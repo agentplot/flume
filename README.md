@@ -10,6 +10,8 @@ makes the place, a worktree on the branch `<kind>/<name>`, and runs the
 kind's stages there, each with a fresh agent. Once the work lands or is
 dropped, flume tidies the place.
 
+<p align="center"><img src="docs/diagrams/flume.svg" alt="A launch from your session, millpond or headwater runs down the flume into a worktree on change/csv-export, made ready by the repository's declaration; construct, code, verify and submit each start a fresh agent whose prompt is confirmed in its transcript and end when their deliverable exists; sluice lands the change and flume tidies the place." width="900"></p>
+
 - **The site:** https://agentplot.github.io/flume
 - **The design book:** https://agentplot.github.io/blueprints/flume/
 - **The statement**, flume's invariants as numbered clauses, comes
@@ -55,6 +57,7 @@ sluice gates what lands, and the Flywheel keeps turning.
 | path | what |
 |---|---|
 | `site/` | the site, Astro with Starlight; its diagrams are drawn at build time (`site/README.md`) |
+| `docs/diagrams/` | the README's diagram, generated from the site's |
 | `devenv.nix` | the shell: moon through proto, Vale, bun, and Playwright with its Chromium |
 | `styles/Flume` | the prose rules, the design books' voice in Vale |
 | `.config/kit.toml` | the kit standard's profile this repository follows |
