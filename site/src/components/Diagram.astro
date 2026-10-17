@@ -1,0 +1,70 @@
+---
+// A diagram, drawn at build time by src/diagrams/ and inlined so it follows
+// the theme toggle. Each is drawn twice: the wide layout where its column has
+// room, the narrow one on a phone, chosen by the width of the column itself.
+// The callers' accents, --dg-pond, --dg-head and --dg-sound, come from the
+// family list, as flume's own comes to --ap-accent through the family bar.
+import { member, pairCss } from '@agentplot/site-theme/family';
+import { diagrams } from '../diagrams';
+
+interface Props {
+  name: string;
+  caption?: string;
+  /** The column width at which the wide layout takes over. */
+  wideFrom?: string;
+}
+const { name, caption } = Astro.props;
+const draw = diagrams[name];
+if (!draw) throw new Error(`no diagram named ${name}`);
+const wide = draw('wide');
+const narrow = draw('narrow');
+const callers =
+  pairCss('--dg-pond', member('millpond').accent) +
+  pairCss('--dg-head', member('headwater').accent) +
+  pairCss('--dg-sound', member('sounding').accent);
+---
+
+<figure class:list={['diagram', 'not-content', `diagram-${name}`]}>
+  <div class="frame">
+    <div class="wide" set:html={wide} />
+    <div class="narrow" set:html={narrow} />
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+<Fragment set:html={`<style>${callers}</style>`} />
+
+<style>
+  .diagram {
+    margin: 2rem 0;
+    container-type: inline-size;
+  }
+  .frame {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    line-height: 0;
+    box-shadow: 0 1.5rem 3rem -1.75rem var(--dg-shadow);
+  }
+  .frame :global(svg) {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .wide {
+    display: none;
+  }
+  @container (min-width: 600px) {
+    .wide {
+      display: block;
+    }
+    .narrow {
+      display: none;
+    }
+  }
+  figcaption {
+    margin-top: 0.75rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    line-height: 1.5;
+  }
+</style>

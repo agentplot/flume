@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 16 112 88" width="112" height="88" role="img" aria-label="flume">
+  <title>flume</title>
+  <circle cx="17" cy="28" r="9.5" fill="#0E1116"/>
+  <path d="M50 52 V 100 M84 64 V 100" fill="none" stroke="#0E1116" stroke-width="7.5" stroke-linecap="round"/>
+  <path d="M36 40 L 102 63" fill="none" stroke="#2F6E7A" stroke-width="21" stroke-linecap="round"/>
+  <g fill="none" stroke="#F7F6F2" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M54.6 40.1 L 59.4 48.2 L 50.6 51.5"/>
+    <path d="M76.6 47.8 L 81.4 55.9 L 72.6 59.2"/>
+  </g>
+</svg>

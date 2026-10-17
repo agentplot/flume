@@ -1,0 +1,22 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The site: its prose, checked by Vale, and its build. Both are in the fast
+# layer. The Pages workflow builds and publishes it on every push to main.
+language: 'typescript'
+layer: 'application'
+
+tasks:
+  prose:
+    command: 'vale src/content/docs'
+    inputs: ['src/content/docs/**/*', '/.vale.ini', '/styles/**/*', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+  build:
+    command: 'bun run build'
+    inputs: ['src/**/*', 'public/**/*', 'astro.config.mjs', 'package.json', 'bun.lock', 'tsconfig.json', '/devenv.nix', '/devenv.lock', '/.prototools']
+    outputs: ['dist']
+    deps: ['~:install']
+    tags: [check-fast]
+  install:
+    command: 'bun install --frozen-lockfile'
+    inputs: ['package.json', 'bun.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    options: {cache: false}

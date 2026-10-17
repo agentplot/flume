@@ -1,0 +1,21 @@
+{
+  "name": "flume-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "readme-diagram": "bun scripts/readme-diagram.ts"
+  },
+  "dependencies": {
+    "@agentplot/site-theme": "file:/Users/chuck/Code/github_agentplot/site-theme/main",
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.3.8",
+    "sharp": "0.35.5",
+    "starlight-links-validator": "0.27.0"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

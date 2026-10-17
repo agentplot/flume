@@ -1,0 +1,85 @@
+---
+title: Roadmap
+description: What gets built in what order, and where flume meets millpond and crew.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+Nothing of flume is built yet. Each step ends with something running on
+real work before the next one depends on it. A step is done when a
+check passes or an observation holds. The step names are the plan's, in
+agentplot/blueprints' `design/capture/plan.md`. flume needs only crew's
+rules to extract from, so its own steps proceed beside millpond's.
+
+## flume's own steps
+
+<Steps>
+
+1. **L1 · The statement.** flume's statement is written from the capture
+   design and the crew rules it takes over: a launch, places, kinds and
+   stages, prompt delivery, stage ends, status, tidying, and what flume
+   never does. A fresh model reconstructs flume from it, and the
+   questions it asks are ruled and folded back in.
+
+   _Needs_ nothing. _Done when_ the reconstruction's questions are
+   ruled and folded in, Vale is clean, and the statement lands on
+   blueprints' `main`.
+
+2. **L2 · The repository's rules.** This repository, in Rust on
+   kit-standard's code profile, gains its founding decisions: one place,
+   one agent per stage; a stage ends on its deliverable; plugins outside
+   the core. With them come its rules, its sluice gate, `cliff.toml`
+   and its OpenSpec configuration.
+
+   _Needs_ L1. _Done when_ sluice protects `main` and the first change
+   lands through it.
+
+3. **L3 · The core and the Claude Code plugin.** `flume launch`,
+   `status --json`, `tell`, `stop`, `retry` and `tidy`, with places, the
+   three kinds and a repository's own. Prompt delivery is checked
+   against the agent's transcript, and stage ends are read from
+   deliverables, a change's from its OpenSpec files. The plugin brings
+   `/launch` and serves `status` over MCP.
+
+   _Needs_ L2. _Done when_ a fix launched from a session lands through
+   sluice and its place is tidied, and a change runs construct, code and
+   verify with its status showing its tasks ticked. A stage whose pane
+   goes quiet with no deliverable is not ended, and tidying keeps a
+   branch that holds commits its target lacks.
+
+4. **L4 · The herdr plugin.** The sidebar of places in flight, with
+   kind, stage, agent state and a change's tasks, and keys to open,
+   tell, stop and retry.
+
+   _Needs_ L3. _Done when_ the plugin installs from flume's tag, and a
+   fix and a change launched from herdr show each stage in the sidebar
+   until they land.
+
+</Steps>
+
+## Where it meets the others
+
+<Steps>
+
+1. **P6 · millpond sends an item through flume.** millpond's `send`
+   names a repository and a kind, records the send, hands flume the
+   brief, and writes the landing against the item from sluice's record.
+   An inbox whose settings hand items to crew refuses a send.
+
+   _Needs_ millpond's tools (P4) and L3. _Done when_ an item of two
+   bumps sent from herdr lands through sluice, the item shows its
+   landing, and a send from crew's inbox is refused.
+
+2. **C7 · crew calls flume.** crew starts each stage's agent in a place
+   through flume and reads stage ends from `flume status`, keeping its
+   plans, bolts, slots, dispatcher, conductors and approvals.
+
+   _Needs_ crew's amended record (C1) and L3. _Done when_ a bolt of one
+   unit and one chore lands with every place and stage started through
+   flume, and no crew code makes a worktree itself.
+
+</Steps>
+
+Others wait on flume too. headwater's plugins (H7) need L3 for the fix
+key. sounding's core (Q3) needs L3 and its herdr plugin (Q4) needs L4,
+since a sounding's place and session are flume's.

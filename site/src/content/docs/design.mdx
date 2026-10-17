@@ -1,0 +1,55 @@
+---
+title: Design
+description: Where flume's design lives, how it is written, and what binds the code.
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+flume's design lives in
+[agentplot/blueprints](https://github.com/agentplot/blueprints), with
+the designs of every tool around it. This site shows the design; the
+design book and the statement define it.
+
+<CardGrid>
+  <LinkCard
+    title="The design book"
+    description="flume's settled design, one chapter per part, written for a reader who was not in the room."
+    href="https://agentplot.github.io/blueprints/flume/"
+  />
+  <LinkCard
+    title="The statement"
+    description="flume's invariants as numbered clauses, which the code cites by number. It comes next: plan step L1."
+    href="https://github.com/agentplot/blueprints"
+  />
+</CardGrid>
+
+## What each document is
+
+- **The capture design**, `design/capture/design.md`, covers every part
+  that turns an outside event into landed work: headwater, eddy,
+  millpond, flume, sounding, sluice, crew, Flywheel and the first fleet
+  that runs them. Its section "Launching: flume" is flume's. `plan.md`
+  beside it orders the work, and its decision 12 settles what flume is.
+- **flume's statement**, `design/flume/requirements.md`, is written
+  from that design and from the rules of crew's it takes over: a launch,
+  places, kinds and stages, prompt delivery, stage ends, status,
+  tidying, and what flume never does. A fresh model reconstructs flume
+  from the statement alone, and the questions it asks are ruled and
+  folded back in before the statement lands. It comes next, as plan
+  step L1.
+- **The design book** explains the design chapter by chapter, with the
+  statement as its appendix.
+
+## What binds the code
+
+The statement binds. This repository cites its clauses by number and
+never restates them. The rules a change here keeps, and the decisions
+behind them, follow the statement into `docs/architecture/` and
+`docs/adr/`. The founding decisions are three: one place, one agent per
+stage; a stage ends on its deliverable; and plugins outside the core.
+
+crew's rules for teams and plans, `teams.2` to `teams.4`, `teams.11`,
+`teams.15`, and `plan.9`, `plan.10`, `plan.12` and `plan.17`, hold
+today's version of what flume takes over. Once flume's statement lands,
+crew amends them to name flume, and a question about places or stages
+goes to flume's statement first.

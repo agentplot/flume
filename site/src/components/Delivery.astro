@@ -1,0 +1,503 @@
+---
+// How it works: prompt delivery and stage ends. flume starts a fresh agent
+// in a herdr pane and waits until it takes input, then sends the stage's
+// prompt. The first sending is lost: the agent's transcript has no user
+// message, so flume sends it once more, finds it there, and counts the stage
+// as started. The agent works, then its pane goes quiet for a long stretch
+// while a check runs; flume looks for the stage's deliverable, finds none,
+// and the stage goes on. Output resumes, the agent commits the change, and
+// the stage ends when the deliverable exists. Drawn on a canvas, since the
+// pane's output is a trace over time. Every position is a function of the
+// time in the loop, so the reduced-motion still and a screenshot's frame are
+// exact (the fl:frame event holds one).
+interface Props {
+  caption?: string;
+}
+const { caption } = Astro.props;
+---
+
+<figure class="fl-canvas not-content">
+  <canvas
+    role="img"
+    aria-label="flume starts a fresh agent for the construct stage in a herdr pane and waits until it takes input. It sends the stage's prompt, but the agent's transcript has no user message: the first sending was lost. flume sends the prompt once more, finds it in the transcript, and the stage is started. The agent works, writing the proposal, design and tasks, and its output shows as a trace. Then the pane is quiet for a long stretch while the checks run. flume looks for the stage's deliverable, the committed OpenSpec change, finds none, and the stage goes on. Output resumes, the checks pass, the agent commits the change, and flume ends the stage when the deliverable exists; the next stage, code, starts with a fresh agent."
+  ></canvas>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .fl-canvas {
+    margin: 2rem 0;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    box-shadow: 0 1.5rem 3rem -1.75rem var(--dg-shadow);
+    background: var(--dg-bg);
+  }
+  figcaption {
+    margin-top: 0.75rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    line-height: 1.5;
+  }
+</style>
+
+<script>
+  type Rect = { x: number; y: number; w: number; h: number };
+  const T = 24; // seconds per loop
+  const STILL = 0.9; // the frame a reader who asks for less motion sees
+
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  const fade = (f: number, at: number, d = 0.01) => clamp((f - at) / d);
+
+  // Times, as fractions of the loop.
+  const START = 0.02; // a fresh agent
+  const INPUT = 0.1; // it takes input
+  const SEND1 = [0.12, 0.15]; // typed
+  const LOST = 0.155; // and gone
+  const SCAN1 = [0.16, 0.22];
+  const NONE = 0.22; // no user message in the transcript
+  const SEND2 = [0.24, 0.27];
+  const SUBMIT = 0.28;
+  const SCAN2 = [0.285, 0.31];
+  const FOUND = 0.31; // the stage is started
+  const QUIET = [0.46, 0.66]; // the pane is quiet
+  const ENDED = 0.78; // the deliverable exists
+  const END = 0.965;
+  const CHECKS = [0.36, 0.44, 0.52, 0.6, 0.68, ENDED];
+
+  const PROMPT = 'construct: write the OpenSpec change for item 7';
+  // The pane's lines, each with when it appears.
+  const PANE: Array<[string, number, string]> = [
+    ['$ claude', START, 'muted'],
+    ['loading the session…', 0.05, 'muted'],
+    [`› ${PROMPT}`, SUBMIT, 'accent'],
+    ['reading item 7’s brief', 0.33, 'fg'],
+    ['writing proposal.md', 0.36, 'fg'],
+    ['writing design.md, tasks.md', 0.4, 'fg'],
+    ['running the checks…', 0.44, 'fg'],
+    ['the checks pass', 0.68, 'fg'],
+    ['git commit: openspec/changes/csv-export', 0.72, 'fg'],
+  ];
+  // The transcript's records: who, what, when.
+  const LOG: Array<[string, string, number]> = [
+    ['system', 'session start', 0.06],
+    ['user', PROMPT, SUBMIT + 0.006],
+    ['assistant', 'reading item 7’s brief', 0.34],
+    ['tool', 'write proposal.md', 0.37],
+    ['tool', 'write design.md, tasks.md', 0.41],
+    ['tool', 'run the checks', 0.44],
+    ['tool', 'result: the checks pass', 0.68],
+    ['tool', 'git commit', 0.72],
+  ];
+  // flume's steps, each lit at its time.
+  const STEPS: Array<[string, number, 'accent' | 'bad' | 'ok']> = [
+    ['fresh agent', START, 'accent'],
+    ['takes input', INPUT, 'accent'],
+    ['prompt sent', SEND1[0], 'accent'],
+    ['transcript: no', NONE, 'bad'],
+    ['sent again', SEND2[0], 'accent'],
+    ['transcript: yes', FOUND, 'ok'],
+  ];
+  // The stage's state, segment by segment.
+  const STATES: Array<[string, number, number, 'muted' | 'warn' | 'accent' | 'quiet' | 'ok']> = [
+    ['starting', 0, INPUT, 'muted'],
+    ['prompt not taken yet', INPUT, FOUND, 'warn'],
+    ['working', FOUND, QUIET[0], 'accent'],
+    ['working, pane quiet', QUIET[0], QUIET[1], 'quiet'],
+    ['working', QUIET[1], ENDED, 'accent'],
+    ['ended', ENDED, END, 'ok'],
+  ];
+
+  // The pane's output: none before the prompt is taken but the agent's
+  // start, a busy trace while it works, nothing while it is quiet.
+  const activity = (f: number) => {
+    const n = 0.5 + 0.25 * Math.sin(f * 211) + 0.2 * Math.sin(f * 97 + 1.3) + 0.15 * Math.sin(f * 431 + 0.4);
+    if (f >= START && f < 0.07) return 0.35 * n;
+    if (f >= SUBMIT && f < QUIET[0]) return 0.55 + 0.45 * n;
+    if (f >= QUIET[1] && f < ENDED) return 0.5 + 0.45 * n;
+    return 0;
+  };
+
+  interface Layout {
+    W: number;
+    H: number;
+    tall: boolean;
+    heads: Array<[string, number, number]>;
+    pane: Rect;
+    log: Rect;
+    step: (i: number) => Rect;
+    spark: Rect; // the trace's area, its baseline its bottom
+    band: Rect;
+  }
+
+  const wide: Layout = {
+    W: 720,
+    H: 470,
+    tall: false,
+    heads: [
+      ['THE PANE', 16, 26],
+      ['THE TRANSCRIPT', 372, 26],
+      ['FLUME', 16, 262],
+      ['THE STAGE', 16, 334],
+    ],
+    pane: { x: 16, y: 38, w: 340, h: 200 },
+    log: { x: 372, y: 38, w: 332, h: 200 },
+    step: (i) => ({ x: 16 + i * 116, y: 272, w: 108, h: 30 }),
+    spark: { x: 16, y: 352, w: 688, h: 60 },
+    band: { x: 16, y: 426, w: 688, h: 24 },
+  };
+  const tall: Layout = {
+    W: 360,
+    H: 812,
+    tall: true,
+    heads: [
+      ['THE PANE', 12, 24],
+      ['THE TRANSCRIPT', 12, 258],
+      ['FLUME', 12, 476],
+      ['THE STAGE', 12, 616],
+    ],
+    pane: { x: 8, y: 34, w: 344, h: 200 },
+    log: { x: 8, y: 268, w: 344, h: 184 },
+    step: (i) => ({ x: 8 + (i % 2) * 176, y: 486 + Math.floor(i / 2) * 38, w: 168, h: 30 }),
+    spark: { x: 8, y: 632, w: 344, h: 56 },
+    band: { x: 8, y: 702, w: 344, h: 22 },
+  };
+
+  function setup(canvas: HTMLCanvasElement) {
+    const ctx = canvas.getContext('2d')!;
+    const fig = canvas.closest('figure')!;
+    let L = wide;
+    let c: Record<string, string> = {};
+    let fonts = { sans: 'sans-serif', mono: 'monospace' };
+
+    const readTheme = () => {
+      const cs = getComputedStyle(canvas);
+      const v = (n: string) => cs.getPropertyValue(n).trim();
+      c = {
+        bg: v('--dg-bg'), panel: v('--dg-panel'), soft: v('--dg-soft'), rule: v('--dg-rule'), fg: v('--dg-fg'), muted: v('--dg-muted'),
+        accent: v('--dg-accent'), accentSoft: v('--dg-accent-soft'), ink: v('--dg-ink'), ok: v('--dg-ok'), warn: v('--dg-warn'), bad: v('--dg-bad'),
+      };
+      fonts = { sans: v('--sl-font') || 'sans-serif', mono: v('--sl-font-mono') || 'monospace' };
+    };
+
+    const resize = () => {
+      const w = canvas.clientWidth;
+      L = w < 560 ? tall : wide;
+      const scale = w / L.W;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.style.height = `${L.H * scale}px`;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(L.H * scale * dpr);
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    };
+
+    type TextOpts = { size?: number; color?: string; mono?: boolean; weight?: number; align?: CanvasTextAlign; spacing?: number; max?: number };
+    const text = (s: string, x: number, y: number, o: TextOpts = {}) => {
+      ctx.font = `${o.weight ?? 400} ${o.size ?? 12}px ${o.mono ? fonts.mono : fonts.sans}`;
+      ctx.fillStyle = o.color ?? c.fg;
+      ctx.textAlign = o.align ?? 'left';
+      ctx.textBaseline = 'alphabetic';
+      if (o.spacing) (ctx as any).letterSpacing = `${o.spacing}px`;
+      let t = s;
+      if (o.max) while (t.length > 1 && ctx.measureText(t).width > o.max) t = t.slice(0, -2) + '…';
+      ctx.fillText(t, x, y);
+      if (o.spacing) (ctx as any).letterSpacing = '0px';
+    };
+    const box = (r: Rect, rad: number, fill?: string, stroke?: string, width = 1.5, dash?: number[]) => {
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, rad);
+      if (fill) {
+        ctx.fillStyle = fill;
+        ctx.fill();
+      }
+      if (stroke) {
+        ctx.setLineDash(dash ?? []);
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = width;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    };
+    const alpha = (a: number, fn: () => void) => {
+      if (a <= 0) return;
+      const prev = ctx.globalAlpha;
+      ctx.globalAlpha = prev * a;
+      fn();
+      ctx.globalAlpha = prev;
+    };
+    const col = (k: string) => (k === 'accent' ? c.accent : k === 'ok' ? c.ok : k === 'bad' ? c.bad : k === 'warn' ? c.warn : k === 'muted' ? c.muted : c.fg);
+    const tick = (x: number, y: number, color: string, ok: boolean) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      if (ok) {
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x - 3, y);
+        ctx.lineTo(x - 0.8, y + 2.4);
+        ctx.lineTo(x + 3.2, y - 2.6);
+        ctx.strokeStyle = c.ink;
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = c.panel;
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 2.4, y - 2.4);
+        ctx.lineTo(x + 2.4, y + 2.4);
+        ctx.moveTo(x + 2.4, y - 2.4);
+        ctx.lineTo(x - 2.4, y + 2.4);
+        ctx.stroke();
+      }
+    };
+
+    function draw(f: number) {
+      ctx.clearRect(0, 0, L.W, L.H);
+      ctx.fillStyle = c.bg;
+      ctx.fillRect(0, 0, L.W, L.H);
+      const out = f > END ? 1 - clamp((f - END) / (1 - END)) : 1;
+      for (const [s, x, y] of L.heads) text(s, x, y, { size: 11, color: c.muted, spacing: 0.8 });
+
+      // ---- the pane
+      const P = L.pane;
+      box(P, 8, c.panel, c.rule, 1);
+      const ended = f >= ENDED && f < END + 0.02;
+      text('construct · agent 1', P.x + 12, P.y + 20, { size: 12, weight: 600 });
+      const state =
+        f < START ? ['no agent yet', c.muted]
+        : f < INPUT ? ['starting', c.muted]
+        : f < FOUND ? ['takes input', c.accent]
+        : f >= QUIET[0] + 0.03 && f < QUIET[1] ? [`quiet ${Math.max(1, Math.round(((f - QUIET[0]) / (QUIET[1] - QUIET[0])) * 9))} min`, c.muted]
+        : ended ? ['ended', c.ok]
+        : f >= ENDED ? ['ended', c.ok]
+        : ['working', c.accent];
+      alpha(out, () => text(state[0], P.x + P.w - 12, P.y + 20, { size: 11, weight: 600, color: state[1], align: 'right' }));
+      ctx.fillStyle = c.rule;
+      ctx.fillRect(P.x, P.y + 30, P.w, 1);
+      // Its lines, the newest at the bottom of the log above the input.
+      const shown = PANE.filter(([, at]) => f >= at && f < END + 0.02);
+      const rows = 7;
+      const lineH = 18;
+      const recent = shown.slice(-rows);
+      alpha(out, () =>
+        recent.forEach(([s, at, k], i) => {
+          alpha(fade(f, at), () => text(s, P.x + 12, P.y + 50 + i * lineH, { size: 10.5, mono: true, color: col(k), max: P.w - 24, weight: k === 'accent' ? 500 : 400 }));
+        }),
+      );
+      // The input line, once the agent takes input: the prompt typed into it.
+      if (f >= INPUT && f < FOUND + 0.02) {
+        const I: Rect = { x: P.x + 8, y: P.y + P.h - 34, w: P.w - 16, h: 26 };
+        box(I, 6, c.bg, f < SUBMIT ? c.accent : c.rule, 1);
+        let typed = '';
+        if (f >= SEND1[0] && f < LOST) typed = PROMPT.slice(0, Math.round(PROMPT.length * clamp((f - SEND1[0]) / (SEND1[1] - SEND1[0]))));
+        if (f >= SEND2[0] && f < SUBMIT) typed = PROMPT.slice(0, Math.round(PROMPT.length * clamp((f - SEND2[0]) / (SEND2[1] - SEND2[0]))));
+        text(`› ${typed}`, I.x + 10, I.y + 17, { size: 10.5, mono: true, color: c.fg, max: I.w - 20 });
+        if (f >= LOST && f < SCAN1[1] + 0.02) text('the input is empty again', I.x + I.w - 10, I.y + 17, { size: 10.5, color: c.muted, align: 'right' });
+      }
+      if (ended) {
+        alpha(fade(f, ENDED, 0.012) * out, () => {
+          const B: Rect = { x: P.x + 8, y: P.y + P.h - 34, w: P.w - 16, h: 26 };
+          box(B, 6, c.panel, c.ok, 1.5);
+          text('next: code, with a fresh agent', B.x + 10, B.y + 17, { size: 11, color: c.ok, weight: 600 });
+        });
+      }
+
+      // ---- the transcript
+      const G = L.log;
+      box(G, 8, c.panel, c.rule, 1);
+      text('the agent’s transcript, as JSON lines', G.x + 12, G.y + 20, { size: 11, color: c.muted });
+      ctx.fillStyle = c.rule;
+      ctx.fillRect(G.x, G.y + 30, G.w, 1);
+      const recs = LOG.filter(([, , at]) => f >= at && f < END + 0.02).slice(-7);
+      const tagW = L.tall ? 66 : 70;
+      alpha(out, () =>
+        recs.forEach(([who, what, at], i) => {
+          const y = G.y + 50 + i * 20;
+          alpha(fade(f, at), () => {
+            if (who === 'user') {
+              const found = f >= FOUND;
+              box({ x: G.x + 6, y: y - 14, w: G.w - 12, h: 20 }, 4, found ? c.accentSoft : undefined, found ? c.ok : c.accent, 1);
+            }
+            text(who, G.x + 12, y, { size: 10.5, mono: true, color: who === 'user' ? c.accent : c.muted, weight: who === 'user' ? 500 : 400 });
+            text(what, G.x + 12 + tagW, y, { size: 10.5, mono: true, color: c.fg, max: G.w - tagW - 24 });
+          });
+        }),
+      );
+      // flume reads it: a bar sweeps down, then it says what it found.
+      const scan = (a: number, b: number) => {
+        if (f < a || f >= b) return;
+        const t = (f - a) / (b - a);
+        const y = G.y + 34 + t * (G.h - 44);
+        ctx.fillStyle = c.accent;
+        alpha(0.18, () => ctx.fillRect(G.x + 2, y - 10, G.w - 4, 20));
+        ctx.fillRect(G.x + 2, y, G.w - 4, 1.5);
+      };
+      scan(SCAN1[0], SCAN1[1]);
+      scan(SCAN2[0], SCAN2[1]);
+      const verdict = (s: string, color: string, a: number, b: number) => {
+        if (f < a || f >= b) return;
+        alpha(fade(f, a) * out, () => {
+          ctx.font = `600 11px ${fonts.sans}`;
+          const w = ctx.measureText(s).width + 20;
+          const r: Rect = { x: G.x + G.w - w - 8, y: G.y + G.h - 30, w, h: 22 };
+          box(r, 11, c.panel, color, 1.5);
+          text(s, r.x + w / 2, r.y + 15, { size: 11, weight: 600, color, align: 'center' });
+        });
+      };
+      verdict('no user message: not taken', c.bad, NONE, SEND2[0] + 0.02);
+      verdict('the prompt is here: started', c.ok, FOUND, QUIET[0]);
+
+      // ---- flume's steps
+      STEPS.forEach(([s, at, k], i) => {
+        const r = L.step(i);
+        const on = f >= at && f < END + 0.02;
+        const color = col(k);
+        box(r, 6, on ? (k === 'accent' ? c.accentSoft : c.panel) : c.panel, on ? color : c.rule, on ? 1.5 : 1);
+        text(`${i + 1}`, r.x + 12, r.y + 19, { size: 10.5, weight: 700, color: on ? color : c.muted });
+        text(s, r.x + 26, r.y + 19, { size: 11, weight: on ? 600 : 400, color: on ? (k === 'accent' ? c.fg : color) : c.muted });
+        if (!L.tall && i < STEPS.length - 1) {
+          ctx.fillStyle = c.rule;
+          ctx.fillRect(r.x + r.w + 1, r.y + r.h / 2 - 0.75, 6, 1.5);
+        }
+      });
+
+      // ---- the stage over time: the pane's output, flume's looks for the
+      // deliverable, and the stage's state.
+      const S = L.spark;
+      const B = L.band;
+      const X = (t: number) => S.x + (t / END) * S.w;
+      const now = Math.min(f, END);
+      ctx.fillStyle = c.rule;
+      ctx.fillRect(S.x, S.y + S.h, S.w, 1);
+      text('the pane’s output', S.x + S.w, S.y - 4 + (L.tall ? 0 : 0), { size: 10.5, color: c.muted, align: 'right' });
+      alpha(out, () => {
+        ctx.beginPath();
+        ctx.moveTo(X(0), S.y + S.h);
+        const step = END / 240;
+        for (let t = 0; t <= now; t += step) ctx.lineTo(X(t), S.y + S.h - activity(t) * (S.h - 6));
+        ctx.lineTo(X(now), S.y + S.h);
+        ctx.closePath();
+        ctx.fillStyle = c.accentSoft;
+        ctx.fill();
+        ctx.beginPath();
+        for (let t = 0; t <= now; t += step) {
+          const y = S.y + S.h - activity(t) * (S.h - 6);
+          if (t === 0) ctx.moveTo(X(t), y);
+          else ctx.lineTo(X(t), y);
+        }
+        ctx.strokeStyle = c.accent;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+      // The quiet stretch, named once half of it has passed.
+      if (f >= QUIET[0] + 0.04 && f < END + 0.02) {
+        alpha(fade(f, QUIET[0] + 0.04, 0.012) * out, () => {
+          const x0 = X(QUIET[0]) + 2;
+          const x1 = X(Math.min(now, QUIET[1])) - 2;
+          ctx.strokeStyle = c.warn;
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([3, 3]);
+          ctx.strokeRect(x0, S.y + 2, Math.max(0, x1 - x0), S.h - 4);
+          ctx.setLineDash([]);
+        });
+        const half = (QUIET[0] + QUIET[1]) / 2;
+        alpha(fade(f, half, 0.012) * out, () => {
+          const mid = (X(QUIET[0]) + X(QUIET[1])) / 2;
+          const lines: Array<[string, string, number]> = L.tall
+            ? [
+                ['quiet:', c.warn, 600],
+                ['it goes on', c.fg, 400],
+              ]
+            : [
+                ['quiet', c.warn, 600],
+                ['no deliverable,', c.fg, 400],
+                ['the stage goes on', c.fg, 400],
+              ];
+          lines.forEach(([t, color, weight], k) => text(t, mid, S.y + 16 + k * 14, { size: k ? 10.5 : 11, weight, color, align: 'center' }));
+        });
+      }
+      // flume's looks for the deliverable, on the baseline.
+      CHECKS.forEach((at) => {
+        if (f < at || f >= END + 0.02) return;
+        alpha(fade(f, at) * out, () => tick(X(at), S.y + S.h, at === ENDED ? c.ok : c.muted, at === ENDED));
+      });
+      // The stage's state, segment by segment, drawn up to now.
+      STATES.forEach(([s, a, b, k]) => {
+        if (now < a) return;
+        const x0 = X(a);
+        const x1 = X(Math.min(b, now));
+        const fill = k === 'accent' ? c.accent : k === 'ok' ? c.ok : k === 'warn' ? c.warn : k === 'quiet' ? c.accentSoft : c.soft;
+        alpha(out, () => {
+          box({ x: x0 + 1, y: B.y, w: Math.max(0, x1 - x0 - 2), h: B.h }, 4, fill, k === 'quiet' ? c.accent : undefined, 1, [4, 3]);
+          const fits = !L.tall && x1 - x0 > s.length * 6.2 + 12;
+          if (fits) text(s, x0 + 8, B.y + B.h / 2 + 4, { size: 10.5, weight: 600, color: k === 'accent' || k === 'ok' || k === 'warn' ? c.ink : k === 'quiet' ? c.fg : c.muted });
+        });
+      });
+      // On a phone, the state under the band, and the key to the looks.
+      if (L.tall) {
+        const cur = STATES.find(([, a, b]) => now >= a && now < b) ?? STATES[STATES.length - 1];
+        alpha(out, () => text(`the stage: ${cur[0]}`, B.x, B.y + B.h + 22, { size: 12, weight: 600, color: col(cur[3] === 'quiet' ? 'accent' : cur[3]) }));
+        tick(B.x + 6, B.y + B.h + 46, c.muted, false);
+        text('flume looks for the deliverable', B.x + 18, B.y + B.h + 50, { size: 11, color: c.muted });
+        text('A quiet pane ends nothing; the deliverable does.', B.x, B.y + B.h + 76, { size: 11, color: c.muted });
+      } else {
+        tick(B.x + 6, B.y + B.h + 14, c.muted, false);
+        text('flume looks for the deliverable: the committed change', B.x + 18, B.y + B.h + 18, { size: 10.5, color: c.muted });
+        text('A quiet pane ends nothing; the deliverable does.', B.x + B.w, B.y + B.h + 18, { size: 10.5, color: c.muted, align: 'right' });
+      }
+      // Now, on the trace.
+      if (f < END) {
+        ctx.fillStyle = c.fg;
+        alpha(0.5, () => ctx.fillRect(X(now) - 0.75, S.y, 1.5, B.y + B.h - S.y));
+      }
+    }
+
+    let frame: number | null = null;
+    let pinned: number | null = null;
+    let visible = true;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const start = performance.now();
+    const loop = (now: number) => {
+      draw((((now - start) / 1000) % T) / T);
+      frame = requestAnimationFrame(loop);
+    };
+    const render = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      if (pinned !== null) return draw(pinned);
+      if (reduce.matches || !visible) return draw(STILL);
+      frame = requestAnimationFrame(loop);
+    };
+
+    readTheme();
+    resize();
+    render();
+    new ResizeObserver(() => {
+      resize();
+      render();
+    }).observe(canvas);
+    new MutationObserver(() => {
+      readTheme();
+      render();
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    reduce.addEventListener('change', render);
+    new IntersectionObserver(([e]) => {
+      visible = e.isIntersecting;
+      render();
+    }).observe(canvas);
+    document.fonts?.ready.then(render);
+    // A screenshot's frame: hold the loop at one point.
+    fig.addEventListener('fl:frame', (e) => {
+      pinned = (e as CustomEvent<number>).detail;
+      render();
+    });
+  }
+
+  document.querySelectorAll<HTMLCanvasElement>('figure.fl-canvas canvas').forEach(setup);
+</script>

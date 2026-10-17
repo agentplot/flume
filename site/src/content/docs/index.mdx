@@ -1,0 +1,79 @@
+---
+title: flume
+description: flume carries one piece of work into a worktree of its own, runs each of its kind's stages with a fresh agent, and tidies the place once the work lands.
+template: splash
+hero:
+  tagline: "flume carries one piece of work into a worktree of its own, runs each stage with a fresh agent, and tidies the place once the work lands."
+  actions:
+    - text: How it works
+      link: /flume/how-it-works/
+      icon: right-arrow
+    - text: Read the design
+      link: https://agentplot.github.io/blueprints/flume/
+      icon: external
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/agentplot/flume
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Why
+
+Every tool that starts an agent on a piece of work meets the same four
+failures. The agent starts before it can take a prompt, and the prompt
+is lost. A pane goes quiet while a test runs, and someone takes the
+quiet for done. A worktree outlives its work, or a branch goes with its
+worktree while it still holds commits nobody landed. flume handles all
+four once, for one place at a time, so your own `/launch`, millpond,
+headwater, sounding and crew start work the same way.
+
+<CardGrid>
+  <Card title="One launch, one place" icon="code-branch">
+    A launch names a repository, a kind, a brief and a name. flume makes
+    a worktree on `<kind>/<name>` and makes it ready by the repository's
+    own declaration of what a worktree needs.
+  </Card>
+  <Card title="A fresh agent for each stage" icon="rocket">
+    Each stage starts a new agent in a herdr pane. flume sends the
+    stage's prompt once the agent takes input, and confirms it in the
+    agent's transcript.
+  </Card>
+  <Card title="Ended by its deliverable" icon="approve-check">
+    A stage ends when its deliverable exists, or when its agent stops
+    short and says what it needs. A quiet pane ends nothing.
+  </Card>
+  <Card title="Tidied when it is done" icon="seti:folder">
+    Once the work lands or is dropped, flume removes the place it made.
+    It keeps a branch that holds commits its target lacks.
+  </Card>
+</CardGrid>
+
+## The name
+
+In a watermill the flume is the channel that carries water from the
+pond to the wheel, a measured flow to where it does work. In the family,
+flume carries one item from millpond to one worktree, where an agent
+does the work. sluice gates what lands, and the Flywheel keeps turning.
+
+## Where it stands
+
+flume is designed and not built. Its design lives in
+[agentplot/blueprints](https://github.com/agentplot/blueprints) with
+the design of every tool around it, and its statement comes next. The
+[roadmap](/flume/roadmap/) says what gets built in what order.
+
+<CardGrid>
+  <LinkCard
+    title="How it works"
+    description="A launch and its place, kinds and their stages, prompt delivery, stage ends, tidying and status."
+    href="/flume/how-it-works/"
+  />
+  <LinkCard
+    title="How it fits"
+    description="Who launches through it, what crew keeps for itself, and what flume never does."
+    href="/flume/how-it-fits/"
+  />
+</CardGrid>

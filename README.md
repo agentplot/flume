@@ -54,11 +54,13 @@ sluice gates what lands, and the Flywheel keeps turning.
 
 | path | what |
 |---|---|
+| `site/` | the site, Astro with Starlight; its diagrams are drawn at build time (`site/README.md`) |
 | `devenv.nix` | the shell: moon through proto, Vale, bun, and Playwright with its Chromium |
 | `styles/Flume` | the prose rules, the design books' voice in Vale |
 | `.config/kit.toml` | the kit standard's profile this repository follows |
 
 ```sh
+devenv shell -- site-build   # the site, through moon
 devenv shell -- prose        # the prose, through Vale
 ```
 

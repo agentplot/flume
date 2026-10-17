@@ -1,0 +1,28 @@
+/* flume's own layer over @agentplot/site-theme's starlight.css: the
+   diagrams' palette, derived from the theme's tokens. The theme carries the
+   type, the ink and paper of both themes, and the accent, --ap-accent, which
+   its family bar sets from family.ts (flume's teal). */
+
+:root {
+  --dg-bg: var(--ap-bg-2);
+  --dg-panel: var(--ap-bg-3);
+  --dg-soft: color-mix(in oklab, var(--ap-line) 45%, var(--ap-bg-2));
+  --dg-rule: var(--ap-line);
+  --dg-fg: var(--ap-fg);
+  --dg-muted: var(--ap-fg-3);
+  --dg-accent: var(--ap-accent);
+  --dg-accent-soft: color-mix(in oklab, var(--ap-accent) 20%, var(--ap-bg-3));
+  --dg-ink: var(--ap-bg);
+  /* What passed takes the theme's ok, what waits on the operator its
+     warning colour, and what was refused its bad. */
+  --dg-ok: var(--ap-ok);
+  --dg-warn: var(--ap-warn);
+  --dg-bad: var(--ap-bad);
+  --dg-shadow: rgb(0 0 0 / 0.45);
+  /* The callers' accents, where a diagram draws them, are set from the
+     family list by Diagram.astro: millpond's --dg-pond, headwater's
+     --dg-head and sounding's --dg-sound. */
+}
+:root[data-theme='light'] {
+  --dg-shadow: rgb(0 0 0 / 0.18);
+}
