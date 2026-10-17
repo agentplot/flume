@@ -1,14 +1,15 @@
 // How it works: flume's herdr plugin, as a small mock, in one 26 s loop.
 // The sidebar lists every place in flight, each with its kind, its stage and
 // its agent's state, and a change's tasks ticked. A fix lands and leaves the
-// list once tidied. The open key shows a place's pane beside its status; the
-// tell key answers an agent that stopped short and said what it needs; stop
-// ends an agent going the wrong way, and retry starts its stage again with a
-// fresh one. A sounding waiting on you shows as a row too.
+// list once tidied. The open key shows a place's pane beside its status. A
+// tell waits while its agent works and reaches it once it waits; a retry
+// with your words starts a stage that ended short again, with a fresh agent;
+// stop ends an agent that went the wrong way, and its stage waits for a
+// retry. A sounding waiting on you shows as a row too.
 //
 // Timeline, percent of the loop:
-//   0-28 a change's tasks tick · 8-22 a fix lands, leaves · 30-50 open, tell
-//   52-76 open, stop, retry
+//   0-20 a change's tasks tick · 8-22 a fix lands, leaves · 24-34 tell
+//   36-62 open, retry · 62-96 open, stop, retry
 import { Diagram, esc, type Layout } from './kit';
 
 const T = 26;
@@ -17,10 +18,10 @@ const T = 26;
 const END = 99.2;
 
 const KEYS: [string, number[]][] = [
-  ['open', [30, 52]],
-  ['tell', [36]],
-  ['stop', [60]],
-  ['retry', [68]],
+  ['open', [36, 62]],
+  ['tell', [24]],
+  ['stop', [68]],
+  ['retry', [42, 76]],
 ];
 
 interface Box {
@@ -134,7 +135,8 @@ export function herdr(layout: Layout) {
     add('</g></g>');
   };
 
-  // change/csv-export: its tasks tick, and it moves on to verify.
+  // change/csv-export: its tasks tick, it moves on to verify, and a tell
+  // reaches its agent once the agent is waiting.
   row(
     'a',
     'change/csv-export',
@@ -142,11 +144,13 @@ export function herdr(layout: Layout) {
     [[0, 0]],
     [-1, 100],
     [
-      ['change · code · working', 'ac', -1, 24],
-      ['change · verify · working', 'ac', 24, END],
+      ['change · code · working', 'ac', -1, 20],
+      ['change · verify · working', 'ac', 20, 31],
+      ['change · verify · waiting', 'm', 31, 33],
+      ['change · verify · working', 'ac', 33, END],
     ],
-    [[-1, 30]],
-    [6, 12, 18],
+    [[-1, 36]],
+    [6, 11, 16],
   );
   // fix/bump-mise: lands, is tidied and leaves the list.
   row(
@@ -162,7 +166,8 @@ export function herdr(layout: Layout) {
     ],
     [],
   );
-  // fix/flaky-test: stopped short, says what it needs; told, works again.
+  // fix/flaky-test: its code stage ended short, in its agent's words; a
+  // retry with your words starts it again with a fresh agent.
   row(
     'c',
     'fix/flaky-test',
@@ -174,10 +179,10 @@ export function herdr(layout: Layout) {
     ],
     [-1, 100],
     [
-      ['fix · code · stopped: needs input', 'warn', -1, 43],
-      ['fix · code · working', 'ac', 43, END],
+      ['fix · code · ended short', 'warn', -1, 49],
+      ['fix · code · agent 2 · working', 'ac', 49, END],
     ],
-    [[30, 52]],
+    [[36, 62]],
   );
   // sounding/parquet: a sounding waiting on you.
   row(
@@ -193,7 +198,8 @@ export function herdr(layout: Layout) {
     [['question · waiting on you', 'warn', -1, END]],
     [],
   );
-  // fix/lint-config: going the wrong way; stopped, and retried.
+  // fix/lint-config: its agent went the wrong way and waits; stopped, then
+  // retried with your words.
   row(
     'e',
     'fix/lint-config',
@@ -205,11 +211,12 @@ export function herdr(layout: Layout) {
     ],
     [-1, 100],
     [
-      ['fix · code · working', 'ac', -1, 60],
-      ['fix · code · stopped', 'bad', 60, 68],
-      ['fix · code · agent 2 · working', 'ac', 68, END],
+      ['fix · code · working', 'ac', -1, 50],
+      ['fix · code · waiting', 'm', 50, 68],
+      ['fix · code · stopped', 'bad', 68, 83],
+      ['fix · code · agent 2 · working', 'ac', 83, END],
     ],
-    [[52, 96]],
+    [[62, 96]],
   );
 
   // ---- the workspace: the place's pane beside its status
@@ -217,9 +224,9 @@ export function herdr(layout: Layout) {
   const P2 = g.paneB;
   const ttl = (txt: string, a: number, b: number, k: string) =>
     add(`<text class="t b mono xs ${d.show(`wt${k}`, a, b)}" x="${g.wsTitle.x}" y="${g.wsTitle.y}">${esc(txt)}</text>`);
-  ttl('change/csv-export', -1, 30, 'a');
-  ttl('fix/flaky-test', 30, 52, 'c');
-  ttl('fix/lint-config', 52, 96, 'e');
+  ttl('change/csv-export', -1, 36, 'a');
+  ttl('fix/flaky-test', 36, 62, 'c');
+  ttl('fix/lint-config', 62, 96, 'e');
   add(`<text class="m xs ${d.show('wt0', 96, 100)}" x="${g.wsTitle.x}" y="${g.wsTitle.y}">change/csv-export</text>`);
   add(`<rect class="box2" x="${P1.x}" y="${P1.y}" width="${P1.w}" height="${P1.h}" rx="6"/>`);
   add(`<rect class="box2" x="${P2.x}" y="${P2.y}" width="${P2.w}" height="${P2.h}" rx="6"/>`);
@@ -232,101 +239,122 @@ export function herdr(layout: Layout) {
       add(`<text class="mono xxs ${c} ${d.show(`pl${k}${i}`, Math.max(at, a), b)}" x="${P1.x + 10}" y="${P1.y + 42 + i * lineH}">${esc(t)}</text>`),
     );
   };
+  // A tell or a retry's words: typed at the pane's foot, then what became
+  // of them.
+  const words = (k: string, head: string, msg: string, a: number, typed: [number, number], b: number, after: [string, string, number, number][]) => {
+    const y = P1.y + P1.h - 62;
+    add(`<g class="${d.show(`wb${k}`, a, b)}">`);
+    add(`<rect class="warnbox" x="${P1.x + 8}" y="${y}" width="${P1.w - 16}" height="50" rx="6"/>`);
+    add(`<text class="warn xxs b" x="${P1.x + 18}" y="${y + 17}">${esc(head)}</text>`);
+    add(`<text class="t mono xxs" x="${P1.x + 18}" y="${y + 37}">${esc(msg)}</text>`);
+    d.kf(`wc${k}`, [
+      [0, 'transform:scaleX(1)'],
+      [typed[0], 'transform:scaleX(1)'],
+      [typed[1], 'transform:scaleX(0)'],
+      [100, 'transform:scaleX(0)'],
+    ]);
+    add(`<rect class="cover ${d.anim(`wc${k}`)}" x="${P1.x + 16}" y="${y + 26}" width="${msg.length * 6.4 + 6}" height="15"/>`);
+    d.rule(`.wc${k}{animation-timing-function:steps(${msg.length},end)}`);
+    add('</g>');
+    after.forEach(([t, cls, from, to], i) =>
+      add(`<text class="${cls} xxs b ${d.show(`wa${k}${i}`, from, to)}" x="${P1.x + P1.w - 10}" y="${y - 8}" text-anchor="end">${esc(t)}</text>`),
+    );
+  };
+
   // tasks.md, ticking, in the change's code stage.
   {
-    add(`<text class="m xxs ${d.show('ph-a', -1, 24)}" x="${P1.x + 10}" y="${P1.y + 18}">agent 2 · code · tasks.md</text>`);
+    add(`<text class="m xxs ${d.show('ph-a', -1, 20)}" x="${P1.x + 10}" y="${P1.y + 18}">agent 2 · code · tasks.md</text>`);
     const tasks = ['read the ledger’s rows', 'write rows as CSV', 'quote fields with commas', 'stream large ledgers', 'add the export command', 'test a round trip'];
-    const at = [-1, -1, -1, 6, 12, 18];
+    const at = [-1, -1, -1, 6, 11, 16];
     tasks.forEach((t, i) => {
       const y = P1.y + 32 + i * 21;
       const x = P1.x + 10;
-      add(`<g class="${d.show(`tk${i}`, -1, 24)}">`);
+      add(`<g class="${d.show(`tk${i}`, -1, 20)}">`);
       add(`<rect x="${x}" y="${y}" width="11" height="11" rx="2" style="fill:none;stroke:var(--dg-muted);stroke-width:1.2"/>`);
       add(`<text class="t xxs" x="${x + 18}" y="${y + 10}">${esc(t)}</text>`);
       add('</g>');
-      add(`<g class="${d.show(`tt${i}`, at[i], 24)}"><rect class="ac" x="${x}" y="${y}" width="11" height="11" rx="2"/><path d="M${x + 2.5},${y + 5.5} l2.5,2.5 l4,-5" style="fill:none;stroke:var(--dg-ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"/></g>`);
+      add(`<g class="${d.show(`tt${i}`, at[i], 20)}"><rect class="ac" x="${x}" y="${y}" width="11" height="11" rx="2"/><path d="M${x + 2.5},${y + 5.5} l2.5,2.5 l4,-5" style="fill:none;stroke:var(--dg-ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"/></g>`);
     });
   }
   pane(
     'agent 3 · verify · a fresh agent',
     [
-      ['prompt in its transcript', 'ok', 25],
-      ['checking the code against', 't', 27],
-      ['the change, task by task', 't', 27],
+      ['prompt in its transcript', 'ok', 21],
+      ['checking the code against', 't', 22],
+      ['the change, task by task', 't', 22],
+      ['your tell, in its transcript', 'ok', 32],
+      ['checking fields with commas', 't', 33.5],
     ],
-    24,
-    30,
+    20,
+    36,
     'a2',
   );
-  pane(
-    'agent 1 · code',
+  // The tell waits while the agent works, and reaches it once it waits.
+  words(
+    'a',
+    'tell change/csv-export',
+    'check fields with commas too',
+    24,
+    [24.5, 28.5],
+    34,
     [
-      ['ran the failing test', 't', 30],
-      ['it reads a fixture that is', 't', 30],
-      ['not in the repository.', 't', 30],
-      ['Which CSV should it read?', 'warn', 30],
+      ['held: the agent is working', 'm', 28.5, 31],
+      ['sent: the agent is waiting', 'ok', 31, 34],
     ],
-    30,
-    43,
+  );
+  pane(
+    'agent 1 · code · ended short',
+    [
+      ['stopped short, in its words:', 'm', 36],
+      ['the test reads a CSV fixture', 't', 36],
+      ['that is not in the repository.', 't', 36],
+      ['Which one should it read?', 'warn', 36],
+    ],
+    36,
+    49,
     'c1',
   );
-  // The tell: typed, sent as a prompt, found in the transcript.
-  {
-    const y = P1.y + P1.h - 62;
-    add(`<g class="${d.show('tell', 36, 43)}">`);
-    add(`<rect class="warnbox" x="${P1.x + 8}" y="${y}" width="${P1.w - 16}" height="50" rx="6"/>`);
-    add(`<text class="warn xxs b" x="${P1.x + 18}" y="${y + 17}">tell fix/flaky-test</text>`);
-    const msg = 'use fixtures/small.csv';
-    add(`<text class="t mono xxs" x="${P1.x + 18}" y="${y + 37}">${msg}</text>`);
-    d.kf('ttype', [
-      [0, 'transform:scaleX(1)'],
-      [37, 'transform:scaleX(1)'],
-      [41, 'transform:scaleX(0)'],
-      [100, 'transform:scaleX(0)'],
-    ]);
-    add(`<rect class="cover ${d.anim('ttype')}" x="${P1.x + 16}" y="${y + 26}" width="${msg.length * 6.4 + 6}" height="15"/>`);
-    d.rule(`.ttype{animation-timing-function:steps(${msg.length},end)}`);
-    add('</g>');
-  }
+  words('c', 'retry fix/flaky-test, with words', 'use fixtures/small.csv', 42, [42.5, 47], 49, []);
   pane(
-    'agent 1 · code',
+    'agent 2 · code · a fresh agent',
     [
-      ['your tell, in its transcript', 'ok', 43],
-      ['reading fixtures/small.csv', 't', 45],
-      ['the test passes', 't', 48],
+      ['prompt and your words, received', 'ok', 50],
+      ['reading fixtures/small.csv', 't', 52],
+      ['the test passes', 't', 56],
     ],
-    43,
-    52,
+    49,
+    62,
     'c2',
   );
   pane(
-    'agent 1 · code',
+    'agent 1 · code · waiting',
     [
-      ['rewriting .eslintrc in', 't', 52],
-      ['every package, one by one', 't', 54],
+      ['rewrote .eslintrc in', 't', 62],
+      ['packages/api; 11 to go', 't', 62],
     ],
-    52,
-    60,
+    62,
+    68,
     'e1',
   );
   pane(
     'agent 1 · code',
     [
-      ['stopped: agent 1 ended', 'bad', 60],
-      ['its place and branch kept', 'm', 61],
+      ['stopped: agent 1 ended', 'bad', 68],
+      ['the stage waits for a retry', 'm', 69],
     ],
-    60,
     68,
+    83,
     'e2',
   );
+  words('e', 'retry fix/lint-config, with words', 'one root eslint.config.js', 76, [76.5, 81], 83, []);
   pane(
     'agent 2 · code · a fresh agent',
     [
-      ['prompt in its transcript', 'ok', 69],
-      ['the brief: one root config', 't', 71],
-      ['editing eslint.config.js', 't', 74],
+      ['prompt and your words, received', 'ok', 84],
+      ['writing eslint.config.js', 't', 86],
+      ['removing 12 .eslintrc files', 't', 89],
     ],
-    68,
+    83,
     96,
     'e3',
   );
@@ -344,90 +372,41 @@ export function herdr(layout: Layout) {
     });
     add('</g>');
   };
-  status(
-    [
-      ['kind', 'change', 't'],
-      ['stage', 'code', 't'],
-      ['agent', 'working', 'ac'],
-      ['deliverable', 'tasks ticked, not all', 'm'],
-      ['submission', 'none yet', 'm'],
-    ],
-    -1,
-    24,
-    'a1',
-  );
-  status(
-    [
-      ['kind', 'change', 't'],
-      ['stage', 'verify', 't'],
-      ['agent', 'working', 'ac'],
-      ['deliverable', 'no report yet', 'm'],
-      ['submission', 'none yet', 'm'],
-    ],
-    24,
-    30,
-    'a2',
-  );
-  status(
-    [
-      ['kind', 'fix', 't'],
-      ['stage', 'code', 't'],
-      ['agent', 'stopped short', 'warn'],
-      ['deliverable', 'no commit yet', 'm'],
-      ['submission', 'none yet', 'm'],
-    ],
-    30,
-    43,
-    'c1',
-  );
-  status(
-    [
-      ['kind', 'fix', 't'],
-      ['stage', 'code', 't'],
-      ['agent', 'working', 'ac'],
-      ['deliverable', 'no commit yet', 'm'],
-      ['submission', 'none yet', 'm'],
-    ],
-    43,
-    52,
-    'c2',
-  );
-  status(
-    [
-      ['kind', 'fix', 't'],
-      ['stage', 'code', 't'],
-      ['agent', 'working', 'ac'],
-      ['deliverable', 'no commit yet', 'm'],
-      ['submission', 'none yet', 'm'],
-    ],
-    52,
-    60,
-    'e1',
-  );
-  status(
-    [
-      ['kind', 'fix', 't'],
-      ['stage', 'code', 't'],
-      ['agent', 'stopped', 'bad'],
-      ['deliverable', 'no commit yet', 'm'],
-      ['submission', 'none yet', 'm'],
-    ],
-    60,
-    68,
-    'e2',
-  );
-  status(
-    [
-      ['kind', 'fix', 't'],
-      ['stage', 'code, retried', 't'],
-      ['agent', 'working', 'ac'],
-      ['deliverable', 'no commit yet', 'm'],
-      ['submission', 'none yet', 'm'],
-    ],
-    68,
-    96,
-    'e3',
-  );
+  const fix = (stage: string, agent: [string, string], a: number, b: number, k: string) =>
+    status(
+      [
+        ['kind', 'fix', 't'],
+        ['stage', stage, 't'],
+        ['agent', agent[0], agent[1]],
+        ['deliverable', 'no commit yet', 'm'],
+        ['submission', 'none yet', 'm'],
+      ],
+      a,
+      b,
+      k,
+    );
+  const change = (stage: string, agent: [string, string], deliverable: string, a: number, b: number, k: string) =>
+    status(
+      [
+        ['kind', 'change', 't'],
+        ['stage', stage, 't'],
+        ['agent', agent[0], agent[1]],
+        ['deliverable', deliverable, 'm'],
+        ['submission', 'none yet', 'm'],
+      ],
+      a,
+      b,
+      k,
+    );
+  change('code', ['working', 'ac'], 'tasks ticked, not all', -1, 20, 'a1');
+  change('verify', ['working', 'ac'], 'no report yet', 20, 31, 'a2');
+  change('verify', ['waiting', 't'], 'no report yet', 31, 33, 'a3');
+  change('verify', ['working', 'ac'], 'no report yet', 33, 36, 'a4');
+  fix('code, ended short', ['waiting', 't'], 36, 49, 'c1');
+  fix('code, started 2 times', ['working', 'ac'], 49, 62, 'c2');
+  fix('code', ['waiting', 't'], 62, 68, 'e1');
+  fix('code, waits on a retry', ['stopped', 'bad'], 68, 83, 'e2');
+  fix('code, started 2 times', ['working', 'ac'], 83, 96, 'e3');
 
   // ---- the keys
   add(`<text class="hd" x="${n ? g.keysX : W.x + 16}" y="${g.keysY + (n ? -8 : 16)}">KEYS</text>`);
@@ -454,10 +433,11 @@ export function herdr(layout: Layout) {
     title: 'flume’s herdr plugin: every place in flight, a place’s pane and status, and the keys',
     desc:
       'A herdr window. Its sidebar lists every place in flight with its kind, its stage and its agent’s state: change/csv-export in code, its tasks ticking from 3 of 6 to 6 of 6 before it moves on to verify; ' +
-      'fix/bump-mise in sluice, which lands, is tidied and leaves the list; fix/flaky-test, whose agent stopped short and says what it needs; sounding/parquet, a question waiting on you; and fix/lint-config, working. ' +
+      'fix/bump-mise in sluice, which lands, is tidied and leaves the list; fix/flaky-test, whose code stage ended short; sounding/parquet, a question waiting on you; and fix/lint-config, working. ' +
       'Beside the selected place’s pane, its status gives the kind, the stage, the agent’s state, the deliverable and the submission. ' +
-      'The open key shows fix/flaky-test, whose agent asks which CSV its test should read; the tell key sends use fixtures/small.csv as a prompt, it reaches the transcript, and the agent works again. ' +
-      'The open key shows fix/lint-config, rewriting the wrong file; the stop key ends its agent, keeping its place and branch, and the retry key starts the stage again with a fresh agent.',
-    still: 34,
+      'The tell key sends check fields with commas too to change/csv-export: flume holds it while the agent works and sends it once the agent waits, and it reaches the transcript. ' +
+      'The open key shows fix/flaky-test, whose agent stopped short asking which CSV its test should read; the retry key starts the stage again with a fresh agent and the words use fixtures/small.csv. ' +
+      'The open key shows fix/lint-config, whose agent rewrote the wrong files and waits; the stop key ends it, and the stage waits; the retry key starts it again with a fresh agent and the words one root eslint.config.js.',
+    still: 40,
   });
 }

@@ -1,13 +1,14 @@
 // How it works: the three kinds as tracks of stages, side by side, in one
 // 24 s loop. Each stage waits on its deliverable and lights the next only
-// once it exists, each with a fresh agent: a fix's code waits on a commit in
-// its place, a change's construct on the OpenSpec change, its code on every
-// task ticked (they tick one by one), its verify on the report; a question's
-// one stage is sounding's session, which waits on you once and ends on
-// sounding conclude. Each track runs at its own pace.
+// once it exists, each with a fresh agent: a fix's code waits on a new
+// commit, a change's construct on the OpenSpec change written, its code on
+// every task ticked (they tick one by one), its verify on the report, and
+// each kind's submit stage on the landing; a question's one stage is
+// sounding's session, which waits on you once and ends on its conclusion.
+// Each track runs at its own pace, and a landed place is tidied.
 //
 // Timeline, percent of the loop:
-//   fix 3-40, landed 46 · change 3-80, landed 86 · question 3-76
+//   fix 3-40, tidied 46 · change 3-80, tidied 86 · question 3-76
 import { Diagram, esc, type Layout } from './kit';
 
 const T = 24;
@@ -38,10 +39,10 @@ const KINDS: Kind[] = [
     from: 'headwater’s fix key',
     cls: 'hw',
     stages: [
-      { name: 'code', a: 3, b: 30, waits: 'a commit in its place', done: 'committed: bump mise' },
-      { name: 'submit', a: 30, b: 40, waits: 'a submission', done: 'in sluice’s queue' },
+      { name: 'code', a: 3, b: 30, waits: 'a new commit', done: 'committed: bump mise' },
+      { name: 'submit', a: 30, b: 40, waits: 'the landing', done: 'landed on main' },
     ],
-    end: ['landed on main', 46],
+    end: ['tidied: place and branch', 46],
   },
   {
     kind: 'change',
@@ -49,19 +50,19 @@ const KINDS: Kind[] = [
     from: 'millpond’s send',
     cls: 'pd',
     stages: [
-      { name: 'construct', a: 3, b: 20, waits: 'the OpenSpec change', done: 'the change, committed' },
+      { name: 'construct', a: 3, b: 20, waits: 'the OpenSpec change', done: 'the change, written' },
       { name: 'code', a: 20, b: 56, waits: 'every task ticked', done: '6 of 6 tasks ticked', ticks: [25, 31, 37, 43, 49, 55] },
       { name: 'verify', a: 56, b: 70, waits: 'its report', done: 'report: 0 to fix' },
-      { name: 'submit', a: 70, b: 80, waits: 'a submission', done: 'in sluice’s queue' },
+      { name: 'submit', a: 70, b: 80, waits: 'the landing', done: 'landed, the change archived' },
     ],
-    end: ['landed on main', 86],
+    end: ['tidied: place and branch', 86],
   },
   {
     kind: 'question',
     branch: 'sounding/parquet',
     from: 'sounding',
     cls: 'sd',
-    stages: [{ name: 'sounding’s session', a: 3, b: 76, waits: 'conclusion.md', done: 'conclusion.md written', ask: [28, 40] }],
+    stages: [{ name: 'sounding’s session', a: 3, b: 76, waits: 'its conclusion', done: 'conclusion.md written', ask: [28, 40] }],
     end: ['ended on sounding conclude', 76],
   },
 ];
@@ -166,7 +167,7 @@ export function kinds(layout: Layout) {
     const ey = nodeY(K.stages.length);
     const [label, at] = K.end;
     add(`<rect x="${c.x}" y="${ey}" width="${c.w}" height="28" rx="14" style="fill:none;stroke:var(--dg-rule);stroke-width:1;stroke-dasharray:4 3"/>`);
-    add(`<text class="m xs ${d.show(`${id}pre`, 0, at)}" x="${c.x + c.w / 2}" y="${ey + 18}" text-anchor="middle">${K.kind === 'question' ? 'ends on sounding conclude' : 'lands through sluice'}</text>`);
+    add(`<text class="m xs ${d.show(`${id}pre`, 0, at)}" x="${c.x + c.w / 2}" y="${ey + 18}" text-anchor="middle">${K.kind === 'question' ? 'ends on sounding conclude' : 'then flume tidies it'}</text>`);
     if (K.kind === 'question') {
       // Who owns what in a question.
       const ny = ey + 52;
@@ -178,14 +179,14 @@ export function kinds(layout: Layout) {
     add(`<g class="${d.show(`${id}end`, at, 96)}"><rect class="okbox" x="${c.x}" y="${ey}" width="${c.w}" height="28" rx="14" style="stroke-dasharray:none"/><text class="ok xs b" x="${c.x + c.w / 2}" y="${ey + 18}" text-anchor="middle">${esc(label)}</text></g>`);
   });
 
-  // A repository's own kinds, in the same form.
+  // A repository's or a launch's own kinds, in the same form.
   {
     const y = g.foot;
     if (n) {
-      add(`<text class="m xs" x="12" y="${y}">A repository may declare kinds of its own,</text>`);
+      add(`<text class="m xs" x="12" y="${y}">A repository or a launch may declare its own kinds,</text>`);
       add(`<text class="m xs" x="12" y="${y + 18}">each stage with its prompt and its deliverable.</text>`);
     } else {
-      add(`<text class="m xs" x="16" y="${y}">A repository may declare kinds of its own in the same form: each stage names its prompt and its deliverable.</text>`);
+      add(`<text class="m xs" x="16" y="${y}">A repository or a launch may declare kinds of its own: each stage names its prompt and its deliverable.</text>`);
     }
   }
 
@@ -195,11 +196,11 @@ export function kinds(layout: Layout) {
     height: g.H,
     title: 'Three kinds, each a track of stages that end on their deliverables',
     desc:
-      'Three tracks side by side. A fix, on fix/bump-mise from headwater’s fix key: code waits on a commit in its place, then submit waits on a submission, and it lands. ' +
-      'A change, on change/csv-export from millpond’s send: construct waits on the OpenSpec change; code waits on every task ticked, and its six tasks tick one by one; ' +
-      'verify waits on its report; submit waits on a submission; it lands. A question, on sounding/parquet: sounding’s session works, waits on you once, works again, ' +
+      'Three tracks side by side. A fix, on fix/bump-mise from headwater’s fix key: code waits on a new commit, then submit waits on the landing, and the place is tidied. ' +
+      'A change, on change/csv-export from millpond’s send: construct waits on the OpenSpec change written; code waits on every task ticked, and its six tasks tick one by one; ' +
+      'verify waits on its report; submit waits on the landing, with the change archived; the place is tidied. A question, on sounding/parquet: sounding’s session works, waits on you once, works again, ' +
       'and ends when sounding conclude writes conclusion.md. Each stage starts a fresh agent and lights the next only once its deliverable exists. ' +
-      'A repository may declare kinds of its own in the same form.',
+      'A repository or a launch may declare kinds of its own in the same form.',
     still: 92,
   });
 }

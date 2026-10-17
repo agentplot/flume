@@ -6,7 +6,7 @@ description: How flume makes a place for a launch, runs its kind's stages with a
 import Diagram from '../../components/Diagram.astro';
 import Delivery from '../../components/Delivery.astro';
 
-A **launch** names a repository, a kind, a brief and a name. flume
+A **launch** names a repository, a kind, a brief, a name and a base. flume
 makes a **place** for it, runs the kind's **stages** there with a fresh
 agent each, follows the work until it lands, and then tidies the place.
 flume runs on one host and launches there.
@@ -16,9 +16,13 @@ flume runs on one host and launches there.
 | Field | What it names |
 |---|---|
 | repository | the repository the work changes |
-| kind | the list of stages the work runs through: `fix`, `change`, `question`, or a kind the repository declares |
-| brief | what the work is, as the first stage's agent reads it |
+| kind | the list of stages the work runs through: `fix`, `change`, `question`, or a kind the repository or the launch declares |
+| brief | what the work is, as the caller wrote it; every stage that asks for it gets it whole |
 | name | the work's name, which names its branch and its place |
+| base | the branch the place is cut from and the only one its work lands on: the repository's shared branch unless the launch names another |
+
+A launch may also carry its agents' settings, the stages that wait on
+the caller's word, and a mark the caller finds its places by.
 
 Five callers launch:
 
@@ -28,20 +32,22 @@ Five callers launch:
 | millpond | an item's send, as a fix or a change |
 | headwater | its fix key, as a fix with the release's brief |
 | sounding | a question, as the place and session of a sounding |
-| crew | each stage of a unit, chore or fix, in a slot of its team |
+| crew | each unit, chore or fix of a team, as a place of a kind crew carries in the launch, every stage after the first waiting on crew's word |
 
 ## The place
 
 flume makes a worktree of the repository at
-`<repository>/places/<kind>--<name>`, on the branch `<kind>/<name>`.
-The repository's own declaration of what a worktree needs makes it
+`<repository>/places/<kind>--<name>`, on a branch of its own,
+`<prefix>/<name>`, cut from the base's current revision. The prefix is
+the kind's: its own name, unless the kind names another. The
+repository's own declaration of what a worktree needs makes it
 ready, so flume runs whatever the repository names and assumes no tool
 of its own. Every stage of the work runs in that one place, and the
 place lasts until the work lands or is dropped.
 
 ## Kinds and stages
 
-<Diagram name="kinds" caption="Each stage waits on its deliverable, and the next starts only once it exists. A change's tasks tick one by one; a question waits on you once, through sounding, and ends on sounding conclude." />
+<Diagram name="kinds" caption="Each stage waits on its deliverable, and the next starts only once it exists. A change's tasks tick one by one, each submit stage waits on the landing, and a question waits on you once, through sounding, and ends on sounding conclude." />
 
 A kind is a list of stages, and each stage names its prompt and its
 deliverable:
@@ -52,10 +58,11 @@ deliverable:
 | change | construct, which writes the OpenSpec change; code, which ticks its tasks; verify; then a submission to sluice |
 | question | sounding's session, which ends on `sounding conclude` |
 
-A repository may declare kinds of its own in the same form. A
-question's place is a sounding's, on the branch `sounding/<name>`:
-flume makes it and runs the session, and sounding keeps the question,
-its rounds and the conclusion you decide.
+A repository, or a launch itself, may declare kinds of its own in the
+same form. The question kind's branch prefix is `sounding/`, so a
+question's place is a sounding's, on `sounding/<name>`. flume makes it
+and runs the session, and sounding keeps the question, its rounds and
+the conclusion you decide.
 
 ## A fresh agent for each stage
 
@@ -76,28 +83,41 @@ agent's transcript records every message it took, so flume reads that:
 3. It reads the transcript for the prompt as a message from the user.
 4. When the transcript lacks it, flume sends the prompt once more and
    reads again. When the second sending is missing too, flume reports
-   that the stage never started.
+   that the stage never began.
 
 Text left typed in a pane is never a stage's state. A `tell`, your
-message to a place's agent, reaches it the same way: as a prompt the
-transcript holds, or not at all.
+words to a place's agent, reaches it the same way: as a prompt the
+transcript holds, or not at all. flume holds a tell while the agent
+works and sends it once the agent waits, and refuses it, with nothing
+typed, when no agent is live or the agent is asking a person a
+question. A tell never starts, ends or moves a stage.
 
 ## A stage ends on its deliverable
 
 A stage ends when its deliverable exists, or when its agent stops short
-and says what it needs. Then flume starts the next stage. A pane that
-goes quiet ends nothing: an agent waiting on a long test run is quiet
-too, and its work is not done.
+and says what it needs. It never ends because its pane went quiet: an
+agent waiting on a long test run shows nothing in its pane, and its
+work is not done.
+
+- **When the deliverable exists,** flume waits until the agent is
+  quiet, then ends it and starts the next stage, unless that stage
+  waits on its caller's word.
+- **When the agent stops short,** no next stage starts. The place waits
+  for a retry or a drop, and the agent's words reach whoever waits on
+  the stage.
+
+A deliverable takes one of five forms, and counts only when made since
+its stage started:
 
 | Kind | Stage | Its deliverable |
 |---|---|---|
-| fix | code | a commit in the place |
-| fix | submit | a submission in sluice's queue |
-| change | construct | the OpenSpec change, committed |
-| change | code | every task of the change ticked |
+| fix | code | a new commit on the place's branch |
+| fix | submit | the landing on its base |
+| change | construct | the change written, its planning complete, in a new commit |
+| change | code | every task of the change ticked, in a new commit |
 | change | verify | its report |
-| change | submit | a submission in sluice's queue |
-| question | sounding's session | `conclusion.md`, by `sounding conclude` |
+| change | submit | the landing, with the change archived |
+| question | sounding's session | its conclusion, as a report: `conclusion.md` |
 
 ## Tidying
 
@@ -105,15 +125,16 @@ too, and its work is not done.
 
 flume tidies a place once its work lands or is dropped. It removes only
 places it made. Before it removes a branch, it compares the branch with
-its target: a branch that holds commits its target lacks stays, and
-flume names it, so dropping the work never loses a commit.
+its base: a branch that holds commits its base lacks stays, and flume
+names it, so dropping the work never loses a commit.
 
 ## What flume reports
 
 `flume status --json` gives each place:
 
 - its kind and its stage;
-- whether its agent is working, waiting or stopped;
+- its agent's state: working, waiting, asking a person, stopped, or
+  unknown when flume cannot read it;
 - whether the stage's deliverable exists;
 - its submission.
 
@@ -124,7 +145,9 @@ live state of the places it runs. An item's record is millpond's.
 ## Where you work with it
 
 - **The command line:** `flume launch`, `status`, `tell`, `stop`,
-  `retry` and `tidy`.
+  `retry`, `drop`, `tidy`, and `prompt`, which shows the prompt a stage
+  would be sent and starts nothing. An agent runs `flume needs` to stop
+  short.
 - **The Claude Code plugin** gives every session `/launch <brief>` and
   serves `status` over MCP.
 - **The herdr plugin** shows every place in flight in the sidebar, with
@@ -132,4 +155,4 @@ live state of the places it runs. An item's record is millpond's.
   Keys open a place's pane, tell its agent, stop it and retry its stage.
   A sounding waiting on you shows as a row there too.
 
-<Diagram name="herdr" caption="tell answers an agent that stopped short; stop ends one going the wrong way, and retry starts its stage again with a fresh agent." />
+<Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
