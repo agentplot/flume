@@ -3,25 +3,18 @@ title: Design
 description: Where flume's design lives, how it is written, and what binds the code.
 ---
 
-import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { LinkCard } from '@astrojs/starlight/components';
 
 flume's design lives in
 [agentplot/blueprints](https://github.com/agentplot/blueprints), with
 the designs of every tool around it. This site shows the design; the
 design book and the statement define it.
 
-<CardGrid>
-  <LinkCard
-    title="The design book"
-    description="flume's settled design, one chapter per part, written for a reader who was not in the room."
-    href="https://agentplot.github.io/blueprints/flume/"
-  />
-  <LinkCard
-    title="The statement"
-    description="flume's invariants as numbered clauses, which the code cites by number. It comes next: plan step L1."
-    href="https://github.com/agentplot/blueprints"
-  />
-</CardGrid>
+<LinkCard
+  title="The design book"
+  description="flume's settled design, one chapter per part, written for a reader who was not in the room."
+  href="https://agentplot.github.io/blueprints/flume/"
+/>
 
 ## What each document is
 
@@ -30,13 +23,16 @@ design book and the statement define it.
   millpond, flume, sounding, sluice, crew, Flywheel and the first fleet
   that runs them. Its section "Launching: flume" is flume's. `plan.md`
   beside it orders the work, and its decision 12 settles what flume is.
-- **flume's statement**, `design/flume/requirements.md`, is written
-  from that design and from the rules of crew's it takes over: a launch,
-  places, kinds and stages, prompt delivery, stage ends, status,
-  tidying, and what flume never does. A fresh model reconstructs flume
-  from the statement alone, and the questions it asks are ruled and
-  folded back in before the statement lands. It comes next, as plan
-  step L1.
+- **flume's statement**, `design/flume/requirements.md`, holds flume's
+  invariants as numbered clauses, which the code cites by number. It is
+  written from that design and from the rules of crew's it takes over: a
+  launch, places, kinds and stages, prompt delivery, stage ends, status,
+  tidying, and what flume never does. A fresh model has reconstructed
+  flume from it alone, and the statement now awaits its ruling. The
+  operator rules the questions that model asked, they are folded back
+  in, and then the statement lands on blueprints' `main` (plan step L1).
+  Until then it is not published, and this site cites none of its
+  clauses.
 - **The design book** explains the design chapter by chapter, with the
   statement as its appendix.
 

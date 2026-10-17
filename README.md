@@ -5,10 +5,11 @@
 exists yet.
 
 flume carries one piece of work into one worktree and follows it until
-it lands. A launch names a repository, a kind, a brief and a name. flume
-makes the place, a worktree on the branch `<kind>/<name>`, and runs the
-kind's stages there, each with a fresh agent. Once the work lands or is
-dropped, flume tidies the place.
+it lands. A launch names a repository, a kind, a brief, a name and a
+base, the branch the work is cut from and lands on. flume makes the
+place, a worktree on a branch of its own, and runs the kind's stages
+there, each with a fresh agent. Once the work lands or is dropped, flume
+tidies the place.
 
 <p align="center"><img src="docs/diagrams/flume.svg" alt="A launch from your session, millpond or headwater runs down the flume into a worktree on change/csv-export, made ready by the repository's declaration; construct, code, verify and submit each start a fresh agent whose prompt is confirmed in its transcript and end when their deliverable exists; sluice lands the change and flume tidies the place." width="900"></p>
 
@@ -20,23 +21,26 @@ dropped, flume tidies the place.
 ## What it does
 
 - **One launch, one place.** `flume launch` makes a worktree of the
-  repository at `<repository>/places/<kind>--<name>`, on
-  `<kind>/<name>`, and makes it ready by the repository's own
-  declaration of what a worktree needs.
+  repository at `<repository>/places/<kind>--<name>`, on the branch
+  `<prefix>/<name>` cut from the base. The prefix is the kind's,
+  `sounding/` for a question. The repository's own declaration of what
+  a worktree needs makes it ready.
 - **A kind is a list of stages.** A fix is code, then a submission to
   sluice. A change is construct, which writes the OpenSpec change, then
   code, which ticks its tasks, then verify and a submission. A question
   is sounding's session, which ends on `sounding conclude`. A
-  repository may declare kinds of its own.
+  repository or a launch may declare kinds of its own.
 - **A fresh agent for each stage.** Each stage starts a new agent in a
   herdr pane. flume sends the stage's prompt only once the agent accepts
   input, and sends it again when the agent's transcript lacks it.
-- **A stage ends on its deliverable.** The next stage starts when the
-  deliverable exists, or when the agent stops short and says what it
-  needs. A quiet pane ends nothing.
+- **A stage ends on its deliverable:** commits, the change written, its
+  tasks ticked, a report or the landing, made since the stage started.
+  Once it exists and the agent is quiet, the next stage starts. An agent
+  that stops short says what it needs, and the place waits for a retry
+  or a drop. A quiet pane ends nothing.
 - **Tidied once it is done.** When the work lands or is dropped, flume
   removes the place. It removes only places it made, and keeps a branch
-  that holds commits its target lacks.
+  that holds commits its base lacks.
 - **Its state, live.** `flume status --json` gives each place's kind,
   its stage, its agent's state, whether the deliverable exists, and its
   submission, with a change's tasks ticked.

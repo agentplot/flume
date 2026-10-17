@@ -1,14 +1,16 @@
 // The start page's diagram: one launch whole, in one 26 s loop. Three
 // callers stand at the head of the flume: your session's /launch, millpond's
-// send and headwater's fix key. millpond sends item 7 as a change, and the
-// launch runs down the flume into its place, a worktree on change/csv-export,
-// which flume makes ready. Each stage lights in turn with a fresh agent, its
-// prompt confirmed in the agent's transcript, and ends when its deliverable
-// exists: the change, every task ticked, the report, the submission. sluice
-// tests the work as merged and lands it, and flume tidies the place.
+// send and headwater's fix key. millpond sends item 7 as a change on main,
+// and the launch runs down the flume into its place, a worktree on
+// change/csv-export cut from main, which flume makes ready. Each stage
+// lights in turn with a fresh agent, its prompt confirmed in the agent's
+// transcript, and ends when its deliverable exists: the change written,
+// every task ticked, the report, and the landing. The submit stage's agent
+// submits; sluice tests the work as merged and lands it, which ends the
+// stage, and flume tidies the place.
 //
 // Timeline, percent of the loop:
-//   2-16 launch · 16-22 ready · 22-68 stages · 68-82 land · 84-96 tidy
+//   2-16 launch · 16-22 ready · 22-62 stages · 62-80 submit, land · 84-96 tidy
 import { Diagram, esc, type Layout } from './kit';
 
 const T = 26;
@@ -41,7 +43,7 @@ const STAGES: {
     a: 22,
     b: 34,
     waits: 'the change',
-    done: ['the change', 'committed'],
+    done: ['the change', 'written'],
     log: [
       ['wrote proposal, design, tasks', 26, 't'],
       ['committed openspec/changes/csv-export', 29.5, 't'],
@@ -74,12 +76,13 @@ const STAGES: {
   {
     name: 'submit',
     a: 62,
-    b: 68,
-    waits: 'a submission',
-    done: ['submitted', 'to sluice'],
+    b: 80,
+    waits: 'the landing',
+    done: ['landed,', 'change archived'],
     log: [
-      ['wt submit change/csv-export', 64.5, 'ac'],
-      ['ended: in sluice’s queue', 67, 'ok'],
+      ['archived the change', 64, 't'],
+      ['wt submit main', 66, 'ac'],
+      ['ended: landed on main', 80, 'ok'],
     ],
   },
 ];
@@ -229,18 +232,20 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
       ['repository', 'ledger', 3.5],
       ['kind', 'change', 5],
       ['name', 'csv-export', 6.5],
-      ['brief', n ? 'item 7, export the ledger as CSV' : 'export as CSV', 8],
+      ['base', 'main', 7.5],
+      ['brief', n ? 'item 7, export as CSV' : 'export as CSV', 8.5],
     ];
-    // On a phone: the first three on one row, the brief under them.
+    // On a phone: the first three on one row, the base and brief under them.
     const row = [
       [10, 72],
       [128, 156],
       [208, 238],
-      [10, 44],
+      [10, 40],
+      [128, 160],
     ];
     fields.forEach(([k, v, at], i) => {
       const x = n ? C.x + row[i][0] : C.x + 10;
-      const y = n ? C.y + 40 + (i >= 3 ? 18 : 0) : C.y + 40 + i * 18;
+      const y = n ? C.y + 40 + (i >= 3 ? 18 : 0) : C.y + 38 + i * 17;
       const vx = n ? C.x + row[i][1] : x + 64;
       add(`<g class="${d.show(`fd${i}`, at, 96)}"><text class="m xxs" x="${x}" y="${y}">${k}</text>`);
       add(`<text class="t mono xxs b" x="${vx}" y="${y}">${esc(v)}</text></g>`);
@@ -278,6 +283,7 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
   add(`<text class="t mono xs b" x="${g.pathAt.x}" y="${g.pathAt.y}">${PATH}</text>`);
   add(`<text class="m xxs" x="${g.pathAt.x}" y="${g.pathAt.y + 18}">on</text>`);
   add(`<text class="ac mono xxs b" x="${g.pathAt.x + 17}" y="${g.pathAt.y + 18}">${BRANCH}</text>`);
+  add(`<text class="m xxs" x="${g.pathAt.x + 132}" y="${g.pathAt.y + 18}">cut from main</text>`);
   {
     const y = g.readyY;
     const x = g.pathAt.x;
@@ -446,14 +452,14 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
   // ---- captions
   const caps: [string, number, number][] = n
     ? [
-        ['A launch: repository, kind, brief, name.', 2, 16],
+        ['A launch: repository, kind, brief, name, base.', 2, 16],
         ['flume makes the place, and makes it ready.', 16, 22],
         ['A fresh agent per stage, ended by its deliverable.', 22, 68],
         ['The last stage submits; sluice lands the work.', 68, 84],
         ['flume tidies the place it made.', 84, 96],
       ]
     : [
-        ['A launch: a repository,|a kind, a brief, a name.', 2, 16],
+        ['A launch: a repository,|a kind, brief, name, base.', 2, 16],
         ['flume makes the place|and makes it ready.', 16, 22],
         ['A fresh agent per stage,|ended by its deliverable.', 22, 68],
         ['The last stage submits;|sluice lands the work.', 68, 84],
@@ -482,11 +488,11 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
     title: 'flume: one launch, one place, a fresh agent for each stage',
     desc:
       'Three callers stand at the head of the flume: your session’s /launch, millpond’s send and headwater’s fix key. millpond sends item 7 as a change: ' +
-      'the launch names the repository ledger, the kind change, the name csv-export and the brief, export the ledger as CSV. It runs down the flume into its place, ' +
-      'a worktree at ledger/places/change--csv-export on the branch change/csv-export, which flume makes ready by the repository’s declaration. ' +
-      'Four stages light in turn, each with a fresh agent in a herdr pane whose prompt flume confirms in the agent’s transcript: construct ends when the OpenSpec change is committed, ' +
-      'code when all five of its tasks are ticked, verify when its report exists, and submit when the branch is in sluice’s queue. ' +
-      'sluice tests main with the change as merged and lands it. flume then tidies the place: the worktree is removed, and the branch with it, since it holds nothing main lacks.',
+      'the launch names the repository ledger, the kind change, the name csv-export, the base main and the brief, export the ledger as CSV. It runs down the flume into its place, ' +
+      'a worktree at ledger/places/change--csv-export on the branch change/csv-export, cut from main, which flume makes ready by the repository’s declaration. ' +
+      'Four stages light in turn, each with a fresh agent in a herdr pane whose prompt flume confirms in the agent’s transcript: construct ends when the OpenSpec change is written, ' +
+      'code when all five of its tasks are ticked, and verify when its report exists. submit’s agent archives the change and submits the branch to main; sluice tests main with the change as merged and lands it, which ends the stage. ' +
+      'flume then tidies the place: the worktree is removed, and the branch with it, since it holds nothing main lacks.',
     still: 82,
     standalone: opts.standalone,
   });

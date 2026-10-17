@@ -32,9 +32,10 @@ headwater, sounding and crew start work the same way.
 
 <CardGrid>
   <Card title="One launch, one place" icon="code-branch">
-    A launch names a repository, a kind, a brief and a name. flume makes
-    a worktree on `<kind>/<name>` and makes it ready by the repository's
-    own declaration of what a worktree needs.
+    A launch names a repository, a kind, a brief, a name and a base.
+    flume makes a worktree on a branch of its own, cut from the base,
+    and makes it ready by the repository's own declaration of what a
+    worktree needs.
   </Card>
   <Card title="A fresh agent for each stage" icon="rocket">
     Each stage starts a new agent in a herdr pane. flume sends the
@@ -47,7 +48,7 @@ headwater, sounding and crew start work the same way.
   </Card>
   <Card title="Tidied when it is done" icon="seti:folder">
     Once the work lands or is dropped, flume removes the place it made.
-    It keeps a branch that holds commits its target lacks.
+    It keeps a branch that holds commits its base lacks.
   </Card>
 </CardGrid>
 
@@ -62,7 +63,8 @@ does the work. sluice gates what lands, and the Flywheel keeps turning.
 
 flume is designed and not built. Its design lives in
 [agentplot/blueprints](https://github.com/agentplot/blueprints) with
-the design of every tool around it, and its statement comes next. The
+the design of every tool around it, and its statement is written and
+awaits its ruling. The
 [roadmap](/flume/roadmap/) says what gets built in what order.
 
 <CardGrid>
