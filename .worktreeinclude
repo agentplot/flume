@@ -1,0 +1,3 @@
+# What a new worktree people make takes from the main one at post-start,
+# via `wt step copy-ignored`: the site's installed packages, and nothing else.
+site/node_modules
