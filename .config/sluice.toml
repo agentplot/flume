@@ -1,0 +1,24 @@
+# sluice gates every merge onto main and into a bolt (kit:gate.1): the
+# checks moon tags, in flume's devenv shell (kit:gate.2), main on GitHub
+# as the sluice app lands it (kit:gate.4).
+[tests]
+runner = "moon"
+toolchain = ["devenv", "print-dev-env"]
+
+[branches."bolt/*"]
+required = ["#check-fast"]
+parallel = 4
+batch = false
+flaky = "fail"
+timeout = "10m"
+
+[branches.main]
+required = ["#check-fast"]
+parallel = 2
+batch = false
+flaky = "fail"
+timeout = "10m"
+remote = "origin"
+
+[branches.main.pull_requests]
+reviews = 0
