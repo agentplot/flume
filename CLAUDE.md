@@ -11,17 +11,23 @@ The design is in agentplot/blueprints: the capture design,
 `design/capture/design.md`, section "Launching: flume", and its plan,
 `plan.md` beside it (decision 12, steps L1 to L4, and P6 and C7 where it
 meets millpond and crew). flume's statement,
-`design/flume/requirements.md`, is written, on blueprints' branch
-`flume-statement`, and awaits the operator's ruling (plan step L1).
-This repository cites the statement's clauses by number and never
-restates them. Where the site and the design disagree, the design wins.
+`design/flume/requirements.md`, is written and ruled, and amended as
+the operator rules (plan step L1). This repository cites the
+statement's clauses by number and never restates them. Where the site
+and the design disagree, the design wins.
 
 ## Rules
 
-flume's rules are written after its statement, into
-`docs/architecture/` with the decisions behind them in `docs/adr/`, and
-then imported here. Until then the kit standard binds as its `code`
-profile says (`.config/kit.toml`).
+The rules are in `docs/architecture/`: `core.md` binds wherever a change
+is made, and an area page, when one exists, binds the paths its
+frontmatter names. The decisions behind them are `docs/adr/`, one MADR
+record each, proposed until the operator's yes. A design or a commit
+that relies on a rule cites its id; one that departs from a rule says
+which and why. Where `docs/architecture/` and the narrative docs
+disagree, `docs/architecture/` wins. A rule is sent to `core.md` or its
+area page with an id, the next free number in its area, amended in the
+same commit as the decision that changes it. The kit standard binds
+beside them as its `code` profile says (`.config/kit.toml`).
 
 ## Checks
 
@@ -41,3 +47,5 @@ Stage by pathspec and commit the paths you wrote: `git add <paths>`, then
 `git commit -m "<subject>" -- <paths>`. Never `-a`, never `add .`.
 Conventional Commits subjects, scope the part of the tree touched; the
 commit-msg hook refuses any other.
+
+@docs/architecture/core.md
