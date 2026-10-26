@@ -8,6 +8,7 @@
 //! and keeps its state in the store (core.16).
 
 mod acts;
+mod agent_acts;
 mod answer;
 mod deliver;
 mod end;

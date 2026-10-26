@@ -94,6 +94,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["24", "25", "123"],
             run: the_six_forms,
         },
+        Scenario {
+            name: "stop-short: a construct stops short, and no code stage starts",
+            cites: &["S4", "41", "42", "36", "92"],
+            run: s4_a_construct_stops_short,
+        },
+        Scenario {
+            name: "stop-short: one carrying another start's secret or identity is refused",
+            cites: &["41", "33"],
+            run: another_starts_secret,
+        },
+        Scenario {
+            name: "stop check: an agent that would stop with nothing made is sent back",
+            cites: &["S24", "110", "115", "28"],
+            run: s24_sent_back,
+        },
+        Scenario {
+            name: "stop check: own work, a question or a conversation are not going quiet",
+            cites: &["110", "S3", "S23"],
+            run: not_going_quiet,
+        },
+        Scenario {
+            name: "guard: an agent's submission refused is reported, and the stage goes on",
+            cites: &["S25", "108", "116", "56", "71"],
+            run: s25_an_agent_tries_to_submit,
+        },
     ]
 }
 
@@ -696,5 +721,176 @@ fn the_six_forms(_: &()) -> Outcome {
             name
         );
     }
+    Ok(())
+}
+
+fn s4_a_construct_stops_short(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("change", "plan");
+    launched(
+        &world
+            .engine
+            .launch(&launch("change", "plan", Some("one of two designs"))),
+    )?;
+    world.settle(&id);
+    let construct = World::identity("change", "plan", "construct", 1);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    let words = "Which design does the brief mean: the queue,\nor the log? Both fit.";
+    let answer = world.engine.needs(&construct.to_string(), &secret.0, words);
+    ensure!(
+        answer.refusal().is_none(),
+        "the stop-short was refused: {answer:?}"
+    );
+    world.settle(&id);
+    let status = world.status(&id)?;
+    ensure_eq!(status.stages[0].state, StageState::EndedShort, "construct");
+    ensure_eq!(status.stages[1].state, StageState::NotReached, "code");
+    ensure_eq!(
+        status.stages[0].end.clone().and_then(|end| end.words),
+        Some(words.to_string()),
+        "the words status gives"
+    );
+    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    Ok(())
+}
+
+fn another_starts_secret(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::Commits), "one")?;
+    let first = World::identity("build", "one", "work", 1);
+    let old = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    world.terminal.kill(&first);
+    world.settle(&id);
+    ensure!(
+        world
+            .engine
+            .retry(&id, Retry::Current, None, false)
+            .refusal()
+            .is_none(),
+        "the retry was refused"
+    );
+    let second = World::identity("build", "one", "work", 2);
+    let new = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    refused(&world.engine.needs(&second.to_string(), &old.0, "stop"))?;
+    refused(&world.engine.needs(&first.to_string(), &old.0, "stop"))?;
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Started),
+        "the stage"
+    );
+    ensure!(
+        world
+            .engine
+            .needs(&second.to_string(), &new.0, "stop")
+            .refusal()
+            .is_none(),
+        "the current start's stop-short was refused"
+    );
+    Ok(())
+}
+
+fn stop_words(world: &World, identity: &Identity) -> Option<String> {
+    match world.engine.stop_check(&identity.to_string()) {
+        Answer::StopCheck { words } => words,
+        _ => None,
+    }
+}
+
+fn s24_sent_back(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("fix", "one");
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world.settle(&id);
+    let code = World::identity("fix", "one", "code", 1);
+    let words = stop_words(&world, &code).ok_or("the agent was not sent back")?;
+    ensure!(
+        words.contains("commits"),
+        "the words name not commits: {words}"
+    );
+    ensure!(
+        words.contains("flume needs"),
+        "the words name not the way to stop short: {words}"
+    );
+    world.commit("fix/one", &["fix.rs"]);
+    ensure_eq!(
+        stop_words(&world, &code),
+        None,
+        "the stop check once delivered"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Delivered),
+        "the code stage"
+    );
+    Ok(())
+}
+
+fn not_going_quiet(_: &()) -> Outcome {
+    let world = World::new();
+    world.begun("build", Some(Deliverable::Commits), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    world.agent.set_own_work(&work, Reading::Yes);
+    ensure_eq!(
+        stop_words(&world, &work),
+        None,
+        "the stop check with own work"
+    );
+    world.agent.set_own_work(&work, Reading::No);
+    world.agent.set_asking(&work, Reading::Yes);
+    ensure_eq!(
+        stop_words(&world, &work),
+        None,
+        "the stop check with a question open"
+    );
+    world.agent.set_asking(&work, Reading::No);
+    ensure!(
+        stop_words(&world, &work).is_some(),
+        "an agent with nothing made was not sent back"
+    );
+    let other = World::new();
+    other.begun("round", None, "one")?;
+    let round = World::identity("round", "one", "work", 1);
+    ensure_eq!(
+        stop_words(&other, &round),
+        None,
+        "the stop check of a conversation"
+    );
+    Ok(())
+}
+
+fn s25_an_agent_tries_to_submit(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("fix", "one");
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world.settle(&id);
+    let code = World::identity("fix", "one", "code", 1);
+    world
+        .agent
+        .refuse_act(&code, "a submission of fix/one to the merge queue");
+    world.settle(&id);
+    let status = world.status(&id)?;
+    ensure!(
+        status
+            .refused_acts
+            .iter()
+            .any(|act| act.contains("submission")),
+        "status reports no refusal: {:?}",
+        status.refused_acts
+    );
+    ensure_eq!(world.queue.log.count("submit"), 0, "submissions");
+    ensure_eq!(status.stages[0].state, StageState::Begun, "the code stage");
     Ok(())
 }
