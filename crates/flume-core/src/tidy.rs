@@ -6,10 +6,51 @@
 //! last.
 
 use crate::start::Starts;
-use crate::{BranchKept, Engine, KeptPlace, Step, Tidied};
+use crate::{Answer, BranchKept, Engine, KeptPlace, Step, Tidied};
 use flume_seams::*;
 
 impl Engine {
+    /// Tidies the place, or every place on the host: each whose work is
+    /// over is removed or kept naming why, and each whose work is not
+    /// over is named so.
+    pub fn tidy(&self, place: Option<&PlaceId>) -> Answer {
+        let mut tidy = self.settle_attended();
+        let targets: Vec<PlaceId> = match place {
+            Some(id) => {
+                if self.store.read(id).is_none() && !tidy.removed.contains(id) {
+                    return Answer::refused(format!("no place {id} stands on this host"));
+                }
+                vec![id.clone()]
+            }
+            None => self
+                .store
+                .read_every()
+                .into_iter()
+                .map(|read| read.state.place.id)
+                .collect(),
+        };
+        for id in &targets {
+            match self.store.read(id).map(|read| read.state.phase) {
+                Some(Phase::Over { .. } | Phase::Gone { .. }) => tidy.add(self.settle_place(id)),
+                Some(_) => tidy.not_over.push(id.clone()),
+                None => {}
+            }
+        }
+        let mut kept: Vec<KeptPlace> = vec![];
+        for one in tidy.kept.into_iter().rev() {
+            if !kept.iter().any(|other| other.place == one.place) {
+                kept.insert(0, one);
+            }
+        }
+        tidy.kept = kept;
+        if let Some(id) = place {
+            tidy.removed.retain(|removed| removed == id);
+            tidy.kept.retain(|kept| &kept.place == id);
+            tidy.branches_kept.retain(|kept| &kept.place == id);
+        }
+        Answer::Tidied { tidy }
+    }
+
     /// Tidies the place if its work is over; true when it changed
     /// something.
     pub(crate) fn tidy_place(&self, id: &PlaceId, tidied: &mut Tidied) -> bool {

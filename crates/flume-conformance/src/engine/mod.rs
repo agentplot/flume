@@ -7,6 +7,7 @@ pub mod launching;
 pub mod place_status;
 pub mod settling;
 pub mod stage_runs;
+pub mod tidying;
 pub mod world;
 
 use crate::Scenario;
@@ -20,5 +21,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(stage_runs::scenarios());
     every.extend(caller_acts::scenarios());
     every.extend(place_status::scenarios());
+    every.extend(tidying::scenarios());
     every
 }
