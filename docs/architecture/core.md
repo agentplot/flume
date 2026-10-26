@@ -6,8 +6,7 @@ The narrative is the statement in agentplot/blueprints,
 `design/flume/requirements.md`; a rule here names the clause it
 enforces and never restates it. There are no area pages yet; a rule
 that binds only one part of the tree moves to an area page when that
-part exists. A rule drawn from a record still proposed says so, and
-stands as proposed until the user's yes (`briefs.15`).
+part exists.
 
 ## Rules
 
@@ -20,8 +19,8 @@ stands as proposed until the user's yes (`briefs.15`).
 
 ### Branches, submissions and landings
 
-- **[core.5]** No code path commits, merges, rebases, pushes or lands in a place, and the only branch flume moves is a place's own, at its launch and at its tidy. (Proposed 2026-10-22, record 0002, on the user's card; accepted only on their yes.)
-- **[core.6]** A place is submitted only by the settle that follows its last stage's delivery, through the merge-queue seam, to its base and to no other branch, and its outcome is read from the merge queue's record, never from an agent. (Proposed 2026-10-22, record 0002, on the user's card; accepted only on their yes.)
+- **[core.5]** No code path commits, merges, rebases, pushes or lands in a place, and the only branch flume moves is a place's own, at its launch and at its tidy.
+- **[core.6]** A place is submitted only by the settle that follows its last stage's delivery, through the merge-queue seam, to its base and to no other branch, and its outcome is read from the merge queue's record, never from an agent.
 - **[core.7]** A place's branch is cut from the base's current revision where the merge queue's profile says the base lives, and a launch that cannot read it is refused.
 - **[core.8]** A launch is refused whole, leaving nothing it made, when anything of it already stands or its kind asks for more than flume runs.
 

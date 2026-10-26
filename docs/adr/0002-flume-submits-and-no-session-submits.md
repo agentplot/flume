@@ -1,7 +1,7 @@
 ---
 number: 2
 title: flume submits a landing kind's place, and no session submits
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # flume submits a landing kind's place, and no session submits
 
-Status: proposed to the user on 2026-10-22, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-26, on their card, after the conflicts section below answered their question.
 
 Deciders: the user, in the capture design's ruling 12 (`design/capture/plan.md`, D2) and in flume's statement.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 14, 15, 63, 71, 108, 111 to 113, 124, I3, I7, C.6; `agentplot/blueprints:design/sluice/requirements.md` clauses 1, 2, 4; crew's `teams.5`.
