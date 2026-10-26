@@ -35,3 +35,23 @@ Option 1 leaves the one act that moves shared history to the agent, which is wha
 - flume never commits, merges, rebases or lands; it moves no branch but a place's own at its launch and its tidy (14, 67).
 - Under sluice, submit is `wt submit <base>` or `sluice submit <base>` run by flume in the place, waited on; `--no-wait`, `--check` and `--no-remove` are never passed (C.6).
 - The guard in flume's Claude Code plugin refuses `sluice submit`, `wt submit`, `wt merge` and `git push` from an agent and leaves the mark status reports (108, C.4).
+
+### What this means for conflicts, asked by the user on 2026-10-26
+
+Today, with crew, an agent runs `submit` itself and is told of a merge
+conflict, and the Claude Code mod tells it when the target branch has
+advanced so it can fix the conflict. Under flume no agent runs submit
+and no agent is told the branch moved. flume submits the place's branch
+once the kind's last stage has delivered and its agent has ended (111);
+an agent works on its base and never rebases or merges on its own (14).
+sluice finds a conflict when it forms the candidate, the line plus every
+entry ahead, before any check runs (sluice 10 to 12), so a conflict is
+found once, at the moment it matters. A failed submission sends the place
+back to the stage its kind names, with a fresh agent whose prompt carries
+the merge queue's words, the conflict and the revisions (112); the
+stages after it run again and flume submits again; after as many
+send-backs as the kind allows, the place waits on its caller (23, 112).
+What is lost is the early notice, one stage later than the mod gives it
+today. What is gained is that nothing races the queue, the same thing
+happens every time, and the agent that fixes the conflict is told what
+conflicted rather than that something moved.
