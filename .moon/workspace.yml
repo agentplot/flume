@@ -1,12 +1,16 @@
-# moon runs flume's checks. Each check is tagged with its layer, which a
-# branch's policy will require by tag:
-#   check-fast    the site's prose and its build: seconds
+# moon runs flume's checks: one project per crate and for the site, each
+# holding its own checks (core.21). Each check is tagged with its layer,
+# which a branch's policy requires by tag:
+#   check-fast    the site's prose and its build; each crate's format,
+#                 lint and tests over the fakes (cargo); the conformance
+#                 suite's clause coverage: under a minute
 # A task whose inputs are identical to a run that passed on this host, in
 # any worktree, replays from .moon/cache/outputs (a link into the git common
 # dir, made by devenv.nix) instead of running again.
 $schema: 'https://moonrepo.dev/schemas/workspace.json'
 
 projects:
+  seams: 'crates/flume-seams'
   site: 'site'
 
 # --affected compares against the merge-base with main.

@@ -13,8 +13,5 @@ brought to the rule.
   agent ended in its terminal (45, 109); a return to a stage on hold
   (47, 112); the default limit on going back (23, 112). None is a
   rule's source until ruled.
-- **The gate has no code yet.** `core.21` binds the first crate and the
-  first plugin to arrive with their own moon projects and check-fast
-  tasks; until then the gate is the site's prose and build.
 - **Records 0001 to 0006 are proposed**, on the user's cards (`briefs.15`);
   each rule drawn from one says so and stands as proposed.

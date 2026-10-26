@@ -1,0 +1,16 @@
+# flume's crates: the seams, the core over them, the fakes, the
+# conformance suite and the binary. Each is a moon project of its own
+# (core.21), and a profile's crate is added to `members` by the unit that
+# writes it.
+[workspace]
+resolver = "2"
+members = ["crates/flume-seams"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

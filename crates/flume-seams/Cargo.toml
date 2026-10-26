@@ -1,0 +1,13 @@
+[package]
+name = "flume-seams"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The seven seams of Part B of flume's statement, one trait each, the types they pass, and git's history and the host beside them (core.1, core.2)."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[lib]
+doctest = false

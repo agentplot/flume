@@ -6,6 +6,9 @@ devenv.local.nix
 /result
 .DS_Store
 
+# cargo's build directory
+/target
+
 # The site (site/README.md)
 /site/node_modules/
 /site/dist/
