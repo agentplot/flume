@@ -131,3 +131,21 @@ pub enum BindingRead {
     Read { binding: Binding },
     CouldNotRead { reason: String },
 }
+
+/// The kinds seam (B.2). The same revision always gives the same kinds,
+/// reading changes nothing, and a launch's declaration is read the same
+/// way (85).
+pub trait Kinds: Send + Sync {
+    /// Every kind the repository declares at `revision` (84, 20).
+    fn read_kinds(&self, repository: &str, revision: &crate::Revision) -> KindsRead;
+
+    /// Every kind a declaration a launch carries holds (19, 85).
+    fn read_declaration(&self, declaration: &str) -> KindsRead;
+
+    /// flume's own declaration: fix and change (22).
+    fn flumes_own(&self) -> Vec<Kind>;
+
+    /// The repository's binding, read at its default branch's current
+    /// revision (20, 105).
+    fn read_binding(&self, repository: &str) -> BindingRead;
+}

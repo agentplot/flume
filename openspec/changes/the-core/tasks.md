@@ -7,7 +7,7 @@
 ## 2. The types and the seven traits
 
 - [x] 2.1 Add the types the seams pass: a launch, a place's held state, a kind with its stages as read-kinds returns them, the six deliverable forms, a prompt and its parts, an identity, a start secret and a stop-short, a submission and its outcomes, agent and stage states, and each seam's unknown and could-not-read answers (design 2, 4), each serializing to JSON and back unchanged. True when `devenv shell -- moon run seams:test` passes with a round-trip test per type.
-- [ ] 2.2 Add the seven traits `Place`, `Kinds`, `Change`, `Agent`, `Terminal`, `MergeQueue` and `Store`, each with the operations its section of Part B names and the three of design 2 beyond them, and the `History` and `Host` traits of design 3, with no tool named in any (core.1, core.2). True when `devenv shell -- moon run seams:lint seams:test` passes.
+- [x] 2.2 Add the seven traits `Place`, `Kinds`, `Change`, `Agent`, `Terminal`, `MergeQueue` and `Store`, each with the operations its section of Part B names and the three of design 2 beyond them, and the `History` and `Host` traits of design 3, with no tool named in any (core.1, core.2). True when `devenv shell -- moon run seams:lint seams:test` passes.
 
 ## 3. The fakes and the seam scenarios
 

@@ -91,3 +91,32 @@ pub enum BranchRemoved {
     Kept { commits: Vec<Revision> },
     Gone,
 }
+
+/// The place seam (B.1): a worktree of one repository on a branch of its
+/// own. The guarantee: make never touches a branch or a location that
+/// already exists, and each operation is all or nothing (83).
+pub trait Place: Send + Sync {
+    /// A worktree at `location` on a new branch at `revision` (78).
+    fn make(
+        &self,
+        repository: &str,
+        revision: &Revision,
+        branch: &str,
+        location: &str,
+    ) -> MakeOutcome;
+
+    /// Each readiness step the repository declares at `revision`, run in
+    /// the place with an environment that carries nothing of the
+    /// caller's, stopping at the first that fails (79, 11, 20).
+    fn ready(&self, place: &PlaceRef, revision: &Revision) -> Readiness;
+
+    /// The place's branch, its head and what it holds (80).
+    fn read(&self, place: &PlaceRef) -> PlaceRead;
+
+    /// The place removed through its repository's teardown (81).
+    fn remove(&self, place: &PlaceRef) -> Removed;
+
+    /// The branch removed when it holds no commit whose change its base
+    /// lacks, judged by change and never by ancestry alone (82, 67).
+    fn remove_branch(&self, repository: &str, branch: &str, base: &str) -> BranchRemoved;
+}

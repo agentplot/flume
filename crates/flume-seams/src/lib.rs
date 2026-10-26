@@ -14,6 +14,7 @@ mod launch;
 mod merge_queue;
 mod place;
 mod prompt;
+mod resolver;
 mod store;
 mod terminal;
 
@@ -27,6 +28,7 @@ pub use launch::*;
 pub use merge_queue::*;
 pub use place::*;
 pub use prompt::*;
+pub use resolver::*;
 pub use store::*;
 pub use terminal::*;
 

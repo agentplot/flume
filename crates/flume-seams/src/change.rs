@@ -31,3 +31,15 @@ pub enum ChangeRead {
     Read { facts: ChangeFacts },
     CouldNotRead { reason: String },
 }
+
+/// The change seam (B.3). The same revision always gives the same
+/// answer, and reading writes nothing (87).
+pub trait Change: Send + Sync {
+    /// The change by its name at `revision` (86).
+    fn read_change(&self, repository: &str, revision: &crate::Revision, name: &str) -> ChangeRead;
+
+    /// Where the change by its name lives in a place, relative to it: the
+    /// prompt's change part, and the path whose newest commit a change
+    /// written or tasks ticked is read by (24, design 2).
+    fn path(&self, name: &str) -> String;
+}

@@ -49,3 +49,30 @@ pub enum Watch {
     Bound { seconds: Seconds },
     None,
 }
+
+/// The terminal seam (B.5), kept once for the host. The guarantee: open
+/// never runs a second agent under an identity already live, and close
+/// never reports an end that did not happen (98).
+pub trait Terminal: Send + Sync {
+    /// An agent running `command` in the place under `identity`, beside
+    /// the pane the settings name, if any (94, 107).
+    fn open(
+        &self,
+        place: &crate::PlaceRef,
+        command: &crate::AgentCommand,
+        identity: &crate::Identity,
+        beside: Option<&str>,
+    ) -> Opened;
+
+    /// `text` delivered as input the agent receives (95).
+    fn send(&self, agent: &crate::Identity, text: &str) -> Sent;
+
+    /// The agent's state (96).
+    fn state(&self, agent: &crate::Identity) -> AgentState;
+
+    /// The agent's end (97).
+    fn close(&self, agent: &crate::Identity) -> Closed;
+
+    /// The watch the terminal keeps, if any (122).
+    fn watch(&self) -> Watch;
+}

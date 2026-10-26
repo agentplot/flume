@@ -88,3 +88,44 @@ pub struct StopShort {
     pub secret: Secret,
     pub words: String,
 }
+
+/// The agent seam (B.4). The guarantee: each answer is what the agent's
+/// own record shows, and an answer the record does not give is unknown,
+/// never guessed from the terminal (93).
+pub trait Agent: Send + Sync {
+    /// How to start the agent with its settings in the place under its
+    /// identity and secret, the prompt in `prompt_args` (88, 29).
+    fn command(
+        &self,
+        settings: &crate::Settings,
+        place: &crate::PlaceRef,
+        identity: &Identity,
+        secret: &Secret,
+        prompt: &str,
+    ) -> AgentCommand;
+
+    /// Whether the agent under `agent` received `text` as a prompt (89).
+    fn received(&self, agent: &Identity, text: &str) -> Received;
+
+    /// Whether it waits on a question it put to a person (90).
+    fn asking(&self, agent: &Identity) -> Reading;
+
+    /// Whether own work it started still runs (91).
+    fn own_work(&self, agent: &Identity) -> Reading;
+
+    /// The one way the agent tells flume it stops short, filled in for
+    /// its place and stage, as its prompt gives it (92, 28).
+    fn stop_short(&self, agent: &Identity) -> String;
+
+    /// Whether the program lets flume keep an agent about to go quiet at
+    /// work, with words naming its deliverable (115).
+    fn send_back(&self) -> Offered;
+
+    /// Each act the agent would have taken that submits, merges or pushes
+    /// its place's branch, refused and reported (116, 108).
+    fn guard(&self, agent: &Identity) -> Guarded;
+
+    /// Whether the program tells flume at once each time the agent goes
+    /// quiet, so that flume settles its place (121).
+    fn on_quiet(&self) -> Offered;
+}
