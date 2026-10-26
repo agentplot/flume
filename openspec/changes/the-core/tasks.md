@@ -18,7 +18,7 @@
 
 ## 4. The core: held state and launches
 
-- [ ] 4.1 Add `crates/flume-core` to `members` and as moon project `core` with check-fast `format`, `lint` and `test` declaring their inputs, holding the engine built over a resolver, the host's terminal and store, `History`, `Host` and `Defaults` (design 2, 3, 10). True when `devenv shell -- moon run core:format core:lint core:test` passes.
+- [x] 4.1 Add `crates/flume-core` to `members` and as moon project `core` with check-fast `format`, `lint` and `test` declaring their inputs, holding the engine built over a resolver, the host's terminal and store, `History`, `Host` and `Defaults` (design 2, 3, 10). True when `devenv shell -- moon run core:format core:lint core:test` passes.
 - [ ] 4.2 Build the held state's document and its versioned read and write, with a refused write re-read and decided again (design 4; held-state spec). True when `devenv shell -- moon run core:test conformance:test` passes, with the held-state scenarios in the suite.
 - [ ] 4.3 Build the launch: resolution of the kind over the three declarations and of the binding, the base revision from the merge queue seam or the local base, every refusal of the launching spec made before anything is made or undone after, readiness, and the first stage started, held or waiting (design 4; 1 to 12, 19 to 23). True when `devenv shell -- moon run conformance:test` passes with the launching scenarios, S11, S13, S15, S16, S22, S31 and S33 among them.
 

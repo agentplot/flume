@@ -12,6 +12,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "flume-core"
+version = "0.0.0"
+dependencies = [
+ "flume-fakes",
+ "flume-seams",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "flume-fakes"
 version = "0.0.0"
 dependencies = [
