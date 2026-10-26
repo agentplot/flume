@@ -1,0 +1,16 @@
+[package]
+name = "flume"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "flume's binary: the core built over the profiles built in, each answer written as JSON (61)."
+publish = false
+
+[[bin]]
+name = "flume"
+path = "src/main.rs"
+test = true
+
+[dependencies]
+flume-core = { path = "../flume-core" }
+serde_json.workspace = true

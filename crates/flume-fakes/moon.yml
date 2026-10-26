@@ -1,0 +1,25 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The fakes: one scriptable fake per seam, and for git's history and the
+# host, which the engine and the conformance suite run over. Each check is
+# one task, in the fast layer.
+language: 'rust'
+layer: 'library'
+dependsOn: [seams]
+
+tasks:
+  format:
+    command: 'cargo fmt --check -p flume-fakes'
+    inputs: ['/crates/flume-fakes/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  lint:
+    command: 'cargo clippy -p flume-fakes --all-targets -- -D warnings'
+    inputs: ['/crates/flume-fakes/**/*', '/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  test:
+    command: 'cargo test -p flume-fakes'
+    inputs: ['/crates/flume-fakes/**/*', '/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}

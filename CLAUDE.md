@@ -36,10 +36,12 @@ Every tool runs through the shell, one command at a time:
 
 | layer | what | how long |
 |---|---|---|
-| `check-fast` | the site's prose (Vale) and its build | seconds |
+| `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes (cargo); the conformance suite's clause coverage | under a minute |
 
 `devenv shell -- moon run :#check-fast` runs them; `site-build` and
-`prose` run one each. The site's own notes are `site/README.md`.
+`prose` run one each, and `moon run <crate>:test` one crate's tests
+(`seams`, `core`, `fakes`, `conformance`, `flume`). The site's own
+notes are `site/README.md`.
 
 ## Commits
 

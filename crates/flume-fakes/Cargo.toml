@@ -1,0 +1,13 @@
+[package]
+name = "flume-fakes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "One scriptable fake for each of flume's seams, and for git's history and the host: every answer settable, every call logged in order."
+publish = false
+
+[dependencies]
+flume-seams = { path = "../flume-seams" }
+
+[lib]
+doctest = false
