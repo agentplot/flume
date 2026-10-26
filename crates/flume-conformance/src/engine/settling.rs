@@ -17,7 +17,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "settle: a delivered stage whose next waits on its caller starts nothing more",
-            cites: &["S7", "47", "70", "I6"],
+            cites: &["S7", "47", "70", "17", "I6"],
             run: s7_two_held_places,
         },
         Scenario {
@@ -37,7 +37,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "settle: a place whose launching command died is undone",
-            cites: &["2", "76", "17"],
+            cites: &["2", "76"],
             run: a_launch_that_died,
         },
         Scenario {
