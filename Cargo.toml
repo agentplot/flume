@@ -9,6 +9,7 @@ members = [
   "crates/flume-fakes",
   "crates/flume-conformance",
   "crates/flume-core",
+  "crates/flume",
 ]
 
 [workspace.package]

@@ -1,0 +1,24 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The binary: the core built over the profiles built in, each answer
+# written as JSON. Each check is one task, in the fast layer.
+language: 'rust'
+layer: 'application'
+dependsOn: [core]
+
+tasks:
+  format:
+    command: 'cargo fmt --check -p flume'
+    inputs: ['/crates/flume/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  lint:
+    command: 'cargo clippy -p flume --all-targets -- -D warnings'
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  test:
+    command: 'cargo test -p flume'
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
