@@ -1,0 +1,25 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The conformance suite: the seam scenarios, the engine's scenarios over
+# the fakes, and the clause coverage check. Each check is one task, in the
+# fast layer.
+language: 'rust'
+layer: 'library'
+dependsOn: [seams, fakes]
+
+tasks:
+  format:
+    command: 'cargo fmt --check -p flume-conformance'
+    inputs: ['/crates/flume-conformance/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  lint:
+    command: 'cargo clippy -p flume-conformance --all-targets -- -D warnings'
+    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  test:
+    command: 'cargo test -p flume-conformance'
+    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}

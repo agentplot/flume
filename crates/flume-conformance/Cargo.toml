@@ -1,0 +1,15 @@
+[package]
+name = "flume-conformance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "flume's conformance suite: the seam scenarios a profile runs against its tool, the engine's scenarios over the fakes, each citing the clauses it exercises, and the check that every clause is cited (106)."
+publish = false
+
+[dependencies]
+flume-seams = { path = "../flume-seams" }
+flume-fakes = { path = "../flume-fakes" }
+serde_json.workspace = true
+
+[lib]
+doctest = false

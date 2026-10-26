@@ -1,0 +1,11 @@
+//! flume's conformance suite (106): the seam scenarios, each generic over
+//! its seam's trait so a profile unit runs them against its real tool as
+//! the fakes pass them here, and the engine's scenarios over the fakes.
+//! Every scenario carries the clauses it cites as data, which the
+//! coverage check reads.
+
+pub mod fake_harness;
+pub mod scenario;
+pub mod seams;
+
+pub use scenario::{Outcome, Scenario};
