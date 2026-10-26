@@ -3,6 +3,7 @@
 
 pub mod held_state;
 pub mod launching;
+pub mod stage_runs;
 pub mod world;
 
 use crate::Scenario;
@@ -12,5 +13,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     let mut every = vec![];
     every.extend(held_state::scenarios());
     every.extend(launching::scenarios());
+    every.extend(stage_runs::scenarios());
     every
 }
