@@ -4,8 +4,11 @@
 //! Every scenario carries the clauses it cites as data, which the
 //! coverage check reads.
 
+pub mod clauses;
+pub mod coverage;
 pub mod fake_harness;
 pub mod scenario;
 pub mod seams;
+pub mod suite;
 
 pub use scenario::{Outcome, Scenario};

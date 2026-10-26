@@ -23,3 +23,8 @@ tasks:
     inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
+  coverage:
+    command: 'cargo run -q -p flume-conformance --bin coverage'
+    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
