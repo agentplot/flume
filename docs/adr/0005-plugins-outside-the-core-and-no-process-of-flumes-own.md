@@ -1,7 +1,7 @@
 ---
 number: 5
 title: Plugins outside the core, and no process of flume's own
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Plugins outside the core, and no process of flume's own
 
-Status: proposed to the user on 2026-10-22, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-26, on their card.
 
 Deciders: the user, in flume's statement (what moves stages on; herdr required for unattended use; no daemon).
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 46, 60, 61, 119 to 122, I8, C.4, C.5, section 9; sluice's ADR 0023 (plugins kept outside the core).

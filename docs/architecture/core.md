@@ -13,10 +13,10 @@ stands as proposed until the user's yes (`briefs.15`).
 
 ### The core and its seams
 
-- **[core.1]** Code outside a profile names no worktree tool, change tool, agent program, terminal or merge queue. (Proposed 2026-10-22, record 0004, on the user's card; accepted only on their yes.)
-- **[core.2]** Every seam of Part B is reached through exactly one interface, and a profile implements that interface and nothing of the core. (Proposed 2026-10-22, record 0004, on the user's card; accepted only on their yes.)
-- **[core.3]** A repository's profiles are read from its `[profiles]` table and from nothing else; a seam the table leaves unbound is the no-tool profile, or unbound, and never guessed from another tool's files. (Proposed 2026-10-22, record 0004, on the user's card; accepted only on their yes.)
-- **[core.4]** flume defines no field of the kind format: the format is weir's, and flume reads the part clause 23 names and ignores every section it does not know. (Proposed 2026-10-22, record 0004, on the user's card; accepted only on their yes.)
+- **[core.1]** Code outside a profile names no worktree tool, change tool, agent program, terminal or merge queue.
+- **[core.2]** Every seam of Part B is reached through exactly one interface, and a profile implements that interface and nothing of the core.
+- **[core.3]** A repository's profiles are read from its `[profiles]` table and from nothing else; a seam the table leaves unbound is the no-tool profile, or unbound, and never guessed from another tool's files.
+- **[core.4]** flume defines no field of the kind format: the format is weir's, and flume reads the part clause 23 names and ignores every section it does not know.
 
 ### Branches, submissions and landings
 
@@ -34,8 +34,8 @@ stands as proposed until the user's yes (`briefs.15`).
 
 ### Settling, surfaces and state
 
-- **[core.13]** flume starts no process that outlives a command of its own: every settle runs inside a command, started by an agent going quiet, by the merge queue's verdict or by the terminal's watch. (Proposed 2026-10-22, record 0005, on the user's card; accepted only on their yes.)
-- **[core.14]** Every surface answers from one core through one form a program reads, which only ever gains fields, and no surface computes a stage's end, a status, a submission or a tidy of its own. (Proposed 2026-10-22, record 0005, on the user's card; accepted only on their yes.)
+- **[core.13]** flume starts no process that outlives a command of its own: every settle runs inside a command, started by an agent going quiet, by the merge queue's verdict or by the terminal's watch.
+- **[core.14]** Every surface answers from one core through one form a program reads, which only ever gains fields, and no surface computes a stage's end, a status, a submission or a tidy of its own.
 - **[core.15]** Status reads every fact of a deliverable, a change or a submission where it lives when asked, and flume keeps no record of one between asks. (Proposed 2026-10-22, record 0006, on the user's card; accepted only on their yes.)
 - **[core.16]** A place's live state is one document on the host, written by compare-and-set on its version, gone when the place is tidied, and nothing of flume's is written into a repository's content. (Proposed 2026-10-22, record 0006, on the user's card; accepted only on their yes.)
 - **[core.17]** Every act is safe to repeat, and no act leaves a worktree or a branch of flume's that its held state does not name.
