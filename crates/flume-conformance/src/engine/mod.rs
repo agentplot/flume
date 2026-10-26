@@ -2,6 +2,7 @@
 //! section 11 where it has one, and each citing its clauses as data.
 
 pub mod held_state;
+pub mod launching;
 pub mod world;
 
 use crate::Scenario;
@@ -10,5 +11,6 @@ use crate::Scenario;
 pub fn scenarios() -> Vec<Scenario<()>> {
     let mut every = vec![];
     every.extend(held_state::scenarios());
+    every.extend(launching::scenarios());
     every
 }

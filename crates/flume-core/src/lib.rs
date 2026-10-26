@@ -7,15 +7,20 @@
 //! The engine reaches every tool through the seams alone (core.1, core.2)
 //! and keeps its state in the store (core.16).
 
-#![allow(dead_code)]
-
+mod answer;
 mod held;
+mod launch;
+mod prompt;
+mod reading;
+mod start;
+mod status;
 
+pub use answer::*;
 pub use held::Step;
 
 use flume_seams::{
-    Agent, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds, Settings,
-    Store, Terminal,
+    Agent, Binding, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds,
+    Settings, Store, Terminal,
 };
 use std::sync::Arc;
 
@@ -85,18 +90,17 @@ impl Engine {
         &self.defaults
     }
 
-    /// The seams a place's binding, as its launch resolved it, names
-    /// (21, 105); an unbound place seam is the one that needs nothing
-    /// beyond git.
-    pub(crate) fn bound(&self, place: &PlaceRecord) -> Result<Bound, String> {
-        let binding = &place.binding;
-        let place_seam =
-            self.resolver
-                .place(binding.place.as_deref())
-                .ok_or_else(|| match &binding.place {
-                    Some(name) => format!("no place profile is named {name}"),
-                    None => "no place profile needs nothing beyond git".to_string(),
-                })?;
+    /// The seams a binding names (105, core.3): an unbound place seam is
+    /// the one that needs nothing beyond git, and an unbound change or
+    /// merge queue stays unbound.
+    pub(crate) fn bind(&self, binding: &Binding) -> Result<Bound, String> {
+        let place = self
+            .resolver
+            .place(binding.place.as_deref())
+            .ok_or_else(|| match &binding.place {
+                Some(name) => format!("no place profile is named {name}"),
+                None => "no place profile needs nothing beyond git".to_string(),
+            })?;
         let change = match &binding.change {
             Some(name) => Some(
                 self.resolver
@@ -114,10 +118,15 @@ impl Engine {
             None => None,
         };
         Ok(Bound {
-            place: place_seam,
+            place,
             change,
             merge_queue,
         })
+    }
+
+    /// The seams of a place's binding as its launch resolved it (21).
+    pub(crate) fn bound(&self, place: &PlaceRecord) -> Result<Bound, String> {
+        self.bind(&place.binding)
     }
 
     /// The agent profile a stage's settings name by its program (32,

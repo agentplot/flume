@@ -114,3 +114,87 @@ impl World {
         self.store.held(place)
     }
 }
+
+/// A stage of a repository's or a launch's kind.
+pub fn stage(name: &str, deliverable: Option<Deliverable>, prompt: &str) -> Stage {
+    Stage {
+        name: name.into(),
+        prompt: prompt.into(),
+        conversation: deliverable.is_none(),
+        deliverables: deliverable.into_iter().collect(),
+        agents: vec![Settings::default()],
+        waits: false,
+        quiet_limit: None,
+        send_back_to: None,
+        send_back_limit: None,
+    }
+}
+
+/// A kind of a repository's or a launch's, at version 1.
+pub fn kind(name: &str, lands: bool, stages: Vec<Stage>) -> Kind {
+    Kind {
+        name: name.into(),
+        version: 1,
+        branch_prefix: name.into(),
+        starts_unready: false,
+        lands,
+        stages,
+    }
+}
+
+/// A launch of `kind` named `name` on `main` with `brief`.
+pub fn launch(kind: &str, name: &str, brief: Option<&str>) -> Launch {
+    Launch {
+        repository: REPOSITORY.into(),
+        kind: kind.into(),
+        name: name.into(),
+        base: "main".into(),
+        brief: brief.map(str::to_string),
+        ..Launch::default()
+    }
+}
+
+/// The place an answer gives, or what the answer was.
+pub fn launched(answer: &flume_core::Answer) -> Result<flume_core::PlaceStatus, String> {
+    match answer {
+        flume_core::Answer::Launched { place } => Ok(place.clone()),
+        other => Err(format!("the launch answered {other:?}")),
+    }
+}
+
+/// The refusal's reason an answer gives, or what the answer was.
+pub fn refused(answer: &flume_core::Answer) -> Result<String, String> {
+    answer
+        .refusal()
+        .map(str::to_string)
+        .ok_or_else(|| format!("the act was taken: {answer:?}"))
+}
+
+impl World {
+    pub fn identity(kind: &str, name: &str, stage: &str, start: u32) -> Identity {
+        Identity {
+            repository: REPOSITORY.into(),
+            place: format!("{kind}--{name}"),
+            stage: stage.into(),
+            start,
+        }
+    }
+
+    pub fn stage_state(&self, place: &PlaceId, stage: &str) -> Option<StageState> {
+        self.held(place)?
+            .stages
+            .iter()
+            .find(|held| held.name == stage)
+            .map(|held| held.state)
+    }
+
+    /// The prompt the start under `identity` was opened with.
+    pub fn prompt(&self, place: &PlaceId, identity: &Identity) -> Option<String> {
+        let held = self.held(place)?;
+        held.stages
+            .iter()
+            .filter_map(|stage| stage.start.as_ref())
+            .find(|start| &start.identity == identity)
+            .map(|start| start.prompt.text.clone())
+    }
+}
