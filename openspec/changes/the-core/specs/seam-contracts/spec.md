@@ -11,9 +11,9 @@ no tool but through them (core.1, core.2).
 ### Requirement: One interface per seam
 
 There SHALL be exactly one interface for each of the seven seams of
-Part B: the place (78 to 83), the kinds (84, 85), the change (86, 87),
+Part B: the place (78 to 83), the kinds (84, 85), the change (86, 87, 127),
 the agent (88 to 93, 115, 116, 121), the terminal (94 to 98, 122), the
-merge queue (99, 101, 117, 125) and the store (102 to 104). Each SHALL
+merge queue (99, 101, 117, 125, 126) and the store (102 to 104, 128). Each SHALL
 offer the operations its section names and no operation of the core's,
 and no interface SHALL name a tool (core.1, core.2).
 
@@ -27,13 +27,14 @@ and no interface SHALL name a tool (core.1, core.2).
 - **WHEN** the seams', core's, fakes' and suite's sources are searched for `wt`, `worktrunk`, `openspec`, `claude`, `herdr` and `sluice` as words
 - **THEN** none is found
 
-### Requirement: What the seams carry beyond Part B's list
+### Requirement: The base, a change's location and a place's folder
 
-The seams SHALL also answer what Part A and the rules need that Part B
-lists under no operation: the merge queue where the base's current
-revision lives, or a refusal naming why (9, core.7); the change's path
-in a place, for a prompt's change part; and the store the place's own
-folder beside its held state, for a report kept there (123).
+The merge queue seam SHALL answer the revision the base stands at where
+its profile says the base lives, after that profile's fetch, or a
+refusal naming why (126; 9, core.7); the change seam where a change
+lies in a place, for a prompt's change part (127); and the store the
+place's own folder beside its held state, for a report kept there (128,
+123).
 
 #### Scenario: The base where the merge queue says it lives
 

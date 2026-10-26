@@ -4,7 +4,7 @@
 
 The tree holds the site, the docs, the shell and the gate, and no
 crate. The statement (`agentplot/blueprints:design/flume/requirements.md`
-at 6246a48) is the source of every behaviour here; the phase 1 plan
+at f90f5fd) is the source of every behaviour here; the phase 1 plan
 (`design/flume/models/phase-1-bolts.md`, Bolt 1, at cdd7c43) fixes what
 this unit owns; `design/flume/models/reconstruction-1.md` gave the
 shapes (a data model, a state machine per stage and per place, ports and
@@ -32,9 +32,9 @@ exists, and this change adds none.
   through interfaces with fakes here; the implementations through `git`
   and the host's own calls arrive with the first unit that runs flume
   on a real repository.
-- Answering the statement's section 10. Where the engine must take a
-  reading, it takes the clause's plain one (decision 11) and the gap is
-  named for the design agent.
+- Ruling anything the statement leaves open. Section 10's rulings
+  bind the engine where it would otherwise take a reading (decision
+  11).
 
 ## Decisions
 
@@ -61,18 +61,21 @@ variant of its own, never an error the core must guess from (93):
 |---|---|---|---|
 | `Place` | make, ready, read, remove, remove_branch | 78 to 83 | worktrunk, git worktree (C.1) |
 | `Kinds` | read_kinds at a revision, read a launch's declaration, flume's own, read_binding | 84, 85, 19, 20, 105 | the kind format through weir's crate (C.2) |
-| `Change` | read_change at a revision, path | 86, 87 | OpenSpec (C.3) |
+| `Change` | read_change at a revision, path | 86, 87, 127 | OpenSpec (C.3) |
 | `Agent` | command, received, asking, own_work, stop_short, send_back, guard, on_quiet | 88 to 93, 115, 116, 121 | Claude Code (C.4) |
 | `Terminal` | open, send, state, close, watch | 94 to 98, 122 | herdr, the printed command (C.5) |
-| `MergeQueue` | submit, read_submission, wait, base_revision | 99, 101, 117, 125, 9 | sluice (C.6) |
-| `Store` | read one or every place, write at a version, folder | 102 to 104 | the host's state directory (C.7) |
+| `MergeQueue` | submit, read_submission, wait, base_revision | 99, 101, 117, 125, 126 | sluice (C.6) |
+| `Store` | read one or every place, write at a version, folder | 102 to 104, 128 | the host's state directory (C.7) |
 
-Three operations are beyond Part B's lists, each because Part A or a
-rule needs a fact only a profile knows: `MergeQueue::base_revision`,
-where the base's current revision lives or why it cannot be read (9,
-core.7, C.1); `Change::path`, the change's location in the place, for
-the prompt's change part; `Store::folder`, the place's own folder
-beside its held state, for a report kept there (123, C.7). `Agent::stop_short`
+Three operations carry Part B's names in the trait's own words:
+`MergeQueue::base_revision` is base (126), the revision the base stands
+at where the merge queue's profile says it lives, after that profile's
+fetch, or why it cannot be read, and the local branch when no merge
+queue is bound (9, core.7, C.1); `Change::path` is locate (127), where
+the change lies in the place, for the prompt's change part (27, C.3);
+`Store::folder` is folder (128), the place's own folder beside its held
+state, where a stage writes what a declaration puts under `{{state}}`
+(123, C.7). `Agent::stop_short`
 is clause 92 as the trait gives it: the text of the one way to stop
 short, filled into every prompt (28). `on_quiet` and `send_back` and
 `guard` answer whether the program offers each (115, 116, 121); the
@@ -111,7 +114,7 @@ One document per place (103, C.7), read and written whole:
 
 - The place: repository, kind name, version and the declaration it came
   from, the kind's stages as resolved (21), name, branch, base, the base
-  revision it was cut from, location `<repository>/places/<kind>--<name>`
+  revision it was cut from (126), location `<repository>/places/<kind>--<name>`
   (C.1), the binding's profile names, brief, mark, settings, holds and
   the submission's hold (7, 8).
 - Its phase: making, live, over (landed with its commit, dropped or
@@ -149,7 +152,7 @@ deliverable at H; if H moved by the end of the read, it reads again
 | change written | the change exists with planning complete, and its newest commit is since S |
 | tasks ticked | the change has a task, every task ticked, and its newest commit is since S |
 | change archived | the change archived, and H holds a commit S does not |
-| report | the file at the path, under the store's folder for `{{state}}`, written after T |
+| report | the file at the path, under the store's folder for `{{state}}` (128), written after T |
 | committed report | the path in a commit since S |
 
 A stage delivered ends once its agent is quiet (40). Quiet is the
@@ -165,7 +168,7 @@ reads none of these but lost, and ends only on finish (109).
 
 Rendering fills `{{brief}}`, `{{name}}`, `{{kind}}`, `{{stage}}`,
 `{{branch}}`, `{{base}}`, `{{place}}`, `{{change}}` (the change seam's
-path), `{{report}}`, `{{words}}`, `{{unready}}` and `{{needs}}` (the
+locate, 127), `{{report}}`, `{{words}}`, `{{unready}}` and `{{needs}}` (the
 agent seam's stop-short text), with `{{#words}}…{{/words}}` rendered
 only when there are words (C.2). The launch checks `{{brief}}` for every
 stage (4); any other bare part with nothing to fill it leaves the stage
@@ -197,7 +200,9 @@ writes it and settles again. Landed makes the work over and the tidy
 removes what the merge queue left (113, 66). Failed sends the place
 back to the stage the last stage's `on_fail` names, the last stage when
 it names none, with the verdict's words, while the send-backs taken are
-fewer than the kind's count; past it the place waits (112). Refused or
+fewer than the kind's count; past it the place waits (112). The stage
+sent back to starts at once, even one that waits on its caller's word
+(47; section 10, ruled 2026-10-26). Refused or
 withdrawn leaves the place waiting with its reason (112). A landing
 read by `read_submission` before flume submits is the landing (63).
 
@@ -213,7 +218,8 @@ identity is the current start's, the secret is that start's, and the
 agent is live. `stop_check(identity)` answers the agent profile's
 send-back (110, 115): words naming the deliverable and the stop-short
 text when the stage is no conversation, nothing is delivered or said,
-there is no own work and no open question; else none.
+there is no own work and no open question; else none. It answers so as
+often as it is asked (section 10, ruled 2026-10-26).
 
 ### 9. Answers
 
@@ -225,28 +231,32 @@ a new field is added to the list in the commit that adds it.
 
 ### 10. Defaults
 
-The statement fixes three: a stage's quiet limit of 30 minutes (44), 60
-seconds to read a prompt received (38), ten minutes for a tell (54).
-These are constants of the core. Two it does not fix: the count of
-send-backs when a kind sets none (section 10, its last question) and
-the agent settings when neither launch nor stage gives them (32). The
-core takes both as a `Defaults` value it is built with and holds no
-value of its own; every scenario that sends a place back declares its
-kind's count.
+The statement fixes three as the core's constants: a stage's quiet
+limit of 30 minutes (44), 60 seconds to read a prompt received (38), ten
+minutes for a tell (54). It fixes the count of send-backs when a kind
+sets none at three (C.2; section 10, ruled 2026-10-26), a default the
+binary gives, and leaves the agent settings when neither launch nor
+stage gives them to the binary too (32). The core takes both as a
+`Defaults` value it is built with and holds no value of its own; every
+scenario that sends a place back declares its kind's count.
 
-### 11. Where the statement leaves a reading open
+### 11. Section 10's rulings
 
-The engine takes each clause's plain reading and names it here, so the
-design agent can rule against it:
+Four of section 10's questions bear on the engine, each ruled on
+2026-10-26, each one branch of the settle or the stop check with a
+scenario:
 
-- The stop check sends back each time it is asked; no count bounds it
-  (110; section 10 asks how many).
-- A conversation's agent that stops with no finish reads lost (45; 109
-  ends it only on finish).
-- A failed submission starts the stage it sends back to even when that
-  stage waits on its caller's word; the later stages wait as 47 says
-  (112; section 10 asks).
-- A held stage or submission is never reported for its wait (47).
+- The stop check sends back as often as it is asked while the
+  deliverable is missing; the stage's quiet limit is the bound, never a
+  count (44, 110).
+- A conversation's agent that stops with no finish reads lost, and the
+  stage waits on a retry or a finish; nothing ends it but the finish
+  (45, 109).
+- A failed submission starts the stage it sends back to at once with
+  the merge queue's words, even when that stage waits on its caller's
+  word; the later stages that wait still wait (47, 112).
+- A held stage or submission is a state status names, never a wait
+  status warns of (47).
 
 ### 12. The suite
 
@@ -259,7 +269,7 @@ design agent can rule against it:
 - `engine/`, the scenarios over the fakes, S1 to S34 among them, each
   named for its S number where it has one.
 - `clauses.rs`, the clause list of Parts A and B, I1 to I8 and S1 to
-  S34 at the statement's revision; and the coverage check, a test and a
+  S34 at the statement's revision 6246a48, which 126 to 128 postdate; and the coverage check, a test and a
   binary its moon task runs, failing on a clause, invariant or scenario
   cited by nothing, a scenario citing nothing, or a citation of no
   clause (106, section 12). No register of pending clauses: over the
@@ -297,9 +307,9 @@ has no code leaves `_open.md`.
 
 ## Risks / Trade-offs
 
-- [The three operations beyond Part B's lists are a contract the
-  statement does not write] → each is named in decision 2 for the
-  design agent to write into Part B, and none holds a tool's name.
+- [Three trait operations are named otherwise than Part B names them]
+  → decision 2 maps each to its clause, 126 to 128, and none holds a
+  tool's name.
 - [The fakes admit what a real tool would not] → every fake passes its
   seam's scenarios, the same ones a profile runs (106).
 - [A real `History` and `Host` are left for later] → the traits are
@@ -308,5 +318,3 @@ has no code leaves `_open.md`.
 - [The answers' field list is hand-kept] → it is read from a full
   instance of each answer, so a new field fails nothing and a removed
   one fails the suite.
-- [The plain readings of decision 11 may be ruled otherwise] → each is
-  one branch of the settle or the stop check, named, with a scenario.
