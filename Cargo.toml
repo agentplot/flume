@@ -4,7 +4,7 @@
 # writes it.
 [workspace]
 resolver = "2"
-members = ["crates/flume-seams"]
+members = ["crates/flume-seams", "crates/flume-fakes"]
 
 [workspace.package]
 version = "0.0.0"

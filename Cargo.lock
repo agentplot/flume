@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "flume-fakes"
+version = "0.0.0"
+dependencies = [
+ "flume-seams",
+]
+
+[[package]]
 name = "flume-seams"
 version = "0.0.0"
 dependencies = [
