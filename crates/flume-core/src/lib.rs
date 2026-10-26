@@ -9,10 +9,12 @@
 
 mod acts;
 mod answer;
+mod deliver;
 mod held;
 mod launch;
 mod prompt;
 mod reading;
+mod settle;
 mod start;
 mod status;
 

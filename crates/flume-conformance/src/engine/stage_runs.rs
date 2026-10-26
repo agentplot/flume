@@ -30,6 +30,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["32", "29", "107"],
             run: settings_resolved,
         },
+        Scenario {
+            name: "prompt: a slow start reads unknown, then a missed sending is sent once more",
+            cites: &["S5", "35", "38", "I5"],
+            run: s5_a_slow_start,
+        },
+        Scenario {
+            name: "prompt: under a terminal that cannot send, the start carries the one sending",
+            cites: &["38", "95"],
+            run: a_terminal_that_cannot_send,
+        },
+        Scenario {
+            name: "prompt: never sent into a question, nor sent once received",
+            cites: &["37", "38", "90"],
+            run: never_into_a_question,
+        },
     ]
 }
 
@@ -183,5 +198,108 @@ fn settings_resolved(_: &()) -> Outcome {
         command.args.contains(&"large".to_string()),
         "the command carries not the model: {command:?}"
     );
+    Ok(())
+}
+
+fn s5_a_slow_start(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.comes_up(AgentState::Unknown);
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world
+        .terminal
+        .schedule(&code, world.host.now() + 240, AgentState::Waiting);
+    world.agent.receives_at(&code, Some(2));
+    for _ in 0..7 {
+        world.engine().settle(Some(&id));
+        ensure_eq!(
+            world.stage_state(&id, "code"),
+            Some(StageState::Started),
+            "the code stage"
+        );
+        let status = match world.engine.status(Some(&id)) {
+            Answer::Status { places } => places,
+            other => return Err(format!("status answered {other:?}")),
+        };
+        let agent = status[0].agent.clone().ok_or("no agent")?;
+        ensure_eq!(agent.state, AgentState::Unknown, "the start");
+        ensure_eq!(
+            world.terminal.log.count("send"),
+            0,
+            "prompts sent before it waits"
+        );
+        world.host.advance(30);
+    }
+    world.host.advance(30);
+    world.engine().settle(Some(&id));
+    let prompt = world.prompt(&id, &code).ok_or("no prompt")?;
+    ensure_eq!(
+        world.terminal.sent_to(&code),
+        vec![prompt.clone(), prompt],
+        "the sendings"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the code stage"
+    );
+    Ok(())
+}
+
+fn a_terminal_that_cannot_send(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.cannot_send();
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    world.agent.receives_at(&code, None);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let (_, carried) = world.terminal.opened(&code).ok_or("not opened")?;
+    ensure!(carried, "the start did not carry the prompt");
+    world.engine.settle(Some(&id));
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "the code stage"
+    );
+    ensure_eq!(world.terminal.log.count("send"), 0, "sends");
+    let other = World::id("fix", "two");
+    launched(&world.engine.launch(&launch("fix", "two", Some("x"))))?;
+    world.engine.settle(Some(&other));
+    ensure_eq!(
+        world.stage_state(&other, "code"),
+        Some(StageState::Begun),
+        "a carried prompt received"
+    );
+    Ok(())
+}
+
+fn never_into_a_question(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world.agent.set_asking(&code, Reading::Yes);
+    world.engine.settle(Some(&id));
+    ensure_eq!(world.terminal.log.count("send"), 0, "sends into a question");
+    world.agent.set_asking(&code, Reading::No);
+    world.engine.settle(Some(&id));
+    ensure_eq!(world.terminal.log.count("send"), 1, "sends");
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the code stage"
+    );
+    world.engine.settle(Some(&id));
+    let other = World::id("fix", "two");
+    let two = World::identity("fix", "two", "code", 1);
+    world.agent.receives_at(&two, Some(0));
+    launched(&world.engine.launch(&launch("fix", "two", Some("x"))))?;
+    world.engine.settle(Some(&other));
+    ensure!(
+        world.terminal.sent_to(&two).is_empty(),
+        "a received prompt was sent"
+    );
+    ensure_eq!(world.terminal.log.count("send"), 1, "sends in all");
     Ok(())
 }
