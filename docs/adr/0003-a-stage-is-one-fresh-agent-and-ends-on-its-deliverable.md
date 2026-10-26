@@ -1,7 +1,7 @@
 ---
 number: 3
 title: A stage is one fresh agent, and ends on its deliverable or its agent's stop-short
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A stage is one fresh agent, and ends on its deliverable or its agent's stop-short
 
-Status: proposed to the user on 2026-10-22, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-26, on their card.
 
 Deciders: the user, in flume's statement, taking over crew's `teams.2` to `teams.4`, `teams.11` and `teams.15`.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 24, 25, 30 to 36, 39 to 45, 109, 110, 118, I1, I2; crew's `teams.2`, `teams.3`, `teams.4`, `teams.11`, `teams.15`.
