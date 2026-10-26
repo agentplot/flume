@@ -1,7 +1,7 @@
 ---
 number: 6
 title: Live state on the host, and every deliverable committed
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Live state on the host, and every deliverable committed
 
-Status: proposed to the user on 2026-10-22, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-26, on their card.
 
 Deciders: the user, in the family's storage ruling (`design/capture/plan.md`, D4) and in flume's statement (a committed report; a `{{state}}` report only where the caller keeps it lasting).
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 24, 58, 62, 73 to 77, 102 to 104, 123, C.7; `agentplot/blueprints:design/capture/design.md`, "Where state lives".
