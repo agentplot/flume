@@ -4,7 +4,7 @@
 //! quiet, by the merge queue's verdict, by the terminal's watch, or by a
 //! caller (120).
 
-use crate::{Answer, Engine, Tidied};
+use crate::{Answer, Engine, Step, Tidied};
 use flume_seams::*;
 
 /// How many steps one settle of a place takes at most.
@@ -31,6 +31,22 @@ impl Engine {
         }
     }
 
+    /// Settles every place on the host.
+    pub(crate) fn settle_every(&self) {
+        for read in self.store.read_every() {
+            self.settle_place(&read.state.place.id);
+        }
+    }
+
+    /// Where the terminal keeps no watch, every command of flume's that
+    /// acts on places settles every place first (119, I8); under a watch
+    /// the watch settles them.
+    pub(crate) fn settle_attended(&self) {
+        if self.terminal.watch() == Watch::None {
+            self.settle_every();
+        }
+    }
+
     pub(crate) fn settle_place(&self, id: &PlaceId) {
         for _ in 0..STEPS {
             if !self.step(id) {
@@ -45,8 +61,10 @@ impl Engine {
             return false;
         };
         let held = read.state;
-        if held.phase != Phase::Live {
-            return false;
+        match &held.phase {
+            Phase::Making { by } => return !self.host.alive(by) && self.undo(&held),
+            Phase::Live => {}
+            _ => return false,
         }
         let Some(index) = held.current else {
             return false;
@@ -54,7 +72,58 @@ impl Engine {
         match held.stages[index].state {
             StageState::Started => self.deliver(id),
             StageState::Begun | StageState::Stuck => self.read_end(id),
+            StageState::Delivered | StageState::Finished => self.advance(id),
             _ => false,
         }
+    }
+
+    /// After a stage delivered and its agent ended, starts the next stage
+    /// unless it waits on its caller's word (40, 47).
+    fn advance(&self, id: &PlaceId) -> bool {
+        let next = self.update(id, |held| {
+            let Some(index) = held.current else {
+                return Step::Keep(None);
+            };
+            let ended = &held.stages[index];
+            if ended.start.as_ref().is_some_and(|start| start.live) {
+                return Step::Keep(None);
+            }
+            let next = index + 1;
+            if next >= held.stages.len() || held.stages[next].state != StageState::NotReached {
+                return Step::Keep(None);
+            }
+            let declared = &held.place.kind.stages[next];
+            if held.place.hold.contains(&declared.name) || declared.waits {
+                held.stages[next].state = StageState::OnHold;
+                return Step::Write(None);
+            }
+            Step::Keep(Some(next))
+        });
+        match next.flatten() {
+            Some(next) => {
+                self.start_stage(id, next, None);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// A place whose launching command is gone while it was made: what
+    /// was made is removed, so nothing of it is left (2, 76).
+    fn undo(&self, held: &HeldState) -> bool {
+        let place = &held.place;
+        let Ok(bound) = self.bound(place) else {
+            return false;
+        };
+        let at = place.place_ref();
+        if let PlaceRead::Live { .. } = bound.place.read(&at) {
+            if let Removed::Refused { .. } = bound.place.remove(&at) {
+                return false;
+            }
+        }
+        bound
+            .place
+            .remove_branch(&place.repository, &place.branch, &place.base);
+        self.remove_held(&place.id)
     }
 }

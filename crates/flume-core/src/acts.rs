@@ -50,6 +50,7 @@ impl Engine {
         force: bool,
     ) -> Answer {
         let _ = force;
+        self.settle_attended();
         let Some(read) = self.store.read(place) else {
             return Answer::refused(format!("no place {place} stands on this host"));
         };

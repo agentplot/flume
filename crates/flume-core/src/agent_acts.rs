@@ -23,6 +23,7 @@ impl Engine {
     /// its words: the stage ends short with the words whole, and no next
     /// stage starts (41, 42).
     pub fn needs(&self, identity: &str, secret: &str, words: &str) -> Answer {
+        self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {
             return Answer::refused(format!(
                 "no live agent of a place's current stage is {identity}"

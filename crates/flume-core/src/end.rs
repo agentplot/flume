@@ -130,6 +130,9 @@ impl Engine {
                 report: report.clone(),
                 words: None,
             });
+            if index + 1 == held.stages.len() && held.place.kind.lands {
+                held.submission.due = true;
+            }
             Step::Write(true)
         })
         .unwrap_or(false)

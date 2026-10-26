@@ -31,7 +31,7 @@
 
 ## 6. The core: settling and submissions
 
-- [ ] 6.1 Build `settle` for one place and every place, run attended before every acting command where the terminal keeps no watch, and by nothing for status or a rendering (design 7; 46, 119 to 122). True when `devenv shell -- moon run conformance:test` passes with S7, S27, S28 and S29.
+- [x] 6.1 Build `settle` for one place and every place, run attended before every acting command where the terminal keeps no watch, and by nothing for status or a rendering (design 7; 46, 119 to 122). True when `devenv shell -- moon run conformance:test` passes with S7, S27, S28 and S29.
 - [ ] 6.2 Build the submission: submitted at the head once the last stage delivered and its agent ended, unless held or over; the waiter recorded and the verdict written; landed making the work over; failed sending the place back to `on_fail` with the verdict's words up to the kind's count; refused and withdrawn waiting; a landing read before flume submits taken as the landing; an open submission nobody waits on waited on again (design 7; 63, 111 to 113, 124, 125). True when `devenv shell -- moon run conformance:test` passes with S1, S8, S19, S30, S34 and the count-reached scenario.
 
 ## 7. The core: caller acts, status and tidying

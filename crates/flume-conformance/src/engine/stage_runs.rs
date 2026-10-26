@@ -785,10 +785,11 @@ fn another_starts_secret(_: &()) -> Outcome {
         .secret;
     refused(&world.engine.needs(&second.to_string(), &old.0, "stop"))?;
     refused(&world.engine.needs(&first.to_string(), &old.0, "stop"))?;
-    ensure_eq!(
-        world.stage_state(&id, "work"),
-        Some(StageState::Started),
-        "the stage"
+    ensure!(
+        world
+            .stage_state(&id, "work")
+            .is_some_and(StageState::running),
+        "a refused stop-short ended the stage"
     );
     ensure!(
         world

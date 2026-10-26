@@ -12,6 +12,7 @@ use flume_seams::*;
 impl Engine {
     /// Launches one place, or refuses naming why (2).
     pub fn launch(&self, launch: &Launch) -> Answer {
+        self.settle_attended();
         match self.make_place(launch) {
             Ok(held) => Answer::Launched {
                 place: self.place_status(&held),
