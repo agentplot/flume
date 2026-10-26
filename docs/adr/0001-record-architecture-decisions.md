@@ -1,7 +1,7 @@
 ---
 number: 1
 title: Record architecture decisions
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Record architecture decisions
 
-Status: proposed to the user on 2026-10-22, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-26, on their card.
 
 Deciders: the user, in flume's statement (plan step L1, ruled and amended through 2026-10-20).
 Sources: `agentplot/blueprints:design/flume/requirements.md`; `agentplot/blueprints:design/capture/plan.md` (L2); `agentplot/blueprints:design/requirements-style.md`; sluice's `docs/adr/0001` as the model for the form.

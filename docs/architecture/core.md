@@ -43,8 +43,8 @@ stands as proposed until the user's yes (`briefs.15`).
 
 ### Design and records
 
-- **[core.19]** A change that bears on a clause cites the clause by number; a clause that no longer holds is changed in the statement first, never worked around here. (Proposed 2026-10-22, record 0001, on the user's card; accepted only on their yes.)
-- **[core.20]** Nothing commercial, no pricing, tier or customer, appears in this repository. (Proposed 2026-10-22, record 0001, on the user's card; accepted only on their yes.)
+- **[core.19]** A change that bears on a clause cites the clause by number; a clause that no longer holds is changed in the statement first, never worked around here.
+- **[core.20]** Nothing commercial, no pricing, tier or customer, appears in this repository.
 
 ### The gate
 
