@@ -43,7 +43,7 @@
 
 ## 8. Answers and the binary's crate
 
-- [ ] 8.1 Make every act's answer one serde type written as JSON, a refusal among them, and add each answer's field list to the suite with a test that fails when an answer lacks a listed field (design 9; 61). True when `devenv shell -- moon run conformance:test` passes.
+- [x] 8.1 Make every act's answer one serde type written as JSON, a refusal among them, and add each answer's field list to the suite with a test that fails when an answer lacks a listed field (design 9; 61). True when `devenv shell -- moon run conformance:test` passes.
 - [ ] 8.2 Add `crates/flume` to `members` and as moon project `flume` with check-fast `format`, `lint` and `test` declaring their inputs, holding `src/main.rs`, which builds the core and writes an answer as JSON with no command yet, and `src/profiles.rs`, holding one marker comment per seam where a profile unit appends its module line (design 13). True when `devenv shell -- moon run flume:format flume:lint flume:test` passes.
 
 ## 9. Coverage and the checks
