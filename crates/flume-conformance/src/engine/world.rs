@@ -198,3 +198,77 @@ impl World {
             .map(|start| start.prompt.text.clone())
     }
 }
+
+impl World {
+    /// A commit on the place's branch touching `paths`, as its agent
+    /// makes one.
+    pub fn commit(&self, branch: &str, paths: &[&str]) -> Revision {
+        self.git.commit(REPOSITORY, branch, paths)
+    }
+
+    /// A commit on `branch` to the change `name`, its planning complete
+    /// and `ticked` of `total` tasks ticked.
+    pub fn tick(&self, branch: &str, name: &str, ticked: usize, total: usize) -> Revision {
+        let path = format!("plans/{name}/tasks.md");
+        let revision = self.commit(branch, &[&path]);
+        self.change.set(
+            REPOSITORY,
+            &revision,
+            name,
+            ChangeFacts {
+                exists: true,
+                planning_complete: true,
+                tasks: (0..total)
+                    .map(|task| Task {
+                        text: format!("1.{} task", task + 1),
+                        ticked: task < ticked,
+                    })
+                    .collect(),
+                archived: false,
+            },
+        );
+        revision
+    }
+
+    /// Settles the place as an agent going quiet or the watch does.
+    pub fn settle(&self, place: &PlaceId) {
+        self.engine().settle(Some(place));
+    }
+
+    /// The place's status, as status gives it.
+    pub fn status(&self, place: &PlaceId) -> Result<flume_core::PlaceStatus, String> {
+        match self.engine().status(Some(place)) {
+            flume_core::Answer::Status { mut places } if places.len() == 1 => Ok(places.remove(0)),
+            other => Err(format!("status answered {other:?}")),
+        }
+    }
+
+    /// A one-stage kind of the repository's, `name`, delivering
+    /// `deliverable`, launched as `place` and begun.
+    pub fn begun(
+        &self,
+        kind_name: &str,
+        deliverable: Option<Deliverable>,
+        place: &str,
+    ) -> Result<PlaceId, String> {
+        self.kinds.set_kinds(
+            REPOSITORY,
+            vec![kind(
+                kind_name,
+                false,
+                vec![stage("work", deliverable, "{{brief}}")],
+            )],
+        );
+        launched(
+            &self
+                .engine
+                .launch(&launch(kind_name, place, Some("do the work"))),
+        )?;
+        let id = World::id(kind_name, place);
+        self.settle(&id);
+        match self.stage_state(&id, "work") {
+            Some(StageState::Begun) => Ok(id),
+            other => Err(format!("the stage did not begin: {other:?}")),
+        }
+    }
+}

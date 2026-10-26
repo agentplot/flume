@@ -5,6 +5,7 @@
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Answer, Retry};
+use flume_fakes::Log;
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -44,6 +45,54 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "prompt: never sent into a question, nor sent once received",
             cites: &["37", "38", "90"],
             run: never_into_a_question,
+        },
+        Scenario {
+            name:
+                "end: tasks ticked over four commits deliver only at the head that ticks the last",
+            cites: &["S2", "24", "40", "43", "56"],
+            run: s2_tasks_ticked_over_four_commits,
+        },
+        Scenario {
+            name: "end: facts are never paired across heads",
+            cites: &["25", "S2"],
+            run: facts_never_paired_across_heads,
+        },
+        Scenario {
+            name: "end: an agent waiting on own work is neither ended nor stuck",
+            cites: &["S3", "39", "40", "44", "91"],
+            run: s3_waiting_on_own_work,
+        },
+        Scenario {
+            name: "end: quiet past its limit with nothing delivered reads stuck, and is not ended",
+            cites: &["S17", "44", "110", "I1"],
+            run: s17_stuck,
+        },
+        Scenario {
+            name: "end: a conversation is never stuck, and never ended by flume",
+            cites: &["S23", "109", "18"],
+            run: s23_a_conversation_over_an_hour,
+        },
+        Scenario {
+            name:
+                "end: an agent that stopped with nothing delivered reads lost, and no agent starts",
+            cites: &["45", "48", "39"],
+            run: lost,
+        },
+        Scenario {
+            name: "end: an agent working past its limit is reported so, and not ended",
+            cites: &["118", "31"],
+            run: working_past_its_limit,
+        },
+        Scenario {
+            name: "end: an agent whose own work cannot be read is not quiet, and status names it",
+            cites: &["31", "93"],
+            run: unknown_is_not_quiet,
+        },
+        Scenario {
+            name:
+                "end: each of the six forms delivers where it lives, made since the stage started",
+            cites: &["24", "25", "123"],
+            run: the_six_forms,
         },
     ]
 }
@@ -301,5 +350,351 @@ fn never_into_a_question(_: &()) -> Outcome {
         "a received prompt was sent"
     );
     ensure_eq!(world.terminal.log.count("send"), 1, "sends in all");
+    Ok(())
+}
+
+fn closes(log: &Log) -> usize {
+    log.count("close")
+}
+
+fn s2_tasks_ticked_over_four_commits(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::TasksTicked), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    world.terminal.set_state(&work, AgentState::Working);
+    world.tick("build/one", "one", 1, 5);
+    world.tick("build/one", "one", 2, 5);
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let ticked = |status: &flume_core::PlaceStatus| {
+        status
+            .tasks
+            .as_ref()
+            .map(|tasks| (tasks.iter().filter(|task| task.ticked).count(), tasks.len()))
+    };
+    ensure_eq!(ticked(&status), Some((2, 5)), "the tasks ticked");
+    ensure_eq!(status.delivered, Some(false), "delivered");
+    world.tick("build/one", "one", 4, 5);
+    let last = world.tick("build/one", "one", 5, 5);
+    world.settle(&id);
+    let status = world.status(&id)?;
+    ensure_eq!(ticked(&status), Some((5, 5)), "the tasks ticked");
+    ensure_eq!(status.delivered, Some(true), "delivered");
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Begun),
+        "a working agent's stage"
+    );
+    world.terminal.set_state(&work, AgentState::Waiting);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Delivered),
+        "the stage"
+    );
+    let end = world.status(&id)?.stages[0].end.clone().ok_or("no end")?;
+    ensure_eq!(end.head, Some(last), "the head it delivered at");
+    ensure_eq!(closes(&world.terminal.log), 1, "agents ended");
+    Ok(())
+}
+
+fn facts_never_paired_across_heads(_: &()) -> Outcome {
+    let world = World::new();
+    let base = world.git.branch_head(REPOSITORY, "main").ok_or("main")?;
+    let done = ChangeFacts {
+        exists: true,
+        planning_complete: true,
+        tasks: vec![Task {
+            text: "1.1".into(),
+            ticked: true,
+        }],
+        archived: false,
+    };
+    world.change.set(REPOSITORY, &base, "one", done);
+    world.kinds.set_kinds(
+        REPOSITORY,
+        vec![kind(
+            "build",
+            false,
+            vec![stage("work", Some(Deliverable::TasksTicked), "{{brief}}")],
+        )],
+    );
+    let mut build = launch("build", "one", Some("x"));
+    build.declaration = None;
+    let id = World::id("build", "one");
+    let answer = world.engine.launch(&build);
+    if answer.refusal().is_some() {
+        world
+            .change
+            .set(REPOSITORY, &base, "one", ChangeFacts::default());
+        launched(&world.engine.launch(&build))?;
+    }
+    world.settle(&id);
+    let work = World::identity("build", "one", "work", 1);
+    world.terminal.set_state(&work, AgentState::Working);
+    let unticked = world.tick("build/one", "one", 0, 1);
+    world.git.set_branch(REPOSITORY, "build/one", &base);
+    world.change.set(
+        REPOSITORY,
+        &base,
+        "one",
+        ChangeFacts {
+            exists: true,
+            planning_complete: true,
+            tasks: vec![Task {
+                text: "1.1".into(),
+                ticked: true,
+            }],
+            archived: false,
+        },
+    );
+    world
+        .git
+        .move_after_reads(REPOSITORY, "build/one", 1, &unticked);
+    world.history.log.clear();
+    world.change.log.clear();
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.head,
+        Some(unticked.clone()),
+        "the head the facts were read at"
+    );
+    ensure_eq!(status.delivered, Some(false), "delivered");
+    ensure!(
+        world
+            .change
+            .log
+            .calls()
+            .iter()
+            .any(|call| call.contains(&unticked.0)),
+        "the change was not read again at the new head: {:?}",
+        world.change.log.calls()
+    );
+    Ok(())
+}
+
+fn s3_waiting_on_own_work(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::TasksTicked), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    world.tick("build/one", "one", 3, 3);
+    world.agent.set_own_work(&work, Reading::Yes);
+    for _ in 0..12 {
+        world.host.advance(60);
+        world.settle(&id);
+        ensure_eq!(
+            world.stage_state(&id, "work"),
+            Some(StageState::Begun),
+            "the stage"
+        );
+    }
+    ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
+    world.agent.set_own_work(&work, Reading::No);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Delivered),
+        "the stage"
+    );
+    Ok(())
+}
+
+fn s17_stuck(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.no_send_back();
+    let id = world.begun("build", Some(Deliverable::TasksTicked), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    world.tick("build/one", "one", 2, 3);
+    world.settle(&id);
+    world.host.advance(29 * 60);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Begun),
+        "the stage short of its limit"
+    );
+    world.host.advance(2 * 60);
+    world.settle(&id);
+    let status = world.status(&id)?;
+    ensure_eq!(status.stages[0].state, StageState::Stuck, "the stage");
+    ensure_eq!(
+        status.agent.map(|agent| agent.identity),
+        Some(work.to_string()),
+        "the agent status names"
+    );
+    ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
+    world.terminal.set_state(&work, AgentState::Working);
+    world.settle(&id);
+    world.tick("build/one", "one", 3, 3);
+    world.terminal.set_state(&work, AgentState::Waiting);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Delivered),
+        "the stage"
+    );
+    Ok(())
+}
+
+fn s23_a_conversation_over_an_hour(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("round", None, "one")?;
+    let work = World::identity("round", "one", "work", 1);
+    for minute in 0..60 {
+        let state = if minute % 2 == 0 {
+            AgentState::Waiting
+        } else {
+            AgentState::Working
+        };
+        world.terminal.set_state(&work, state);
+        world.host.advance(60);
+        world.settle(&id);
+        ensure_eq!(
+            world.stage_state(&id, "work"),
+            Some(StageState::Begun),
+            "the conversation"
+        );
+    }
+    ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
+    Ok(())
+}
+
+fn lost(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::Commits), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    world.terminal.kill(&work);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Lost),
+        "the stage"
+    );
+    world.settle(&id);
+    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    Ok(())
+}
+
+fn working_past_its_limit(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::Commits), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    world.terminal.set_state(&work, AgentState::Working);
+    world.host.advance(31 * 60);
+    world.settle(&id);
+    let agent = world.status(&id)?.agent.ok_or("no agent")?;
+    ensure!(agent.past_limit, "the agent is not reported past its limit");
+    ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
+    world.commit("build/one", &["work.rs"]);
+    world.settle(&id);
+    let agent = world.status(&id)?.agent.ok_or("no agent")?;
+    ensure!(!agent.past_limit, "a head move left it past its limit");
+    Ok(())
+}
+
+fn unknown_is_not_quiet(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::Commits), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    world.commit("build/one", &["work.rs"]);
+    world.agent.set_own_work(&work, Reading::Unknown);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Begun),
+        "the stage"
+    );
+    ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
+    let status = world.status(&id)?;
+    ensure!(
+        status
+            .cannot_read
+            .iter()
+            .any(|what| what.contains("own work")),
+        "status names not what it cannot read: {:?}",
+        status.cannot_read
+    );
+    Ok(())
+}
+
+fn the_six_forms(_: &()) -> Outcome {
+    let forms = [
+        ("commits", Deliverable::Commits),
+        ("written", Deliverable::ChangeWritten),
+        ("ticked", Deliverable::TasksTicked),
+        ("archived", Deliverable::ChangeArchived),
+        (
+            "report",
+            Deliverable::Report {
+                path: "{{state}}/conclusion.md".into(),
+            },
+        ),
+        (
+            "committed",
+            Deliverable::CommittedReport {
+                path: "notes/report.md".into(),
+            },
+        ),
+    ];
+    for (name, form) in forms {
+        let world = World::new();
+        let id = world.begun(name, Some(form.clone()), "one")?;
+        let branch = format!("{name}/one");
+        world.settle(&id);
+        ensure_eq!(
+            world.stage_state(&id, "work"),
+            Some(StageState::Begun),
+            name
+        );
+        match form {
+            Deliverable::Commits => {
+                world.commit(&branch, &["work.rs"]);
+            }
+            Deliverable::ChangeWritten => {
+                let revision = world.commit(&branch, &["plans/one/design.md"]);
+                world.change.set(
+                    REPOSITORY,
+                    &revision,
+                    "one",
+                    ChangeFacts {
+                        exists: true,
+                        planning_complete: true,
+                        ..ChangeFacts::default()
+                    },
+                );
+            }
+            Deliverable::TasksTicked => {
+                world.tick(&branch, "one", 1, 1);
+            }
+            Deliverable::ChangeArchived => {
+                let revision = world.commit(&branch, &["plans/archive/one/tasks.md"]);
+                world.change.set(
+                    REPOSITORY,
+                    &revision,
+                    "one",
+                    ChangeFacts {
+                        archived: true,
+                        ..ChangeFacts::default()
+                    },
+                );
+            }
+            Deliverable::Report { .. } => {
+                world.host.advance(1);
+                world
+                    .host
+                    .write_file(&format!("{}/conclusion.md", world.store.folder(&id)));
+            }
+            Deliverable::CommittedReport { .. } => {
+                world.commit(&branch, &["notes/report.md"]);
+            }
+            Deliverable::Unreadable { .. } => {}
+        }
+        world.settle(&id);
+        ensure_eq!(
+            world.stage_state(&id, "work"),
+            Some(StageState::Delivered),
+            name
+        );
+    }
     Ok(())
 }

@@ -53,6 +53,7 @@ impl Engine {
         };
         match held.stages[index].state {
             StageState::Started => self.deliver(id),
+            StageState::Begun | StageState::Stuck => self.read_end(id),
             _ => false,
         }
     }

@@ -9,6 +9,8 @@ pub(crate) struct Facts {
     pub head: Revision,
     /// Whether the stage's deliverable exists, made since it started.
     pub delivered: bool,
+    /// The report it delivered, for a report form.
+    pub report: Option<String>,
     pub change: Option<ChangeRead>,
 }
 
@@ -20,6 +22,14 @@ pub(crate) struct AgentReading {
 }
 
 impl AgentReading {
+    /// Neither working, asking, nor waiting on own work; anything flume
+    /// cannot read is not quiet (31).
+    pub fn quiet(&self) -> bool {
+        matches!(self.state, AgentState::Waiting | AgentState::Stopped)
+            && self.asking == Reading::No
+            && self.own_work == Reading::No
+    }
+
     /// What flume could not read of the agent (31).
     pub fn unread(&self) -> Vec<String> {
         let mut unread = vec![];
@@ -67,13 +77,16 @@ impl Engine {
                 }
                 _ => None,
             };
-            let delivered = index
-                .is_some_and(|index| self.delivered(held, bound, index, &head, change.as_ref()));
+            let (delivered, report) = match index {
+                Some(index) => self.delivered(held, bound, index, &head, change.as_ref()),
+                None => (false, None),
+            };
             let again = head_now();
             if again == head {
                 return Facts {
                     head,
                     delivered,
+                    report,
                     change,
                 };
             }
@@ -82,7 +95,7 @@ impl Engine {
     }
 
     /// Whether the stage's deliverable exists at `head`, made since its
-    /// start (24, 25).
+    /// start, and the report it is, for a report form (24, 25).
     fn delivered(
         &self,
         held: &HeldState,
@@ -90,11 +103,11 @@ impl Engine {
         index: usize,
         head: &Revision,
         change: Option<&ChangeRead>,
-    ) -> bool {
+    ) -> (bool, Option<String>) {
         let place = &held.place;
         let stage = &place.kind.stages[index];
         let Some(start) = held.stages[index].start.as_ref() else {
-            return false;
+            return (false, None);
         };
         let since = &start.start_head;
         let facts = match change {
@@ -109,27 +122,39 @@ impl Engine {
             })
         };
         match stage.deliverables.first() {
-            None | Some(Deliverable::Unreadable { .. }) => false,
-            Some(Deliverable::Commits) => self.history.holds_since(&place.repository, head, since),
-            Some(Deliverable::ChangeWritten) => {
-                facts.is_some_and(|facts| facts.exists && facts.planning_complete) && touched()
-            }
-            Some(Deliverable::TasksTicked) => {
+            None | Some(Deliverable::Unreadable { .. }) => (false, None),
+            Some(Deliverable::Commits) => (
+                self.history.holds_since(&place.repository, head, since),
+                None,
+            ),
+            Some(Deliverable::ChangeWritten) => (
+                facts.is_some_and(|facts| facts.exists && facts.planning_complete) && touched(),
+                None,
+            ),
+            Some(Deliverable::TasksTicked) => (
                 facts.is_some_and(|facts| {
                     !facts.tasks.is_empty() && facts.tasks.iter().all(|task| task.ticked)
-                }) && touched()
-            }
-            Some(Deliverable::ChangeArchived) => {
+                }) && touched(),
+                None,
+            ),
+            Some(Deliverable::ChangeArchived) => (
                 facts.is_some_and(|facts| facts.archived)
-                    && self.history.holds_since(&place.repository, head, since)
+                    && self.history.holds_since(&place.repository, head, since),
+                None,
+            ),
+            Some(Deliverable::Report { path }) => {
+                let path = self.report_path(place, path);
+                let written = self
+                    .host
+                    .write_time(&path)
+                    .is_some_and(|written| written > start.started_at);
+                (written, written.then_some(path))
             }
-            Some(Deliverable::Report { path }) => self
-                .host
-                .write_time(&self.report_path(place, path))
-                .is_some_and(|written| written > start.started_at),
             Some(Deliverable::CommittedReport { path }) => {
-                self.history
-                    .in_commit_since(&place.repository, head, since, path)
+                let committed = self
+                    .history
+                    .in_commit_since(&place.repository, head, since, path);
+                (committed, committed.then(|| path.clone()))
             }
         }
     }
