@@ -6,7 +6,8 @@
 //! one that stopped with nothing delivered is reported lost; flume ends
 //! none of them. A conversation is read only for lost. After a restart,
 //! an agent that did not survive reads lost, and one the terminal resumed
-//! is taken only when its own record is its start's (77).
+//! is taken only when its own record is its start's (77); one whose record
+//! cannot be read is neither taken nor lost, and is not quiet (31, 93).
 
 use crate::start::Starts;
 use crate::{Engine, Step, QUIET_LIMIT};
@@ -31,7 +32,7 @@ impl Engine {
         };
         let identity = start.identity.clone();
         let reading = self.read_agent(&start);
-        let gone = reading.state == AgentState::Stopped || !self.own_record(&start);
+        let gone = reading.state == AgentState::Stopped || reading.own_record == Reading::No;
         if gone && !declared.conversation {
             let facts = self.facts(&held, &bound, Some(index));
             if facts.delivered {
@@ -104,21 +105,6 @@ impl Engine {
             }
         });
         false
-    }
-
-    /// Whether the agent under the start's identity keeps the record its
-    /// start began with: an agent the terminal resumed is the stage's
-    /// only when both its identity and its own record are its start's
-    /// (77). A record no reading names yet, or one the agent seam cannot
-    /// read, is taken as the start's.
-    fn own_record(&self, start: &StartHeld) -> bool {
-        let (Some(kept), Some(agent)) = (&start.record, self.agent(&start.program)) else {
-            return true;
-        };
-        match agent.received(&start.identity, &start.prompt.text) {
-            Received::Received { record } | Received::NotReceived { record } => &record == kept,
-            Received::Unknown => true,
-        }
     }
 
     /// The stage under `identity` ended as `state`, with what it

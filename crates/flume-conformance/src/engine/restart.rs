@@ -18,6 +18,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["77", "35"],
             run: a_resumed_agent_with_another_record,
         },
+        Scenario {
+            name: "restart: an agent resumed under the stage's identity whose record cannot be read is neither taken nor lost",
+            cites: &["77", "93", "31"],
+            run: a_resumed_agent_whose_record_cannot_be_read,
+        },
     ]
 }
 
@@ -89,6 +94,41 @@ fn a_resumed_agent_with_another_record(_: &()) -> Outcome {
         world.stage_state(&id, "code"),
         Some(StageState::Lost),
         "a resumed agent with another record"
+    );
+    Ok(())
+}
+
+fn a_resumed_agent_whose_record_cannot_be_read(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("fix", "one");
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world.settle(&id);
+    let code = World::identity("fix", "one", "code", 1);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the code stage"
+    );
+    world.host.restart();
+    world.terminal.forget_all();
+    world.terminal.resume(&code);
+    world.agent.received_unknown(&code);
+    world.commit("fix/one", &["fix.rs"]);
+    world.engine().settle(None);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "a resumed agent whose record cannot be read, its deliverable made"
+    );
+    ensure_eq!(world.terminal.log.count("close"), 0, "agents ended");
+    let status = world.status(&id)?;
+    ensure!(
+        status
+            .cannot_read
+            .iter()
+            .any(|unread| unread == "the agent's own record"),
+        "status names not the agent's record among what it cannot read: {:?}",
+        status.cannot_read
     );
     Ok(())
 }

@@ -1,5 +1,6 @@
 //! Reading a stage's deliverable at one head of the place's branch (24,
-//! 25), and an agent's state from the terminal and the agent seam (31).
+//! 25), and an agent's state from the terminal and the agent seam (31,
+//! 77).
 
 use crate::{Bound, Engine};
 use flume_seams::*;
@@ -19,6 +20,9 @@ pub(crate) struct AgentReading {
     pub state: AgentState,
     pub asking: Reading,
     pub own_work: Reading,
+    /// Whether the agent under the start's identity keeps the record its
+    /// start began with: no where it keeps another (77).
+    pub own_record: Reading,
 }
 
 impl AgentReading {
@@ -28,6 +32,7 @@ impl AgentReading {
         matches!(self.state, AgentState::Waiting | AgentState::Stopped)
             && self.asking == Reading::No
             && self.own_work == Reading::No
+            && self.own_record != Reading::Unknown
     }
 
     /// What flume could not read of the agent (31).
@@ -41,6 +46,9 @@ impl AgentReading {
         }
         if self.own_work == Reading::Unknown {
             unread.push("whether the agent's own work runs".to_string());
+        }
+        if self.own_record == Reading::Unknown {
+            unread.push("the agent's own record".to_string());
         }
         unread
     }
@@ -162,17 +170,43 @@ impl Engine {
     /// The agent of a start, as the terminal and the agent seam read it.
     pub(crate) fn read_agent(&self, start: &StartHeld) -> AgentReading {
         let state = self.terminal.state(&start.identity);
-        match self.agent(&start.program) {
+        let agent = self.agent(&start.program);
+        let own_record = own_record(agent.as_deref(), start);
+        match agent {
             Some(agent) => AgentReading {
                 state,
                 asking: agent.asking(&start.identity),
                 own_work: agent.own_work(&start.identity),
+                own_record,
             },
             None => AgentReading {
                 state,
                 asking: Reading::Unknown,
                 own_work: Reading::Unknown,
+                own_record,
             },
         }
+    }
+}
+
+/// Whether the agent under the start's identity keeps the record its
+/// start began with: an agent the terminal resumed is the stage's only
+/// when both its identity and its own record are its start's, and a
+/// record the agent seam cannot read is unknown, never taken as the
+/// start's (77, 93). A start whose prompt no reading has named received
+/// keeps no record yet, and has none to differ from.
+fn own_record(agent: Option<&dyn Agent>, start: &StartHeld) -> Reading {
+    let Some(kept) = &start.record else {
+        return Reading::Yes;
+    };
+    let Some(agent) = agent else {
+        return Reading::Unknown;
+    };
+    match agent.received(&start.identity, &start.prompt.text) {
+        Received::Received { record } | Received::NotReceived { record } if &record == kept => {
+            Reading::Yes
+        }
+        Received::Received { .. } | Received::NotReceived { .. } => Reading::No,
+        Received::Unknown => Reading::Unknown,
     }
 }
