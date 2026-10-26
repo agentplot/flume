@@ -30,6 +30,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_merge_queue_unreadable,
         },
         Scenario {
+            name: "tidy: a teardown the fake place refuses keeps the place, after its one remove",
+            cites: &["66", "81"],
+            run: a_scripted_refusal,
+        },
+        Scenario {
             name: "tidy: a place whose agent works is kept until the agent stops",
             cites: &["64", "16", "31"],
             run: an_agent_still_working,
@@ -237,5 +242,30 @@ fn an_agent_still_working(_: &()) -> Outcome {
         "the place once its agent is quiet"
     );
     ensure_eq!(world.terminal.log.count("close"), 1, "agents ended");
+    Ok(())
+}
+
+fn a_scripted_refusal(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("notes", Some(Deliverable::Commits), "one")?;
+    world
+        .place
+        .fail_teardown(&id.0, "post-remove", "the database would not drop");
+    let answer = world.engine.done(&id, false);
+    let tidy = match answer {
+        Answer::Acted {
+            tidy: Some(tidy), ..
+        } => tidy,
+        other => return Err(format!("the done answered {other:?}")),
+    };
+    ensure!(
+        matches!(tidy.kept.first().map(|kept| &kept.why), Some(Kept::Teardown { step, .. }) if step == "post-remove"),
+        "the place was not kept naming the step: {tidy:?}"
+    );
+    ensure_eq!(
+        world.place.log.of("remove"),
+        vec![format!("remove {}", id.0)],
+        "the removes"
+    );
     Ok(())
 }

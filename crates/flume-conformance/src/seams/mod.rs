@@ -7,6 +7,7 @@
 
 pub mod agent;
 pub mod change;
+pub mod history;
 pub mod kinds;
 pub mod merge_queue;
 pub mod place;

@@ -203,6 +203,22 @@ fn s7_two_held_places(_: &()) -> Outcome {
         Some(StageState::OnHold),
         "the second's"
     );
+    let opened = world.terminal.log.count("open");
+    let answer = world.engine.retry(&ids[0], Retry::Submission, None, false);
+    ensure!(
+        answer.refusal().is_none(),
+        "the submission's retry was refused: {answer:?}"
+    );
+    ensure_eq!(world.queue.log.of("submit").len(), 1, "submissions");
+    ensure!(
+        world.queue.log.of("submit")[0].contains("change/one"),
+        "another place was submitted"
+    );
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        opened,
+        "agents a submission's retry opened"
+    );
     ensure_eq!(world.place.log.count("make"), 2, "places made");
     Ok(())
 }

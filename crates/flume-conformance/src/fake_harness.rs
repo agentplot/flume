@@ -2,7 +2,7 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::AgentHarness, change::ChangeHarness, kinds::KindsHarness,
+    agent::AgentHarness, change::ChangeHarness, history::HistoryHarness, kinds::KindsHarness,
     merge_queue::MergeQueueHarness, place::PlaceHarness, store::StoreHarness,
     terminal::TerminalHarness,
 };
@@ -437,5 +437,41 @@ impl StoreHarness for FakeStoreHarness {
 
     fn repository(&self) -> String {
         REPOSITORY.into()
+    }
+}
+
+pub struct FakeHistoryHarness {
+    pub git: Arc<FakeGit>,
+    pub history: FakeHistory,
+}
+
+impl Default for FakeHistoryHarness {
+    fn default() -> Self {
+        let git = FakeGit::new();
+        FakeHistoryHarness {
+            history: FakeHistory::new(git.clone()),
+            git,
+        }
+    }
+}
+
+impl HistoryHarness for FakeHistoryHarness {
+    type Seam = FakeHistory;
+
+    fn seam(&self) -> &FakeHistory {
+        &self.history
+    }
+
+    fn branch(&self) -> (String, String, Revision) {
+        let first = self.git.init(REPOSITORY, "fix/one");
+        (REPOSITORY.into(), "fix/one".into(), first)
+    }
+
+    fn commit(&self, repository: &str, branch: &str, path: &str) -> Revision {
+        self.git.commit(repository, branch, &[path])
+    }
+
+    fn reset(&self, repository: &str, branch: &str, revision: &Revision) {
+        self.git.set_branch(repository, branch, revision);
     }
 }

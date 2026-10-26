@@ -47,3 +47,12 @@ fn the_fake_merge_queue_passes_the_merge_queue_scenarios() {
 fn the_fake_store_passes_the_store_scenarios() {
     pass_all("store", &store::scenarios(), FakeStoreHarness::default);
 }
+
+#[test]
+fn the_fake_history_passes_the_history_scenarios() {
+    pass_all(
+        "history",
+        &history::scenarios(),
+        FakeHistoryHarness::default,
+    );
+}
