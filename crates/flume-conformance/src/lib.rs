@@ -6,6 +6,7 @@
 
 pub mod clauses;
 pub mod coverage;
+pub mod engine;
 pub mod fake_harness;
 pub mod no_tool;
 pub mod scenario;

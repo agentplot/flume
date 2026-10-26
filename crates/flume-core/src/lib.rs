@@ -9,6 +9,10 @@
 
 #![allow(dead_code)]
 
+mod held;
+
+pub use held::Step;
+
 use flume_seams::{
     Agent, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds, Settings,
     Store, Terminal,

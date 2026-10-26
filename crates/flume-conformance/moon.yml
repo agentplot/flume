@@ -5,7 +5,7 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 # fast layer.
 language: 'rust'
 layer: 'library'
-dependsOn: [seams, fakes]
+dependsOn: [seams, fakes, core]
 
 tasks:
   format:
@@ -15,16 +15,16 @@ tasks:
     options: {runFromWorkspaceRoot: true}
   lint:
     command: 'cargo clippy -p flume-conformance --all-targets -- -D warnings'
-    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   test:
     command: 'cargo test -p flume-conformance'
-    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   coverage:
     command: 'cargo run -q -p flume-conformance --bin coverage'
-    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}

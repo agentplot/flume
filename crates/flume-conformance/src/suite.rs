@@ -47,6 +47,7 @@ pub fn every() -> Vec<Cited> {
             .iter()
             .map(Scenario::cited),
     );
+    every.extend(crate::engine::scenarios().iter().map(Scenario::cited));
     every.extend(scenarios().iter().map(Scenario::cited));
     every
 }
