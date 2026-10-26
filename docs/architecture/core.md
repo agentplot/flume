@@ -27,8 +27,8 @@ stands as proposed until the user's yes (`briefs.15`).
 
 ### Stages and agents
 
-- **[core.9]** A stage's end is read from its deliverable at one head of the place's branch, or from a stop-short carrying the start's own secret; no code reads an end from a terminal's state or an agent's exit. (Proposed 2026-10-22, record 0003, on the user's card; accepted only on their yes.)
-- **[core.10]** Each stage starts exactly one fresh agent, a place has at most one agent at any moment, every agent carries an identity no other live agent on the host carries, and no agent that is not quiet is ended unless a caller forced it. (Proposed 2026-10-22, record 0003, on the user's card; accepted only on their yes.)
+- **[core.9]** A stage's end is read from its deliverable at one head of the place's branch, or from a stop-short carrying the start's own secret; no code reads an end from a terminal's state or an agent's exit.
+- **[core.10]** Each stage starts exactly one fresh agent, a place has at most one agent at any moment, every agent carries an identity no other live agent on the host carries, and no agent that is not quiet is ended unless a caller forced it.
 - **[core.11]** A prompt or a tell is sent only to a waiting agent, read back as received within 60 seconds or sent once more, and never left typed for a hand.
 - **[core.12]** flume answers on an agent's behalf only the question whether it may work in the place, and never one that widens what an agent may do.
 
