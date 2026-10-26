@@ -548,8 +548,15 @@ fn s17_stuck(_: &()) -> Outcome {
         "the agent status names"
     );
     ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
+    let told = world.engine.tell(&id, "the last task is the docs", None);
+    ensure!(told.refusal().is_none(), "the tell was refused: {told:?}");
     world.terminal.set_state(&work, AgentState::Working);
     world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Begun),
+        "the woken stage"
+    );
     world.tick("build/one", "one", 3, 3);
     world.terminal.set_state(&work, AgentState::Waiting);
     world.settle(&id);
@@ -581,6 +588,18 @@ fn s23_a_conversation_over_an_hour(_: &()) -> Outcome {
         );
     }
     ensure_eq!(closes(&world.terminal.log), 0, "agents ended");
+    world.terminal.set_state(&work, AgentState::Waiting);
+    let finished = world.engine.finish(&id, false);
+    ensure!(
+        finished.refusal().is_none(),
+        "the finish was refused: {finished:?}"
+    );
+    ensure_eq!(closes(&world.terminal.log), 1, "agents ended");
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Finished),
+        "the conversation"
+    );
     Ok(())
 }
 

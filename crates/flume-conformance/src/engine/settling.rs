@@ -210,7 +210,9 @@ fn s7_two_held_places(_: &()) -> Outcome {
 fn s27_killed_with_nobody_watching(_: &()) -> Outcome {
     let world = World::new();
     let id = World::id("fix", "one");
+    let other = World::id("fix", "two");
     launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    launched(&world.engine.launch(&launch("fix", "two", Some("y"))))?;
     world.settle(&id);
     world
         .terminal
@@ -221,12 +223,17 @@ fn s27_killed_with_nobody_watching(_: &()) -> Outcome {
         StageState::Begun,
         "the stage before a command acts"
     );
-    launched(&world.engine.launch(&launch("fix", "two", Some("y"))))?;
+    let dropped = world.engine.drop_place(&other, true);
+    ensure!(
+        dropped.refusal().is_none(),
+        "the drop was refused: {dropped:?}"
+    );
     ensure_eq!(
         world.status(&id)?.stages[0].state,
         StageState::Lost,
         "the stage once a command acted"
     );
+    ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
     Ok(())
 }
 
