@@ -49,4 +49,4 @@
 ## 9. Coverage and the checks
 
 - [x] 9.1 Cite, across the seam and engine scenarios, every clause of Parts A and B, I1 to I8 and S1 to S34, adding a scenario wherever a clause has none (clause-coverage spec). True when `devenv shell -- moon run conformance:coverage` passes.
-- [ ] 9.2 Run the checks of every project this change touches. True when `devenv shell -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test` passes.
+- [x] 9.2 Run the checks of every project this change touches. True when `devenv shell -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test` passes.
