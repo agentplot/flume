@@ -39,7 +39,7 @@
 - [x] 7.1 Build retry, stop, drop, done, finish and tell, each ending an agent only when quiet or forced and answering a close the terminal refused as a failure, a retry of a first stage whose readiness failed running it again (caller-acts spec; 12, 31, 47 to 55, 109, 114). True when `devenv shell -- moon run conformance:test` passes with S4, S6, S7, S9, S20, S21 and S26.
 - [x] 7.2 Build status of one place or every place, every fact of clause 56 read from its seam at one head per place, nothing written and nothing started (place-status spec; 43, 56 to 62). True when `devenv shell -- moon run conformance:test` passes with S14.
 - [x] 7.3 Build the tidy: only places over with no live agent, kept on what the place seam reads them holding or on a failed teardown, the branch removed only through remove-branch's judgement and named once when kept, nothing removed while the merge queue cannot be read, the held state and the place's folder gone last (tidying spec; 16, 62 to 68). True when `devenv shell -- moon run conformance:test` passes with S9, S10 and S18.
-- [ ] 7.4 Build the core rebuilt over the same store and seams reading every place again, an agent that did not survive read lost and a resumed one taken only when its identity and its own record match (77). True when `devenv shell -- moon run conformance:test` passes with S12 and the resumed-agent scenario.
+- [x] 7.4 Build the core rebuilt over the same store and seams reading every place again, an agent that did not survive read lost and a resumed one taken only when its identity and its own record match (77). True when `devenv shell -- moon run conformance:test` passes with S12 and the resumed-agent scenario.
 
 ## 8. Answers and the binary's crate
 

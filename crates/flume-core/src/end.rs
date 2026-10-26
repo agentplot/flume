@@ -4,7 +4,9 @@
 //! never ends it. An agent quiet past the stage's limit with nothing
 //! delivered is reported stuck, one working past it is reported so, and
 //! one that stopped with nothing delivered is reported lost; flume ends
-//! none of them. A conversation is read only for lost.
+//! none of them. A conversation is read only for lost. After a restart,
+//! an agent that did not survive reads lost, and one the terminal resumed
+//! is taken only when its own record is its start's (77).
 
 use crate::start::Starts;
 use crate::{Engine, Step, QUIET_LIMIT};
@@ -29,7 +31,8 @@ impl Engine {
         };
         let identity = start.identity.clone();
         let reading = self.read_agent(&start);
-        if reading.state == AgentState::Stopped && !declared.conversation {
+        let gone = reading.state == AgentState::Stopped || !self.own_record(&start);
+        if gone && !declared.conversation {
             let facts = self.facts(&held, &bound, Some(index));
             if facts.delivered {
                 return self.ended(
@@ -41,7 +44,7 @@ impl Engine {
                 );
             }
         }
-        if reading.state == AgentState::Stopped {
+        if gone {
             self.with_start(id, &identity, |start, state| {
                 start.live = false;
                 *state = StageState::Lost;
@@ -101,6 +104,21 @@ impl Engine {
             }
         });
         false
+    }
+
+    /// Whether the agent under the start's identity keeps the record its
+    /// start began with: an agent the terminal resumed is the stage's
+    /// only when both its identity and its own record are its start's
+    /// (77). A record no reading names yet, or one the agent seam cannot
+    /// read, is taken as the start's.
+    fn own_record(&self, start: &StartHeld) -> bool {
+        let (Some(kept), Some(agent)) = (&start.record, self.agent(&start.program)) else {
+            return true;
+        };
+        match agent.received(&start.identity, &start.prompt.text) {
+            Received::Received { record } | Received::NotReceived { record } => &record == kept,
+            Received::Unknown => true,
+        }
     }
 
     /// The stage under `identity` ended as `state`, with what it
