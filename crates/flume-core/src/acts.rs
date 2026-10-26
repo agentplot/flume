@@ -78,6 +78,7 @@ impl Engine {
             for stage in held.stages.iter_mut().skip(index + 1) {
                 stage.state = StageState::NotReached;
             }
+            held.submission.due = false;
             Step::Write(())
         });
         match self.start_stage(place, index, words) {

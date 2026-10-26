@@ -812,7 +812,9 @@ fn stop_words(world: &World, identity: &Identity) -> Option<String> {
 fn s24_sent_back(_: &()) -> Outcome {
     let world = World::new();
     let id = World::id("fix", "one");
-    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let mut fix = launch("fix", "one", Some("x"));
+    fix.hold_submission = true;
+    launched(&world.engine.launch(&fix))?;
     world.settle(&id);
     let code = World::identity("fix", "one", "code", 1);
     let words = stop_words(&world, &code).ok_or("the agent was not sent back")?;

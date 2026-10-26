@@ -22,49 +22,56 @@ impl Engine {
                 .map(|read| read.state.place.id)
                 .collect(),
         };
+        let mut tidy = Tidied::default();
         for id in &places {
-            self.settle_place(id);
+            tidy.add(self.settle_place(id));
         }
-        Answer::Settled {
-            places,
-            tidy: Tidied::default(),
-        }
+        Answer::Settled { places, tidy }
     }
 
     /// Settles every place on the host.
-    pub(crate) fn settle_every(&self) {
+    pub(crate) fn settle_every(&self) -> Tidied {
+        let mut tidy = Tidied::default();
         for read in self.store.read_every() {
-            self.settle_place(&read.state.place.id);
+            tidy.add(self.settle_place(&read.state.place.id));
         }
+        tidy
     }
 
     /// Where the terminal keeps no watch, every command of flume's that
     /// acts on places settles every place first (119, I8); under a watch
     /// the watch settles them.
-    pub(crate) fn settle_attended(&self) {
+    pub(crate) fn settle_attended(&self) -> Tidied {
         if self.terminal.watch() == Watch::None {
-            self.settle_every();
+            return self.settle_every();
         }
+        Tidied::default()
     }
 
-    pub(crate) fn settle_place(&self, id: &PlaceId) {
+    /// Settles one place, and gives what its tidy did.
+    pub(crate) fn settle_place(&self, id: &PlaceId) -> Tidied {
+        let mut tidied = Tidied::default();
         for _ in 0..STEPS {
-            if !self.step(id) {
-                return;
+            if !self.step(id, &mut tidied) {
+                break;
             }
         }
+        tidied
     }
 
     /// One step the place allows; true when it changed something.
-    fn step(&self, id: &PlaceId) -> bool {
+    fn step(&self, id: &PlaceId, tidied: &mut Tidied) -> bool {
         let Some(read) = self.store.read(id) else {
             return false;
         };
         let held = read.state;
         match &held.phase {
             Phase::Making { by } => return !self.host.alive(by) && self.undo(&held),
+            Phase::Over { .. } | Phase::Gone { .. } => return self.tidy_place(id, tidied),
             Phase::Live => {}
-            _ => return false,
+        }
+        if self.submission(&held) {
+            return true;
         }
         let Some(index) = held.current else {
             return false;
