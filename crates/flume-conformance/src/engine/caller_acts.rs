@@ -54,6 +54,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: finish_while_the_agent_works,
         },
         Scenario {
+            name: "finish: a conversation whose agent stopped reads lost, and a finish ends it delivered",
+            cites: &["45", "109", "40"],
+            run: a_lost_conversation_finished,
+        },
+        Scenario {
             name: "retry: the first stage of a place whose readiness failed runs readiness again",
             cites: &["12", "49"],
             run: a_retry_after_readiness_failed,
@@ -345,6 +350,59 @@ fn finish_while_the_agent_works(_: &()) -> Outcome {
     );
     ensure!(StageState::Finished.ended(), "a finish is no end");
     ensure_eq!(world.terminal.log.count("close"), 1, "closes");
+    Ok(())
+}
+
+fn a_lost_conversation_finished(_: &()) -> Outcome {
+    let world = World::new();
+    world.kinds.set_kinds(
+        REPOSITORY,
+        vec![kind(
+            "round",
+            false,
+            vec![
+                stage("talk", None, "{{brief}}"),
+                stage("work", Some(Deliverable::Commits), "{{brief}}"),
+            ],
+        )],
+    );
+    launched(
+        &world
+            .engine
+            .launch(&launch("round", "one", Some("talk it over"))),
+    )?;
+    let id = World::id("round", "one");
+    world.settle(&id);
+    let talk = World::identity("round", "one", "talk", 1);
+    world.terminal.kill(&talk);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "talk"),
+        Some(StageState::Lost),
+        "the conversation"
+    );
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        1,
+        "agents opened before the finish"
+    );
+    taken(&world.engine.finish(&id, false))?;
+    ensure_eq!(
+        world.stage_state(&id, "talk"),
+        Some(StageState::Finished),
+        "the conversation"
+    );
+    ensure_eq!(world.terminal.log.count("close"), 0, "closes");
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        2,
+        "agents opened after the finish"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Begun),
+        "the stage after the conversation"
+    );
     Ok(())
 }
 

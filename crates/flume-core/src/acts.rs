@@ -225,6 +225,8 @@ impl Engine {
 
     /// Ends a conversation's agent once quiet, one not quiet only when
     /// forced, and the conversation then counts as delivered (109, 40).
+    /// A conversation whose agent was lost has no agent to end, and waits
+    /// on a retry or this finish (45).
     pub fn finish(&self, place: &PlaceId, force: bool) -> Answer {
         self.settle_attended();
         let Some(read) = self.store.read(place) else {
@@ -232,18 +234,18 @@ impl Engine {
         };
         let held = read.state;
         let current = held.current.filter(|index| {
-            held.place.kind.stages[*index].conversation && held.stages[*index].state.running()
+            let state = held.stages[*index].state;
+            held.place.kind.stages[*index].conversation
+                && (state.running() || state == StageState::Lost)
         });
         let Some(index) = current else {
             return Answer::refused(format!("the place {place} runs no conversation"));
         };
-        let Some(start) = held.stages[index].start.clone().filter(|start| start.live) else {
-            return Answer::refused(format!(
-                "the place {place}'s conversation has no live agent"
-            ));
+        let Some(start) = held.stages[index].start.clone() else {
+            return Answer::refused(format!("the place {place}'s conversation has no agent"));
         };
-        let reading = self.read_agent(&start);
-        if reading.state != AgentState::Stopped {
+        let reading = start.live.then(|| self.read_agent(&start));
+        if let Some(reading) = reading.filter(|reading| reading.state != AgentState::Stopped) {
             if !reading.quiet() && !force {
                 return Answer::refused(format!(
                     "the agent {} is not quiet; ask again forced to finish it",

@@ -122,7 +122,8 @@ impl Engine {
     }
 
     /// The stage under `identity` ended as `state`, with what it
-    /// delivered, its agent ended (40, 43); false when it had ended.
+    /// delivered, its agent ended or lost (40, 43, 45); false when it had
+    /// ended.
     pub(crate) fn ended(
         &self,
         id: &PlaceId,
@@ -136,7 +137,8 @@ impl Engine {
                 return Step::Keep(false);
             };
             let stage = &mut held.stages[index];
-            let Some(start) = stage.start.as_mut().filter(|start| start.live) else {
+            let lost = stage.state == StageState::Lost;
+            let Some(start) = stage.start.as_mut().filter(|start| start.live || lost) else {
                 return Step::Keep(false);
             };
             start.live = false;
