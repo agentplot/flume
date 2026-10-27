@@ -1,7 +1,7 @@
 ---
 number: 8
 title: A hold is recorded with its caller's words, and a place left to its caller is said and told
-status: proposed
+status: accepted
 date: 2026-10-27
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A hold is recorded with its caller's words, and a place left to its caller is said and told
 
-Status: proposed to the user on 2026-10-27, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-27, on their card.
 
 Deciders: the user, accepting crew record 0044 on 2026-10-27 with the note "I'd rather spend the tokens to build out the correct functionality in Flume, sluice, and Tailrace instead of continuing to make crew more kludgy", which hands Flume two of that record's outcomes; the shape is madswan-design's, on swancloud-design's and madswan-planner's asking of the same day, and the user's yes is asked on the record's card.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 8, 12, 40, 42, 43, 44, 47, 49, 56, 58, 62, 70, 72, 114, 120 and the open question on how long a stage may wait on its caller's word; `afterthought/crew:docs/adr/0044-a-bolts-next-stage-starts-itself-and-a-stalled-team-is-raised.md`, points 1 and 3; `afterthought/crew-state:swancloud/main` signal 2026-10-27-swancloud-operator-f037f753/02-idle-conductor-raises-nothing; records 0003 and 0006; rules core.14, core.15, core.16.

@@ -40,7 +40,7 @@ part exists.
 - **[core.17]** Every act is safe to repeat, and no act leaves a worktree or a branch of flume's that its held state does not name.
 - **[core.18]** flume removes only places it made, through the repository's teardown, never a place holding uncommitted or unignored work or a lock, and never a branch holding a commit whose change its base lacks.
 - **[core.23]** What a stage made is read from the line the stage's run wrote and carried as written, a durable thing by its address and a thing that must run by the branch and revision that bring it up; flume builds, checks or rewrites no address of its own, a stage starts no server that outlives its place, and a declared thing with no line is a deliverable not yet made.
-- **[core.24]** A place waits on its caller only as status says, which move and since when, a hold carrying its caller's words whether put at the launch or after it; a place waiting under no hold's words for five minutes, or the launch's bound, is said left and whoever waits on it is told once; flume watches no event for a hold and ends none itself. (Proposed 2026-10-27, record 0008, on the user's card; accepted only on their yes.)
+- **[core.24]** A place waits on its caller only as status says, which move and since when, a hold carrying its caller's words whether put at the launch or after it; a place waiting under no hold's words for five minutes, or the launch's bound, is said left and whoever waits on it is told once; flume watches no event for a hold and ends none itself.
 
 ### Design and records
 
