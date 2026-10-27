@@ -1,7 +1,7 @@
 ---
 number: 7
 title: A stage records the addresses of what it made, and flume carries them as written
-status: proposed
+status: accepted
 date: 2026-10-27
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A stage records the addresses of what it made, and flume carries them as written
 
-Status: proposed to the user on 2026-10-27, as `briefs.15` has it, and revised the same day on their note; accepted only on their yes.
+Status: accepted by the user on 2026-10-27, on their card ("Approved"), after a revision the same day on their note.
 
 Deciders: the user, answering swancloud's proposal 369 on 2026-10-26 ("I want to make sure we think about this design more in terms of how Flume ties in. Landing a bolt is one thing but we could possibly have another Flume kind where maybe it was running or created a spike. We want a card that has the link to that spike or maybe there's a preview server that's not done through sluice, although I'm not sure we would want that, really"), relayed by swancloud-design; and the user again on the record's first card (2026-10-27): "How does this work? What process is driving this loose preview? Is it Flume or is it Crew? What if the preview needs to be started? I'm just thinking about a card that sits for a long time. Is there some concept of not just being handed something and hoping that the service stays running, but being able to toggle the server on and off? I don't want to overcomplicate it." The shape, and the answer on a thing that must run, are madswan-design's; the user's yes is asked on the record's card.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 23, 24, 42 to 44, 62, 110, 123, 128, 129, C.2, C.7; records 0003, 0005, 0006; rules core.9, core.14, core.15, core.16; sluice record 0045 and its previews guide (`sluice preview`, `sluice release`, `sluice previews`).
