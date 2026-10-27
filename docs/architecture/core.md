@@ -39,6 +39,7 @@ part exists.
 - **[core.16]** A place's live state is one document on the host, written by compare-and-set on its version, gone when the place is tidied, and nothing of flume's is written into a repository's content.
 - **[core.17]** Every act is safe to repeat, and no act leaves a worktree or a branch of flume's that its held state does not name.
 - **[core.18]** flume removes only places it made, through the repository's teardown, never a place holding uncommitted or unignored work or a lock, and never a branch holding a commit whose change its base lacks.
+- **[core.23]** The address of a thing a stage made is read from the line the stage's run wrote and carried as written; flume builds, checks or rewrites no address of its own, and a declared thing with no line is a deliverable not yet made. (Proposed 2026-10-27, record 0007, on the user's card; accepted only on their yes.)
 
 ### Design and records
 
@@ -74,3 +75,4 @@ part exists.
 - **core.20** Rules out: pricing, a tier or a customer named in code, docs or the site. Source: record 0001; agentplot/strategy's `CLAUDE.md`.
 - **core.21** Rules out: a tracked file treefmt neither formats nor excludes; a crate or plugin outside `.moon/workspace.yml`; a check run by a script a task does not name. Source: `.moon/workspace.yml`, `treefmt.nix`, `.config/sluice.toml`; kit-standard's code profile.
 - **core.22** Rules out: a tool from the machine's own installation in a task; a version floated by a range. Source: `devenv.nix`, `.prototools`.
+- **core.23** Rules out: a link to a branch, a preview or a page computed from a name and a forge's or a server's layout; an address rewritten, shortened or resolved before it is handed on; a stage read as delivered while a declared made thing has no line; a made thing's lines kept by flume after the place is tidied. Not ruled out: carrying a thing the run recorded and the kind did not declare; the caller keeping the lines it was given. Source: clauses 23, 43, 44, 110, 128, 129; record 0007.
