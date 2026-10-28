@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-28, on their card ("Approved").
 
+Amended 2026-10-28 by record 0014, accepted by the user: told and untold are delivered and pending, a waiter is a recipient, a caller's start collects what is pending by `flume inbox`, and the end is put into the pane as a notice.
+
 Amended 2026-10-28 by record 0012, accepted by the user: a submission's outcome reaches flume's settle by the settle asking sluice for the place's untold outcomes (clause 133), not by sluice's push; and a caller's start that asks for its untold ends is, for crew, a role run's start (record 0013), not a session-start hook.
 
 Deciders: the user, in swancloud-ops's pane on 2026-10-28 (afterthought/crew-state, swancloud/main, signal 2026-10-28-swancloud-ops-4f509aa5/01-waits-are-pushed-and-reconnect-after-restart): "If our records already know about sluice submissions, crew units, and chores, then if we restarted a Claude Code session, it should be able to come back up and reconnect with those watchers (either through the mod or through some instruction)", which settles that an end reaches its waiter by a push the waiter picks up again from the records after a restart; the shape is madswan-design's, on swancloud-design's asking of the same night for Flume's answer to the statement's open question 43/46, and the user's yes is asked on the record's card.
