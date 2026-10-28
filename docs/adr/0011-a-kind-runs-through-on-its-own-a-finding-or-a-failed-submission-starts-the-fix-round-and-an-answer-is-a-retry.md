@@ -1,7 +1,7 @@
 ---
 number: 11
 title: A kind runs through on its own; a finding or a failed submission starts the fix round, a stop-short that asks waits on its answer, and a review note's fix is a fix launched with the note
-status: proposed
+status: accepted
 date: 2026-10-28
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A kind runs through on its own; a finding or a failed submission starts the fix round, a stop-short that asks waits on its answer, and a review note's fix is a fix launched with the note
 
-Status: proposed to the user on 2026-10-28, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-28, on their card ("Approved").
 
 Deciders: the user, in swancloud-design's pane on 2026-10-28, relayed by madswan-operator: "yes. i want to simplify crew that way. so the priority i think becomes to fix the fires with cpu usage in sluice/crew. then build flume, then refactor teams from crew", which settles that Flume, not a conductor, runs a unit's stages, and that Flume is built right after the fires; swancloud-design's four asks of the same night, in its words: a kind's stage sequence launched and ended by Flume with no conductor's word; a failed or conflicting submission launching the kind's fix stage on its own with sluice's blame in its prompt; a stage that stops short with a question shown in status with its words and started again by the answer; a review batch's notes marked fix starting the fix round the same way. The shape is madswan-design's; the user's yes is asked on this record's card. The crew side is afterthought/crew record 0047 (the end state: no conductor, no team ops, no team, no dispatcher; per partition a planner, one ops, design and the operator).
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 18, 22, 23, 39 to 49, 53 to 56, 110 to 112, 124, 130, C.2, C.4, the callers table's crew row, S4 and S7, and section 10's first question; records 0003 (a stage ends on its deliverable or a stop-short), 0008 (a hold is the caller's words), 0009 (an end told once), 0010 (room is the host's, flume holds no cap); afterthought/crew records 0045 and 0047; sluice clauses 20 and 51 (what a failed or conflicting submission's words carry).
