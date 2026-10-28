@@ -119,6 +119,8 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             settings: BTreeMap::new(),
             hold: vec![],
             hold_submission: false,
+            hold_words: BTreeMap::new(),
+            recipients: vec![],
         },
         phase: Phase::Live,
         readiness: Readiness::default(),
@@ -129,9 +131,11 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             refused_part: None,
             end: None,
             start: None,
+            waiting_since: None,
         }],
         current: None,
         submission: SubmissionHeld::default(),
         failures: vec![],
+        priority: 0,
     }
 }

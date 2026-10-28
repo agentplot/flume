@@ -1,14 +1,33 @@
 use crate::{lock, Log};
-use flume_seams::{Host, Seconds, Secret};
+use flume_seams::{Host, RoomGuard, Seconds, Secret};
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Condvar, Mutex};
 
 /// The host: a clock that moves only when a test advances it or a command
-/// sleeps on it, numbered secrets, files' write times, and the commands
-/// of flume's that live.
+/// sleeps on it, numbered secrets, files' write times, the commands of
+/// flume's that live, the bound on agents its configuration states, and
+/// an exclusive room lock.
 pub struct FakeHost {
     state: Mutex<HostState>,
+    room: Arc<Room>,
     pub log: Log,
+}
+
+/// The room lock: taken while held, waited on by every other taker.
+#[derive(Default)]
+struct Room {
+    taken: Mutex<bool>,
+    freed: Condvar,
+}
+
+/// Holding the room until dropped.
+struct Held(Arc<Room>);
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        *lock(&self.0.taken) = false;
+        self.0.freed.notify_one();
+    }
 }
 
 struct HostState {
@@ -17,6 +36,7 @@ struct HostState {
     files: BTreeMap<String, Seconds>,
     command: u64,
     alive: BTreeSet<String>,
+    bound: Option<u32>,
 }
 
 impl Default for FakeHost {
@@ -28,7 +48,9 @@ impl Default for FakeHost {
                 files: BTreeMap::new(),
                 command: 1,
                 alive: BTreeSet::from(["command-1".to_string()]),
+                bound: None,
             }),
+            room: Arc::default(),
             log: Log::default(),
         }
     }
@@ -72,6 +94,16 @@ impl FakeHost {
     pub fn end_command(&self, command: &str) {
         lock(&self.state).alive.remove(command);
     }
+
+    /// The bound on agents the host's configuration states, or none.
+    pub fn set_bound(&self, bound: Option<u32>) {
+        lock(&self.state).bound = bound;
+    }
+
+    /// Whether the room lock is held now.
+    pub fn room_taken(&self) -> bool {
+        *lock(&self.room.taken)
+    }
 }
 
 impl Host for FakeHost {
@@ -101,5 +133,24 @@ impl Host for FakeHost {
 
     fn alive(&self, command: &str) -> bool {
         lock(&self.state).alive.contains(command)
+    }
+
+    fn bound(&self) -> Option<u32> {
+        self.log.push("bound");
+        lock(&self.state).bound
+    }
+
+    fn room(&self) -> RoomGuard {
+        self.log.push("room");
+        let mut taken = lock(&self.room.taken);
+        while *taken {
+            taken = self
+                .room
+                .freed
+                .wait(taken)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        *taken = true;
+        RoomGuard::new(Held(self.room.clone()))
     }
 }

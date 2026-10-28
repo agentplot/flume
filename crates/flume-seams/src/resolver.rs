@@ -2,7 +2,7 @@
 //! (design 2, 105). The core is built over one; a profile is chosen from
 //! the binding alone (core.3).
 
-use crate::{Agent, Change, Kinds, MergeQueue, Place};
+use crate::{Agent, Binding, Change, Kinds, MergeQueue, Place};
 use std::sync::Arc;
 
 pub trait Resolver: Send + Sync {
@@ -10,9 +10,16 @@ pub trait Resolver: Send + Sync {
     /// (105).
     fn kinds(&self) -> Arc<dyn Kinds>;
 
-    /// The place profile a binding names, or with `None` the one that
-    /// needs nothing beyond git (105).
-    fn place(&self, profile: Option<&str>) -> Option<Arc<dyn Place>>;
+    /// The names of the place profiles it holds, so a binding naming
+    /// another is refused naming them (C.1, core.3).
+    fn place_profiles(&self) -> Vec<String>;
+
+    /// The place profile `binding` names for `repository`, or where it
+    /// names none the one that needs nothing beyond git, bound with the
+    /// data the binding's merge queue profile declares for the place: its
+    /// readiness, its teardown and where the base lives (105, design 9,
+    /// 13). Neither profile calls the other (core.2).
+    fn place(&self, repository: &str, binding: &Binding) -> Option<Arc<dyn Place>>;
 
     /// The change profile a binding names.
     fn change(&self, profile: &str) -> Option<Arc<dyn Change>>;

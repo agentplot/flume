@@ -23,6 +23,7 @@ struct TerminalState {
     close_refused: BTreeSet<String>,
     watch: Watch,
     sent: Vec<(String, String)>,
+    session: Option<String>,
 }
 
 struct Running {
@@ -45,6 +46,7 @@ impl FakeTerminal {
                 close_refused: BTreeSet::new(),
                 watch: Watch::None,
                 sent: vec![],
+                session: None,
             }),
             log: Log::default(),
         }
@@ -114,6 +116,11 @@ impl FakeTerminal {
 
     pub fn set_watch(&self, watch: Watch) {
         lock(&self.state).watch = watch;
+    }
+
+    /// The session the calling command runs in, as the terminal names it.
+    pub fn set_session(&self, session: Option<&str>) {
+        lock(&self.state).session = session.map(str::to_string);
     }
 
     /// The texts sent to the agent, in order.
@@ -237,5 +244,10 @@ impl Terminal for FakeTerminal {
 
     fn watch(&self) -> Watch {
         lock(&self.state).watch
+    }
+
+    fn session(&self) -> Option<String> {
+        self.log.push("session");
+        lock(&self.state).session.clone()
     }
 }

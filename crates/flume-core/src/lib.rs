@@ -30,7 +30,8 @@ use flume_seams::{
     Agent, Binding, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds,
     Settings, Store, Terminal,
 };
-use std::sync::Arc;
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// A stage's quiet limit where its declaration sets none (44).
 pub const QUIET_LIMIT: Seconds = 30 * 60;
@@ -66,6 +67,17 @@ pub struct Engine {
     history: Arc<dyn History>,
     host: Arc<dyn Host>,
     defaults: Defaults,
+    /// The repositories and bases whose queue this command drove a round
+    /// of, each at most once (125).
+    stepped: Mutex<BTreeSet<(String, String)>>,
+}
+
+/// The guard of the engine's own state, read through a panic a caller
+/// caught.
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// The seams a place's binding resolved to (105).
@@ -91,6 +103,7 @@ impl Engine {
             history,
             host,
             defaults,
+            stepped: Mutex::default(),
         }
     }
 
@@ -98,17 +111,18 @@ impl Engine {
         &self.defaults
     }
 
-    /// The seams a binding names (105, core.3): an unbound place seam is
-    /// the one that needs nothing beyond git, and an unbound change or
-    /// merge queue stays unbound.
-    pub(crate) fn bind(&self, binding: &Binding) -> Result<Bound, String> {
-        let place = self
-            .resolver
-            .place(binding.place.as_deref())
-            .ok_or_else(|| match &binding.place {
-                Some(name) => format!("no place profile is named {name}"),
-                None => "no place profile needs nothing beyond git".to_string(),
-            })?;
+    /// The seams a repository's binding names (105, core.3): an unbound
+    /// place seam is the one that needs nothing beyond git, bound with the
+    /// merge queue profile's data by the resolver, and an unbound change
+    /// or merge queue stays unbound.
+    pub(crate) fn bind(&self, repository: &str, binding: &Binding) -> Result<Bound, String> {
+        let place =
+            self.resolver
+                .place(repository, binding)
+                .ok_or_else(|| match &binding.place {
+                    Some(name) => format!("no place profile is named {name}"),
+                    None => "no place profile needs nothing beyond git".to_string(),
+                })?;
         let change = match &binding.change {
             Some(name) => Some(
                 self.resolver
@@ -134,7 +148,7 @@ impl Engine {
 
     /// The seams of a place's binding as its launch resolved it (21).
     pub(crate) fn bound(&self, place: &PlaceRecord) -> Result<Bound, String> {
-        self.bind(&place.binding)
+        self.bind(&place.repository, &place.binding)
     }
 
     /// The agent profile a stage's settings name by its program (32,
@@ -175,6 +189,8 @@ mod tests {
             settings: BTreeMap::new(),
             hold: vec![],
             hold_submission: false,
+            hold_words: BTreeMap::new(),
+            recipients: vec![],
         }
     }
 
@@ -187,7 +203,7 @@ mod tests {
         let place = Arc::new(FakePlace::new(git.clone()));
         resolver.bind_no_tool_place(place.clone());
         resolver.bind_place("trees", place);
-        resolver.bind_merge_queue("queue", Arc::new(FakeMergeQueue::new(git.clone(), None)));
+        resolver.bind_merge_queue("queue", Arc::new(FakeMergeQueue::new(git.clone())));
         let defaults = Defaults {
             settings: Settings {
                 program: Some("agent".into()),

@@ -5,7 +5,7 @@
 
 use crate::{
     Binding, Declared, Holds, Identity, Kind, PlaceId, PlaceRef, Prompt, Readiness, Revision,
-    Seconds, Secret, Settings, Verdict,
+    Seconds, Secret, Settings, StopKind, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -22,6 +22,10 @@ pub struct HeldState {
     pub submission: SubmissionHeld,
     /// Each end flume asked for that the agent did not take (31).
     pub failures: Vec<String>,
+    /// The place's priority, higher first: its launch's, changed by its
+    /// caller after (7, 70).
+    #[serde(default)]
+    pub priority: i64,
 }
 
 /// What a launch fixed of a place (8, 21).
@@ -45,6 +49,13 @@ pub struct PlaceRecord {
     pub settings: BTreeMap<String, Settings>,
     pub hold: Vec<String>,
     pub hold_submission: bool,
+    /// The words of each hold the launch put, by stage name (7, 130).
+    #[serde(default)]
+    pub hold_words: BTreeMap<String, String>,
+    /// The recipients of the place's ends, as the launch named them (7,
+    /// 8, 43).
+    #[serde(default)]
+    pub recipients: Vec<String>,
 }
 
 impl PlaceRecord {
@@ -109,6 +120,8 @@ pub enum StageState {
     NotReached,
     OnHold,
     WaitingOnReadiness,
+    /// Due to start, waiting for room on the host (70).
+    WaitingForRoom,
     Refused,
     Started,
     Begun,
@@ -149,6 +162,9 @@ pub struct StageHeld {
     pub refused_part: Option<String>,
     pub end: Option<StageEnd>,
     pub start: Option<StartHeld>,
+    /// Since when the stage waits for room on the host (70, 56).
+    #[serde(default)]
+    pub waiting_since: Option<Seconds>,
 }
 
 /// A stage's end as reported when it ended (43).
@@ -158,6 +174,9 @@ pub struct StageEnd {
     pub report: Option<String>,
     /// A stop-short's words, whole (42).
     pub words: Option<String>,
+    /// Whether the stop-short needs an answer or found work (41, 131).
+    #[serde(default)]
+    pub needs: Option<StopKind>,
 }
 
 /// One start of a stage and its agent.
@@ -188,7 +207,8 @@ pub struct StartHeld {
     pub past_limit: bool,
 }
 
-/// A landing kind's submission as flume keeps it (48, 111, 112, 124).
+/// A landing kind's submission as flume keeps it, with no wait held on
+/// it (48, 111, 112, 124, 133).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubmissionHeld {
     /// The last stage delivered and its submission is to be made.
@@ -197,9 +217,16 @@ pub struct SubmissionHeld {
     pub submits: u32,
     /// How many send-backs the place has taken (112).
     pub send_backs: u32,
-    /// The command of flume's waiting on the merge queue's verdict (124).
-    pub waiter: Option<String>,
+    /// The submission flume last made, by the merge queue's id, so a
+    /// withdrawal of it is told from a hand's (99, 112).
+    #[serde(default)]
+    pub id: Option<String>,
+    /// The last outcome flume collected, or its refusal at submit.
     pub verdict: Option<Verdict>,
     /// Why the place waits for its caller's retry or drop (112).
     pub waiting: Option<String>,
+    /// Why the place's inbox could not be read at the last settle, which
+    /// acted on nothing (133, 68).
+    #[serde(default)]
+    pub unread: Option<String>,
 }

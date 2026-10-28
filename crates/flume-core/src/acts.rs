@@ -53,7 +53,7 @@ impl Engine {
             return Ok(());
         };
         let identity = start.identity.clone();
-        let reading = self.read_agent(start);
+        let reading = self.read_agent(id, start);
         if reading.state != AgentState::Stopped {
             if !reading.quiet() && !force {
                 return Err(format!(
@@ -244,7 +244,7 @@ impl Engine {
         let Some(start) = held.stages[index].start.clone() else {
             return Answer::refused(format!("the place {place}'s conversation has no agent"));
         };
-        let reading = start.live.then(|| self.read_agent(&start));
+        let reading = start.live.then(|| self.read_agent(place, &start));
         if let Some(reading) = reading.filter(|reading| reading.state != AgentState::Stopped) {
             if !reading.quiet() && !force {
                 return Answer::refused(format!(
@@ -288,10 +288,11 @@ impl Engine {
                 start.program
             ));
         };
+        let folder = self.store.folder(place);
         let deadline = self.host.now() + bound.unwrap_or(TELL_BOUND);
         loop {
             let state = self.terminal.state(&identity);
-            let asking = agent.asking(&identity);
+            let asking = agent.asking(&folder, &identity);
             if state == AgentState::Asking || asking == Reading::Yes {
                 return Answer::refused(format!(
                     "the agent {identity} is asking a person; nothing was typed"
@@ -318,7 +319,7 @@ impl Engine {
             }
             let sent = self.host.now();
             loop {
-                if let Received::Received { .. } = agent.received(&identity, words) {
+                if let Received::Received { .. } = agent.received(&folder, &identity, words) {
                     return self.acted(Act::Tell, place);
                 }
                 let waited = self.host.now().saturating_sub(sent);

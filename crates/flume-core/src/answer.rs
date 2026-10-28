@@ -146,7 +146,8 @@ pub struct SubmissionStatus {
     pub read: SubmissionRead,
     pub submits: u32,
     pub send_backs: u32,
-    /// The last verdict flume waited on, with the merge queue's words.
+    /// The last outcome flume collected, or its refusal at submit, with
+    /// the merge queue's words (133).
     pub verdict: Option<Verdict>,
     /// Why the place waits for its caller (112).
     pub waiting: Option<String>,

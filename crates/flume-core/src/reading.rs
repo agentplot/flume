@@ -167,16 +167,18 @@ impl Engine {
         }
     }
 
-    /// The agent of a start, as the terminal and the agent seam read it.
-    pub(crate) fn read_agent(&self, start: &StartHeld) -> AgentReading {
+    /// The agent of a place's start, as the terminal and the agent seam
+    /// read it, the agent's record read in the place's own folder (128).
+    pub(crate) fn read_agent(&self, place: &PlaceId, start: &StartHeld) -> AgentReading {
         let state = self.terminal.state(&start.identity);
         let agent = self.agent(&start.program);
-        let own_record = own_record(agent.as_deref(), start);
+        let folder = self.store.folder(place);
+        let own_record = own_record(agent.as_deref(), &folder, start);
         match agent {
             Some(agent) => AgentReading {
                 state,
-                asking: agent.asking(&start.identity),
-                own_work: agent.own_work(&start.identity),
+                asking: agent.asking(&folder, &start.identity),
+                own_work: agent.own_work(&folder, &start.identity),
                 own_record,
             },
             None => AgentReading {
@@ -195,14 +197,14 @@ impl Engine {
 /// record the agent seam cannot read is unknown, never taken as the
 /// start's (77, 93). A start whose prompt no reading has named received
 /// keeps no record yet, and has none to differ from.
-fn own_record(agent: Option<&dyn Agent>, start: &StartHeld) -> Reading {
+fn own_record(agent: Option<&dyn Agent>, folder: &str, start: &StartHeld) -> Reading {
     let Some(kept) = &start.record else {
         return Reading::Yes;
     };
     let Some(agent) = agent else {
         return Reading::Unknown;
     };
-    match agent.received(&start.identity, &start.prompt.text) {
+    match agent.received(folder, &start.identity, &start.prompt.text) {
         Received::Received { record } | Received::NotReceived { record } if &record == kept => {
             Reading::Yes
         }

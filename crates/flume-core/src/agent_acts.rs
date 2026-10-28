@@ -51,6 +51,7 @@ impl Engine {
                     head: None,
                     report: None,
                     words: Some(words.to_string()),
+                    needs: Some(StopKind::NeedsAnswer),
                 });
                 Step::Write(true)
             })
@@ -79,8 +80,9 @@ impl Engine {
         }
         let start = held.stages[index].start.as_ref()?;
         let agent = self.agent(&start.program)?;
-        if agent.own_work(&start.identity) != Reading::No
-            || agent.asking(&start.identity) != Reading::No
+        let folder = self.store.folder(&place.id);
+        if agent.own_work(&folder, &start.identity) != Reading::No
+            || agent.asking(&folder, &start.identity) != Reading::No
         {
             return None;
         }

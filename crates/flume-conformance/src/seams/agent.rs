@@ -1,4 +1,4 @@
-//! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121).
+//! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -10,9 +10,13 @@ pub trait AgentHarness {
 
     fn place(&self) -> PlaceRef;
 
+    /// The place's own folder beside its held state, where the agent's
+    /// program records its session (128).
+    fn folder(&self) -> String;
+
     /// The agent run with `command` under `identity`, as a terminal runs
-    /// it.
-    fn start(&self, command: &AgentCommand, identity: &Identity);
+    /// it, its session recorded in `folder`.
+    fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str);
 
     /// `text` delivered to the agent as input.
     fn deliver(&self, identity: &Identity, text: &str);
@@ -28,6 +32,9 @@ pub trait AgentHarness {
 
     /// The agent tries to push its place's branch.
     fn try_push(&self, identity: &Identity);
+
+    /// The agent's session ends.
+    fn end_session(&self, identity: &Identity);
 }
 
 fn identity(stage: &str) -> Identity {
@@ -48,7 +55,7 @@ fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
         &Secret("secret".into()),
         "begin",
     );
-    harness.start(&command, &who);
+    harness.start(&command, &who, &harness.folder());
     who
 }
 
@@ -91,6 +98,16 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["115", "121", "110"],
             run: what_the_program_offers::<H>,
         },
+        Scenario {
+            name: "agent: the readings read the start's record in the place's folder, and nothing in another",
+            cites: &["128", "93", "77"],
+            run: the_folder_handed_to_the_readings::<H>,
+        },
+        Scenario {
+            name: "agent: ended reads whether the agent's record shows its session ended",
+            cites: &["134", "93"],
+            run: ended_reads_the_session::<H>,
+        },
     ]
 }
 
@@ -128,9 +145,10 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
 
 fn received_reads_the_record<H: AgentHarness>(harness: &H) -> Outcome {
     let who = started(harness, "code");
+    let folder = harness.folder();
     ensure!(
         !matches!(
-            harness.seam().received(&who, "the prompt"),
+            harness.seam().received(&folder, &who, "the prompt"),
             Received::Received { .. }
         ),
         "a prompt never sent read as received"
@@ -138,7 +156,7 @@ fn received_reads_the_record<H: AgentHarness>(harness: &H) -> Outcome {
     harness.deliver(&who, "the prompt");
     ensure!(
         matches!(
-            harness.seam().received(&who, "the prompt"),
+            harness.seam().received(&folder, &who, "the prompt"),
             Received::Received { .. }
         ),
         "a delivered prompt read as not received"
@@ -148,21 +166,35 @@ fn received_reads_the_record<H: AgentHarness>(harness: &H) -> Outcome {
 
 fn asking_and_own_work<H: AgentHarness>(harness: &H) -> Outcome {
     let who = started(harness, "code");
-    ensure_eq!(harness.seam().asking(&who), Reading::No, "asking");
-    ensure_eq!(harness.seam().own_work(&who), Reading::No, "own work");
+    let folder = harness.folder();
+    ensure_eq!(harness.seam().asking(&folder, &who), Reading::No, "asking");
+    ensure_eq!(
+        harness.seam().own_work(&folder, &who),
+        Reading::No,
+        "own work"
+    );
     harness.ask(&who);
     harness.start_own_work(&who);
-    ensure_eq!(harness.seam().asking(&who), Reading::Yes, "asking");
-    ensure_eq!(harness.seam().own_work(&who), Reading::Yes, "own work");
+    ensure_eq!(harness.seam().asking(&folder, &who), Reading::Yes, "asking");
+    ensure_eq!(
+        harness.seam().own_work(&folder, &who),
+        Reading::Yes,
+        "own work"
+    );
     Ok(())
 }
 
 fn unknown_when_the_record_cannot_say<H: AgentHarness>(harness: &H) -> Outcome {
     let who = started(harness, "code");
+    let folder = harness.folder();
     harness.hide_record(&who);
-    ensure_eq!(harness.seam().own_work(&who), Reading::Unknown, "own work");
     ensure_eq!(
-        harness.seam().received(&who, "anything"),
+        harness.seam().own_work(&folder, &who),
+        Reading::Unknown,
+        "own work"
+    );
+    ensure_eq!(
+        harness.seam().received(&folder, &who, "anything"),
         Received::Unknown,
         "received"
     );
@@ -178,7 +210,7 @@ fn the_way_to_stop_short<H: AgentHarness>(harness: &H) -> Outcome {
 fn the_guard_reports<H: AgentHarness>(harness: &H) -> Outcome {
     let who = started(harness, "code");
     harness.try_push(&who);
-    match harness.seam().guard(&who) {
+    match harness.seam().guard(&harness.folder(), &who) {
         Guarded::Refused { acts } => {
             ensure!(!acts.is_empty(), "a refused push is not reported");
             Ok(())
@@ -194,6 +226,58 @@ fn what_the_program_offers<H: AgentHarness>(harness: &H) -> Outcome {
             .iter()
             .all(|answer| matches!(answer, Offered::Offered | Offered::NotOffered)),
         "an answer neither offered nor not"
+    );
+    Ok(())
+}
+
+fn the_folder_handed_to_the_readings<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    let folder = harness.folder();
+    let elsewhere = format!("{folder}-of-another-place");
+    harness.deliver(&who, "the prompt");
+    ensure!(
+        matches!(
+            harness.seam().received(&folder, &who, "the prompt"),
+            Received::Received { .. }
+        ),
+        "the prompt delivered read as not received in the place's folder"
+    );
+    ensure_eq!(
+        harness.seam().received(&elsewhere, &who, "the prompt"),
+        Received::Unknown,
+        "received, read in another folder"
+    );
+    ensure_eq!(
+        harness.seam().asking(&elsewhere, &who),
+        Reading::Unknown,
+        "asking, read in another folder"
+    );
+    ensure_eq!(
+        harness.seam().own_work(&elsewhere, &who),
+        Reading::Unknown,
+        "own work, read in another folder"
+    );
+    ensure_eq!(
+        harness.seam().ended(&elsewhere, &who),
+        Reading::Unknown,
+        "ended, read in another folder"
+    );
+    Ok(())
+}
+
+fn ended_reads_the_session<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    let folder = harness.folder();
+    ensure_eq!(
+        harness.seam().ended(&folder, &who),
+        Reading::No,
+        "ended, while the session runs"
+    );
+    harness.end_session(&who);
+    ensure_eq!(
+        harness.seam().ended(&folder, &who),
+        Reading::Yes,
+        "ended, once the session ended"
     );
     Ok(())
 }

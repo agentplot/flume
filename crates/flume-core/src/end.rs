@@ -31,7 +31,7 @@ impl Engine {
             return false;
         };
         let identity = start.identity.clone();
-        let reading = self.read_agent(&start);
+        let reading = self.read_agent(id, &start);
         let gone = reading.state == AgentState::Stopped || reading.own_record == Reading::No;
         if gone && !declared.conversation {
             let facts = self.facts(&held, &bound, Some(index));
@@ -135,6 +135,7 @@ impl Engine {
                 head: Some(head.clone()),
                 report: report.clone(),
                 words: None,
+                needs: None,
             });
             if index + 1 == held.stages.len() && held.place.kind.lands {
                 held.submission.due = true;

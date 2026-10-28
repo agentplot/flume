@@ -57,10 +57,12 @@ impl Engine {
             None => None,
         };
         let agent = held.live_start().map(|(index, start)| {
-            let reading = self.read_agent(start);
+            let reading = self.read_agent(&place.id, start);
             cannot_read.extend(reading.unread());
             if let Some(agent) = self.agent(&start.program) {
-                if let Guarded::Refused { acts } = agent.guard(&start.identity) {
+                if let Guarded::Refused { acts } =
+                    agent.guard(&self.store.folder(&place.id), &start.identity)
+                {
                     refused_acts.extend(acts);
                 }
             }
@@ -80,6 +82,9 @@ impl Engine {
                 let read = queue.read_submission(&place.repository, &place.branch);
                 if let SubmissionRead::CouldNotRead { reason } = &read {
                     cannot_read.push(format!("the merge queue: {reason}"));
+                }
+                if let Some(reason) = &held.submission.unread {
+                    cannot_read.push(format!("the merge queue's inbox: {reason}"));
                 }
                 SubmissionStatus {
                     read,

@@ -34,7 +34,8 @@ impl Engine {
             };
             let identity = &start.identity;
             let prompt = &start.prompt;
-            if let Received::Received { record } = agent.received(identity, &prompt.text) {
+            let folder = self.store.folder(id);
+            if let Received::Received { record } = agent.received(&folder, identity, &prompt.text) {
                 let now = self.host.now();
                 self.with_start(id, identity, |start, state| {
                     start.prompt.received_at = Some(now);
@@ -71,7 +72,7 @@ impl Engine {
                 self.claim_sending(id, identity, prompt.sendings.len(), now);
                 continue;
             }
-            if state != AgentState::Waiting || agent.asking(identity) != Reading::No {
+            if state != AgentState::Waiting || agent.asking(&folder, identity) != Reading::No {
                 return sent;
             }
             if !self.claim_sending(id, identity, prompt.sendings.len(), now) {

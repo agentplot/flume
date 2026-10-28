@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// One ask to start a piece of work: a repository, a kind, a name, a
-/// base, and the caller's brief, settings, stages on hold, submission's
-/// hold and mark (2, 7).
+/// base, and the caller's brief, settings, stages on hold with their
+/// words, submission's hold, mark, priority and recipients (2, 7, 8, 70,
+/// 130).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Launch {
     pub repository: String,
@@ -22,4 +23,15 @@ pub struct Launch {
     pub hold: Vec<String>,
     pub hold_submission: bool,
     pub mark: Option<String>,
+    /// The words of each hold, by stage name: why the stage waits on its
+    /// caller (7, 130).
+    #[serde(default)]
+    pub hold_words: BTreeMap<String, String>,
+    /// The place's priority, higher first, zero where the caller gives
+    /// none (7, 70).
+    #[serde(default)]
+    pub priority: i64,
+    /// The recipients of the place's ends (7, 43).
+    #[serde(default)]
+    pub recipients: Vec<String>,
 }

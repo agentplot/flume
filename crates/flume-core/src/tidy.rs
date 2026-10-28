@@ -80,7 +80,7 @@ impl Engine {
             }
             if let Some((_, start)) = held.live_start() {
                 let identity = start.identity.clone();
-                let reading = self.read_agent(start);
+                let reading = self.read_agent(id, start);
                 if reading.state != AgentState::Stopped {
                     if !reading.quiet() {
                         return self.keep(

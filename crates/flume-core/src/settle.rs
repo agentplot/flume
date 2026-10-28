@@ -1,8 +1,9 @@
 //! The settle, flume's one mover (46, 119 to 122): it reads every fact of
-//! a place again and takes each step Part A then allows, safe to repeat
-//! (74). It runs inside a command of flume's, started by an agent going
-//! quiet, by the merge queue's verdict, by the terminal's watch, or by a
-//! caller (120).
+//! a place again and takes each step Part A then allows, collecting its
+//! submission's outcomes first, safe to repeat (74, 133). It runs inside
+//! a command of flume's, started by an agent going quiet, by the
+//! terminal's watch, or by a caller, and waits on no merge queue (120,
+//! core.13).
 
 use crate::{Answer, Engine, Step, Tidied};
 use flume_seams::*;

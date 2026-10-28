@@ -1,4 +1,4 @@
-//! The terminal seam's answers (94 to 98, 122), and an agent's state.
+//! The terminal seam's answers (94 to 98, 122, 7), and an agent's state.
 
 use crate::Seconds;
 use serde::{Deserialize, Serialize};
@@ -75,4 +75,8 @@ pub trait Terminal: Send + Sync {
 
     /// The watch the terminal keeps, if any (122).
     fn watch(&self) -> Watch;
+
+    /// The session the calling command runs in, as the terminal names
+    /// it, a launch's default recipient; none where it names none (7).
+    fn session(&self) -> Option<String>;
 }

@@ -111,6 +111,8 @@ fn held() -> HeldState {
             settings: BTreeMap::from([("code".into(), settings())]),
             hold: vec!["review".into()],
             hold_submission: true,
+            hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
+            recipients: vec!["operator".into(), "role:planner".into()],
         },
         phase: Phase::Over {
             over: Over::Landed {
@@ -128,6 +130,7 @@ fn held() -> HeldState {
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
+                needs: Some(StopKind::FoundWork),
             }),
             start: Some(StartHeld {
                 n: 2,
@@ -147,19 +150,23 @@ fn held() -> HeldState {
                 last_head_move: 90,
                 past_limit: true,
             }),
+            waiting_since: Some(120),
         }],
         current: Some(0),
         submission: SubmissionHeld {
             due: true,
             submits: 2,
             send_backs: 1,
-            waiter: Some("command-7".into()),
-            verdict: Some(Verdict::Failed {
-                words: "test x failed".into(),
+            id: Some("7".into()),
+            verdict: Some(Verdict::Conflict {
+                files: vec!["src/lib.rs".into()],
+                words: "conflicts with main".into(),
             }),
             waiting: Some("withdrawn".into()),
+            unread: Some("the merge queue is down".into()),
         },
         failures: vec!["the agent did not end".into()],
+        priority: -3,
     }
 }
 
@@ -176,6 +183,9 @@ fn a_launch() {
         hold: vec!["review".into()],
         hold_submission: true,
         mark: Some("team-a".into()),
+        hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
+        priority: 5,
+        recipients: vec!["operator".into()],
     });
 }
 
@@ -289,10 +299,20 @@ fn an_identity_a_secret_and_a_stop_short() {
     round_trips(identity());
     assert_eq!(identity().to_string(), "flume:/r:bump--one:code:2");
     round_trips(Secret("s".into()));
-    round_trips(StopShort {
-        identity: identity().to_string(),
-        secret: Secret("s".into()),
-        words: "which of two designs?".into(),
+    for kind in [StopKind::NeedsAnswer, StopKind::FoundWork] {
+        round_trips(kind);
+        round_trips(StopShort {
+            identity: identity().to_string(),
+            secret: Secret("s".into()),
+            words: "which of two designs?".into(),
+            kind,
+        });
+    }
+    round_trips(StageEnd {
+        head: None,
+        report: None,
+        words: Some("the tests fail on main".into()),
+        needs: Some(StopKind::FoundWork),
     });
 }
 
@@ -305,6 +325,10 @@ fn a_submission_and_its_outcomes() {
             commit: Revision::new("c9"),
         },
         SubmissionState::Failed { words: "x".into() },
+        SubmissionState::Conflict {
+            files: vec!["src/lib.rs".into()],
+            words: "conflicts".into(),
+        },
         SubmissionState::Withdrawn,
     ] {
         round_trips(SubmissionRead::Found {
@@ -327,6 +351,10 @@ fn a_submission_and_its_outcomes() {
             branch_removed: false,
         },
         Verdict::Failed { words: "x".into() },
+        Verdict::Conflict {
+            files: vec!["src/lib.rs".into()],
+            words: "conflicts".into(),
+        },
         Verdict::Withdrawn,
         Verdict::Refused {
             reason: "conflict".into(),
@@ -334,6 +362,63 @@ fn a_submission_and_its_outcomes() {
     ] {
         round_trips(verdict);
     }
+}
+
+fn a_submission() -> Submission {
+    Submission {
+        id: "7".into(),
+        branch: "fix/one".into(),
+        target: "main".into(),
+        state: SubmissionState::UnderTest,
+    }
+}
+
+#[test]
+fn submit_holds_no_wait() {
+    round_trips(Submitted::Submitted {
+        submission: a_submission(),
+    });
+    round_trips(Submitted::Refused {
+        reason: "no such base".into(),
+    });
+}
+
+#[test]
+fn the_inbox_and_its_outcomes() {
+    let outcomes = vec![
+        SubmissionOutcome::Landed {
+            commit: Revision::new("c9"),
+        },
+        SubmissionOutcome::Failed {
+            words: "check test-x failed".into(),
+        },
+        SubmissionOutcome::Conflict {
+            files: vec!["src/lib.rs".into(), "Cargo.lock".into()],
+            base: Revision::new("c8"),
+            words: "conflicts with main at c8".into(),
+        },
+    ];
+    for outcome in &outcomes {
+        round_trips(outcome.clone());
+    }
+    round_trips(Inbox::Outcomes { outcomes });
+    round_trips(Inbox::Outcomes { outcomes: vec![] });
+    round_trips(Inbox::CouldNotRead {
+        reason: "down".into(),
+    });
+}
+
+#[test]
+fn a_step() {
+    round_trips(Stepped::Stepped);
+    round_trips(Stepped::MovesOnItsOwn);
+    round_trips(Stepped::CouldNotRead {
+        reason: "down".into(),
+    });
+}
+
+#[test]
+fn where_the_base_lives() {
     round_trips(BaseRevision::At {
         revision: Revision::new("c1"),
     });
@@ -357,6 +442,7 @@ fn agent_and_stage_states() {
         StageState::NotReached,
         StageState::OnHold,
         StageState::WaitingOnReadiness,
+        StageState::WaitingForRoom,
         StageState::Refused,
         StageState::Started,
         StageState::Begun,
@@ -432,6 +518,10 @@ fn the_agent_seams_answers() {
         args: vec!["--model".into(), "large".into()],
         env: BTreeMap::from([("ID".into(), identity().to_string())]),
         prompt_args: vec!["do it".into()],
+        folder_trust: Some(FolderTrust {
+            question: "Do you trust the files in this folder?".into(),
+            answer: "1".into(),
+        }),
     });
     for reading in [Reading::Yes, Reading::No, Reading::Unknown] {
         round_trips(reading);
@@ -467,6 +557,24 @@ fn the_terminal_seams_answers() {
     });
     round_trips(Watch::Bound { seconds: 30 });
     round_trips(Watch::None);
+    round_trips(Some("pane-3".to_string()));
+}
+
+#[test]
+fn the_room_guard_holds_until_dropped() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    struct Release(Arc<AtomicBool>);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+    let released = Arc::new(AtomicBool::new(false));
+    let guard = RoomGuard::new(Release(released.clone()));
+    assert!(!released.load(Ordering::SeqCst));
+    drop(guard);
+    assert!(released.load(Ordering::SeqCst));
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! The terminal seam's scenarios (B.5, 94 to 98, 122).
+//! The terminal seam's scenarios (B.5, 94 to 98, 122, 7).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -18,6 +18,10 @@ pub trait TerminalHarness {
 
     /// The agent under `identity` will not end when closed.
     fn stubborn(&self, identity: &Identity);
+
+    /// The session the scenario's own command runs in, as the terminal
+    /// names it, or none where it names none.
+    fn session(&self) -> Option<String>;
 }
 
 fn identity(start: u32) -> Identity {
@@ -74,7 +78,22 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             cites: &["122", "119"],
             run: watch_states_its_bound::<H>,
         },
+        Scenario {
+            name: "terminal: session names the session a command runs in, or none",
+            cites: &["7"],
+            run: session_names_the_callers::<H>,
+        },
     ]
+}
+
+fn session_names_the_callers<H: TerminalHarness>(harness: &H) -> Outcome {
+    let session = harness.seam().session();
+    ensure_eq!(session, harness.session(), "the session");
+    ensure!(
+        session.as_ref().is_none_or(|name| !name.trim().is_empty()),
+        "a session named by no name"
+    );
+    Ok(())
 }
 
 fn open_runs_an_agent<H: TerminalHarness>(harness: &H) -> Outcome {

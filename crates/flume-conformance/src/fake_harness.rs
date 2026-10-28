@@ -262,8 +262,13 @@ impl AgentHarness for FakeAgentHarness {
         a_place()
     }
 
-    fn start(&self, command: &AgentCommand, identity: &Identity) {
+    fn folder(&self) -> String {
+        "/host/state/flume/places/fix--one".into()
+    }
+
+    fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str) {
         self.terminal.open(&a_place(), command, identity, None);
+        self.agent.keep_record_in(identity, folder);
     }
 
     fn deliver(&self, identity: &Identity, text: &str) {
@@ -286,6 +291,10 @@ impl AgentHarness for FakeAgentHarness {
     fn try_push(&self, identity: &Identity) {
         self.agent.refuse_act(identity, "push of fix/one");
     }
+
+    fn end_session(&self, identity: &Identity) {
+        self.agent.set_ended(identity, Reading::Yes);
+    }
 }
 
 pub struct FakeTerminalHarness {
@@ -299,7 +308,9 @@ impl FakeTerminalHarness {
     pub fn new(sends: bool) -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = FakeTerminal::new(host.clone());
-        if !sends {
+        if sends {
+            terminal.set_session(Some("pane-1"));
+        } else {
             terminal.cannot_send();
         }
         FakeTerminalHarness {
@@ -335,6 +346,10 @@ impl TerminalHarness for FakeTerminalHarness {
     fn stubborn(&self, identity: &Identity) {
         self.terminal.refuse_close(identity);
     }
+
+    fn session(&self) -> Option<String> {
+        self.sends.then(|| "pane-1".to_string())
+    }
 }
 
 pub struct FakeMergeQueueHarness {
@@ -347,7 +362,7 @@ impl Default for FakeMergeQueueHarness {
         let git = FakeGit::new();
         git.init(REPOSITORY, "main");
         FakeMergeQueueHarness {
-            queue: FakeMergeQueue::new(git.clone(), None),
+            queue: FakeMergeQueue::new(git.clone()),
             git,
         }
     }
@@ -370,6 +385,25 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
 
     fn will_fail(&self, words: &str) {
         self.queue.plan_submits(vec![Plan::Fail(words.into())]);
+    }
+
+    fn will_conflict(&self, place: &PlaceRef, file: &str) {
+        self.git.commit(&place.repository, &place.base, &[file]);
+        self.queue.plan_submits(vec![Plan::Conflict(
+            vec![file.into()],
+            format!("{file} conflicts with {}", place.base),
+        )]);
+    }
+
+    fn will_hold(&self) {
+        self.queue.plan_submits(vec![Plan::Hold]);
+    }
+
+    fn until_decided(&self, _place: &PlaceRef) {}
+
+    fn withdraw(&self, place: &PlaceRef) {
+        self.queue
+            .decide(&place.repository, &place.branch, Plan::Withdraw);
     }
 
     fn land_elsewhere(&self, place: &PlaceRef) {

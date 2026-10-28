@@ -110,7 +110,7 @@ impl Engine {
             change,
             merge_queue,
         } = self
-            .bind(&binding)
+            .bind(repository, &binding)
             .map_err(|reason| format!("{repository}'s binding: {reason}"))?;
         let base_revision = match &merge_queue {
             Some(queue) => match queue.base_revision(repository, &launch.base) {
@@ -217,6 +217,8 @@ impl Engine {
                 settings: launch.settings.clone(),
                 hold: launch.hold.clone(),
                 hold_submission: launch.hold_submission,
+                hold_words: launch.hold_words.clone(),
+                recipients: launch.recipients.clone(),
             },
             phase: Phase::Making {
                 by: self.host.command(),
@@ -232,11 +234,13 @@ impl Engine {
                     refused_part: None,
                     end: None,
                     start: None,
+                    waiting_since: None,
                 })
                 .collect(),
             current: None,
             submission: SubmissionHeld::default(),
             failures: vec![],
+            priority: launch.priority,
         };
         if self.create(&held).is_none() {
             return Err(format!("the place {id} already stands"));

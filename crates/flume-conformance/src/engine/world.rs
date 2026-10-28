@@ -53,7 +53,7 @@ impl World {
         let change = Arc::new(FakeChange::new(git.clone()));
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
         let agent = Arc::new(FakeAgent::new(terminal.clone()));
-        let queue = Arc::new(FakeMergeQueue::new(git.clone(), Some(place.clone())));
+        let queue = Arc::new(FakeMergeQueue::new(git.clone()));
         let store = Arc::new(FakeStore::default());
         let history = Arc::new(FakeHistory::new(git.clone()));
         let resolver = Arc::new(FakeResolver::new(kinds.clone()));
