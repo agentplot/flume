@@ -260,6 +260,12 @@ impl History for FakeHistory {
         !self.git.since(head, start).is_empty()
     }
 
+    fn commits_since(&self, repository: &str, head: &Revision, start: &Revision) -> Vec<Revision> {
+        self.log
+            .push(format!("commits_since {repository} {head} {start}"));
+        self.git.since(head, start)
+    }
+
     fn newest_touching(
         &self,
         repository: &str,

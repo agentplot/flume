@@ -80,8 +80,8 @@ impl Engine {
             return false;
         };
         match held.stages[index].state {
-            StageState::Started => self.deliver(id),
-            StageState::Begun | StageState::Stuck => self.read_end(id),
+            StageState::Starting | StageState::Started => self.deliver(id),
+            StageState::Begun | StageState::Stuck | StageState::Lost => self.read_end(id),
             StageState::Delivered | StageState::Finished => self.advance(id),
             StageState::EndedShort => self.found_work(id),
             _ => false,

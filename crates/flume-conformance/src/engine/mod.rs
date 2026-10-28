@@ -12,6 +12,7 @@ pub mod restart;
 pub mod running_through;
 pub mod settling;
 pub mod stage_runs;
+pub mod starts;
 pub mod tidying;
 pub mod world;
 
@@ -25,6 +26,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(settling::scenarios());
     every.extend(running_through::scenarios());
     every.extend(stage_runs::scenarios());
+    every.extend(starts::scenarios());
     every.extend(caller_acts::scenarios());
     every.extend(place_status::scenarios());
     every.extend(tidying::scenarios());

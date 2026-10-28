@@ -22,6 +22,9 @@ pub trait History: Send + Sync {
     /// and `start` does not (25).
     fn holds_since(&self, repository: &str, head: &Revision, start: &Revision) -> bool;
 
+    /// The commits `head` holds that `start` does not, newest first (43).
+    fn commits_since(&self, repository: &str, head: &Revision, start: &Revision) -> Vec<Revision>;
+
     /// The newest commit at `head` touching `path`, and whether it was
     /// made since `start` (24).
     fn newest_touching(

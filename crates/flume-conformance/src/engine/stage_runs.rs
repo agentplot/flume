@@ -219,7 +219,7 @@ fn s32_words_missing_then_given(_: &()) -> Outcome {
     );
     ensure_eq!(
         world.stage_state(&id, "review"),
-        Some(StageState::Started),
+        Some(StageState::Starting),
         "the review stage"
     );
     let prompt = world

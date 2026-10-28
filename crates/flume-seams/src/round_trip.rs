@@ -131,6 +131,9 @@ fn held() -> HeldState {
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
                 needs: Some(StopKind::FoundWork),
+                last_words: Some("I could not sign in".into()),
+                commits: vec![Revision::new("c3")],
+                screen: Some("Bypass Permissions mode".into()),
             }),
             room: Some(RoomWait {
                 order: 3,
@@ -318,7 +321,19 @@ fn an_identity_a_secret_and_a_stop_short() {
         report: None,
         words: Some("the tests fail on main".into()),
         needs: Some(StopKind::FoundWork),
+        ..StageEnd::default()
     });
+    round_trips(StageEnd {
+        head: Some(Revision::new("c4")),
+        last_words: Some("Usage limit reached".into()),
+        commits: vec![Revision::new("c4"), Revision::new("c3")],
+        screen: Some("Do you trust the files in this folder?".into()),
+        ..StageEnd::default()
+    });
+    let before: StageEnd =
+        serde_json::from_str(r#"{"head":"c3","report":null,"words":null}"#).unwrap();
+    assert_eq!(before.commits, Vec::<Revision>::new());
+    assert_eq!(before.screen, None);
 }
 
 #[test]
@@ -449,6 +464,7 @@ fn agent_and_stage_states() {
         StageState::WaitingOnReadiness,
         StageState::WaitingForRoom,
         StageState::Refused,
+        StageState::Starting,
         StageState::Started,
         StageState::Begun,
         StageState::NeverBegun,
@@ -563,6 +579,7 @@ fn the_terminal_seams_answers() {
     round_trips(Watch::Bound { seconds: 30 });
     round_trips(Watch::None);
     round_trips(Some("pane-3".to_string()));
+    round_trips(Some("Do you trust the files in this folder?".to_string()));
 }
 
 #[test]

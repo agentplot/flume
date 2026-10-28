@@ -213,10 +213,22 @@ pub struct AgentStatus {
     pub program: String,
     pub settings: Settings,
     pub state: AgentState,
+    /// Whether the agent said it started under its start's identity
+    /// (135).
+    #[serde(default = "unknown")]
+    pub started: Reading,
     pub asking: Reading,
     pub own_work: Reading,
     /// Working past its stage's limit (118).
     pub past_limit: bool,
+    /// While the start is starting, what the terminal shows of the agent
+    /// (35, 136).
+    #[serde(default)]
+    pub screen: Option<String>,
+}
+
+fn unknown() -> Reading {
+    Reading::Unknown
 }
 
 /// The place's submission as the merge queue holds it, and how often

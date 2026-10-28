@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "e5f92f6";
+pub const REVISION: &str = "4fe1522";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -23,7 +23,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(115..=117)
         .chain([121, 122])
         .chain(125..=128)
-        .chain([133, 134])
+        .chain(133..=136)
         .collect()
 }
 
@@ -36,7 +36,7 @@ pub fn all() -> Vec<String> {
         .map(|clause| clause.to_string())
         .collect();
     all.extend((1..=8).map(|invariant| format!("I{invariant}")));
-    all.extend((1..=38).map(|scenario| format!("S{scenario}")));
+    all.extend((1..=43).map(|scenario| format!("S{scenario}")));
     all
 }
 
@@ -62,23 +62,23 @@ mod tests {
         let a = part_a();
         let b = part_b();
         assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4);
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 2);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4);
         assert!(!a.contains(&100) && !b.contains(&100));
         assert!(a.iter().all(|clause| !b.contains(clause)));
         let mut every: Vec<u32> = a.into_iter().chain(b).collect();
         every.sort();
         assert_eq!(
             every,
-            (1..=134)
+            (1..=136)
                 .filter(|clause| *clause != 100)
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 133 + 8 + 38);
-        assert_eq!(REVISION, "e5f92f6");
+        assert_eq!(all().len(), 135 + 8 + 43);
+        assert_eq!(REVISION, "4fe1522");
         for clause in [129, 130, 131, 132] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
-        for clause in [126, 127, 128, 133, 134] {
+        for clause in [126, 127, 128, 133, 134, 135, 136] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }

@@ -1,4 +1,4 @@
-//! The terminal seam's answers (94 to 98, 122, 7), and an agent's state.
+//! The terminal seam's answers (94 to 98, 122, 136, 7), and an agent's state.
 
 use crate::Seconds;
 use serde::{Deserialize, Serialize};
@@ -55,20 +55,28 @@ pub enum Watch {
 /// never reports an end that did not happen (98).
 pub trait Terminal: Send + Sync {
     /// An agent running `command` in the place under `identity`, beside
-    /// the pane the settings name, if any (94, 107).
+    /// the pane the settings name, if any; what the terminal keeps of the
+    /// start it keeps in the place's own `folder` (94, 107, 128).
     fn open(
         &self,
         place: &crate::PlaceRef,
+        folder: &str,
         command: &crate::AgentCommand,
         identity: &crate::Identity,
         beside: Option<&str>,
     ) -> Opened;
 
-    /// `text` delivered as input the agent receives (95).
+    /// `text` delivered as input the agent receives, any text it holds
+    /// typed cleared first, so no answer leaves text typed (95).
     fn send(&self, agent: &crate::Identity, text: &str) -> Sent;
 
-    /// The agent's state (96).
+    /// The agent's state: stopped only when its program no longer runs,
+    /// unknown for anything the terminal cannot classify (96).
     fn state(&self, agent: &crate::Identity) -> AgentState;
+
+    /// What the terminal shows of the agent, for status and a prompt
+    /// never begun; none where it shows nothing (136, 35, 43).
+    fn screen(&self, agent: &crate::Identity) -> Option<String>;
 
     /// The agent's end (97).
     fn close(&self, agent: &crate::Identity) -> Closed;

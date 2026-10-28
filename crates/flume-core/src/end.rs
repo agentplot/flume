@@ -9,6 +9,7 @@
 //! is taken only when its own record is its start's (77); one whose record
 //! cannot be read is neither taken nor lost, and is not quiet (31, 93).
 
+use crate::reading::AgentReading;
 use crate::start::Starts;
 use crate::{Engine, Step, QUIET_LIMIT};
 use flume_seams::*;
@@ -32,7 +33,11 @@ impl Engine {
         };
         let identity = start.identity.clone();
         let reading = self.read_agent(id, &start);
-        let gone = reading.state == AgentState::Stopped || reading.own_record == Reading::No;
+        if held.stages[index].state == StageState::Lost {
+            return self.end_foreign(id, &identity, &reading);
+        }
+        let foreign = reading.started == Reading::No || reading.own_record == Reading::No;
+        let gone = reading.state == AgentState::Stopped || foreign;
         if gone && !declared.conversation {
             let facts = self.facts(&held, &bound, Some(index));
             if facts.delivered {
@@ -46,10 +51,16 @@ impl Engine {
             }
         }
         if gone {
+            let end = self.read_out(&held, &start, false);
+            let stopped = reading.state == AgentState::Stopped;
             self.with_start(id, &identity, |start, state| {
-                start.live = false;
+                start.live = !stopped;
                 *state = StageState::Lost;
             });
+            self.end_with(id, &identity, end);
+            if !stopped {
+                self.end_foreign(id, &identity, &reading);
+            }
             return true;
         }
         if declared.conversation {
@@ -104,7 +115,46 @@ impl Engine {
                 }
             }
         });
+        self.mark_stuck(id, &start);
         false
+    }
+
+    /// A stuck stage's end carries what was read of its agent while it
+    /// stays stuck, and a stage that is stuck no more carries none (43).
+    fn mark_stuck(&self, id: &PlaceId, start: &StartHeld) {
+        let Some(read) = self.store.read(id) else {
+            return;
+        };
+        let Some(index) = read.state.index_of(&start.identity) else {
+            return;
+        };
+        let stage = &read.state.stages[index];
+        let end = match (stage.state, stage.end.is_some()) {
+            (StageState::Stuck, false) => Some(self.read_out(&read.state, start, false)),
+            (StageState::Begun, true) => None,
+            _ => return,
+        };
+        self.update(id, |held| {
+            held.stages[index].end = end.clone();
+            Step::Write(())
+        });
+    }
+
+    /// The agent of a lost stage that is no agent of the stage's, a
+    /// session the terminal brought back with no word that it started
+    /// among them, ended once quiet (77, 31); true when it was ended.
+    fn end_foreign(&self, id: &PlaceId, identity: &Identity, reading: &AgentReading) -> bool {
+        if reading.state != AgentState::Stopped {
+            if !reading.quiet() {
+                return false;
+            }
+            if let Closed::Refused { reason } = self.terminal.close(identity) {
+                self.failed_end(id, identity, &reason);
+                return false;
+            }
+        }
+        self.with_start(id, identity, |start, _| start.live = false);
+        true
     }
 
     /// The stage under `identity` ended as `state`, with what it
@@ -134,8 +184,7 @@ impl Engine {
             stage.end = Some(StageEnd {
                 head: Some(head.clone()),
                 report: report.clone(),
-                words: None,
-                needs: None,
+                ..StageEnd::default()
             });
             if index + 1 == held.stages.len() && held.place.kind.lands {
                 held.submission.due = true;

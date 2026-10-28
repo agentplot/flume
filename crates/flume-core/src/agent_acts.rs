@@ -36,7 +36,9 @@ impl Engine {
         if start.secret.0 != secret {
             return Answer::refused(format!("the secret is not {identity}'s start's"));
         }
-        if self.terminal.state(&start.identity) == AgentState::Stopped {
+        let agent = self.agent(&start.program);
+        let folder = self.store.folder(&held.place.id);
+        if self.state_of(agent.as_deref(), &folder, &start.identity) == AgentState::Stopped {
             return Answer::refused(format!("the agent {identity} is not live"));
         }
         let id = held.place.id.clone();
@@ -51,10 +53,9 @@ impl Engine {
                 }
                 stage.state = StageState::EndedShort;
                 stage.end = Some(StageEnd {
-                    head: None,
-                    report: None,
                     words: Some(words.to_string()),
                     needs: Some(kind),
+                    ..StageEnd::default()
                 });
                 Step::Write(true)
             })

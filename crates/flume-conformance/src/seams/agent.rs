@@ -1,4 +1,5 @@
-//! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134).
+//! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
+//! 135).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -35,6 +36,9 @@ pub trait AgentHarness {
 
     /// The agent's session ends.
     fn end_session(&self, identity: &Identity);
+
+    /// The agent's last message is `words`.
+    fn say_last(&self, identity: &Identity, words: &str);
 }
 
 fn identity(stage: &str) -> Identity {
@@ -108,7 +112,58 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["134", "93"],
             run: ended_reads_the_session::<H>,
         },
+        Scenario {
+            name: "agent: started reads the agent's own word that it started under its identity",
+            cites: &["135", "35", "93", "128"],
+            run: started_reads_the_agents_word::<H>,
+        },
+        Scenario {
+            name: "agent: last words are read from the record, and none from another folder",
+            cites: &["43", "93", "128"],
+            run: last_words_from_the_record::<H>,
+        },
     ]
+}
+
+fn started_reads_the_agents_word<H: AgentHarness>(harness: &H) -> Outcome {
+    let folder = harness.folder();
+    ensure!(
+        harness.seam().started(&folder, &identity("verify")) != Reading::Yes,
+        "an agent never started read as started"
+    );
+    let who = started(harness, "code");
+    ensure_eq!(
+        harness.seam().started(&folder, &who),
+        Reading::Yes,
+        "started, once the agent said so"
+    );
+    ensure_eq!(
+        harness
+            .seam()
+            .started(&format!("{folder}-of-another-place"), &who),
+        Reading::Unknown,
+        "started, read in another folder"
+    );
+    Ok(())
+}
+
+fn last_words_from_the_record<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    let folder = harness.folder();
+    harness.say_last(&who, "I could not sign in");
+    ensure_eq!(
+        harness.seam().last_words(&folder, &who),
+        Some("I could not sign in".to_string()),
+        "the last words"
+    );
+    ensure_eq!(
+        harness
+            .seam()
+            .last_words(&format!("{folder}-of-another-place"), &who),
+        None,
+        "the last words, read in another folder"
+    );
+    Ok(())
 }
 
 fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome {

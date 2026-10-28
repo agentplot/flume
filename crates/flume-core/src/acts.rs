@@ -44,16 +44,20 @@ impl Engine {
     }
 
     /// Ends the place's live agent, one that is not quiet only when
-    /// forced; a stage it ran that had not ended reads stopped (31, 51).
+    /// forced; a stage it ran that had not ended reads stopped, and one
+    /// still starting is reported never begun with what the terminal
+    /// showed of it (31, 35, 51).
     fn end_agent(&self, id: &PlaceId, force: bool) -> Result<(), String> {
         let Some(read) = self.store.read(id) else {
             return Ok(());
         };
-        let Some((_, start)) = read.state.live_start() else {
+        let Some((index, start)) = read.state.live_start() else {
             return Ok(());
         };
         let identity = start.identity.clone();
         let reading = self.read_agent(id, start);
+        let starting = (read.state.stages[index].state == StageState::Starting)
+            .then(|| self.read_out(&read.state, start, true));
         if reading.state != AgentState::Stopped {
             if !reading.quiet() && !force {
                 return Err(format!(
@@ -67,10 +71,15 @@ impl Engine {
         }
         self.with_start(id, &identity, |start, state| {
             start.live = false;
-            if state.running() {
+            if *state == StageState::Starting {
+                *state = StageState::NeverBegun;
+            } else if state.running() {
                 *state = StageState::Stopped;
             }
         });
+        if let Some(end) = starting {
+            self.end_with(id, &identity, end);
+        }
         Ok(())
     }
 
@@ -273,7 +282,7 @@ impl Engine {
     }
 
     /// Hands the agent of the place's current stage `words` as a prompt
-    /// once it waits, received or sent once more; refused with nothing
+    /// once it said it started and waits, received or sent once more; refused with nothing
     /// typed when the place has no live agent, its agent is asking, or the
     /// words are not delivered within the bound (53 to 55).
     pub fn tell(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
@@ -294,7 +303,7 @@ impl Engine {
         let folder = self.store.folder(place);
         let deadline = self.host.now() + bound.unwrap_or(TELL_BOUND);
         loop {
-            let state = self.terminal.state(&identity);
+            let state = self.state_of(Some(agent.as_ref()), &folder, &identity);
             let asking = agent.asking(&folder, &identity);
             if state == AgentState::Asking || asking == Reading::Yes {
                 return Answer::refused(format!(
@@ -306,7 +315,10 @@ impl Engine {
                     "the agent {identity} is not live; nothing was typed"
                 ));
             }
-            if state == AgentState::Waiting && asking == Reading::No {
+            if state == AgentState::Waiting
+                && asking == Reading::No
+                && agent.started(&folder, &identity) == Reading::Yes
+            {
                 break;
             }
             if self.host.now() >= deadline {

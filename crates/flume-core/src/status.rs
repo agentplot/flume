@@ -69,15 +69,20 @@ impl Engine {
                     refused_acts.extend(acts);
                 }
             }
+            let starting = held.stages[index].state == StageState::Starting;
             AgentStatus {
                 identity: start.identity.to_string(),
                 stage: place.kind.stages[index].name.clone(),
                 program: start.program.clone(),
                 settings: start.settings.clone(),
                 state: reading.state,
+                started: reading.started,
                 asking: reading.asking,
                 own_work: reading.own_work,
                 past_limit: start.past_limit,
+                screen: starting
+                    .then(|| self.terminal.screen(&start.identity))
+                    .flatten(),
             }
         });
         let submission = match (&bound, place.kind.lands) {

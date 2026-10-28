@@ -147,7 +147,13 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
     let who = identity("code", 1);
     let folder = "/state/fix--one";
     assert_eq!(agent.received(folder, &who, "go"), Received::Unknown);
-    terminal.open(&place_ref(), &AgentCommand::default(), &who, None);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        None,
+    );
     agent.set_own_work(&who, Reading::Unknown);
     agent.set_asking(&who, Reading::Yes);
     assert_eq!(agent.own_work(folder, &who), Reading::Unknown);
@@ -191,7 +197,13 @@ fn the_agents_record_is_read_in_its_folder_alone() {
     let terminal = Arc::new(FakeTerminal::new(host));
     let agent = FakeAgent::new(terminal.clone());
     let who = identity("code", 1);
-    terminal.open(&place_ref(), &AgentCommand::default(), &who, None);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        None,
+    );
     agent.keep_record_in(&who, "/state/fix--one");
     assert_eq!(agent.asking("/state/fix--one", &who), Reading::No);
     assert_eq!(agent.asking("/state/fix--two", &who), Reading::Unknown);
@@ -218,7 +230,13 @@ fn the_terminals_states_follow_the_fake_clock() {
     let terminal = FakeTerminal::new(host.clone());
     let who = identity("code", 1);
     terminal.comes_up(AgentState::Unknown);
-    terminal.open(&place_ref(), &AgentCommand::default(), &who, None);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        None,
+    );
     terminal.schedule(&who, host.now() + 240, AgentState::Waiting);
     assert_eq!(terminal.state(&who), AgentState::Unknown);
     host.advance(240);

@@ -1,6 +1,7 @@
 //! Git's history, read through `git` in the repository (section 9;
 //! design 11): `rev-parse` for a head, `merge-base --is-ancestor` for a
-//! commit since a start, `log -1 --format=%H -- <path>` for the newest
+//! commit since a start, `rev-list <start>..<head>` for the commits
+//! since, `log -1 --format=%H -- <path>` for the newest
 //! commit touching a path, `log <start>..<head> -- <path>` for a path in
 //! a commit since, and `check-ref-format --branch` (24, 25, C.1). A
 //! revision git cannot read holds nothing since and touches nothing.
@@ -31,6 +32,13 @@ impl History for GitHistory {
         // `head` holds a commit `start` lacks exactly where it is not
         // `start`'s ancestor (25).
         ancestor(&Git::at(repository), &head.0, &start.0) == Some(false)
+    }
+
+    fn commits_since(&self, repository: &str, head: &Revision, start: &Revision) -> Vec<Revision> {
+        Git::at(repository)
+            .text(&["rev-list", &format!("{}..{}", start.0, head.0)])
+            .map(|commits| commits.lines().map(Revision::new).collect())
+            .unwrap_or_default()
     }
 
     fn newest_touching(

@@ -110,7 +110,11 @@ fn a_fix_launched(_: &()) -> Outcome {
         "the place's revision"
     );
     ensure_eq!(world.place.log.count("ready"), 1, "readiness runs");
-    ensure_eq!(place.stages[0].state, StageState::Started, "the code stage");
+    ensure_eq!(
+        place.stages[0].state,
+        StageState::Starting,
+        "the code stage"
+    );
     let agent = place.agent.ok_or("no agent in the answer")?;
     ensure_eq!(agent.state, AgentState::Unknown, "the agent's state");
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
@@ -211,7 +215,7 @@ fn readiness_fails(_: &()) -> Outcome {
     let fix = launched(&world.engine.launch(&launch("fix", "mend", Some("mend it"))))?;
     ensure_eq!(
         fix.stages[0].state,
-        StageState::Started,
+        StageState::Starting,
         "the fix's code stage"
     );
     let prompt = world
@@ -309,7 +313,7 @@ fn no_binding(_: &()) -> Outcome {
     let mut notes = launch("notes", "one", Some("x"));
     notes.repository = plain.into();
     let place = launched(&world.engine.launch(&notes))?;
-    ensure_eq!(place.stages[0].state, StageState::Started, "the stage");
+    ensure_eq!(place.stages[0].state, StageState::Starting, "the stage");
     ensure_eq!(
         makes(&world.place.log),
         1,

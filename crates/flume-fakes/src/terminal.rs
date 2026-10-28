@@ -7,8 +7,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 /// The terminal seam: the agents it runs by identity, each one's state
-/// as set or as scheduled by the fake clock, what was sent to each, and
-/// whether it sends, closes and watches.
+/// as set or as scheduled by the fake clock, what each shows and holds
+/// typed, what was sent to each, and whether it sends, closes and
+/// watches. A send clears what the agent holds typed before it types.
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -32,6 +33,28 @@ struct Running {
     carried: bool,
     command: AgentCommand,
     beside: Option<String>,
+    folder: Option<String>,
+    screen: Option<String>,
+    typed: String,
+    cleared: usize,
+    leaves_typed: bool,
+}
+
+impl Running {
+    fn new(state: AgentState, command: AgentCommand) -> Running {
+        Running {
+            state,
+            schedule: vec![],
+            carried: false,
+            command,
+            beside: None,
+            folder: None,
+            screen: Some("the agent's screen".into()),
+            typed: String::new(),
+            cleared: 0,
+            leaves_typed: false,
+        }
+    }
 }
 
 impl FakeTerminal {
@@ -85,13 +108,7 @@ impl FakeTerminal {
     pub fn resume(&self, agent: &Identity) {
         lock(&self.state).agents.insert(
             agent.to_string(),
-            Running {
-                state: AgentState::Waiting,
-                schedule: vec![],
-                carried: false,
-                command: AgentCommand::default(),
-                beside: None,
-            },
+            Running::new(AgentState::Waiting, AgentCommand::default()),
         );
     }
 
@@ -121,6 +138,45 @@ impl FakeTerminal {
     /// The session the calling command runs in, as the terminal names it.
     pub fn set_session(&self, session: Option<&str>) {
         lock(&self.state).session = session.map(str::to_string);
+    }
+
+    /// What the terminal shows of the agent, or that it shows nothing.
+    pub fn set_screen(&self, agent: &Identity, screen: Option<&str>) {
+        if let Some(running) = lock(&self.state).agents.get_mut(&agent.to_string()) {
+            running.screen = screen.map(str::to_string);
+        }
+    }
+
+    /// Text left typed in the agent's input, never submitted, as a
+    /// sending the agent did not receive leaves it.
+    pub fn leave_typed(&self, agent: &Identity, text: &str) {
+        if let Some(running) = lock(&self.state).agents.get_mut(&agent.to_string()) {
+            running.typed.push_str(text);
+        }
+    }
+
+    /// The next send types its text and never submits it, as a prompt
+    /// left typed in the pane (S43).
+    pub fn leaves_next_typed(&self, agent: &Identity) {
+        if let Some(running) = lock(&self.state).agents.get_mut(&agent.to_string()) {
+            running.leaves_typed = true;
+        }
+    }
+
+    /// What the agent holds typed, and how many times a send cleared it.
+    pub fn typed(&self, agent: &Identity) -> Option<(String, usize)> {
+        lock(&self.state)
+            .agents
+            .get(&agent.to_string())
+            .map(|running| (running.typed.clone(), running.cleared))
+    }
+
+    /// The folder the agent's start was opened with (128).
+    pub fn folder(&self, agent: &Identity) -> Option<String> {
+        lock(&self.state)
+            .agents
+            .get(&agent.to_string())
+            .and_then(|running| running.folder.clone())
     }
 
     /// The texts sent to the agent, in order.
@@ -170,6 +226,7 @@ impl Terminal for FakeTerminal {
     fn open(
         &self,
         place: &PlaceRef,
+        folder: &str,
         command: &AgentCommand,
         identity: &Identity,
         beside: Option<&str>,
@@ -189,16 +246,11 @@ impl Terminal for FakeTerminal {
         }
         let carried = !state.sends;
         let comes_up = state.comes_up;
-        state.agents.insert(
-            key,
-            Running {
-                state: comes_up,
-                schedule: vec![],
-                carried,
-                command: command.clone(),
-                beside: beside.map(str::to_string),
-            },
-        );
+        let mut running = Running::new(comes_up, command.clone());
+        running.carried = carried;
+        running.beside = beside.map(str::to_string);
+        running.folder = Some(folder.to_string());
+        state.agents.insert(key, running);
         Opened::Opened { carried }
     }
 
@@ -217,6 +269,15 @@ impl Terminal for FakeTerminal {
                 reason: format!("no agent runs under {key}"),
             };
         }
+        if let Some(running) = state.agents.get_mut(&key) {
+            if !running.typed.is_empty() {
+                running.typed.clear();
+                running.cleared += 1;
+            }
+            if std::mem::take(&mut running.leaves_typed) {
+                running.typed.push_str(text);
+            }
+        }
         state.sent.push((key, text.into()));
         Sent::Sent
     }
@@ -224,6 +285,18 @@ impl Terminal for FakeTerminal {
     fn state(&self, agent: &Identity) -> AgentState {
         self.log.push(format!("state {agent}"));
         self.read(&agent.to_string())
+    }
+
+    fn screen(&self, agent: &Identity) -> Option<String> {
+        self.log.push(format!("screen {agent}"));
+        let state = lock(&self.state);
+        if !state.sends {
+            return None;
+        }
+        state
+            .agents
+            .get(&agent.to_string())
+            .and_then(|running| running.screen.clone())
     }
 
     fn close(&self, agent: &Identity) -> Closed {

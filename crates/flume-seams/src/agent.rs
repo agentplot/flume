@@ -1,4 +1,4 @@
-//! The agent seam's answers (88 to 93, 115, 116, 121, 134), an agent's
+//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135), an agent's
 //! identity and its start's secret (33, 41). Every reading of an agent's
 //! own record is handed the place's own folder with the identity, where
 //! the agent profile keeps its marks (128).
@@ -134,6 +134,11 @@ pub trait Agent: Send + Sync {
         prompt: &str,
     ) -> AgentCommand;
 
+    /// Whether the agent under `agent` has said it started under its
+    /// start's identity, with flume's guard and stop check in force, read
+    /// from its record in the place's own `folder` (135, 35, 128).
+    fn started(&self, folder: &str, agent: &Identity) -> Reading;
+
     /// Whether the agent under `agent` received `text` as a prompt, read
     /// from its record in the place's own `folder` (89, 128).
     fn received(&self, folder: &str, agent: &Identity, text: &str) -> Received;
@@ -146,6 +151,11 @@ pub trait Agent: Send + Sync {
 
     /// Whether the agent's own record shows its session ended (134, 128).
     fn ended(&self, folder: &str, agent: &Identity) -> Reading;
+
+    /// The agent's last words as its own record holds them, which a stuck,
+    /// lost or never-begun end carries; none where the record holds none
+    /// or cannot be read (43, 128).
+    fn last_words(&self, folder: &str, agent: &Identity) -> Option<String>;
 
     /// The one way the agent tells flume it stops short, filled in for
     /// its place and stage, as its prompt gives it (92, 28).

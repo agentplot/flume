@@ -1,6 +1,6 @@
 //! Reading a stage's deliverable at one head of the place's branch (24,
-//! 25), and an agent's state from the terminal and the agent seam (31,
-//! 77).
+//! 25), an agent's state from the terminal and the agent seam (31, 77,
+//! 90, 134, 135), and what an end that read no deliverable carries (43).
 
 use crate::{Bound, Engine};
 use flume_seams::*;
@@ -18,6 +18,9 @@ pub(crate) struct Facts {
 /// An agent's state as flume reads it.
 pub(crate) struct AgentReading {
     pub state: AgentState,
+    /// Whether the agent said it started under its start's identity
+    /// (135).
+    pub started: Reading,
     pub asking: Reading,
     pub own_work: Reading,
     /// Whether the agent under the start's identity keeps the record its
@@ -170,23 +173,79 @@ impl Engine {
     /// The agent of a place's start, as the terminal and the agent seam
     /// read it, the agent's record read in the place's own folder (128).
     pub(crate) fn read_agent(&self, place: &PlaceId, start: &StartHeld) -> AgentReading {
-        let state = self.terminal.state(&start.identity);
         let agent = self.agent(&start.program);
         let folder = self.store.folder(place);
+        let state = self.state_of(agent.as_deref(), &folder, &start.identity);
         let own_record = own_record(agent.as_deref(), &folder, start);
         match agent {
             Some(agent) => AgentReading {
                 state,
+                started: agent.started(&folder, &start.identity),
                 asking: agent.asking(&folder, &start.identity),
                 own_work: agent.own_work(&folder, &start.identity),
                 own_record,
             },
             None => AgentReading {
                 state,
+                started: Reading::Unknown,
                 asking: Reading::Unknown,
                 own_work: Reading::Unknown,
                 own_record,
             },
+        }
+    }
+
+    /// The agent's state: the terminal's reading, but asking only where
+    /// the agent profile's mark says it asks, and unknown otherwise, never
+    /// waiting, so nothing is typed into a dialog flume cannot name (90,
+    /// core.2); and stopped where the terminal cannot read the agent and
+    /// its own record says its session ended (134).
+    pub(crate) fn state_of(
+        &self,
+        agent: Option<&dyn Agent>,
+        folder: &str,
+        identity: &Identity,
+    ) -> AgentState {
+        match (self.terminal.state(identity), agent) {
+            (AgentState::Asking, Some(agent)) if agent.asking(folder, identity) == Reading::Yes => {
+                AgentState::Asking
+            }
+            (AgentState::Asking, _) => AgentState::Unknown,
+            (AgentState::Unknown, Some(agent)) if agent.ended(folder, identity) == Reading::Yes => {
+                AgentState::Stopped
+            }
+            (state, _) => state,
+        }
+    }
+
+    /// What a stuck, lost or never-begun end carries: the agent's last
+    /// words as its own record holds them, the commits on the place's
+    /// branch since the start, and for a prompt never begun what the
+    /// terminal shows of the agent (43).
+    pub(crate) fn read_out(
+        &self,
+        held: &HeldState,
+        start: &StartHeld,
+        never_begun: bool,
+    ) -> StageEnd {
+        let place = &held.place;
+        let head = self
+            .history
+            .head(&place.repository, &place.branch)
+            .unwrap_or_else(|| start.start_head.clone());
+        let folder = self.store.folder(&place.id);
+        StageEnd {
+            commits: self
+                .history
+                .commits_since(&place.repository, &head, &start.start_head),
+            head: Some(head),
+            last_words: self
+                .agent(&start.program)
+                .and_then(|agent| agent.last_words(&folder, &start.identity)),
+            screen: never_begun
+                .then(|| self.terminal.screen(&start.identity))
+                .flatten(),
+            ..StageEnd::default()
         }
     }
 }

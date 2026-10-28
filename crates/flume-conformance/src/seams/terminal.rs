@@ -1,4 +1,4 @@
-//! The terminal seam's scenarios (B.5, 94 to 98, 122, 7).
+//! The terminal seam's scenarios (B.5, 94 to 98, 122, 136, 7).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -9,6 +9,10 @@ pub trait TerminalHarness {
     fn seam(&self) -> &Self::Seam;
 
     fn place(&self) -> PlaceRef;
+
+    /// The place's own folder, where the terminal keeps what it keeps of
+    /// a start (128).
+    fn folder(&self) -> String;
 
     /// A command that runs an agent which waits for input.
     fn command(&self) -> AgentCommand;
@@ -22,6 +26,15 @@ pub trait TerminalHarness {
     /// The session the scenario's own command runs in, as the terminal
     /// names it, or none where it names none.
     fn session(&self) -> Option<String>;
+
+    /// Whether the terminal shows anything of an agent at all (136).
+    fn shows(&self) -> bool;
+
+    /// `text` left typed in the agent's input and never submitted.
+    fn leave_typed(&self, identity: &Identity, text: &str);
+
+    /// Each input the agent took as submitted, in order.
+    fn submitted(&self, identity: &Identity) -> Vec<String>;
 }
 
 fn identity(start: u32) -> Identity {
@@ -35,10 +48,13 @@ fn identity(start: u32) -> Identity {
 
 fn opened<H: TerminalHarness>(harness: &H, start: u32) -> Result<Identity, String> {
     let who = identity(start);
-    match harness
-        .seam()
-        .open(&harness.place(), &harness.command(), &who, None)
-    {
+    match harness.seam().open(
+        &harness.place(),
+        &harness.folder(),
+        &harness.command(),
+        &who,
+        None,
+    ) {
         Opened::Opened { .. } => Ok(who),
         other => Err(format!("open gave {other:?}")),
     }
@@ -83,7 +99,46 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             cites: &["7"],
             run: session_names_the_callers::<H>,
         },
+        Scenario {
+            name: "terminal: screen gives what the terminal shows of the agent, or nothing",
+            cites: &["136", "35"],
+            run: screen_shows_the_agent::<H>,
+        },
+        Scenario {
+            name: "terminal: send clears what the agent holds typed, and leaves nothing typed",
+            cites: &["95", "38", "S43"],
+            run: send_clears_what_is_typed::<H>,
+        },
     ]
+}
+
+fn screen_shows_the_agent<H: TerminalHarness>(harness: &H) -> Outcome {
+    let who = opened(harness, 1)?;
+    let screen = harness.seam().screen(&who);
+    if harness.shows() {
+        ensure!(
+            screen.is_some_and(|screen| !screen.trim().is_empty()),
+            "a terminal that shows its agents showed nothing"
+        );
+    } else {
+        ensure_eq!(screen, None, "the screen of a terminal that shows nothing");
+    }
+    Ok(())
+}
+
+fn send_clears_what_is_typed<H: TerminalHarness>(harness: &H) -> Outcome {
+    if !harness.sends() {
+        return Ok(());
+    }
+    let who = opened(harness, 1)?;
+    harness.leave_typed(&who, "left typed ");
+    ensure_eq!(harness.seam().send(&who, "words"), Sent::Sent, "a send");
+    ensure_eq!(
+        harness.submitted(&who).last().cloned(),
+        Some("words".to_string()),
+        "what the agent took after the send"
+    );
+    Ok(())
 }
 
 fn session_names_the_callers<H: TerminalHarness>(harness: &H) -> Outcome {
@@ -109,9 +164,13 @@ fn no_second_agent<H: TerminalHarness>(harness: &H) -> Outcome {
     let who = opened(harness, 1)?;
     ensure!(
         matches!(
-            harness
-                .seam()
-                .open(&harness.place(), &harness.command(), &who, None),
+            harness.seam().open(
+                &harness.place(),
+                &harness.folder(),
+                &harness.command(),
+                &who,
+                None
+            ),
             Opened::Refused { .. }
         ),
         "a second agent opened under a live identity"

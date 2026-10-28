@@ -123,6 +123,8 @@ pub enum StageState {
     /// Due to start, waiting for room on the host (70).
     WaitingForRoom,
     Refused,
+    /// Its agent opened, and not yet said it started (35, 135).
+    Starting,
     Started,
     Begun,
     NeverBegun,
@@ -147,7 +149,7 @@ impl StageState {
     pub fn running(self) -> bool {
         matches!(
             self,
-            StageState::Started | StageState::Begun | StageState::Stuck
+            StageState::Starting | StageState::Started | StageState::Begun | StageState::Stuck
         )
     }
 }
@@ -192,6 +194,17 @@ pub struct StageEnd {
     /// Whether the stop-short needs an answer or found work (41, 131).
     #[serde(default)]
     pub needs: Option<StopKind>,
+    /// For a stuck, lost or never-begun end, the agent's last words as
+    /// its own record held them (43).
+    #[serde(default)]
+    pub last_words: Option<String>,
+    /// For a stuck, lost or never-begun end, the commits on the place's
+    /// branch since the start (43).
+    #[serde(default)]
+    pub commits: Vec<Revision>,
+    /// For a never-begun end, what the terminal showed of the agent (43).
+    #[serde(default)]
+    pub screen: Option<String>,
 }
 
 /// One start of a stage and its agent.

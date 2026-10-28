@@ -6,8 +6,9 @@ use flume_seams::{
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-/// The agent seam: each agent's own record by identity. An agent
-/// receives a prompt once the fake terminal has sent it, or opened it
+/// The agent seam: each agent's own record by identity. An agent says
+/// it started once the fake terminal has opened it, unless set otherwise,
+/// and receives a prompt once the fake terminal has sent it, or opened it
 /// carried, as many times as it is set to need; every other answer is
 /// set, unknowns among them. A record kept in a place's folder is read
 /// there alone: a reading handed another folder is unknown (128).
@@ -35,6 +36,8 @@ struct Record {
     refused: Vec<String>,
     ended: Reading,
     folder: Option<String>,
+    started: Option<Reading>,
+    last_words: Option<String>,
 }
 
 impl Default for Record {
@@ -48,6 +51,8 @@ impl Default for Record {
             refused: vec![],
             ended: Reading::No,
             folder: None,
+            started: None,
+            last_words: None,
         }
     }
 }
@@ -98,6 +103,18 @@ impl FakeAgent {
     /// Whether the agent's record shows its session ended (134).
     pub fn set_ended(&self, agent: &Identity, reading: Reading) {
         self.with(agent, |record| record.ended = reading);
+    }
+
+    /// Whether the agent says it started, in place of its word once opened
+    /// (135).
+    pub fn set_started(&self, agent: &Identity, reading: Reading) {
+        self.with(agent, |record| record.started = Some(reading));
+    }
+
+    /// The agent's last words as its record holds them (43).
+    pub fn set_last_words(&self, agent: &Identity, words: &str) {
+        let words = words.to_string();
+        self.with(agent, |record| record.last_words = Some(words));
     }
 
     /// The agent's record is kept in `folder`, as the agent's program
@@ -173,6 +190,19 @@ impl Agent for FakeAgent {
         }
     }
 
+    fn started(&self, folder: &str, agent: &Identity) -> Reading {
+        let Some(model) = self.read_in("started", folder, agent) else {
+            return Reading::Unknown;
+        };
+        model
+            .started
+            .unwrap_or(if self.terminal.opened(agent).is_some() {
+                Reading::Yes
+            } else {
+                Reading::No
+            })
+    }
+
     fn received(&self, folder: &str, agent: &Identity, text: &str) -> Received {
         let Some(model) = self.read_in("received", folder, agent) else {
             return Received::Unknown;
@@ -216,6 +246,11 @@ impl Agent for FakeAgent {
     fn ended(&self, folder: &str, agent: &Identity) -> Reading {
         self.read_in("ended", folder, agent)
             .map_or(Reading::Unknown, |record| record.ended)
+    }
+
+    fn last_words(&self, folder: &str, agent: &Identity) -> Option<String> {
+        self.read_in("last_words", folder, agent)
+            .and_then(|record| record.last_words)
     }
 
     fn stop_short(&self, agent: &Identity) -> String {

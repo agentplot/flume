@@ -276,7 +276,8 @@ impl AgentHarness for FakeAgentHarness {
     }
 
     fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str) {
-        self.terminal.open(&a_place(), command, identity, None);
+        self.terminal
+            .open(&a_place(), folder, command, identity, None);
         self.agent.keep_record_in(identity, folder);
     }
 
@@ -303,6 +304,10 @@ impl AgentHarness for FakeAgentHarness {
 
     fn end_session(&self, identity: &Identity) {
         self.agent.set_ended(identity, Reading::Yes);
+    }
+
+    fn say_last(&self, identity: &Identity, words: &str) {
+        self.agent.set_last_words(identity, words);
     }
 }
 
@@ -358,6 +363,22 @@ impl TerminalHarness for FakeTerminalHarness {
 
     fn session(&self) -> Option<String> {
         self.sends.then(|| "pane-1".to_string())
+    }
+
+    fn folder(&self) -> String {
+        "/host/state/flume/places/fix--one".into()
+    }
+
+    fn shows(&self) -> bool {
+        self.sends
+    }
+
+    fn leave_typed(&self, identity: &Identity, text: &str) {
+        self.terminal.leave_typed(identity, text);
+    }
+
+    fn submitted(&self, identity: &Identity) -> Vec<String> {
+        self.terminal.sent_to(identity)
     }
 }
 

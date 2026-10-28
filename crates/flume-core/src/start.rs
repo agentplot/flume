@@ -212,7 +212,7 @@ impl Engine {
                 .unwrap_or_else(|| held.place.base_revision.clone());
             let secret = self.host.secret();
             let stage = &mut held.stages[index];
-            stage.state = StageState::Started;
+            stage.state = StageState::Starting;
             stage.starts = identity.start;
             stage.refused_part = None;
             stage.room = None;
@@ -263,10 +263,14 @@ impl Engine {
             agent,
         } = claim;
         let command = agent.command(&settings, &place, &identity, &secret, &text);
-        match self
-            .terminal
-            .open(&place, &command, &identity, settings.beside.as_deref())
-        {
+        let folder = self.store.folder(id);
+        match self.terminal.open(
+            &place,
+            &folder,
+            &command,
+            &identity,
+            settings.beside.as_deref(),
+        ) {
             Opened::Opened { carried } => {
                 if carried {
                     self.with_start(id, &identity, |start, _| start.prompt.carried = true);
