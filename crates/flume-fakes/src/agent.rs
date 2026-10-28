@@ -1,0 +1,211 @@
+use crate::{lock, FakeTerminal, Log};
+use flume_seams::{
+    Agent, AgentCommand, Guarded, Identity, Offered, PlaceRef, Reading, Received, Secret, Settings,
+};
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+
+/// The agent seam: each agent's own record by identity. An agent
+/// receives a prompt once the fake terminal has sent it, or opened it
+/// carried, as many times as it is set to need; every other answer is
+/// set, unknowns among them.
+pub struct FakeAgent {
+    terminal: Arc<FakeTerminal>,
+    state: Mutex<AgentModel>,
+    pub log: Log,
+}
+
+#[derive(Default)]
+struct AgentModel {
+    agents: BTreeMap<String, Record>,
+    no_send_back: bool,
+    no_on_quiet: bool,
+    no_guard: bool,
+}
+
+#[derive(Clone)]
+struct Record {
+    asking: Reading,
+    own_work: Reading,
+    record: Option<String>,
+    receives_at: Option<usize>,
+    received_unknown: bool,
+    refused: Vec<String>,
+}
+
+impl Default for Record {
+    fn default() -> Self {
+        Record {
+            asking: Reading::No,
+            own_work: Reading::No,
+            record: None,
+            receives_at: Some(1),
+            received_unknown: false,
+            refused: vec![],
+        }
+    }
+}
+
+impl FakeAgent {
+    pub fn new(terminal: Arc<FakeTerminal>) -> FakeAgent {
+        FakeAgent {
+            terminal,
+            state: Mutex::default(),
+            log: Log::default(),
+        }
+    }
+
+    fn with(&self, agent: &Identity, change: impl FnOnce(&mut Record)) {
+        let mut state = lock(&self.state);
+        change(state.agents.entry(agent.to_string()).or_default());
+    }
+
+    pub fn set_asking(&self, agent: &Identity, reading: Reading) {
+        self.with(agent, |record| record.asking = reading);
+    }
+
+    pub fn set_own_work(&self, agent: &Identity, reading: Reading) {
+        self.with(agent, |record| record.own_work = reading);
+    }
+
+    /// The record the agent keeps, as one a terminal resumed may differ.
+    pub fn set_record(&self, agent: &Identity, record: &str) {
+        let record = record.to_string();
+        self.with(agent, |model| model.record = Some(record));
+    }
+
+    /// The agent receives a prompt at its `sending`th sending, or never.
+    pub fn receives_at(&self, agent: &Identity, sending: Option<usize>) {
+        self.with(agent, |record| record.receives_at = sending);
+    }
+
+    pub fn received_unknown(&self, agent: &Identity) {
+        self.with(agent, |record| record.received_unknown = true);
+    }
+
+    /// The guard refused an act the agent tried.
+    pub fn refuse_act(&self, agent: &Identity, act: &str) {
+        let act = act.to_string();
+        self.with(agent, |record| record.refused.push(act));
+    }
+
+    pub fn no_send_back(&self) {
+        lock(&self.state).no_send_back = true;
+    }
+
+    pub fn no_on_quiet(&self) {
+        lock(&self.state).no_on_quiet = true;
+    }
+
+    pub fn no_guard(&self) {
+        lock(&self.state).no_guard = true;
+    }
+
+    fn record(&self, agent: &Identity) -> Record {
+        lock(&self.state)
+            .agents
+            .get(&agent.to_string())
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
+impl Agent for FakeAgent {
+    fn command(
+        &self,
+        settings: &Settings,
+        place: &PlaceRef,
+        identity: &Identity,
+        secret: &Secret,
+        prompt: &str,
+    ) -> AgentCommand {
+        self.log.push(format!("command {identity}"));
+        let mut args = vec![];
+        if let Some(model) = &settings.model {
+            args.extend(["--model".to_string(), model.clone()]);
+        }
+        if let Some(instructions) = &settings.instructions {
+            args.extend(["--instructions".to_string(), instructions.clone()]);
+        }
+        let mut env = settings.env.clone();
+        env.insert("AGENT_IDENTITY".into(), identity.to_string());
+        env.insert("AGENT_SECRET".into(), secret.0.clone());
+        env.insert("AGENT_PLACE".into(), place.location.clone());
+        env.insert("AGENT_STAGE".into(), identity.stage.clone());
+        AgentCommand {
+            program: settings.program.clone().unwrap_or_else(|| "agent".into()),
+            args,
+            env,
+            prompt_args: vec![prompt.to_string()],
+        }
+    }
+
+    fn received(&self, agent: &Identity, text: &str) -> Received {
+        self.log.push(format!("received {agent}"));
+        let model = self.record(agent);
+        let Some((command, carried)) = self.terminal.opened(agent) else {
+            return Received::Unknown;
+        };
+        if model.received_unknown {
+            return Received::Unknown;
+        }
+        let record = model
+            .record
+            .clone()
+            .unwrap_or_else(|| format!("record:{agent}"));
+        let mut sendings = self
+            .terminal
+            .sent_to(agent)
+            .iter()
+            .filter(|sent| *sent == text)
+            .count();
+        if carried && command.prompt_args.iter().any(|arg| arg == text) {
+            sendings += 1;
+        }
+        if model.receives_at.is_some_and(|needed| sendings >= needed) {
+            Received::Received { record }
+        } else {
+            Received::NotReceived { record }
+        }
+    }
+
+    fn asking(&self, agent: &Identity) -> Reading {
+        self.log.push(format!("asking {agent}"));
+        self.record(agent).asking
+    }
+
+    fn own_work(&self, agent: &Identity) -> Reading {
+        self.log.push(format!("own_work {agent}"));
+        self.record(agent).own_work
+    }
+
+    fn stop_short(&self, agent: &Identity) -> String {
+        format!("to stop short, run `flume needs \"<what you need>\"` as {agent}")
+    }
+
+    fn send_back(&self) -> Offered {
+        if lock(&self.state).no_send_back {
+            Offered::NotOffered
+        } else {
+            Offered::Offered
+        }
+    }
+
+    fn guard(&self, agent: &Identity) -> Guarded {
+        self.log.push(format!("guard {agent}"));
+        if lock(&self.state).no_guard {
+            return Guarded::NotOffered;
+        }
+        Guarded::Refused {
+            acts: self.record(agent).refused,
+        }
+    }
+
+    fn on_quiet(&self) -> Offered {
+        if lock(&self.state).no_on_quiet {
+            Offered::NotOffered
+        } else {
+            Offered::Offered
+        }
+    }
+}

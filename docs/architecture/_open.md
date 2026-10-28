@@ -12,9 +12,6 @@ brought to the rule.
   2026-10-28: the finding sends the place back to the kind's fix round
   by itself. The other four were ruled on
   2026-10-26, in the section. None is a rule's source until ruled.
-- **The gate has no code yet.** `core.21` binds the first crate and the
-  first plugin to arrive with their own moon projects and check-fast
-  tasks; until then the gate is the site's prose and build.
 - **Record 0007 is proposed**, on the user's card (`briefs.15`); rule
   core.23 says so and stands as proposed.
 - **Records 0012 and 0013 wait on sluice's untold command.** The

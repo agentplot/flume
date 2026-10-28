@@ -1,0 +1,87 @@
+schema: spec-driven
+
+context: |
+  flume carries one launch into one worktree of its own, a place at
+  <repository>/places/<kind>--<name> on <prefix>/<name> cut from the
+  base, and works it through its kind's stages, each a fresh agent whose
+  stage ends on its deliverable; the place is tidied once the work lands
+  or is dropped. It is one static binary in Rust, with no daemon of its
+  own (120), and three surfaces answer from its one core: the
+  command line, a Claude Code plugin and a herdr plugin, each plugin
+  kept under plugins/ outside the core. The site is site/, Astro with
+  Starlight. Until the first crate lands the tree holds the site, the
+  docs and the shell.
+
+  The design is in agentplot/blueprints (local:
+  ~/Code/github_agentplot/blueprints/main): the capture design,
+  design/capture/design.md, section "Launching: flume", its plan,
+  plan.md beside it (decision 12, steps L1 to L4, and P6 and C7 where it
+  meets millpond and crew), and flume's statement of invariants,
+  design/flume/requirements.md. An artifact that rests on a clause cites
+  it by bare number, (23), and never restates it. Where this repository
+  and the design disagree, the design wins: a clause that no longer
+  holds is changed in the statement first, never worked around here
+  (core.19). The kind format is weir's (agentplot/weir); flume defines no
+  field of it (core.4).
+
+  Rules: flume's own are docs/architecture/ (core.md binds every change;
+  an area page, when one exists, binds the paths its frontmatter names),
+  with the decisions behind them in docs/adr/, one MADR record each
+  (adrs.toml), and what still waits on a decision in
+  docs/architecture/_open.md. Where docs/architecture/ and the narrative
+  docs disagree, docs/architecture/ wins. Where flume has no rule of its
+  own, the kit standard binds as its code profile says (.config/kit.toml),
+  cited as kit:<id> (kit:specs.3): its rules are docs/architecture/ in
+  afterthought/kit-standard (local:
+  ~/Code/github_afterthought/kit-standard/main/docs/architecture/).
+
+  The core names no tool. A worktree tool, a change tool, an agent
+  program, a terminal and a merge queue are seams, each reached through
+  one interface and bound by the repository's [profiles] table; no
+  module outside a profile names wt, worktrunk, openspec, claude, herdr
+  or sluice (core.1 to core.3). flume never commits, merges, rebases or
+  pushes in a place (core.5), keeps nothing of its own in a repository's
+  content (core.16), and starts no process that outlives a command of
+  its own (core.13). Nothing commercial, no pricing, tier or customer,
+  appears in this repository (core.20).
+
+  Stack: devenv for the shell, moon (through proto) for the checks,
+  treefmt for formatting and Vale for prose (styles/Flume). Every tool
+  runs through the shell, one command at a time:
+  devenv shell -- <command>. Each check is a moon task tagged with its
+  layer; CLAUDE.md names the layers, and check-fast (the site's prose and
+  its build) runs in seconds. Every crate, every directory under
+  plugins/, and site/ is a moon project of its own in
+  .moon/workspace.yml (core.21), and every tool a task runs is the
+  version the tree pins (core.22). sluice gates every merge into a bolt
+  and onto main on the layers .config/sluice.toml requires. treefmt fails
+  on a tracked file no formatter claims and no exclude names
+  (treefmt.nix).
+
+  Commits: stage by pathspec and commit the paths you wrote, git add
+  <paths>, then git commit -m "<subject>" -- <paths>; never -a, never
+  add . (kit:agents.3). Conventional Commits subjects, scoped to the part
+  of the tree touched; the commit-msg hook refuses any other.
+
+rules:
+  specs:
+    - "A spec changes only through a delta in the change that builds it, and each scenario is one a moon task proves (kit:specs.3, kit:testing.5). A scenario no existing check proves is a check this change adds, in its tasks; never a step done by hand."
+  design:
+    - "Cite by id the rules in docs/architecture/ that this design relies on, and name each page of docs/architecture/ whose area the change touches. Where the design departs from a rule, name the rule and say why."
+    - "Where flume has no rule of its own for the area, cite the kit standard's rules the same way, as kit:<id>; a departure from one is recorded as an ADR in docs/adr/ naming the rule (kit:kit.4)."
+    - "Cite by number the clauses of the statement (design/flume/requirements.md in agentplot/blueprints) the design satisfies (core.19)."
+    - "Where the design reaches a tool, name the seam it goes through and the profile that implements it; the core names no tool and holds no profile's branch (core.1, core.2), and a profile is chosen from the [profiles] table alone (core.3)."
+    - "The design holds no proof list of any name, no *Proof in dev*, no *Proof on real work*: a change is proved by flume's checks, named task by task (kit:testing.5)."
+  tasks:
+    - "Each task says what must be true and names the moon task that proves it, run as `devenv shell -- moon run <project>:<task>` (kit:specs.3). No task is a step done by hand, a deploy or work after the landing."
+    - "A task that adds a crate adds it to the cargo workspace's `members`, and a task that adds a crate or a directory under plugins/ adds it as a moon project of its own in .moon/workspace.yml, with its language declared and check-fast tasks that validate, lint and test it, one task per check, each tagged with its layer and declaring its inputs, /devenv.nix, /devenv.lock and /.prototools among them (core.21, kit:testing.1, kit:testing.3)."
+    - "A task that adds a tool pins its version in devenv.nix or .prototools, never a range, and runs it from there in every task (core.22)."
+    - "A task that adds a file type has treefmt.nix claim it with a formatter or name it in an exclude, with its reason, in the same task (core.21)."
+    - "The last task runs the checks of the moon projects the change touches, never the whole workspace, which sluice runs at the merge."
+
+operations:
+  apply:
+    guidance:
+      - "Tick a task only once the check it names passes, run as the task names it."
+      - "Where a task leaves a detail open, decide it the way a careful engineer would from docs/architecture (where flume has no rule, the kit standard's), openspec/specs, the statement in agentplot/blueprints, CLAUDE.md and the code, in that order, hold similar things to the same rule, and name each choice in your summary. An open detail is not a reason to pause."
+      - "Pause only when the same check still fails after two attempts, or when passing would mean changing a rule in docs/architecture, a spec under openspec/specs or a clause of the statement that the task does not tell you to change."

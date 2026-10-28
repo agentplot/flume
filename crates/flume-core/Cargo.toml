@@ -1,0 +1,17 @@
+[package]
+name = "flume-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "flume's one core: the engine that launches a place, runs its kind's stages one fresh agent at a time, settles, submits and tidies it, over the seams alone (core.1, core.2)."
+
+[dependencies]
+flume-seams = { path = "../flume-seams" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+flume-fakes = { path = "../flume-fakes" }
+
+[lib]
+doctest = false
