@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-28, in their design session ("i agree with these changes"), on the recommendations drawn from reading crew records 0045 to 0048, sluice records 0056, 0065 and 0068, and flume records 0002 to 0011 together.
 
+Amended 2026-10-28 by record 0014, accepted by the user: the settle's `untold` is `inbox`, collecting the place's pending outcomes by `sluice inbox`; and there is no worktrunk place profile.
+
 Deciders: the user, accepting recommendations R2 and R4 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 43, 46, 66, 111, 113, 120, 124, 125, 133, I8, C.6 and S34, as amended with this record; records 0002, 0005, 0009; `agentplot/sluice:docs/adr/0065` (the driver's wait removes a landed worktree) and `0068` (an outcome pushed to its submitter and kept until told; an entry submitted outside a multiplexer stands untold until asked); sluice clauses 51 and 135; `afterthought/crew:docs/adr/0048`, pattern 5; rules core.6, core.13, core.18, core.25.
 

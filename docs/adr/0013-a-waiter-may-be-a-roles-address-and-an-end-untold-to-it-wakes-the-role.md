@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-28, in their design session ("i agree with these changes"), on the recommendations drawn from reading crew records 0045 to 0048, sluice records 0056, 0065 and 0068, and flume records 0002 to 0011 together.
 
+Amended 2026-10-28 by record 0014, accepted by the user: a waiter is a recipient, and an end untold to an address is pending for it, collected by the run's start.
+
 Deciders: the user, accepting recommendation R1 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
 
