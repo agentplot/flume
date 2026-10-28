@@ -13,13 +13,19 @@ address at once (3, 43, 132, C.7, S38; record 0013; core.28).
 
 flume SHALL read the roles a host wakes from the `[roles]` table of the
 host's own configuration, each address `<partition>/<role>` with the
-repository, the kind and the priority of its run, and SHALL choose no
-kind or priority of its own for an address (70, 132, C.7).
+repository, kind, priority, base (the repository's default branch where
+it names none) and optional brief of its run, and SHALL choose none of
+them of its own (70, 132, C.7).
 
 #### Scenario: A role configured
 
 - **WHEN** the host's configuration names `madswan/planner` with a repository, the kind `planner` and priority 5
-- **THEN** a wake of `madswan/planner` launches a place of kind `planner` in that repository at priority 5
+- **THEN** a wake of `madswan/planner` launches a place of kind `planner` in that repository at priority 5, cut from the repository's default branch, with no brief
+
+#### Scenario: A base and a brief
+
+- **WHEN** the table gives `madswan/planner` the base `next` and a brief
+- **THEN** the woken place is cut from `next` and its stages that ask for the brief get it whole
 
 #### Scenario: An address with no kind
 

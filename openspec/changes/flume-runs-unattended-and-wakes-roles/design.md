@@ -17,25 +17,30 @@ command line under `crates/flume/src/commands/`. This change is written
 against that tree. Where it names a module of that change it names it
 by the statement's term, the herdr terminal profile, the host
 configuration's reader, the launch command, since its file names are
-that change's. Three of that change's choices bear on this one: the
-host's terminal is bound by `[host] terminal` in the host's
-configuration, and the herdr terminal profile answers no watch until
-this change's plugin keeps one; flume's Claude Code plugin is
+that change's. Four of that change's choices bear on this one: a
+launch's recipients are named and stored at the launch, the launching
+session as the terminal names it where the launch names none (7, 8),
+and this change delivers to them; the host's terminal is bound by
+`[host] terminal` (C.7), and the herdr terminal profile answers no
+watch until this change's plugin keeps one; flume's Claude Code plugin is
 `plugins/claude/`; and the root moon project runs `openspec validate`
 over the changes as its `changes` task, with herdr, sluice and OpenSpec
 pinned in `devenv.nix` and the tools' own checks in the `check-tools`
 layer.
 
-The statement is read at agentplot/blueprints edf0de2, which carries
+The statement is read at agentplot/blueprints e5f92f6, which carries
 the words of record 0014 (delivered, pending, recipient, collect,
-notice, stalled, needs an answer or found work). The records behind
-this change are 0005 (plugins outside the core, no process of flume's),
-0007 (what a stage made), 0008 (a hold and a stalled place), 0009 (an
-end delivered once, a wait by place), 0012 (a submission read at the
-settles that follow it), 0013 (a role's address) and 0014 (the words).
-Record 0014 and the rules in its words are on flume's branch
-`design/the-words`; the rules this design cites, core.24, core.25 and
-core.28, are cited in those words. The one rules page is
+notice, stalled, needs an answer or found work) and the answers of
+record 0015. The records behind this change are 0005 (plugins outside
+the core, no process of flume's), 0007 (what a stage made), 0008 (a
+hold and a stalled place), 0009 (an end delivered once, a wait by
+place), 0012 (a submission read at the settles that follow it), 0013 (a
+role's address), 0014 (the words) and 0015 (recipients at the launch, a
+pending end outliving the worktree, every end delivered, `[roles]`'s
+base and brief). Record 0014 and the rules in its words are on flume's
+main (28c0c6e), and record 0015 with core.11 in its words since
+6eef857; the rules this design cites, core.11,
+core.24, core.25 and core.28, are cited in those words. The one rules page is
 `docs/architecture/core.md`; this change adds no area page and touches
 no area another page would own.
 
@@ -55,7 +60,10 @@ no area another page would own.
   a role's kind does, what a woken run decides (69, 70, 72; core.28).
 - Bringing up or releasing a made thing that must run: sluice's, pressed
   by whoever shows the card (129; record 0007).
-- The kind format's `makes` field: weir's to add (core.4).
+- The kind format's `makes` field in flume: weir's to add, which group 4
+  does first in agentplot/weir (core.4).
+- Naming and storing a launch's recipients, and the launching session's
+  default: the earlier change's (7, 8).
 - Telling a person anything: a notice goes into a recipient's session,
   and no surface pushes to a person by itself (72).
 
@@ -66,18 +74,20 @@ no area another page would own.
 `HeldState` in `flume-seams` gains, each serialized and round-tripped as
 the core's types are:
 
-- `recipients`: the launch's recipients, each a `Recipient`, a session's
-  name or a role's address. A name of the form `<partition>/<role>` is
-  an address; any other is a session's name. They are fixed by the
-  launch (8).
+- The launch's recipients, as the earlier change stores them, each a
+  session's name or a role's address: a name of the form
+  `<partition>/<role>` is an address, any other a session's name. Fixed
+  at the launch (8); this change reads them and adds nothing to them.
 - `role`: the address a role's run serves, set by the wake (decision
   8).
 - `ends`: every end the place has had, in order, each with its key, a
-  stage's start (the stage and its start's number), a submission (the
-  submit's number) or a stall (its since), when it was read, what 43
-  names of it (the head or report and the made lines, the agent's words
-  with whether it needs an answer or found work, the commit landed as,
-  the merge queue's words, or the stalled move), and its deliveries,
+  stage's start (the stage, its start's number, and for stuck the
+  first quiet reading it ran from), a submission (the submit's number)
+  or a stall (its since), when it was read, what 43 names of it (the
+  head or report and the made lines, the agent's words with whether it
+  needs an answer or found work, what flume read of a stage lost, never
+  begun or stuck, the commit landed as, the merge queue's words, or the
+  stalled move), and its deliveries,
   each a recipient, when, and by what: a notice, a wait or the inbox.
   An end is pending for every recipient with no delivery of it (43).
 - `waiting`: the move the place waits on its caller for, since when,
@@ -89,12 +99,13 @@ the core's types are:
   sets none (130).
 
 A stage's `StageEnd` gains `made`, the made lines read at its end
-(decision 6). The `Kept` reasons gain `Pending`, naming each recipient
-an over place's ends wait on (decision 3).
+(decision 6). The `Phase` gains `Tidied`, a place whose worktree and
+branch are gone and whose document stays for its pending ends, naming
+the recipients they wait on (decision 3).
 
-Rejected: ends kept in a host inbox apart from the places, outliving
-them. That keeps a record of a place after its tidy, against 62 and
-core.16, and makes a second store to keep in step with the first.
+Rejected: ends kept in a host inbox apart from the places' documents,
+a second store to keep in step with the first, where 62 keeps the
+place's own document.
 
 ### 2. Delivery inside the settle
 
@@ -102,15 +113,18 @@ The settle (46) gains three steps after the existing ones read and move
 the place, in this order, each safe to repeat and each written by
 compare-and-set (74, 75):
 
-1. **Record.** A stage end, a submission outcome the settle reads, a
+1. **Record.** A stage end (delivered, ended short or finished, and a
+   stage read lost, never begun or stuck, with what flume read of it),
+   a submission outcome the settle reads, a
    landing, a failure or a conflict from the merge queue's inbox or a
    withdrawal from read-submission (99, 133), or a stall read in this
    settle is appended to `ends`, once, by its key.
 2. **Deliver.** For each end pending for a recipient, the notice is
    sent through the terminal seam into the recipient's session (decision
-   7). Only a send the terminal answers sent is recorded as a delivery;
-   a recipient asking, unknown or not found, or a send refused, leaves
-   it pending for the next settle. The delivery is claimed in held state
+   7). It is sent only while the terminal reads the recipient asking
+   no question, and counts delivered on the terminal's answer sent
+   (43; core.11); a recipient asking, unknown or not found, or a send
+   refused, leaves it pending for the next settle. The delivery is claimed in held state
    before the send, as a prompt's sending is (`deliver.rs`), so two
    settles at once send one notice.
 3. **Wake.** For each address with an end pending and no run live or
@@ -121,37 +135,44 @@ caller's acting command runs them (119, 120). No step waits: a notice
 not sendable now is sent by a later settle.
 
 **A notice is sent into a working session, never into a question.**
-Rule core.11 binds prompts and tells, which wait for a waiting agent and
-are read back as received. A notice is neither: it is the end and the
-place to read (record 0014), and it is sent as sluice pushes an outcome
-(sluice record 0068), into the session whatever it is doing, the agent
-program queuing it as its next turn; herdr's send refuses a session at
-an approval or question before typing anything, and the core reads the
-session's state first. So a notice is never sent while the session is
-asking or unknown, never left typed (95), and is recorded delivered on
-the terminal's answer, with no read-back. Waiting for the session to be
-idle was rejected: a busy conductor is rarely idle when the watch runs,
-and the end would lag by the conductor's turns.
+Rule core.11 binds a notice beside a prompt and a tell: sent only to a
+recipient that asks no question, counted delivered on the terminal's
+answer with no reading back (43; record 0015). It is sent as sluice
+pushes an outcome (sluice record 0068), into the session whatever else
+it is doing, the agent program queuing it as its next turn; herdr's
+send refuses a session at an approval or question before typing
+anything, and the core reads the session's state first, treating
+unknown as asking, since a question it cannot see is one it may not
+type into. Waiting for the session to be idle was rejected: a busy
+conductor is rarely idle when the watch runs, and the end would lag by
+the conductor's turns.
 
 **The notice's words** are one line: `flume: <kind>--<name> <what
 ended>; read: flume status <kind>--<name>`, where what ended is
 `<stage> delivered`, `<stage> needs an answer`, `<stage> found work`,
-`<stage> finished`, `submission landed <commit>`, `submission failed`,
-`submission withdrawn`, or `stalled: <move>`. The words whole, the head,
+`<stage> finished`, `<stage> lost`, `<stage> never begun`, `<stage>
+stuck`, `submission landed <commit>`, `submission failed`, `submission
+withdrawn`, or `stalled: <move>`. The words whole, the head,
 the made lines and the commit are in status, the wait's answer and the
 inbox's (43, 61).
 
-### 3. An over place is kept while its ends are pending
+### 3. A tidied place's document stays while an end is pending
 
-The tidy (66) of a place whose work is over first asks whether any end
-stands pending; if so the place is kept with `Kept::Pending` naming the
-recipients, and the first settle after the last delivery tidies it.
-This keeps 62 whole, since nothing of a place outlives its tidy, and
-gives a restarted recipient the landing it missed. A recipient that
-never returns keeps the place: status names it, and the operator's
-`flume inbox --recipient <name>` releases it. Rejected: tidying at once
-and losing the pending end, which 43 forbids, and the host inbox of
-decision 1.
+The tidy (66) of a place whose work is over removes its worktree and
+its branch as always (67). Where an end of it stands pending, the
+place's document stays in phase `Tidied`, with no worktree and no
+branch, naming the recipients it waits on, and goes at the first settle
+after every end is delivered, or when its caller drops it, `flume drop`
+on a tidied place removing the document and its pending ends (62). The
+place's folder, with its made lines, goes with the tidy as before; the
+ends carry what they need. The document is kept apart from a live
+place's, under the place's id and the tidy's time, so a launch of the
+same repository, kind and name proceeds while it stays (3): a tidied
+place is not live. The wait and the inbox read tidied documents beside
+live ones. Rejected: keeping the worktree until every end is delivered,
+which holds a place's disk and its branch for a recipient that may
+never return; and tidying the document at once, which loses the end 43
+says a restarted recipient collects.
 
 ### 4. Holds
 
@@ -160,9 +181,9 @@ hold after the launch (8, 130). It is taken for a stage the place has
 not started since its current stage began, one not reached or waiting
 for room (a hold takes it out of the queue), or for a submission not
 yet made; it is refused naming why for a stage started, a submission
-made, or a place whose work is over. `flume launch --hold <stage>` keeps
-its spelling and gains `--hold <stage>=<words>`, so a launch's hold may
-carry words too. A retry naming the stage or the submission ends its
+made, or a place whose work is over. A launch's hold carries its words
+as `--hold <stage>=<words>` (7; record 0015), taken here where the
+earlier change's launch does not take it yet. A retry naming the stage or the submission ends its
 hold (47, 49), the only way one ends (core.24).
 
 ### 5. The waiting move and the stall
@@ -170,7 +191,8 @@ hold (47, 49), the only way one ends (core.24).
 Each settle computes, from the held state alone, the move the place
 waits on its caller for, the first that holds of: the submission on
 hold and due; the next stage on hold; the current stage ended short
-needing an answer; readiness failed with a stage waiting on it; a
+needing an answer; the current stage lost; its prompt never begun;
+readiness failed with a stage waiting on it; a
 non-landing kind's last stage delivered; the place past its kind's
 bound of goings-back (112, 130, 131). A move read for the first time
 sets `waiting` with since when; a move that changes resets it; none
@@ -210,28 +232,32 @@ by herdr's agent prompt; the printed command answers every send
 refused, so every end stays pending there and is read from status, a
 wait or the inbox (C.5).
 
-**Naming a recipient.** `flume launch --recipient <name>`, given any
-number of times. A caller's session gives its own name: crew's sessions
-and role runs carry it, and flume's Claude Code plugin's `/launch`
-passes `$FLUME_RECIPIENT` where the session has it set. A command that
-takes a recipient, `flume wait` and `flume inbox`, defaults to
-`$FLUME_RECIPIENT`, and within a role's run to the run's address, read
-from the place `$FLUME_PLACE` names.
+**Naming a recipient.** A launch's recipients are the earlier change's:
+named at the launch, else the launching session as the terminal names
+it, `$FLUME_RECIPIENT` overriding that, a role run its address (7;
+record 0015). A command that takes a recipient here, `flume wait` and
+`flume inbox`, defaults the same way: `$FLUME_RECIPIENT`, else within a
+role's run the run's address, read from the place `$FLUME_PLACE` names,
+else the calling session as the terminal names it, through the same
+reading the launch's default uses.
 
 ### 8. Roles and the wake
 
 The host configuration's reader gains `[roles."<partition>/<role>"]`
-with `repository`, `kind` and `priority` (C.7). An address's run is a
-launch of that kind in that repository on its shared branch, named by
-the role, at that priority, with the address as its `role` and as its
-agent's session name, no brief and no recipient (132). The wake,
+with `repository`, `kind`, `priority`, `base` and an optional `brief`
+(C.7). An address's run is a launch of that kind in that repository on
+`base`, the repository's default branch where it names none, named by
+the role, at that priority, with `brief` as its brief where given, the
+address as its `role` and as its agent's session name, and no
+recipient (132). The wake,
 `Engine::wake(address)`, answers that the run is live or waiting where
 a place of that repository, kind and name stands, and otherwise
 launches it; a launch refused for its name standing is the other
 settle's run, answered as waiting (3, 75). The settle's wake step
 (decision 2) and `flume wake <address>` call the same wake. A role's
-kind whose stage asks for `{{brief}}` is refused at the wake, and
-status names the refusal beside the pending ends. Delivery to an
+kind whose stage asks for `{{brief}}` while the table gives none is
+refused at the wake (4), and status names the refusal beside the
+pending ends. Delivery to an
 address goes to the session named by the address, which is the run's
 agent while one is live; between the run's stages, or before its first
 agent starts, the end stays pending and the run's `flume inbox`
@@ -254,7 +280,7 @@ short, lost or never begun, or a submission failed or withdrawn, and 3
 for still waiting at the timeout.
 
 `flume inbox [--recipient <name>] [--json]` reads every place on the
-host, over places kept for their pending ends among them, and answers
+host, tidied documents kept for their pending ends among them, and answers
 each end pending for the recipient with what 43 names, recording each
 delivered by the inbox at the same write. Status answers ends and their
 deliveries and records nothing (57).
@@ -319,23 +345,26 @@ engine's new scenarios live in `flume-conformance/src/engine/`, one
 file per capability (`end_delivery.rs`, `caller_waits.rs`,
 `made_things.rs`, `role_waking.rs`), each citing its clauses as data
 (106); the terminal's recipient scenarios join `seams/terminal.rs`. The
-clause list moves to the statement's revision edf0de2 or later, holding
-128 to 133 and S35 to S38, wherever the earlier change has not. The
+clause list moves to the statement's revision e5f92f6 or later, holding
+128 to 134 and S35 to S38, wherever the earlier change has not. The
 last group runs `sluice exec main`, the gate's checks with the root's
 `changes` task among them, and `openspec validate` on this change.
 
 ## Risks / Trade-offs
 
 - [weir's kind format holds no `makes` yet, and weir refuses a stage
-  field it does not know] → group 4 waits on weir's release with the
-  field; the other groups do not depend on it, and the tasks say so.
+  field it does not know] → group 4 begins with a change in
+  agentplot/weir adding `makes` to weir-kinds, landed there through
+  sluice, and flume then pins that revision; no other group depends on
+  it.
 - [A notice into a working session is queued by the agent program, not
   read back] → the terminal's send is the record, the end stays readable
   by status, the wait and the inbox, and a later delivery of the same
   end never happens (43).
-- [A recipient that never returns keeps an over place, worktree and
-  all] → status names the recipient it waits on, and `flume inbox
-  --recipient <name>` releases it.
+- [A recipient that never returns keeps a tidied place's document] →
+  only the document, no worktree and no branch; status names the
+  recipient it waits on, and `flume inbox --recipient <name>` or a drop
+  of the place removes it.
 - [A role whose launch is refused is tried again at every settle] → the
   refusal is a launch's, refused before anything is made (core.8); it
   costs a read of the configuration and the kinds per settle while ends

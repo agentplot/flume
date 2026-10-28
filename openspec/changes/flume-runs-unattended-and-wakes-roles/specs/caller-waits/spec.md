@@ -33,6 +33,17 @@ on a place whose work is over, SHALL be refused naming why (8, 47, 49,
 - **WHEN** a caller holds the stage whose agent is working
 - **THEN** the hold is refused naming the stage, and nothing changes
 
+### Requirement: A launch's hold carries its words
+
+A launch SHALL be able to give each stage it holds words saying what
+for, spelled `--hold <stage>=<words>`, kept and given by status as a
+later hold's are (7, 130).
+
+#### Scenario: Held at the launch with words
+
+- **WHEN** a caller launches a change with `--hold code=waiting on the schema card`
+- **THEN** construct's delivery leaves code on hold with those words, and the place is never stalled
+
 ### Requirement: flume watches no event for a hold
 
 flume SHALL end a hold only on its caller's retry, and SHALL read no
@@ -47,10 +58,16 @@ card, tell, landing or other place for the event a hold's words name
 ### Requirement: A waiting place says which move and since when
 
 For a place whose next move is its caller's, a stage or a submission on
-hold, a stage ended short needing an answer, a readiness that failed, a
-non-landing kind's last stage delivered, or a place past its kind's
+hold, a stage ended short needing an answer, a stage lost, a prompt
+never begun, a readiness that failed, a non-landing kind's last stage
+delivered, or a place past its kind's
 bound of goings-back, flume SHALL record the move and when it first read
-the place so, and status SHALL give both (56, 112, 130, 131).
+the place so, and status SHALL give both (38, 45, 56, 112, 130, 131).
+
+#### Scenario: A lost stage waits on its caller
+
+- **WHEN** a code stage is read lost
+- **THEN** status gives the place waiting on a retry of code since that reading, and five minutes on it is stalled
 
 #### Scenario: Ended short needing an answer
 

@@ -9,25 +9,14 @@ by `flume inbox` (43, 46, 119, 120, 122; record 0009; core.25).
 
 ## ADDED Requirements
 
-### Requirement: A launch names its recipients
-
-A launch SHALL carry the place's recipients, each a session's name as
-the terminal names it or a role's address, none where it gives none, and
-flume SHALL keep them with the place and report them in status. A
-recipient SHALL be fixed by the launch, as its brief is (7, 8, 43).
-
-#### Scenario: Two recipients
-
-- **WHEN** a caller launches a fix naming the session `ops` and the address `madswan/planner` as recipients
-- **THEN** status of the place names both, and no act after the launch changes them
-
 ### Requirement: The settle delivers each end once to each recipient
 
-The settle that reads a stage's end, a submission's outcome or a stall
-SHALL record it on the place as an end, and SHALL deliver each end once
-to each recipient: a notice sent through the terminal into the
-recipient's own pane, recorded with to whom and when. An end SHALL stay
-pending for a recipient until so recorded (43, 46, 95).
+The settle that reads a stage's end, a stage lost, never begun or
+stuck, a submission's outcome or a stall SHALL record it on the place
+as an end, with what flume read, and SHALL deliver each end once to
+each recipient the launch named: a notice through the terminal into
+the recipient's own pane, recorded with to whom and when, and pending
+until so recorded (7, 43, 46, 95).
 
 #### Scenario: A delivery and its record
 
@@ -39,6 +28,11 @@ pending for a recipient until so recorded (43, 46, 95).
 - **WHEN** the same place is settled again after the end was delivered
 - **THEN** the fake terminal records no second notice to `ops` (74)
 
+#### Scenario: An agent killed
+
+- **WHEN** a code stage's agent is killed with nothing delivered and the watch's settle reads the stage lost
+- **THEN** each recipient gets one notice that the stage is lost, and the end carries what flume read of it (43, 45, S28)
+
 #### Scenario: A landing and a failure
 
 - **WHEN** the merge queue's inbox gives the place's submission failed, and later landed
@@ -46,12 +40,11 @@ pending for a recipient until so recorded (43, 46, 95).
 
 ### Requirement: A notice is never sent into a question or left typed
 
-A notice SHALL name the place, the end, and the command that reads it,
-and carry no fact for the recipient to act on unread. It SHALL be sent
-only while the terminal reads the recipient's session neither asking
-nor unknown, and only through the terminal's send; a send the terminal
-refuses, or a recipient it cannot find, SHALL leave the end pending for
-the next settle (95, core.11).
+A notice SHALL name the place, the end, and the command that reads it.
+It SHALL be sent only while the terminal reads the recipient asking no
+question, neither asking nor unknown, and SHALL count delivered on the
+terminal's answer sent, with no reading back; a send refused, or a
+recipient not found, SHALL leave the end pending (43, 95, core.11).
 
 #### Scenario: A recipient asking
 
@@ -116,13 +109,25 @@ recipient SHALL mark nothing delivered (43, core.25).
 - **WHEN** two ends of two places are pending for `ops` while its session is gone, and its restarted session runs `flume inbox` as `ops`
 - **THEN** the answer holds both ends whole, both read delivered to `ops`, and a second `flume inbox` gives nothing
 
-### Requirement: A place is tidied only once its ends are delivered
+### Requirement: A tidied place's document stays while an end is pending
 
-A place whose work is over SHALL be kept, status naming each recipient
-it waits on, while an end of it stands pending, and SHALL be tidied by
-the first settle after every end is delivered (43, 62, 66).
+A place whose work is over SHALL be tidied as always, its worktree and
+branch removed (66, 67), and while an end of it stands pending its
+document alone SHALL stay, naming the recipients it waits on, until
+every end is delivered or its caller drops it. A launch of the same
+name SHALL not be refused for it (3, 43, 62).
 
 #### Scenario: A landing with its recipient away
 
 - **WHEN** a place lands while its one recipient's session is gone
-- **THEN** the place is kept naming the recipient, and once the recipient collects by `flume inbox` the next settle tidies it
+- **THEN** its worktree and branch are removed, status gives the tidied place pending for that recipient, and once the recipient collects by `flume inbox` the next settle removes the document
+
+#### Scenario: Dropped while pending
+
+- **WHEN** the caller drops a tidied place whose end stands pending
+- **THEN** the document and its pending ends are gone, and the inbox gives nothing of it
+
+#### Scenario: Launched again
+
+- **WHEN** a place of the same repository, kind and name is launched while the tidied document stays
+- **THEN** the launch makes its place, and the tidied document's ends stay pending as they were

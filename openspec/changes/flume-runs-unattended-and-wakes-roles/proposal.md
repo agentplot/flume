@@ -22,16 +22,18 @@ where nobody is there to deliver to.
   shows every place in flight from `flume status --json`, with keys that
   open a place's pane, tell, stop and retry through flume's commands
   (section 9).
-- **An end is delivered once.** A launch names its recipients. The
-  settle that reads a stage's end, a submission's outcome or a stall
-  delivers it once, as a notice through the terminal into each
+- **An end is delivered once.** To the recipients the launch named,
+  which the earlier change stores (7, 8), the settle that reads a
+  stage's end (a stage lost, never begun or stuck among them, with what
+  flume read), a submission's outcome or a stall delivers it once, as a notice through the terminal into each
   recipient's pane, and records on the place that it was delivered, to
   whom and when; until then it is pending (43; record 0009). `flume wait`
   waits by place, answering a pending end at once and otherwise
   following the host's state under a timeout, and drives no settle
   where the terminal keeps watch. `flume inbox` collects every end
-  pending for a recipient and marks each delivered. A place whose work
-  is over is kept until its ends are delivered.
+  pending for a recipient and marks each delivered. A finished place is
+  tidied as always, and only its document stays while an end of it is
+  pending (62).
 - **Holds and stalled places.** `flume hold` puts a place's next stage
   or its submission on hold after the launch, with the caller's words.
   Status gives, for a place waiting on its caller, the move it waits on,
@@ -45,7 +47,8 @@ where nobody is there to deliver to.
   the deliverable not yet made (128, 129; record 0007).
 - **Role addresses and waking.** A recipient may be a role's address,
   `<partition>/<role>`. A role's run is a place of the kind the host's
-  `[roles]` table names, named by the role, its agent's session named by
+  `[roles]` table names, on its `base` with its optional `brief`, named
+  by the role, its agent's session named by
   the address. A settle that finds an end pending for an address with
   no run live or waiting for room launches that kind at its priority,
   and `flume wake <address>` does the same for another tool's carrier;
@@ -55,9 +58,9 @@ where nobody is there to deliver to.
 
 ### New Capabilities
 
-- `end-delivery`: a place's recipients; an end, an outcome or a stall
-  delivered once into each recipient's pane and recorded; pending until
-  then; the wait by place; the inbox; a place kept while its ends are
+- `end-delivery`: an end, an outcome or a stall delivered once into
+  each recipient's pane and recorded; pending until then; the wait by
+  place; the inbox; a tidied place's document kept while its ends are
   pending.
 - `caller-waits`: a hold put after the launch with its words; the move a
   place waits on and since when; a stalled place, said once to each
@@ -81,12 +84,12 @@ where nobody is there to deliver to.
 - `seam-fakes`: the fake terminal holds recipients' sessions and records
   each notice sent.
 - `clause-coverage`: the suite's list holds every clause, invariant and
-  scenario of the statement at edf0de2, 128 to 133 and S35 to S38 among
+  scenario of the statement at e5f92f6, 128 to 134 and S35 to S38 among
   them.
 
 ## Impact
 
-- `crates/flume-seams`: the held state gains recipients, the ends log
+- `crates/flume-seams`: the held state gains the ends log
   with its deliveries, holds with words and since when, the waiting
   move, the role address; the terminal seam's recipient send.
 - `crates/flume-core`: delivery inside the settle, the wait, the inbox,
@@ -94,16 +97,17 @@ where nobody is there to deliver to.
   are pending.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake terminal's
   recipients; the engine scenarios for every new requirement, S38 among
-  them; the clause list at edf0de2.
+  them; the clause list at e5f92f6.
 - `crates/flume`: `flume wait`, `flume inbox`, `flume hold`,
-  `flume wake`, and `--recipient` on `flume launch`; the herdr terminal
+  `flume wake`, and `--hold <stage>=<words>` on `flume launch` where the
+  earlier change does not take it; the herdr terminal
   profile's recipient send, its session name, and its watch answered
   while the plugin's watch is live; the host configuration's `[roles]`
   table.
 - `plugins/herdr` (new) with its moon project, its tools pinned in
-  `devenv.nix`, and treefmt claiming its files; flume's Claude Code
-  plugin, `plugins/claude/`, whose `/launch` names its session as the
-  recipient.
+  `devenv.nix`, and treefmt claiming its files.
+- agentplot/weir: weir-kinds gains `makes` on a stage, landed there
+  through sluice, before flume reads it (core.4).
 - Depends on `flume-runs-a-kind-through` landed (the profiles, the
-  command line, the queue, `sluice inbox`), on weir's kind format
-  holding `makes` (core.4), and on herdr 0.9.3 or later on the host.
+  command line, the queue, `sluice inbox`, a launch's recipients), and
+  on herdr 0.9.3 or later on the host.
