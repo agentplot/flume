@@ -16,6 +16,8 @@ tasks:
     outputs: ['dist']
     deps: ['~:install']
     tags: [check-fast]
+  # No layer: it checks nothing, and build, which the gate runs, runs it
+  # first.
   install:
     command: 'bun install --frozen-lockfile'
     inputs: ['package.json', 'bun.lock', '/devenv.nix', '/devenv.lock', '/.prototools']

@@ -229,9 +229,10 @@ let
   # change profile reads other schemas through: sluice's release, built as
   # nixpkgs builds its older one. Bump the version, then each hash from
   # the mismatch the build reports.
+  openspecVersion = "1.14.3";
   openspec = pkgs.openspec.overrideAttrs (
     finalAttrs: _: {
-      version = "1.14.3";
+      version = openspecVersion;
       src = pkgs.fetchFromGitHub {
         owner = "Fission-AI";
         repo = "OpenSpec";

@@ -19,3 +19,43 @@ tasks:
     inputs: ['/check-hooks.sh', '/treefmt.nix', '/.versionrc', '/devenv.nix', '/devenv.lock']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
+  # rustc, cargo, clippy and rustfmt are the build .prototools pins, and
+  # Claude Code, OpenSpec, herdr and sluice the releases devenv.nix pins, on
+  # whichever host runs the gate (core.22). It reads the tools it checks
+  # from outside the tree, so it never replays.
+  toolchain:
+    command: 'sh check-toolchain.sh'
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true, cache: false}
+  # No two decision records share a number (check-adrs.sh).
+  adrs:
+    command: 'sh check-adrs.sh'
+    inputs: ['/docs/adr/*.md', '/check-adrs.sh']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # Every spec under openspec/specs passes openspec validate --strict, which
+  # fails a warning as an error, by the openspec devenv.nix pins (core.22).
+  # It sends no usage statistics and asks for no newer release.
+  specs:
+    command: 'openspec validate --specs --strict --no-interactive'
+    env: {OPENSPEC_TELEMETRY: '0', OPENSPEC_NO_UPDATE_CHECK: '1'}
+    inputs: ['/openspec/specs/**/*', '/openspec/config.yaml', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # Every open change under openspec/changes passes the same strict
+  # validation, so a requirement archive would refuse fails the change's own
+  # checks and not first at its merge. A MODIFIED block is read against the
+  # specs it replaces, so they are inputs too; the archived changes are not.
+  changes:
+    command: 'openspec validate --changes --strict --no-interactive'
+    env: {OPENSPEC_TELEMETRY: '0', OPENSPEC_NO_UPDATE_CHECK: '1'}
+    inputs: ['/openspec/changes/**/*', '!/openspec/changes/archive/**/*', '/openspec/specs/**/*', '/openspec/config.yaml', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # Every task of every project carries exactly one layer tag, or a comment
+  # saying why the gate cannot run it (check-layers.sh).
+  layers:
+    command: 'sh check-layers.sh'
+    inputs: ['/.moon/workspace.yml', '/**/moon.yml', '/check-layers.sh']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
