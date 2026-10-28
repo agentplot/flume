@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-26, on their card.
 
+Amended 2026-10-28 by record 0012, accepted by the user: the merge queue's verdict no longer starts a settle by a waiting command; every settle reads the outcome of its place's open submission.
+
 Deciders: the user, in flume's statement (what moves stages on; herdr required for unattended use; no daemon).
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 46, 60, 61, 119 to 122, I8, C.4, C.5, section 9; sluice's ADR 0023 (plugins kept outside the core).
 
