@@ -5,13 +5,13 @@
 The suite SHALL hold the numbers of every clause of Part A and Part B,
 the invariants I1 to I8 and the scenarios of section 11, with the
 statement's revision they were read at, and SHALL name each clause no
-change has built yet. A clause the statement adds or removes SHALL
+change has built yet, each named as the change that builds it. A clause the statement adds or removes SHALL
 change this list in the commit that adopts it.
 
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names revision edf0de2; Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124 and 129 to 132; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128 and 133; the scenarios run S1 to S38; and 129, 132 and S38 are named as built by no change yet
+- **THEN** it names revision e5f92f6; Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124 and 129 to 132; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128, 133 and 134; the scenarios run S1 to S38; and 129, 132 and S38 are named as the next change's
 
 ### Requirement: A clause cited by nothing fails the suite
 

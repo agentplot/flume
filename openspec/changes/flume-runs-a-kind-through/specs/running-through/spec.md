@@ -31,10 +31,17 @@ submitted again (112, 131).
 - **WHEN** a change's verify agent stops short having found work
 - **THEN** code starts at once with the findings as its words, and verify runs again after it (S35, 131)
 
+### Requirement: A conflict's fix takes the base in
+
+A conflict's words SHALL carry the base's revision the merge queue
+tested against, so the fix round's agent merges it into the place's
+branch and commits before anything else; flume SHALL merge, rebase or
+commit nothing itself (14, 112, core.5).
+
 #### Scenario: A conflict
 
 - **WHEN** the fake merge queue's inbox gives the place's submission in conflict with the files contested
-- **THEN** the fix round starts with the outcome's words naming the files (112)
+- **THEN** the fix round starts with the outcome's words naming the files and the base's revision tested against, and the fakes record no merge, rebase or commit of flume's (112, core.5)
 
 ### Requirement: Goings-back count together toward the kind's bound
 

@@ -3,12 +3,16 @@
 ### Requirement: A launch makes one place and answers
 
 A launch SHALL name a repository, a kind, a name and a base, and a brief
-where a stage asks for one, and may carry the place's priority; it SHALL
+where a stage asks for one, and may carry the place's priority, the
+recipients of its ends, and the stages it holds each with its words; a
+launch naming no recipient SHALL take `$FLUME_RECIPIENT`, or else the
+session that launched it as the terminal names it, or none; it SHALL
 resolve its kind to one declaration, the launch's over the repository's
 over flume's own (19). It SHALL make one place on `<prefix>/<name>` at
-the base's current revision, record it with its priority, ready it, and
+the base's current revision, record it with its priority, its recipients and its holds' words,
+ready it, and
 answer once its first stage is started, on hold, waiting on readiness or
-waiting for room, never waiting on an agent (2, 6, 7, 9, 70).
+waiting for room, never waiting on an agent (2, 6, 7, 8, 9, 43, 70).
 
 #### Scenario: A fix launched
 
@@ -18,7 +22,12 @@ waiting for room, never waiting on an agent (2, 6, 7, 9, 70).
 #### Scenario: The first stage on hold
 
 - **WHEN** a launch puts its first stage on hold
-- **THEN** the place is made and readied, no agent is started, and the stage reads on hold (7, 47)
+- **THEN** the place is made and readied, no agent is started, and the stage reads on hold with its words (7, 47, 130)
+
+#### Scenario: Recipients at the launch
+
+- **WHEN** one launch names two recipients, another names none with `FLUME_RECIPIENT` set, and a third names none from a session the fake terminal names
+- **THEN** status gives the first place both, the second the variable's, the third that session, and nothing after the launch changes them (7, 8)
 
 #### Scenario: A launch on a full host
 

@@ -4,13 +4,16 @@
 
 There SHALL be exactly one interface for each of the seven seams of
 Part B: the place (78 to 83), the kinds (84, 85), the change (86, 87, 127),
-the agent (88 to 93, 115, 116, 121), the terminal (94 to 98, 122), the
+the agent (88 to 93, 115, 116, 121, 134), the terminal (94 to 98, 122), the
 merge queue (99, 101, 117, 125, 126, 133) and the store (102 to 104,
 128). Each SHALL offer the operations its section names and no
 operation of the core's, and no interface SHALL name a tool (core.1,
 core.2). The merge queue's submit SHALL answer once the merge queue
 holds the submission, with no wait on its verdict, and its inbox SHALL
-give each pending outcome of the place once (117, 133).
+give each pending outcome of the place once (117, 133). The terminal
+seam SHALL name the session a command runs in, for a launch's default
+recipient (7), and the agent seam SHALL say whether the agent's record
+shows its session ended (134).
 
 #### Scenario: Each seam's operations
 
@@ -29,8 +32,8 @@ give each pending outcome of the place once (117, 133).
 
 ### Requirement: The types the seams pass
 
-The seams SHALL pass one type for each of: a launch with its priority
-(2, 3, 7, 8, 70); a place and its held state, its priority and each
+The seams SHALL pass one type for each of: a launch with its priority,
+its recipients and each hold's words (2, 3, 7, 8, 70, 130); a place and its held state, its priority and each
 stage's wait for room among it (62, 70, 73 to 76, 102 to 104); a kind
 with its stages as read-kinds returns them (18, 23); a deliverable in
 one of the six forms (24); a prompt and its parts (27, 28); an agent's

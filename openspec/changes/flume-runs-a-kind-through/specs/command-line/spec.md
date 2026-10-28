@@ -38,6 +38,11 @@ A command SHALL name a place by its location or by `<kind>--<name>` in
 the repository it runs in, the repository being the directory holding a
 bare repository and its worktrees, or the main worktree.
 
+#### Scenario: Holds and recipients at the launch
+
+- **WHEN** `flume launch` runs with `--hold verify=after review --recipient madswan/planner` and then with neither, `FLUME_RECIPIENT` set
+- **THEN** the first place's verify is on hold with the words `after review` and its recipient is `madswan/planner`, and the second's recipient is the variable's (7)
+
 #### Scenario: A place named from inside it
 
 - **WHEN** `flume status fix--one --json` runs inside the place `places/fix--one`

@@ -18,7 +18,8 @@ with the entry once sluice holds it, or the refusal with sluice's words
 The profile SHALL collect a place's pending outcomes by `sluice inbox
 --json` in the place: landed with its commit, failed with the merge
 queue's words, or in conflict with the files contested, each carrying
-sluice's `notice` as its words, each delivered once; and SHALL read a
+sluice's `notice` as its words, a conflict's carrying the base's revision sluice tested
+against, each delivered once; and SHALL read a
 withdrawal from read-submission, never from the inbox (99, 133, C.6).
 
 #### Scenario: A failed entry collected once
@@ -31,10 +32,22 @@ withdrawal from read-submission, never from the inbox (99, 133, C.6).
 - **WHEN** the merge-queue seam's scenarios run against the profile on scratch repositories landing through the pinned sluice
 - **THEN** each passes: landed is said only of an entry sluice landed, and nothing of the place is removed (101, 113)
 
-### Requirement: Read, step, base and the place's data
+### Requirement: One round at each undecided settle
+
+The profile SHALL drive one round by `sluice step <base>` at each settle
+that finds the submission undecided, with no read of whether a `sluice
+run` is live, since beside one the step finds the branch's lock held and
+does nothing (124, 125; sluice clause 135).
+
+#### Scenario: A step beside a live driver
+
+- **WHEN** a `sluice run` drives the base and a settle steps it
+- **THEN** the step does nothing and the settle goes on (124)
+
+### Requirement: Read, base and the place's data
 
 The profile SHALL read the newest entry of a branch from `sluice status
-<base> --json`; drive one round by `sluice step <base>`; answer the base
+<base> --json`; answer the base
 at `origin/<base>` after one fetch where `.config/sluice.toml` lands the
 base on a remote and the local base otherwise; and give the place
 profile the readiness, the teardown (`sluice release` in the place) and

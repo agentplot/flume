@@ -40,13 +40,24 @@ take as asking only where the agent seam's asking reads yes, and SHALL report a 
 - **WHEN** herdr reads a pane blocked and the agent profile holds no asking mark
 - **THEN** the core reads the agent not asking (90, core.2)
 
+### Requirement: The caller's session as the terminal names it
+
+Each terminal profile SHALL name the session a command of flume's runs
+in, for a launch's default recipient: under herdr the pane it runs in,
+under the printed command none (7).
+
+#### Scenario: A launch from a herdr pane
+
+- **WHEN** a launch names no recipient and `FLUME_RECIPIENT` is unset, run from a herdr pane
+- **THEN** the place's recipient is that pane as herdr names it
+
 ### Requirement: The printed command
 
 The printed-command profile SHALL answer open with the command, its
 prompt carried in it, for a person to run in the place; refuse send and
 close; read the agent stopped only once the agent's own record says its
-session ended; and keep no watch, so flume runs attended (38, 119,
-C.5).
+session ended (134); and keep no watch, so flume runs attended (38,
+119, C.5).
 
 #### Scenario: A tell under the printed command
 

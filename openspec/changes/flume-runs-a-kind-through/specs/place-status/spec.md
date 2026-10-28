@@ -4,14 +4,15 @@
 
 Status SHALL give, for one place or every place, what clause 56 lists:
 the place's repository, kind at its version with its declaration, name,
-branch, base, mark and priority; each stage's state, end and start
+branch, base, mark, priority and recipients; each stage's state, end and start
 count; the current agent with its identity, settings, state and whether
 it works past its limit, and the command to run under a terminal that
 prints it; whether the deliverable exists; the submission, how often
 flume submitted and how often the place went back; the change's tasks;
 refused acts; a refused stage's part; a stop-short's words and whether
 it needs an answer or found work, or a failed submission's words; for a
-place waiting on its caller, the move it waits on and since when; and,
+place waiting on its caller, the move it waits on and since when, a
+hold's words among it; and,
 for the host, the agents running, the bound, the room and the queue
 (56, 70, 130).
 

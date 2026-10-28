@@ -20,8 +20,8 @@ argument under the printed command (29, 32, 33, 88, C.4).
 The profile SHALL read received, own-work and asking from the
 transcript of the session the plugin's SessionStart hook recorded for
 that start in the place's own folder, and whether the session ended from
-the SessionEnd hook's mark; an answer the record does not give SHALL be
-unknown (77, 89 to 91, 93).
+the SessionEnd hook's mark (134); an answer the record does not give
+SHALL be unknown (77, 89 to 91, 93).
 
 #### Scenario: Seam scenarios over fixture transcripts
 
@@ -35,7 +35,8 @@ blocks a stop with the core's stop-check words and, when it lets the
 agent stop, starts `flume settle <place> --on-quiet` detached; the
 PreToolUse hook refuses a shell command that runs `sluice submit`, `wt
 submit`, `wt merge` or `git push`, saying flume submits the place, and
-records the refusal status reads (108, 110, 115, 116, 121, C.4).
+records the refusal status reads, and never refuses `git merge` into the
+place's branch (108, 110, 112, 115, 116, 121, C.4).
 
 #### Scenario: An agent that would stop with nothing made
 
@@ -46,6 +47,11 @@ records the refusal status reads (108, 110, 115, 116, 121, C.4).
 
 - **WHEN** the PreToolUse hook is handed `git add -A && git push origin HEAD`
 - **THEN** it refuses the command, and status lists the refused act (S25)
+
+#### Scenario: An agent merges the base for a conflict
+
+- **WHEN** the PreToolUse hook is handed `git fetch origin && git merge 4f2a9c1` in the place
+- **THEN** it allows the command and records no refusal (112)
 
 #### Scenario: A conversation's agent stops
 

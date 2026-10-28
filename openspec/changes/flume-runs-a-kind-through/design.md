@@ -6,16 +6,15 @@ The core landed from `bolt/flume-the-core` (4e8bb15): the seven seam
 traits, the engine over them, one fake per seam, the conformance suite
 citing S1 to S34, and the binary's crate with no command and no
 profile. The statement (`agentplot/blueprints:design/flume/requirements.md`
-at edf0de2) is the source of every behaviour here, and it moved after
-the core was built: records 0010 to 0014 rewrote 22, 41 to 43, 56, 70,
-111 to 113, 120, 124, 130, 131, 133, C.1, C.2, C.4, C.6 and C.7, and
-added S35 to S38. Where the core and the statement differ the
+at e5f92f6) is the source of every behaviour here, and it moved after
+the core was built: records 0010 to 0015 rewrote 7, 8, 22, 41 to 43,
+56, 62, 70, 111 to 113, 120, 124, 130, 131, 133, C.1, C.2, C.4, C.6,
+C.7, S1 and S19, and added 134 and S35 to S38. Where the core and the statement differ the
 statement wins (core.19), so this change first brings the core to it,
 then builds the profiles of Part C and two of the three surfaces of
-section 9. Record 0014 is accepted and on `design/the-words`
-(993a19c); its rule texts (core.3, core.24, core.25, core.27, core.28)
-are cited here as that branch words them, and land before this
-change's code does.
+section 9. Records 0014 and 0015 are accepted; their rule texts
+(core.3, core.5, core.11, core.24, core.25, core.27, core.28) are cited
+here as those records word them.
 
 The work is Crew's dropped bolts `flume-the-profiles`,
 `a-kind-runs-through-on-its-own`, `flume-keeps-the-hosts-queue-by-priority`,
@@ -51,7 +50,9 @@ core.1 to core.3 and core.21 as they stand.
   130, 132, S38), and the herdr plugin's watch and sidebar: the next
   change's. Under this change no terminal keeps watch, so flume runs
   attended (119), and the agent's going quiet moves a place on (121).
-- A stage's made things (129): record 0007 is proposed.
+- A stage's made things (129; record 0007), and a place's document
+  kept past its tidy while an end is pending (62): the next change's,
+  with delivery.
 - A worktrunk place profile (C.1; record 0014).
 
 ## Decisions
@@ -95,8 +96,9 @@ item below is where flume's falls short of it today.
 - **The pinned tools.** `devenv.nix` pins, by their release builds as
   sluice pins its own: Claude Code (sluice's version, 2.1.296), OpenSpec
   (1.14.3, sluice's), herdr (the release the terminal profile is
-  checked against), and sluice (a release that holds `sluice inbox`;
-  see Risks). Each profile's tests run the pinned tool, never one on the
+  checked against), and sluice (the release that holds `sluice inbox`,
+  sluice's change `outcomes-are-delivered`, which is built before this
+  change's group 7). Each profile's tests run the pinned tool, never one on the
   host's PATH (core.22).
 - **The shell.** As sluice's: a run sluice starts gets `SLUICE_JOBS`
   cores (`CARGO_BUILD_JOBS`, `RUST_TEST_THREADS`); a session's own shell
@@ -105,8 +107,8 @@ item below is where flume's falls short of it today.
   and files on scratch repositories; the plugin's hooks against the
   built binary), `check-tools` (the sluice and herdr profiles against
   the pinned tools, and the walkthroughs with a stand-in agent program),
-  and `check-live` (the walkthroughs with a real Claude Code, required
-  by no branch). `.config/sluice.toml`: the bolts require `#check-fast`,
+  and `check-live` (the walkthroughs with a real Claude Code, outside
+  the sandboxed gate and run by hand in the devenv shell). `.config/sluice.toml`: the bolts require `#check-fast`,
   `main` `#check-fast` and `#check-tools`; the executor is the sandbox
   with localhost networking, trusting runs as sluice's own gate does.
 - **CI.** `.github/workflows/ci.yml` runs `devenv shell -- moon run
@@ -173,6 +175,11 @@ agent is live (core.9).
 - **The fix round** is the stage the kind's last stage names in
   `on_fail`, that last stage where it names none (23, C.2). A failed or
   conflicting submission starts it with the merge queue's words (112);
+  a conflict's words carry the base's revision the merge queue tested
+  against, and the stage's agent takes the base in by a merge of that
+  revision it commits in the place, resolving the files contested,
+  before anything else, never by a rebase: the agent's commit in its
+  place, never flume's (14, core.5);
   found work from the kind's last stage starts it with the findings
   (131). Both count toward one count, the place's goings-back, against
   the last stage's `max_send_backs`, three where none is set (23;
@@ -194,6 +201,17 @@ agent is live (core.9).
 
 The core holds no kind's name: change@1's send-back to code is its
 declaration's `on_fail`, read like any kind's (core.4).
+
+### 5a. Recipients and holds at the launch
+
+A launch names the recipients of its ends (7): each `--recipient`, or
+`$FLUME_RECIPIENT` where the launch names none, or else the session
+that launched it as the terminal names it (the terminal seam's
+`session`: under herdr the launching pane, under the printed command
+none). A hold at the launch carries its words, `--hold
+<stage>=<words>` (7, 130). Both are fixed at the launch (8), kept in
+the place's held state and given by status. This change stores them;
+delivering an end to a recipient is the next change's (43).
 
 ### 6. The host's queue
 
@@ -241,6 +259,10 @@ of its own (core.4).
   directory, built into the binary and read through `weir-kinds` like
   any other: fix@1, chore@1 and change@1 as C.2's table gives them.
   The prompts: code fixes what the brief or the words name and commits;
+  under every kind, code sent back with a conflict's words first merges
+  the base's revision the words name into the place's branch with `git
+  merge`, resolves the files contested and commits the merge, before
+  anything else, and never rebases (112, core.5);
   under change@1, code sent back with words first moves an archived
   change back out of `openspec/changes/archive/`, then records the fix
   as a task of the change, ticked; verify checks the work against the
@@ -339,7 +361,7 @@ lives, the bound and the room lock (decisions 6, 10).
 
 The terminal is bound once for the host by `[host] terminal`, `herdr`
 or `printed`, `printed` where none is named (105). C.7 names no such
-word yet (see Open Questions).
+word in C.7 (105).
 
 - **herdr** (C.5): open makes a pane in the herdr session the launch's
   settings name, flume's own otherwise, one tab per place named
@@ -373,13 +395,17 @@ word yet (see Open Questions).
   51): each record landed with its commit, failed with the merge
   queue's words, or in conflict with the files contested, and its
   `notice` field, the one-line words sluice gives the outcome, carried
-  as the outcome's words, which start the fix round (112). A withdrawal
+  as the outcome's words, which start the fix round (112); a conflict's
+  words carry the base's revision sluice tested against, as its record
+  gives it. A withdrawal
   is never in the inbox; it is read from `sluice status` (99).
 - **read-submission**: `sluice status <base> --json`, read once per
   repository in one command; the newest entry from the place's branch,
   landed as sluice records it with its landing commit (99, 101).
-- **step**: `sluice step <base>`, only where no `sluice run` is live on
-  the host (125; sluice clause 135), read as sluice says it.
+- **step**: `sluice step <base>`, run by each settle that finds the
+  place's submission undecided; beside a live `sluice run` it finds the
+  branch's lock held and does nothing, so no liveness is read (124,
+  125; sluice clause 135).
 - **base**: `origin/<base>` after one fetch where `.config/sluice.toml`
   lands the base on a remote, the local base otherwise (126, C.1).
 - **The place's data**: the readiness, the teardown (`sluice release`
@@ -428,13 +454,14 @@ built (Part C's preamble).
   runs `sluice submit`, `wt submit`, `wt merge` or `git push`, read as
   words of each command a shell line runs, its reason saying flume
   submits the place, and appends the act to the mark status reads
-  (108).
+  (108). `git merge` into the place's branch is never refused: a
+  conflict's fix merges the base in (112).
 - **on-quiet** (121): the Stop hook, when it lets the agent stop,
   starts `flume settle <place> --on-quiet` detached, which reads the
   agent until the terminal reads it quiet, for up to 60 seconds, then
   settles; so the place moves on the moment its agent goes quiet
   (46, S29).
-- **ended**: the SessionEnd hook marks the start's session ended, which
+- **ended** (134): the SessionEnd hook marks the start's session ended, which
   the printed command's state reads (decision 12).
 
 The hooks' entry, `flume hook <event>`, is the profile's code under its
@@ -444,8 +471,11 @@ an agent flume started (no `FLUME_AGENT`), every hook does nothing.
 ### 15. The seams' types, as this change leaves them
 
 Beyond decisions 2 and 4: the agent seam's readings take the place's
-folder with the identity, and the seam gains `ended`, whether the
-agent's own record says its session ended (93); `AgentCommand` gains
+folder with the identity, and the seam gains `ended` (134);
+the terminal seam gains `session`, the caller's session as the
+terminal names it, for a launch's default recipient (7); the launch
+and the held state gain the recipients and each hold's words (7, 8,
+130); `AgentCommand` gains
 the folder-trust question and its answer; `StageState` gains
 `WaitingForRoom`; the held state gains the place's priority and, per
 stage, since when it waits for room; `Host` gains `bound` and `room`;
@@ -460,7 +490,7 @@ for a person or as JSON with `--json` (60, 61, section 9):
 
 | command | act |
 |---|---|
-| `launch --kind <k> --name <n> [--base <b>] [--brief <text> \| --brief-file <f>] [--kinds <file>] [--hold <stage>]… [--hold-submission] [--mark <m>] [--priority <n>] [--set <stage>.<field>=<value>]…` | 2 to 8, 70 |
+| `launch --kind <k> --name <n> [--base <b>] [--brief <text> \| --brief-file <f>] [--kinds <file>] [--hold <stage>=<words>]… [--hold-submission] [--recipient <r>]… [--mark <m>] [--priority <n>] [--set <stage>.<field>=<value>]…` | 2 to 8, 43, 70 |
 | `status [<place>]` | 56 to 58, 70 |
 | `prompt <place> <stage>` | 29 |
 | `tell <place> <words> [--within <time>]` | 53 to 55 |
@@ -510,11 +540,10 @@ settle, a session outside flume), and the root's `format` and
   `flume-conformance` as a dev-dependency, in the layer that can run the
   tool (106).
 - Engine scenarios for S35, S36 and S37, and for 70, 131 and 133; S1,
-  S19 and S34 rewritten as the statement's 113, 22 and 133 read (see
-  Open Questions for S1 and S19).
-- The clause list moves to edf0de2: Part A gains 129 to 131, Part B
-  126 to 128 and 133, the scenarios run to S38; 129, 132 and S38 are
-  named in the list as built by no change yet, and the coverage check
+  S19 and S34 rewritten as the statement reads them.
+- The clause list moves to e5f92f6: Part A gains 129 to 132, Part B
+  126 to 128, 133 and 134, the scenarios run to S38; 129, 132 and S38
+  are named in the list as the next change's, and the coverage check
   passes over every other clause, invariant and scenario.
 - The walkthroughs: from the built binary, on scratch repositories with
   a local remote, sluice bound and landing: a stand-in for Claude Code
@@ -526,10 +555,8 @@ settle, a session outside flume), and the root's `format` and
 
 ## Risks / Trade-offs
 
-- [`sluice inbox` is not on sluice's main yet (sluice record 0070's
-  unit)] → group 7 pins a sluice release that holds it; until one
-  exists, the sluice profile's inbox and the walkthroughs cannot pass,
-  and that group waits on sluice. `_open.md` keeps the item until then.
+- [The sluice profile needs `sluice inbox`] → sluice's change
+  `outcomes-are-delivered` is built first; group 7 pins its release.
 - [No terminal keeps watch in this change] → a place moves on when its
   agent goes quiet (121), and after the last stage, at the next command
   that acts or `flume settle` (119); a landing is read then, not within
@@ -548,34 +575,9 @@ settle, a session outside flume), and the root's `format` and
 - [herdr headless in the gate] → the herdr profile's tests start a
   server of their own on a private socket; if the pinned herdr cannot,
   those tests move to `check-live`.
-- [`check-live` needs the network, and main's executor is a sandbox
-  with localhost networking] → `flume:live` is required by no branch;
-  where sluice's sandbox refuses Claude Code its network, the task runs
-  under the executor its own run names, which the implementing group
-  settles with sluice's options as built.
+- [`check-live` needs the network and a signed-in Claude Code] → it
+  stays out of the sandboxed gate and is run by hand in the devenv
+  shell.
 - [Ten groups in one change] → each group lands its own checks green
   and names what it leaves to the next; the seams' changes come first,
   so the profile groups code against settled traits.
-
-## Open Questions
-
-- **C.7 names no word for the host's terminal.** 105 binds the terminal
-  once for the host, and C.7's configuration gives only `[host] agents`
-  and the roles. This design reads `[host] terminal` (`herdr` or
-  `printed`, `printed` when none is named); the statement should say so
-  before group 7 builds it (core.19).
-- **B.4 names no reading of whether an agent's session ended**, which
-  C.5's printed-command row relies on ("stopped when its record says
-  the session ended"). This design adds `ended` to the agent seam; the
-  statement should name it first (core.19).
-- **S19 sends a change back to verify, and S1 has the merge queue
-  remove the place**, against 22, C.2 and 131 (code is change@1's fix
-  round) and 66 and 113 (flume tidies a landed place). This change's
-  scenarios follow the clauses; the statement's S1 and S19 want the
-  same words.
-- **How the sluice profile tells that a `sluice run` is live** on the
-  host (sluice clause 135): sluice gives no command for it yet that
-  this design found. The profile reads it as sluice says once sluice
-  says; until then it runs `sluice step`, which takes the branch's lock
-  and is safe beside a driver (sluice core.14), at the cost of a round
-  a driver would also run.

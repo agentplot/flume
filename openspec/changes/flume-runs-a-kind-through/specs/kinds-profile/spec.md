@@ -47,11 +47,8 @@ profile `git-worktree` or unbound (20, 105, C.2, core.3).
 
 flume's own declaration and its prompts SHALL be built into the binary
 and read like any other: fix@1, chore@1 and change@1 as C.2 gives them,
-each prompt naming its deliverable, the way to stop short and no submit,
-merge or push; change@1's verify prompt committing `verify.md` in the
-change's directory and archiving the change, or stopping short having
-found work; its code prompt, sent with words, restoring an archived
-change and recording the fix as a ticked task (22, 28, C.2).
+each prompt naming its deliverable and the way to stop short, and none
+asking for a submit, a push or a rebase (22, 28, 71, C.2).
 
 #### Scenario: The kinds built in
 
@@ -61,4 +58,19 @@ change and recording the fix as a ticked task (22, 28, C.2).
 #### Scenario: No prompt asks to submit
 
 - **WHEN** every prompt of flume's own kinds is rendered for a place
-- **THEN** each holds `flume needs` and none holds a submit, a merge or a push (28, 71)
+- **THEN** each holds `flume needs` and none holds a submit, a push or a rebase, nor a merge but the base's in a conflict's words (28, 71, 112)
+
+### Requirement: What flume's own prompts ask
+
+change@1's verify prompt SHALL commit `verify.md` in the change's
+directory and archive the change, or stop short having found work; its
+code prompt sent with words SHALL restore an archived change and record
+the fix as a ticked task; and every code prompt sent back with a
+conflict's words SHALL tell its agent to `git merge` the base's revision
+the words name into the place's branch, resolve the files contested and
+commit, before anything else, and never to rebase (22, 112, C.2).
+
+#### Scenario: A code prompt sent back with a conflict
+
+- **WHEN** fix@1's, chore@1's and change@1's code prompts are rendered with a conflict's words naming the files contested and the base's revision
+- **THEN** each tells the agent to `git merge` that revision into the place's branch, resolve those files and commit, before anything else, and never to rebase (112)

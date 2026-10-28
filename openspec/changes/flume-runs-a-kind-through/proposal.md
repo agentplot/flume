@@ -11,10 +11,12 @@ stages, send it back on a failed submission or a finding, keep the
 host's bound on agents by its callers' priorities, and tidy the place
 when the work is over. Since the core was built, the statement moved
 under it: a submission is read at the settles that follow it and never
-waited on (111, 124, 133, as edf0de2 reads; record 0012), a kind runs through on its own
+waited on (111, 124, 133; record 0012), a kind runs through on its own
 (131; record 0011), the host keeps one queue (70; record 0010), a
-stop-short needs an answer or found work, and the one place profile is
-plain `git worktree` (C.1, C.4; record 0014). This change brings the
+stop-short needs an answer or found work, the one place profile is
+plain `git worktree` (C.1, C.4; record 0014), and a launch names its
+recipients, a conflict's fix merges the base in, and the agent seam
+reads whether a session ended (7, 8, 112, 134; record 0015). This change brings the
 core to the statement and builds every profile and surface a kind needs
 to run through.
 
@@ -109,7 +111,7 @@ things (129; record 0007, proposed).
 - `place-status`: the stop-short's kind, the move a place waits on,
   and the host's queue.
 - `clause-coverage`: the clause list read at the statement's revision
-  edf0de2.
+  e5f92f6.
 
 ## Impact
 
