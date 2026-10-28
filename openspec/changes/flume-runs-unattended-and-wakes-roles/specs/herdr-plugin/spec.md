@@ -34,6 +34,18 @@ nothing, and a server started in a stopped one's place starts its own
 - **WHEN** the plugin's startup runs twice against a stand-in herdr
 - **THEN** one watch runs, and the second start exits leaving it
 
+### Requirement: flume runs unattended only while the watch is kept
+
+The herdr terminal SHALL answer that it keeps watch, with its bound,
+only while the plugin's watch is running, and no watch otherwise, so
+flume runs attended on a host where the plugin's watch is not kept
+(119, 122, C.5).
+
+#### Scenario: The plugin not running
+
+- **WHEN** the herdr terminal profile is bound and the plugin's watch lease is stale
+- **THEN** the terminal answers no watch, and the next acting command settles every place first
+
 ### Requirement: The watch settles on its bound and at each state change
 
 The watch SHALL run `flume settle` on the bound the herdr terminal

@@ -10,7 +10,7 @@ removes SHALL change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124 and 129 to 132; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128 and 133; and the list names the statement's revision, 9ae2125 or later
+- **THEN** Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124 and 129 to 132; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128 and 133; and the list names the statement's revision, edf0de2 or later
 
 ### Requirement: A clause cited by nothing fails the suite
 

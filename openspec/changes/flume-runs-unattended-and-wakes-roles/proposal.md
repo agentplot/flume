@@ -81,7 +81,7 @@ where nobody is there to deliver to.
 - `seam-fakes`: the fake terminal holds recipients' sessions and records
   each notice sent.
 - `clause-coverage`: the suite's list holds every clause, invariant and
-  scenario of the statement at 9ae2125, 128 to 133 and S35 to S38 among
+  scenario of the statement at edf0de2, 128 to 133 and S35 to S38 among
   them.
 
 ## Impact
@@ -94,14 +94,15 @@ where nobody is there to deliver to.
   are pending.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake terminal's
   recipients; the engine scenarios for every new requirement, S38 among
-  them; the clause list at 9ae2125.
+  them; the clause list at edf0de2.
 - `crates/flume`: `flume wait`, `flume inbox`, `flume hold`,
   `flume wake`, and `--recipient` on `flume launch`; the herdr terminal
-  profile's recipient send and session name; the host configuration's
-  `[roles]` table.
+  profile's recipient send, its session name, and its watch answered
+  while the plugin's watch is live; the host configuration's `[roles]`
+  table.
 - `plugins/herdr` (new) with its moon project, its tools pinned in
   `devenv.nix`, and treefmt claiming its files; flume's Claude Code
-  plugin, under `plugins/`, whose `/launch` names its session as the
+  plugin, `plugins/claude/`, whose `/launch` names its session as the
   recipient.
 - Depends on `flume-runs-a-kind-through` landed (the profiles, the
   command line, the queue, `sluice inbox`), on weir's kind format

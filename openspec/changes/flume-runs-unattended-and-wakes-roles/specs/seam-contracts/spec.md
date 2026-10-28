@@ -15,11 +15,11 @@ as not found, never guessed (43, 95, 96, 98).
 
 ### Requirement: An agent opened under a session name
 
-The terminal seam's open SHALL take, from the agent's settings, the
-session name the agent is to carry, and a send or a state read by that
-name SHALL reach that agent (94, 107, 132).
+The terminal seam's open SHALL take the session name the agent is to
+carry, a role run's address where the place is one, and a send or a
+state read by that name SHALL reach that agent (94, 107, 132).
 
 #### Scenario: A role run's agent
 
-- **WHEN** an agent is opened with the session name `madswan/planner` in its settings
+- **WHEN** an agent is opened under the session name `madswan/planner`
 - **THEN** a send to the recipient `madswan/planner` reaches that agent, and a second open under that name while it is live is refused (98)

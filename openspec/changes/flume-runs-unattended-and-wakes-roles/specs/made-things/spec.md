@@ -54,7 +54,7 @@ checking or rewriting no address (43, 56, 129, core.23).
 #### Scenario: An address carried whole
 
 - **WHEN** the run records a spike at `https://forge.example/o/r/tree/spike/x?ref=a%2Fb` and a thing it did not declare
-- **THEN** the stage's end, status and the inbox carry both lines byte for byte
+- **THEN** the stage's end, status and the inbox carry both lines, every field and the address as the run wrote them
 
 #### Scenario: A thing that must run
 
