@@ -18,9 +18,14 @@ with the entry once sluice holds it, or the refusal with sluice's words
 The profile SHALL collect a place's pending outcomes by `sluice inbox
 --json` in the place: landed with its commit, failed with the merge
 queue's words, or in conflict with the files contested, each carrying
-sluice's `notice` as its words, a conflict's carrying the base's revision sluice tested
-against, each delivered once; and SHALL read a
+sluice's `notice` as its words, a conflict's base revision read from
+the record's `tested.on`, each delivered once; and SHALL read a
 withdrawal from read-submission, never from the inbox (99, 133, C.6).
+
+#### Scenario: A conflict's base revision
+
+- **WHEN** sluice records a place's entry in conflict, tested on a base revision
+- **THEN** the outcome's base is the record's `tested.on`, its words sluice's `notice`, and nothing is parsed from the notice (112)
 
 #### Scenario: A failed entry collected once
 

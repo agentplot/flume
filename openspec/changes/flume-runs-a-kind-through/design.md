@@ -123,7 +123,7 @@ item below is where flume's falls short of it today.
 | operation | answer |
 |---|---|
 | `submit(place, head)` | `Submitted { submission }` once the merge queue holds it, or `Refused { reason }`; no wait, nothing removed (117) |
-| `inbox(place)` | `Outcomes { outcomes }`, each `Landed { commit }`, `Failed { words }` or `Conflict { files, words }`, each delivered to the place once; or `CouldNotRead { reason }` (133). A withdrawal is never delivered: it is read from `read_submission` (99) |
+| `inbox(place)` | `Outcomes { outcomes }`, each `Landed { commit }`, `Failed { words }` or `Conflict { files, base, words }`, each delivered to the place once; or `CouldNotRead { reason }` (133). A withdrawal is never delivered: it is read from `read_submission` (99) |
 | `read_submission(repository, branch)` | unchanged (99) |
 | `step(repository, base)` | `Stepped`, `MovesOnItsOwn`, or `CouldNotRead { reason }` (125) |
 | `base_revision(repository, base)` | unchanged (126) |
@@ -396,8 +396,10 @@ word in C.7 (105).
   queue's words, or in conflict with the files contested, and its
   `notice` field, the one-line words sluice gives the outcome, carried
   as the outcome's words, which start the fix round (112); a conflict's
-  words carry the base's revision sluice tested against, as its record
-  gives it. A withdrawal
+  base revision is read from the record's `tested.on`, the revision of
+  the tested combination's base (`tested: {combination, on,
+  submissions}`), never from inside `notice`; the fix round's words are
+  `notice` with the files contested and that revision. A withdrawal
   is never in the inbox; it is read from `sluice status` (99).
 - **read-submission**: `sluice status <base> --json`, read once per
   repository in one command; the newest entry from the place's branch,
