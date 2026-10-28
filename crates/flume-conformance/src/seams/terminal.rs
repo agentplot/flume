@@ -20,6 +20,10 @@ pub trait TerminalHarness {
     /// Whether the terminal sends to a running agent at all.
     fn sends(&self) -> bool;
 
+    /// Whether the terminal ends an agent at all, rather than leaving its
+    /// end to a person (97, C.5).
+    fn closes(&self) -> bool;
+
     /// The agent under `identity` will not end when closed.
     fn stubborn(&self, identity: &Identity);
 
@@ -194,6 +198,17 @@ fn send_delivers_or_refuses<H: TerminalHarness>(harness: &H) -> Outcome {
 
 fn state_then_close<H: TerminalHarness>(harness: &H) -> Outcome {
     let who = opened(harness, 1)?;
+    if !harness.closes() {
+        ensure!(
+            matches!(harness.seam().close(&who), Closed::Refused { .. }),
+            "a terminal that leaves an agent's end to a person reported it ended"
+        );
+        ensure!(
+            harness.seam().state(&who) != AgentState::Stopped,
+            "an agent no close ended reads stopped"
+        );
+        return Ok(());
+    }
     ensure_eq!(harness.seam().close(&who), Closed::Closed, "close");
     ensure_eq!(
         harness.seam().state(&who),

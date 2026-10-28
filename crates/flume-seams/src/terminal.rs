@@ -16,12 +16,20 @@ pub enum AgentState {
 
 /// open: an agent running in the place under its identity, or a refusal
 /// (94). `carried` says the command it ran carried the prompt, as a
-/// terminal that cannot send runs it (38).
+/// terminal that cannot send runs it (38); `printed` is the command a
+/// person runs in the place, where the terminal prints it rather than
+/// runs it, which status gives with the agent (C.5).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Opened {
-    Opened { carried: bool },
-    Refused { reason: String },
+    Opened {
+        carried: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        printed: Option<String>,
+    },
+    Refused {
+        reason: String,
+    },
 }
 
 /// send: the text delivered as input, or a refusal; never left typed

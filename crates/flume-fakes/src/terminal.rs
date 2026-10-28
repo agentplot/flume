@@ -251,7 +251,10 @@ impl Terminal for FakeTerminal {
         running.beside = beside.map(str::to_string);
         running.folder = Some(folder.to_string());
         state.agents.insert(key, running);
-        Opened::Opened { carried }
+        Opened::Opened {
+            carried,
+            printed: None,
+        }
     }
 
     fn send(&self, agent: &Identity, text: &str) -> Sent {

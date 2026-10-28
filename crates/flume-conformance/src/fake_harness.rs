@@ -357,6 +357,10 @@ impl TerminalHarness for FakeTerminalHarness {
         self.sends
     }
 
+    fn closes(&self) -> bool {
+        true
+    }
+
     fn stubborn(&self, identity: &Identity) {
         self.terminal.refuse_close(identity);
     }

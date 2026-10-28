@@ -24,6 +24,9 @@ pub mod change {
 // ---- the agent seam's profiles: a profile unit appends its module line below ----
 
 // ---- the terminal seam's profiles: a profile unit appends its module line below ----
+pub mod terminal {
+    pub mod printed;
+}
 
 // ---- the merge queue seam's profiles: a profile unit appends its module line below ----
 

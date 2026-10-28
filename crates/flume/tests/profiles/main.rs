@@ -10,3 +10,4 @@ mod change_openspec;
 mod kinds_weir;
 mod place_git_worktree;
 mod store_state_dir;
+mod terminal_printed;

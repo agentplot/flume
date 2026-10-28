@@ -140,6 +140,7 @@ fn place_status() -> PlaceStatus {
             own_work: Reading::Unknown,
             past_limit: true,
             screen: Some("Bypass Permissions mode".into()),
+            printed: Some("cd /r/places/fix--one && agent 'fix it'".into()),
         }),
         head: Some(Revision::new("c3")),
         delivered: Some(false),

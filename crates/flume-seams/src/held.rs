@@ -233,6 +233,10 @@ pub struct StartHeld {
     pub last_head_move: Seconds,
     /// Reported working past its limit (118).
     pub past_limit: bool,
+    /// The command a person runs in the place to start the agent, where
+    /// the terminal printed it rather than ran it (C.5).
+    #[serde(default)]
+    pub printed: Option<String>,
 }
 
 /// A landing kind's submission as flume keeps it, with no wait held on

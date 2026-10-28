@@ -83,6 +83,7 @@ impl Engine {
                 screen: starting
                     .then(|| self.terminal.screen(&start.identity))
                     .flatten(),
+                printed: start.printed.clone(),
             }
         });
         let submission = match (&bound, place.kind.lands) {

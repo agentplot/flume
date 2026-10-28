@@ -156,6 +156,7 @@ fn held() -> HeldState {
                 last_head: Revision::new("c3"),
                 last_head_move: 90,
                 past_limit: true,
+                printed: Some("cd /r/places/bump--one && agent 'bump it'".into()),
             }),
             since: Some(120),
         }],
@@ -564,7 +565,22 @@ fn the_agent_seams_answers() {
 
 #[test]
 fn the_terminal_seams_answers() {
-    round_trips(Opened::Opened { carried: true });
+    round_trips(Opened::Opened {
+        carried: true,
+        printed: Some("cd /r/places/fix--one && agent 'do it'".into()),
+    });
+    round_trips(Opened::Opened {
+        carried: false,
+        printed: None,
+    });
+    let before: Opened = serde_json::from_str(r#"{"opened":{"carried":true}}"#).unwrap();
+    assert_eq!(
+        before,
+        Opened::Opened {
+            carried: true,
+            printed: None
+        }
+    );
     round_trips(Opened::Refused {
         reason: "identity live".into(),
     });

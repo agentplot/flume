@@ -225,6 +225,10 @@ pub struct AgentStatus {
     /// (35, 136).
     #[serde(default)]
     pub screen: Option<String>,
+    /// The command a person runs in the place to start the agent, where
+    /// the terminal printed it (C.5).
+    #[serde(default)]
+    pub printed: Option<String>,
 }
 
 fn unknown() -> Reading {

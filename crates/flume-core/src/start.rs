@@ -237,6 +237,7 @@ impl Engine {
                 last_head: head,
                 last_head_move: now,
                 past_limit: false,
+                printed: None,
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
@@ -271,9 +272,12 @@ impl Engine {
             &identity,
             settings.beside.as_deref(),
         ) {
-            Opened::Opened { carried } => {
-                if carried {
-                    self.with_start(id, &identity, |start, _| start.prompt.carried = true);
+            Opened::Opened { carried, printed } => {
+                if carried || printed.is_some() {
+                    self.with_start(id, &identity, |start, _| {
+                        start.prompt.carried = carried;
+                        start.printed = printed.clone();
+                    });
                 }
                 Start::Opened(identity)
             }
