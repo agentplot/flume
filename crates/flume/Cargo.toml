@@ -24,6 +24,16 @@ toml.workspace = true
 clap.workspace = true
 libc.workspace = true
 
+[features]
+# The profiles' tests against the tools the tree pins, the check-tools
+# layer (flume:tools).
+tools = []
+
+[[test]]
+name = "tools"
+path = "tests/profiles/tools/main.rs"
+required-features = ["tools"]
+
 [dev-dependencies]
 flume-conformance = { path = "../flume-conformance" }
 flume-fakes = { path = "../flume-fakes" }

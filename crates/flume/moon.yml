@@ -3,7 +3,9 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 # The binary: the core built over the profiles built in, each answer
 # written as JSON. Its tests run each seam's scenarios against its
 # profile on scratch repositories, the pinned openspec among the tools
-# they read. Each check is one task, in the fast layer.
+# they read. Each check is one task, in the fast layer, but `tools`: the
+# profiles against the pinned herdr, on servers the tests start, in the
+# check-tools layer.
 language: 'rust'
 layer: 'application'
 dependsOn: [seams, core, fakes, conformance]
@@ -15,7 +17,7 @@ tasks:
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   lint:
-    command: 'cargo clippy -p flume --all-targets -- -D warnings'
+    command: 'cargo clippy -p flume --all-targets --all-features -- -D warnings'
     inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/.config/flume.toml', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
@@ -23,4 +25,9 @@ tasks:
     command: 'cargo test -p flume'
     inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/.config/flume.toml', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  tools:
+    command: 'cargo test -p flume --features tools --test tools'
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-tools]
     options: {runFromWorkspaceRoot: true}
