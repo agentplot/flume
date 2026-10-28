@@ -4,13 +4,13 @@ Decisions waiting, and code that stands against a rule. An item leaves
 when the decision lands in the statement or a record, or the code is
 brought to the rule.
 
-- **Five of the statement's section 10 questions are unanswered.** They
+- **Three of the statement's section 10 questions are unanswered.** They
   wait on flume's reconstruction and the operator's ruling: a verify
-  stage's finding (42, 112); how a caller learns an end (43, 46); a
-  repository's own deliverable forms (24); how long a hold may wait
-  (47); a kind that lands only part of its work (67, 111). The other
-  four were ruled on 2026-10-26, in the section. None is a rule's source
-  until ruled.
+  stage's finding (42, 112); a repository's own deliverable forms (24);
+  a kind that lands only part of its work (67, 111). How long a hold
+  may wait (47) is record 0008's; how a caller learns an end (43, 46)
+  is record 0009's, proposed on 2026-10-27. The other four were ruled
+  on 2026-10-26, in the section. None is a rule's source until ruled.
 - **Whether a team is bound to one unit of work or works on several**
   is decided when crew integrates with flume, on the user's word of
   2026-10-26 (relayed by madswan-planner): "a fix, a unit and a chore
