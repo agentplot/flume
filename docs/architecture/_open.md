@@ -11,16 +11,7 @@ brought to the rule.
   may wait (47) is record 0008's; how a caller learns an end (43, 46)
   is record 0009's, proposed on 2026-10-27. The other four were ruled
   on 2026-10-26, in the section. None is a rule's source until ruled.
-- **Whether a team is bound to one unit of work or works on several**
-  is decided when crew integrates with flume, on the user's word of
-  2026-10-26 (relayed by madswan-planner): "a fix, a unit and a chore
-  are all just different Flume kinds, and once we integrate with Flume
-  we need to decide whether a team is bound to one unit of work or can
-  work on multiple; and the whole point of a bolt is that it can be
-  delivered to production independently." The kinds are in the
-  statement (C.2: fix@1, chore@1, change@1); a team's bound is crew's
-  question for flume's model, open here until that integration is
-  designed.
+- **A team's bound is decided**: crew record 0045 (accepted 2026-10-28) binds a team to one bolt and nothing smaller, with room the host's, counted in agents running; flume's side is record 0010, proposed on 2026-10-28, which has status say the host's agents running and its room against the bound the host states, flume holding no cap (70). The item leaves when 0010 is accepted.
 - **The gate has no code yet.** `core.21` binds the first crate and the
   first plugin to arrive with their own moon projects and check-fast
   tasks; until then the gate is the site's prose and build.
