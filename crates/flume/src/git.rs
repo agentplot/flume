@@ -95,6 +95,21 @@ impl Git {
             .is_ok_and(|output| output.status.success())
     }
 
+    /// git's yes or no where it answers by its exit, 0 for yes and 1 for
+    /// no, as `merge-base --is-ancestor` does; its words where it could
+    /// not answer.
+    pub fn answer(&self, args: &[&str]) -> Result<bool, String> {
+        let output = self.output(args)?;
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            _ => {
+                let words = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                Err(format!("git {}: {words}", args.join(" ")))
+            }
+        }
+    }
+
     /// The commit `revision` names, or why it names none.
     pub fn commit(&self, revision: &str) -> Result<String, String> {
         self.text(&[

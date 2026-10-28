@@ -7,6 +7,9 @@
 use flume_core::Engine;
 
 // ---- the place seam's profiles: a profile unit appends its module line below ----
+pub mod place {
+    pub mod git_worktree;
+}
 
 // ---- the kinds seam's profiles: a profile unit appends its module line below ----
 pub mod kinds {
@@ -25,10 +28,17 @@ pub mod change {
 // ---- the merge queue seam's profiles: a profile unit appends its module line below ----
 
 // ---- the store seam's profiles: a profile unit appends its module line below ----
+pub mod store {
+    pub mod state_dir;
+}
 
 /// The core over the profiles built in: the resolver from a binding's
 /// profile names to them, and the host's terminal, store, history and
-/// clock. No profile is built in yet, so the core names what it lacks.
+/// clock. No terminal profile and no resolver are built in yet, so the
+/// core names what it lacks.
 pub fn core() -> Result<Engine, String> {
-    Err("no terminal, store, history or host profile is built in: the core cannot be built over them yet".into())
+    Err(
+        "no terminal profile and no resolver are built in: the core cannot be built over them yet"
+            .into(),
+    )
 }

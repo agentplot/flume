@@ -25,3 +25,5 @@ serde_json = "1"
 weir-kinds = { git = "https://github.com/agentplot/weir", rev = "379d68e13705f8f808af9df7fdec8a83a6fb5581" }
 toml = "1"
 clap = { version = "4", features = ["derive"] }
+# The host's process table, read for a command's start (design 11).
+libc = "0.2"
