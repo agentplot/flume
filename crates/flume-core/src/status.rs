@@ -4,7 +4,9 @@
 
 use crate::reading::reads_change;
 use crate::start::Starts;
-use crate::{AgentStatus, Answer, Engine, PlaceStatus, StageStatus, SubmissionStatus};
+use crate::{
+    Act, AgentStatus, Answer, Engine, PlaceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+};
 use flume_seams::*;
 
 impl Engine {
@@ -135,6 +137,114 @@ impl Engine {
             refused_acts,
             cannot_read,
             failures: held.failures.clone(),
+            recipients: place.recipients.clone(),
+            hold_words: place.hold_words.clone(),
+            waiting_on: waiting_on(held),
         }
+    }
+}
+
+/// The move a live place waits on its caller for, why, since when and
+/// with what words; none where it waits on nobody, its next step being
+/// flume's or an agent's (56, 130).
+pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
+    if held.phase != Phase::Live {
+        return None;
+    }
+    let place = &held.place;
+    let stages = &place.kind.stages;
+    let last = held.stages.len().checked_sub(1)?;
+    let waits = |act, stage: Option<usize>, why, since, words| {
+        Some(WaitingOn {
+            act,
+            stage: stage.map(|index| held.stages[index].name.clone()),
+            why,
+            since,
+            words,
+        })
+    };
+    let submission = &held.submission;
+    if let Some(words) = &submission.waiting {
+        let found = held.stages[last].state == StageState::EndedShort
+            && held.stages[last].end.as_ref().and_then(|end| end.needs)
+                == Some(StopKind::FoundWork);
+        let failed = matches!(
+            submission.verdict,
+            Some(Verdict::Failed { .. } | Verdict::Conflict { .. })
+        );
+        if found || failed {
+            let target = stages[last]
+                .send_back_to
+                .as_ref()
+                .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
+                .unwrap_or(last);
+            return waits(
+                Act::Retry,
+                Some(target),
+                Waits::PastBound,
+                submission.waiting_since,
+                Some(words.clone()),
+            );
+        }
+        return waits(
+            Act::Retry,
+            None,
+            Waits::Submission,
+            submission.waiting_since,
+            Some(words.clone()),
+        );
+    }
+    if let Some(index) = held.stages.iter().position(|stage| {
+        matches!(
+            stage.state,
+            StageState::OnHold | StageState::WaitingOnReadiness
+        )
+    }) {
+        let stage = &held.stages[index];
+        return match stage.state {
+            StageState::OnHold => waits(
+                Act::Retry,
+                Some(index),
+                Waits::OnHold,
+                stage.since,
+                place.hold_words.get(&stage.name).cloned(),
+            ),
+            _ => waits(
+                Act::Retry,
+                Some(index),
+                Waits::Unready,
+                stage.since,
+                held.readiness
+                    .failed()
+                    .map(|step| format!("{}: {}", step.step, step.words)),
+            ),
+        };
+    }
+    let index = held.current?;
+    let stage = &held.stages[index];
+    let retry = |why, words| waits(Act::Retry, Some(index), why, stage.since, words);
+    match stage.state {
+        StageState::EndedShort => {
+            let end = stage.end.as_ref();
+            let found = end.and_then(|end| end.needs) == Some(StopKind::FoundWork);
+            if found && index == last {
+                return None;
+            }
+            retry(Waits::Answer, end.and_then(|end| end.words.clone()))
+        }
+        StageState::Lost => retry(Waits::Lost, None),
+        StageState::NeverBegun => retry(Waits::NeverBegun, None),
+        StageState::Refused => retry(Waits::Refused, stage.refused_part.clone()),
+        StageState::Stopped => retry(Waits::Stopped, None),
+        StageState::Delivered | StageState::Finished if index == last => {
+            if !place.kind.lands {
+                waits(Act::Done, None, Waits::Delivered, stage.since, None)
+            } else if place.hold_submission && submission.due {
+                waits(Act::Retry, None, Waits::OnHold, stage.since, None)
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }

@@ -150,7 +150,7 @@ fn held() -> HeldState {
                 last_head_move: 90,
                 past_limit: true,
             }),
-            waiting_since: Some(120),
+            since: Some(120),
         }],
         current: Some(0),
         submission: SubmissionHeld {
@@ -163,6 +163,7 @@ fn held() -> HeldState {
                 words: "conflicts with main".into(),
             }),
             waiting: Some("withdrawn".into()),
+            waiting_since: Some(130),
             unread: Some("the merge queue is down".into()),
         },
         failures: vec!["the agent did not end".into()],

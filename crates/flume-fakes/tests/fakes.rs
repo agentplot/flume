@@ -61,6 +61,15 @@ fn the_hosts_bound_is_set() {
 }
 
 #[test]
+fn the_callers_recipient_is_set() {
+    let host = FakeHost::default();
+    assert_eq!(host.recipient(), None);
+    host.set_recipient(Some("operator"));
+    assert_eq!(host.recipient(), Some("operator".into()));
+    assert_eq!(host.log.count("recipient"), 2);
+}
+
+#[test]
 fn the_room_lock_is_exclusive() {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;

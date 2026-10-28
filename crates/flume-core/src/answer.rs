@@ -4,6 +4,7 @@
 
 use flume_seams::*;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -110,6 +111,56 @@ pub struct PlaceStatus {
     pub cannot_read: Vec<String>,
     /// Each end flume asked for that the agent did not take (31).
     pub failures: Vec<String>,
+    /// The recipients of the place's ends, as its launch fixed them (7,
+    /// 8, 43).
+    pub recipients: Vec<String>,
+    /// The words of each hold the launch put, by stage name (7, 130).
+    pub hold_words: BTreeMap<String, String>,
+    /// The move the place waits on its caller for, and since when; none
+    /// where it waits on nobody (56, 130).
+    pub waiting_on: Option<WaitingOn>,
+}
+
+/// The move a place waits on its caller for, why, since when, and the
+/// words that go with it: a hold's, the question, or the merge queue's
+/// (56, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitingOn {
+    /// A retry, or done.
+    pub act: Act,
+    /// The stage the retry names; none where it names the submission.
+    pub stage: Option<String>,
+    pub why: Waits,
+    pub since: Option<Seconds>,
+    pub words: Option<String>,
+}
+
+/// Why a place waits on its caller (56, 130).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Waits {
+    /// A stage, or the submission, the launch holds (47).
+    OnHold,
+    /// A stage ended short needing an answer, or having found work
+    /// outside the kind's last stage (42, 131).
+    Answer,
+    /// A stage whose agent was lost (45).
+    Lost,
+    /// A stage whose prompt was never begun (38).
+    NeverBegun,
+    /// A first stage waiting on the place's readiness (12).
+    Unready,
+    /// A stage whose prompt asks for a part with nothing to fill it
+    /// (27).
+    Refused,
+    /// A stage whose agent the caller stopped (51).
+    Stopped,
+    /// The place went back as often as its kind allows (23, 112).
+    PastBound,
+    /// The merge queue withdrew or refused the submission (112).
+    Submission,
+    /// The last stage delivered, and the kind does not land (114).
+    Delivered,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

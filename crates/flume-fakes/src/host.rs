@@ -5,8 +5,9 @@ use std::sync::{Arc, Condvar, Mutex};
 
 /// The host: a clock that moves only when a test advances it or a command
 /// sleeps on it, numbered secrets, files' write times, the commands of
-/// flume's that live, the bound on agents its configuration states, and
-/// an exclusive room lock.
+/// flume's that live, the bound on agents its configuration states, the
+/// recipient the calling command's environment names, and an exclusive
+/// room lock.
 pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
@@ -37,6 +38,7 @@ struct HostState {
     command: u64,
     alive: BTreeSet<String>,
     bound: Option<u32>,
+    recipient: Option<String>,
 }
 
 impl Default for FakeHost {
@@ -49,6 +51,7 @@ impl Default for FakeHost {
                 command: 1,
                 alive: BTreeSet::from(["command-1".to_string()]),
                 bound: None,
+                recipient: None,
             }),
             room: Arc::default(),
             log: Log::default(),
@@ -100,6 +103,11 @@ impl FakeHost {
         lock(&self.state).bound = bound;
     }
 
+    /// The recipient the calling command's environment names, or none.
+    pub fn set_recipient(&self, recipient: Option<&str>) {
+        lock(&self.state).recipient = recipient.map(str::to_string);
+    }
+
     /// Whether the room lock is held now.
     pub fn room_taken(&self) -> bool {
         *lock(&self.room.taken)
@@ -138,6 +146,11 @@ impl Host for FakeHost {
     fn bound(&self) -> Option<u32> {
         self.log.push("bound");
         lock(&self.state).bound
+    }
+
+    fn recipient(&self) -> Option<String> {
+        self.log.push("recipient");
+        lock(&self.state).recipient.clone()
     }
 
     fn room(&self) -> RoomGuard {

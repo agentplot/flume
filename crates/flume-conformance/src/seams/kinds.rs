@@ -76,8 +76,8 @@ pub fn scenarios<H: KindsHarness>() -> Vec<Scenario<H>> {
             run: two_agents_are_kept::<H>,
         },
         Scenario {
-            name: "kinds: flume's own declaration holds fix and change, both landing",
-            cites: &["22", "19"],
+            name: "kinds: flume's own declaration holds fix and change, both landing, each sent back to code",
+            cites: &["22", "19", "S35"],
             run: flumes_own::<H>,
         },
         Scenario {
@@ -180,8 +180,8 @@ fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
             .stages
             .last()
             .and_then(|stage| stage.send_back_to.clone()),
-        Some("verify".to_string()),
-        "where change goes back"
+        Some("code".to_string()),
+        "where change goes back, never verify (22, S35)"
     );
     Ok(())
 }

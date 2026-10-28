@@ -1,6 +1,7 @@
-//! What an agent's program asks of flume (41, 42, 110, 115): a stop-short,
-//! taken only under the current start's identity and secret while its
-//! agent is live, and the stop check, which keeps at work an agent that
+//! What an agent's program asks of flume (41, 42, 110, 115, 131): a
+//! stop-short, taken only under the current start's identity and secret
+//! while its agent is live, saying whether it needs an answer or found
+//! work, and the stop check, which keeps at work an agent that
 //! would go quiet with its deliverable missing and nothing said.
 
 use crate::start::Starts;
@@ -19,10 +20,12 @@ impl Engine {
         })
     }
 
-    /// An agent's stop-short, with its identity, its start's secret and
-    /// its words: the stage ends short with the words whole, and no next
-    /// stage starts (41, 42).
-    pub fn needs(&self, identity: &str, secret: &str, words: &str) -> Answer {
+    /// An agent's stop-short, with its identity, its start's secret, its
+    /// words and whether it needs an answer or found work: the stage ends
+    /// short with the words whole and the kind, and no next stage starts,
+    /// except that found work from the kind's last stage starts its fix
+    /// round once the agent is quiet (41, 42, 131).
+    pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
         self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {
             return Answer::refused(format!(
@@ -51,7 +54,7 @@ impl Engine {
                     head: None,
                     report: None,
                     words: Some(words.to_string()),
-                    needs: Some(StopKind::NeedsAnswer),
+                    needs: Some(kind),
                 });
                 Step::Write(true)
             })

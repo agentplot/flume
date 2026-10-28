@@ -75,7 +75,8 @@ impl Engine {
     }
 
     /// Starts the stage a retry names with a fresh agent and the retry's
-    /// words, the stages after it then running again in order; or, naming
+    /// words, after the question of the stop-short the stage ended with,
+    /// the stages after it then running again in order; or, naming
     /// the submission, submits the place's head again and starts no
     /// agent. The place's agent is ended first (49, 50, 12).
     pub fn retry(
@@ -134,11 +135,13 @@ impl Engine {
                 return self.acted(Act::Retry, place);
             }
         }
+        let words = answered(&held.stages[index], words);
         self.update(place, |held| {
             for stage in held.stages.iter_mut().skip(index + 1) {
                 stage.state = StageState::NotReached;
             }
             held.submission.due = false;
+            held.submission.waiting = None;
             Step::Write(())
         });
         match self.start_stage(place, index, words) {
@@ -343,6 +346,24 @@ impl Engine {
                 .map(|read| self.place_status(&read.state)),
             tidy: None,
         }
+    }
+}
+
+/// A retry's words for a stage: where the stage ended short, the
+/// question its agent stopped with, then the retry's words as the answer
+/// (42, 49, core.27).
+fn answered(stage: &StageHeld, words: Option<String>) -> Option<String> {
+    let question = stage
+        .end
+        .as_ref()
+        .filter(|_| stage.state == StageState::EndedShort)
+        .and_then(|end| end.words.clone());
+    match (question, words) {
+        (Some(question), Some(answer)) => {
+            Some(format!("The question: {question}\n\nThe answer: {answer}"))
+        }
+        (Some(question), None) => Some(format!("The question: {question}")),
+        (None, words) => words,
     }
 }
 

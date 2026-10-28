@@ -48,6 +48,11 @@ pub trait Host: Send + Sync {
     /// then the host keeps no queue (70).
     fn bound(&self) -> Option<u32>;
 
+    /// The recipient the calling command's environment names in
+    /// `FLUME_RECIPIENT`, a launch's default recipient; none where it
+    /// names none (7).
+    fn recipient(&self) -> Option<String>;
+
     /// The host-wide lock over the room, held until the guard is dropped,
     /// so two starts at once never pass the bound (70, 75).
     fn room(&self) -> RoomGuard;

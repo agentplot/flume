@@ -3,6 +3,7 @@
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::{Act, WaitingOn, Waits};
 use flume_fakes::Log;
 use flume_seams::*;
 
@@ -14,9 +15,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_fix_launched,
         },
         Scenario {
-            name: "launch: the first stage on hold starts no agent",
-            cites: &["7", "47", "I6"],
+            name: "launch: the first stage on hold starts no agent, and reads on hold with its words",
+            cites: &["7", "47", "130", "I6"],
             run: the_first_stage_on_hold,
+        },
+        Scenario {
+            name: "launch: recipients named, from the caller's environment, or the launching session, fixed at the launch",
+            cites: &["7", "8", "43"],
+            run: recipients_at_the_launch,
         },
         Scenario {
             name: "launch: readiness fails; a change's place waits, a fix's starts with the step in its prompt",
@@ -114,11 +120,60 @@ fn a_fix_launched(_: &()) -> Outcome {
 fn the_first_stage_on_hold(_: &()) -> Outcome {
     let world = World::new();
     let mut held = launch("fix", "held", Some("x"));
+    let words = "until the release branch is cut";
     held.hold = vec!["code".into()];
+    held.hold_words = [("code".to_string(), words.to_string())].into();
+    let now = world.host.now();
     let place = launched(&world.engine.launch(&held))?;
     ensure_eq!(place.stages[0].state, StageState::OnHold, "the code stage");
     ensure_eq!(world.place.log.count("ready"), 1, "readiness");
     ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    ensure_eq!(
+        place.hold_words.get("code").map(String::as_str),
+        Some(words),
+        "the hold's words status gives"
+    );
+    ensure_eq!(
+        place.waiting_on,
+        Some(WaitingOn {
+            act: Act::Retry,
+            stage: Some("code".into()),
+            why: Waits::OnHold,
+            since: Some(now),
+            words: Some(words.into()),
+        }),
+        "the move the place waits on"
+    );
+    Ok(())
+}
+
+fn recipients_at_the_launch(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_session(Some("pane-7"));
+    let mut named = launch("fix", "named", Some("x"));
+    named.recipients = vec!["operator".into(), "role:planner".into()];
+    launched(&world.engine.launch(&named))?;
+    world.host.set_recipient(Some("conductor"));
+    launched(&world.engine().launch(&launch("fix", "variable", Some("x"))))?;
+    world.host.set_recipient(None);
+    launched(&world.engine().launch(&launch("fix", "session", Some("x"))))?;
+    world.terminal.set_session(None);
+    world.host.set_recipient(Some("someone else"));
+    world.settle(&World::id("fix", "named"));
+    for (name, recipients) in [
+        ("named", vec!["operator", "role:planner"]),
+        ("variable", vec!["conductor"]),
+        ("session", vec!["pane-7"]),
+    ] {
+        ensure_eq!(
+            world.status(&World::id("fix", name))?.recipients,
+            recipients
+                .iter()
+                .map(|recipient| recipient.to_string())
+                .collect::<Vec<_>>(),
+            format!("the recipients of {name}")
+        );
+    }
     Ok(())
 }
 

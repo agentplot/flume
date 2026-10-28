@@ -81,6 +81,7 @@ impl Engine {
             StageState::Started => self.deliver(id),
             StageState::Begun | StageState::Stuck => self.read_end(id),
             StageState::Delivered | StageState::Finished => self.advance(id),
+            StageState::EndedShort => self.found_work(id),
             _ => false,
         }
     }

@@ -2,7 +2,9 @@
 //! declarations and the binding read, the base's revision where the
 //! merge queue says it lives, every refusal made before anything is
 //! made, then one place made, readied, and its first stage started, held
-//! or left waiting on readiness. A refusal after the place's held state
+//! or left waiting on readiness. Its recipients are the launch's, or the
+//! one the caller's environment names, or the session the terminal says
+//! launched it (7, 8). A refusal after the place's held state
 //! is created undoes what was made, so nothing is left (2, 76).
 
 use crate::reading::reads_change;
@@ -200,6 +202,15 @@ impl Engine {
                 ));
             }
         }
+        let recipients = if launch.recipients.is_empty() {
+            self.host
+                .recipient()
+                .or_else(|| self.terminal.session())
+                .into_iter()
+                .collect()
+        } else {
+            launch.recipients.clone()
+        };
         let held = HeldState {
             place: PlaceRecord {
                 id: id.clone(),
@@ -218,7 +229,7 @@ impl Engine {
                 hold: launch.hold.clone(),
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),
-                recipients: launch.recipients.clone(),
+                recipients,
             },
             phase: Phase::Making {
                 by: self.host.command(),
@@ -234,7 +245,7 @@ impl Engine {
                     refused_part: None,
                     end: None,
                     start: None,
-                    waiting_since: None,
+                    since: None,
                 })
                 .collect(),
             current: None,

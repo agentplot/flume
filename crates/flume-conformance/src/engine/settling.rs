@@ -58,8 +58,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s8_another_places_landing,
         },
         Scenario {
-            name: "submit: a failed submission sends the place back to verify with its words, then lands",
-            cites: &["S19", "112", "I7", "22", "48"],
+            name: "submit: a change's failed submission sends it back to code with the words, verify runs again, then it lands",
+            cites: &["S19", "S35", "112", "131", "I7", "22", "48"],
             run: s19_a_failure_then_a_landing,
         },
         Scenario {
@@ -96,7 +96,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 }
 
 /// A change's construct stage begun, its agent waiting.
-fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
+pub(super) fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
     let id = World::id("change", name);
     launched(
         &world
@@ -113,7 +113,7 @@ fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
 }
 
 /// The change written on the place's branch, its planning complete.
-fn write_change(world: &World, name: &str) {
+pub(super) fn write_change(world: &World, name: &str) {
     let revision = world.commit(
         &format!("change/{name}"),
         &[&format!("plans/{name}/design.md")],
@@ -377,7 +377,7 @@ fn a_launch_that_died(_: &()) -> Outcome {
 }
 
 /// A change's place driven to its verify stage, begun.
-fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
+pub(super) fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
     let id = construct_begun(world, name)?;
     write_change(world, name);
     world.settle(&id);
@@ -399,7 +399,7 @@ fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
 }
 
 /// The change archived on the place's branch, its report with it.
-fn archive(world: &World, name: &str) {
+pub(super) fn archive(world: &World, name: &str) {
     let revision = world.commit(
         &format!("change/{name}"),
         &[&format!("plans/archive/{name}/verify.md")],
@@ -486,26 +486,40 @@ fn s8_another_places_landing(_: &()) -> Outcome {
 fn s19_a_failure_then_a_landing(_: &()) -> Outcome {
     let world = World::new();
     let id = change_at_verify(&world, "plan")?;
-    world
-        .queue
-        .plan_submits(vec![Plan::Fail("check test-x failed: 2 of 46".into())]);
+    let words = "check test-x failed: 2 of 46";
+    world.queue.plan_submits(vec![Plan::Fail(words.into())]);
     archive(&world, "plan");
     world.settle(&id);
     let held = world.held(&id).ok_or("the place is gone")?;
     ensure_eq!(held.submission.send_backs, 1, "send-backs");
-    ensure_eq!(held.stages[2].starts, 2, "verify's starts");
-    let verify = World::identity("change", "plan", "verify", 2);
-    let prompt = world.prompt(&id, &verify).ok_or("no second verify")?;
-    ensure!(
-        prompt.contains("check test-x failed: 2 of 46"),
-        "the words are not in {prompt}"
+    ensure_eq!(held.stages[1].starts, 2, "code's starts");
+    ensure_eq!(held.stages[2].starts, 1, "verify's starts");
+    let code = World::identity("change", "plan", "code", 2);
+    let prompt = world.prompt(&id, &code).ok_or("no second code")?;
+    ensure!(prompt.contains(words), "the words are not in {prompt}");
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::Delivered),
+        "construct"
     );
+    ensure_eq!(
+        world.stage_state(&id, "verify"),
+        Some(StageState::NotReached),
+        "verify, before code delivers again"
+    );
+    world.tick("change/plan", "plan", 2, 2);
+    world.settle(&id);
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::Delivered),
-        "code, before verify"
+        "code, delivered again"
     );
-    world.settle(&id);
+    ensure!(
+        world
+            .stage_state(&id, "verify")
+            .is_some_and(StageState::running),
+        "verify did not run again"
+    );
     archive(&world, "plan");
     world.settle(&id);
     ensure_eq!(world.queue.log.count("submit"), 2, "submissions");
@@ -562,7 +576,7 @@ fn s34_a_restart_while_under_test(_: &()) -> Outcome {
 }
 
 /// A fix launched as `name` with its code stage begun.
-fn fix_begun(world: &World, name: &str) -> Result<PlaceId, String> {
+pub(super) fn fix_begun(world: &World, name: &str) -> Result<PlaceId, String> {
     launched(&world.engine.launch(&launch("fix", name, Some("x"))))?;
     let id = World::id("fix", name);
     world.settle(&id);
@@ -570,7 +584,7 @@ fn fix_begun(world: &World, name: &str) -> Result<PlaceId, String> {
 }
 
 /// The fix's code stage delivered, unsettled.
-fn deliver_fix(world: &World, id: &PlaceId) {
+pub(super) fn deliver_fix(world: &World, id: &PlaceId) {
     let name = id.0.rsplit("--").next().unwrap_or_default();
     world.commit(&format!("fix/{name}"), &["fix.rs"]);
 }

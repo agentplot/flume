@@ -3,8 +3,9 @@
 //! unless the launch holds it or the work is over, with no wait held on
 //! it. Its outcomes are collected at the settles that follow through the
 //! merge queue's inbox and acted on once each: a landing makes the work
-//! over, a failure or a conflict sends the place back to the stage its
-//! kind names, up to its count. A withdrawal, and a landing before flume
+//! over, a failure or a conflict starts the kind's fix round, as found
+//! work from its last stage does, every going-back counted together up to
+//! the kind's bound. A withdrawal, and a landing before flume
 //! submits, are read from the merge queue's record of the branch; an
 //! open submission's base is driven one round per command, and never
 //! submitted anew.
@@ -143,12 +144,13 @@ impl Engine {
     }
 
     /// Acts on an outcome of the place's submission, or its refusal at
-    /// submit (112, 113).
+    /// submit: a failure or a conflict starts the kind's fix round with
+    /// the merge queue's words (112, 113, 131).
     pub(crate) fn verdict(&self, id: &PlaceId, verdict: Verdict) {
         let limit = self.defaults.send_backs;
         let back = self.update(id, |held| {
             held.submission.verdict = Some(verdict.clone());
-            let words = match &verdict {
+            let (cause, words) = match &verdict {
                 Verdict::Landed { commit, .. } => {
                     if held.phase == Phase::Live {
                         held.phase = Phase::Over {
@@ -162,7 +164,8 @@ impl Engine {
                     return Step::Write(None);
                 }
                 Verdict::Withdrawn => {
-                    held.submission.waiting = Some("the merge queue withdrew the submission".into());
+                    held.submission.waiting =
+                        Some("the merge queue withdrew the submission".into());
                     return Step::Write(None);
                 }
                 Verdict::Refused { reason } => {
@@ -170,33 +173,69 @@ impl Engine {
                         Some(format!("the merge queue refused the submission: {reason}"));
                     return Step::Write(None);
                 }
-                Verdict::Failed { words } | Verdict::Conflict { words, .. } => words,
+                Verdict::Failed { words } => ("the submission failed", words),
+                Verdict::Conflict { words, .. } => {
+                    ("the submission conflicted with its base", words)
+                }
             };
             if held.phase != Phase::Live {
                 return Step::Write(None);
             }
-            let last = held.place.kind.stages.last().expect("a kind has a stage");
-            let allowed = last.send_back_limit.unwrap_or(limit);
-            if held.submission.send_backs >= allowed {
-                held.submission.waiting = Some(format!(
-                    "the submission failed: {words}. The place went back {} times, as many as its kind allows",
-                    held.submission.send_backs
-                ));
-                return Step::Write(None);
-            }
-            let target = last
-                .send_back_to
-                .as_ref()
-                .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
-                .unwrap_or(held.stages.len() - 1);
-            held.submission.send_backs += 1;
-            for stage in held.stages.iter_mut().skip(target) {
-                stage.state = StageState::NotReached;
-            }
-            Step::Write(Some((target, words.clone())))
+            Step::Write(fix_round(held, limit, cause, words))
         });
         if let Some(Some((target, words))) = back {
             self.start_stage(id, target, Some(words));
+        }
+    }
+
+    /// Found work from the kind's last stage starts the kind's fix round
+    /// with the findings as its words, once the agent that stopped short
+    /// is quiet and ended, so the place never has two agents (131, 30).
+    /// True when it changed something.
+    pub(crate) fn found_work(&self, id: &PlaceId) -> bool {
+        let Some(read) = self.store.read(id) else {
+            return false;
+        };
+        let held = read.state;
+        let Some(index) = held.current.filter(|index| sent_back_by(&held, *index)) else {
+            return false;
+        };
+        if let Some(start) = held.stages[index].start.clone().filter(|start| start.live) {
+            let reading = self.read_agent(id, &start);
+            if reading.state != AgentState::Stopped {
+                if !reading.quiet() {
+                    return false;
+                }
+                if let Closed::Refused { reason } = self.terminal.close(&start.identity) {
+                    self.failed_end(id, &start.identity, &reason);
+                    return false;
+                }
+            }
+            self.with_start(id, &start.identity, |start, _| start.live = false);
+        }
+        let limit = self.defaults.send_backs;
+        let back = self.update(id, |held| {
+            if held.live_start().is_some() || held.current != Some(index) {
+                return Step::Keep(None);
+            }
+            if !sent_back_by(held, index) {
+                return Step::Keep(None);
+            }
+            let words = held.stages[index]
+                .end
+                .as_ref()
+                .and_then(|end| end.words.clone())
+                .unwrap_or_default();
+            let cause = format!("the {} stage found work", held.stages[index].name);
+            Step::Write(Some(fix_round(held, limit, &cause, &words)))
+        });
+        match back.flatten() {
+            Some(Some((target, words))) => {
+                self.start_stage(id, target, Some(words));
+                true
+            }
+            Some(None) => true,
+            None => false,
         }
     }
 
@@ -216,8 +255,58 @@ impl Engine {
     }
 }
 
+/// Whether the stage at `index` ended short having found work, as the
+/// kind's last stage, its fix round not yet started nor refused past the
+/// kind's bound (131).
+fn sent_back_by(held: &HeldState, index: usize) -> bool {
+    let stage = &held.stages[index];
+    held.phase == Phase::Live
+        && index + 1 == held.stages.len()
+        && stage.state == StageState::EndedShort
+        && stage.end.as_ref().and_then(|end| end.needs) == Some(StopKind::FoundWork)
+        && held.submission.waiting.is_none()
+}
+
+/// The kind's fix round decided in held state: the stage the kind's
+/// last stage names for a failed submission, that last stage where it
+/// names none, and every stage from it not reached again, counted as one
+/// going-back against the last stage's bound, flume's default where it
+/// sets none; past the bound, the place waits on its caller with `cause`
+/// and the words (23, 112, 130, 131). The stage to start and its words.
+fn fix_round(
+    held: &mut HeldState,
+    limit: u32,
+    cause: &str,
+    words: &str,
+) -> Option<(usize, String)> {
+    let last = held.place.kind.stages.last()?;
+    let allowed = last.send_back_limit.unwrap_or(limit);
+    let target = last
+        .send_back_to
+        .as_ref()
+        .and_then(|name| held.stages.iter().position(|stage| &stage.name == name))
+        .unwrap_or(held.stages.len() - 1);
+    if held.submission.send_backs >= allowed {
+        held.submission.waiting = Some(format!(
+            "{cause}: {words}. The place went back {} times, as many as its kind allows",
+            held.submission.send_backs
+        ));
+        return None;
+    }
+    held.submission.send_backs += 1;
+    held.submission.waiting = None;
+    held.submission.due = false;
+    for stage in held.stages.iter_mut().skip(target) {
+        stage.state = StageState::NotReached;
+    }
+    Some((target, words.to_string()))
+}
+
 /// An outcome as the answer reports it: the merge queue removes nothing
-/// of a place (113).
+/// of a place (113). A conflict's words name the files contested and the
+/// base's revision the merge queue tested against, which the fix round's
+/// agent merges into the place's branch and commits before anything
+/// else; flume merges nothing itself (14, 112, core.5).
 fn verdict_of(outcome: SubmissionOutcome) -> Verdict {
     match outcome {
         SubmissionOutcome::Landed { commit } => Verdict::Landed {
@@ -226,6 +315,12 @@ fn verdict_of(outcome: SubmissionOutcome) -> Verdict {
             branch_removed: false,
         },
         SubmissionOutcome::Failed { words } => Verdict::Failed { words },
-        SubmissionOutcome::Conflict { files, words, .. } => Verdict::Conflict { files, words },
+        SubmissionOutcome::Conflict { files, base, words } => {
+            let words = format!(
+                "{words}\n\nThe files contested: {}.\nThe base's revision the merge queue tested against: {base}.",
+                files.join(", ")
+            );
+            Verdict::Conflict { files, words }
+        }
     }
 }

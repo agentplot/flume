@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 const REPOSITORY: &str = "/repository";
 
-/// flume's own kinds as Part C's table gives them: fix@1 and change@1.
+/// flume's own kinds as Part C's table gives them: fix@1 and change@1,
+/// each sent back to code (22, C.2).
 pub fn flumes_own() -> Vec<Kind> {
     let stage = |name: &str, deliverable: Deliverable, prompt: &str| Stage {
         name: name.into(),
@@ -36,7 +37,7 @@ pub fn flumes_own() -> Vec<Kind> {
         Deliverable::ChangeArchived,
         "Verify {{change}} against the work, commit the report, and archive it.\n\n{{#words}}{{words}}\n\n{{/words}}{{needs}}",
     );
-    verify.send_back_to = Some("verify".into());
+    verify.send_back_to = Some("code".into());
     vec![
         Kind {
             name: "fix".into(),
