@@ -1,7 +1,7 @@
 ---
 number: 9
 title: A caller is told an end once, inside the settle that reads it, and resumes its wait by place from the host's state
-status: proposed
+status: accepted
 date: 2026-10-27
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A caller is told an end once, inside the settle that reads it, and resumes its wait by place from the host's state
 
-Status: proposed to the user on 2026-10-27, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-28, on their card ("Approved").
 
 Deciders: the user, in swancloud-ops's pane on 2026-10-28 (afterthought/crew-state, swancloud/main, signal 2026-10-28-swancloud-ops-4f509aa5/01-waits-are-pushed-and-reconnect-after-restart): "If our records already know about sluice submissions, crew units, and chores, then if we restarted a Claude Code session, it should be able to come back up and reconnect with those watchers (either through the mod or through some instruction)", which settles that an end reaches its waiter by a push the waiter picks up again from the records after a restart; the shape is madswan-design's, on swancloud-design's asking of the same night for Flume's answer to the statement's open question 43/46, and the user's yes is asked on the record's card.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 43, 46, 56, 58, 72, 95, 119 to 122, 125, 129 and the section 10 question "Does a caller learn a stage's or a submission's end by asking, or does flume tell it, and through what"; records 0003, 0005, 0006, 0008; rules core.9, core.10, core.11, core.14, core.24; `agentplot/sluice:docs/adr/0068` (a submission's outcome pushed to its submitter and kept until told); `afterthought/crew:docs/adr/0046` (waits are pushed into the session and reconnect from the records after a restart), part 6.
