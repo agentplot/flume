@@ -288,11 +288,11 @@ let
   # loader, on macOS libiconv, are store paths of the machine that built
   # them, set here to this tree's. Bump the version and the three checksums
   # from the release's assets.
-  sluiceVersion = "0.54.0";
+  sluiceVersion = "0.55.0";
   sluiceHashes = {
-    aarch64-darwin = "43839d0f960756ac7aa2046961bca1a896fef94eec701e5a3ca492656dac7dac";
-    aarch64-linux = "d80058cc42768d59aa44ac88c11481ff0c828f1f15214788bcaaf2ecc6b8ac6c";
-    x86_64-linux = "161d4e6e0cf6662754b6a2665a215584887dffdf0aa44884393e1fe173dd74e7";
+    aarch64-darwin = "f8163a960ff2562c8b0e76d41937a032898a6f4031536d311d482d778311add1";
+    aarch64-linux = "8e72b76a743160cd131273a994f35ea23b743f563c2abcac52b3e951d2f8bec0";
+    x86_64-linux = "58ab8ec41a98175c32faedc9d6b6098ad405601991f736efe8f631312c7d1a99";
   };
   sluiceSystem = pkgs.stdenv.hostPlatform.system;
   sluice = pkgs.stdenv.mkDerivation {
