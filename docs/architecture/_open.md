@@ -12,8 +12,6 @@ brought to the rule.
   2026-10-28: the finding sends the place back to the kind's fix round
   by itself. The other four were ruled on
   2026-10-26, in the section. None is a rule's source until ruled.
-- **Record 0007 is proposed**, on the user's card (`briefs.15`); rule
-  core.23 says so and stands as proposed.
 - **Records 0012 and 0013 wait on `sluice inbox`.** The settle's
   `inbox` (clause 133) collects the place's pending outcomes by the
   command sluice records 0068 and 0070 give a submitter; until it is
