@@ -17,3 +17,8 @@ brought to the rule.
   tasks; until then the gate is the site's prose and build.
 - **Record 0007 is proposed**, on the user's card (`briefs.15`); rule
   core.23 says so and stands as proposed.
+- **Records 0012 and 0013 wait on sluice's untold command.** The
+  settle's `untold` (clause 133) calls the one command sluice record
+  0068 gives a submitter for its untold outcomes, by the name sluice
+  gives it once built; until then the merge-queue profile has nothing
+  to call and the unit waits on sluice's.

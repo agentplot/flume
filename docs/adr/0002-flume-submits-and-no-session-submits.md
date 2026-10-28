@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-26, on their card, after the conflicts section below answered their question.
 
+Amended 2026-10-28 by record 0012, accepted by the user: flume submits with `--no-wait`, holds no wait on the verdict, and reads the outcome at the settles that follow; it never runs `wt submit`, and sluice removes no place on landing.
+
 Deciders: the user, in the capture design's ruling 12 (`design/capture/plan.md`, D2) and in flume's statement.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 14, 15, 63, 71, 108, 111 to 113, 124, I3, I7, C.6; `agentplot/blueprints:design/sluice/requirements.md` clauses 1, 2, 4; crew's `teams.5`.
 
