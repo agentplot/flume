@@ -2,15 +2,40 @@
 
 ### Requirement: The plugin's hooks
 
-flume's Claude Code plugin SHALL hold SessionStart, PreToolUse,
-PostToolUse, Stop and SessionEnd hooks, each running `flume hook
-<event>`, and SHALL do nothing in a session flume did not start (C.4,
-section 9).
+flume's Claude Code plugin SHALL hold SessionStart, UserPromptSubmit,
+PreToolUse, PostToolUse, Stop and SessionEnd hooks, and StopFailure and
+the permission-request or permission-prompt notification hook where the
+pinned Claude Code has them, each running `flume hook <event>` by the
+binary's absolute path; every hook SHALL exit 0 and never hold up a
+start or a turn, and each SHALL do nothing in a session flume did not
+start (C.4, section 9; record 0016).
 
 #### Scenario: A session the operator started
 
 - **WHEN** each hook runs with no `FLUME_AGENT` in its environment
 - **THEN** each allows what it was asked and writes nothing
+
+### Requirement: The acks and the asking mark
+
+SessionStart SHALL run the started ack and UserPromptSubmit the received
+ack, each skipping a subagent's input; the asking mark SHALL cover a
+permission prompt and clear at UserPromptSubmit and SessionStart as
+well as on the answer; StopFailure SHALL record its reason as the
+agent's last words (35, 38, 43, 90; record 0016).
+
+#### Scenario: A question dismissed
+
+- **WHEN** an agent opens `AskUserQuestion`, the question is dismissed with no PostToolUse, and the next prompt is submitted
+- **THEN** the UserPromptSubmit hook clears the mark, and asking reads no (90)
+
+#### Scenario: A usage limit ends the turn
+
+- **WHEN** the pinned Claude Code's StopFailure hook runs with a usage limit's reason
+- **THEN** the reason is recorded as the agent's last words, which status gives with the agent (43)
+
+### Requirement: The plugin passes validation
+
+The plugin SHALL pass the pinned Claude Code's strict validation.
 
 #### Scenario: The plugin validates
 

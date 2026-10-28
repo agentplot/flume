@@ -17,16 +17,41 @@ argument under the printed command (29, 32, 33, 88, C.4).
 
 ### Requirement: Readings from the agent's own record
 
-The profile SHALL read received, own-work and asking from the
-transcript of the session the plugin's SessionStart hook recorded for
-that start in the place's own folder, and whether the session ended from
-the SessionEnd hook's mark (134); an answer the record does not give
-SHALL be unknown (77, 89 to 91, 93).
+The profile SHALL read own-work and asking from the transcript of the
+session the plugin's SessionStart hook recorded for that start in the
+place's own folder and the plugin's marks; last words from the
+transcript's last message or the reason the StopFailure hook recorded;
+and whether the session ended from the SessionEnd hook's mark (134); an
+answer the record does not give SHALL be unknown (43, 77, 90, 91, 93).
 
 #### Scenario: Seam scenarios over fixture transcripts
 
 - **WHEN** the agent seam's scenarios run against the profile over fixture transcripts of the pinned Claude Code
-- **THEN** each passes: a prompt received as a user turn, a background shell started and not finished as own work, an open question as asking, and a missing transcript as unknown
+- **THEN** each passes: a prompt received by its ack, a background shell started and not finished as own work, an open question as asking, and a missing transcript as unknown
+
+### Requirement: Started and received from the plugin's acks
+
+The profile SHALL read started from the start's started ack, carrying
+its identity, secret, the plugin's version and the session, and
+received from the start's received ack, carrying the submitted prompt's
+digest; only where no ack can come SHALL it read received from the
+transcript's user turn or queued `enqueue` record (38, 77, 89, 135;
+record 0016).
+
+#### Scenario: A bare resume
+
+- **WHEN** herdr resumes a start's session with a bare `claude --resume`, no `FLUME_*` in its environment and no `--plugin-dir`
+- **THEN** no started ack comes for the start, and `started` reads no (77, S41)
+
+#### Scenario: A prompt queued while the agent worked
+
+- **WHEN** a prompt is typed while the agent works and Claude Code submits it after the turn
+- **THEN** the received ack comes at the submission, and `received` reads yes then and not before (38, 89)
+
+#### Scenario: A plugin of another version
+
+- **WHEN** the started ack names a plugin version other than the binary's
+- **THEN** status reports the difference with the agent
 
 ### Requirement: The stop check, the guard and on-quiet through hooks
 

@@ -14,7 +14,11 @@ statement wins (core.19), so this change first brings the core to it,
 then builds the profiles of Part C and two of the three surfaces of
 section 9. Records 0014 and 0015 are accepted; their rule texts
 (core.3, core.5, core.11, core.24, core.25, core.27, core.28) are cited
-here as those records word them.
+here as those records word them. Record 0016, accepted on 2026-10-28,
+brings crew's lessons driving Claude Code through herdr to the
+statement at blueprints 4fe1522 (35, 37, 38, 43, 77, 89, 90, 95, 96, 98,
+135, 136, C.4, C.5, S39 to S43) and adds core.29; groups 7 and 9 carry
+it, groups 1 to 6 having landed before it.
 
 The work is Crew's dropped bolts `flume-the-profiles`,
 `a-kind-runs-through-on-its-own`, `flume-keeps-the-hosts-queue-by-priority`,
@@ -363,26 +367,73 @@ The terminal is bound once for the host by `[host] terminal`, `herdr`
 or `printed`, `printed` where none is named (105). C.7 names no such
 word in C.7 (105).
 
-- **herdr** (C.5): open makes a pane in the herdr session the launch's
-  settings name, flume's own otherwise, one tab per place named
-  `<kind>--<name>`, or a split beside the pane the settings name, the
-  pane named by the identity; it reads the pane until the agent program
-  shows its folder-trust question, answered with the key the agent
-  profile names in its command (34, decision 14), or its first wait.
-  send types the text and submits it, received then read through the
-  agent (89, 95). state maps herdr's reading: working, idle as waiting,
-  done as stopped, blocked as asking only with the agent profile's mark
-  (96, 90): herdr's blocked is answered as asking, which the core
-  takes as asking only where the agent seam's asking reads yes, so the
-  terminal reads no profile's mark itself (core.2). close ends the pane and its process group and reads that it
-  is gone (97). watch is none: the herdr plugin keeps it in the next
-  change (122).
+- **herdr** (C.5; record 0016): every command, state name, error code
+  and field is checked against the pinned herdr, 0.9.5 or later
+  (core.29), and every call runs under a bound, ten seconds where the
+  call states none, read unknown or refused in herdr's words past it,
+  with the caller's `HERDR_*` stripped and the recorded server's socket
+  passed (98), since a crew team once waited two hours inside an
+  `agent prompt` that never returned. open makes a pane in the herdr
+  session the launch's settings name, flume's own otherwise, one tab
+  per place named `<kind>--<name>`, or a split beside the pane the
+  settings name. The pane is held by its id and its server's socket;
+  the agent gets a herdr name of at most 32 of herdr's legal characters
+  made from the identity, for display only, since herdr refuses the
+  identity as a name and drops any name when the pane's session
+  changes. What open types into the shell is one line running a
+  launcher file it writes in the place's state folder, since herdr
+  refuses a line past the terminal's limit and the agent's instructions
+  pass it. It reads the pane until the agent program shows its
+  folder-trust question, answered with the key the agent profile names
+  in its command (34, decision 14), or its first wait. `session` is
+  `herdr:<pane>@<socket>` (7). send clears the held input with one
+  ctrl+c while the agent waits, types the text and submits it, received
+  then read through the agent (89, 95); the core's second sending and a
+  prompt never begun clear it again, so nothing is left typed. state
+  maps herdr's reading: working as working; idle and done as waiting,
+  herdr's done being a finished turn nobody has looked at; blocked as
+  asking, which the core takes as asking only where the agent seam's
+  asking reads yes and as unknown otherwise, so the terminal reads no
+  profile's mark itself (core.2); herdr's unknown as unknown; stopped
+  only when the pane is gone, herdr lists no agent in it and
+  process-info shows the shell in its foreground, or herdr lists the
+  pane with a `restore_error` after its server's restart (96). screen
+  is `pane read --source visible` (136). close ends the pane and its
+  process group and reads that it is gone (97). watch is none: the
+  herdr plugin keeps it in the next change (122). A fresh pane per
+  start makes moot crew's escape codes left by a bad exit and the
+  exit's question about background work.
 - **printed command** (C.5): open answers the command, the prompt
   carried in it, which status gives with the agent; send and close are
   refused, so a tell is refused and a prompt not received is never
-  begun (38); state is unknown from the terminal, and the agent is read
+  begun (38); screen is nothing (136); state is unknown from the terminal, and the agent is read
   stopped once the agent profile's own record says its session ended
   (decision 14); watch is none, so flume runs attended (119).
+
+### 12a. A start is starting until its agent says it started
+
+Record 0016 (35, 37, 38, 43, 77, 135, 136). The agent seam gains
+`started`: whether the agent has said it started under its start's
+identity with flume's guard and stop check in force, or unknown. The
+terminal seam gains `screen`. `StageState` gains `Starting`, the state
+from the start until `started` reads yes. The core:
+
+- sends no prompt while `started` does not read yes (37);
+- reads a start never begun at once when the terminal reads its agent
+  stopped with no started word; at the stage's limit (44) while it
+  stays starting, a dialog no hook precedes holding it; or on its
+  caller's stop or retry; status gives the screen meanwhile (35);
+- reads a terminal's blocked with no asking mark as unknown, never as
+  waiting, so nothing is typed into a dialog it cannot name (90);
+- takes an agent the terminal brought back with no started word for
+  its start as no agent of the stage's: the stage is lost and the agent
+  ended once quiet (77, 31);
+- delivers stuck, lost and never-begun ends with the agent's last
+  words, the commits on the place's branch since the start and, for
+  never begun, the screen (43).
+
+The clause list moves to blueprints 4fe1522, adding 135, 136 and S39 to
+S43, each cited by an engine scenario.
 
 ### 13. The merge queue through sluice
 
@@ -434,17 +485,34 @@ built (Part C's preamble).
   directory's path (33). The command carries the program's
   folder-trust question and the key that answers it, as data the
   terminal reads (34).
-- **The agent's own record** is the session's transcript. The plugin's
-  SessionStart hook records the session's id and transcript path in
-  the place's own folder, under the start's identity, so received,
-  asking and own-work read that start's transcript and no other (77,
-  93). The seam's readings are handed the place's folder with the
+- **The agent's own record** is the session's transcript and the
+  plugin's acks and marks. The plugin's SessionStart hook runs `flume
+  ack started` with the start's identity, its secret, the plugin's
+  version, the session's id, its transcript's path and its source, and
+  records the session in the place's own folder under the start's
+  identity, so every reading reads that start's record and no other
+  (77, 93, 135). A plugin version other than the binary's is reported;
+  a session herdr resumed bare loads no `--plugin-dir` and carries no
+  `FLUME_*`, so it acks nothing. The hooks name the binary that wrote
+  the plugin by its absolute path. The seam's readings are handed the place's folder with the
   identity (decision 15).
-- **received**: the transcript holds a user turn whose text is the
-  prompt (89). **own-work**: background shells and tasks the transcript
+- **started** (135): the start's started ack. **received** (89): the
+  start's received ack, which the plugin's UserPromptSubmit hook runs
+  with the submitted prompt's digest when Claude Code submits it,
+  queued prompts among them, so text typed and never submitted acks
+  nothing; only where no ack can come, the transcript's user turn or
+  queued `enqueue` record holding the prompt, a slash command as its
+  `<command-name>` and arguments, whitespace collapsed, a transcript not
+  yet written read as not received. **own-work**: background shells and tasks the transcript
   shows started and not finished (91). **asking**: the mark the
-  PreToolUse hook leaves on `AskUserQuestion` and `ExitPlanMode`, open
-  until the transcript holds the answer (90). Each answers unknown when
+  PreToolUse hook leaves on `AskUserQuestion` and `ExitPlanMode`, and
+  the permission-request or permission-prompt notification hook leaves
+  where the pinned Claude Code has one, open until the transcript holds
+  the answer, and cleared at UserPromptSubmit and SessionStart too, so
+  a dismissed question never stays open (90). **last words** (43): the
+  transcript's last message, or the reason the StopFailure hook
+  records where the pinned Claude Code has it, a refused sign-in or a
+  usage limit among them. Each answers unknown when
   the transcript cannot be read.
 - **stop-short** (92): the text naming `flume needs "<words>"` and
   `flume needs --found "<words>"`, filled into every prompt's
@@ -479,7 +547,8 @@ terminal names it, for a launch's default recipient (7); the launch
 and the held state gain the recipients and each hold's words (7, 8,
 130); `AgentCommand` gains
 the folder-trust question and its answer; `StageState` gains
-`WaitingForRoom`; the held state gains the place's priority and, per
+`WaitingForRoom`, and `Starting` (decision 12a); the agent seam gains
+`started` (135) and the terminal seam `screen` (136); the held state gains the place's priority and, per
 stage, since when it waits for room; `Host` gains `bound` and `room`;
 the resolver lists the place profiles it holds and binds a place
 profile with the merge queue profile's data. Every type round-trips
@@ -519,8 +588,13 @@ marketplace at `.claude-plugin/marketplace.json` so any session can
 install it, and built into the binary for the agents it starts:
 
 - `.claude-plugin/plugin.json`;
-- `hooks/hooks.json`: SessionStart, PreToolUse, PostToolUse, Stop and
-  SessionEnd, each `flume hook <event>` (decision 14);
+- `hooks/hooks.json`: SessionStart, UserPromptSubmit, PreToolUse,
+  PostToolUse, Stop and SessionEnd, and StopFailure and the
+  permission-request or permission-prompt notification hook where the
+  pinned Claude Code has them, each `flume hook <event>` by the
+  binary's absolute path (decision 14; record 0016). Every hook exits 0
+  and never holds up a start or a turn; the acks skip a subagent's
+  input, and the guard refuses a subagent's command as its agent's;
 - `commands/launch.md`: `/launch <brief>`, which has the session choose
   the kind and a name with the operator and run `flume launch --json`,
   then report the place and how to follow it with `flume status`;
@@ -571,9 +645,15 @@ settle, a session outside flume), and the root's `format` and
   back before ticking its fix; verify archives it again (decision 7).
   A prompt is guidance, not a check: the deliverable's reading is the
   check (24).
-- [Claude Code's transcript format is not a contract] → the agent
-  profile reads it at the pinned version only, and the profile's tests
-  hold fixture transcripts of that version.
+- [Claude Code's transcript format is not a contract] → started and
+  received come from the plugin's own acks (record 0016), and the
+  transcript is read for the rest at the pinned version only, the
+  profile's tests holding fixture transcripts of that version.
+- [Which dialogs Claude Code shows before any hook] → the bypass
+  warning, a sign-in, a first run's setup and an MCP servers' approval
+  are read as showing before SessionStart; a start held at one stays
+  starting with its screen until the stage's limit (35), so a dialog
+  measured to come after the hook costs nothing but the limit.
 - [herdr headless in the gate] → the herdr profile's tests start a
   server of their own on a private socket; if the pinned herdr cannot,
   those tests move to `check-live`.

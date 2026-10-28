@@ -4,7 +4,7 @@
 
 There SHALL be exactly one interface for each of the seven seams of
 Part B: the place (78 to 83), the kinds (84, 85), the change (86, 87, 127),
-the agent (88 to 93, 115, 116, 121, 134), the terminal (94 to 98, 122), the
+the agent (88 to 93, 115, 116, 121, 134, 135), the terminal (94 to 98, 122, 136), the
 merge queue (99, 101, 117, 125, 126, 133) and the store (102 to 104,
 128). Each SHALL offer the operations its section names and no
 operation of the core's, and no interface SHALL name a tool (core.1,
@@ -13,7 +13,10 @@ holds the submission, with no wait on its verdict, and its inbox SHALL
 give each pending outcome of the place once (117, 133). The terminal
 seam SHALL name the session a command runs in, for a launch's default
 recipient (7), and the agent seam SHALL say whether the agent's record
-shows its session ended (134).
+shows its session ended (134) and whether the agent has said it started
+under its start's identity (135); the terminal seam SHALL give what it
+shows of an agent (136), and every terminal operation SHALL answer
+within a bound the profile states (98).
 
 #### Scenario: Each seam's operations
 
@@ -24,6 +27,11 @@ shows its session ended (134).
 
 - **WHEN** the seams', core's, fakes', suite's and commands' sources are searched for `wt`, `worktrunk`, `openspec`, `claude`, `herdr` and `sluice` as words
 - **THEN** none is found outside a `profiles` directory
+
+#### Scenario: Started and screen
+
+- **WHEN** the fake agent holds no started word for a start, and the fake terminal shows lines for its agent
+- **THEN** `started` reads no and `screen` gives those lines (135, 136)
 
 #### Scenario: Submit holds no wait
 
