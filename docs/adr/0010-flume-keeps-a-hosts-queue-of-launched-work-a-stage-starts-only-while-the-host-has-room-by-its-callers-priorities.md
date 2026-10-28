@@ -1,7 +1,7 @@
 ---
 number: 10
 title: Flume keeps a host's queue of launched work: a stage starts only while the host has room, by its callers' priorities, and status says the agents running, the room and the queue
-status: proposed
+status: accepted
 date: 2026-10-28
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Flume keeps a host's queue of launched work: a stage starts only while the host has room, by its callers' priorities, and status says the agents running, the room and the queue
 
-Status: proposed to the user on 2026-10-28, as `briefs.15` has it, and revised the same day on their note; accepted only on their yes.
+Status: accepted by the user on 2026-10-28, on their card ("Approved"), after a revision the same day on their note.
 
 Deciders: the user, on this record's first card (2026-10-28): "This might be right but I want to make sure it's consistent with the recent design work I was doing, in which we remove teams from crew. Instead crew starts to manage bolts using flume so we no longer get bottlenecked by teams being attached to a single bolt at a time. In that world if there's work to be done in a bolt, it would appear to flume as a queue of work that needs to be processed concurrently. I think flume would be managing that queue. There would be some sort of priority system so the operator has control over making sure that as priorities change, the work that needs to get scheduled gets scheduled", which settles that flume keeps the queue of a host's launched work and starts it by a priority the operator controls; the user, accepting crew record 0045 on 2026-10-28 (`afterthought/crew:docs/adr/0045-a-team-is-bound-to-one-bolt-and-launches-work-while-its-host-has-room.md`): a fix, a unit and a chore are three Flume kinds, not slots; a team is bound to one bolt and to nothing smaller; room is the host's, counted in agents running, a waiting piece holding none; and, from 2026-10-27, "a fix, a unit and a chore are all just different Flume kinds, and once we integrate with Flume we need to decide whether a team is bound to one unit of work or can work on multiple" (relayed by madswan-planner, in `_open.md`); the shape is madswan-design's, on swancloud-design's asking of 2026-10-28, and the user's yes is asked on the record's card.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 54, 56, 58, 70 and section 9's list of what is not flume's, the C.8 crew row and S7; C.7, the host's state directory and the family's storage rule; records 0004, 0006; rules core.14, core.16; `afterthought/crew:docs/adr/0045`; sluice's host configuration (`~/.config/sluice/config.toml`, `[runs] max`), the precedent for a bound the host states.

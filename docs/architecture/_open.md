@@ -12,7 +12,6 @@ brought to the rule.
   2026-10-28: the finding sends the place back to the kind's fix round
   by itself. The other four were ruled on
   2026-10-26, in the section. None is a rule's source until ruled.
-- **A team's bound is decided**: crew record 0045 (accepted 2026-10-28) binds a team to one bolt and nothing smaller, with room the host's, counted in agents running; flume's side is record 0010, proposed on 2026-10-28 and revised the same day on the user's note: flume keeps to the bound the host states and keeps the host's queue of launched work by its callers' priorities (70). The item leaves when 0010 is accepted.
 - **The gate has no code yet.** `core.21` binds the first crate and the
   first plugin to arrive with their own moon projects and check-fast
   tasks; until then the gate is the site's prose and build.
