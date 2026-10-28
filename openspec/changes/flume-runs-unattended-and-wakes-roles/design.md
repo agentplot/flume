@@ -40,7 +40,10 @@ pending end outliving the worktree, every end delivered, `[roles]`'s
 base and brief). Record 0014 and the rules in its words are on flume's
 main (28c0c6e), and record 0015 with core.11 in its words since
 6eef857; the rules this design cites, core.11,
-core.24, core.25 and core.28, are cited in those words. The one rules page is
+core.24, core.25 and core.28, are cited in those words. Record 0016
+(accepted 2026-10-28; the statement at blueprints 4fe1522, C.5) names a
+herdr session by its pane and socket and bounds every herdr call
+(core.29); groups 1 and 6 carry it, in task 1.3 and task 6.3. The one rules page is
 `docs/architecture/core.md`; this change adds no area page and touches
 no area another page would own.
 
@@ -227,8 +230,14 @@ role run's address. 43 names the recipient's own pane (95), so a
 caller's session is an agent the terminal sends to; the operations are
 95 and 96 reached by the name a session carries rather than by flume's
 identity, and no operation is added to the statement. The herdr
-terminal profile finds a session by its agent's name in herdr and sends
-by herdr's agent prompt; the printed command answers every send
+terminal profile names a session `herdr:<pane>@<socket>`, the pane's id
+and its server's socket (C.5; record 0016), and reaches it by that pane
+on that server, never by a herdr agent name, which herdr drops whenever
+a pane's session changes and whose rule refuses flume's names; a role
+run's session is the pane its live start holds. It sends by herdr's
+agent prompt, the held input cleared first, every call under the
+profile's bound with the caller's `HERDR_*` stripped and the socket
+passed (98, core.29); the printed command answers every send
 refused, so every end stays pending there and is read from status, a
 wait or the inbox (C.5).
 
@@ -295,11 +304,16 @@ agentplot/flume/plugins/herdr`, and the keys and sidebar rows to add to
 herdr's configuration.
 
 - **The watch** holds a lease in the plugin's state directory, renewed
-  on each tick, naming its process, the plugin's directory and version,
-  and herdr's server by its socket, so a second `--ensure` exits and a
+  on each tick, naming its process by its pid and its start time, so a
+  pid the system has given another process since, after a reboot, is
+  never taken for the watch (as sluice's herdr plugin keys its own),
+  the plugin's directory and version, and herdr's server by its
+  socket; the lease is changed only under a lock broken in one step when
+  its holder is gone, so a second `--ensure` exits and a
   reinstall or a new server replaces it. On each short tick it reads
-  herdr's agent states for flume's panes, a herdr call that starts no
-  process of flume's; when one changed, or when the bound passed since
+  herdr's agent states for every flume pane in one listing, never a
+  call per pane, a herdr call that starts no process of flume's and
+  runs under a bound (core.29); when one changed, or when the bound passed since
   its last settle, it runs `flume settle`, then `flume status --json`
   into its state directory for the sidebar. The bound is the one the
   herdr terminal profile states (122), read from status's host part, so

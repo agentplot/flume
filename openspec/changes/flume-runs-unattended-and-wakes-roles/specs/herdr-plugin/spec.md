@@ -34,6 +34,11 @@ nothing, and a server started in a stopped one's place starts its own
 - **WHEN** the plugin's startup runs twice against a stand-in herdr
 - **THEN** one watch runs, and the second start exits leaving it
 
+#### Scenario: A lease whose pid was reused
+
+- **WHEN** the lease names a pid now held by another process with a different start time
+- **THEN** the lease is read stale and a new watch takes it (record 0016)
+
 ### Requirement: flume runs unattended only while the watch is kept
 
 The herdr terminal SHALL answer that it keeps watch, with its bound,
@@ -57,6 +62,11 @@ but `flume settle` and `flume status` (46, 120, 122, C.5).
 
 - **WHEN** a stand-in herdr reports a flume agent going from working to idle between two bounds
 - **THEN** the watch runs `flume settle` at once, before its bound passes
+
+#### Scenario: One listing a tick
+
+- **WHEN** a tick reads the states of five flume panes
+- **THEN** the stand-in herdr is asked one listing, and no call per pane (core.29)
 
 #### Scenario: Nothing changes
 
