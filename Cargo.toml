@@ -20,3 +20,8 @@ license = "MIT"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The kind format, read by weir's crate at a revision of weir's main, moved
+# by a chore when weir changes (core.4, core.22).
+weir-kinds = { git = "https://github.com/agentplot/weir", rev = "379d68e13705f8f808af9df7fdec8a83a6fb5581" }
+toml = "1"
+clap = { version = "4", features = ["derive"] }

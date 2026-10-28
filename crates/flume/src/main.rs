@@ -3,8 +3,7 @@
 //! (61). It has no command yet; the commands arrive under
 //! `src/commands/`.
 
-mod profiles;
-
+use flume::profiles;
 use flume_core::Answer;
 use std::process::ExitCode;
 

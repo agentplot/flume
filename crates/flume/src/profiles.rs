@@ -9,8 +9,14 @@ use flume_core::Engine;
 // ---- the place seam's profiles: a profile unit appends its module line below ----
 
 // ---- the kinds seam's profiles: a profile unit appends its module line below ----
+pub mod kinds {
+    pub mod weir;
+}
 
 // ---- the change seam's profiles: a profile unit appends its module line below ----
+pub mod change {
+    pub mod openspec;
+}
 
 // ---- the agent seam's profiles: a profile unit appends its module line below ----
 

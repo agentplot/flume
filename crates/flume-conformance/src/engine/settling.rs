@@ -96,7 +96,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 }
 
 /// A change's construct stage begun, its agent waiting.
-pub(super) fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
     let id = World::id("change", name);
     launched(
         &world
@@ -113,7 +113,7 @@ pub(super) fn construct_begun(world: &World, name: &str) -> Result<PlaceId, Stri
 }
 
 /// The change written on the place's branch, its planning complete.
-pub(super) fn write_change(world: &World, name: &str) {
+pub fn write_change(world: &World, name: &str) {
     let revision = world.commit(
         &format!("change/{name}"),
         &[&format!("plans/{name}/design.md")],
@@ -377,7 +377,7 @@ fn a_launch_that_died(_: &()) -> Outcome {
 }
 
 /// A change's place driven to its verify stage, begun.
-pub(super) fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
     let id = construct_begun(world, name)?;
     write_change(world, name);
     world.settle(&id);
@@ -399,7 +399,7 @@ pub(super) fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, Str
 }
 
 /// The change archived on the place's branch, its report with it.
-pub(super) fn archive(world: &World, name: &str) {
+pub fn archive(world: &World, name: &str) {
     let revision = world.commit(
         &format!("change/{name}"),
         &[&format!("plans/archive/{name}/verify.md")],
@@ -576,7 +576,7 @@ fn s34_a_restart_while_under_test(_: &()) -> Outcome {
 }
 
 /// A fix launched as `name` with its code stage begun.
-pub(super) fn fix_begun(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn fix_begun(world: &World, name: &str) -> Result<PlaceId, String> {
     launched(&world.engine.launch(&launch("fix", name, Some("x"))))?;
     let id = World::id("fix", name);
     world.settle(&id);
@@ -584,7 +584,7 @@ pub(super) fn fix_begun(world: &World, name: &str) -> Result<PlaceId, String> {
 }
 
 /// The fix's code stage delivered, unsettled.
-pub(super) fn deliver_fix(world: &World, id: &PlaceId) {
+pub fn deliver_fix(world: &World, id: &PlaceId) {
     let name = id.0.rsplit("--").next().unwrap_or_default();
     world.commit(&format!("fix/{name}"), &["fix.rs"]);
 }

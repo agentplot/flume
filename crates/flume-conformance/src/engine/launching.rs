@@ -50,6 +50,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: no_binding,
         },
         Scenario {
+            name: "launch: a binding naming a place profile flume does not hold is refused, naming the place profiles there are, nothing made",
+            cites: &["105", "2", "20"],
+            run: a_place_profile_flume_does_not_hold,
+        },
+        Scenario {
             name: "launch: two launches of one place at once make one place",
             cites: &["S11", "3", "75"],
             run: two_launches_at_once,
@@ -311,6 +316,25 @@ fn no_binding(_: &()) -> Outcome {
         "makes through the no-tool place"
     );
     ensure_eq!(world.queue.log.calls().len(), 0, "merge queue calls");
+    Ok(())
+}
+
+fn a_place_profile_flume_does_not_hold(_: &()) -> Outcome {
+    let world = World::new();
+    world.kinds.set_binding(
+        REPOSITORY,
+        Binding {
+            place: Some("groves".into()),
+            change: Some("plans".into()),
+            merge_queue: Some("queue".into()),
+        },
+    );
+    let reason = refused(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure!(
+        reason.contains("groves") && reason.contains("trees"),
+        "the refusal names not the profile asked for and the ones there are: {reason}"
+    );
+    nothing_made(&world)?;
     Ok(())
 }
 

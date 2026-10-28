@@ -121,7 +121,10 @@ impl Engine {
             self.resolver
                 .place(repository, binding)
                 .ok_or_else(|| match &binding.place {
-                    Some(name) => format!("no place profile is named {name}"),
+                    Some(name) => format!(
+                        "no place profile is named {name}; the place profiles there are: {}",
+                        self.resolver.place_profiles().join(", ")
+                    ),
                     None => "no place profile needs nothing beyond git".to_string(),
                 })?;
         let change = match &binding.change {

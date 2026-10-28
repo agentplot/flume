@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 const REPOSITORY: &str = "/repository";
 
-/// flume's own kinds as Part C's table gives them: fix@1 and change@1,
-/// each sent back to code (22, C.2).
+/// flume's own kinds as Part C's table gives them: fix@1, chore@1 and
+/// change@1, each sent back to code (22, C.2).
 pub fn flumes_own() -> Vec<Kind> {
     let stage = |name: &str, deliverable: Deliverable, prompt: &str| Stage {
         name: name.into(),
@@ -43,6 +43,14 @@ pub fn flumes_own() -> Vec<Kind> {
             name: "fix".into(),
             version: 1,
             branch_prefix: "fix".into(),
+            starts_unready: true,
+            lands: true,
+            stages: vec![code.clone()],
+        },
+        Kind {
+            name: "chore".into(),
+            version: 1,
+            branch_prefix: "chore".into(),
             starts_unready: true,
             lands: true,
             stages: vec![code],
