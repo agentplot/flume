@@ -3,6 +3,14 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 # The workspace as a whole: what spans the tree, each check one task
 # (core.21). A candidate is held to what the commit hooks hold a commit to.
 tasks:
+  # Every formatter treefmt.nix configures, writing nothing it would change
+  # and keeping no cache outside the tree. It reads every tracked file: one
+  # that no formatter claims and no exclude names fails it (core.21).
+  format:
+    command: 'treefmt --ci'
+    inputs: ['/**/*', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
   # The commit hooks devenv.nix installs, driven in a fresh worktree of a
   # scratch clone (check-hooks.sh): convco, treefmt and clippy each run on
   # the main checkout's config, with no PREK_ALLOW_NO_CONFIG.

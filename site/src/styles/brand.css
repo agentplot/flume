@@ -23,6 +23,6 @@
      family list by Diagram.astro: millpond's --dg-pond, headwater's
      --dg-head and sounding's --dg-sound. */
 }
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   --dg-shadow: rgb(0 0 0 / 0.18);
 }
