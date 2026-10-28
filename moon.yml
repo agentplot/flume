@@ -1,0 +1,13 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The workspace as a whole: what spans the tree, each check one task
+# (core.21). A candidate is held to what the commit hooks hold a commit to.
+tasks:
+  # The commit hooks devenv.nix installs, driven in a fresh worktree of a
+  # scratch clone (check-hooks.sh): convco, treefmt and clippy each run on
+  # the main checkout's config, with no PREK_ALLOW_NO_CONFIG.
+  hooks:
+    command: 'sh check-hooks.sh'
+    inputs: ['/check-hooks.sh', '/treefmt.nix', '/.versionrc', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}

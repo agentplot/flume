@@ -16,6 +16,7 @@ projects:
   conformance: 'crates/flume-conformance'
   flume: 'crates/flume'
   site: 'site'
+  root: '.'
 
 # --affected compares against the merge-base with main.
 vcs:
