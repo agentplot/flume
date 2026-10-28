@@ -16,7 +16,7 @@ brought to the rule.
   2026-10-28 from the user's decision to take teams out of crew
   (afterthought/crew record 0047); clause 131, rule core.27. The item
   leaves when 0011 is accepted and Flume's first units are queued.
-- **A team's bound is decided**: crew record 0045 (accepted 2026-10-28) binds a team to one bolt and nothing smaller, with room the host's, counted in agents running; flume's side is record 0010, proposed on 2026-10-28, which has status say the host's agents running and its room against the bound the host states, flume holding no cap (70). The item leaves when 0010 is accepted.
+- **A team's bound is decided**: crew record 0045 (accepted 2026-10-28) binds a team to one bolt and nothing smaller, with room the host's, counted in agents running; flume's side is record 0010, proposed on 2026-10-28 and revised the same day on the user's note: flume keeps to the bound the host states and keeps the host's queue of launched work by its callers' priorities (70). The item leaves when 0010 is accepted.
 - **The gate has no code yet.** `core.21` binds the first crate and the
   first plugin to arrive with their own moon projects and check-fast
   tasks; until then the gate is the site's prose and build.
