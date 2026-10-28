@@ -49,7 +49,7 @@ scenario a group adds to the conformance suite cites its clauses as data
 - [x] 5.4 Refuse a binding whose place profile the resolver does not hold, naming the profiles it holds, `worktrunk` among the tested names (launching spec; C.1, core.3). True when `devenv shell -- moon run conformance:test flume:test` passes with the place-profile-flume-does-not-hold and worktrunk-binding scenarios.
 - [x] 5.5 Build the change profile under `crates/flume/src/profiles/change/openspec/` (design 8; change-profile spec): spec-driven changes read from their files at a revision with git alone, other schemas through the pinned `openspec status` in a checkout made for the read and removed after it, locate at `openspec/changes/<name>`. True when `devenv shell -- moon run flume:test` passes with the change seam's scenarios against the profile and the five-revision agreement test against `openspec status`.
 - [x] 5.6 Add `.config/flume.toml` to flume's own repository with `[profiles]` `place = "git-worktree"`, `change = "openspec"`, `merge_queue = "sluice"`. True when `devenv shell -- moon run flume:test` passes with a test reading the binding at this repository's HEAD.
-- [ ] 5.7 Run the group's checks through sluice and commit. True when `sluice exec main -- moon run flume:format flume:lint flume:test conformance:test root:format` passes.
+- [x] 5.7 Run the group's checks through sluice and commit. True when `sluice exec main -- moon run flume:format flume:lint flume:test conformance:test root:format` passes.
 
 ## 6. The place, the store, git's history and the host
 
