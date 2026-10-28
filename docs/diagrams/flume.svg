@@ -173,7 +173,7 @@
 <text class="fl-m fl-mono fl-xxs fl-pp3" x="356" y="304">prompt sent: submit…</text>
 <g class="fl-pc3"><circle class="fl-ok" cx="360" cy="300" r="4"/><text class="fl-ok fl-xxs fl-b" x="370" y="304">prompt in its transcript</text></g>
 <text class="fl-mono fl-xxs fl-t fl-pl30" x="356" y="330">archived the change</text>
-<text class="fl-mono fl-xxs fl-ac fl-pl31" x="356" y="350">wt submit main</text>
+<text class="fl-mono fl-xxs fl-ac fl-pl31" x="356" y="350">sluice submit main --no-wait</text>
 <text class="fl-mono fl-xxs fl-ok fl-pl32" x="356" y="370">ended: landed on main</text>
 </g>
 <g class="fl-gone">

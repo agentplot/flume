@@ -81,7 +81,7 @@ const STAGES: {
     done: ['landed,', 'change archived'],
     log: [
       ['archived the change', 64, 't'],
-      ['wt submit main', 66, 'ac'],
+      ['sluice submit main --no-wait', 66, 'ac'],
       ['ended: landed on main', 80, 'ok'],
     ],
   },
