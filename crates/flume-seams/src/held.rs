@@ -166,6 +166,20 @@ pub struct StageHeld {
     /// waits, on its caller or for room on the host (56, 70, 130).
     #[serde(default, alias = "waiting_since")]
     pub since: Option<Seconds>,
+    /// What a stage waiting for room starts with, and its place in the
+    /// host's queue (70).
+    #[serde(default)]
+    pub room: Option<RoomWait>,
+}
+
+/// A stage waiting for room on the host (70).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoomWait {
+    /// The order it came to wait in, host-wide, so equals in priority
+    /// start in the order they came to wait.
+    pub order: u64,
+    /// The words it starts with: a fix round's or a retry's (49, 112).
+    pub words: Option<String>,
 }
 
 /// A stage's end as reported when it ended (43).

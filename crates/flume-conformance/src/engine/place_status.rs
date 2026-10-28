@@ -126,7 +126,7 @@ fn the_moves_waited_on(_: &()) -> Outcome {
 
 fn places(answer: Answer) -> Result<Vec<PlaceStatus>, String> {
     match answer {
-        Answer::Status { places } => Ok(places),
+        Answer::Status { places, .. } => Ok(places),
         other => Err(format!("status answered {other:?}")),
     }
 }

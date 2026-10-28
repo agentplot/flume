@@ -246,6 +246,7 @@ impl Engine {
                     end: None,
                     start: None,
                     since: None,
+                    room: None,
                 })
                 .collect(),
             current: None,

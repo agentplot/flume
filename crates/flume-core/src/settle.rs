@@ -49,7 +49,8 @@ impl Engine {
         Tidied::default()
     }
 
-    /// Settles one place, and gives what its tidy did.
+    /// Settles one place, then starts what waits for room on the host
+    /// (46, 70), and gives what its tidy did.
     pub(crate) fn settle_place(&self, id: &PlaceId) -> Tidied {
         let mut tidied = Tidied::default();
         for _ in 0..STEPS {
@@ -57,6 +58,7 @@ impl Engine {
                 break;
             }
         }
+        self.start_waiting();
         tidied
     }
 

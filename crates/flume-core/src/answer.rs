@@ -9,8 +9,12 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Answer {
-    /// Status of one place or every place (56).
-    Status { places: Vec<PlaceStatus> },
+    /// Status of one place or every place, and of the host (56, 70).
+    Status {
+        places: Vec<PlaceStatus>,
+        #[serde(default)]
+        host: HostStatus,
+    },
     /// A launch's place, once its first stage is started, on hold or
     /// waiting (2, 6).
     Launched { place: PlaceStatus },
@@ -70,6 +74,7 @@ pub enum Act {
     Finish,
     Tell,
     Needs,
+    Priority,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,6 +124,30 @@ pub struct PlaceStatus {
     /// The move the place waits on its caller for, and since when; none
     /// where it waits on nobody (56, 130).
     pub waiting_on: Option<WaitingOn>,
+    /// The place's priority, its caller's (7, 70).
+    #[serde(default)]
+    pub priority: i64,
+}
+
+/// The host's agents running, its bound, the room left and the stages
+/// waiting for room in the order they would start (56, 70); a host that
+/// states no bound has no room to judge and no queue.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostStatus {
+    pub running: u32,
+    pub bound: Option<u32>,
+    pub room: Option<u32>,
+    pub queue: Vec<Queued>,
+}
+
+/// A stage waiting for room on the host: it waits on the host, never on
+/// its caller (70, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Queued {
+    pub place: PlaceId,
+    pub stage: String,
+    pub priority: i64,
+    pub since: Option<Seconds>,
 }
 
 /// The move a place waits on its caller for, why, since when, and the

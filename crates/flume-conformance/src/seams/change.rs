@@ -40,8 +40,8 @@ pub fn scenarios<H: ChangeHarness>() -> Vec<Scenario<H>> {
             run: the_same_revision_the_same_answer::<H>,
         },
         Scenario {
-            name: "change: the change's path in the place names it",
-            cites: &["24", "27"],
+            name: "change: locate gives where the change lies in the place, naming it",
+            cites: &["127", "24", "27"],
             run: the_path_names_the_change::<H>,
         },
     ]

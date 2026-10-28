@@ -16,6 +16,7 @@ mod held;
 mod launch;
 mod prompt;
 mod reading;
+mod room;
 mod settle;
 mod start;
 mod status;

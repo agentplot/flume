@@ -1,16 +1,31 @@
 //! A stage's start (27 to 33): its settings resolved, a fresh identity
 //! and secret, its prompt filled or the stage refused naming the part,
 //! and one agent opened through the agent seam's command and the
-//! terminal, never while another of the place's is live.
+//! terminal, never while another of the place's is live, and only under
+//! the host's bound (70).
 
 use crate::prompt::{asks, render};
+use crate::room::Admit;
 use crate::{Engine, Step};
 use flume_seams::*;
+use std::sync::Arc;
+
+/// A start written as live, its agent still to open.
+pub(crate) struct Claim {
+    identity: Identity,
+    secret: Secret,
+    text: String,
+    place: PlaceRef,
+    settings: Settings,
+    agent: Arc<dyn Agent>,
+}
 
 /// What a start came to.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Start {
     Opened(Identity),
+    /// The host has no room, or stages waiting rank ahead of it (70).
+    WaitingForRoom,
     /// The prompt asks for a part with nothing to fill it (27).
     Refused(PromptPart),
     /// Another agent of the place's is live (30).
@@ -115,20 +130,52 @@ impl Engine {
     }
 
     /// Starts the stage at `index` with one fresh agent and `words` in
-    /// its prompt: the start is written to held state first, so two acts
-    /// at once open one agent (30, 75), then the agent is opened.
+    /// its prompt, admitted under the host's room lock: the start is
+    /// written to held state as live while there is room and no stage
+    /// waiting ranks ahead of it, so two acts at once open one agent and
+    /// two settles at once never start past the bound (30, 70, 75), and
+    /// the agent is opened once the lock is released; otherwise the stage
+    /// waits for room with its words.
     pub(crate) fn start_stage(&self, id: &PlaceId, index: usize, words: Option<String>) -> Start {
+        let claimed = {
+            let _room = self.host.room();
+            let queue = self.queue();
+            self.claim(id, index, words, Admit::Queue(&queue))
+        };
+        match claimed {
+            Ok(claim) => self.open(id, claim),
+            Err(start) => start,
+        }
+    }
+
+    /// Claims the stage's start in held state: refused naming the part
+    /// its prompt cannot fill, left waiting for room where `admit` says
+    /// so, or written as live; called under the room lock.
+    pub(crate) fn claim(
+        &self,
+        id: &PlaceId,
+        index: usize,
+        words: Option<String>,
+        admit: Admit<'_>,
+    ) -> Result<Claim, Start> {
         let Some(read) = self.store.read(id) else {
-            return Start::NoPlace;
+            return Err(Start::NoPlace);
         };
         let place = &read.state.place;
         let settings = self.settings(place, &place.kind.stages[index]);
         let program = settings.program.clone().unwrap_or_default();
         let Some(agent) = self.agent(&program) else {
-            return Start::NoAgent(program);
+            return Err(Start::NoAgent(program));
         };
         let now = self.host.now();
         let claimed = self.update(id, |held| {
+            if let Admit::Waiting = admit {
+                if held.phase != Phase::Live
+                    || held.stages[index].state != StageState::WaitingForRoom
+                {
+                    return Step::Keep(Err(Start::NoPlace));
+                }
+            }
             if held
                 .stages
                 .iter()
@@ -137,59 +184,88 @@ impl Engine {
                 return Step::Keep(Err(Start::AgentLive));
             }
             let identity = self.next_identity(held, index);
-            match self.fill(held, index, &identity, words.as_deref()) {
+            let text = match self.fill(held, index, &identity, words.as_deref()) {
                 Err(part) => {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::Refused;
                     stage.refused_part = Some(part.name().into());
-                    Step::Write(Err(Start::Refused(part)))
+                    stage.room = None;
+                    return Step::Write(Err(Start::Refused(part)));
                 }
-                Ok(text) => {
-                    let head = self
-                        .history
-                        .head(&held.place.repository, &held.place.branch)
-                        .unwrap_or_else(|| held.place.base_revision.clone());
-                    let secret = self.host.secret();
+                Ok(text) => text,
+            };
+            if let Admit::Queue(queue) = admit {
+                if queue.must_wait(id, held.priority) {
                     let stage = &mut held.stages[index];
-                    stage.state = StageState::Started;
-                    stage.starts = identity.start;
-                    stage.refused_part = None;
-                    stage.end = None;
-                    stage.start = Some(StartHeld {
-                        n: identity.start,
-                        started_at: now,
-                        start_head: head.clone(),
+                    stage.state = StageState::WaitingForRoom;
+                    stage.room = Some(RoomWait {
+                        order: queue.next_order(),
                         words: words.clone(),
-                        identity: identity.clone(),
-                        secret: secret.clone(),
-                        program: program.clone(),
-                        settings: settings.clone(),
-                        record: None,
-                        prompt: Prompt {
-                            text: text.clone(),
-                            ..Prompt::default()
-                        },
-                        live: true,
-                        begun_at: None,
-                        first_quiet: None,
-                        last_head: head,
-                        last_head_move: now,
-                        past_limit: false,
                     });
                     held.current = Some(index);
-                    Step::Write(Ok((identity, secret, text, held.place.place_ref())))
+                    return Step::Write(Err(Start::WaitingForRoom));
                 }
             }
+            let head = self
+                .history
+                .head(&held.place.repository, &held.place.branch)
+                .unwrap_or_else(|| held.place.base_revision.clone());
+            let secret = self.host.secret();
+            let stage = &mut held.stages[index];
+            stage.state = StageState::Started;
+            stage.starts = identity.start;
+            stage.refused_part = None;
+            stage.room = None;
+            stage.end = None;
+            stage.start = Some(StartHeld {
+                n: identity.start,
+                started_at: now,
+                start_head: head.clone(),
+                words: words.clone(),
+                identity: identity.clone(),
+                secret: secret.clone(),
+                program: program.clone(),
+                settings: settings.clone(),
+                record: None,
+                prompt: Prompt {
+                    text: text.clone(),
+                    ..Prompt::default()
+                },
+                live: true,
+                begun_at: None,
+                first_quiet: None,
+                last_head: head,
+                last_head_move: now,
+                past_limit: false,
+            });
+            held.current = Some(index);
+            Step::Write(Ok(Claim {
+                identity,
+                secret,
+                text,
+                place: held.place.place_ref(),
+                settings: settings.clone(),
+                agent: agent.clone(),
+            }))
         });
-        let (identity, secret, text, place_ref) = match claimed {
-            None => return Start::NoPlace,
-            Some(Err(refused)) => return refused,
-            Some(Ok(claim)) => claim,
-        };
-        let command = agent.command(&settings, &place_ref, &identity, &secret, &text);
+        claimed.unwrap_or(Err(Start::NoPlace))
+    }
+
+    /// Opens the agent of a claimed start, out of the room lock; an open
+    /// the terminal refuses ends the start, freeing its room (70).
+    pub(crate) fn open(&self, id: &PlaceId, claim: Claim) -> Start {
+        let Claim {
+            identity,
+            secret,
+            text,
+            place,
+            settings,
+            agent,
+        } = claim;
+        let command = agent.command(&settings, &place, &identity, &secret, &text);
         match self
             .terminal
-            .open(&place_ref, &command, &identity, settings.beside.as_deref())
+            .open(&place, &command, &identity, settings.beside.as_deref())
         {
             Opened::Opened { carried } => {
                 if carried {

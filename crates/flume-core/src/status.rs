@@ -26,6 +26,7 @@ impl Engine {
         };
         Answer::Status {
             places: held.iter().map(|held| self.place_status(held)).collect(),
+            host: self.host_status(),
         }
     }
 
@@ -140,6 +141,7 @@ impl Engine {
             recipients: place.recipients.clone(),
             hold_words: place.hold_words.clone(),
             waiting_on: waiting_on(held),
+            priority: held.priority,
         }
     }
 }

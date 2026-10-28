@@ -132,6 +132,10 @@ fn held() -> HeldState {
                 words: Some("which design?".into()),
                 needs: Some(StopKind::FoundWork),
             }),
+            room: Some(RoomWait {
+                order: 3,
+                words: Some("the merge queue's words".into()),
+            }),
             start: Some(StartHeld {
                 n: 2,
                 started_at: 5,

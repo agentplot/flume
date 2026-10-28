@@ -363,7 +363,7 @@ fn a_kinds_version_changes(_: &()) -> Outcome {
     ensure_eq!(held.place.kind.version, 1, "the first place's kind");
     ensure_eq!(held.stages.len(), 1, "the first place's stages");
     let status = match world.engine.status(None) {
-        flume_core::Answer::Status { places } => places,
+        flume_core::Answer::Status { places, .. } => places,
         other => return Err(format!("status answered {other:?}")),
     };
     let versions: Vec<(String, u32)> = status

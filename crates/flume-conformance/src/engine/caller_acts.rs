@@ -5,6 +5,7 @@ use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Act, Answer, Retry};
 use flume_seams::*;
+use std::sync::{Arc, Mutex};
 
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
@@ -558,10 +559,29 @@ fn two_starts_at_once(_: &()) -> Outcome {
     world.store.put(&id, held);
     let other = world.engine();
     let retried = id.clone();
+    let host = world.host.clone();
+    let retry = Arc::new(Mutex::new(None));
+    let handle = retry.clone();
     world.store.before_next_write(move || {
-        let _ = other.retry(&retried, Retry::Stage("code".into()), None, false);
+        let rooms = host.log.count("room");
+        let thread = std::thread::spawn(move || {
+            let _ = other.retry(&retried, Retry::Stage("code".into()), None, false);
+        });
+        while host.log.count("room") == rooms {
+            std::thread::yield_now();
+        }
+        *handle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(thread);
     });
     world.settle(&id);
+    let thread = retry
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take();
+    if let Some(thread) = thread {
+        thread.join().map_err(|_| "the retry panicked")?;
+    }
     let code = World::identity("change", "plan", "code", 1);
     ensure_eq!(
         world

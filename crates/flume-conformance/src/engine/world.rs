@@ -238,7 +238,9 @@ impl World {
     /// The place's status, as status gives it.
     pub fn status(&self, place: &PlaceId) -> Result<flume_core::PlaceStatus, String> {
         match self.engine().status(Some(place)) {
-            flume_core::Answer::Status { mut places } if places.len() == 1 => Ok(places.remove(0)),
+            flume_core::Answer::Status { mut places, .. } if places.len() == 1 => {
+                Ok(places.remove(0))
+            }
             other => Err(format!("status answered {other:?}")),
         }
     }

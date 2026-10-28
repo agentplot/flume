@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "6246a48";
+pub const REVISION: &str = "e5f92f6";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -12,6 +12,7 @@ pub fn part_a() -> Vec<u32> {
         .chain(107..=114)
         .chain(118..=120)
         .chain([123, 124])
+        .chain(129..=132)
         .collect()
 }
 
@@ -20,7 +21,9 @@ pub fn part_b() -> Vec<u32> {
     (78..=99)
         .chain(101..=106)
         .chain(115..=117)
-        .chain([121, 122, 125])
+        .chain([121, 122])
+        .chain(125..=128)
+        .chain([133, 134])
         .collect()
 }
 
@@ -33,8 +36,21 @@ pub fn all() -> Vec<String> {
         .map(|clause| clause.to_string())
         .collect();
     all.extend((1..=8).map(|invariant| format!("I{invariant}")));
-    all.extend((1..=34).map(|scenario| format!("S{scenario}")));
+    all.extend((1..=38).map(|scenario| format!("S{scenario}")));
     all
+}
+
+/// The change that builds what no change has built yet.
+pub const NEXT_CHANGE: &str = "the next change, which delivers a place's ends";
+
+/// Each clause or scenario no change has built yet, with the change that
+/// builds it: no scenario of the suite cites one, and the coverage check
+/// asks none to be cited.
+pub fn unbuilt() -> Vec<(String, &'static str)> {
+    ["129", "132", "S38"]
+        .into_iter()
+        .map(|clause| (clause.to_string(), NEXT_CHANGE))
+        .collect()
 }
 
 #[cfg(test)]
@@ -45,19 +61,40 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2);
-        assert_eq!(b.len(), 22 + 6 + 3 + 3);
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 2);
         assert!(!a.contains(&100) && !b.contains(&100));
         assert!(a.iter().all(|clause| !b.contains(clause)));
         let mut every: Vec<u32> = a.into_iter().chain(b).collect();
         every.sort();
         assert_eq!(
             every,
-            (1..=125)
+            (1..=134)
                 .filter(|clause| *clause != 100)
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 124 + 8 + 34);
-        assert_eq!(REVISION, "6246a48");
+        assert_eq!(all().len(), 133 + 8 + 38);
+        assert_eq!(REVISION, "e5f92f6");
+        for clause in [129, 130, 131, 132] {
+            assert!(part_a().contains(&clause), "{clause} is not in Part A");
+        }
+        for clause in [126, 127, 128, 133, 134] {
+            assert!(part_b().contains(&clause), "{clause} is not in Part B");
+        }
+    }
+
+    #[test]
+    fn what_the_next_change_builds() {
+        let unbuilt = unbuilt();
+        assert_eq!(
+            unbuilt
+                .iter()
+                .map(|(clause, _)| clause.as_str())
+                .collect::<Vec<_>>(),
+            ["129", "132", "S38"]
+        );
+        assert!(unbuilt
+            .iter()
+            .all(|(clause, change)| all().contains(clause) && *change == NEXT_CHANGE));
     }
 }

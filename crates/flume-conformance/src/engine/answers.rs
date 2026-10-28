@@ -173,6 +173,21 @@ fn place_status() -> PlaceStatus {
             since: Some(120),
             words: Some("which design?".into()),
         }),
+        priority: 2,
+    }
+}
+
+fn host_status() -> HostStatus {
+    HostStatus {
+        running: 2,
+        bound: Some(2),
+        room: Some(0),
+        queue: vec![Queued {
+            place: PlaceId::new("/r/places/fix--two"),
+            stage: "code".into(),
+            priority: 1,
+            since: Some(60),
+        }],
     }
 }
 
@@ -204,6 +219,7 @@ pub fn full() -> Vec<(&'static str, Answer)> {
             "status",
             Answer::Status {
                 places: vec![place_status()],
+                host: host_status(),
             },
         ),
         (
@@ -305,6 +321,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
         "status",
         &[
             "status",
+            "status.host",
+            "status.host.bound",
+            "status.host.queue",
+            "status.host.queue[].place",
+            "status.host.queue[].priority",
+            "status.host.queue[].since",
+            "status.host.queue[].stage",
+            "status.host.room",
+            "status.host.running",
             "status.places",
             "status.places[].agent",
             "status.places[].agent.asking",
@@ -346,6 +371,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].phase.over.over.landed",
             "status.places[].phase.over.over.landed.commit",
             "status.places[].place",
+            "status.places[].priority",
             "status.places[].recipients",
             "status.places[].readiness",
             "status.places[].readiness.steps",
@@ -439,6 +465,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.phase.over.over.landed",
             "launched.place.phase.over.over.landed.commit",
             "launched.place.place",
+            "launched.place.priority",
             "launched.place.recipients",
             "launched.place.readiness",
             "launched.place.readiness.steps",
@@ -538,6 +565,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.phase.over.over.landed",
             "acted.status.phase.over.over.landed.commit",
             "acted.status.place",
+            "acted.status.priority",
             "acted.status.recipients",
             "acted.status.readiness",
             "acted.status.readiness.steps",

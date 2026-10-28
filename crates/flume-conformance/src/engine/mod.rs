@@ -4,6 +4,7 @@
 pub mod answers;
 pub mod caller_acts;
 pub mod held_state;
+pub mod host_queue;
 pub mod launching;
 pub mod place_status;
 pub mod places;
@@ -30,5 +31,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(restart::scenarios());
     every.extend(answers::scenarios());
     every.extend(places::scenarios());
+    every.extend(host_queue::scenarios());
     every
 }

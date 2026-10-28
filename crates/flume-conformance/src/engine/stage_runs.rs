@@ -293,7 +293,7 @@ fn s5_a_slow_start(_: &()) -> Outcome {
             "the code stage"
         );
         let status = match world.engine.status(Some(&id)) {
-            Answer::Status { places } => places,
+            Answer::Status { places, .. } => places,
             other => return Err(format!("status answered {other:?}")),
         };
         let agent = status[0].agent.clone().ok_or("no agent")?;
