@@ -17,3 +17,13 @@ brought to the rule.
   command sluice records 0068 and 0070 give a submitter; until it is
   built the merge-queue profile has nothing to call and the unit waits
   on sluice's.
+- **Part C's readings of herdr 0.9.5 and sluice 0.55.0 wait on the
+  operator's ruling.** The commands, state names, error codes and
+  fields the herdr, printed-command and sluice profiles read, and what
+  herdr and sluice were seen to do (herdr's `done` only after a prompted
+  turn on an unfocused pane, an agent left listed `unknown` after it
+  exits; a conflict found before testing with no `tested`, a failure's
+  `notice` naming its check), are written into C.5 and C.6 of
+  agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
+  operator rules (Part C's preamble; core.19). The item leaves when it
+  lands.
