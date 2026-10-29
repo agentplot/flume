@@ -12,11 +12,6 @@ brought to the rule.
   2026-10-28: the finding sends the place back to the kind's fix round
   by itself. The other four were ruled on
   2026-10-26, in the section. None is a rule's source until ruled.
-- **Records 0012 and 0013 wait on `sluice inbox`.** The settle's
-  `inbox` (clause 133) collects the place's pending outcomes by the
-  command sluice records 0068 and 0070 give a submitter; until it is
-  built the merge-queue profile has nothing to call and the unit waits
-  on sluice's.
 - **Part C's readings of herdr 0.9.5 and sluice 0.55.0 wait on the
   operator's ruling.** The commands, state names, error codes and
   fields the herdr, printed-command and sluice profiles read, and what

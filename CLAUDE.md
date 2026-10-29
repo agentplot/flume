@@ -5,7 +5,9 @@ One launch, carried into one worktree of its own at
 base, and worked through its kind's stages. Each stage is a fresh agent
 whose prompt is confirmed against its transcript; once its deliverable
 exists and its agent is quiet, the next stage starts. The place is
-tidied once the work lands or is dropped. Designed, not built.
+tidied once the work lands or is dropped. It runs: a fix and a change
+are carried through to their landing by the walkthroughs of the
+`check-tools` layer.
 
 The design is in agentplot/blueprints: the capture design,
 `design/capture/design.md`, section "Launching: flume", and its plan,
@@ -39,16 +41,18 @@ branch requires:
 | layer | what | who requires it |
 |---|---|---|
 | `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the plugin's hooks against the built binary; the conformance suite's clause coverage; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks and layers | every branch, and CI on Linux and macOS |
-| `check-tools` | the sluice and herdr profiles against the pinned tools, and the walkthroughs with a stand-in agent program | main |
+| `check-tools` | the sluice and herdr profiles against the pinned tools, and the walkthroughs with the stand-in for Claude Code (`crates/flume/tests/stand-in/`) | main |
 | `check-live` | the walkthroughs with a real Claude Code under herdr | no branch: run by hand in the devenv shell, on a host signed in to Claude Code |
 
 Run suites through sluice, so the agents on this host take turns under
 its bound: once your work is committed, `sluice exec main` for the
 gate's checks, and while iterating `sluice exec main -- moon run
-<project>:<task>`. A quick, narrow call, `cargo check` or one unit test,
+<project>:<task>`. The projects are those `.moon/workspace.yml` lists:
+`seams`, `core`, `fakes`, `conformance` and `flume` (the crates under
+`crates/`), `plugin-claude` (`plugins/claude`), `site` and `root`. A quick, narrow call, `cargo check` or one unit test,
 is fine to run directly. `devenv shell -- moon run :#check-fast` runs
-the fast layer; `site-build` and `prose` run one each, `lint` the
-workspace's clippy, `disk` what `target/` has grown to, and `moon run
+the fast layer, `:#check-tools` the tools layer; `site-build` and
+`prose` run one each, `lint` the workspace's clippy, `disk` what `target/` has grown to, and `moon run
 <crate>:test` one crate's tests (`seams`, `core`, `fakes`,
 `conformance`, `flume`). The site's own notes are `site/README.md`.
 
