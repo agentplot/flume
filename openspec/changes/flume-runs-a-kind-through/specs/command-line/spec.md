@@ -43,6 +43,11 @@ bare repository and its worktrees, or the main worktree.
 - **WHEN** `flume launch` runs with `--hold verify=after review --recipient madswan/planner` and then with neither, `FLUME_RECIPIENT` set
 - **THEN** the first place's verify is on hold with the words `after review` and its recipient is `madswan/planner`, and the second's recipient is the variable's (7)
 
+#### Scenario: Agent settings at the launch
+
+- **WHEN** `flume launch --kind change --agent model=opus --agent verify.model=sonnet --agent env.A=1` runs
+- **THEN** construct and code start with `opus`, verify with `sonnet`, every stage with `A=1`, each at the `launch` layer (7, 32)
+
 #### Scenario: A place named from inside it
 
 - **WHEN** `flume status fix--one --json` runs inside the place `places/fix--one`

@@ -348,7 +348,8 @@ The place seam's `ready` and `remove` are unchanged in shape.
   document and the folder (62).
 - The room lock is `$XDG_STATE_HOME/flume/room.lock` (decision 6).
 - The host's configuration is `$XDG_CONFIG_HOME/flume/config.toml`:
-  `[host] agents` (C.7) and `[host] terminal` (decision 12).
+  `[host] agents` (C.7), `[host] terminal` (decision 12), and the
+  agents' settings by kind and by repository and kind (decision 16a).
 
 ### 11. Git's history and the host, read for real
 
@@ -561,7 +562,7 @@ for a person or as JSON with `--json` (60, 61, section 9):
 
 | command | act |
 |---|---|
-| `launch --kind <k> --name <n> [--base <b>] [--brief <text> \| --brief-file <f>] [--kinds <file>] [--hold <stage>=<words>]… [--hold-submission] [--recipient <r>]… [--mark <m>] [--priority <n>] [--set <stage>.<field>=<value>]…` | 2 to 8, 43, 70 |
+| `launch --kind <k> --name <n> [--base <b>] [--brief <text> \| --brief-file <f>] [--kinds <file>] [--hold <stage>=<words>]… [--hold-submission] [--recipient <r>]… [--mark <m>] [--priority <n>] [--agent [<stage>.]<field>=<value>]…` | 2 to 8, 32, 43, 70 |
 | `status [<place>]` | 56 to 58, 70 |
 | `prompt <place> <stage>` | 29 |
 | `tell <place> <words> [--within <time>]` | 53 to 55 |
@@ -578,8 +579,63 @@ runs in, or `--repository`. Exit status 0 for an answer, 1 for a
 refusal. `flume hook <event>` and `flume mcp` are the plugin's.
 The engine is built per command over the resolver, the host's terminal
 and store, the real history and host, and `Defaults`: Claude Code with
-no model where neither launch nor stage gives settings (32), three
+no model where no layer gives settings (32, decision 16a), three
 send-backs (23).
+
+### 16a. An agent's settings, layered (record 0017)
+
+An agent's program, model, instructions and environment are resolved at
+each start from six layers, each setting from the first that gives it
+(32): the launch's; the host's for the repository and kind; the host's
+for the kind; the repository's for a kind it does not declare; the
+kind's declaration; `Defaults`. Within a layer a stage's own setting
+comes before the kind's. `Settings::under` already merges `env` by
+variable and takes the rest whole; the resolver folds the layers through
+it, most general first, and keeps, for each setting and each
+environment variable, the layer that gave it.
+
+- **The launch.** `--agent <field>=<value>` gives every stage's agent a
+  setting, `--agent <stage>.<field>=<value>` one stage's, the field one
+  of `program`, `model`, `instructions`, `env.<NAME>` and `beside`. The
+  launch and its held state carry the kind-level settings beside the
+  per-stage map they carry now (7, 8).
+- **The host.** The store profile reads `[kinds.<kind>.agents]` and
+  `[repos."<repository>".kinds.<kind>.agents]` from the host's
+  configuration, each with `.stages.<stage>` tables, the repository
+  keyed by its location as a launch names it, `~` expanded. `Host`
+  gains `settings(repository, kind)`, both host layers as written, read
+  again at every start, never cached in held state (32, C.7). Settings
+  for a kind or a stage the place does not run are ignored.
+- **The repository and the kind.** weir's crate, at the pin that reads
+  them (weir 52, 57, C.4), gives a kind's `agents` table with its
+  `stages` tables, and a settings-only `[kinds.<kind>]` table apart
+  from the kinds; the kinds profile maps both onto the seams' types.
+  The launch keeps, in the place's held state, the repository's
+  settings for the kind the name resolved to and the kind's own, as it
+  read them at the base's revision, so a later start reads them from
+  held state, never from the base again (8, 20, 21). A repository's
+  declaration that a launch's resolves over gives nothing (C.2).
+- **Expansion.** Host-layer `env` values only: a leading `~` is the host
+  user's home and `$VAR` or `${VAR}` a variable of the login
+  environment the agent profile already reads (29); a variable it lacks
+  refuses the start naming it. Nothing in a repository's file or a
+  launch is expanded.
+- **Refusals.** At the launch, every stage resolved with the host's
+  configuration as it stands then: a program the resolver binds no
+  agent profile for, or the host's terminal cannot run, refuses the
+  launch naming the program, the stage and the layer (4); so does an
+  `env` in a repository's `.config/flume.toml`, and settings for a stage
+  the kind does not hold. At a later start, a program or a missing
+  variable the host's configuration has changed to leaves the stage
+  refused, naming it and its layer, with no agent started, until a
+  retry (27).
+- **Status.** The current agent's `settings` gain `from`: for each of
+  `program`, `model`, `instructions` and each `env` variable, its layer
+  (`launch`, `host-repository`, `host-kind`, `repository`, `kind`,
+  `default`), the value as that layer wrote it, before expansion (56,
+  61: a field gained, none removed). An agent already started keeps the
+  settings it started with in its start's record; a change to the
+  host's configuration shows at the next start.
 
 ### 17. flume's Claude Code plugin
 

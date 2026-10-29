@@ -22,10 +22,19 @@ the document (62, 102 to 104, 128, C.7).
 
 The host's configuration SHALL be read from
 `$XDG_CONFIG_HOME/flume/config.toml`: `[host] agents`, the bound (70),
-and `[host] terminal`, the terminal bound for the host (105); a file or a
-word left out SHALL be no bound and the printed command.
+`[host] terminal`, the terminal bound for the host (105), and the
+agents' settings by kind, `[kinds.<kind>.agents]`, and by repository and
+kind, `[repos."<repository>".kinds.<kind>.agents]`, each with
+`.stages.<stage>` tables, the repository keyed by its location, read at
+every start (32, C.7); a file or a word left out SHALL be no bound, the
+printed command and no host settings.
 
 #### Scenario: A bound stated
 
 - **WHEN** the configuration states `[host] agents = 2`
 - **THEN** the host's bound reads two
+
+#### Scenario: Settings for a kind and for a repository's kind
+
+- **WHEN** the configuration gives `[kinds.change.agents] model = "opus"` and `[repos."/r".kinds.change.agents.stages.verify] model = "sonnet"`
+- **THEN** the host's settings for change@1 in `/r` read `opus` for the kind at the host-kind layer and `sonnet` for verify at the host-repository layer, and for change@1 elsewhere only `opus` (32, C.7)
