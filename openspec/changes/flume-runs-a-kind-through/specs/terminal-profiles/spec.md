@@ -28,10 +28,11 @@ unknown or refused in herdr's words (98, core.29; record 0016).
 ### Requirement: Where herdr opens an agent
 
 The herdr profile SHALL open an agent in a pane of the session the
-launch's settings name, flume's own otherwise: in the repository's
-workspace, labelled with its name and made when its first place opens,
-one tab per place named `<kind>--<name>`, each recorded by id and
-socket in the host's state; or a split beside the pane the settings
+launch's settings name, flume's own otherwise: in the workspace of the
+place's repository and base, labelled `<repository> <base>` and made
+when the first place on that base opens, one tab per place named
+`<kind>--<name>` whose panes are the place's agents, each recorded by
+id and socket in the host's state; or a split beside the pane the settings
 name, left where its caller put it (94, 107, C.5; record 0018).
 
 #### Scenario: A conversation beside the operator's pane
@@ -39,10 +40,10 @@ name, left where its caller put it (94, 107, C.5; record 0018).
 - **WHEN** a stage's settings name the pane `operator`
 - **THEN** the agent opens in a split beside that pane, held by its pane and socket, under a herdr name made from its identity
 
-#### Scenario: Two repositories' places
+#### Scenario: Places on two bases
 
-- **WHEN** places of two repositories open under herdr in flume's own session
-- **THEN** each repository's places are tabs of a workspace of its own, labelled with the repository's name
+- **WHEN** places on `main` and on `bolt/the-surfaces` of one repository open under herdr in flume's own session
+- **THEN** each base's places are tabs of a workspace of its own, labelled `<repository> main` and `<repository> bolt/the-surfaces`
 
 ### Requirement: herdr starts the agent by agent start
 
@@ -122,26 +123,26 @@ record 0018).
 ### Requirement: herdr tidies what it made
 
 The herdr profile SHALL close a place's recorded tab when the place
-goes, and the repository's recorded workspace once it holds no tab of a
-live place and no pane flume did not open, keeping and naming either
+goes, and its base's recorded workspace once it holds no tab of a live
+place and no pane flume did not open, keeping and naming either
 where a pane flume did not open stands, and never closing what flume did
 not make (137, 138, C.5; record 0018).
 
-#### Scenario: The last place of a repository
+#### Scenario: The last place on a base
 
-- **WHEN** a repository's last place lands and is tidied
-- **THEN** its tab and the repository's workspace are closed (S47)
+- **WHEN** the last place on a repository's base lands and is tidied
+- **THEN** its tab and the base's workspace are closed (S47)
 
 #### Scenario: A person's pane in flume's workspace
 
-- **WHEN** a person has opened a pane in a repository's workspace and its last place is dropped
+- **WHEN** a person has opened a pane in a base's workspace and the last place on that base is dropped
 - **THEN** the place's tab is closed, the workspace left open, and status names it with the person's pane (S48)
 
 ### Requirement: herdr shows clues
 
 The herdr profile SHALL show, by `pane report-metadata` and `workspace
 report-metadata` with `--source flume`, the pane's stage and state as
-its title and the repository's count of places as the workspace's
+its title and the count of the places on its base as the workspace's
 `flume` token, a failure logged and failing nothing (139, C.5; record
 0018).
 

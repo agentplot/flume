@@ -376,9 +376,10 @@ word in C.7 (105).
   passed (98), since a crew team once waited two hours inside an
   `agent prompt` that never returned. open makes a pane in the herdr
   session the launch's settings name, flume's own otherwise: in the
-  repository's workspace, labelled with its name and made `--no-focus`
-  when its first place opens, one tab per place named `<kind>--<name>`,
-  each recorded by id and socket in the host's state; or a split beside
+  workspace of the place's repository and base, labelled `<repository>
+  <base>` and made `--no-focus` when the first place on that base
+  opens, one tab per place named `<kind>--<name>`, whose panes are the
+  place's agents, each recorded by id and socket in the host's state; or a split beside
   the pane the settings name, left where its caller put it. The pane is
   made with `--cwd <place>` and an `--env` for each variable of the
   agent's environment and flume's `FLUME_*`, `PATH` led by a folder of
@@ -419,8 +420,8 @@ word in C.7 (105).
   pane with a `restore_error` after its server's restart (96). screen
   is `pane read --source visible` (136). close ends the pane and its
   process group and reads that it is gone (97). tidy closes the place's
-  recorded tab, and the repository's recorded workspace once it holds no
-  tab of a live place and no pane flume did not open; either is kept,
+  recorded tab, and the base's recorded workspace once it holds no tab
+  of a live place and no pane flume did not open; either is kept,
   named, where a pane flume did not open stands, and nothing flume did
   not make is closed (137, 138). show reports `pane report-metadata
   <pane> --source flume --title "<stage> · <state>" --display-agent
@@ -473,9 +474,9 @@ sends no prompt (35, 43). The seam gains `tidy`, which the core calls
 when a place goes, landed or dropped (137, 138), status naming what
 the terminal kept and why; and `show`, which the core calls at each
 settle that changes a stage's state with the stage, its state and the
-repository's count of places running, asking, waiting on their caller
+count of the places on its base running, asking, waiting on their caller
 and stalled, a failure logged and failing nothing, and nothing read
-back (139). The clause list moves to blueprints ad5ffeb, adding 137 to
+back (139). The clause list moves to blueprints f44ec91, adding 137 to
 139 and S45 to S49.
 
 ### 13. The merge queue through sluice
