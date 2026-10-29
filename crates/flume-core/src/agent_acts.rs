@@ -24,7 +24,8 @@ impl Engine {
 
     /// An agent's stop-short, with its identity, its start's secret, its
     /// words and whether it needs an answer or found work: the stage ends
-    /// short with the words whole and the kind, and no next stage starts,
+    /// short with the words whole, the kind and a repetition's task group
+    /// (142), and no next stage starts,
     /// except that found work from the kind's last stage starts its fix
     /// round once the agent is quiet (41, 42, 131).
     pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
@@ -59,6 +60,7 @@ impl Engine {
                     words: Some(words.to_string()),
                     needs: Some(kind),
                     made: made.clone(),
+                    group: start.group.clone().map(Box::new),
                     ..StageEnd::default()
                 });
                 Step::Write(true)

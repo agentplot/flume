@@ -164,11 +164,18 @@ fn held() -> HeldState {
                 commits: vec![Revision::new("c3")],
                 screen: Some("Bypass Permissions mode".into()),
                 made: made(),
+                group: Some(Box::new(GroupHeld {
+                    index: 1,
+                    number: Some("2".into()),
+                    title: Some("Two".into()),
+                    tasks: vec!["2.1 do it".into()],
+                })),
             }),
             room: Some(RoomWait {
                 order: 3,
                 words: Some("the merge queue's words".into()),
             }),
+            made_from: Some(1),
             start: Some(StartHeld {
                 n: 2,
                 started_at: 5,
@@ -820,6 +827,27 @@ fn a_start_held_before_it_had_a_group() {
     assert_eq!(group, GroupHeld::default(), "the group above every heading");
     round_trips(group);
     round_trips(held().stages[0].start.clone().unwrap().group.unwrap());
+}
+
+#[test]
+fn a_stage_and_its_end_held_before_repetitions_carried_theirs() {
+    let mut json = serde_json::to_value(held().stages[0].clone()).unwrap();
+    json.as_object_mut().unwrap().remove("made_from");
+    json["end"].as_object_mut().unwrap().remove("group");
+    let before: StageHeld = serde_json::from_value(json).unwrap();
+    assert_eq!(before.made_from, None, "a stage held before");
+    assert_eq!(
+        before.end.as_ref().and_then(|end| end.group.clone()),
+        None,
+        "an end held before"
+    );
+    let none = serde_json::to_value(StageHeld {
+        end: Some(StageEnd::default()),
+        ..before
+    })
+    .unwrap();
+    assert!(none.get("made_from").is_none(), "no count written");
+    assert!(none["end"].get("group").is_none(), "no group written");
 }
 
 #[test]

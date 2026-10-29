@@ -175,6 +175,7 @@ impl Engine {
         self.update(place, |held| {
             for stage in held.stages.iter_mut().skip(index + 1) {
                 stage.state = StageState::NotReached;
+                stage.made_from = None;
             }
             held.submission.due = false;
             held.submission.waiting = None;
@@ -201,10 +202,12 @@ impl Engine {
     /// Puts the place's stage, or its submission, on hold with the
     /// caller's words: taken for a stage not started since the place's
     /// current stage began, one waiting for room taken out of the queue,
-    /// or for a submission not made; refused naming why for a stage
-    /// started, a submission made and undecided, a hold already put, or
-    /// a place whose work is over. Only a retry naming it ends it (8, 47,
-    /// 49, 130; core.24).
+    /// for a repeating stage whose repetition runs as a hold on its next
+    /// repetition, the running one going on (142), or for a submission
+    /// not made; refused naming why for any other stage started, a
+    /// submission made and undecided, a hold already put, or a place
+    /// whose work is over. Only a retry naming it ends it (8, 47, 49,
+    /// 130; core.24).
     pub fn hold(&self, place: &PlaceId, on: HoldOn, words: &str) -> Answer {
         self.settle_attended();
         let now = self.host.now();
@@ -250,9 +253,12 @@ impl Engine {
                             | StageState::WaitingForRoom
                             | StageState::WaitingOnReadiness
                     );
-                    if held.current == Some(index) && !unstarted {
+                    let repeats = held.place.kind.stages[index].repeats;
+                    let next_repetition = repeats
+                        && (stage.state.running() || stage.state == StageState::Repeating);
+                    if held.current == Some(index) && !unstarted && !next_repetition {
                         return Step::Keep(Some(format!(
-                            "the stage {} of the place {place} has started; a hold is put on a stage not started",
+                            "the stage {} of the place {place} has started; a hold is put on a stage not started, or on a repeating stage's next repetition while one runs",
                             stage.name
                         )));
                     }

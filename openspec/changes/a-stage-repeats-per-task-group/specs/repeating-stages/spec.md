@@ -53,12 +53,19 @@ stage starts; the stage SHALL deliver once every task is ticked (24, 25,
 
 flume SHALL record no end and deliver nothing to a recipient for a
 repetition that delivered while a task stays unticked; the stage's end
-SHALL be recorded and delivered once, when the stage delivers (43, 140).
+SHALL be recorded and delivered once, when the stage delivers, carrying
+every line each repetition's run wrote of what it made, in order (43,
+129, 140).
 
 #### Scenario: One notice for the stage
 
 - **WHEN** a repeating stage of three groups delivers with a recipient waiting on it
 - **THEN** the recipient is delivered one end, the stage's, carrying the head its last repetition delivered at
+
+#### Scenario: What every repetition made
+
+- **WHEN** each of a repeating stage's three repetitions writes a line of what it made before it delivers
+- **THEN** the stage's one end carries the three lines, in the order they were written (129)
 
 ### Requirement: The next repetition waits for room like any start
 

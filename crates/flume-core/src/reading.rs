@@ -294,8 +294,9 @@ impl Engine {
 
     /// What a stuck, lost or never-begun end carries: the agent's last
     /// words as its own record holds them, the commits on the place's
-    /// branch since the start, and for a prompt never begun what the
-    /// terminal shows of the agent (43).
+    /// branch since the start, for a prompt never begun what the
+    /// terminal shows of the agent, and a repetition's task group (43,
+    /// 142).
     pub(crate) fn read_out(
         &self,
         held: &HeldState,
@@ -320,6 +321,7 @@ impl Engine {
                 .then(|| self.terminal.screen(&start.identity))
                 .flatten(),
             made: self.made_since(&place.id, start),
+            group: start.group.clone().map(Box::new),
             ..StageEnd::default()
         }
     }

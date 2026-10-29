@@ -67,6 +67,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["70", "140", "46"],
             run: a_full_host_between_repetitions,
         },
+        Scenario {
+            name: "repeating stages: a caller stopping code's agent on group 4 leaves the stage waiting for a retry, status naming group 4, and the place stalls five minutes from the stop, not from the stage's first start",
+            cites: &["51", "142", "130", "S51"],
+            run: a_stop_names_the_group,
+        },
+        Scenario {
+            name: "repeating stages: a repetition on group 2 stopping short needing an answer ends naming group 2, its notice too, and the caller's retry starts a fresh agent on group 2 with the question and the answer, never on group 1",
+            cites: &["42", "49", "43", "142", "S51"],
+            run: a_retry_after_a_stop_short,
+        },
+        Scenario {
+            name: "repeating stages: four repetitions each working twenty minutes and quiet twenty more under a thirty-minute limit are never reported working past it nor stuck, though the stage runs past two hours",
+            cites: &["44", "118", "142"],
+            run: a_long_stage_with_short_repetitions,
+        },
+        Scenario {
+            name: "repeating stages: the stage's one end carries every line each repetition's run wrote of what it made, in order",
+            cites: &["129", "140", "43"],
+            run: every_repetitions_made_lines,
+        },
     ]
 }
 
@@ -94,6 +114,17 @@ pub fn branch(name: &str) -> String {
 /// written as three groups none ticked, and code's first repetition
 /// begun.
 pub fn code_begun(world: &World, name: &str, recipients: &[&str]) -> Result<PlaceId, String> {
+    code_begun_on(world, name, recipients, GROUPS)
+}
+
+/// The repeating change `name` launched with `recipients`, its change
+/// written as `groups` none ticked, and code's first repetition begun.
+pub fn code_begun_on(
+    world: &World,
+    name: &str,
+    recipients: &[&str],
+    groups: &[(&str, &str, usize)],
+) -> Result<PlaceId, String> {
     world.kinds.set_kinds(REPOSITORY, vec![repeating_change()]);
     let mut launch = launch("change", name, Some("plan it"));
     launch.recipients = recipients
@@ -103,7 +134,7 @@ pub fn code_begun(world: &World, name: &str, recipients: &[&str]) -> Result<Plac
     launched(&world.engine.launch(&launch))?;
     let id = World::id("change", name);
     world.settle(&id);
-    world.tick_groups(&branch(name), name, GROUPS, 0);
+    world.tick_groups(&branch(name), name, groups, 0);
     world.settle(&id);
     ensure_eq!(
         world.stage_state(&id, "code"),
@@ -551,5 +582,245 @@ fn a_full_host_between_repetitions(_: &()) -> Outcome {
         2,
         "agents ended: construct's and the first repetition's, none for room"
     );
+    Ok(())
+}
+
+/// A change of four groups, one task each.
+pub const FOUR: &[(&str, &str, usize)] = &[
+    ("1", "One", 1),
+    ("2", "Two", 1),
+    ("3", "Three", 1),
+    ("4", "Four", 1),
+];
+
+/// The live start of the place's code stage.
+fn code_start(world: &World, id: &PlaceId) -> Result<StartHeld, String> {
+    world.held(id).ok_or("the place is gone")?.stages[1]
+        .start
+        .clone()
+        .filter(|start| start.live)
+        .ok_or_else(|| "code has no live start".to_string())
+}
+
+fn a_stop_names_the_group(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun_on(&world, "plan", &[], FOUR)?;
+    for ticked in 1..=3 {
+        world.host.advance(20 * 60);
+        world.tick_groups(&branch("plan"), "plan", FOUR, ticked);
+        world.settle(&id);
+    }
+    ensure_eq!(
+        group_of(&world, &id)?.and_then(|group| group.number),
+        Some("4".to_string()),
+        "the fourth repetition's group"
+    );
+    world.host.advance(60);
+    let stopped_at = world.host.now();
+    let answer = world.engine.stop(&id, true);
+    let status = match answer {
+        Answer::Acted {
+            status: Some(status),
+            ..
+        } => status,
+        other => return Err(format!("the stop answered {other:?}")),
+    };
+    let code = &status.stages[1];
+    ensure_eq!(code.state, StageState::Stopped, "code after the stop");
+    ensure_eq!(
+        code.group
+            .as_ref()
+            .map(|group| (group.place, group.of, group.number.clone())),
+        Some((4, 4, Some("4".to_string()))),
+        "the group the stop's answer names"
+    );
+    let waiting = status
+        .waiting_on
+        .ok_or("the stopped stage waits on nobody")?;
+    ensure_eq!(
+        (waiting.stage.as_deref(), waiting.since),
+        (Some("code"), Some(stopped_at)),
+        "the retry it waits for, since the stop"
+    );
+    world.host.advance(4 * 60);
+    world.settle(&id);
+    let status = world.status(&id)?;
+    ensure!(
+        !status.stalled,
+        "stalled four minutes after the stop, the stage having run an hour"
+    );
+    ensure_eq!(
+        status.stages[1]
+            .group
+            .as_ref()
+            .and_then(|group| group.number.clone()),
+        Some("4".to_string()),
+        "the group status names"
+    );
+    world.host.advance(2 * 60);
+    world.settle(&id);
+    ensure!(
+        world.status(&id)?.stalled,
+        "not stalled six minutes after the stop"
+    );
+    Ok(())
+}
+
+fn a_retry_after_a_stop_short(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = code_begun(&world, "plan", &["ops"])?;
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    let second = code_start(&world, &id)?;
+    let question = "Which schema does task 2.1 mean?";
+    let answer = world.engine.needs(
+        &second.identity.to_string(),
+        &second.secret.0,
+        question,
+        StopKind::NeedsAnswer,
+    );
+    ensure!(answer.refusal().is_none(), "the stop-short: {answer:?}");
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(
+        held.stages[1].state,
+        StageState::EndedShort,
+        "code after the stop-short"
+    );
+    ensure_eq!(
+        held.stages[1]
+            .end
+            .as_ref()
+            .and_then(|end| end.group.as_ref())
+            .and_then(|group| group.number.clone()),
+        Some("2".to_string()),
+        "the group the end names"
+    );
+    ensure!(
+        world.terminal.notices("ops").contains(
+            &"flume: change--plan code on group 2. Two needs an answer; read: flume status change--plan"
+                .to_string()
+        ),
+        "the notice of the stop-short: {:?}",
+        world.terminal.notices("ops")
+    );
+    let retried = world.engine.retry(
+        &id,
+        flume_core::Retry::Stage("code".into()),
+        Some("the one in design 3".into()),
+        false,
+    );
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    let third = code_start(&world, &id)?;
+    ensure_eq!(
+        third.identity,
+        World::identity("change", "plan", "code", 3),
+        "the retry's fresh agent"
+    );
+    ensure_eq!(
+        third.group.and_then(|group| group.number),
+        Some("2".to_string()),
+        "the retry's group"
+    );
+    let prompt = third.prompt.text;
+    for named in [
+        "Group 2. Two",
+        "The question: Which schema does task 2.1 mean?",
+        "The answer: the one in design 3",
+    ] {
+        ensure!(prompt.contains(named), "{named} is not in {prompt}");
+    }
+    ensure!(!prompt.contains("Group 1."), "group 1 is in {prompt}");
+    Ok(())
+}
+
+fn a_long_stage_with_short_repetitions(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun_on(&world, "plan", &[], FOUR)?;
+    let began = world.host.now();
+    for ticked in 1..=4 {
+        let start = World::identity("change", "plan", "code", ticked as u32);
+        world.terminal.set_state(&start, AgentState::Working);
+        world.settle(&id);
+        world.host.advance(20 * 60);
+        world.settle(&id);
+        let agent = world.status(&id)?.agent.ok_or("no agent")?;
+        ensure_eq!(agent.identity, start.to_string(), "the repetition working");
+        ensure!(
+            !agent.past_limit,
+            "repetition {ticked} reported past its limit after twenty minutes' work"
+        );
+        world.terminal.set_state(&start, AgentState::Waiting);
+        world.settle(&id);
+        world.host.advance(20 * 60);
+        world.settle(&id);
+        ensure_eq!(
+            world.stage_state(&id, "code"),
+            Some(StageState::Begun),
+            "repetition {ticked} after twenty minutes quiet"
+        );
+        world.tick_groups(&branch("plan"), "plan", FOUR, ticked);
+        world.settle(&id);
+    }
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Delivered),
+        "code, its four repetitions done"
+    );
+    ensure!(
+        world.host.now() - began >= 160 * 60,
+        "the stage ran {} seconds",
+        world.host.now() - began
+    );
+    ensure!(
+        world.held(&id).is_some_and(|held| held
+            .ends
+            .iter()
+            .all(|end| !matches!(&end.of, EndOf::Stage { stage, state: StageState::Stuck, .. } if stage == "code"))),
+        "a repetition was recorded stuck"
+    );
+    Ok(())
+}
+
+fn every_repetitions_made_lines(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    let lines = [
+        r#"{"name":"schema","what":"one"}"#,
+        r#"{"name":"api","what":"two"}"#,
+        "not one object",
+    ];
+    for (ticked, line) in [(2, lines[0]), (4, lines[1]), (5, lines[2])] {
+        world.store.record_made(&id, line);
+        world.tick_groups(&branch("plan"), "plan", GROUPS, ticked);
+        world.settle(&id);
+    }
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(
+        held.stages[1].state,
+        StageState::Delivered,
+        "code, every task ticked"
+    );
+    let made: Vec<Made> = lines.iter().map(|line| Made::read(line)).collect();
+    ensure_eq!(
+        held.stages[1].end.as_ref().map(|end| end.made.clone()),
+        Some(made.clone()),
+        "the stage's end"
+    );
+    ensure_eq!(
+        held.stages[1].made_from,
+        None,
+        "the count kept once the stage ended"
+    );
+    let recorded: Vec<Vec<Made>> = held
+        .ends
+        .iter()
+        .filter_map(|end| match &end.of {
+            EndOf::Stage { stage, end, .. } if stage == "code" => Some(end.made.clone()),
+            _ => None,
+        })
+        .collect();
+    ensure_eq!(recorded, vec![made], "code's one recorded end");
     Ok(())
 }

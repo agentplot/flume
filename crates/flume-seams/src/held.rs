@@ -495,6 +495,12 @@ pub struct StageHeld {
     /// host's queue (70).
     #[serde(default)]
     pub room: Option<RoomWait>,
+    /// For a repeating stage between its repetitions, how many lines
+    /// `made.jsonl` held when the first repetition whose lines no end yet
+    /// carries started: the stage's end carries every line from there, so
+    /// what an earlier repetition made is not lost (129, 140).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub made_from: Option<usize>,
 }
 
 /// A stage waiting for room on the host (70).
@@ -532,6 +538,11 @@ pub struct StageEnd {
     /// as written (129).
     #[serde(default)]
     pub made: Vec<Made>,
+    /// For a repetition of a repeating stage that ended short, stuck,
+    /// lost or never begun, the task group it was given (142); boxed, so
+    /// an end stays small beside a submission's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<Box<GroupHeld>>,
 }
 
 /// One line a stage's run wrote of what it made (129): a JSON object

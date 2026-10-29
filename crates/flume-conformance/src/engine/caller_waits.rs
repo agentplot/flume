@@ -33,6 +33,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_hold_on_a_running_stage,
         },
         Scenario {
+            name: "caller waits: a hold on a repeating code stage while its repetition on group 2 works lets that repetition go on, starts no next one at its delivery, status giving code on hold with the words and naming group 3, and a retry of code starts group 3",
+            cites: &["142", "130", "47", "49", "S51"],
+            run: a_hold_on_a_running_repeating_stage,
+        },
+        Scenario {
             name: "caller waits: a hold on a place whose work is over, a stage it has not, a second hold and a submission undecided are each refused naming why",
             cites: &["130", "47", "63", "111"],
             run: holds_refused,
@@ -261,6 +266,96 @@ fn a_hold_on_a_running_stage(_: &()) -> Outcome {
             .is_some_and(StageState::running),
         "code no longer runs"
     );
+    Ok(())
+}
+
+fn a_hold_on_a_running_repeating_stage(_: &()) -> Outcome {
+    use super::repeating_stages::{branch, code_begun, group_of, GROUPS};
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    let second = World::identity("change", "plan", "code", 2);
+    ensure_eq!(
+        group_of(&world, &id)?.and_then(|group| group.number),
+        Some("2".to_string()),
+        "the repetition working"
+    );
+    let words = "waiting on the user's card about group 3's schema";
+    let status = acted(&world.engine.hold(&id, on_stage("code"), words))?;
+    ensure_eq!(
+        hold_of(&status, &on_stage("code")).and_then(|hold| hold.words),
+        Some(words.to_string()),
+        "the hold the act answers"
+    );
+    ensure_eq!(
+        status.agent.as_ref().map(|agent| agent.identity.clone()),
+        Some(second.to_string()),
+        "the repetition going on"
+    );
+    ensure!(
+        world
+            .stage_state(&id, "code")
+            .is_some_and(StageState::running),
+        "the repetition no longer runs"
+    );
+    world.host.advance(10 * 60);
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 4);
+    let delivered_at = world.host.now();
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::OnHold),
+        "code once the repetition on group 2 delivered"
+    );
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        3,
+        "agents opened: construct's and two repetitions'"
+    );
+    let status = world.status(&id)?;
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage.as_deref(), waiting.why),
+        (Act::Retry, Some("code"), Waits::OnHold),
+        "the move"
+    );
+    ensure_eq!(waiting.words.as_deref(), Some(words), "the move's words");
+    ensure_eq!(
+        waiting.since,
+        Some(delivered_at),
+        "since the repetition's end, not code's first start"
+    );
+    ensure_eq!(
+        status.stages[1]
+            .group
+            .as_ref()
+            .map(|group| (group.place, group.of, group.number.clone())),
+        Some((3, 3, Some("3".to_string()))),
+        "the group the held stage would take"
+    );
+    let retried = world
+        .engine
+        .retry(&id, Retry::Stage("code".into()), None, false);
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure!(
+        world
+            .stage_state(&id, "code")
+            .is_some_and(StageState::running),
+        "code did not start on the retry"
+    );
+    let held = world.held(&id).ok_or("the place is gone")?;
+    let start = held.stages[1].start.clone().ok_or("no start")?;
+    ensure_eq!(
+        (start.identity, start.group.and_then(|group| group.number)),
+        (
+            World::identity("change", "plan", "code", 3),
+            Some("3".to_string())
+        ),
+        "the retry's repetition"
+    );
+    ensure!(held.holds.is_empty(), "the retry left {:?}", held.holds);
     Ok(())
 }
 

@@ -155,7 +155,9 @@ impl Engine {
     /// delivered and the lines its run wrote of what it made, its agent
     /// ended or lost (40, 43, 45, 129); a repetition that delivered its
     /// group with a task still unticked records no end, and its stage
-    /// repeats (140); false when it had ended.
+    /// repeats, keeping where its run's lines began so the stage's end
+    /// carries every repetition's lines in order (129, 140); false when
+    /// it had ended.
     pub(crate) fn ended(
         &self,
         id: &PlaceId,
@@ -179,12 +181,14 @@ impl Engine {
             start.past_limit = false;
             stage.state = state;
             if state == StageState::Repeating {
+                stage.made_from.get_or_insert(start.made_from);
                 stage.end = None;
                 return Step::Write(true);
             }
+            let from = stage.made_from.take().unwrap_or(start.made_from);
             let made = lines
                 .iter()
-                .skip(start.made_from)
+                .skip(from)
                 .map(|line| Made::read(line))
                 .collect();
             stage.end = Some(StageEnd {
