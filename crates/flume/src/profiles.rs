@@ -298,13 +298,29 @@ pub fn core_over(
     recipient: Option<String>,
     resolver: BuiltIn,
 ) -> Result<Engine, String> {
+    let login = resolver.login.clone();
+    core_with(state, config, recipient, Arc::new(resolver), login)
+}
+
+/// The core over any resolver, as [`core_over`] builds it over the
+/// profiles built in: the terminal `config` binds, the store in `state`,
+/// git's history, and the host with `config`, `recipient` and exactly
+/// `login` for the host user's login environment where it is given one
+/// (design 16). A test binds a stand-in agent program through it.
+pub fn core_with(
+    state: &Path,
+    config: HostConfig,
+    recipient: Option<String>,
+    resolver: Arc<dyn Resolver>,
+    login: Option<Vec<(String, String)>>,
+) -> Result<Engine, String> {
     let terminal = terminal(config.terminal.as_deref(), state)?;
     let mut host = RealHost::new(state, config, recipient);
-    if let Some(login) = &resolver.login {
+    if let Some(login) = &login {
         host = host.with_login(login);
     }
     Ok(Engine::new(
-        Arc::new(resolver),
+        resolver,
         terminal,
         Arc::new(store::state_dir::StateDir::at(state)),
         Arc::new(GitHistory),

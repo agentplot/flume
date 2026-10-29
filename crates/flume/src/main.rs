@@ -1,29 +1,13 @@
-//! flume's binary (design 13): it builds the core over the profiles built
-//! in and writes the answer as JSON, the one form every surface gives
-//! (61). It has no command yet, and answers every place's status; the
-//! commands arrive under `src/commands/`.
+//! flume's binary (design 16): each command builds the core over the
+//! profiles built in, asks it one act and prints its answer for a person
+//! or as JSON with `--json`, the one form every surface gives (61); the
+//! commands are under `src/commands/`.
 
-use flume::profiles;
-use flume_core::Answer;
+use flume::{commands, profiles};
 use std::process::ExitCode;
 
-/// The core's answer: every place's status on this host, or the refusal
-/// naming why the core could not be built.
-fn answer() -> Answer {
-    match profiles::core() {
-        Ok(core) => core.status(None),
-        Err(reason) => Answer::refused(reason),
-    }
-}
-
 fn main() -> ExitCode {
-    let answer = answer();
-    println!("{}", answer.to_json());
-    if answer.refusal().is_some() {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
+    commands::run(std::env::args_os(), &profiles::core).exit()
 }
 
 #[cfg(test)]

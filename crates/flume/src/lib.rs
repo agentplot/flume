@@ -4,6 +4,7 @@
 //! them; the tests under `tests/` run the seams' scenarios against them
 //! (106).
 
+pub mod commands;
 pub mod git;
 pub mod host;
 pub mod profiles;
