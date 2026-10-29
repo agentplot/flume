@@ -109,8 +109,16 @@ pub const TRUST_WAIT: Duration = Duration::from_secs(30);
 const TRUST_BEAT: Duration = Duration::from_millis(250);
 
 /// How long the screen is read for the folder-trust question to be drawn
-/// or the screen to hold still without it.
-const TRUST_SETTLE: Duration = Duration::from_secs(5);
+/// or the program's screen to hold still without it.
+const TRUST_SETTLE: Duration = Duration::from_secs(10);
+
+/// How long a program's screen holds still without the folder-trust
+/// question before it is read as not asking.
+const TRUST_STILL: Duration = Duration::from_secs(1);
+
+/// How long a screen still as it was when herdr answered is given for the
+/// program to draw before it is read as not asking.
+const TRUST_DRAW: Duration = Duration::from_secs(3);
 
 /// How long a key sent at the folder-trust question is given to show on
 /// the screen before it is sent again, as one sent before the program
@@ -939,18 +947,28 @@ impl Herdr {
     }
 
     /// The pane's visible lines once they show the folder-trust question,
-    /// or once they hold still without it, two reads a beat apart
-    /// agreeing, so a dialog half drawn is not taken for what it shows;
-    /// for up to [`TRUST_SETTLE`]. Where herdr said the program is held at
-    /// a question, `blocked`, a screen without the question is read until
-    /// the bound, as the dialog may be drawn late.
+    /// or once the program has drawn and its screen holds still without
+    /// it, so neither a dialog half drawn nor one not yet drawn is taken
+    /// for what the screen shows; for up to [`TRUST_SETTLE`]. herdr may
+    /// call the program ready before it draws anything, so a screen still
+    /// as it was at the first read is settled only after [`TRUST_DRAW`];
+    /// where herdr said the program is held at a question, `blocked`, the
+    /// question is waited for until the bound, as it may be drawn late.
     fn settled(&self, pane: &Pane, trust: &FolderTrust, blocked: bool) -> String {
-        let deadline = Instant::now() + TRUST_SETTLE;
-        let mut last = self.visible(pane);
+        let began = Instant::now();
+        let deadline = began + TRUST_SETTLE;
+        let first = self.visible(pane);
+        let mut last = first.clone();
+        let mut still = Instant::now();
         while !asks(&last, trust) && Instant::now() < deadline {
             std::thread::sleep(TRUST_BEAT);
             let screen = self.visible(pane);
-            if screen == last && !blocked {
+            if screen != last {
+                still = Instant::now();
+            } else if !blocked
+                && still.elapsed() >= TRUST_STILL
+                && (screen != first || began.elapsed() >= TRUST_DRAW)
+            {
                 break;
             }
             last = screen;

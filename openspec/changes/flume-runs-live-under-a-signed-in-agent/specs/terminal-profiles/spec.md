@@ -13,7 +13,11 @@ the last did, and read again until the question is gone, within 30
 seconds, never confirming another choice. Where `agent start` answered
 `agent_not_ready`, it SHALL then wait within its bound until herdr reads
 the agent idle, and a screen that shows no folder-trust question by
-five seconds SHALL be held with the screen; a `timeout` with no
+ten seconds SHALL be held with the screen; after `agent_started` the
+screen SHALL be read until it shows the question, or until it holds
+still for a second without it once it differs from its first read or
+three seconds have passed, up to ten seconds, as herdr may answer
+before the program draws anything; a `timeout` with no
 folder-trust question SHALL be not come up with the screen (34, 35,
 94, C.5; record 0018).
 
@@ -26,6 +30,11 @@ folder-trust question SHALL be not come up with the screen (34, 35,
 
 - **WHEN** `agent start` answers `agent_not_ready` while the pane shows only the dialog's first line, and the choices are drawn a second later
 - **THEN** the profile waits for the choices, answers yes from the screen, and the agent comes up (S39)
+
+#### Scenario: herdr reads the dialog ready
+
+- **WHEN** `agent start` answers `agent_started` while the pane still shows the shell's line, and the folder-trust question is drawn after it
+- **THEN** the profile waits for the program's screen, answers yes from it, and the start is opened, its started ack deciding it (S39)
 
 #### Scenario: A folder-trust dialog herdr does not see
 
