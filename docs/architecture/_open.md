@@ -22,12 +22,6 @@ brought to the rule.
   agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
   operator rules (Part C's preamble; core.19). The item leaves when it
   lands.
-- **weir's crate does not yet read a stage's `repeat`.** Record 0019
-  (accepted 2026-10-29) makes it a field of the kind format, named by
-  weir's statement at blueprints d75cf53 (53, 57, C.4), and flume reads
-  it only through weir-kinds (core.4). Until weir-kinds reads it and
-  flume's pin moves, flume's own change stays at version 1. The item
-  leaves when the pin moves.
 - **Records 0020 and 0021 wait on a plan.** Streams, pools, spent
   accounts and affinity (record 0020; core.26, core.30, core.32), and
   the standing prompt with cache use in status (record 0021; core.33),
@@ -47,8 +41,8 @@ brought to the rule.
   weir 88 to 93), are built only once the user approves a build plan
   for them, weir-kinds' packages, identities, hash and locks first,
   since the format is weir's (core.4). Until then flume runs no kind
-  from outside, and a launch names a kind by its name alone, or by its
-  name and version once record 0019's change lets it. The item leaves
+  from outside, and a launch names a kind by its name, or by its name
+  and version, never by its source. The item leaves
   when the code is brought to core.34.
 - **The command line still says `<partition>/<role>`.** `flume wake
   --help` and the refusals of a name that is no address, in
