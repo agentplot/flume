@@ -10,7 +10,9 @@ shows it, the profile SHALL send the agent profile's next key by `pane
 send-keys` while another choice holds the focus and its confirming key
 only while the yes choice holds it, each key once the screen shows what
 the last did, and read again until the question is gone, within 30
-seconds, never confirming another choice. Where `agent start` answered
+seconds, never confirming another choice; and SHALL answer it the same way at
+each settle of a start whose agent has not said it started, where the
+screen shows it then. Where `agent start` answered
 `agent_not_ready`, it SHALL then wait within its bound until herdr reads
 the agent idle, and a screen that shows no folder-trust question by
 ten seconds SHALL be held with the screen; after `agent_started` the
@@ -35,6 +37,11 @@ folder-trust question SHALL be not come up with the screen (34, 35,
 
 - **WHEN** `agent start` answers `agent_started` while the pane still shows the shell's line, and the folder-trust question is drawn after it
 - **THEN** the profile waits for the program's screen, answers yes from it, and the start is opened, its started ack deciding it (S39)
+
+#### Scenario: The dialog drawn after the open returned
+
+- **WHEN** the folder-trust question is drawn only after open has returned, and a settle reads the start, whose agent has not said it started
+- **THEN** the settle answers it yes from the screen through the terminal's `answer_trust`, as open would have (S39)
 
 #### Scenario: A folder-trust dialog herdr does not see
 

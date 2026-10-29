@@ -67,7 +67,8 @@ if [ -n "$STAND_IN_TRUST" ]; then
   # focus moved by the arrow keys and confirmed by enter, one key at a
   # time. STAND_IN_TRUST=late tells herdr it is held at a question and
   # draws the choices only a while later; =ready tells herdr it is ready
-  # and draws the dialog a while later; =silent draws the dialog and
+  # and draws the dialog a while later, =after only once open has
+  # returned; =silent draws the dialog and
   # tells herdr nothing, as a dialog herdr does not know.
   focus=no
   draw() {
@@ -81,6 +82,7 @@ if [ -n "$STAND_IN_TRUST" ]; then
   case $STAND_IN_TRUST in
     late) printf '\033[2J\033[H Accessing workspace:\n'; report blocked; sleep 1; draw ;;
     ready) report idle; sleep 1; draw ;;
+    after) report idle; sleep 12; draw ;;
     silent) draw ;;
     *) draw; report blocked ;;
   esac
@@ -762,6 +764,43 @@ fn s39_a_folder_trust_question_drawn_after_herdr_reads_ready_is_answered() {
         &who,
         &server.command(&[("STAND_IN_TRUST", "ready")]),
     );
+    assert_eq!(
+        server.kept(&pane.id, "events"),
+        vec!["trusted".to_string()],
+        "the stand-in read yes to its question"
+    );
+}
+
+/// The folder-trust question drawn only once open has returned: a settle
+/// of the start, which its agent has not said it started, answers it from
+/// the screen (34, 35; record 0018).
+#[test]
+fn s39_a_folder_trust_question_drawn_after_the_open_is_answered_at_a_settle() {
+    let server = TestServer::start("herdr-trust-after");
+    let profile = server.profile();
+    let who = identity(1);
+    let opened = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &server.command(&[("STAND_IN_TRUST", "after")]),
+        &who,
+        None,
+        None,
+    );
+    assert!(
+        matches!(opened, Opened::Opened { .. }),
+        "open gave {opened:?}"
+    );
+    assert!(
+        !profile.answer_trust(&who),
+        "a question not yet asked was answered"
+    );
+    let pane = profile.pane(&who).expect("the pane recorded");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !profile.answer_trust(&who) {
+        assert!(Instant::now() < deadline, "the question was never answered");
+        std::thread::sleep(Duration::from_millis(500));
+    }
     assert_eq!(
         server.kept(&pane.id, "events"),
         vec!["trusted".to_string()],

@@ -229,6 +229,9 @@ struct Kept {
     pane: Pane,
     name: String,
     place: Option<String>,
+    /// The folder-trust question the open was given, which a settle
+    /// answers where the program asks it after the open (34).
+    trust: Option<FolderTrust>,
 }
 
 /// Where a pane was found: there, gone, or not readable now.
@@ -496,6 +499,9 @@ impl Herdr {
                 .get("place")
                 .and_then(Value::as_str)
                 .map(str::to_string),
+            trust: record
+                .get("trust")
+                .and_then(|trust| serde_json::from_value(trust.clone()).ok()),
         })
     }
 
@@ -507,6 +513,7 @@ impl Herdr {
                 "socket": kept.pane.socket,
                 "name": kept.name,
                 "place": kept.place,
+                "trust": kept.trust,
             }),
         )
     }
@@ -1515,6 +1522,10 @@ impl Terminal for Herdr {
             pane: pane.clone(),
             name: herdr_name(identity),
             place: beside.is_none().then(|| place.location.clone()),
+            trust: command
+                .folder_trust
+                .clone()
+                .filter(|trust| !trust.question.is_empty()),
         };
         if let Err(reason) = self.keep(identity, &kept) {
             self.abandon(identity, &pane, &bin);
@@ -1715,6 +1726,22 @@ impl Terminal for Herdr {
             Call::Answered(Value::String(text)) => Some(text),
             _ => None,
         }
+    }
+
+    /// The folder-trust question the open was given, answered from the
+    /// pane's screen as open answers it, where the screen shows it now
+    /// (34; record 0018).
+    fn answer_trust(&self, agent: &Identity) -> bool {
+        let Some(trust) = self.kept(agent).and_then(|kept| kept.trust) else {
+            return false;
+        };
+        let Found::At(pane) = self.found(agent) else {
+            return false;
+        };
+        if !asks(&self.visible(&pane), &trust) {
+            return false;
+        }
+        matches!(self.trust(&pane, &trust, false), Trusted::Answered)
     }
 
     fn close(&self, agent: &Identity) -> Closed {
@@ -1970,6 +1997,7 @@ mod tests {
                     },
                     name: herdr_name(&identity()),
                     place: Some(place.location.clone()),
+                    trust: None,
                 },
             )
             .unwrap();
