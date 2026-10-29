@@ -10,16 +10,16 @@ dependsOn: [seams]
 tasks:
   format:
     command: 'cargo fmt --check -p flume-fakes'
-    inputs: ['/crates/flume-fakes/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-fakes/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   lint:
     command: 'cargo clippy -p flume-fakes --all-targets -- -D warnings'
-    inputs: ['/crates/flume-fakes/**/*', '/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-fakes/**/*', '/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   test:
     command: 'cargo test -p flume-fakes'
-    inputs: ['/crates/flume-fakes/**/*', '/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-fakes/**/*', '/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
