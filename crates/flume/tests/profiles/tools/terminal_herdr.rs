@@ -809,7 +809,9 @@ fn s39_a_folder_trust_question_drawn_after_the_open_is_answered_at_a_settle() {
 }
 
 /// The folder-trust question in a dialog herdr does not know, so its
-/// agent start times out: the question is read off the screen and
+/// agent start times out, or answers that the name no longer owns the
+/// terminal where herdr's server dropped it first under load (the gate's
+/// run of 272bc16): the question is read off the screen and
 /// answered yes, and the agent comes up (34; record 0018).
 #[test]
 fn s39_a_folder_trust_question_herdr_does_not_see_is_answered_from_the_screen() {

@@ -1594,7 +1594,12 @@ impl Terminal for Herdr {
                     };
                 }
             }
-            Call::Refused { code, .. } if code == "timeout" => {
+            // herdr's server drops a pending name at the start's deadline,
+            // a moment before its command's own deadline, so a command
+            // that polls in between answers that the name no longer owns
+            // the terminal where it means the start timed out: both are
+            // read off the screen alike (34; record 0018).
+            Call::Refused { code, .. } if code == "timeout" || code == "agent_name_not_found" => {
                 let answered = trust.map(|trust| self.trust(&pane, trust, false));
                 match answered {
                     Some(Trusted::Answered) => {}

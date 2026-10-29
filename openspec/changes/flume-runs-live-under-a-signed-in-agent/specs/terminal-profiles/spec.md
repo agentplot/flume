@@ -5,7 +5,10 @@
 The herdr profile SHALL read the folder-trust question off the pane's
 screen whatever `agent start` answered, `agent_started`,
 `agent_not_ready` or `timeout`, since herdr may read the dialog ready,
-held or neither and may answer before it is drawn; where the screen
+held or neither and may answer before it is drawn, and SHALL read
+`agent_name_not_found` from `agent start` as its `timeout`, since herdr
+0.9.5's server drops a pending name at the start's deadline a moment
+before its command's own deadline and a poll between them answers so; where the screen
 shows it, the profile SHALL send the agent profile's next key by `pane
 send-keys` while another choice holds the focus and its confirming key
 only while the yes choice holds it, each key once the screen shows what
@@ -45,7 +48,7 @@ folder-trust question SHALL be not come up with the screen (34, 35,
 
 #### Scenario: A folder-trust dialog herdr does not see
 
-- **WHEN** the program shows the folder-trust question and herdr reads it neither ready nor held, so `agent start` answers `timeout`
+- **WHEN** the program shows the folder-trust question and herdr reads it neither ready nor held, so `agent start` answers `timeout`, or `agent_name_not_found` where its server dropped the pending name first
 - **THEN** the profile answers yes from the screen and the start is opened, its started ack deciding it (S39)
 
 #### Scenario: The bypass warning at the start
