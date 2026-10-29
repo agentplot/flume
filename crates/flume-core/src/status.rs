@@ -5,7 +5,8 @@
 use crate::reading::reads_change;
 use crate::start::Starts;
 use crate::{
-    Act, AgentStatus, Answer, Engine, PlaceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+    Act, AgentSettings, AgentStatus, Answer, Engine, PlaceStatus, StageStatus, SubmissionStatus,
+    WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -74,7 +75,10 @@ impl Engine {
                 identity: start.identity.to_string(),
                 stage: place.kind.stages[index].name.clone(),
                 program: start.program.clone(),
-                settings: start.settings.clone(),
+                settings: AgentSettings {
+                    settings: start.settings.clone(),
+                    from: start.from.clone(),
+                },
                 state: reading.state,
                 started: reading.started,
                 asking: reading.asking,
@@ -132,6 +136,7 @@ impl Engine {
                     starts: stage.starts,
                     end: stage.end.clone(),
                     refused_part: stage.refused_part.clone(),
+                    refused_setting: stage.refused_setting.clone(),
                     conversation: declared.conversation,
                 })
                 .collect(),
@@ -242,7 +247,13 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
         }
         StageState::Lost => retry(Waits::Lost, None),
         StageState::NeverBegun => retry(Waits::NeverBegun, None),
-        StageState::Refused => retry(Waits::Refused, stage.refused_part.clone()),
+        StageState::Refused => retry(
+            Waits::Refused,
+            stage
+                .refused_part
+                .clone()
+                .or_else(|| stage.refused_setting.clone()),
+        ),
         StageState::Stopped => retry(Waits::Stopped, None),
         StageState::Delivered | StageState::Finished if index == last => {
             if !place.kind.lands {

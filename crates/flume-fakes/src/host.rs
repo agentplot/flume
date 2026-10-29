@@ -1,13 +1,13 @@
 use crate::{lock, Log};
-use flume_seams::{Host, RoomGuard, Seconds, Secret};
+use flume_seams::{Host, HostSettings, KindSettings, RoomGuard, Seconds, Secret};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
 
 /// The host: a clock that moves only when a test advances it or a command
 /// sleeps on it, numbered secrets, files' write times, the commands of
-/// flume's that live, the bound on agents its configuration states, the
-/// recipient the calling command's environment names, and an exclusive
-/// room lock.
+/// flume's that live, the bound on agents and the agents' settings its
+/// configuration states, the recipient the calling command's environment
+/// names, the host user's login environment, and an exclusive room lock.
 pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
@@ -39,6 +39,11 @@ struct HostState {
     alive: BTreeSet<String>,
     bound: Option<u32>,
     recipient: Option<String>,
+    /// The agents' settings by kind, for every repository.
+    kinds: BTreeMap<String, KindSettings>,
+    /// The agents' settings by repository and kind.
+    repos: BTreeMap<(String, String), KindSettings>,
+    login: BTreeMap<String, String>,
 }
 
 impl Default for FakeHost {
@@ -52,6 +57,9 @@ impl Default for FakeHost {
                 alive: BTreeSet::from(["command-1".to_string()]),
                 bound: None,
                 recipient: None,
+                kinds: BTreeMap::new(),
+                repos: BTreeMap::new(),
+                login: BTreeMap::from([("HOME".to_string(), "/home/user".to_string())]),
             }),
             room: Arc::default(),
             log: Log::default(),
@@ -108,6 +116,40 @@ impl FakeHost {
         lock(&self.state).recipient = recipient.map(str::to_string);
     }
 
+    /// The settings the configuration gives `kind`'s agents, in
+    /// `repository` or in every repository where none is named; empty
+    /// settings remove them.
+    pub fn set_settings(&self, repository: Option<&str>, kind: &str, settings: KindSettings) {
+        let mut state = lock(&self.state);
+        let empty = settings.is_empty();
+        match repository {
+            Some(repository) => {
+                let key = (repository.to_string(), kind.to_string());
+                if empty {
+                    state.repos.remove(&key);
+                } else {
+                    state.repos.insert(key, settings);
+                }
+            }
+            None if empty => {
+                state.kinds.remove(kind);
+            }
+            None => {
+                state.kinds.insert(kind.to_string(), settings);
+            }
+        }
+    }
+
+    /// A variable of the host user's login environment, or none; `HOME`
+    /// is `/home/user` until set.
+    pub fn set_login(&self, name: &str, value: Option<&str>) {
+        let mut state = lock(&self.state);
+        match value {
+            Some(value) => state.login.insert(name.to_string(), value.to_string()),
+            None => state.login.remove(name),
+        };
+    }
+
     /// Whether the room lock is held now.
     pub fn room_taken(&self) -> bool {
         *lock(&self.room.taken)
@@ -151,6 +193,23 @@ impl Host for FakeHost {
     fn recipient(&self) -> Option<String> {
         self.log.push("recipient");
         lock(&self.state).recipient.clone()
+    }
+
+    fn settings(&self, repository: &str, kind: &str) -> HostSettings {
+        self.log.push(format!("settings {repository} {kind}"));
+        let state = lock(&self.state);
+        HostSettings {
+            repository: state
+                .repos
+                .get(&(repository.to_string(), kind.to_string()))
+                .cloned()
+                .unwrap_or_default(),
+            kind: state.kinds.get(kind).cloned().unwrap_or_default(),
+        }
+    }
+
+    fn login(&self, name: &str) -> Option<String> {
+        lock(&self.state).login.get(name).cloned()
     }
 
     fn room(&self) -> RoomGuard {

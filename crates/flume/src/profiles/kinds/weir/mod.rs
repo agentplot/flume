@@ -4,7 +4,12 @@
 //! (core.4). The format's fields are mapped onto the seam's types, every
 //! section the format does not name is ignored (23), and a declaration
 //! weir refuses is answered as could not be read, naming every field that
-//! fails (84). A prompt is a path relative to its declaration's file,
+//! fails (84). A kind's `agents` table, and a `[kinds.<kind>]` table that
+//! gives settings to a kind declared elsewhere, are weir's too: each is
+//! mapped onto the seam's settings for every stage and for each stage it
+//! names, the latter returned apart from the kinds (32, C.2; weir 52,
+//! 57, C.4); which declaration they join, and whether the stages they
+//! name exist, are the core's to say. A prompt is a path relative to its declaration's file,
 //! read beside it: at the same revision for a repository's, on disk for
 //! a launch's, and from the binary for flume's own.
 //!
@@ -15,8 +20,10 @@
 
 use crate::git::{tree_path, Git};
 use flume_seams::{
-    Binding, BindingRead, Deliverable, Kind, Kinds, KindsRead, Revision, Settings, Stage,
+    Binding, BindingRead, Deliverable, Kind, KindSettings, Kinds, KindsRead, Revision, Settings,
+    Stage,
 };
+use std::collections::BTreeMap;
 use std::path::Path;
 use weir_kinds::toml::{Table, Value};
 use weir_kinds::{End, Refusal};
@@ -59,7 +66,12 @@ impl Kinds for Weir {
         }
         let text = match git.file(&revision.0, DECLARATION) {
             Ok(Some(text)) => text,
-            Ok(None) => return KindsRead::Read { kinds: vec![] },
+            Ok(None) => {
+                return KindsRead::Read {
+                    kinds: vec![],
+                    settings: BTreeMap::new(),
+                }
+            }
             Err(reason) => return KindsRead::CouldNotRead { reason },
         };
         let directory = Path::new(DECLARATION)
@@ -100,7 +112,7 @@ impl Kinds for Weir {
                 .map(|(_, text)| text.to_string())
                 .ok_or_else(|| format!("{path} is not built in"))
         }) {
-            KindsRead::Read { kinds } => kinds,
+            KindsRead::Read { kinds, .. } => kinds,
             KindsRead::CouldNotRead { reason } => {
                 panic!("flume's own declaration is built in and reads: {reason}")
             }
@@ -206,7 +218,8 @@ fn profiles(text: &str) -> Result<Binding, String> {
 }
 
 /// Every kind a declaration's text holds, its prompts read by `prompt`
-/// from their paths, or every field that fails it (84).
+/// from their paths, and the settings it gives kinds it does not
+/// declare, or every field that fails it (84, 32).
 fn read(text: &str, prompt: impl Fn(&str) -> Result<String, String>) -> KindsRead {
     let declaration = match weir_kinds::read_kinds(text) {
         Ok(declaration) => declaration,
@@ -222,8 +235,19 @@ fn read(text: &str, prompt: impl Fn(&str) -> Result<String, String>) -> KindsRea
         .values()
         .map(|kind| map_kind(kind, &prompt, &mut problems))
         .collect();
+    let settings = declaration
+        .settings
+        .values()
+        .map(|given| {
+            let at = format!("kinds.{}.agents", given.name);
+            (
+                given.name.clone(),
+                map_agents(&given.agents, &at, &mut problems),
+            )
+        })
+        .collect();
     if problems.is_empty() {
-        KindsRead::Read { kinds }
+        KindsRead::Read { kinds, settings }
     } else {
         KindsRead::CouldNotRead {
             reason: problems.join("; "),
@@ -256,6 +280,7 @@ fn map_kind(
         branch_prefix: kind.branch.clone(),
         starts_unready: kind.starts_unready,
         lands: kind.lands,
+        agents: map_agents(&kind.agents, &format!("{at}.agents"), problems),
         stages: kind
             .stages
             .iter()
@@ -313,6 +338,26 @@ fn map_deliverable(deliverable: &weir_kinds::Deliverable) -> Deliverable {
         weir_kinds::Deliverable::Committed(path) => {
             Deliverable::CommittedReport { path: path.clone() }
         }
+    }
+}
+
+/// A kind's `agents` table: the settings for every stage, and for each
+/// stage its `stages` table names (32; weir 52, C.4).
+fn map_agents(
+    agents: &weir_kinds::KindAgents,
+    at: &str,
+    problems: &mut Vec<String>,
+) -> KindSettings {
+    KindSettings {
+        every_stage: map_agent(&agents.every_stage, at, problems),
+        stages: agents
+            .stages
+            .iter()
+            .map(|(stage, table)| {
+                let at = format!("{at}.stages.{stage}");
+                (stage.clone(), map_agent(table, &at, problems))
+            })
+            .collect(),
     }
 }
 

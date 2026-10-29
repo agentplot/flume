@@ -1,20 +1,23 @@
 //! The host's facts and git's history, read for real (design 11;
 //! history-and-host spec): the system clock, a sleep, a secret of 32
 //! random bytes, a file's write time, a command of flume's named by its
-//! process and that process's start, the bound the host's configuration
-//! states, the recipient the calling command's environment names, and
-//! the room lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75; design
+//! process and that process's start, the bound and the agents' settings
+//! the host's configuration states, the recipient the calling command's
+//! environment names, the host user's login environment, and the room
+//! lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75; design
 //! 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
 
 use config::HostConfig;
-use flume_seams::{Host, RoomGuard, Seconds, Secret};
+use flume_seams::{Host, HostSettings, RoomGuard, Seconds, Secret};
+use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::process::Command;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The host this command runs on.
@@ -23,7 +26,13 @@ pub struct RealHost {
     state: PathBuf,
     config: HostConfig,
     recipient: Option<String>,
+    login: Arc<OnceLock<BTreeMap<String, String>>>,
 }
+
+/// The variables of the host user's own a login shell starts from, all
+/// else cleared, so nothing of the calling command's session reaches the
+/// login environment (29).
+const LOGIN_NAMES: [&str; 6] = ["HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG"];
 
 /// The variable a caller names a launch's default recipient in (7).
 pub const RECIPIENT: &str = "FLUME_RECIPIENT";
@@ -40,7 +49,58 @@ impl RealHost {
             state: state.into(),
             config,
             recipient,
+            login: Arc::default(),
         }
+    }
+
+    /// The host with exactly `variables` for the host user's login
+    /// environment.
+    pub fn with_login(self, variables: &[(String, String)]) -> RealHost {
+        let login = OnceLock::new();
+        let _ = login.set(variables.iter().cloned().collect());
+        RealHost {
+            login: Arc::new(login),
+            ..self
+        }
+    }
+
+    /// The host user's login environment: what their login shell sets,
+    /// started from their own variables alone, read once; those variables
+    /// alone where the shell cannot be run (29).
+    fn login_environment(&self) -> &BTreeMap<String, String> {
+        self.login.get_or_init(|| {
+            let own: BTreeMap<String, String> = LOGIN_NAMES
+                .iter()
+                .filter_map(|name| {
+                    std::env::var(name)
+                        .ok()
+                        .map(|value| (name.to_string(), value))
+                })
+                .collect();
+            let shell = own
+                .get("SHELL")
+                .cloned()
+                .unwrap_or_else(|| "/bin/sh".into());
+            let read = Command::new(&shell)
+                .args(["-l", "-c", "env -0"])
+                .env_clear()
+                .envs(&own)
+                .output()
+                .ok()
+                .filter(|output| output.status.success());
+            match read {
+                Some(output) => output
+                    .stdout
+                    .split(|byte| *byte == 0)
+                    .filter_map(|pair| {
+                        let pair = String::from_utf8_lossy(pair);
+                        pair.split_once('=')
+                            .map(|(name, value)| (name.to_string(), value.to_string()))
+                    })
+                    .collect(),
+                None => own,
+            }
+        })
     }
 
     /// The host as this command finds it: `$XDG_STATE_HOME/flume`, the
@@ -165,6 +225,26 @@ impl Host for RealHost {
 
     fn recipient(&self) -> Option<String> {
         self.recipient.clone()
+    }
+
+    /// The configuration's settings as this command read it: the engine
+    /// is built for each command, so each start reads the host's
+    /// configuration as it stands (32, C.7; record 0017).
+    fn settings(&self, repository: &str, kind: &str) -> HostSettings {
+        HostSettings {
+            repository: self
+                .config
+                .repos
+                .get(repository)
+                .and_then(|kinds| kinds.get(kind))
+                .cloned()
+                .unwrap_or_default(),
+            kind: self.config.kinds.get(kind).cloned().unwrap_or_default(),
+        }
+    }
+
+    fn login(&self, name: &str) -> Option<String> {
+        self.login_environment().get(name).cloned()
     }
 
     fn room(&self) -> RoomGuard {

@@ -17,6 +17,7 @@ mod launch;
 mod prompt;
 mod reading;
 mod room;
+mod settings;
 mod settle;
 mod start;
 mod status;
@@ -50,7 +51,7 @@ pub const POLL: Seconds = 5;
 
 /// What the statement leaves to flume's own default and the engine is
 /// built with, holding no value of its own (design 10): the agent's
-/// settings where neither launch nor stage gives them (32), and the
+/// settings where no other layer gives them (32), and the
 /// send-backs a kind allows where it sets none (23, 112).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Defaults {
@@ -166,7 +167,7 @@ impl Engine {
 mod tests {
     use super::*;
     use flume_fakes::*;
-    use flume_seams::{Binding, Declared, Kind, PlaceId, Readiness, Revision};
+    use flume_seams::{Binding, Declared, Kind, KindSettings, PlaceId, Readiness, Revision};
     use std::collections::BTreeMap;
 
     fn record(binding: Binding) -> PlaceRecord {
@@ -179,6 +180,7 @@ mod tests {
                 branch_prefix: "fix".into(),
                 starts_unready: true,
                 lands: true,
+                agents: KindSettings::default(),
                 stages: vec![],
             },
             declared: Declared::Flume,
@@ -191,6 +193,8 @@ mod tests {
             brief: None,
             mark: None,
             settings: BTreeMap::new(),
+            every_stage: Settings::default(),
+            repository_settings: KindSettings::default(),
             hold: vec![],
             hold_submission: false,
             hold_words: BTreeMap::new(),

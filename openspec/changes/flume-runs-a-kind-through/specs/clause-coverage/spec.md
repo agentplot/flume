@@ -11,7 +11,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names revision 4fe1522; Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124 and 129 to 132; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128 and 133 to 136; the scenarios run S1 to S43; and 129, 132 and S38 are named as the next change's
+- **THEN** it names revision 4d1f88b; Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124 and 129 to 132; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128 and 133 to 136; the scenarios run S1 to S44; and 129, 132 and S38 are named as the next change's
 
 ### Requirement: A clause cited by nothing fails the suite
 

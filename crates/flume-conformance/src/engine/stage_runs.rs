@@ -255,9 +255,13 @@ fn settings_resolved(_: &()) -> Outcome {
     let place = launched(&world.engine.launch(&bump))?;
     let agent = place.agent.ok_or("no agent")?;
     ensure_eq!(agent.program, "agent", "the program");
-    ensure_eq!(agent.settings.model.as_deref(), Some("large"), "the model");
     ensure_eq!(
-        agent.settings.instructions.as_deref(),
+        agent.settings.settings.model.as_deref(),
+        Some("large"),
+        "the model"
+    );
+    ensure_eq!(
+        agent.settings.settings.instructions.as_deref(),
         Some("keep it short"),
         "the instructions"
     );

@@ -138,6 +138,7 @@ pub fn kind(name: &str, lands: bool, stages: Vec<Stage>) -> Kind {
         branch_prefix: name.into(),
         starts_unready: false,
         lands,
+        agents: KindSettings::default(),
         stages,
     }
 }

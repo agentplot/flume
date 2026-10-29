@@ -1,6 +1,7 @@
 //! The engine's scenarios over the fakes, each named for its scenario of
 //! section 11 where it has one, and each citing its clauses as data.
 
+pub mod agent_settings;
 pub mod answers;
 pub mod caller_acts;
 pub mod held_state;
@@ -34,5 +35,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(answers::scenarios());
     every.extend(places::scenarios());
     every.extend(host_queue::scenarios());
+    every.extend(agent_settings::scenarios());
     every
 }

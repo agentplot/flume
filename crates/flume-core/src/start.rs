@@ -1,4 +1,5 @@
-//! A stage's start (27 to 33): its settings resolved, a fresh identity
+//! A stage's start (27 to 33): its settings resolved from their six
+//! layers, or the stage refused naming the setting (32), a fresh identity
 //! and secret, its prompt filled or the stage refused naming the part,
 //! and one agent opened through the agent seam's command and the
 //! terminal, never while another of the place's is live, and only under
@@ -16,6 +17,7 @@ pub(crate) struct Claim {
     secret: Secret,
     text: String,
     place: PlaceRef,
+    /// The settings the agent starts with, the host's values read (29).
     settings: Settings,
     agent: Arc<dyn Agent>,
 }
@@ -32,8 +34,10 @@ pub(crate) enum Start {
     AgentLive,
     /// The terminal refused to open the agent.
     NotOpened(String),
-    /// No agent profile answers for the stage's program (32, 105).
-    NoAgent(String),
+    /// The stage's settings name a program no agent profile answers for,
+    /// or a variable the host user's login environment lacks (27, 32,
+    /// 105).
+    Unresolved(String),
     NoPlace,
 }
 
@@ -50,14 +54,6 @@ fn unready(readiness: &Readiness) -> String {
 }
 
 impl Engine {
-    /// A stage's agent settings: the launch's for its stage over the
-    /// stage's declaration over flume's own default (32).
-    pub(crate) fn settings(&self, place: &PlaceRecord, stage: &Stage) -> Settings {
-        let declared = stage.agents.first().cloned().unwrap_or_default();
-        let launched = place.settings.get(&stage.name).cloned().unwrap_or_default();
-        self.defaults.settings.under(&declared).under(&launched)
-    }
-
     /// A report's path: under the place's own folder for `{{state}}`, or
     /// inside the place (24, 123).
     pub(crate) fn report_path(&self, place: &PlaceRecord, path: &str) -> String {
@@ -79,21 +75,21 @@ impl Engine {
 
     /// The stage's prompt filled for `identity`'s start, or the first
     /// part it asks for with nothing to fill it (27). The way to stop
-    /// short is in every prompt (28), and a first stage started in a
-    /// place that could not be made ready carries the step and its words
-    /// (12).
+    /// short is in every prompt (28), as `agent`, the profile of the
+    /// stage's program, gives it; and a first stage started in a place
+    /// that could not be made ready carries the step and its words (12).
     pub(crate) fn fill(
         &self,
         held: &HeldState,
         index: usize,
         identity: &Identity,
         words: Option<&str>,
+        agent: Option<&dyn Agent>,
     ) -> Result<String, PromptPart> {
         let place = &held.place;
         let stage = &place.kind.stages[index];
         let change = self.bound(place).ok().and_then(|bound| bound.change);
-        let program = self.settings(place, stage).program.unwrap_or_default();
-        let stop_short = self.agent(&program).map(|agent| agent.stop_short(identity));
+        let stop_short = agent.map(|agent| agent.stop_short(identity));
         let fill = |part: PromptPart| -> Option<String> {
             match part {
                 PromptPart::Brief => place.brief.clone(),
@@ -162,11 +158,7 @@ impl Engine {
             return Err(Start::NoPlace);
         };
         let place = &read.state.place;
-        let settings = self.settings(place, &place.kind.stages[index]);
-        let program = settings.program.clone().unwrap_or_default();
-        let Some(agent) = self.agent(&program) else {
-            return Err(Start::NoAgent(program));
-        };
+        let resolution = self.resolution(place, &place.kind.stages[index]);
         let now = self.host.now();
         let claimed = self.update(id, |held| {
             if let Admit::Waiting = admit {
@@ -183,12 +175,26 @@ impl Engine {
             {
                 return Step::Keep(Err(Start::AgentLive));
             }
+            let resolution = match &resolution {
+                Ok(resolution) => resolution,
+                Err(reason) => {
+                    let stage = &mut held.stages[index];
+                    stage.state = StageState::Refused;
+                    stage.refused_part = None;
+                    stage.refused_setting = Some(reason.clone());
+                    stage.room = None;
+                    held.current = Some(index);
+                    return Step::Write(Err(Start::Unresolved(reason.clone())));
+                }
+            };
             let identity = self.next_identity(held, index);
-            let text = match self.fill(held, index, &identity, words.as_deref()) {
+            let agent = resolution.agent.as_ref();
+            let text = match self.fill(held, index, &identity, words.as_deref(), Some(agent)) {
                 Err(part) => {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::Refused;
                     stage.refused_part = Some(part.name().into());
+                    stage.refused_setting = None;
                     stage.room = None;
                     return Step::Write(Err(Start::Refused(part)));
                 }
@@ -215,6 +221,7 @@ impl Engine {
             stage.state = StageState::Starting;
             stage.starts = identity.start;
             stage.refused_part = None;
+            stage.refused_setting = None;
             stage.room = None;
             stage.end = None;
             stage.start = Some(StartHeld {
@@ -224,8 +231,14 @@ impl Engine {
                 words: words.clone(),
                 identity: identity.clone(),
                 secret: secret.clone(),
-                program: program.clone(),
-                settings: settings.clone(),
+                program: resolution
+                    .resolved
+                    .settings
+                    .program
+                    .clone()
+                    .unwrap_or_default(),
+                settings: resolution.resolved.settings.clone(),
+                from: resolution.resolved.from.clone(),
                 record: None,
                 prompt: Prompt {
                     text: text.clone(),
@@ -245,8 +258,8 @@ impl Engine {
                 secret,
                 text,
                 place: held.place.place_ref(),
-                settings: settings.clone(),
-                agent: agent.clone(),
+                settings: resolution.settings.clone(),
+                agent: resolution.agent.clone(),
             }))
         });
         claimed.unwrap_or(Err(Start::NoPlace))

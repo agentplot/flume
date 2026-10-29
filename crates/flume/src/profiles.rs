@@ -290,7 +290,8 @@ pub fn core() -> Result<Engine, String> {
 
 /// The core over `resolver`, the terminal `config` binds, the store in
 /// flume's state directory `state`, git's history, and the host with
-/// `config` and `recipient`, with flume's [`defaults`] (design 16).
+/// `config` and `recipient`, and the login environment `resolver` was
+/// given where it was given one, with flume's [`defaults`] (design 16).
 pub fn core_over(
     state: &Path,
     config: HostConfig,
@@ -298,12 +299,16 @@ pub fn core_over(
     resolver: BuiltIn,
 ) -> Result<Engine, String> {
     let terminal = terminal(config.terminal.as_deref(), state)?;
+    let mut host = RealHost::new(state, config, recipient);
+    if let Some(login) = &resolver.login {
+        host = host.with_login(login);
+    }
     Ok(Engine::new(
         Arc::new(resolver),
         terminal,
         Arc::new(store::state_dir::StateDir::at(state)),
         Arc::new(GitHistory),
-        Arc::new(RealHost::new(state, config, recipient)),
+        Arc::new(host),
         defaults(),
     ))
 }

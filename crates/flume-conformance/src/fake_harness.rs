@@ -45,6 +45,7 @@ pub fn flumes_own() -> Vec<Kind> {
             branch_prefix: "fix".into(),
             starts_unready: true,
             lands: true,
+            agents: KindSettings::default(),
             stages: vec![code.clone()],
         },
         Kind {
@@ -53,6 +54,7 @@ pub fn flumes_own() -> Vec<Kind> {
             branch_prefix: "chore".into(),
             starts_unready: true,
             lands: true,
+            agents: KindSettings::default(),
             stages: vec![code],
         },
         Kind {
@@ -61,6 +63,7 @@ pub fn flumes_own() -> Vec<Kind> {
             branch_prefix: "change".into(),
             starts_unready: false,
             lands: true,
+            agents: KindSettings::default(),
             stages: vec![
                 stage(
                     "construct",

@@ -30,7 +30,10 @@ impl Engine {
             return Answer::refused(format!("the place {place} has no stage {stage}"));
         };
         let identity = self.next_identity(&held, index);
-        match self.fill(&held, index, &identity, None) {
+        let declared = &held.place.kind.stages[index];
+        let resolved = self.resolve(&held.place, declared);
+        let agent = self.agent_for(&resolved, stage).ok();
+        match self.fill(&held, index, &identity, None, agent.as_deref()) {
             Ok(text) => Answer::Prompt {
                 place: place.clone(),
                 stage: stage.into(),
@@ -164,9 +167,7 @@ impl Engine {
             Start::NotOpened(reason) => {
                 Answer::refused(format!("the terminal did not open the agent: {reason}"))
             }
-            Start::NoAgent(program) => {
-                Answer::refused(format!("no agent profile runs the program {program}"))
-            }
+            Start::Unresolved(reason) => Answer::refused(reason),
             Start::NoPlace => Answer::refused(format!("no place {place} stands on this host")),
         }
     }

@@ -347,7 +347,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "weir-kinds"
 version = "0.0.0"
-source = "git+https://github.com/agentplot/weir?rev=379d68e13705f8f808af9df7fdec8a83a6fb5581#379d68e13705f8f808af9df7fdec8a83a6fb5581"
+source = "git+https://github.com/agentplot/weir?rev=a214b95f5d19c74dba1b9691ed6c783e2677e23c#a214b95f5d19c74dba1b9691ed6c783e2677e23c"
 dependencies = [
  "toml",
 ]

@@ -230,7 +230,7 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
     let agent = one.agent.clone().ok_or("no agent")?;
     ensure_eq!(agent.identity, code.to_string(), "the agent's identity");
     ensure_eq!(
-        agent.settings.program.as_deref(),
+        agent.settings.settings.program.as_deref(),
         Some("agent"),
         "the agent's settings"
     );

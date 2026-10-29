@@ -2,6 +2,7 @@
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 /// What the kinds scenarios need: repositories and declarations holding
 /// the kinds a scenario names.
@@ -31,6 +32,7 @@ pub fn bump(agents: usize) -> Kind {
         branch_prefix: "bump".into(),
         starts_unready: false,
         lands: true,
+        agents: KindSettings::default(),
         stages: vec![Stage {
             name: "code".into(),
             prompt: "{{brief}}\n\n{{needs}}".into(),
@@ -94,7 +96,7 @@ fn read<H: KindsHarness>(
     revision: &Revision,
 ) -> Result<Vec<Kind>, String> {
     match harness.seam().read_kinds(repository, revision) {
-        KindsRead::Read { kinds } => Ok(kinds),
+        KindsRead::Read { kinds, .. } => Ok(kinds),
         other => Err(format!("read-kinds gave {other:?}")),
     }
 }
@@ -114,7 +116,10 @@ fn the_same_revision_the_same_kinds<H: KindsHarness>(harness: &H) -> Outcome {
     let declaration = harness.launch_declaration(&[bump(1)]);
     ensure_eq!(
         harness.seam().read_declaration(&declaration),
-        KindsRead::Read { kinds: first },
+        KindsRead::Read {
+            kinds: first,
+            settings: BTreeMap::new(),
+        },
         "a launch's declaration of the same kind"
     );
     Ok(())

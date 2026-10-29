@@ -202,6 +202,10 @@ pub struct StageStatus {
     pub end: Option<StageEnd>,
     /// The part a refused stage could not fill (27).
     pub refused_part: Option<String>,
+    /// The setting a stage was refused at its start for, with its layer
+    /// (27, 32).
+    #[serde(default)]
+    pub refused_setting: Option<String>,
     pub conversation: bool,
 }
 
@@ -211,7 +215,7 @@ pub struct AgentStatus {
     pub identity: String,
     pub stage: String,
     pub program: String,
-    pub settings: Settings,
+    pub settings: AgentSettings,
     pub state: AgentState,
     /// Whether the agent said it started under its start's identity
     /// (135).
@@ -229,6 +233,19 @@ pub struct AgentStatus {
     /// the terminal printed it (C.5).
     #[serde(default)]
     pub printed: Option<String>,
+}
+
+/// The settings an agent started with, each value as its layer wrote it,
+/// and where each came from (32, 56).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSettings {
+    #[serde(flatten)]
+    pub settings: Settings,
+    /// Each setting's layer and value as written, by `program`, `model`,
+    /// `instructions` or `env.<NAME>`; a host's value before its `~` and
+    /// variables are read.
+    #[serde(default)]
+    pub from: BTreeMap<String, Given>,
 }
 
 fn unknown() -> Reading {

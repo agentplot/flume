@@ -3,7 +3,8 @@
 //! on agents its configuration states, and a lock over the room (design
 //! 3, 6). No seam of Part B.
 
-use crate::{Seconds, Secret};
+use crate::{KindSettings, Seconds, Secret};
+use serde::{Deserialize, Serialize};
 
 /// The host's room lock, held while this guard lives and released when
 /// it is dropped (70, 75).
@@ -20,6 +21,16 @@ impl std::fmt::Debug for RoomGuard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("RoomGuard")
     }
+}
+
+/// The settings the host's configuration gives a kind's agents, each value
+/// as the configuration wrote it (32, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSettings {
+    /// For the kind in one repository.
+    pub repository: KindSettings,
+    /// For the kind in every repository.
+    pub kind: KindSettings,
 }
 
 /// The host's facts (design 3).
@@ -52,6 +63,16 @@ pub trait Host: Send + Sync {
     /// `FLUME_RECIPIENT`, a launch's default recipient; none where it
     /// names none (7).
     fn recipient(&self) -> Option<String>;
+
+    /// The settings the host's configuration gives `kind`'s agents in
+    /// `repository`, as it stands now: read at every start, never kept
+    /// in held state (32, C.7).
+    fn settings(&self, repository: &str, kind: &str) -> HostSettings;
+
+    /// A variable of the host user's login environment, `HOME` among
+    /// them, never of the calling command's session; none where it lacks
+    /// it (29).
+    fn login(&self, name: &str) -> Option<String>;
 
     /// The host-wide lock over the room, held until the guard is dropped,
     /// so two starts at once never pass the bound (70, 75).

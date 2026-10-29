@@ -19,6 +19,10 @@ pub struct Launch {
     pub declaration: Option<String>,
     /// Settings for each stage's agent, by stage name (32).
     pub settings: BTreeMap<String, Settings>,
+    /// Settings for every stage's agent, which a stage's own come before
+    /// (7, 32).
+    #[serde(default)]
+    pub every_stage: Settings,
     /// The stages it puts on hold (47).
     pub hold: Vec<String>,
     pub hold_submission: bool,

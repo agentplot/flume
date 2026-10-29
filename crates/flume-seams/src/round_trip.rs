@@ -42,7 +42,18 @@ fn kind() -> Kind {
         branch_prefix: "bump".into(),
         starts_unready: true,
         lands: true,
+        agents: kind_settings(),
         stages: vec![stage()],
+    }
+}
+
+fn kind_settings() -> KindSettings {
+    KindSettings {
+        every_stage: Settings {
+            model: Some("sonnet".into()),
+            ..Settings::default()
+        },
+        stages: BTreeMap::from([("code".into(), settings())]),
     }
 }
 
@@ -109,6 +120,8 @@ fn held() -> HeldState {
             brief: Some("bump it".into()),
             mark: Some("team-a".into()),
             settings: BTreeMap::from([("code".into(), settings())]),
+            every_stage: settings(),
+            repository_settings: kind_settings(),
             hold: vec!["review".into()],
             hold_submission: true,
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
@@ -126,6 +139,7 @@ fn held() -> HeldState {
             state: StageState::Begun,
             starts: 2,
             refused_part: Some("words".into()),
+            refused_setting: Some("the program nothing-here, from host-kind".into()),
             end: Some(StageEnd {
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
@@ -148,6 +162,22 @@ fn held() -> HeldState {
                 secret: Secret("s3cret".into()),
                 program: "agent".into(),
                 settings: settings(),
+                from: BTreeMap::from([
+                    (
+                        "model".into(),
+                        Given {
+                            layer: Layer::Repository,
+                            value: "opus".into(),
+                        },
+                    ),
+                    (
+                        "env.AGENT_HOME".into(),
+                        Given {
+                            layer: Layer::HostKind,
+                            value: "~/.agent-work".into(),
+                        },
+                    ),
+                ]),
                 record: Some("record-1".into()),
                 prompt: prompt(),
                 live: true,
@@ -189,6 +219,7 @@ fn a_launch() {
         brief: Some("bump it".into()),
         declaration: Some("kinds.toml".into()),
         settings: BTreeMap::from([("code".into(), settings())]),
+        every_stage: settings(),
         hold: vec!["review".into()],
         hold_submission: true,
         mark: Some("team-a".into()),
@@ -246,7 +277,26 @@ fn a_kind_with_its_stages() {
     round_trips(kind());
     round_trips(KindsRead::Read {
         kinds: vec![kind()],
+        settings: BTreeMap::from([("change".into(), kind_settings())]),
     });
+    round_trips(HostSettings {
+        repository: kind_settings(),
+        kind: KindSettings::default(),
+    });
+    for layer in [
+        Layer::Launch,
+        Layer::HostRepository,
+        Layer::HostKind,
+        Layer::Repository,
+        Layer::Kind,
+        Layer::Default,
+    ] {
+        round_trips(layer);
+        assert_eq!(
+            serde_json::to_value(layer).unwrap(),
+            serde_json::Value::String(layer.name().into())
+        );
+    }
     round_trips(KindsRead::CouldNotRead {
         reason: "no file".into(),
     });

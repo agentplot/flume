@@ -458,3 +458,43 @@ fn one_resolver_from_profile_names_to_fakes() {
     assert!(resolver.agent("agent").is_some());
     assert!(resolver.agent("other").is_none());
 }
+
+#[test]
+fn the_settings_of_the_host_and_of_a_repository_are_set() {
+    let given = |model: &str| KindSettings {
+        every_stage: Settings {
+            model: Some(model.into()),
+            ..Settings::default()
+        },
+        stages: Default::default(),
+    };
+    let host = FakeHost::default();
+    host.set_settings(None, "change", given("opus"));
+    host.set_settings(Some("/r"), "change", given("sonnet"));
+    let in_r = host.settings("/r", "change");
+    assert_eq!(in_r.kind, given("opus"));
+    assert_eq!(in_r.repository, given("sonnet"));
+    assert_eq!(
+        host.settings("/s", "change").repository,
+        KindSettings::default()
+    );
+    host.set_settings(None, "change", KindSettings::default());
+    assert_eq!(host.settings("/r", "change").kind, KindSettings::default());
+    assert_eq!(host.login("HOME").as_deref(), Some("/home/user"));
+    host.set_login("ACCOUNT", Some("work"));
+    assert_eq!(host.login("ACCOUNT").as_deref(), Some("work"));
+    assert_eq!(host.login("NOT_SET"), None);
+
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let next = git.commit("/r", "main", &["next.rs"]);
+    let kinds = FakeKinds::default();
+    kinds.set_settings("/r", "change", given("opus"));
+    kinds.set_settings_at("/r", &next, "change", given("sonnet"));
+    let settings = |revision: &Revision| match kinds.read_kinds("/r", revision) {
+        KindsRead::Read { settings, .. } => settings,
+        other => panic!("read-kinds gave {other:?}"),
+    };
+    assert_eq!(settings(&base)["change"], given("opus"));
+    assert_eq!(settings(&next)["change"], given("sonnet"));
+}

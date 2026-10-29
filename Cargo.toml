@@ -22,7 +22,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The kind format, read by weir's crate at a revision of weir's main, moved
 # by a chore when weir changes (core.4, core.22).
-weir-kinds = { git = "https://github.com/agentplot/weir", rev = "379d68e13705f8f808af9df7fdec8a83a6fb5581" }
+weir-kinds = { git = "https://github.com/agentplot/weir", rev = "a214b95f5d19c74dba1b9691ed6c783e2677e23c" }
 toml = "1"
 clap = { version = "4", features = ["derive"] }
 # The host's process table, read for a command's start (design 11).

@@ -4,8 +4,8 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Holds, Identity, Kind, PlaceId, PlaceRef, Prompt, Readiness, Revision,
-    Seconds, Secret, Settings, StopKind, Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PlaceId, PlaceRef, Prompt,
+    Readiness, Revision, Seconds, Secret, Settings, StopKind, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -47,6 +47,14 @@ pub struct PlaceRecord {
     pub brief: Option<String>,
     pub mark: Option<String>,
     pub settings: BTreeMap<String, Settings>,
+    /// The launch's settings for every stage's agent (7, 8, 32).
+    #[serde(default)]
+    pub every_stage: Settings,
+    /// The repository's settings for the kind, which it does not
+    /// declare, as the launch read them at the base's revision (8, 21,
+    /// 32).
+    #[serde(default)]
+    pub repository_settings: KindSettings,
     pub hold: Vec<String>,
     pub hold_submission: bool,
     /// The words of each hold the launch put, by stage name (7, 130).
@@ -162,6 +170,11 @@ pub struct StageHeld {
     pub starts: u32,
     /// The part a refused stage could not fill (27).
     pub refused_part: Option<String>,
+    /// The setting a stage was refused at its start for, with its layer:
+    /// a program no agent profile binds, or a variable the host user's
+    /// login environment lacks (27, 32).
+    #[serde(default)]
+    pub refused_setting: Option<String>,
     pub end: Option<StageEnd>,
     pub start: Option<StartHeld>,
     /// Since when the stage has stood in its state, so since when it
@@ -219,7 +232,13 @@ pub struct StartHeld {
     pub identity: Identity,
     pub secret: Secret,
     pub program: String,
+    /// The settings it started with, each value as its layer wrote it
+    /// (32, 56).
     pub settings: Settings,
+    /// Each setting's layer and value as written, by `program`, `model`,
+    /// `instructions` or `env.<NAME>` (32, 56).
+    #[serde(default)]
+    pub from: BTreeMap<String, Given>,
     /// The agent's own record, once a reading names it (77).
     pub record: Option<String>,
     pub prompt: Prompt,

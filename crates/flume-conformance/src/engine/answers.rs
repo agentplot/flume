@@ -126,6 +126,7 @@ fn place_status() -> PlaceStatus {
                 screen: None,
             }),
             refused_part: Some("words".into()),
+            refused_setting: None,
             conversation: false,
         }],
         current: Some("code".into()),
@@ -133,7 +134,16 @@ fn place_status() -> PlaceStatus {
             identity: "flume:/r:fix--one:code:2".into(),
             stage: "code".into(),
             program: "agent".into(),
-            settings: settings(),
+            settings: AgentSettings {
+                settings: settings(),
+                from: BTreeMap::from([(
+                    "model".into(),
+                    Given {
+                        layer: Layer::Launch,
+                        value: "large".into(),
+                    },
+                )]),
+            },
             state: AgentState::Working,
             started: Reading::Yes,
             asking: Reading::No,

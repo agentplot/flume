@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "4fe1522";
+pub const REVISION: &str = "4d1f88b";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -36,7 +36,7 @@ pub fn all() -> Vec<String> {
         .map(|clause| clause.to_string())
         .collect();
     all.extend((1..=8).map(|invariant| format!("I{invariant}")));
-    all.extend((1..=43).map(|scenario| format!("S{scenario}")));
+    all.extend((1..=44).map(|scenario| format!("S{scenario}")));
     all
 }
 
@@ -73,8 +73,8 @@ mod tests {
                 .filter(|clause| *clause != 100)
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 135 + 8 + 43);
-        assert_eq!(REVISION, "4fe1522");
+        assert_eq!(all().len(), 135 + 8 + 44);
+        assert_eq!(REVISION, "4d1f88b");
         for clause in [129, 130, 131, 132] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }

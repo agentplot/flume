@@ -232,13 +232,79 @@ fn a_repository_with_no_declaration_declares_no_kind() {
     let revision = Revision::new(repository.head());
     assert_eq!(
         Weir.read_kinds(&repository.name(), &revision),
-        KindsRead::Read { kinds: vec![] }
+        KindsRead::Read {
+            kinds: vec![],
+            settings: Default::default()
+        }
     );
     assert_eq!(
         Weir.read_binding(&repository.name()),
         BindingRead::Read {
             binding: Binding::default()
         }
+    );
+}
+
+#[test]
+fn a_repositorys_settings_for_a_kind_it_does_not_declare_and_a_kinds_own() {
+    let repository = Repository::new("settings");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.change.agents]
+model = "opus"
+
+[kinds.change.agents.stages.verify]
+instructions = "Read every task."
+
+[kinds.bump.agents]
+program = "agent"
+model = "sonnet"
+
+[kinds.bump.agents.stages.code]
+model = "haiku"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ instructions = "keep it short" }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("settings for change@1, and bump's own");
+    let revision = Revision::new(repository.head());
+    let KindsRead::Read { kinds, settings } = Weir.read_kinds(&repository.name(), &revision) else {
+        panic!("the declaration did not read");
+    };
+    assert_eq!(
+        kinds
+            .iter()
+            .map(|kind| kind.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["bump"],
+        "settings declare no kind"
+    );
+    assert_eq!(
+        settings.keys().collect::<Vec<_>>(),
+        vec!["change"],
+        "settings apart from the kinds"
+    );
+    let change = &settings["change"];
+    assert_eq!(change.every_stage.model.as_deref(), Some("opus"));
+    assert_eq!(
+        change.for_stage("verify").instructions.as_deref(),
+        Some("Read every task.")
+    );
+    let bump = &kinds[0];
+    assert_eq!(bump.agents.every_stage.program.as_deref(), Some("agent"));
+    assert_eq!(
+        bump.agents.for_stage("code").model.as_deref(),
+        Some("haiku")
+    );
+    assert_eq!(
+        bump.stages[0].agents[0].instructions.as_deref(),
+        Some("keep it short"),
+        "the stage's own beside the kind's"
     );
 }
 
@@ -250,6 +316,7 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
         branch_prefix: "bump".into(),
         starts_unready: false,
         lands: false,
+        agents: KindSettings::default(),
         stages: stages
             .iter()
             .map(|name| Stage {
@@ -385,7 +452,7 @@ makes = ["preview"]
     )
     .expect("the declaration");
     let read = Weir.read_declaration(&scratch.path("kinds.toml").to_string_lossy());
-    let KindsRead::Read { kinds } = read else {
+    let KindsRead::Read { kinds, .. } = read else {
         panic!("an elaboration kind read as {read:?}");
     };
     assert_eq!(kinds.len(), 1);
