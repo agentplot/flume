@@ -1,14 +1,16 @@
-use crate::{lock, FakeKinds};
-use flume_seams::{Agent, Change, Kinds, MergeQueue, Place, Resolver};
+use crate::{lock, FakeKinds, Log};
+use flume_seams::{Agent, Binding, Change, Kinds, MergeQueue, Place, Resolver};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 /// From profile names to fakes: the place profile with no name is the
 /// one that needs nothing beyond git, and a name it does not hold
-/// resolves to nothing.
+/// resolves to nothing. Every place it binds is logged with the
+/// repository and the merge queue whose data it is bound with.
 pub struct FakeResolver {
     kinds: Arc<FakeKinds>,
     state: Mutex<Profiles>,
+    pub log: Log,
 }
 
 #[derive(Default)]
@@ -25,6 +27,7 @@ impl FakeResolver {
         FakeResolver {
             kinds,
             state: Mutex::default(),
+            log: Log::default(),
         }
     }
 
@@ -56,9 +59,18 @@ impl Resolver for FakeResolver {
         self.kinds.clone()
     }
 
-    fn place(&self, profile: Option<&str>) -> Option<Arc<dyn Place>> {
+    fn place_profiles(&self) -> Vec<String> {
+        lock(&self.state).places.keys().cloned().collect()
+    }
+
+    fn place(&self, repository: &str, binding: &Binding) -> Option<Arc<dyn Place>> {
+        self.log.push(format!(
+            "place {repository} {} {}",
+            binding.place.as_deref().unwrap_or("-"),
+            binding.merge_queue.as_deref().unwrap_or("-")
+        ));
         let state = lock(&self.state);
-        match profile {
+        match &binding.place {
             None => state.no_tool_place.clone(),
             Some(name) => state.places.get(name).cloned(),
         }

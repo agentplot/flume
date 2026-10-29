@@ -1,0 +1,43 @@
+# flume on GitHub: the fast layer runs in the devenv shell a session uses,
+# on Linux and macOS, so CI and `sluice exec` hold a tree to the same rules
+# (core.22). flume's own gate is sluice (.config/sluice.toml); this is the
+# public check.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # On a pull request moon compares the change against its base
+      # branch, `main` by name: it needs the history and the branch.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - if: github.event_name == 'pull_request'
+        run: git branch main origin/main
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+      - run: nix profile add nixpkgs#devenv
+      - uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: fast-${{ runner.os }}-${{ hashFiles('Cargo.lock', '.prototools') }}
+          restore-keys: fast-${{ runner.os }}-
+      - run: devenv shell -- moon run ':#check-fast'

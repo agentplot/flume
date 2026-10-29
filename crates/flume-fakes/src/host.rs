@@ -1,14 +1,36 @@
 use crate::{lock, Log};
-use flume_seams::{Host, Seconds, Secret};
+use flume_seams::{Host, HostSettings, KindSettings, RoomGuard, Seconds, Secret};
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Condvar, Mutex};
 
 /// The host: a clock that moves only when a test advances it or a command
-/// sleeps on it, numbered secrets, files' write times, and the commands
-/// of flume's that live.
+/// sleeps on it, numbered secrets, files' write times, the commands of
+/// flume's that live, the bound on agents and the agents' settings its
+/// configuration states, the recipient the calling command's environment
+/// names, the host user's login environment, and an exclusive room lock.
 pub struct FakeHost {
     state: Mutex<HostState>,
+    room: Arc<Room>,
     pub log: Log,
+    /// The lines written to the host's log (139).
+    pub logged: Log,
+}
+
+/// The room lock: taken while held, waited on by every other taker.
+#[derive(Default)]
+struct Room {
+    taken: Mutex<bool>,
+    freed: Condvar,
+}
+
+/// Holding the room until dropped.
+struct Held(Arc<Room>);
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        *lock(&self.0.taken) = false;
+        self.0.freed.notify_one();
+    }
 }
 
 struct HostState {
@@ -17,6 +39,13 @@ struct HostState {
     files: BTreeMap<String, Seconds>,
     command: u64,
     alive: BTreeSet<String>,
+    bound: Option<u32>,
+    recipient: Option<String>,
+    /// The agents' settings by kind, for every repository.
+    kinds: BTreeMap<String, KindSettings>,
+    /// The agents' settings by repository and kind.
+    repos: BTreeMap<(String, String), KindSettings>,
+    login: BTreeMap<String, String>,
 }
 
 impl Default for FakeHost {
@@ -28,8 +57,15 @@ impl Default for FakeHost {
                 files: BTreeMap::new(),
                 command: 1,
                 alive: BTreeSet::from(["command-1".to_string()]),
+                bound: None,
+                recipient: None,
+                kinds: BTreeMap::new(),
+                repos: BTreeMap::new(),
+                login: BTreeMap::from([("HOME".to_string(), "/home/user".to_string())]),
             }),
+            room: Arc::default(),
             log: Log::default(),
+            logged: Log::default(),
         }
     }
 }
@@ -72,6 +108,55 @@ impl FakeHost {
     pub fn end_command(&self, command: &str) {
         lock(&self.state).alive.remove(command);
     }
+
+    /// The bound on agents the host's configuration states, or none.
+    pub fn set_bound(&self, bound: Option<u32>) {
+        lock(&self.state).bound = bound;
+    }
+
+    /// The recipient the calling command's environment names, or none.
+    pub fn set_recipient(&self, recipient: Option<&str>) {
+        lock(&self.state).recipient = recipient.map(str::to_string);
+    }
+
+    /// The settings the configuration gives `kind`'s agents, in
+    /// `repository` or in every repository where none is named; empty
+    /// settings remove them.
+    pub fn set_settings(&self, repository: Option<&str>, kind: &str, settings: KindSettings) {
+        let mut state = lock(&self.state);
+        let empty = settings.is_empty();
+        match repository {
+            Some(repository) => {
+                let key = (repository.to_string(), kind.to_string());
+                if empty {
+                    state.repos.remove(&key);
+                } else {
+                    state.repos.insert(key, settings);
+                }
+            }
+            None if empty => {
+                state.kinds.remove(kind);
+            }
+            None => {
+                state.kinds.insert(kind.to_string(), settings);
+            }
+        }
+    }
+
+    /// A variable of the host user's login environment, or none; `HOME`
+    /// is `/home/user` until set.
+    pub fn set_login(&self, name: &str, value: Option<&str>) {
+        let mut state = lock(&self.state);
+        match value {
+            Some(value) => state.login.insert(name.to_string(), value.to_string()),
+            None => state.login.remove(name),
+        };
+    }
+
+    /// Whether the room lock is held now.
+    pub fn room_taken(&self) -> bool {
+        *lock(&self.room.taken)
+    }
 }
 
 impl Host for FakeHost {
@@ -101,5 +186,50 @@ impl Host for FakeHost {
 
     fn alive(&self, command: &str) -> bool {
         lock(&self.state).alive.contains(command)
+    }
+
+    fn bound(&self) -> Option<u32> {
+        self.log.push("bound");
+        lock(&self.state).bound
+    }
+
+    fn recipient(&self) -> Option<String> {
+        self.log.push("recipient");
+        lock(&self.state).recipient.clone()
+    }
+
+    fn settings(&self, repository: &str, kind: &str) -> HostSettings {
+        self.log.push(format!("settings {repository} {kind}"));
+        let state = lock(&self.state);
+        HostSettings {
+            repository: state
+                .repos
+                .get(&(repository.to_string(), kind.to_string()))
+                .cloned()
+                .unwrap_or_default(),
+            kind: state.kinds.get(kind).cloned().unwrap_or_default(),
+        }
+    }
+
+    fn login(&self, name: &str) -> Option<String> {
+        lock(&self.state).login.get(name).cloned()
+    }
+
+    fn log(&self, line: &str) {
+        self.logged.push(line);
+    }
+
+    fn room(&self) -> RoomGuard {
+        self.log.push("room");
+        let mut taken = lock(&self.room.taken);
+        while *taken {
+            taken = self
+                .room
+                .freed
+                .wait(taken)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+        *taken = true;
+        RoomGuard::new(Held(self.room.clone()))
     }
 }

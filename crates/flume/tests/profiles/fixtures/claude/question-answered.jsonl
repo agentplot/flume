@@ -1,0 +1,1 @@
+{"parentUuid":"aq1","isSidechain":false,"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01AskWhichParser","type":"tool_result","content":"User has answered your questions: \"Which parser?\"=\"A new one\"."}]},"uuid":"aq2","timestamp":"2026-10-29T01:03:00.000Z","sessionId":"4e3c05c8-51c4-4449-8577-4f7038e394bf","version":"2.1.296"}

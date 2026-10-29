@@ -1,0 +1,29 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# flume's Claude Code plugin (design 17): its manifests, its hooks, the
+# /launch command and its MCP server's entry. It holds no script of its
+# own: the hooks are the binary's `flume hook <event>`, so its lint is
+# Biome's over its JSON, in `format`. Each check is one task, in the fast
+# layer (core.21).
+language: 'bash'
+layer: 'application'
+
+tasks:
+  # The plugin's files, by every formatter treefmt.nix configures.
+  format:
+    command: 'treefmt --ci plugins/claude'
+    inputs: ['/plugins/claude/**/*', '/treefmt.nix', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # The manifest, the hooks and the command, by the pinned Claude Code's
+  # strict validation, which fails a warning as an error.
+  validate:
+    command: '../claude.sh plugin validate --strict .'
+    inputs: ['.claude-plugin/**/*', 'hooks/**/*', 'commands/**/*', '.mcp.json', '/plugins/claude.sh', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+  # Each hook run by the built binary with fixture inputs and a fixture
+  # transcript on a scratch state directory (tests/hooks.sh).
+  test:
+    command: 'bash tests/hooks.sh'
+    inputs: ['**/*', '/crates/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]

@@ -1,0 +1,16 @@
+{
+  "name": "flume",
+  "owner": {
+    "name": "agentplot"
+  },
+  "metadata": {
+    "description": "Claude Code plugins for flume, which carries one launch through its kind's stages in a worktree of its own."
+  },
+  "plugins": [
+    {
+      "name": "flume",
+      "source": "./plugins/claude",
+      "description": "flume's hooks for the agents it starts, /launch to start a place from a session, and flume's status over MCP."
+    }
+  ]
+}

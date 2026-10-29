@@ -30,7 +30,10 @@ impl Engine {
             return Answer::refused(format!("the place {place} has no stage {stage}"));
         };
         let identity = self.next_identity(&held, index);
-        match self.fill(&held, index, &identity, None) {
+        let declared = &held.place.kind.stages[index];
+        let resolved = self.resolve(&held.place, declared);
+        let agent = self.agent_for(&resolved, stage).ok();
+        match self.fill(&held, index, &identity, None, agent.as_deref()) {
             Ok(text) => Answer::Prompt {
                 place: place.clone(),
                 stage: stage.into(),
@@ -44,16 +47,20 @@ impl Engine {
     }
 
     /// Ends the place's live agent, one that is not quiet only when
-    /// forced; a stage it ran that had not ended reads stopped (31, 51).
+    /// forced; a stage it ran that had not ended reads stopped, and one
+    /// still starting is reported never begun with what the terminal
+    /// showed of it (31, 35, 51).
     fn end_agent(&self, id: &PlaceId, force: bool) -> Result<(), String> {
         let Some(read) = self.store.read(id) else {
             return Ok(());
         };
-        let Some((_, start)) = read.state.live_start() else {
+        let Some((index, start)) = read.state.live_start() else {
             return Ok(());
         };
         let identity = start.identity.clone();
-        let reading = self.read_agent(start);
+        let reading = self.read_agent(id, start);
+        let starting = (read.state.stages[index].state == StageState::Starting)
+            .then(|| self.read_out(&read.state, start, true));
         if reading.state != AgentState::Stopped {
             if !reading.quiet() && !force {
                 return Err(format!(
@@ -67,15 +74,21 @@ impl Engine {
         }
         self.with_start(id, &identity, |start, state| {
             start.live = false;
-            if state.running() {
+            if *state == StageState::Starting {
+                *state = StageState::NeverBegun;
+            } else if state.running() {
                 *state = StageState::Stopped;
             }
         });
+        if let Some(end) = starting {
+            self.end_with(id, &identity, end);
+        }
         Ok(())
     }
 
     /// Starts the stage a retry names with a fresh agent and the retry's
-    /// words, the stages after it then running again in order; or, naming
+    /// words, after the question of the stop-short the stage ended with,
+    /// the stages after it then running again in order; or, naming
     /// the submission, submits the place's head again and starts no
     /// agent. The place's agent is ended first (49, 50, 12).
     pub fn retry(
@@ -134,15 +147,19 @@ impl Engine {
                 return self.acted(Act::Retry, place);
             }
         }
+        let words = answered(&held.stages[index], words);
         self.update(place, |held| {
             for stage in held.stages.iter_mut().skip(index + 1) {
                 stage.state = StageState::NotReached;
             }
             held.submission.due = false;
+            held.submission.waiting = None;
             Step::Write(())
         });
         match self.start_stage(place, index, words) {
-            Start::Opened(_) => self.acted(Act::Retry, place),
+            Start::Opened(_) | Start::NeverBegun(_) | Start::WaitingForRoom => {
+                self.acted(Act::Retry, place)
+            }
             Start::Refused(part) => Answer::refused(format!(
                 "the stage {}'s prompt asks for {}, which has nothing to fill it",
                 held.stages[index].name,
@@ -152,9 +169,7 @@ impl Engine {
             Start::NotOpened(reason) => {
                 Answer::refused(format!("the terminal did not open the agent: {reason}"))
             }
-            Start::NoAgent(program) => {
-                Answer::refused(format!("no agent profile runs the program {program}"))
-            }
+            Start::Unresolved(reason) => Answer::refused(reason),
             Start::NoPlace => Answer::refused(format!("no place {place} stands on this host")),
         }
     }
@@ -244,7 +259,7 @@ impl Engine {
         let Some(start) = held.stages[index].start.clone() else {
             return Answer::refused(format!("the place {place}'s conversation has no agent"));
         };
-        let reading = start.live.then(|| self.read_agent(&start));
+        let reading = start.live.then(|| self.read_agent(place, &start));
         if let Some(reading) = reading.filter(|reading| reading.state != AgentState::Stopped) {
             if !reading.quiet() && !force {
                 return Answer::refused(format!(
@@ -270,7 +285,7 @@ impl Engine {
     }
 
     /// Hands the agent of the place's current stage `words` as a prompt
-    /// once it waits, received or sent once more; refused with nothing
+    /// once it said it started and waits, received or sent once more; refused with nothing
     /// typed when the place has no live agent, its agent is asking, or the
     /// words are not delivered within the bound (53 to 55).
     pub fn tell(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
@@ -288,10 +303,11 @@ impl Engine {
                 start.program
             ));
         };
+        let folder = self.store.folder(place);
         let deadline = self.host.now() + bound.unwrap_or(TELL_BOUND);
         loop {
-            let state = self.terminal.state(&identity);
-            let asking = agent.asking(&identity);
+            let state = self.state_of(Some(agent.as_ref()), &folder, &identity);
+            let asking = agent.asking(&folder, &identity);
             if state == AgentState::Asking || asking == Reading::Yes {
                 return Answer::refused(format!(
                     "the agent {identity} is asking a person; nothing was typed"
@@ -302,7 +318,10 @@ impl Engine {
                     "the agent {identity} is not live; nothing was typed"
                 ));
             }
-            if state == AgentState::Waiting && asking == Reading::No {
+            if state == AgentState::Waiting
+                && asking == Reading::No
+                && agent.started(&folder, &identity) == Reading::Yes
+            {
                 break;
             }
             if self.host.now() >= deadline {
@@ -318,7 +337,7 @@ impl Engine {
             }
             let sent = self.host.now();
             loop {
-                if let Received::Received { .. } = agent.received(&identity, words) {
+                if let Received::Received { .. } = agent.received(&folder, &identity, words) {
                     return self.acted(Act::Tell, place);
                 }
                 let waited = self.host.now().saturating_sub(sent);
@@ -345,6 +364,24 @@ impl Engine {
     }
 }
 
+/// A retry's words for a stage: where the stage ended short, the
+/// question its agent stopped with, then the retry's words as the answer
+/// (42, 49, core.27).
+fn answered(stage: &StageHeld, words: Option<String>) -> Option<String> {
+    let question = stage
+        .end
+        .as_ref()
+        .filter(|_| stage.state == StageState::EndedShort)
+        .and_then(|end| end.words.clone());
+    match (question, words) {
+        (Some(question), Some(answer)) => {
+            Some(format!("The question: {question}\n\nThe answer: {answer}"))
+        }
+        (Some(question), None) => Some(format!("The question: {question}")),
+        (None, words) => words,
+    }
+}
+
 /// What a tidy did for one place.
 fn only(tidy: Tidied, place: &PlaceId) -> Tidied {
     Tidied {
@@ -360,5 +397,10 @@ fn only(tidy: Tidied, place: &PlaceId) -> Tidied {
             .filter(|kept| &kept.place == place)
             .collect(),
         not_over: vec![],
+        terminal: tidy
+            .terminal
+            .into_iter()
+            .filter(|tidied| &tidied.place == place)
+            .collect(),
     }
 }

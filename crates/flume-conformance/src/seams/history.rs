@@ -44,7 +44,29 @@ pub fn scenarios<H: HistoryHarness>() -> Vec<Scenario<H>> {
             cites: &["9", "2"],
             run: a_branch_name_refused::<H>,
         },
+        Scenario {
+            name: "history: the commits since a start, newest first, which an end carries",
+            cites: &["43", "25"],
+            run: the_commits_since_a_start::<H>,
+        },
     ]
+}
+
+fn the_commits_since_a_start<H: HistoryHarness>(harness: &H) -> Outcome {
+    let (repository, branch, start) = harness.branch();
+    ensure_eq!(
+        harness.seam().commits_since(&repository, &start, &start),
+        Vec::<Revision>::new(),
+        "the commits since the start, at the start"
+    );
+    let first = harness.commit(&repository, &branch, "a.rs");
+    let second = harness.commit(&repository, &branch, "b.rs");
+    ensure_eq!(
+        harness.seam().commits_since(&repository, &second, &start),
+        vec![second.clone(), first],
+        "the commits since the start"
+    );
+    Ok(())
 }
 
 fn a_commit_since_the_start<H: HistoryHarness>(harness: &H) -> Outcome {

@@ -219,7 +219,7 @@ fn s32_words_missing_then_given(_: &()) -> Outcome {
     );
     ensure_eq!(
         world.stage_state(&id, "review"),
-        Some(StageState::Started),
+        Some(StageState::Starting),
         "the review stage"
     );
     let prompt = world
@@ -255,9 +255,13 @@ fn settings_resolved(_: &()) -> Outcome {
     let place = launched(&world.engine.launch(&bump))?;
     let agent = place.agent.ok_or("no agent")?;
     ensure_eq!(agent.program, "agent", "the program");
-    ensure_eq!(agent.settings.model.as_deref(), Some("large"), "the model");
     ensure_eq!(
-        agent.settings.instructions.as_deref(),
+        agent.settings.settings.model.as_deref(),
+        Some("large"),
+        "the model"
+    );
+    ensure_eq!(
+        agent.settings.settings.instructions.as_deref(),
         Some("keep it short"),
         "the instructions"
     );
@@ -293,7 +297,7 @@ fn s5_a_slow_start(_: &()) -> Outcome {
             "the code stage"
         );
         let status = match world.engine.status(Some(&id)) {
-            Answer::Status { places } => places,
+            Answer::Status { places, .. } => places,
             other => return Err(format!("status answered {other:?}")),
         };
         let agent = status[0].agent.clone().ok_or("no agent")?;
@@ -759,7 +763,12 @@ fn s4_a_construct_stops_short(_: &()) -> Outcome {
         .ok_or("no start")?
         .secret;
     let words = "Which design does the brief mean: the queue,\nor the log? Both fit.";
-    let answer = world.engine.needs(&construct.to_string(), &secret.0, words);
+    let answer = world.engine.needs(
+        &construct.to_string(),
+        &secret.0,
+        words,
+        StopKind::NeedsAnswer,
+    );
     ensure!(
         answer.refusal().is_none(),
         "the stop-short was refused: {answer:?}"
@@ -772,6 +781,11 @@ fn s4_a_construct_stops_short(_: &()) -> Outcome {
         status.stages[0].end.clone().and_then(|end| end.words),
         Some(words.to_string()),
         "the words status gives"
+    );
+    ensure_eq!(
+        status.stages[0].end.clone().and_then(|end| end.needs),
+        Some(StopKind::NeedsAnswer),
+        "the kind of stop-short status gives"
     );
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
     Ok(())
@@ -802,8 +816,16 @@ fn another_starts_secret(_: &()) -> Outcome {
         .and_then(|held| held.stages[0].start.clone())
         .ok_or("no start")?
         .secret;
-    refused(&world.engine.needs(&second.to_string(), &old.0, "stop"))?;
-    refused(&world.engine.needs(&first.to_string(), &old.0, "stop"))?;
+    refused(
+        &world
+            .engine
+            .needs(&second.to_string(), &old.0, "stop", StopKind::NeedsAnswer),
+    )?;
+    refused(
+        &world
+            .engine
+            .needs(&first.to_string(), &old.0, "stop", StopKind::FoundWork),
+    )?;
     ensure!(
         world
             .stage_state(&id, "work")
@@ -813,7 +835,7 @@ fn another_starts_secret(_: &()) -> Outcome {
     ensure!(
         world
             .engine
-            .needs(&second.to_string(), &new.0, "stop")
+            .needs(&second.to_string(), &new.0, "stop", StopKind::NeedsAnswer)
             .refusal()
             .is_none(),
         "the current start's stop-short was refused"

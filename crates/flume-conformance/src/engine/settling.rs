@@ -1,5 +1,7 @@
-//! Settling (40, 46, 111 to 113, 119 to 122, 124): what moves a place on
-//! with no process of flume's own, and a landing kind's submission.
+//! Settling (40, 46, 111 to 113, 119 to 122, 124, 125, 133): what moves a
+//! place on with no process of flume's own, and a landing kind's
+//! submission, made with no wait and its outcomes collected at the
+//! settles that follow.
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -41,8 +43,13 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_launch_that_died,
         },
         Scenario {
-            name: "submit: a fix lands, the merge queue removes it, and flume records it gone",
-            cites: &["S1", "111", "113", "66", "67", "62", "101"],
+            name: "settle: the agent's record is read in the place's own folder",
+            cites: &["128", "77", "102"],
+            run: the_record_read_in_the_places_folder,
+        },
+        Scenario {
+            name: "submit: a fix lands, the merge queue removes nothing, and flume's tidy removes the place",
+            cites: &["S1", "111", "113", "133", "66", "67", "62", "101"],
             run: s1_a_fix_lands,
         },
         Scenario {
@@ -51,8 +58,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s8_another_places_landing,
         },
         Scenario {
-            name: "submit: a failed submission sends the place back to verify with its words, then lands",
-            cites: &["S19", "112", "I7", "22", "48"],
+            name: "submit: a change's failed submission sends it back to code with the words, verify runs again, then it lands",
+            cites: &["S19", "S35", "112", "131", "I7", "22", "48"],
             run: s19_a_failure_then_a_landing,
         },
         Scenario {
@@ -61,9 +68,19 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s30_a_landing_before_flume_submits,
         },
         Scenario {
-            name: "submit: after a restart an open submission nobody waits on is waited on, never made anew",
-            cites: &["S34", "124", "125", "120", "77"],
+            name: "submit: after a restart a landing is collected by the next settle, never submitted anew",
+            cites: &["S34", "124", "133", "120", "77"],
             run: s34_a_restart_while_under_test,
+        },
+        Scenario {
+            name: "submit: one settle of two places open on one base steps that base once",
+            cites: &["125", "124", "111"],
+            run: two_places_one_base,
+        },
+        Scenario {
+            name: "submit: an inbox that cannot be read acts on nothing and is named in status",
+            cites: &["133", "68", "57"],
+            run: an_unreadable_inbox,
         },
         Scenario {
             name: "submit: a place gone back as often as its kind allows waits for its caller",
@@ -79,7 +96,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 }
 
 /// A change's construct stage begun, its agent waiting.
-fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
     let id = World::id("change", name);
     launched(
         &world
@@ -96,7 +113,7 @@ fn construct_begun(world: &World, name: &str) -> Result<PlaceId, String> {
 }
 
 /// The change written on the place's branch, its planning complete.
-fn write_change(world: &World, name: &str) {
+pub fn write_change(world: &World, name: &str) {
     let revision = world.commit(
         &format!("change/{name}"),
         &[&format!("plans/{name}/design.md")],
@@ -156,6 +173,37 @@ fn s29_a_commit_and_a_quiet_agent(_: &()) -> Outcome {
             .is_some_and(StageState::running),
         "code did not start"
     );
+    Ok(())
+}
+
+fn the_record_read_in_the_places_folder(_: &()) -> Outcome {
+    let world = World::new();
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    let folder = world.store.folder(&id);
+    world.agent.keep_record_in(&code, &folder);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code, its record read in the place's folder"
+    );
+    let elsewhere: Vec<String> = world
+        .agent
+        .log
+        .calls()
+        .into_iter()
+        .filter(|call| !call.starts_with("command") && !call.ends_with(&format!(" in {folder}")))
+        .collect();
+    ensure_eq!(
+        elsewhere,
+        Vec::<String>::new(),
+        "readings in another folder"
+    );
+    world.commit("fix/one", &["fix.rs"]);
+    world.settle(&id);
+    ensure!(world.held(&id).is_none(), "the place did not land");
     Ok(())
 }
 
@@ -329,7 +377,7 @@ fn a_launch_that_died(_: &()) -> Outcome {
 }
 
 /// A change's place driven to its verify stage, begun.
-fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
     let id = construct_begun(world, name)?;
     write_change(world, name);
     world.settle(&id);
@@ -351,7 +399,7 @@ fn change_at_verify(world: &World, name: &str) -> Result<PlaceId, String> {
 }
 
 /// The change archived on the place's branch, its report with it.
-fn archive(world: &World, name: &str) {
+pub fn archive(world: &World, name: &str) {
     let revision = world.commit(
         &format!("change/{name}"),
         &[&format!("plans/archive/{name}/verify.md")],
@@ -369,7 +417,6 @@ fn archive(world: &World, name: &str) {
 
 fn s1_a_fix_lands(_: &()) -> Outcome {
     let world = World::new();
-    world.queue.removes_places();
     let id = World::id("fix", "one");
     let code = World::identity("fix", "one", "code", 1);
     launched(
@@ -398,7 +445,8 @@ fn s1_a_fix_lands(_: &()) -> Outcome {
         world.git.branch_head(REPOSITORY, "fix/one").is_none(),
         "a branch holding nothing its base lacks is kept"
     );
-    ensure_eq!(world.place.log.count("remove"), 0, "removes flume made");
+    ensure_eq!(world.place.log.count("remove"), 1, "removes flume made");
+    ensure_eq!(world.queue.log.count("inbox"), 2, "inbox reads");
     match answer {
         flume_core::Answer::Settled { tidy, .. } => {
             ensure_eq!(tidy.removed, vec![id.clone()], "the places removed")
@@ -438,26 +486,40 @@ fn s8_another_places_landing(_: &()) -> Outcome {
 fn s19_a_failure_then_a_landing(_: &()) -> Outcome {
     let world = World::new();
     let id = change_at_verify(&world, "plan")?;
-    world
-        .queue
-        .plan_submits(vec![Plan::Fail("check test-x failed: 2 of 46".into())]);
+    let words = "check test-x failed: 2 of 46";
+    world.queue.plan_submits(vec![Plan::Fail(words.into())]);
     archive(&world, "plan");
     world.settle(&id);
     let held = world.held(&id).ok_or("the place is gone")?;
     ensure_eq!(held.submission.send_backs, 1, "send-backs");
-    ensure_eq!(held.stages[2].starts, 2, "verify's starts");
-    let verify = World::identity("change", "plan", "verify", 2);
-    let prompt = world.prompt(&id, &verify).ok_or("no second verify")?;
-    ensure!(
-        prompt.contains("check test-x failed: 2 of 46"),
-        "the words are not in {prompt}"
+    ensure_eq!(held.stages[1].starts, 2, "code's starts");
+    ensure_eq!(held.stages[2].starts, 1, "verify's starts");
+    let code = World::identity("change", "plan", "code", 2);
+    let prompt = world.prompt(&id, &code).ok_or("no second code")?;
+    ensure!(prompt.contains(words), "the words are not in {prompt}");
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::Delivered),
+        "construct"
     );
+    ensure_eq!(
+        world.stage_state(&id, "verify"),
+        Some(StageState::NotReached),
+        "verify, before code delivers again"
+    );
+    world.tick("change/plan", "plan", 2, 2);
+    world.settle(&id);
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::Delivered),
-        "code, before verify"
+        "code, delivered again"
     );
-    world.settle(&id);
+    ensure!(
+        world
+            .stage_state(&id, "verify")
+            .is_some_and(StageState::running),
+        "verify did not run again"
+    );
     archive(&world, "plan");
     world.settle(&id);
     ensure_eq!(world.queue.log.count("submit"), 2, "submissions");
@@ -494,21 +556,99 @@ fn s30_a_landing_before_flume_submits(_: &()) -> Outcome {
 fn s34_a_restart_while_under_test(_: &()) -> Outcome {
     let world = World::new();
     let id = change_at_verify(&world, "plan")?;
-    world.queue.plan_submits(vec![Plan::Hang]);
+    world.queue.plan_submits(vec![Plan::Hold]);
     archive(&world, "plan");
-    let quiet = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let killed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| world.settle(&id)));
-    std::panic::set_hook(quiet);
-    ensure!(killed.is_err(), "the waiting command was not killed");
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure!(
+        held.submission.id.is_some(),
+        "no submission of flume's is recorded"
+    );
+    ensure_eq!(held.phase, Phase::Live, "the place under test");
     world.host.restart();
     world.terminal.forget_all();
-    let held = world.held(&id).ok_or("the place is gone")?;
-    ensure!(held.submission.waiter.is_some(), "no waiter was recorded");
+    world.queue.decide(REPOSITORY, "change/plan", Plan::Land);
     world.engine().settle(None);
     ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
-    ensure_eq!(world.queue.log.count("wait"), 1, "waits");
     ensure!(world.held(&id).is_none(), "the landed place is kept");
+    ensure!(!world.place.exists(&id.0), "the landed place stands");
+    Ok(())
+}
+
+/// A fix launched as `name` with its code stage begun.
+pub fn fix_begun(world: &World, name: &str) -> Result<PlaceId, String> {
+    launched(&world.engine.launch(&launch("fix", name, Some("x"))))?;
+    let id = World::id("fix", name);
+    world.settle(&id);
+    Ok(id)
+}
+
+/// The fix's code stage delivered, unsettled.
+pub fn deliver_fix(world: &World, id: &PlaceId) {
+    let name = id.0.rsplit("--").next().unwrap_or_default();
+    world.commit(&format!("fix/{name}"), &["fix.rs"]);
+}
+
+fn two_places_one_base(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold, Plan::Hold]);
+    let one = fix_begun(&world, "one")?;
+    let two = fix_begun(&world, "two")?;
+    deliver_fix(&world, &one);
+    deliver_fix(&world, &two);
+    world.queue.log.clear();
+    world.engine().settle(None);
+    ensure_eq!(world.queue.log.count("submit"), 2, "submissions");
+    ensure_eq!(
+        world.queue.log.of("step"),
+        vec![format!("step {REPOSITORY} main")],
+        "steps one settle made"
+    );
+    for id in [&one, &two] {
+        ensure_eq!(
+            world.held(id).map(|held| held.phase),
+            Some(Phase::Live),
+            "a place under test"
+        );
+    }
+    world.engine().settle(None);
+    ensure_eq!(world.queue.log.count("submit"), 2, "submissions made anew");
+    ensure_eq!(world.queue.log.count("step"), 2, "steps two settles made");
+    Ok(())
+}
+
+fn an_unreadable_inbox(_: &()) -> Outcome {
+    let world = World::new();
+    world
+        .queue
+        .plan_submits(vec![Plan::Fail("check x failed".into())]);
+    let id = fix_begun(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.queue.moves_on_its_own();
+    world.settle(&id);
+    world.queue.run_round(REPOSITORY, "main");
+    world.queue.unreadable("the merge queue is down");
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(held.submission.send_backs, 0, "send-backs");
+    ensure_eq!(held.stages[0].starts, 1, "code's starts");
+    ensure!(
+        world
+            .status(&id)?
+            .cannot_read
+            .iter()
+            .any(|what| what.contains("inbox") && what.contains("down")),
+        "status names not the unread inbox"
+    );
+    world.queue.readable();
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(held.submission.send_backs, 1, "send-backs once read");
+    ensure_eq!(
+        held.submission.unread,
+        None,
+        "the inbox's reason, once read"
+    );
     Ok(())
 }
 

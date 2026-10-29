@@ -5,11 +5,12 @@ use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Act, Answer, Retry};
 use flume_seams::*;
+use std::sync::{Arc, Mutex};
 
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
-            name: "retry: a construct that ended short, retried with words, starts afresh with them",
+            name: "retry: a construct that ended short, retried with words, starts afresh with the question and the answer",
             cites: &["S4", "49", "50", "42"],
             run: s4_retried_with_words,
         },
@@ -109,11 +110,12 @@ fn s4_retried_with_words(_: &()) -> Outcome {
         .and_then(|held| held.stages[0].start.clone())
         .ok_or("no start")?
         .secret;
-    taken(
-        &world
-            .engine
-            .needs(&first.to_string(), &secret.0, "which design?"),
-    )?;
+    taken(&world.engine.needs(
+        &first.to_string(),
+        &secret.0,
+        "which design?",
+        StopKind::NeedsAnswer,
+    ))?;
     let words = "The design agent says: the queue.";
     taken(&world.engine.retry(
         &id,
@@ -128,7 +130,11 @@ fn s4_retried_with_words(_: &()) -> Outcome {
     );
     let second = World::identity("change", "plan", "construct", 2);
     let prompt = world.prompt(&id, &second).ok_or("no fresh agent")?;
-    ensure!(prompt.contains(words), "the words are not in {prompt}");
+    let asked = format!("The question: which design?\n\nThe answer: {words}");
+    ensure!(
+        prompt.contains(&asked),
+        "the question then the answer are not in {prompt}"
+    );
     Ok(())
 }
 
@@ -553,10 +559,29 @@ fn two_starts_at_once(_: &()) -> Outcome {
     world.store.put(&id, held);
     let other = world.engine();
     let retried = id.clone();
+    let host = world.host.clone();
+    let retry = Arc::new(Mutex::new(None));
+    let handle = retry.clone();
     world.store.before_next_write(move || {
-        let _ = other.retry(&retried, Retry::Stage("code".into()), None, false);
+        let rooms = host.log.count("room");
+        let thread = std::thread::spawn(move || {
+            let _ = other.retry(&retried, Retry::Stage("code".into()), None, false);
+        });
+        while host.log.count("room") == rooms {
+            std::thread::yield_now();
+        }
+        *handle
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(thread);
     });
     world.settle(&id);
+    let thread = retry
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take();
+    if let Some(thread) = thread {
+        thread.join().map_err(|_| "the retry panicked")?;
+    }
     let code = World::identity("change", "plan", "code", 1);
     ensure_eq!(
         world

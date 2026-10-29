@@ -1,21 +1,33 @@
 # sluice gates every merge onto main and into a bolt (kit:gate.1): the
 # checks moon tags, in flume's devenv shell (kit:gate.2), main and the
 # bolts on GitHub as the sluice app lands them (kit:gate.4). crew makes
-# each bolt there with `sluice branch create`.
+# each bolt there with `sluice branch create`. The layers are
+# .moon/workspace.yml's: check-live, run by hand in the devenv shell with
+# a test account's Claude Code token, is required by no branch.
 [tests]
 runner = "moon"
 toolchain = ["devenv", "print-dev-env"]
 
+[executor]
+kind = "sandbox"
+# The profiles' tests listen on localhost; nothing reaches further.
+network = "localhost"
+
 [branches."bolt/*"]
 required = ["#check-fast"]
+# A replay counts when a run this gate trusts recorded a pass for its key.
+trust = ["open", "sandbox", "container"]
 parallel = 4
 batch = false
 flaky = "fail"
 timeout = "10m"
 remote = "origin"
 
+# A replay counts on main only when a sandboxed or confined run recorded a
+# pass for its key: the cache also holds what open shells ran.
 [branches.main]
-required = ["#check-fast"]
+required = ["#check-fast", "#check-tools"]
+trust = ["confined", "sandbox"]
 parallel = 2
 batch = false
 flaky = "fail"

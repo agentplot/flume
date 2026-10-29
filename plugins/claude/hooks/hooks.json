@@ -1,0 +1,102 @@
+{
+  "description": "flume's agent hooks: the started and received acks, the asking mark, the guard on submitting and pushing, the stop check and the settle once the agent is quiet, the last words a failed turn leaves, and the session's end. Each does nothing in a session flume did not start, and each exits 0.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "session-start"],
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "user-prompt-submit"],
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|AskUserQuestion|ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "pre-tool-use"],
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "permission-request"],
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "post-tool-use"],
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "stop"],
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "stop-failure"],
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "flume",
+            "args": ["hook", "session-end"],
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

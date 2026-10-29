@@ -51,6 +51,53 @@ fn the_host_names_its_commands_and_forgets_them_on_a_restart() {
 }
 
 #[test]
+fn the_hosts_bound_is_set() {
+    let host = FakeHost::default();
+    assert_eq!(host.bound(), None);
+    host.set_bound(Some(2));
+    assert_eq!(host.bound(), Some(2));
+    host.set_bound(None);
+    assert_eq!(host.bound(), None);
+}
+
+#[test]
+fn the_callers_recipient_is_set() {
+    let host = FakeHost::default();
+    assert_eq!(host.recipient(), None);
+    host.set_recipient(Some("operator"));
+    assert_eq!(host.recipient(), Some("operator".into()));
+    assert_eq!(host.log.count("recipient"), 2);
+}
+
+#[test]
+fn the_room_lock_is_exclusive() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+    let host = Arc::new(FakeHost::default());
+    let guard = host.room();
+    assert!(host.room_taken());
+    let entered = Arc::new(AtomicBool::new(false));
+    let other = {
+        let host = host.clone();
+        let entered = entered.clone();
+        std::thread::spawn(move || {
+            let _guard = host.room();
+            entered.store(true, Ordering::SeqCst);
+        })
+    };
+    std::thread::sleep(Duration::from_millis(50));
+    assert!(
+        !entered.load(Ordering::SeqCst),
+        "a second taker entered a held room"
+    );
+    drop(guard);
+    other.join().expect("the second taker");
+    assert!(entered.load(Ordering::SeqCst));
+    assert!(!host.room_taken());
+    assert_eq!(host.log.count("room"), 2);
+}
+
+#[test]
 fn every_call_is_logged_in_order() {
     let git = FakeGit::new();
     let base = git.init("/r", "main");
@@ -98,36 +145,83 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
     let terminal = Arc::new(FakeTerminal::new(host.clone()));
     let agent = FakeAgent::new(terminal.clone());
     let who = identity("code", 1);
-    assert_eq!(agent.received(&who, "go"), Received::Unknown);
-    terminal.open(&place_ref(), &AgentCommand::default(), &who, None);
+    let folder = "/state/fix--one";
+    assert_eq!(agent.received(folder, &who, "go"), Received::Unknown);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        None,
+    );
     agent.set_own_work(&who, Reading::Unknown);
     agent.set_asking(&who, Reading::Yes);
-    assert_eq!(agent.own_work(&who), Reading::Unknown);
-    assert_eq!(agent.asking(&who), Reading::Yes);
+    assert_eq!(agent.own_work(folder, &who), Reading::Unknown);
+    assert_eq!(agent.asking(folder, &who), Reading::Yes);
     assert!(matches!(
-        agent.received(&who, "go"),
+        agent.received(folder, &who, "go"),
         Received::NotReceived { .. }
     ));
     terminal.send(&who, "go");
     assert!(matches!(
-        agent.received(&who, "go"),
+        agent.received(folder, &who, "go"),
         Received::Received { .. }
     ));
     agent.received_unknown(&who);
-    assert_eq!(agent.received(&who, "go"), Received::Unknown);
+    assert_eq!(agent.received(folder, &who, "go"), Received::Unknown);
     agent.refuse_act(&who, "submit");
     assert_eq!(
-        agent.guard(&who),
+        agent.guard(folder, &who),
         Guarded::Refused {
             acts: vec!["submit".into()]
         }
     );
+    assert_eq!(agent.ended(folder, &who), Reading::No);
+    agent.set_ended(&who, Reading::Yes);
+    assert_eq!(agent.ended(folder, &who), Reading::Yes);
     agent.no_send_back();
     agent.no_on_quiet();
     agent.no_guard();
     assert_eq!(agent.send_back(), Offered::NotOffered);
     assert_eq!(agent.on_quiet(), Offered::NotOffered);
-    assert_eq!(agent.guard(&who), Guarded::NotOffered);
+    assert_eq!(agent.guard(folder, &who), Guarded::NotOffered);
+    assert_eq!(
+        agent.log.of("asking"),
+        vec![format!("asking {who} in {folder}")]
+    );
+}
+
+#[test]
+fn the_agents_record_is_read_in_its_folder_alone() {
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host));
+    let agent = FakeAgent::new(terminal.clone());
+    let who = identity("code", 1);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        None,
+    );
+    agent.keep_record_in(&who, "/state/fix--one");
+    assert_eq!(agent.asking("/state/fix--one", &who), Reading::No);
+    assert_eq!(agent.asking("/state/fix--two", &who), Reading::Unknown);
+    assert_eq!(agent.own_work("/state/fix--two", &who), Reading::Unknown);
+    assert_eq!(agent.ended("/state/fix--two", &who), Reading::Unknown);
+    assert_eq!(
+        agent.received("/state/fix--two", &who, "go"),
+        Received::Unknown
+    );
+}
+
+#[test]
+fn the_agent_gives_both_stop_shorts() {
+    let host = Arc::new(FakeHost::default());
+    let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
+    let way = agent.stop_short(&identity("code", 1));
+    assert!(way.contains("flume needs \""), "{way}");
+    assert!(way.contains("flume needs --found"), "{way}");
 }
 
 #[test]
@@ -136,7 +230,13 @@ fn the_terminals_states_follow_the_fake_clock() {
     let terminal = FakeTerminal::new(host.clone());
     let who = identity("code", 1);
     terminal.comes_up(AgentState::Unknown);
-    terminal.open(&place_ref(), &AgentCommand::default(), &who, None);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        None,
+    );
     terminal.schedule(&who, host.now() + 240, AgentState::Waiting);
     assert_eq!(terminal.state(&who), AgentState::Unknown);
     host.advance(240);
@@ -148,25 +248,118 @@ fn the_terminals_states_follow_the_fake_clock() {
     assert_eq!(terminal.state(&who), AgentState::Stopped);
     terminal.cannot_send();
     assert!(matches!(terminal.send(&who, "x"), Sent::Refused { .. }));
+    assert_eq!(terminal.session(), None);
+    terminal.set_session(Some("pane-3"));
+    assert_eq!(terminal.session().as_deref(), Some("pane-3"));
+}
+
+fn submitted(answer: Submitted) -> Submission {
+    match answer {
+        Submitted::Submitted { submission } => submission,
+        other => panic!("submit answered {other:?}"),
+    }
+}
+
+fn outcomes(answer: Inbox) -> Vec<SubmissionOutcome> {
+    match answer {
+        Inbox::Outcomes { outcomes } => outcomes,
+        other => panic!("the inbox answered {other:?}"),
+    }
+}
+
+#[test]
+fn submit_holds_no_wait_and_a_step_decides() {
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    let at = place_ref();
+    git.set_branch("/r", "fix/one", &base);
+    let head = git.commit("/r", "fix/one", &["a"]);
+    let submission = submitted(queue.submit(&at, &head));
+    assert!(submission.state.open());
+    assert_eq!(outcomes(queue.inbox(&at)), vec![]);
+    assert_eq!(queue.step("/r", "main"), Stepped::Stepped);
+    let landed = outcomes(queue.inbox(&at));
+    assert!(
+        matches!(landed.as_slice(), [SubmissionOutcome::Landed { .. }]),
+        "{landed:?}"
+    );
+    assert_eq!(outcomes(queue.inbox(&at)), vec![], "delivered twice");
+    assert_eq!(
+        queue
+            .log
+            .calls()
+            .iter()
+            .map(|line| line.split(' ').next().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["submit", "inbox", "step", "inbox", "inbox"]
+    );
 }
 
 #[test]
 fn the_merge_queues_outcomes_are_planned() {
     let git = FakeGit::new();
-    git.init("/r", "main");
-    let queue = FakeMergeQueue::new(git.clone(), None);
+    let base = git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
+    git.set_branch("/r", "fix/one", &base);
     let head = git.commit("/r", "fix/one", &["a"]);
-    queue.plan_submits(vec![Plan::Fail("test x".into()), Plan::Withdraw]);
+    queue.plan_submits(vec![
+        Plan::Fail("test x".into()),
+        Plan::Conflict(vec!["a".into()], "conflicts with main".into()),
+        Plan::Withdraw,
+        Plan::Refuse("no such base".into()),
+        Plan::Hold,
+    ]);
+    for _ in 0..3 {
+        submitted(queue.submit(&at, &head));
+        queue.step("/r", "main");
+    }
+    assert_eq!(
+        outcomes(queue.inbox(&at)),
+        vec![
+            SubmissionOutcome::Failed {
+                words: "test x".into()
+            },
+            SubmissionOutcome::Conflict {
+                files: vec!["a".into()],
+                base: base.clone(),
+                words: "conflicts with main".into()
+            },
+        ],
+        "a withdrawal is never in the inbox"
+    );
+    assert!(matches!(
+        queue.read_submission("/r", "fix/one"),
+        SubmissionRead::Found {
+            submission: Submission {
+                state: SubmissionState::Withdrawn,
+                ..
+            }
+        }
+    ));
     assert_eq!(
         queue.submit(&at, &head),
-        Verdict::Failed {
-            words: "test x".into()
+        Submitted::Refused {
+            reason: "no such base".into()
         }
     );
-    assert_eq!(queue.submit(&at, &head), Verdict::Withdrawn);
-    assert!(matches!(queue.submit(&at, &head), Verdict::Landed { .. }));
+    submitted(queue.submit(&at, &head));
+    queue.step("/r", "main");
+    assert_eq!(outcomes(queue.inbox(&at)), vec![], "a held submission");
+    queue.decide("/r", "fix/one", Plan::Land);
+    assert!(matches!(
+        outcomes(queue.inbox(&at)).as_slice(),
+        [SubmissionOutcome::Landed { .. }]
+    ));
+    queue.moves_on_its_own();
+    assert_eq!(queue.step("/r", "main"), Stepped::MovesOnItsOwn);
     queue.unreadable("down");
+    assert!(matches!(queue.inbox(&at), Inbox::CouldNotRead { .. }));
+    assert!(matches!(
+        queue.step("/r", "main"),
+        Stepped::CouldNotRead { .. }
+    ));
     assert!(matches!(
         queue.read_submission("/r", "fix/one"),
         SubmissionRead::CouldNotRead { .. }
@@ -243,18 +436,65 @@ fn one_resolver_from_profile_names_to_fakes() {
     resolver.bind_no_tool_place(place.clone());
     resolver.bind_place("trees", place.clone());
     resolver.bind_change("plans", Arc::new(FakeChange::new(git.clone())));
-    resolver.bind_merge_queue("queue", Arc::new(FakeMergeQueue::new(git.clone(), None)));
+    resolver.bind_merge_queue("queue", Arc::new(FakeMergeQueue::new(git.clone())));
     let host = Arc::new(FakeHost::default());
     resolver.bind_agent(
         "agent",
         Arc::new(FakeAgent::new(Arc::new(FakeTerminal::new(host)))),
     );
-    assert!(resolver.place(None).is_some());
-    assert!(resolver.place(Some("trees")).is_some());
-    assert!(resolver.place(Some("other")).is_none());
+    let binding = |place: Option<&str>| Binding {
+        place: place.map(str::to_string),
+        change: None,
+        merge_queue: Some("queue".into()),
+    };
+    assert!(resolver.place("/r", &binding(None)).is_some());
+    assert!(resolver.place("/r", &binding(Some("trees"))).is_some());
+    assert!(resolver.place("/r", &binding(Some("other"))).is_none());
+    assert_eq!(resolver.place_profiles(), vec!["trees".to_string()]);
+    assert_eq!(resolver.log.of("place")[1], "place /r trees queue");
     assert!(resolver.change("plans").is_some());
     assert!(resolver.merge_queue("queue").is_some());
     assert!(resolver.merge_queue("other").is_none());
     assert!(resolver.agent("agent").is_some());
     assert!(resolver.agent("other").is_none());
+}
+
+#[test]
+fn the_settings_of_the_host_and_of_a_repository_are_set() {
+    let given = |model: &str| KindSettings {
+        every_stage: Settings {
+            model: Some(model.into()),
+            ..Settings::default()
+        },
+        stages: Default::default(),
+    };
+    let host = FakeHost::default();
+    host.set_settings(None, "change", given("opus"));
+    host.set_settings(Some("/r"), "change", given("sonnet"));
+    let in_r = host.settings("/r", "change");
+    assert_eq!(in_r.kind, given("opus"));
+    assert_eq!(in_r.repository, given("sonnet"));
+    assert_eq!(
+        host.settings("/s", "change").repository,
+        KindSettings::default()
+    );
+    host.set_settings(None, "change", KindSettings::default());
+    assert_eq!(host.settings("/r", "change").kind, KindSettings::default());
+    assert_eq!(host.login("HOME").as_deref(), Some("/home/user"));
+    host.set_login("ACCOUNT", Some("work"));
+    assert_eq!(host.login("ACCOUNT").as_deref(), Some("work"));
+    assert_eq!(host.login("NOT_SET"), None);
+
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let next = git.commit("/r", "main", &["next.rs"]);
+    let kinds = FakeKinds::default();
+    kinds.set_settings("/r", "change", given("opus"));
+    kinds.set_settings_at("/r", &next, "change", given("sonnet"));
+    let settings = |revision: &Revision| match kinds.read_kinds("/r", revision) {
+        KindsRead::Read { settings, .. } => settings,
+        other => panic!("read-kinds gave {other:?}"),
+    };
+    assert_eq!(settings(&base)["change"], given("opus"));
+    assert_eq!(settings(&next)["change"], given("sonnet"));
 }

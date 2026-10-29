@@ -1,0 +1,69 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The workspace as a whole: what spans the tree, each check one task
+# (core.21). A candidate is held to what the commit hooks hold a commit to.
+tasks:
+  # Every formatter treefmt.nix configures, writing nothing it would change
+  # and keeping no cache outside the tree. It reads every tracked file: one
+  # that no formatter claims and no exclude names fails it (core.21).
+  format:
+    command: 'treefmt --ci'
+    inputs: ['/**/*', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # The commit hooks devenv.nix installs, driven in a fresh worktree of a
+  # scratch clone (check-hooks.sh): convco, treefmt and clippy each run on
+  # the main checkout's config, with no PREK_ALLOW_NO_CONFIG.
+  hooks:
+    command: 'sh check-hooks.sh'
+    inputs: ['/check-hooks.sh', '/treefmt.nix', '/.versionrc', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # rustc, cargo, clippy and rustfmt are the build .prototools pins, and
+  # Claude Code, OpenSpec, herdr and sluice the releases devenv.nix pins, on
+  # whichever host runs the gate (core.22). It reads the tools it checks
+  # from outside the tree, so it never replays.
+  toolchain:
+    command: 'sh check-toolchain.sh'
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true, cache: false}
+  # The Claude Code marketplace, which spans the plugins: it validates by
+  # the pinned Claude Code, and every plugin it lists has a manifest
+  # (check-marketplace.sh). Each plugin's own checks are its project's.
+  marketplace:
+    command: 'bash check-marketplace.sh'
+    inputs: ['/.claude-plugin/**/*', '/plugins/*/.claude-plugin/plugin.json', '/check-marketplace.sh', '/plugins/claude.sh', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # No two decision records share a number (check-adrs.sh).
+  adrs:
+    command: 'sh check-adrs.sh'
+    inputs: ['/docs/adr/*.md', '/check-adrs.sh']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # Every spec under openspec/specs passes openspec validate --strict, which
+  # fails a warning as an error, by the openspec devenv.nix pins (core.22).
+  # It sends no usage statistics and asks for no newer release.
+  specs:
+    command: 'openspec validate --specs --strict --no-interactive'
+    env: {OPENSPEC_TELEMETRY: '0', OPENSPEC_NO_UPDATE_CHECK: '1'}
+    inputs: ['/openspec/specs/**/*', '/openspec/config.yaml', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # Every open change under openspec/changes passes the same strict
+  # validation, so a requirement archive would refuse fails the change's own
+  # checks and not first at its merge. A MODIFIED block is read against the
+  # specs it replaces, so they are inputs too; the archived changes are not.
+  changes:
+    command: 'openspec validate --changes --strict --no-interactive'
+    env: {OPENSPEC_TELEMETRY: '0', OPENSPEC_NO_UPDATE_CHECK: '1'}
+    inputs: ['/openspec/changes/**/*', '!/openspec/changes/archive/**/*', '/openspec/specs/**/*', '/openspec/config.yaml', '/devenv.nix', '/devenv.lock']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # Every task of every project carries exactly one layer tag, or a comment
+  # saying why the gate cannot run it (check-layers.sh).
+  layers:
+    command: 'sh check-layers.sh'
+    inputs: ['/.moon/workspace.yml', '/**/moon.yml', '/check-layers.sh']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}

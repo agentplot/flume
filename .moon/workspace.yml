@@ -1,9 +1,22 @@
 # moon runs flume's checks: one project per crate and for the site, each
-# holding its own checks (core.21). Each check is tagged with its layer,
-# which a branch's policy requires by tag:
+# holding its own checks (core.21); the root holds what spans the tree.
+# Each check is tagged with its layer, which a branch's policy requires by
+# tag (.config/sluice.toml):
 #   check-fast    the site's prose and its build; each crate's format,
-#                 lint and tests over the fakes (cargo); the conformance
-#                 suite's clause coverage: under a minute
+#                 lint and tests over the fakes, and every profile over
+#                 real git and files on scratch repositories; the plugin's
+#                 hooks against the built binary; the conformance suite's
+#                 clause coverage; the root's format, toolchain, records,
+#                 specs, changes, hooks and layers. Every branch requires
+#                 it, and CI runs it on Linux and macOS
+#   check-tools   the sluice and herdr profiles against the pinned tools,
+#                 and the walkthroughs with a stand-in agent program. main
+#                 requires it
+#   check-live    the walkthroughs with the pinned Claude Code under herdr:
+#                 outside the sandboxed gate, required by no branch, run by
+#                 hand in the devenv shell with a test account's token in
+#                 FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN
+# A task in no layer says why above it (root:layers).
 # A task whose inputs are identical to a run that passed on this host, in
 # any worktree, replays from .moon/cache/outputs (a link into the git common
 # dir, made by devenv.nix) instead of running again.
@@ -15,7 +28,9 @@ projects:
   fakes: 'crates/flume-fakes'
   conformance: 'crates/flume-conformance'
   flume: 'crates/flume'
+  plugin-claude: 'plugins/claude'
   site: 'site'
+  root: '.'
 
 # --affected compares against the merge-base with main.
 vcs:

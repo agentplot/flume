@@ -1,6 +1,7 @@
-//! What an agent's program asks of flume (41, 42, 110, 115): a stop-short,
-//! taken only under the current start's identity and secret while its
-//! agent is live, and the stop check, which keeps at work an agent that
+//! What an agent's program asks of flume (41, 42, 110, 115, 131): a
+//! stop-short, taken only under the current start's identity and secret
+//! while its agent is live, saying whether it needs an answer or found
+//! work, and the stop check, which keeps at work an agent that
 //! would go quiet with its deliverable missing and nothing said.
 
 use crate::start::Starts;
@@ -19,10 +20,12 @@ impl Engine {
         })
     }
 
-    /// An agent's stop-short, with its identity, its start's secret and
-    /// its words: the stage ends short with the words whole, and no next
-    /// stage starts (41, 42).
-    pub fn needs(&self, identity: &str, secret: &str, words: &str) -> Answer {
+    /// An agent's stop-short, with its identity, its start's secret, its
+    /// words and whether it needs an answer or found work: the stage ends
+    /// short with the words whole and the kind, and no next stage starts,
+    /// except that found work from the kind's last stage starts its fix
+    /// round once the agent is quiet (41, 42, 131).
+    pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
         self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {
             return Answer::refused(format!(
@@ -33,7 +36,9 @@ impl Engine {
         if start.secret.0 != secret {
             return Answer::refused(format!("the secret is not {identity}'s start's"));
         }
-        if self.terminal.state(&start.identity) == AgentState::Stopped {
+        let agent = self.agent(&start.program);
+        let folder = self.store.folder(&held.place.id);
+        if self.state_of(agent.as_deref(), &folder, &start.identity) == AgentState::Stopped {
             return Answer::refused(format!("the agent {identity} is not live"));
         }
         let id = held.place.id.clone();
@@ -48,9 +53,9 @@ impl Engine {
                 }
                 stage.state = StageState::EndedShort;
                 stage.end = Some(StageEnd {
-                    head: None,
-                    report: None,
                     words: Some(words.to_string()),
+                    needs: Some(kind),
+                    ..StageEnd::default()
                 });
                 Step::Write(true)
             })
@@ -59,6 +64,23 @@ impl Engine {
             return Answer::refused(format!("the stage of {identity} is not running"));
         }
         self.acted(Act::Needs, &id)
+    }
+
+    /// The place's own folder, where the agent of the live current start
+    /// `identity` names keeps its record, given only with that start's
+    /// secret: the folder an agent program's acks and marks are written in
+    /// (128, 135).
+    pub fn agent_folder(&self, identity: &str, secret: &str) -> Result<String, String> {
+        let Some((held, index)) = self.current_start(identity) else {
+            return Err(format!(
+                "no live agent of a place's current stage is {identity}"
+            ));
+        };
+        let start = held.stages[index].start.as_ref().expect("a live start");
+        if start.secret.0 != secret {
+            return Err(format!("the secret is not {identity}'s start's"));
+        }
+        Ok(self.store.folder(&held.place.id))
     }
 
     /// The stop check: words naming the deliverable and the way to stop
@@ -79,8 +101,9 @@ impl Engine {
         }
         let start = held.stages[index].start.as_ref()?;
         let agent = self.agent(&start.program)?;
-        if agent.own_work(&start.identity) != Reading::No
-            || agent.asking(&start.identity) != Reading::No
+        let folder = self.store.folder(&place.id);
+        if agent.own_work(&folder, &start.identity) != Reading::No
+            || agent.asking(&folder, &start.identity) != Reading::No
         {
             return None;
         }

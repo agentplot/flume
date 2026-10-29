@@ -1,0 +1,358 @@
+//! The host's queue (70, 75): a stage starts only under the host's bound,
+//! every caller's agents counted together, and otherwise waits for room;
+//! every settle starts what waits by priority, then the order it came to
+//! wait, ending no agent for one (31, 46); priority is the caller's (7);
+//! status gives the host's agents running, bound, room and queue (56,
+//! 130); a host with no bound has no queue.
+
+use super::settling::{construct_begun, deliver_fix, fix_begun, write_change};
+use super::world::*;
+use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::{Answer, HostStatus};
+use flume_seams::*;
+
+pub fn scenarios() -> Vec<Scenario<()>> {
+    vec![
+        Scenario {
+            name: "host queue: a third launch on a host of two is taken and its stage waits for room",
+            cites: &["70", "75", "2", "6"],
+            run: a_third_launch_on_a_host_of_two,
+        },
+        Scenario {
+            name: "host queue: two settles at once with two stages waiting on a host of two start exactly one",
+            cites: &["70", "75", "46", "45"],
+            run: two_settles_at_once,
+        },
+        Scenario {
+            name: "host queue: nine changes on a host of four, one raised while it waits, start by priority as each agent ends",
+            cites: &["S37", "70", "46", "31", "7"],
+            run: s37_nine_units_on_a_host_of_four,
+        },
+        Scenario {
+            name: "host queue: the room a landing frees is taken by the stage waiting, at that settle",
+            cites: &["70", "46", "31", "113"],
+            run: room_freed_by_a_settle,
+        },
+        Scenario {
+            name: "host queue: a priority raised while its stage runs leaves the agent and orders the place's next start",
+            cites: &["7", "70", "56"],
+            run: priority_raised_while_running,
+        },
+        Scenario {
+            name: "host queue: a priority given a place whose work is over is refused naming it",
+            cites: &["7", "70", "63"],
+            run: priority_once_over,
+        },
+        Scenario {
+            name: "host queue: status of a full host gives two running, a bound of two, no room, and the place waiting on the host",
+            cites: &["56", "70", "130"],
+            run: status_of_a_full_host,
+        },
+        Scenario {
+            name: "host queue: a host with no bound starts every first stage and judges no room",
+            cites: &["70", "56"],
+            run: a_host_with_no_bound,
+        },
+    ]
+}
+
+/// The host's part of status.
+fn host(world: &World) -> Result<HostStatus, String> {
+    match world.engine().status(None) {
+        Answer::Status { host, .. } => Ok(host),
+        other => Err(format!("status answered {other:?}")),
+    }
+}
+
+/// Fixes launched as `names` at `priority`, each settled once.
+fn fixes(world: &World, names: &[&str], priority: i64) -> Result<Vec<PlaceId>, String> {
+    names
+        .iter()
+        .map(|name| {
+            launched(&world.engine.launch(&Launch {
+                priority,
+                ..launch("fix", name, Some("x"))
+            }))?;
+            let id = World::id("fix", name);
+            world.settle(&id);
+            Ok(id)
+        })
+        .collect()
+}
+
+/// Whether the place's stage runs: its agent started and its end not
+/// yet read.
+fn runs(world: &World, id: &PlaceId, stage: &str) -> bool {
+    world
+        .stage_state(id, stage)
+        .is_some_and(StageState::running)
+}
+
+fn waits(world: &World, id: &PlaceId, stage: &str) -> bool {
+    world.stage_state(id, stage) == Some(StageState::WaitingForRoom)
+}
+
+fn a_third_launch_on_a_host_of_two(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(2));
+    let places = fixes(&world, &["one", "two"], 0)?;
+    let third = world.engine.launch(&launch("fix", "three", Some("x")));
+    let status = launched(&third)?;
+    ensure_eq!(
+        status.stages[0].state,
+        StageState::WaitingForRoom,
+        "the third launch's code stage"
+    );
+    ensure!(status.agent.is_none(), "the third launch has an agent");
+    for id in &places {
+        ensure!(runs(&world, id, "code"), "{id}'s code does not run");
+    }
+    ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
+    Ok(())
+}
+
+fn two_settles_at_once(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(2));
+    let places = fixes(&world, &["one", "two", "three", "four"], 0)?;
+    ensure!(
+        waits(&world, &places[2], "code") && waits(&world, &places[3], "code"),
+        "two stages do not wait for room"
+    );
+    world
+        .terminal
+        .kill(&World::identity("fix", "one", "code", 1));
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            scope.spawn(|| world.engine().settle(None));
+        }
+    });
+    ensure_eq!(
+        world.stage_state(&places[0], "code"),
+        Some(StageState::Lost),
+        "the ended agent's stage"
+    );
+    ensure_eq!(world.terminal.log.count("open"), 3, "agents opened");
+    ensure!(
+        runs(&world, &places[2], "code"),
+        "the first waiting stage did not start"
+    );
+    ensure!(
+        waits(&world, &places[3], "code"),
+        "the second waiting stage does not wait"
+    );
+    ensure_eq!(host(&world)?.running, 2, "agents running");
+    Ok(())
+}
+
+fn s37_nine_units_on_a_host_of_four(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(4));
+    let names = ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9"];
+    let mut places = vec![];
+    for name in &names[..4] {
+        places.push(construct_begun(&world, name)?);
+    }
+    for name in &names[4..] {
+        launched(
+            &world
+                .engine
+                .launch(&launch("change", name, Some("plan it"))),
+        )?;
+        places.push(World::id("change", name));
+    }
+    let queue = host(&world)?;
+    ensure_eq!(queue.running, 4, "agents running");
+    ensure_eq!(
+        queue
+            .queue
+            .iter()
+            .map(|queued| &queued.place)
+            .collect::<Vec<_>>(),
+        places[4..].iter().collect::<Vec<_>>(),
+        "the queue's order"
+    );
+    let raised = world.engine.priority(&places[8], 1);
+    ensure!(
+        raised.refusal().is_none(),
+        "the priority was refused: {raised:?}"
+    );
+    ensure_eq!(
+        host(&world)?
+            .queue
+            .first()
+            .map(|queued| queued.place.clone()),
+        Some(places[8].clone()),
+        "the queue's head once raised"
+    );
+    write_change(&world, "u1");
+    world.settle(&places[0]);
+    ensure!(
+        runs(&world, &places[8], "construct"),
+        "the raised unit's construct did not start at the next room"
+    );
+    ensure!(
+        waits(&world, &places[0], "code"),
+        "the ended unit's code did not wait behind the units that came first"
+    );
+    ensure!(
+        world.terminal.log.of("close").len() == 1,
+        "an agent was ended for room: {:?}",
+        world.terminal.log.of("close")
+    );
+    let order: Vec<(PlaceId, String)> = host(&world)?
+        .queue
+        .into_iter()
+        .map(|queued| (queued.place, queued.stage))
+        .collect();
+    let due: Vec<(PlaceId, String)> = places[4..8]
+        .iter()
+        .map(|id| (id.clone(), "construct".to_string()))
+        .chain([(places[0].clone(), "code".to_string())])
+        .collect();
+    ensure_eq!(order, due, "the queue after the room was taken");
+    Ok(())
+}
+
+fn room_freed_by_a_settle(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(1));
+    let places = fixes(&world, &["one", "two"], 0)?;
+    ensure!(
+        waits(&world, &places[1], "code"),
+        "the second fix does not wait"
+    );
+    deliver_fix(&world, &places[0]);
+    world.settle(&places[0]);
+    ensure!(world.held(&places[0]).is_none(), "the landed place is kept");
+    ensure!(
+        runs(&world, &places[1], "code"),
+        "the waiting fix did not start"
+    );
+    ensure_eq!(
+        world.terminal.log.of("close"),
+        vec![format!(
+            "close {}",
+            World::identity("fix", "one", "code", 1)
+        )],
+        "agents ended"
+    );
+    Ok(())
+}
+
+fn priority_raised_while_running(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(1));
+    let first = construct_begun(&world, "first")?;
+    for name in ["second", "third"] {
+        launched(
+            &world
+                .engine
+                .launch(&launch("change", name, Some("plan it"))),
+        )?;
+    }
+    let opened = world.terminal.log.count("open");
+    let raised = world.engine.priority(&first, 5);
+    ensure!(
+        raised.refusal().is_none(),
+        "the priority was refused: {raised:?}"
+    );
+    ensure!(
+        runs(&world, &first, "construct"),
+        "the running agent changed"
+    );
+    ensure_eq!(world.terminal.log.count("close"), 0, "agents ended");
+    ensure_eq!(world.terminal.log.count("open"), opened, "agents opened");
+    ensure_eq!(
+        world.status(&first)?.priority,
+        5,
+        "the priority status gives"
+    );
+    write_change(&world, "first");
+    world.settle(&first);
+    ensure!(
+        runs(&world, &first, "code"),
+        "the raised place's code did not start ahead of the places waiting"
+    );
+    for name in ["second", "third"] {
+        ensure!(
+            waits(&world, &World::id("change", name), "construct"),
+            "{name} does not wait"
+        );
+    }
+    Ok(())
+}
+
+fn priority_once_over(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    let held = world.held(&id).ok_or("no place")?;
+    world.place.set_holds(
+        &held.place.location,
+        Holds {
+            untracked: vec!["notes.txt".into()],
+            ..Holds::default()
+        },
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure!(
+        matches!(
+            world.held(&id).map(|held| held.phase),
+            Some(Phase::Over { .. })
+        ),
+        "the place's work is not over"
+    );
+    let reason = refused(&world.engine.priority(&id, 3))?;
+    ensure!(
+        reason.contains(&id.0) && reason.contains("over"),
+        "the refusal does not name the place over: {reason}"
+    );
+    ensure_eq!(
+        world.held(&id).map(|held| held.priority),
+        Some(0),
+        "the priority"
+    );
+    Ok(())
+}
+
+fn status_of_a_full_host(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(2));
+    fixes(&world, &["one", "two"], 0)?;
+    let since = world.host.now();
+    let waiting = fixes(&world, &["three"], 3)?.remove(0);
+    world.host.advance(30);
+    let host = host(&world)?;
+    ensure_eq!(host.running, 2, "agents running");
+    ensure_eq!(host.bound, Some(2), "the bound");
+    ensure_eq!(host.room, Some(0), "the room");
+    ensure_eq!(host.queue.len(), 1, "places waiting");
+    let queued = &host.queue[0];
+    ensure_eq!(queued.place, waiting, "the place waiting");
+    ensure_eq!(queued.stage, "code", "its stage");
+    ensure_eq!(queued.priority, 3, "its priority");
+    ensure_eq!(queued.since, Some(since), "since when it waits");
+    let status = world.status(&waiting)?;
+    ensure_eq!(status.priority, 3, "the place's priority");
+    ensure!(
+        status.waiting_on.is_none(),
+        "the place waiting for room waits on its caller: {:?}",
+        status.waiting_on
+    );
+    Ok(())
+}
+
+fn a_host_with_no_bound(_: &()) -> Outcome {
+    let world = World::new();
+    let places = fixes(&world, &["a", "b", "c", "d", "e"], 0)?;
+    for id in &places {
+        ensure!(runs(&world, id, "code"), "{id}'s code does not run");
+    }
+    let host = host(&world)?;
+    ensure_eq!(host.running, 5, "agents running");
+    ensure_eq!(host.bound, None, "the bound");
+    ensure_eq!(host.room, None, "the room");
+    ensure!(host.queue.is_empty(), "a host with no bound has a queue");
+    Ok(())
+}

@@ -17,6 +17,10 @@ pub struct Kind {
     /// ready (12).
     pub starts_unready: bool,
     pub lands: bool,
+    /// Settings its declaration gives every stage's agent and the
+    /// stages it names, which a stage's own come before (23, 32).
+    #[serde(default)]
+    pub agents: KindSettings,
     pub stages: Vec<Stage>,
 }
 
@@ -98,6 +102,83 @@ impl Settings {
     }
 }
 
+/// Settings given for a kind's agents: for every stage, and for each
+/// stage named, which come before those for every stage (32).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KindSettings {
+    pub every_stage: Settings,
+    pub stages: BTreeMap<String, Settings>,
+}
+
+impl KindSettings {
+    /// The settings for `stage`'s agent: the stage's own over those for
+    /// every stage (32).
+    pub fn for_stage(&self, stage: &str) -> Settings {
+        match self.stages.get(stage) {
+            Some(own) => self.every_stage.under(own),
+            None => self.every_stage.clone(),
+        }
+    }
+
+    /// Whether they give no setting, for every stage or for any.
+    pub fn is_empty(&self) -> bool {
+        self.every_stage == Settings::default() && self.stages.is_empty()
+    }
+}
+
+/// Where a setting an agent started with came from, the first of the
+/// six that gave it (32, 56).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Layer {
+    /// The launch's settings (7).
+    Launch,
+    /// The host's configuration for the place's repository and kind.
+    HostRepository,
+    /// The host's configuration for the kind.
+    HostKind,
+    /// The repository's settings for a kind it does not declare.
+    Repository,
+    /// The kind's declaration (23).
+    Kind,
+    /// flume's own default.
+    Default,
+}
+
+impl Layer {
+    /// The layer as status names it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Layer::Launch => "launch",
+            Layer::HostRepository => "host-repository",
+            Layer::HostKind => "host-kind",
+            Layer::Repository => "repository",
+            Layer::Kind => "kind",
+            Layer::Default => "default",
+        }
+    }
+
+    /// Whether the layer is the host's configuration, whose environment
+    /// values are read against the host user's login environment (29).
+    pub fn hosts(self) -> bool {
+        matches!(self, Layer::HostRepository | Layer::HostKind)
+    }
+}
+
+impl std::fmt::Display for Layer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// One setting's layer and its value as that layer wrote it, before a
+/// host value's `~` and variables are read (32, 56).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Given {
+    pub layer: Layer,
+    pub value: String,
+}
+
 /// The declaration a kind resolved to (19).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -112,8 +193,16 @@ pub enum Declared {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KindsRead {
-    Read { kinds: Vec<Kind> },
-    CouldNotRead { reason: String },
+    Read {
+        kinds: Vec<Kind>,
+        /// The settings the declaration gives kinds it does not declare,
+        /// by the kind's name (32, C.2).
+        #[serde(default)]
+        settings: BTreeMap<String, KindSettings>,
+    },
+    CouldNotRead {
+        reason: String,
+    },
 }
 
 /// A repository's binding: the profile it names for each of the place,
@@ -136,7 +225,8 @@ pub enum BindingRead {
 /// reading changes nothing, and a launch's declaration is read the same
 /// way (85).
 pub trait Kinds: Send + Sync {
-    /// Every kind the repository declares at `revision` (84, 20).
+    /// Every kind the repository declares at `revision`, and the
+    /// settings it gives kinds it does not declare (84, 20, 32).
     fn read_kinds(&self, repository: &str, revision: &crate::Revision) -> KindsRead;
 
     /// Every kind a declaration a launch carries holds (19, 85).

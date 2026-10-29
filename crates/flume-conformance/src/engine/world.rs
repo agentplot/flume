@@ -53,7 +53,7 @@ impl World {
         let change = Arc::new(FakeChange::new(git.clone()));
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
         let agent = Arc::new(FakeAgent::new(terminal.clone()));
-        let queue = Arc::new(FakeMergeQueue::new(git.clone(), Some(place.clone())));
+        let queue = Arc::new(FakeMergeQueue::new(git.clone()));
         let store = Arc::new(FakeStore::default());
         let history = Arc::new(FakeHistory::new(git.clone()));
         let resolver = Arc::new(FakeResolver::new(kinds.clone()));
@@ -138,6 +138,7 @@ pub fn kind(name: &str, lands: bool, stages: Vec<Stage>) -> Kind {
         branch_prefix: name.into(),
         starts_unready: false,
         lands,
+        agents: KindSettings::default(),
         stages,
     }
 }
@@ -171,9 +172,11 @@ pub fn refused(answer: &flume_core::Answer) -> Result<String, String> {
 }
 
 impl World {
+    /// The identity the engine gives a start in the repository, named by
+    /// its id from the fake git's common directory (33, C.4).
     pub fn identity(kind: &str, name: &str, stage: &str, start: u32) -> Identity {
         Identity {
-            repository: REPOSITORY.into(),
+            repository: flume_core::repository_id(&format!("{REPOSITORY}/.git")),
             place: format!("{kind}--{name}"),
             stage: stage.into(),
             start,
@@ -238,7 +241,9 @@ impl World {
     /// The place's status, as status gives it.
     pub fn status(&self, place: &PlaceId) -> Result<flume_core::PlaceStatus, String> {
         match self.engine().status(Some(place)) {
-            flume_core::Answer::Status { mut places } if places.len() == 1 => Ok(places.remove(0)),
+            flume_core::Answer::Status { mut places, .. } if places.len() == 1 => {
+                Ok(places.remove(0))
+            }
             other => Err(format!("status answered {other:?}")),
         }
     }

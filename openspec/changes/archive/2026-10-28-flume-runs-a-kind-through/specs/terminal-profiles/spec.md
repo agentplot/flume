@@ -1,0 +1,230 @@
+## ADDED Requirements
+
+### Requirement: The terminal through herdr
+
+The herdr profile SHALL open, send to, read and close agents through
+herdr, and keep no watch (94 to 98, 122, C.5). Every herdr command,
+state name, error code and field it reads SHALL be checked against the
+pinned herdr, and every herdr call SHALL run under a bound, ten seconds
+where the call states none, with the caller's `HERDR_*` stripped and
+the recorded server's socket passed; a call past its bound SHALL read
+unknown or refused in herdr's words (98, core.29; record 0016).
+
+#### Scenario: Seam scenarios against herdr
+
+- **WHEN** the terminal seam's scenarios run against the profile on a herdr server the test starts
+- **THEN** each passes: no second agent under a live identity, and no close reported that did not happen (98)
+
+#### Scenario: A herdr call that never answers
+
+- **WHEN** herdr does not answer a send within its bound
+- **THEN** the send is refused in words naming the bound, and nothing waits on herdr (98, core.29)
+
+#### Scenario: A quiet pane with nothing delivered
+
+- **WHEN** a stage's agent under herdr goes idle with no deliverable and no stop-short
+- **THEN** no settle ends the stage or its agent (39, I1)
+
+### Requirement: Where herdr opens an agent
+
+The herdr profile SHALL open an agent in a pane of the session the
+launch's settings name, flume's own otherwise: in the workspace of the
+place's repository and base, labelled `<repository> <base>` and made
+when the first place on that base opens, one tab per place named
+`<kind>--<name>` whose panes are the place's agents, each recorded by
+id and socket in the host's state; or a split beside the pane the settings
+name, left where its caller put it (94, 107, C.5; record 0018).
+
+#### Scenario: A conversation beside the operator's pane
+
+- **WHEN** a stage's settings name the pane `operator`
+- **THEN** the agent opens in a split beside that pane, held by its pane and socket, under a herdr name made from its identity
+
+#### Scenario: Places on two bases
+
+- **WHEN** places on `main` and on `bolt/the-surfaces` of one repository open under herdr in flume's own session
+- **THEN** each base's places are tabs of a workspace of its own, labelled `<repository> main` and `<repository> bolt/the-surfaces`
+
+### Requirement: herdr starts the agent by agent start
+
+The herdr profile SHALL make the pane with `--cwd <place>` and an
+`--env` for each variable of the agent's environment and flume's own,
+and start the agent by `herdr agent start <name> --kind <kind> --pane
+<id> --timeout 120000 -- <arguments>`, bounded ten seconds past its
+timeout, typing nothing into the pane's shell; herdr's ready SHALL
+never count as the start (35, 94, C.5; record 0018; core.29).
+
+#### Scenario: The environment from the pane
+
+- **WHEN** the host's configuration gives the agent a variable
+- **THEN** the started program sees it, set on the pane by `--env`, and nothing of it is typed
+
+#### Scenario: Instructions of 20,000 characters
+
+- **WHEN** a stage's instructions run to 20,000 characters with quotes, `$`, backticks and non-ASCII
+- **THEN** `agent start` hands them over whole, and nothing is typed into the shell
+
+### Requirement: herdr reads a start held or never come up
+
+The herdr profile SHALL answer `agent_not_ready` as the start held at a
+question, answering only the folder-trust question, by `agent
+send-keys` with the keys the agent profile names and a bounded `agent
+wait --until idle`, and any other as held with the screen; and SHALL
+answer `timeout` as not come up with the screen (34, 35, 94, C.5;
+record 0018).
+
+#### Scenario: The folder-trust question at the start
+
+- **WHEN** `agent start` answers `agent_not_ready` and the pane shows the folder-trust question
+- **THEN** the profile answers it, waits within its bound until herdr reads the agent idle, and the prompt is sent only after the started ack (S39)
+
+#### Scenario: The bypass warning at the start
+
+- **WHEN** `agent start` answers `agent_not_ready` and the pane shows the warning about bypassing permissions
+- **THEN** nothing is answered, and the core reads the start never begun at once with the warning's lines (S40)
+
+#### Scenario: A program that never comes up
+
+- **WHEN** the program the stage names is not on the pane's `PATH` and `agent start` answers `timeout`
+- **THEN** the core reads the start never begun with the pane's visible lines, and sends no prompt (S45)
+
+### Requirement: herdr runs the program the settings name
+
+The herdr profile SHALL lead the pane's `PATH` with a folder of the
+start's own linking the kind's name to the program the settings name,
+SHALL give the pane the host user's login environment under the agent's
+and a shell of the start's own that reads no startup file, and SHALL
+close and refuse, naming what ran, a start whose pane runs any other
+program (29, 32, C.4, C.5; record 0018).
+
+#### Scenario: Startup files that put another program first
+
+- **WHEN** the host user's login shell is zsh, bash or sh, and its every startup file puts another `claude` ahead of the start's own folder on `PATH`
+- **THEN** the pane's shell reads none of them, and the program the settings name starts
+
+#### Scenario: A program that runs another in its place
+
+- **WHEN** the program the settings name execs another `claude`
+- **THEN** the start is closed and refused, naming the program that ran
+
+### Requirement: herdr's panes by id and socket, found again by name
+
+The herdr profile SHALL hold each pane by its id and its server's
+socket, give its agent a herdr name of at most 32 of herdr's legal
+characters made from the identity and ending in its digest, and, where
+the pane's id no longer answers, find the pane again by `agent get
+<name>`, taking it only once herdr lists it under that name and
+recording its new id before anything is sent to it (30, 95, 96, 98;
+record 0018).
+
+#### Scenario: A pane moved to another workspace
+
+- **WHEN** the operator moves a working agent's pane into another workspace, and its id no longer answers
+- **THEN** the profile finds it by the agent's name, records its new id, and reads and sends there (S46)
+
+#### Scenario: A name already taken
+
+- **WHEN** `agent start` answers `agent_name_taken`
+- **THEN** open is refused, an agent being live under the identity (98)
+
+### Requirement: herdr tidies what it made
+
+The herdr profile SHALL close a place's recorded tab when the place
+goes, and its base's recorded workspace once it holds no tab of a live
+place and no pane flume did not open, keeping and naming either
+where a pane flume did not open stands, and never closing what flume did
+not make (137, 138, C.5; record 0018).
+
+#### Scenario: The last place on a base
+
+- **WHEN** the last place on a repository's base lands and is tidied
+- **THEN** its tab and the base's workspace are closed (S47)
+
+#### Scenario: A person's pane in flume's workspace
+
+- **WHEN** a person has opened a pane in a base's workspace and the last place on that base is dropped
+- **THEN** the place's tab is closed, the workspace left open, and status names it with the person's pane (S48)
+
+### Requirement: herdr shows clues
+
+The herdr profile SHALL show, by `pane report-metadata` and `workspace
+report-metadata` with `--source flume`, the pane's stage and state as
+its title and the count of the places on its base as the workspace's
+`flume` token, a failure logged and failing nothing (139, C.5; record
+0018).
+
+#### Scenario: Titles follow a stage
+
+- **WHEN** a stage's agent goes from starting to waiting to working to asking
+- **THEN** its pane's title follows each settle that changes it, and a report that fails is logged while the settle goes on (S49)
+
+### Requirement: What herdr reads of an agent
+
+The herdr profile SHALL read herdr's working as working, idle and done
+as waiting, blocked as asking, which the core SHALL take as asking only
+where the agent seam's asking reads yes and as unknown otherwise, and
+herdr's unknown as unknown; it SHALL read an agent stopped only when its
+pane is gone, herdr lists no agent in it with the shell in its
+foreground, or herdr lists it with a `restore_error`, and report a
+close only once the pane is gone (90, 96, 97; record 0016).
+
+#### Scenario: Blocked with no mark
+
+- **WHEN** herdr reads a pane blocked and the agent profile holds no asking mark
+- **THEN** the core reads the agent's state unknown, neither asking nor waiting, and types nothing into the pane (90, core.2)
+
+#### Scenario: A finished turn nobody looked at
+
+- **WHEN** a code stage's agent commits, ends its turn, and herdr reads it done
+- **THEN** the profile reads it waiting, and the stage delivers and the next starts (S42, 96)
+
+#### Scenario: A pane herdr could not bring back
+
+- **WHEN** after herdr's server restarts it lists a place's pane with a `restore_error`
+- **THEN** the profile reads the agent stopped, and the core reads the stage lost (45, 77)
+
+### Requirement: herdr's send leaves nothing typed, and its screen
+
+The herdr profile SHALL clear the pane's held input before each send and
+after a send the core reads not received, so no text is left typed, and
+SHALL give `screen` from the pane's visible lines (38, 95, 136; record
+0016).
+
+#### Scenario: A prompt left typed
+
+- **WHEN** herdr's prompt leaves the text typed and unsubmitted, and no received word comes within 60 seconds
+- **THEN** the input is cleared before the second sending, and nothing is left typed whatever the second comes to (S43, 38, 95)
+
+#### Scenario: The screen of a start held at a dialog
+
+- **WHEN** a start's agent shows the warning about bypassing permissions
+- **THEN** `screen` gives the warning's visible lines (136, S40)
+
+### Requirement: The caller's session as the terminal names it
+
+Each terminal profile SHALL name the session a command of flume's runs
+in, for a launch's default recipient: under herdr the pane it runs in,
+under the printed command none (7).
+
+#### Scenario: A launch from a herdr pane
+
+- **WHEN** a launch names no recipient and `FLUME_RECIPIENT` is unset, run from a herdr pane
+- **THEN** the place's recipient is `herdr:<pane>@<socket>`, that pane on its server
+
+### Requirement: The printed command
+
+The printed-command profile SHALL answer open with the command, its
+prompt carried in it, for a person to run in the place; refuse send and
+close; tidy nothing and show nothing; read the agent stopped only once the agent's own record says its
+session ended (134); give no screen (136); and keep no watch, so flume runs attended (38,
+119, C.5).
+
+#### Scenario: A tell under the printed command
+
+- **WHEN** a caller tells a place's agent under the printed command
+- **THEN** the tell is refused with nothing typed (53)
+
+#### Scenario: Seam scenarios over the printed command
+
+- **WHEN** the terminal seam's scenarios run against the profile
+- **THEN** each passes, its refusals among them

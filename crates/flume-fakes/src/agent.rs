@@ -1,14 +1,17 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
-    Agent, AgentCommand, Guarded, Identity, Offered, PlaceRef, Reading, Received, Secret, Settings,
+    Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
+    Secret, Settings,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-/// The agent seam: each agent's own record by identity. An agent
-/// receives a prompt once the fake terminal has sent it, or opened it
+/// The agent seam: each agent's own record by identity. An agent says
+/// it started once the fake terminal has opened it, unless set otherwise,
+/// and receives a prompt once the fake terminal has sent it, or opened it
 /// carried, as many times as it is set to need; every other answer is
-/// set, unknowns among them.
+/// set, unknowns among them. A record kept in a place's folder is read
+/// there alone: a reading handed another folder is unknown (128).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     state: Mutex<AgentModel>,
@@ -31,6 +34,10 @@ struct Record {
     receives_at: Option<usize>,
     received_unknown: bool,
     refused: Vec<String>,
+    ended: Reading,
+    folder: Option<String>,
+    started: Option<Reading>,
+    last_words: Option<String>,
 }
 
 impl Default for Record {
@@ -42,6 +49,10 @@ impl Default for Record {
             receives_at: Some(1),
             received_unknown: false,
             refused: vec![],
+            ended: Reading::No,
+            folder: None,
+            started: None,
+            last_words: None,
         }
     }
 }
@@ -89,6 +100,30 @@ impl FakeAgent {
         self.with(agent, |record| record.refused.push(act));
     }
 
+    /// Whether the agent's record shows its session ended (134).
+    pub fn set_ended(&self, agent: &Identity, reading: Reading) {
+        self.with(agent, |record| record.ended = reading);
+    }
+
+    /// Whether the agent says it started, in place of its word once opened
+    /// (135).
+    pub fn set_started(&self, agent: &Identity, reading: Reading) {
+        self.with(agent, |record| record.started = Some(reading));
+    }
+
+    /// The agent's last words as its record holds them (43).
+    pub fn set_last_words(&self, agent: &Identity, words: &str) {
+        let words = words.to_string();
+        self.with(agent, |record| record.last_words = Some(words));
+    }
+
+    /// The agent's record is kept in `folder`, as the agent's program
+    /// records its session in the place's own folder (128).
+    pub fn keep_record_in(&self, agent: &Identity, folder: &str) {
+        let folder = folder.to_string();
+        self.with(agent, |record| record.folder = Some(folder));
+    }
+
     pub fn no_send_back(&self) {
         lock(&self.state).no_send_back = true;
     }
@@ -107,6 +142,17 @@ impl FakeAgent {
             .get(&agent.to_string())
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// The agent's record as read in `folder`: none where it is kept in
+    /// another.
+    fn read_in(&self, operation: &str, folder: &str, agent: &Identity) -> Option<Record> {
+        self.log.push(format!("{operation} {agent} in {folder}"));
+        let record = self.record(agent);
+        match &record.folder {
+            Some(kept) if kept != folder => None,
+            _ => Some(record),
+        }
     }
 }
 
@@ -137,12 +183,31 @@ impl Agent for FakeAgent {
             args,
             env,
             prompt_args: vec![prompt.to_string()],
+            folder_trust: Some(FolderTrust {
+                question: "Do you trust this folder?".into(),
+                answer: "yes".into(),
+            }),
+            kind: Some("agent".into()),
         }
     }
 
-    fn received(&self, agent: &Identity, text: &str) -> Received {
-        self.log.push(format!("received {agent}"));
-        let model = self.record(agent);
+    fn started(&self, folder: &str, agent: &Identity) -> Reading {
+        let Some(model) = self.read_in("started", folder, agent) else {
+            return Reading::Unknown;
+        };
+        model
+            .started
+            .unwrap_or(if self.terminal.opened(agent).is_some() {
+                Reading::Yes
+            } else {
+                Reading::No
+            })
+    }
+
+    fn received(&self, folder: &str, agent: &Identity, text: &str) -> Received {
+        let Some(model) = self.read_in("received", folder, agent) else {
+            return Received::Unknown;
+        };
         let Some((command, carried)) = self.terminal.opened(agent) else {
             return Received::Unknown;
         };
@@ -169,18 +234,30 @@ impl Agent for FakeAgent {
         }
     }
 
-    fn asking(&self, agent: &Identity) -> Reading {
-        self.log.push(format!("asking {agent}"));
-        self.record(agent).asking
+    fn asking(&self, folder: &str, agent: &Identity) -> Reading {
+        self.read_in("asking", folder, agent)
+            .map_or(Reading::Unknown, |record| record.asking)
     }
 
-    fn own_work(&self, agent: &Identity) -> Reading {
-        self.log.push(format!("own_work {agent}"));
-        self.record(agent).own_work
+    fn own_work(&self, folder: &str, agent: &Identity) -> Reading {
+        self.read_in("own_work", folder, agent)
+            .map_or(Reading::Unknown, |record| record.own_work)
+    }
+
+    fn ended(&self, folder: &str, agent: &Identity) -> Reading {
+        self.read_in("ended", folder, agent)
+            .map_or(Reading::Unknown, |record| record.ended)
+    }
+
+    fn last_words(&self, folder: &str, agent: &Identity) -> Option<String> {
+        self.read_in("last_words", folder, agent)
+            .and_then(|record| record.last_words)
     }
 
     fn stop_short(&self, agent: &Identity) -> String {
-        format!("to stop short, run `flume needs \"<what you need>\"` as {agent}")
+        format!(
+            "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work the stage cannot deliver past, run `flume needs --found \"<the work you found>\"`; as {agent}"
+        )
     }
 
     fn send_back(&self) -> Offered {
@@ -191,13 +268,13 @@ impl Agent for FakeAgent {
         }
     }
 
-    fn guard(&self, agent: &Identity) -> Guarded {
-        self.log.push(format!("guard {agent}"));
+    fn guard(&self, folder: &str, agent: &Identity) -> Guarded {
+        let record = self.read_in("guard", folder, agent);
         if lock(&self.state).no_guard {
             return Guarded::NotOffered;
         }
         Guarded::Refused {
-            acts: self.record(agent).refused,
+            acts: record.map(|record| record.refused).unwrap_or_default(),
         }
     }
 

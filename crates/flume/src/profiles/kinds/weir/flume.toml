@@ -1,0 +1,55 @@
+# flume's own kinds, built into the binary and read through weir-kinds
+# like any other declaration (22, C.2; design 7). Each prompt is a path
+# beside this file. A kind a repository or a launch declares by the same
+# name stands over these (19).
+
+[kinds.fix]
+version = 1
+branch = "fix"
+starts_unready = true
+lands = true
+
+[[kinds.fix.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["commits"]
+agents = [{}]
+on_fail = "code"
+
+[kinds.chore]
+version = 1
+branch = "chore"
+starts_unready = true
+lands = true
+
+[[kinds.chore.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["commits"]
+agents = [{}]
+on_fail = "code"
+
+[kinds.change]
+version = 1
+branch = "change"
+starts_unready = false
+lands = true
+
+[[kinds.change.stages]]
+name = "construct"
+prompt = "prompts/change-construct.md"
+deliverables = ["change"]
+agents = [{}]
+
+[[kinds.change.stages]]
+name = "code"
+prompt = "prompts/change-code.md"
+deliverables = ["tasks"]
+agents = [{}]
+
+[[kinds.change.stages]]
+name = "verify"
+prompt = "prompts/change-verify.md"
+deliverables = ["archived"]
+agents = [{}]
+on_fail = "code"

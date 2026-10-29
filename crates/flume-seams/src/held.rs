@@ -4,8 +4,8 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Holds, Identity, Kind, PlaceId, PlaceRef, Prompt, Readiness, Revision,
-    Seconds, Secret, Settings, Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PlaceId, PlaceRef, Prompt,
+    Readiness, Revision, Seconds, Secret, Settings, StopKind, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -22,6 +22,14 @@ pub struct HeldState {
     pub submission: SubmissionHeld,
     /// Each end flume asked for that the agent did not take (31).
     pub failures: Vec<String>,
+    /// The place's priority, higher first: its launch's, changed by its
+    /// caller after (7, 70).
+    #[serde(default)]
+    pub priority: i64,
+    /// The clues last shown for the place, so a settle shows them again
+    /// only when they change (139); never read to decide anything.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shown: Option<String>,
 }
 
 /// What a launch fixed of a place (8, 21).
@@ -43,8 +51,23 @@ pub struct PlaceRecord {
     pub brief: Option<String>,
     pub mark: Option<String>,
     pub settings: BTreeMap<String, Settings>,
+    /// The launch's settings for every stage's agent (7, 8, 32).
+    #[serde(default)]
+    pub every_stage: Settings,
+    /// The repository's settings for the kind, which it does not
+    /// declare, as the launch read them at the base's revision (8, 21,
+    /// 32).
+    #[serde(default)]
+    pub repository_settings: KindSettings,
     pub hold: Vec<String>,
     pub hold_submission: bool,
+    /// The words of each hold the launch put, by stage name (7, 130).
+    #[serde(default)]
+    pub hold_words: BTreeMap<String, String>,
+    /// The recipients of the place's ends, as the launch named them (7,
+    /// 8, 43).
+    #[serde(default)]
+    pub recipients: Vec<String>,
 }
 
 impl PlaceRecord {
@@ -109,7 +132,11 @@ pub enum StageState {
     NotReached,
     OnHold,
     WaitingOnReadiness,
+    /// Due to start, waiting for room on the host (70).
+    WaitingForRoom,
     Refused,
+    /// Its agent opened, and not yet said it started (35, 135).
+    Starting,
     Started,
     Begun,
     NeverBegun,
@@ -134,7 +161,7 @@ impl StageState {
     pub fn running(self) -> bool {
         matches!(
             self,
-            StageState::Started | StageState::Begun | StageState::Stuck
+            StageState::Starting | StageState::Started | StageState::Begun | StageState::Stuck
         )
     }
 }
@@ -147,8 +174,31 @@ pub struct StageHeld {
     pub starts: u32,
     /// The part a refused stage could not fill (27).
     pub refused_part: Option<String>,
+    /// The setting a stage was refused at its start for, with its layer:
+    /// a program no agent profile binds, or a variable the host user's
+    /// login environment lacks (27, 32).
+    #[serde(default)]
+    pub refused_setting: Option<String>,
     pub end: Option<StageEnd>,
     pub start: Option<StartHeld>,
+    /// Since when the stage has stood in its state, so since when it
+    /// waits, on its caller or for room on the host (56, 70, 130).
+    #[serde(default, alias = "waiting_since")]
+    pub since: Option<Seconds>,
+    /// What a stage waiting for room starts with, and its place in the
+    /// host's queue (70).
+    #[serde(default)]
+    pub room: Option<RoomWait>,
+}
+
+/// A stage waiting for room on the host (70).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoomWait {
+    /// The order it came to wait in, host-wide, so equals in priority
+    /// start in the order they came to wait.
+    pub order: u64,
+    /// The words it starts with: a fix round's or a retry's (49, 112).
+    pub words: Option<String>,
 }
 
 /// A stage's end as reported when it ended (43).
@@ -158,6 +208,20 @@ pub struct StageEnd {
     pub report: Option<String>,
     /// A stop-short's words, whole (42).
     pub words: Option<String>,
+    /// Whether the stop-short needs an answer or found work (41, 131).
+    #[serde(default)]
+    pub needs: Option<StopKind>,
+    /// For a stuck, lost or never-begun end, the agent's last words as
+    /// its own record held them (43).
+    #[serde(default)]
+    pub last_words: Option<String>,
+    /// For a stuck, lost or never-begun end, the commits on the place's
+    /// branch since the start (43).
+    #[serde(default)]
+    pub commits: Vec<Revision>,
+    /// For a never-begun end, what the terminal showed of the agent (43).
+    #[serde(default)]
+    pub screen: Option<String>,
 }
 
 /// One start of a stage and its agent.
@@ -172,7 +236,13 @@ pub struct StartHeld {
     pub identity: Identity,
     pub secret: Secret,
     pub program: String,
+    /// The settings it started with, each value as its layer wrote it
+    /// (32, 56).
     pub settings: Settings,
+    /// Each setting's layer and value as written, by `program`, `model`,
+    /// `instructions` or `env.<NAME>` (32, 56).
+    #[serde(default)]
+    pub from: BTreeMap<String, Given>,
     /// The agent's own record, once a reading names it (77).
     pub record: Option<String>,
     pub prompt: Prompt,
@@ -186,9 +256,14 @@ pub struct StartHeld {
     pub last_head_move: Seconds,
     /// Reported working past its limit (118).
     pub past_limit: bool,
+    /// The command a person runs in the place to start the agent, where
+    /// the terminal printed it rather than ran it (C.5).
+    #[serde(default)]
+    pub printed: Option<String>,
 }
 
-/// A landing kind's submission as flume keeps it (48, 111, 112, 124).
+/// A landing kind's submission as flume keeps it, with no wait held on
+/// it (48, 111, 112, 124, 133).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubmissionHeld {
     /// The last stage delivered and its submission is to be made.
@@ -197,9 +272,19 @@ pub struct SubmissionHeld {
     pub submits: u32,
     /// How many send-backs the place has taken (112).
     pub send_backs: u32,
-    /// The command of flume's waiting on the merge queue's verdict (124).
-    pub waiter: Option<String>,
+    /// The submission flume last made, by the merge queue's id, so a
+    /// withdrawal of it is told from a hand's (99, 112).
+    #[serde(default)]
+    pub id: Option<String>,
+    /// The last outcome flume collected, or its refusal at submit.
     pub verdict: Option<Verdict>,
-    /// Why the place waits for its caller's retry or drop (112).
+    /// Why the place waits for its caller's retry or drop (112, 130).
     pub waiting: Option<String>,
+    /// Since when it has waited so (56, 130).
+    #[serde(default)]
+    pub waiting_since: Option<Seconds>,
+    /// Why the place's inbox could not be read at the last settle, which
+    /// acted on nothing (133, 68).
+    #[serde(default)]
+    pub unread: Option<String>,
 }
