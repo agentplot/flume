@@ -11,7 +11,8 @@
 //! 57, C.4); which declaration they join, and whether the stages they
 //! name exist, are the core's to say. A prompt is a path relative to its declaration's file,
 //! read beside it: at the same revision for a repository's, on disk for
-//! a launch's, and from the binary for flume's own.
+//! a launch's, and from the binary for flume's own, whose versions are
+//! each a declaration of its own with its prompts beside it (157).
 //!
 //! The repository's binding is the declaration's `[profiles]` table at
 //! the default branch: `origin/HEAD` after one fetch where the
@@ -35,23 +36,64 @@ pub const DECLARATION: &str = ".config/flume.toml";
 /// one.
 const REMOTE: &str = "origin";
 
-/// flume's own declaration and its prompts, built into the binary (22,
-/// C.2).
-const OWN: &str = include_str!("flume.toml");
-const OWN_PROMPTS: &[(&str, &str)] = &[
-    ("prompts/code.md", include_str!("prompts/code.md")),
-    (
-        "prompts/change-construct.md",
-        include_str!("prompts/change-construct.md"),
-    ),
-    (
-        "prompts/change-code.md",
-        include_str!("prompts/change-code.md"),
-    ),
-    (
-        "prompts/change-verify.md",
-        include_str!("prompts/change-verify.md"),
-    ),
+/// One version of one of flume's own kinds, built into the binary: its
+/// declaration and each prompt it names by its path within the version's
+/// own directory (22, 157, C.2; design 7).
+struct Own {
+    declaration: &'static str,
+    prompts: &'static [(&'static str, &'static str)],
+}
+
+/// flume's own kinds, one declaration per version, each in a directory of
+/// its own under `own/`, `<name>@<version>/kind.toml` with its prompts
+/// beside it under `prompts/`: change@1 and change@2 side by side, and
+/// fix@1 and chore@1 (22, 157, C.2; record 0022).
+const OWN: &[Own] = &[
+    Own {
+        declaration: include_str!("own/change@1/kind.toml"),
+        prompts: &[
+            (
+                "prompts/change-construct.md",
+                include_str!("own/change@1/prompts/change-construct.md"),
+            ),
+            (
+                "prompts/change-code.md",
+                include_str!("own/change@1/prompts/change-code.md"),
+            ),
+            (
+                "prompts/change-verify.md",
+                include_str!("own/change@1/prompts/change-verify.md"),
+            ),
+        ],
+    },
+    Own {
+        declaration: include_str!("own/change@2/kind.toml"),
+        prompts: &[
+            (
+                "prompts/change-construct.md",
+                include_str!("own/change@2/prompts/change-construct.md"),
+            ),
+            (
+                "prompts/change-code.md",
+                include_str!("own/change@2/prompts/change-code.md"),
+            ),
+            (
+                "prompts/change-verify.md",
+                include_str!("own/change@2/prompts/change-verify.md"),
+            ),
+        ],
+    },
+    Own {
+        declaration: include_str!("own/chore@1/kind.toml"),
+        prompts: &[(
+            "prompts/code.md",
+            include_str!("own/chore@1/prompts/code.md"),
+        )],
+    },
+    Own {
+        declaration: include_str!("own/fix@1/kind.toml"),
+        prompts: &[("prompts/code.md", include_str!("own/fix@1/prompts/code.md"))],
+    },
 ];
 
 /// The kinds profile over weir's kind format.
@@ -104,19 +146,26 @@ impl Kinds for Weir {
         })
     }
 
+    /// Every kind of every one of flume's own declarations, each read
+    /// through weir-kinds with its prompts from its own version's
+    /// directory, two versions of `change` among them (22, 157).
     fn flumes_own(&self) -> Vec<Kind> {
-        match read(OWN, |path| {
-            OWN_PROMPTS
-                .iter()
-                .find(|(own, _)| *own == path)
-                .map(|(_, text)| text.to_string())
-                .ok_or_else(|| format!("{path} is not built in"))
-        }) {
-            KindsRead::Read { kinds, .. } => kinds,
-            KindsRead::CouldNotRead { reason } => {
-                panic!("flume's own declaration is built in and reads: {reason}")
-            }
-        }
+        OWN.iter()
+            .flat_map(|own| {
+                match read(own.declaration, |path| {
+                    own.prompts
+                        .iter()
+                        .find(|(at, _)| *at == path)
+                        .map(|(_, text)| text.to_string())
+                        .ok_or_else(|| format!("{path} is not built in"))
+                }) {
+                    KindsRead::Read { kinds, .. } => kinds,
+                    KindsRead::CouldNotRead { reason } => {
+                        panic!("flume's own declaration is built in and reads: {reason}")
+                    }
+                }
+            })
+            .collect()
     }
 
     fn read_binding(&self, repository: &str) -> BindingRead {

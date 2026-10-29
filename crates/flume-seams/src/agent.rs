@@ -172,7 +172,10 @@ pub trait Agent: Send + Sync {
     }
 
     /// The one way the agent tells flume it stops short, filled in for
-    /// its place and stage, as its prompt gives it (92, 28).
+    /// its place and stage, as its prompt gives it (92, 28): the same for
+    /// every start of the stage, naming nothing of `agent` that differs
+    /// between starts, so a repetition's prompt matches the one before it
+    /// up to its group (141; core.31).
     fn stop_short(&self, agent: &Identity) -> String;
 
     /// Whether the program lets flume keep an agent about to go quiet at

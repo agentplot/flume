@@ -435,12 +435,10 @@ fn notes_never_read(_: &()) -> Outcome {
         .prompt(&id, &World::identity("change", "plan", "code", 2))
         .ok_or("no second repetition")?;
     let shared = |text: &str| text.split("Group ").next().unwrap_or_default().to_string();
-    let one = World::identity("change", "plan", "code", 1).to_string();
-    let two = World::identity("change", "plan", "code", 2).to_string();
     ensure_eq!(
-        shared(&second).replace(&two, &one),
+        shared(&second),
         shared(&first),
-        "the two repetitions' prompts up to the group, the fake agent's way to stop short naming each start"
+        "the two repetitions' prompts up to the group"
     );
     let status = serde_json::to_string(&world.status(&id)?).map_err(|error| error.to_string())?;
     ensure!(

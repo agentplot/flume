@@ -88,8 +88,8 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             run: unknown_when_the_record_cannot_say::<H>,
         },
         Scenario {
-            name: "agent: the one way to stop short is given for every prompt",
-            cites: &["92", "28", "41"],
+            name: "agent: the one way to stop short is given for every prompt, the same at every start of a stage",
+            cites: &["92", "28", "41", "141"],
             run: the_way_to_stop_short::<H>,
         },
         Scenario {
@@ -257,8 +257,15 @@ fn unknown_when_the_record_cannot_say<H: AgentHarness>(harness: &H) -> Outcome {
 }
 
 fn the_way_to_stop_short<H: AgentHarness>(harness: &H) -> Outcome {
-    let way = harness.seam().stop_short(&identity("construct"));
+    let first = identity("construct");
+    let way = harness.seam().stop_short(&first);
     ensure!(!way.trim().is_empty(), "no way to stop short");
+    let second = Identity { start: 2, ..first };
+    ensure_eq!(
+        harness.seam().stop_short(&second),
+        way,
+        "the way to stop short at the stage's second start"
+    );
     Ok(())
 }
 

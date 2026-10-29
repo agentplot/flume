@@ -1,0 +1,18 @@
+# flume's own fix@1, one version of one kind, built into the binary and read
+# through weir-kinds like any other declaration (22, 157, C.2; design 7).
+# Each prompt is a path beside this file, in this version's own
+# directory. A kind a repository or a launch declares by the same name
+# stands over flume's own (19).
+
+[kinds.fix]
+version = 1
+branch = "fix"
+starts_unready = true
+lands = true
+
+[[kinds.fix.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["commits"]
+agents = [{}]
+on_fail = "code"

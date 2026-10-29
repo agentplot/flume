@@ -254,10 +254,8 @@ impl Agent for FakeAgent {
             .and_then(|record| record.last_words)
     }
 
-    fn stop_short(&self, agent: &Identity) -> String {
-        format!(
-            "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work the stage cannot deliver past, run `flume needs --found \"<the work you found>\"`; as {agent}"
-        )
+    fn stop_short(&self, _agent: &Identity) -> String {
+        "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work the stage cannot deliver past, run `flume needs --found \"<the work you found>\"`".into()
     }
 
     fn send_back(&self) -> Offered {

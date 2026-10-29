@@ -1569,8 +1569,8 @@ impl Agent for StandIn {
         None
     }
 
-    fn stop_short(&self, agent: &Identity) -> String {
-        format!("to stop short, run flume needs as {agent}")
+    fn stop_short(&self, _agent: &Identity) -> String {
+        "to stop short, run flume needs".into()
     }
 
     fn send_back(&self) -> Offered {

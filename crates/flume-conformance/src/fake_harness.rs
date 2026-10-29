@@ -12,8 +12,10 @@ use std::sync::Arc;
 
 const REPOSITORY: &str = "/repository";
 
-/// flume's own kinds as Part C's table gives them: fix@1, chore@1 and
-/// change@1, each sent back to code (22, C.2).
+/// flume's own kinds as Part C's table gives them: fix@1, chore@1,
+/// change@1 and change@2 side by side, each sent back to code, and
+/// change@2's code stage repeating per task group with its group, notes
+/// and words last (22, 140, 141, C.2; core.31).
 pub fn flumes_own() -> Vec<Kind> {
     let stage = |name: &str, deliverable: Deliverable, prompt: &str| Stage {
         name: name.into(),
@@ -40,6 +42,31 @@ pub fn flumes_own() -> Vec<Kind> {
         "Verify {{change}} against the work, commit the report, and archive it.\n\n{{#words}}{{words}}\n\n{{/words}}{{needs}}",
     );
     verify.send_back_to = Some("code".into());
+    let change = Kind {
+        name: "change".into(),
+        version: 1,
+        branch_prefix: "change".into(),
+        starts_unready: false,
+        lands: true,
+        agents: KindSettings::default(),
+        stages: vec![
+            stage(
+                "construct",
+                Deliverable::ChangeWritten,
+                "Write the change {{change}}.\n\n{{brief}}\n\n{{#words}}{{words}}\n\n{{/words}}{{needs}}",
+            ),
+            stage(
+                "code",
+                Deliverable::TasksTicked,
+                "Build {{change}}, ticking each task.\n\n{{#words}}{{words}}\n\n{{/words}}{{needs}}",
+            ),
+            verify,
+        ],
+    };
+    let mut repeating = change.clone();
+    repeating.version = 2;
+    repeating.stages[1].repeats = true;
+    repeating.stages[1].prompt = "Build {{change}}, one task group of it, ticking each task.\n\n{{needs}}\n\n{{group}}\n\nThe notes: {{notes}}{{#words}}\n\n{{words}}{{/words}}".into();
     vec![
         Kind {
             name: "fix".into(),
@@ -59,27 +86,8 @@ pub fn flumes_own() -> Vec<Kind> {
             agents: KindSettings::default(),
             stages: vec![code],
         },
-        Kind {
-            name: "change".into(),
-            version: 1,
-            branch_prefix: "change".into(),
-            starts_unready: false,
-            lands: true,
-            agents: KindSettings::default(),
-            stages: vec![
-                stage(
-                    "construct",
-                    Deliverable::ChangeWritten,
-                    "Write the change {{change}}.\n\n{{brief}}\n\n{{#words}}{{words}}\n\n{{/words}}{{needs}}",
-                ),
-                stage(
-                    "code",
-                    Deliverable::TasksTicked,
-                    "Build {{change}}, ticking each task.\n\n{{#words}}{{words}}\n\n{{/words}}{{needs}}",
-                ),
-                verify,
-            ],
-        },
+        change,
+        repeating,
     ]
 }
 

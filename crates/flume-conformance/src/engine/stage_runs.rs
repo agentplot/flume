@@ -138,7 +138,9 @@ fn the_prompt_rendered(_: &()) -> Outcome {
         other => return Err(format!("prompt answered {other:?}")),
     };
     ensure!(text.contains(brief), "the brief is not whole in {text}");
-    let way = format!("{}", World::identity("fix", "one", "code", 1));
+    let way = world
+        .agent
+        .stop_short(&World::identity("fix", "one", "code", 1));
     ensure!(
         text.contains("flume needs") && text.contains(&way),
         "the way to stop short is not in {text}"
