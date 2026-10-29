@@ -193,7 +193,12 @@ fn the_command_for_a_code_stage() {
     let settings = Settings {
         model: Some("opus".into()),
         instructions: Some("Keep each commit small.".into()),
-        env: BTreeMap::from([("CLAUDE_CONFIG_DIR".into(), "/home/me/.claude-work".into())]),
+        // A `PATH` holding no `claude`, so no wrapper of the host's is
+        // read for the program named by its name.
+        env: BTreeMap::from([
+            ("CLAUDE_CONFIG_DIR".into(), "/home/me/.claude-work".into()),
+            ("PATH".into(), "/nowhere".into()),
+        ]),
         ..Settings::default()
     };
     let who = identity("code");
@@ -224,6 +229,7 @@ fn the_command_for_a_code_stage() {
                 "CLAUDE_CONFIG_DIR".to_string(),
                 "/home/me/.claude-work".to_string()
             ),
+            ("PATH".into(), "/nowhere".into()),
             ("FLUME_AGENT".into(), who.to_string()),
             ("FLUME_SECRET".into(), "s3cret".into()),
             ("FLUME_PLACE".into(), harness.place().location),
