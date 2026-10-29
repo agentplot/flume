@@ -10,8 +10,11 @@ tasks:
     command: 'vale src/content/docs'
     inputs: ['src/content/docs/**/*', '/.vale.ini', '/styles/**/*', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
+  # astro's bin starts `#!/usr/bin/env node`, and the devenv holds no node:
+  # `bun run` would stand in a `node` of bun's own written under /tmp, which
+  # the gate's sandbox does not let it write, so bun runs astro's bin itself.
   build:
-    command: 'bun run build'
+    command: 'bun ./node_modules/astro/bin/astro.mjs build'
     inputs: ['src/**/*', 'public/**/*', 'astro.config.mjs', 'package.json', 'bun.lock', 'tsconfig.json', '/devenv.nix', '/devenv.lock', '/.prototools']
     outputs: ['dist']
     deps: ['~:install']
