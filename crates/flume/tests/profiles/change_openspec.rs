@@ -31,23 +31,36 @@ fn write_change(repository: &Repository, name: &str, facts: &ChangeFacts) {
             repository.write(&format!("{folder}/design.md"), "# Design\n");
         }
         if facts.planning_complete || !facts.tasks.is_empty() {
-            let tasks: String = facts
-                .tasks
-                .iter()
-                .map(|task| {
-                    format!(
-                        "- [{}] {}\n",
-                        if task.ticked { "x" } else { " " },
-                        task.text
-                    )
-                })
-                .collect();
-            repository.write(
-                &format!("{folder}/tasks.md"),
-                &format!("# Tasks\n\n{tasks}"),
-            );
+            repository.write(&format!("{folder}/tasks.md"), &tasks_file(facts));
         }
     }
+}
+
+/// A `tasks.md` holding the change's tasks: those in a group with no
+/// number or title, or in none, above every heading, then each group's
+/// `## <n>. <title>` heading and its tasks.
+fn tasks_file(facts: &ChangeFacts) -> String {
+    let line = |task: &Task| {
+        format!(
+            "- [{}] {}\n",
+            if task.ticked { "x" } else { " " },
+            task.text
+        )
+    };
+    let headed = |task: &Task| {
+        task.group
+            .and_then(|group| facts.groups.get(group))
+            .is_some_and(|group| group.number.is_some())
+    };
+    let mut text = String::from("# Tasks\n\n");
+    text.extend(facts.tasks.iter().filter(|task| !headed(task)).map(line));
+    for (at, group) in facts.groups.iter().enumerate() {
+        if let (Some(number), Some(title)) = (&group.number, &group.title) {
+            text.push_str(&format!("\n## {number}. {title}\n\n"));
+            text.extend(facts.tasks_of(at).map(line));
+        }
+    }
+    text
 }
 
 #[derive(Default)]
@@ -95,10 +108,13 @@ fn reading_writes_nothing() {
             tasks: vec![Task {
                 text: "1.1 one".into(),
                 ticked: false,
-                group: None,
+                group: Some(0),
             }],
             archived: false,
-            groups: vec![],
+            groups: vec![TaskGroup {
+                number: Some("1".into()),
+                title: Some("One".into()),
+            }],
         },
     );
     let revision = Revision::new(repository.commit("the change"));
@@ -119,8 +135,9 @@ fn reading_writes_nothing() {
 
 /// What the pinned `openspec` gives of the change in the checkout: its
 /// existence and planning complete from `status`, its tasks from
-/// `instructions apply`.
-fn openspec_reads(dir: &std::path::Path, name: &str) -> (bool, bool, Vec<Task>) {
+/// `instructions apply`, each task's text and whether it is ticked, since
+/// OpenSpec gives no task its group.
+fn openspec_reads(dir: &std::path::Path, name: &str) -> (bool, bool, Vec<(String, bool)>) {
     let run = |args: &[&str]| {
         let output = Command::new("openspec")
             .args(args)
@@ -143,10 +160,11 @@ fn openspec_reads(dir: &std::path::Path, name: &str) -> (bool, bool, Vec<Task>) 
         .and_then(|tasks| tasks.as_array().cloned())
         .unwrap_or_default()
         .iter()
-        .map(|task| Task {
-            text: task["description"].as_str().unwrap_or_default().to_string(),
-            ticked: task["done"].as_bool().unwrap_or_default(),
-            group: None,
+        .map(|task| {
+            (
+                task["description"].as_str().unwrap_or_default().to_string(),
+                task["done"].as_bool().unwrap_or_default(),
+            )
         })
         .collect();
     (exists, planning.unwrap_or(false), tasks)
@@ -170,13 +188,13 @@ fn the_file_reading_agrees_with_openspec_at_five_revisions() {
 
     repository.write(
         &format!("{folder}/tasks.md"),
-        "# Tasks\n\n## 1. One\n\n- [ ] 1.1 the first\n- [ ] 1.2 the second\n",
+        "# Tasks\n\n## 1. One\n\n- [ ] 1.1 the first\n- [ ] 1.2 the second\n\n## 2. Two\n\n- [ ] 2.1 the third\n",
     );
     revisions.push(repository.commit("planned"));
 
     repository.write(
         &format!("{folder}/tasks.md"),
-        "# Tasks\n\n## 1. One\n\n- [x] 1.1 the first\n- [ ] 1.2 the second\n",
+        "# Tasks\n\n## 1. One\n\n- [x] 1.1 the first\n- [ ] 1.2 the second\n\n## 2. Two\n\n- [ ] 2.1 the third\n",
     );
     revisions.push(repository.commit("one ticked"));
 
@@ -204,7 +222,18 @@ fn the_file_reading_agrees_with_openspec_at_five_revisions() {
                 read.planning_complete, planning,
                 "planning complete at revision {n}"
             );
-            assert_eq!(read.tasks, tasks, "the tasks at revision {n}");
+            assert_eq!(
+                read.tasks
+                    .iter()
+                    .map(|task| (task.text.clone(), task.ticked))
+                    .collect::<Vec<_>>(),
+                tasks,
+                "the tasks at revision {n}"
+            );
+            if n >= 2 {
+                assert_eq!(read.groups.len(), 2, "the groups at revision {n}");
+                assert_eq!(read.first_unticked_group(), Some(0), "at revision {n}");
+            }
         }
         assert_eq!(read.archived, n == 4, "archived at revision {n}");
     }
