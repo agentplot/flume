@@ -69,7 +69,7 @@ sluice gates what lands, and the Flywheel keeps turning.
 
 | path | what |
 |---|---|
-| `crates/` | the crates, each a moon project: `flume-seams` (`seams`), `flume-core` (`core`), `flume-fakes` (`fakes`), `flume-conformance` (`conformance`) and the binary `flume` (`flume`), whose `tests/stand-in/` stands in for Claude Code |
+| `crates/` | the crates, each a moon project: `flume-seams` (`seams`), `flume-core` (`core`), `flume-fakes` (`fakes`), `flume-conformance` (`conformance`) and the binary `flume` (`flume`), whose `tests/profiles/stand-in/` stands in for Claude Code |
 | `plugins/claude` | flume's Claude Code plugin, the project `plugin-claude` |
 | `docs/architecture/`, `docs/adr/` | the rules and the decisions behind them |
 | `site/` | the project `site`: the site, Astro with Starlight; its diagrams are drawn at build time (`site/README.md`) |

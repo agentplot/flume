@@ -38,7 +38,7 @@ live = ["tools"]
 # 18), built only for the check-tools layer.
 [[bin]]
 name = "flume-stand-in"
-path = "tests/stand-in/claude.rs"
+path = "tests/profiles/stand-in/claude.rs"
 test = false
 required-features = ["tools"]
 

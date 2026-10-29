@@ -7,7 +7,7 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 # profiles against the pinned herdr and sluice, on servers and scratch
 # repositories the tests make, and the walkthroughs, the built binary
 # under the printed command with the stand-in for Claude Code
-# (`tests/stand-in/`) on scratch repositories landing on a local bare
+# (`tests/profiles/stand-in/`) on scratch repositories landing on a local bare
 # remote, in the check-tools layer; and `live`, the walkthroughs with the
 # pinned Claude Code under herdr, in the check-live layer, run by hand
 # with a test account's token (`tests/profiles/live/`).
