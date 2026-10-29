@@ -36,7 +36,7 @@ pub const KIND: &str = "claude";
 
 /// The version of flume, which the plugin it writes carries, so a hook
 /// run by a binary of another version is reported (135).
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const VERSION: &str = crate::VERSION;
 
 /// A line of the folder-trust dialog Claude Code 2.1.296 shows in a
 /// folder new to it: its confirming choice, short enough that no width of
@@ -78,10 +78,15 @@ pub const PLUGIN: [(&str, &str); 4] = [
 
 /// A file of the plugin as the binary writes it for the agents it
 /// starts: each command naming `flume` names the binary by its absolute
-/// path instead (C.4).
+/// path instead (C.4), and the manifest carries the binary's version, a
+/// release's where the repository's says the workspace's (135).
 pub fn written(text: &str, binary: &Path) -> String {
     let path = serde_json::to_string(&binary.to_string_lossy()).expect("a path as JSON");
     text.replace("\"command\": \"flume\"", &format!("\"command\": {path}"))
+        .replace(
+            concat!("\"version\": \"", env!("CARGO_PKG_VERSION"), "\""),
+            &format!("\"version\": \"{VERSION}\""),
+        )
 }
 
 /// The hex digest of `text`'s SHA-256.
