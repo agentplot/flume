@@ -24,11 +24,13 @@ mod start;
 mod status;
 mod submit;
 mod tidy;
+mod wait;
 
 pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
+pub use wait::{WaitFor, WAIT_POLL};
 
 use flume_seams::{
     Agent, Binding, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds,

@@ -326,6 +326,31 @@ pub fn full() -> Vec<(&'static str, Answer)> {
             "refused",
             Answer::refused("the kind bump resolves to no declaration"),
         ),
+        (
+            "waited",
+            Answer::Waited {
+                place: PlaceId::new("/r/places/fix--one"),
+                recipient: "operator".into(),
+                end: place_status().ends.pop(),
+                delivered: true,
+            },
+        ),
+        (
+            "inbox",
+            Answer::Inbox {
+                recipient: "operator".into(),
+                ends: place_status()
+                    .ends
+                    .into_iter()
+                    .map(|end| Collected {
+                        place: PlaceId::new("/r/places/fix--one"),
+                        kind: "fix".into(),
+                        name: "one".into(),
+                        end,
+                    })
+                    .collect(),
+            },
+        ),
     ]
 }
 
@@ -793,5 +818,61 @@ pub const FIELDS: &[(&str, &[&str])] = &[
     (
         "refused",
         &["refused", "refused.refusal", "refused.refusal.reason"],
+    ),
+    (
+        "waited",
+        &[
+            "waited",
+            "waited.delivered",
+            "waited.end",
+            "waited.end.deliveries",
+            "waited.end.of",
+            "waited.end.pending_for",
+            "waited.end.read_at",
+            "waited.end.submit",
+            "waited.end.verdict",
+            "waited.end.verdict.landed",
+            "waited.end.verdict.landed.branch_removed",
+            "waited.end.verdict.landed.commit",
+            "waited.end.verdict.landed.place_removed",
+            "waited.place",
+            "waited.recipient",
+        ],
+    ),
+    (
+        "inbox",
+        &[
+            "inbox",
+            "inbox.ends",
+            "inbox.ends[].end",
+            "inbox.ends[].end.deliveries",
+            "inbox.ends[].end.deliveries[].at",
+            "inbox.ends[].end.deliveries[].by",
+            "inbox.ends[].end.deliveries[].recipient",
+            "inbox.ends[].end.end",
+            "inbox.ends[].end.end.commits",
+            "inbox.ends[].end.end.head",
+            "inbox.ends[].end.end.last_words",
+            "inbox.ends[].end.end.needs",
+            "inbox.ends[].end.end.report",
+            "inbox.ends[].end.end.screen",
+            "inbox.ends[].end.end.words",
+            "inbox.ends[].end.of",
+            "inbox.ends[].end.pending_for",
+            "inbox.ends[].end.read_at",
+            "inbox.ends[].end.stage",
+            "inbox.ends[].end.start",
+            "inbox.ends[].end.state",
+            "inbox.ends[].end.submit",
+            "inbox.ends[].end.verdict",
+            "inbox.ends[].end.verdict.landed",
+            "inbox.ends[].end.verdict.landed.branch_removed",
+            "inbox.ends[].end.verdict.landed.commit",
+            "inbox.ends[].end.verdict.landed.place_removed",
+            "inbox.ends[].kind",
+            "inbox.ends[].name",
+            "inbox.ends[].place",
+            "inbox.recipient",
+        ],
     ),
 ];

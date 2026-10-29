@@ -10,7 +10,7 @@ pub mod place;
 mod print;
 
 use clap::{Args, Parser, Subcommand};
-use flume_core::{Answer, Engine, Retry};
+use flume_core::{Answer, Engine, Retry, WaitFor};
 use flume_seams::{AgentState, Launch, PlaceId, Reading, Seconds, StopKind};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -23,6 +23,10 @@ pub const AGENT: &str = "FLUME_AGENT";
 
 /// The variable an agent's start's secret is in (41, C.4).
 pub const SECRET: &str = "FLUME_SECRET";
+
+/// The variable an agent flume started names its place in, by which a
+/// command run in a role's run finds the role it serves (132, C.4).
+pub const PLACE: &str = "FLUME_PLACE";
 
 /// How long `settle --on-quiet` reads the agent for until it is quiet
 /// (121; design 14).
@@ -122,6 +126,41 @@ enum Command {
     Ack {
         #[command(subcommand)]
         ack: Ack,
+    },
+    /// Wait on a place's stage or submission as a recipient: an end
+    /// pending for it is answered and delivered, one already delivered is
+    /// read, and otherwise the host's state is followed until one comes
+    /// (43). Exits 0 for a stage delivered or finished or a submission
+    /// landed, 2 for any other end, 3 for still waiting at the timeout.
+    Wait {
+        /// A location, or `<kind>--<name>` in the repository.
+        place: String,
+        /// The stage whose current start's end is waited on.
+        #[arg(
+            long,
+            conflicts_with = "submission",
+            required_unless_present = "submission"
+        )]
+        stage: Option<String>,
+        /// The place's submission's outcome is waited on.
+        #[arg(long)]
+        submission: bool,
+        /// The recipient waited as; `$FLUME_RECIPIENT`, a role's run's
+        /// address, or the terminal's session, where none is named.
+        #[arg(long)]
+        recipient: Option<String>,
+        /// How long to follow the host's state, as `<n>`, `<n>s`, `<n>m`
+        /// or `<n>h`; with none, until an end comes.
+        #[arg(long)]
+        timeout: Option<String>,
+    },
+    /// Collect every end pending for a recipient, of every place on the
+    /// host, each then delivered to it (43).
+    Inbox {
+        /// The recipient collected for; `$FLUME_RECIPIENT`, a role's
+        /// run's address, or the terminal's session, where none is named.
+        #[arg(long)]
+        recipient: Option<String>,
     },
     /// flume's status over MCP on standard input and output, one tool,
     /// `status`, settling nothing (57, 60).
@@ -296,7 +335,7 @@ where
     Outcome {
         text,
         usage: false,
-        code: u8::from(answer.refusal().is_some()),
+        code: answer.exit(),
     }
 }
 
@@ -375,9 +414,47 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let place = named(place)?;
             build()?.priority(&place, *priority)
         }
+        Command::Wait {
+            place,
+            stage,
+            submission: _,
+            recipient,
+            timeout,
+        } => {
+            let place = named(place)?;
+            let of = match stage {
+                Some(stage) => WaitFor::Stage(stage.clone()),
+                None => WaitFor::Submission,
+            };
+            let timeout = timeout.as_deref().map(seconds).transpose()?;
+            let core = build()?;
+            let recipient = recipient_of(&core, recipient)?;
+            core.wait(&place, &of, &recipient, timeout)
+        }
+        Command::Inbox { recipient } => {
+            let core = build()?;
+            let recipient = recipient_of(&core, recipient)?;
+            core.inbox(&recipient)
+        }
         Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
             unreachable!("answered before the core's acts")
         }
+    })
+}
+
+/// The recipient named, else the one the core reads for a command that
+/// names none: `$FLUME_RECIPIENT`, the address of the role's run
+/// `$FLUME_PLACE` names, or the terminal's session (7, 132; design 7).
+fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String> {
+    if let Some(named) = named {
+        return Ok(named.clone());
+    }
+    let here = std::env::var(PLACE)
+        .ok()
+        .filter(|place| !place.is_empty())
+        .map(PlaceId::new);
+    core.recipient(here.as_ref()).ok_or_else(|| {
+        format!("no recipient is named: name one with --recipient or ${}, or run in a terminal's session or a role's run", crate::host::RECIPIENT)
     })
 }
 

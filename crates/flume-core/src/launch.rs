@@ -260,6 +260,7 @@ impl Engine {
             priority: launch.priority,
             shown: None,
             ends: vec![],
+            role: None,
         };
         for stage in &kind.stages {
             let resolved = self.resolve(&held.place, stage);

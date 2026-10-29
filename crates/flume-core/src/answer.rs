@@ -40,6 +40,24 @@ pub enum Answer {
     StopCheck { words: Option<String> },
     /// An act refused, naming why.
     Refused { refusal: Refusal },
+    /// A wait by place: the end of the stage's current start or of the
+    /// submission it answers, delivered to the recipient by this wait or
+    /// answered as a read of one already delivered; no end where the
+    /// wait was still waiting when its timeout passed (43, design 9).
+    Waited {
+        place: PlaceId,
+        recipient: String,
+        end: Option<EndStatus>,
+        /// This wait delivered the end; false for a read.
+        delivered: bool,
+    },
+    /// Every end pending for the recipient that the inbox collected and
+    /// delivered, of every place on the host, tidied places kept for
+    /// their ends among them (43, design 9).
+    Inbox {
+        recipient: String,
+        ends: Vec<Collected>,
+    },
 }
 
 impl Answer {
@@ -56,6 +74,29 @@ impl Answer {
         match self {
             Answer::Refused { refusal } => Some(&refusal.reason),
             _ => None,
+        }
+    }
+
+    /// The exit a command gives the answer (design 9): 1 for a refusal;
+    /// for a wait, 0 for a stage delivered or finished or a submission
+    /// landed, 2 for any other end, and 3 for still waiting at its
+    /// timeout; 0 for every other answer.
+    pub fn exit(&self) -> u8 {
+        match self {
+            Answer::Refused { .. } => 1,
+            Answer::Waited { end: None, .. } => 3,
+            Answer::Waited { end: Some(end), .. } => match &end.end.of {
+                EndOf::Stage {
+                    state: StageState::Delivered | StageState::Finished,
+                    ..
+                }
+                | EndOf::Submission {
+                    verdict: Verdict::Landed { .. },
+                    ..
+                } => 0,
+                _ => 2,
+            },
+            _ => 0,
         }
     }
 
@@ -140,6 +181,17 @@ pub struct EndStatus {
     #[serde(flatten)]
     pub end: EndHeld,
     pub pending_for: Vec<String>,
+}
+
+/// An end the inbox collected: the place it is of, by its location and
+/// as its agents name it, and the end whole with its deliveries, this
+/// one among them (43).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Collected {
+    pub place: PlaceId,
+    pub kind: String,
+    pub name: String,
+    pub end: EndStatus,
 }
 
 /// The host's agents running, its bound, the room left and the stages

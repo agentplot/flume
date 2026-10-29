@@ -208,6 +208,7 @@ fn held() -> HeldState {
         priority: -3,
         shown: Some("code · working; 1 running".into()),
         ends: ends(),
+        role: Some("madswan/planner".into()),
     }
 }
 
@@ -363,6 +364,18 @@ fn an_end_and_its_deliveries() {
     })
     .unwrap();
     assert!(before.ends.is_empty(), "a document from before ends");
+}
+
+#[test]
+fn a_role_runs_address() {
+    let held = held();
+    assert_eq!(held.role.as_deref(), Some("madswan/planner"));
+    let mut value = serde_json::to_value(&held).unwrap();
+    assert_eq!(value["role"], "madswan/planner");
+    value.as_object_mut().unwrap().remove("role");
+    let before: HeldState = serde_json::from_value(value).unwrap();
+    assert_eq!(before.role, None, "a document from before roles");
+    round_trips(HeldState { role: None, ..held });
 }
 
 #[test]

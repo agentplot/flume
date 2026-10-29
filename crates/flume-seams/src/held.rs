@@ -35,6 +35,11 @@ pub struct HeldState {
     /// pending for every recipient it has no delivery to (43).
     #[serde(default)]
     pub ends: Vec<EndHeld>,
+    /// The role's address `<partition>/<role>` a role's run serves, by
+    /// which a command run in it collects for the address (132); none
+    /// for any other place.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 impl HeldState {

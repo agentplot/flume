@@ -61,6 +61,39 @@ pub fn person(answer: &Answer) -> String {
             None => "the agent may go quiet".to_string(),
         }),
         Answer::Refused { refusal } => lines.push(format!("refused: {}", refusal.reason)),
+        Answer::Waited {
+            place,
+            recipient,
+            end,
+            delivered,
+        } => lines.push(match end {
+            None => format!("still waiting on {place} as {recipient}"),
+            Some(end) => {
+                let how = if *delivered {
+                    "delivered by this wait"
+                } else {
+                    "read; delivered before"
+                };
+                format!(
+                    "{place} {} for {recipient}: {how}",
+                    flume_core::what_ended(&end.end.of)
+                )
+            }
+        }),
+        Answer::Inbox { recipient, ends } => {
+            if ends.is_empty() {
+                lines.push(format!("nothing pending for {recipient}"));
+            }
+            for collected in ends {
+                lines.push(format!(
+                    "{}--{} {}; read: flume status {}",
+                    collected.kind,
+                    collected.name,
+                    flume_core::what_ended(&collected.end.end.of),
+                    collected.place
+                ));
+            }
+        }
     }
     lines.join("\n")
 }
