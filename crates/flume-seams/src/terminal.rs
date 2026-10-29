@@ -133,6 +133,21 @@ pub enum Shown {
     Failed { reason: String },
 }
 
+/// Where the terminal shows a place's clues, each named in the
+/// terminal's own words: what holds the place's agents, the pane of its
+/// live agent, and what holds the places of its repository on its base;
+/// none where it holds none. Status gives them so a plugin of the
+/// terminal's refreshes the clues show gives, copying status (139, C.5).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShownAt {
+    #[serde(default)]
+    pub place: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub base: Option<String>,
+}
+
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
 /// never reports an end that did not happen (98).
@@ -191,6 +206,12 @@ pub trait Terminal: Send + Sync {
     /// Clues beside the place's agents, display only: nothing flume
     /// decides reads them back (139).
     fn show(&self, place: &crate::PlaceRef, clues: &Clues) -> Shown;
+
+    /// Where the terminal shows the place's clues, the agent's by
+    /// `agent` where one is live, as it last recorded them, asking
+    /// nothing of the terminal's program; none of each where it shows
+    /// none (139).
+    fn shown_at(&self, place: &crate::PlaceRef, agent: Option<&crate::Identity>) -> ShownAt;
 
     /// The watch the terminal keeps, if any (122).
     fn watch(&self) -> Watch;

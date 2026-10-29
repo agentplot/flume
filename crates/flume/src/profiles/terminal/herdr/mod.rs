@@ -36,9 +36,15 @@
 //! flume did not open is in it, keeping and naming either where a pane
 //! flume did not open stands (137, 138). show titles the agent's pane
 //! with its stage and state and gives the base's workspace its count as
-//! the token `flume` (139). There is no watch (122); and the session a
-//! command runs in is `herdr:<pane>@<socket>`, its pane on its server
-//! (7).
+//! the token `flume` (139), and says where it shows them, the place's
+//! tab, its agent's pane and its base's workspace each as
+//! `herdr:<id>@<socket>` from its records, for flume's herdr plugin to
+//! refresh them (C.5). The watch is flume's herdr plugin's: while a
+//! watch of it has renewed its lease within the lease's term, a minute,
+//! the profile answers its bound, thirty seconds, and no watch
+//! otherwise, reading the lease and starting nothing (119, 122; design
+//! 10). The session a command runs in is `herdr:<pane>@<socket>`, its
+//! pane on its server (7).
 //!
 //! A recipient's session is reached by its name (43, 132; records 0016,
 //! 0018): `herdr:<pane>@<socket>` by that pane on that server, its id
@@ -58,8 +64,8 @@
 //! the recorded server's socket passed (98, core.29).
 
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, Terminal,
-    TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, ShownAt,
+    Terminal, TerminalTidy, ToSession, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -78,6 +84,14 @@ pub const NAME: &str = "herdr";
 
 /// The bound on a herdr call that states none (98).
 pub const BOUND: Duration = Duration::from_secs(10);
+
+/// The bound flume's herdr plugin settles every place on while its watch
+/// runs (122).
+pub const WATCH_BOUND: flume_seams::Seconds = 30;
+
+/// How long a lease of the plugin's watch is fresh after it was last
+/// renewed; the watch renews it four times as often.
+pub const LEASE_TERM: Duration = Duration::from_secs(60);
 
 /// How long agent start waits for the program to be ready: room for
 /// SessionStart hooks slow under load (record 0018).
@@ -181,6 +195,7 @@ pub struct Herdr {
     start_timeout: Duration,
     caller: Option<Pane>,
     login: Arc<OnceLock<BTreeMap<String, String>>>,
+    plugin: Option<PathBuf>,
 }
 
 /// A pane as open recorded it for an agent: its id, its server, the
@@ -212,11 +227,13 @@ impl Herdr {
     /// and the pane the calling command runs in, as herdr's environment
     /// names it.
     pub fn of_host() -> Result<Herdr, String> {
+        let state = crate::host::config::flume_state()?;
         Ok(Herdr::new(
             Server::Session(SESSION.into()),
-            crate::host::config::flume_state()?.join("terminal/herdr"),
+            state.join("terminal/herdr"),
         )
-        .with_caller(caller()))
+        .with_caller(caller())
+        .with_plugin(plugin_state(&state)))
     }
 
     /// herdr opening on `server`, recording what it makes under
@@ -230,7 +247,38 @@ impl Herdr {
             start_timeout: START_TIMEOUT,
             caller: None,
             login: Arc::default(),
+            plugin: None,
         }
+    }
+
+    /// The state directory of flume's herdr plugin, whose watch's lease
+    /// says the terminal keeps watch; none, no watch.
+    pub fn with_plugin(mut self, plugin: Option<PathBuf>) -> Herdr {
+        self.plugin = plugin;
+        self
+    }
+
+    /// Whether a watch of flume's herdr plugin, on any herdr server, has
+    /// renewed its lease within the lease's term: the lease's first line
+    /// is the watch's pid and when it last renewed, in seconds since the
+    /// epoch (design 10).
+    pub fn watch_kept(&self) -> bool {
+        let Some(plugin) = &self.plugin else {
+            return false;
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs());
+        fs::read_dir(plugin.join("servers"))
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .filter_map(|server| fs::read_to_string(server.path().join("watch.lease")).ok())
+            .filter_map(|lease| {
+                let first = lease.lines().next()?.to_string();
+                first.split_whitespace().nth(1)?.parse::<u64>().ok()
+            })
+            .any(|renewed| renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs())
     }
 
     /// Exactly `variables` for the host user's login environment, in
@@ -1099,6 +1147,18 @@ pub fn caller() -> Option<Pane> {
     })
 }
 
+/// The state directory herdr gives flume's herdr plugin, beside flume's
+/// own state directory `flume_state`: `$XDG_STATE_HOME/herdr/plugins/
+/// agentplot.flume` where flume's is `$XDG_STATE_HOME/flume` (design 10).
+pub fn plugin_state(flume_state: &Path) -> Option<PathBuf> {
+    flume_state
+        .parent()
+        .map(|state| state.join("herdr/plugins").join(PLUGIN))
+}
+
+/// flume's herdr plugin's id (`plugins/herdr/herdr-plugin.toml`).
+pub const PLUGIN: &str = "agentplot.flume";
+
 /// The agent's herdr name, made from the identity: at most 32 of the
 /// characters herdr's rule `[a-z][a-z0-9_-]{0,31}` allows, ending in a
 /// digest of the whole identity, so it is unique on the server (C.5;
@@ -1650,8 +1710,27 @@ impl Terminal for Herdr {
         }
     }
 
+    fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
+        let named = |id: &str, socket: &Path| format!("herdr:{id}@{}", socket.display());
+        ShownAt {
+            place: self.tab(place).map(|(tab, socket)| named(&tab, &socket)),
+            agent: agent
+                .and_then(|agent| self.pane(agent))
+                .map(|pane| pane.session()),
+            base: self
+                .workspace(place)
+                .map(|(workspace, socket)| named(&workspace, &socket)),
+        }
+    }
+
     fn watch(&self) -> Watch {
-        Watch::None
+        if self.watch_kept() {
+            Watch::Bound {
+                seconds: WATCH_BOUND,
+            }
+        } else {
+            Watch::None
+        }
     }
 
     fn session(&self) -> Option<String> {

@@ -14,8 +14,8 @@
 
 use crate::shell;
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, Terminal,
-    TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, ShownAt,
+    Terminal, TerminalTidy, ToSession, Watch,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -135,6 +135,11 @@ impl Terminal for Printed {
     /// Nothing beside a person's own terminal shows a clue (139).
     fn show(&self, _place: &PlaceRef, _clues: &Clues) -> Shown {
         Shown::ShowsNone
+    }
+
+    /// Nothing shows a clue, so nothing is shown anywhere (139).
+    fn shown_at(&self, _place: &PlaceRef, _agent: Option<&Identity>) -> ShownAt {
+        ShownAt::default()
     }
 
     fn watch(&self) -> Watch {

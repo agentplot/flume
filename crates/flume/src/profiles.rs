@@ -301,7 +301,8 @@ pub fn terminal(
                 terminal::herdr::Server::Session(terminal::herdr::SESSION.into()),
                 state.join("terminal/herdr"),
             )
-            .with_caller(terminal::herdr::caller());
+            .with_caller(terminal::herdr::caller())
+            .with_plugin(terminal::herdr::plugin_state(state));
             if let Some(login) = login {
                 herdr = herdr.with_login(login);
             }

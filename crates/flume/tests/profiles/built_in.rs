@@ -276,3 +276,51 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
         }
     );
 }
+
+/// The herdr terminal over a scratch state directory, with flume's herdr
+/// plugin's watch on one server having renewed its lease `renewed` seconds
+/// ago, or with no lease where none is given.
+fn herdr_watch(name: &str, renewed: Option<u64>) -> Watch {
+    let scratch = Scratch::new(name);
+    let state = scratch.path("state/flume");
+    std::fs::create_dir_all(&state).expect("flume's state");
+    if let Some(ago) = renewed {
+        let server = scratch.path("state/herdr/plugins/agentplot.flume/servers/1234");
+        std::fs::create_dir_all(&server).expect("the plugin's server state");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the clock")
+            .as_secs();
+        std::fs::write(
+            server.join("watch.lease"),
+            format!("4242 {}\n/plugin\n0.0.0\n77\n", now - ago),
+        )
+        .expect("the lease");
+    }
+    terminal(Some("herdr"), &state, None)
+        .expect("the herdr terminal")
+        .watch()
+}
+
+#[test]
+fn the_herdr_terminal_keeps_watch_while_the_plugins_lease_is_fresh() {
+    // 122, C.5, design 10: the plugin's watch renewed its lease a moment
+    // ago, so the terminal answers its bound, starting nothing.
+    assert_eq!(
+        herdr_watch("watch-fresh", Some(5)),
+        Watch::Bound { seconds: 30 }
+    );
+}
+
+#[test]
+fn the_herdr_terminal_keeps_no_watch_on_a_stale_lease() {
+    // 119, 122, C.5: a lease last renewed two minutes ago is a watch
+    // that stopped, so flume runs attended.
+    assert_eq!(herdr_watch("watch-stale", Some(120)), Watch::None);
+}
+
+#[test]
+fn the_herdr_terminal_keeps_no_watch_without_the_plugin() {
+    // 119, 122, C.5: no lease, the plugin not installed or never started.
+    assert_eq!(herdr_watch("watch-none", None), Watch::None);
+}

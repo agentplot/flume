@@ -1057,6 +1057,12 @@ fn the_terminal_seams_answers() {
         .to_string(),
         "3 running · 1 asking · 1 waiting on caller · 0 stalled"
     );
+    round_trips(ShownAt {
+        place: Some("tab w1:t2".into()),
+        agent: Some("pane w1:p3".into()),
+        base: Some("workspace w1".into()),
+    });
+    round_trips(ShownAt::default());
     round_trips(Shown::Shown);
     round_trips(Shown::ShowsNone);
     round_trips(Shown::Failed {

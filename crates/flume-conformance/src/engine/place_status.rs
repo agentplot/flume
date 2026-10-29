@@ -44,7 +44,56 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "130", "43"],
             run: a_stalled_place_with_a_pending_end,
         },
+        Scenario {
+            name: "status: a live place's clues and its base's count are the ones show was given, with where the terminal shows them",
+            cites: &["139", "56", "60"],
+            run: clues_in_status,
+        },
     ]
+}
+
+fn clues_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    let one = world.begun("build", Some(Deliverable::TasksTicked), "one")?;
+    let two = World::id("build", "two");
+    launched(&world.engine.launch(&launch("build", "two", Some("x"))))?;
+    world.settle(&two);
+    let asking = World::identity("build", "two", "work", 1);
+    world.terminal.set_state(&asking, AgentState::Working);
+    world.settle(&one);
+    world.settle(&two);
+    let shown = world.terminal.shown();
+    let (_, last) = shown.last().ok_or("nothing shown")?;
+    let Answer::Status { places, host } = world.engine().status(None) else {
+        return Err("status refused".into());
+    };
+    let base = host.bases.first().ok_or("no base")?;
+    ensure_eq!(host.bases.len(), 1, "the bases");
+    ensure_eq!(base.base.as_str(), "main", "the base");
+    ensure_eq!(base.count, last.base, "the count show was given");
+    ensure_eq!(base.line, last.base.to_string(), "the count's line");
+    ensure!(base.shown_at.is_some(), "the base's workspace unnamed");
+    let two = places
+        .iter()
+        .find(|place| place.place == two)
+        .ok_or("no place two")?;
+    let clues = two.clues.as_ref().ok_or("no clues")?;
+    ensure_eq!(
+        (clues.title.as_str(), clues.display_agent.as_str()),
+        ("work · working", "build--two"),
+        "the title and the agent's name"
+    );
+    ensure_eq!(
+        format!("{} · {}", last.stage, last.state),
+        clues.title,
+        "the title show was given"
+    );
+    ensure!(
+        clues.shown_at.agent.is_some() && clues.shown_at.place.is_some(),
+        "the place's tab or its agent's pane unnamed: {:?}",
+        clues.shown_at
+    );
+    Ok(())
 }
 
 fn waiting_on_an_answer(_: &()) -> Outcome {

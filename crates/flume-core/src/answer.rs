@@ -190,6 +190,10 @@ pub struct PlaceStatus {
     /// place (132).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    /// The clues show gives the place while it is live, with where the
+    /// terminal shows them (139).
+    #[serde(default)]
+    pub clues: Option<PlaceClues>,
 }
 
 /// An end of a place as status gives it: what ended and what was read of
@@ -215,7 +219,7 @@ pub struct Collected {
 /// The host's agents running, its bound, the room left and the stages
 /// waiting for room in the order they would start (56, 70); a host that
 /// states no bound has no room to judge and no queue.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostStatus {
     pub running: u32,
     pub bound: Option<u32>,
@@ -230,6 +234,58 @@ pub struct HostStatus {
     /// was not woken (132; core.28).
     #[serde(default)]
     pub addresses: Vec<AddressStatus>,
+    /// The watch the terminal keeps, with its bound, or none (122).
+    #[serde(default = "no_watch")]
+    pub watch: Watch,
+    /// Each repository's base a live place stands on, with the count of
+    /// its places show gives and where the terminal shows it (139).
+    #[serde(default)]
+    pub bases: Vec<BaseClues>,
+}
+
+fn no_watch() -> Watch {
+    Watch::None
+}
+
+impl Default for HostStatus {
+    fn default() -> HostStatus {
+        HostStatus {
+            running: 0,
+            bound: None,
+            room: None,
+            queue: vec![],
+            terminal_kept: vec![],
+            addresses: vec![],
+            watch: Watch::None,
+            bases: vec![],
+        }
+    }
+}
+
+/// A repository's base as show counts it (139): the count of its live
+/// places running, asking, waiting on their caller and stalled, that
+/// count in its one line, and where the terminal shows it, in the
+/// terminal's words.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BaseClues {
+    pub repository: String,
+    pub base: String,
+    pub count: BaseCount,
+    pub line: String,
+    pub shown_at: Option<String>,
+}
+
+/// A live place's clues as show gives them (139): its current stage and
+/// that stage's state, the title `<stage> · <state>` its agent is shown
+/// under, the name `<kind>--<name>` the agent is shown as, and where the
+/// terminal shows them, in the terminal's words.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceClues {
+    pub stage: String,
+    pub state: String,
+    pub title: String,
+    pub display_agent: String,
+    pub shown_at: ShownAt,
 }
 
 /// A role's address with ends pending for it (132): the run the host's

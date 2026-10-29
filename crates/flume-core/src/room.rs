@@ -171,6 +171,8 @@ impl Engine {
                 .collect(),
             terminal_kept: self.terminal.kept(),
             addresses: self.addresses(),
+            watch: self.terminal.watch(),
+            bases: self.bases(),
         }
     }
 

@@ -9,7 +9,6 @@
 //! (43, 132, core.25).
 
 use crate::held::read_stall;
-use crate::start::Starts;
 use crate::{Answer, Engine, Step, Tidied};
 use flume_seams::*;
 
@@ -95,49 +94,11 @@ impl Engine {
             return;
         };
         let held = read.state;
-        if held.phase != Phase::Live {
-            return;
-        }
-        let Some(index) = held.current else {
+        let Some(mut clues) = self.clues(&held, None) else {
             return;
         };
-        let stage = &held.stages[index];
-        let agent = stage.start.as_ref().filter(|start| start.live);
-        let state = match agent {
-            Some(_) if stage.state == StageState::Starting => "starting".to_string(),
-            Some(start) => word(&self.read_agent(id, start).state),
-            None => word(&stage.state),
-        };
+        clues.base = self.base_count(&held.place);
         let place = &held.place;
-        let mut base = BaseCount::default();
-        for other in self.store.read_every() {
-            let other = other.state;
-            if other.phase != Phase::Live
-                || other.place.repository != place.repository
-                || other.place.base != place.base
-            {
-                continue;
-            }
-            if let Some(waiting) = &other.waiting {
-                if waiting.stalled {
-                    base.stalled += 1;
-                } else {
-                    base.waiting_on_caller += 1;
-                }
-            } else if let Some((_, start)) = other.live_start() {
-                if self.read_agent(&other.place.id, start).state == AgentState::Asking {
-                    base.asking += 1;
-                } else {
-                    base.running += 1;
-                }
-            }
-        }
-        let clues = Clues {
-            stage: stage.name.clone(),
-            state,
-            agent: agent.map(|start| start.identity.clone()),
-            base,
-        };
         let key = format!("{} · {}; {}", clues.stage, clues.state, clues.base);
         if held.shown.as_ref() == Some(&key) {
             return;
@@ -232,12 +193,4 @@ impl Engine {
             .remove_branch(&place.repository, &place.branch, &place.base);
         self.remove_held(&place.id)
     }
-}
-
-/// A state as its JSON spells it, in words.
-fn word(state: &impl serde::Serialize) -> String {
-    serde_json::to_value(state)
-        .ok()
-        .and_then(|value| value.as_str().map(|word| word.replace('_', " ")))
-        .unwrap_or_else(|| "unknown".into())
 }

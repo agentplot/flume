@@ -110,6 +110,7 @@ impl Engine {
                 notes,
             }
         });
+        let agent_state = agent.as_ref().map(|agent| agent.state);
         let submission = match (&bound, place.kind.lands) {
             (Some(bound), true) if read_facts => bound.merge_queue.as_ref().map(|queue| {
                 let read = crate::submit::own_read(
@@ -187,6 +188,7 @@ impl Engine {
                 })
                 .collect(),
             role: held.role.clone(),
+            clues: self.place_clues(held, agent_state),
         }
     }
 }

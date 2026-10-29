@@ -1,7 +1,7 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
     AgentCommand, AgentState, Closed, Clues, Host, Identity, Opened, PlaceRef, Seconds, Sent,
-    Shown, Terminal, TerminalTidy, ToSession, Watch,
+    Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -579,6 +579,27 @@ impl Terminal for FakeTerminal {
         }
         state.shown.push((place.location.clone(), clues.clone()));
         Shown::Shown
+    }
+
+    /// The tab made for the place, the agent while it runs, and the
+    /// workspace of its repository and base while it stands, each by the
+    /// name the fake gives it; nothing logged, since it asks nothing.
+    fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
+        let state = lock(&self.state);
+        let label = workspace(place);
+        ShownAt {
+            place: state
+                .tabs
+                .get(&place.location)
+                .map(|(tab, _)| format!("tab {tab}")),
+            agent: agent
+                .filter(|agent| state.agents.contains_key(&agent.to_string()))
+                .map(|agent| format!("pane {agent}")),
+            base: state
+                .workspaces
+                .contains(&label)
+                .then(|| format!("workspace {label}")),
+        }
     }
 
     fn watch(&self) -> Watch {
