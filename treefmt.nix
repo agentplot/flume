@@ -43,6 +43,11 @@ in
     # The site's components: Biome formats only an .astro file's
     # frontmatter, and only experimentally.
     "site/**/*.astro"
+    # Claude Code's transcripts and screens, kept as the pinned release
+    # wrote them for the agent profile's and the plugin's tests; a
+    # formatter would rewrite what the readings are checked against.
+    "crates/flume/tests/profiles/fixtures/**"
+    "plugins/claude/tests/fixtures/**"
     # Build outputs and caches.
     "target/**"
     ".devenv/**"

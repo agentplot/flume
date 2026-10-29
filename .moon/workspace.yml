@@ -27,6 +27,7 @@ projects:
   fakes: 'crates/flume-fakes'
   conformance: 'crates/flume-conformance'
   flume: 'crates/flume'
+  plugin-claude: 'plugins/claude'
   site: 'site'
   root: '.'
 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "flume": {
+      "command": "flume",
+      "args": ["mcp"]
+    }
+  }
+}
