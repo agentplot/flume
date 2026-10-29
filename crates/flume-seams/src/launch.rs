@@ -1,13 +1,13 @@
 //! A caller's launch (2, 7, 8).
 
-use crate::Settings;
+use crate::{Seconds, Settings};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// One ask to start a piece of work: a repository, a kind, a name, a
 /// base, and the caller's brief, settings, stages on hold with their
-/// words, submission's hold, mark, priority and recipients (2, 7, 8, 70,
-/// 130).
+/// words, submission's hold, mark, priority, recipients and stall
+/// bound (2, 7, 8, 70, 130).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Launch {
     pub repository: String,
@@ -38,4 +38,8 @@ pub struct Launch {
     /// The recipients of the place's ends (7, 43).
     #[serde(default)]
     pub recipients: Vec<String>,
+    /// How long the place may wait on its caller under no hold's words
+    /// before it is stalled; five minutes where none is given (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stall_after: Option<Seconds>,
 }

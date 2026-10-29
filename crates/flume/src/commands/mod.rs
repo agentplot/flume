@@ -11,7 +11,7 @@ mod print;
 
 use clap::{Args, Parser, Subcommand};
 use flume_core::{Answer, Engine, Retry, WaitFor};
-use flume_seams::{AgentState, Launch, PlaceId, Reading, Seconds, StopKind};
+use flume_seams::{AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -89,6 +89,23 @@ enum Command {
         words: Option<String>,
         #[arg(long)]
         force: bool,
+    },
+    /// Put the place's next stage, or its submission, on hold with words
+    /// saying what for; only a retry naming it ends the hold (47, 130).
+    Hold {
+        place: String,
+        /// The stage held: one not started since the current stage began.
+        #[arg(
+            long,
+            conflicts_with = "submission",
+            required_unless_present = "submission"
+        )]
+        stage: Option<String>,
+        /// Hold the place's submission, not yet made.
+        #[arg(long)]
+        submission: bool,
+        /// What the hold waits for, the caller's to make good.
+        words: String,
     },
     /// Remove what is over (63 to 68).
     Tidy { place: Option<String> },
@@ -229,6 +246,11 @@ struct LaunchArgs {
     mark: Option<String>,
     #[arg(long, allow_negative_numbers = true)]
     priority: Option<i64>,
+    /// How long the place may wait on its caller under no hold's words
+    /// before it is stalled, as `<n>`, `<n>s`, `<n>m` or `<n>h`; five
+    /// minutes where none is given (130).
+    #[arg(long, value_name = "TIME")]
+    stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
     /// field one of program, model, instructions, env.<NAME> and beside.
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
@@ -396,6 +418,21 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             };
             build()?.retry(&place, target, words.clone(), *force)
         }
+        Command::Hold {
+            place,
+            stage,
+            submission: _,
+            words,
+        } => {
+            let place = named(place)?;
+            let on = match stage {
+                Some(stage) => HoldOn::Stage {
+                    stage: stage.clone(),
+                },
+                None => HoldOn::Submission,
+            };
+            build()?.hold(&place, on, words)
+        }
         Command::Tidy { place } => {
             let place = maybe(place)?;
             build()?.tidy(place.as_ref())
@@ -533,6 +570,7 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         hold_words,
         priority: args.priority.unwrap_or(0),
         recipients: args.recipient.clone(),
+        stall_after: args.stall_after.as_deref().map(seconds).transpose()?,
     })
 }
 

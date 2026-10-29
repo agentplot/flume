@@ -100,7 +100,7 @@ impl Engine {
     /// live (47, 111).
     fn due(&self, held: &HeldState) -> bool {
         let ours = &held.submission;
-        if ours.due && !held.place.hold_submission && held.live_start().is_none() {
+        if ours.due && held.submission_hold().is_none() && held.live_start().is_none() {
             return self.submit(&held.place.id, false);
         }
         false

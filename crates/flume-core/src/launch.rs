@@ -261,6 +261,9 @@ impl Engine {
             shown: None,
             ends: vec![],
             role: None,
+            holds: launch_holds(launch, self.host.now()),
+            waiting: None,
+            stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
         };
         for stage in &kind.stages {
             let resolved = self.resolve(&held.place, stage);
@@ -285,7 +288,7 @@ impl Engine {
         let readiness = place_seam.ready(&place_ref, &base_revision);
         let failed = readiness.failed().is_some();
         let first = &kind.stages[0];
-        let holds = launch.hold.contains(&first.name) || first.waits;
+        let holds = held.hold_on(&first.name).is_some() || first.waits;
         self.update(&id, |held| {
             held.readiness = readiness.clone();
             if failed && !kind.starts_unready {
@@ -307,4 +310,28 @@ impl Engine {
             .map(|read| read.state)
             .ok_or_else(|| format!("the place {id} was removed while it was launched"))
     }
+}
+
+/// The holds a launch puts, each stage's with its words, and the
+/// submission's, since the launch (7, 47, 130).
+fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
+    let mut holds: Vec<Hold> = launch
+        .hold
+        .iter()
+        .map(|stage| Hold {
+            on: HoldOn::Stage {
+                stage: stage.clone(),
+            },
+            words: launch.hold_words.get(stage).cloned(),
+            since: now,
+        })
+        .collect();
+    if launch.hold_submission {
+        holds.push(Hold {
+            on: HoldOn::Submission,
+            words: None,
+            since: now,
+        });
+    }
+    holds
 }

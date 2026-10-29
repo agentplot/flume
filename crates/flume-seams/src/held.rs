@@ -40,6 +40,29 @@ pub struct HeldState {
     /// for any other place.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    /// Each hold on a stage or the submission, the launch's and those put
+    /// after it, with its words and since when; a retry naming its stage
+    /// or the submission ends it, and nothing else does (47, 49, 130).
+    #[serde(default)]
+    pub holds: Vec<Hold>,
+    /// The move the place waits on its caller for, since when, and
+    /// whether a settle read it stalled; none where it waits on nobody
+    /// (56, 130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<Waiting>,
+    /// How long the place waits on its caller under no hold's words
+    /// before it is stalled: the launch's bound, five minutes where it
+    /// sets none (130).
+    #[serde(default = "stall_after")]
+    pub stall_after: Seconds,
+}
+
+/// How long a place waits on its caller under no hold's words before it
+/// is stalled, where its launch sets no bound (130).
+pub const STALL_AFTER: Seconds = 5 * 60;
+
+fn stall_after() -> Seconds {
+    STALL_AFTER
 }
 
 impl HeldState {
@@ -56,6 +79,122 @@ impl HeldState {
         }
         pending
     }
+
+    /// The hold on the stage `name`, if it is held (47).
+    pub fn hold_on(&self, name: &str) -> Option<&Hold> {
+        self.holds
+            .iter()
+            .find(|hold| matches!(&hold.on, HoldOn::Stage { stage } if stage == name))
+    }
+
+    /// The hold on the submission, if it is held (47).
+    pub fn submission_hold(&self) -> Option<&Hold> {
+        self.holds.iter().find(|hold| hold.on == HoldOn::Submission)
+    }
+}
+
+/// A hold on a stage or the submission, with its caller's words and
+/// since when (47, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hold {
+    #[serde(flatten)]
+    pub on: HoldOn,
+    /// What the hold waits for, in its caller's words; the caller's to
+    /// make good, since flume watches no event for it (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words: Option<String>,
+    pub since: Seconds,
+}
+
+/// What a hold holds: a stage, or the submission (47).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "on", rename_all = "snake_case")]
+pub enum HoldOn {
+    Stage { stage: String },
+    Submission,
+}
+
+/// The move a place waits on its caller for, as the settle last read it,
+/// and whether it read the place stalled on it (56, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Waiting {
+    #[serde(flatten)]
+    pub on: WaitingOn,
+    #[serde(default)]
+    pub stalled: bool,
+}
+
+/// The move a place waits on its caller for, why, since when, and the
+/// words that go with it: a hold's, the question, or the merge queue's
+/// (56, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitingOn {
+    /// A retry, or done.
+    pub act: Act,
+    /// The stage the retry names; none where it names the submission.
+    pub stage: Option<String>,
+    pub why: Waits,
+    pub since: Option<Seconds>,
+    pub words: Option<String>,
+}
+
+impl WaitingOn {
+    /// Whether it is the same move as `other`, whatever its words.
+    pub fn same_move(&self, other: &WaitingOn) -> bool {
+        self.act == other.act && self.stage == other.stage && self.why == other.why
+    }
+
+    /// The move, in the words a stall's notice gives it (130).
+    pub fn move_words(&self) -> String {
+        match (self.act, &self.stage) {
+            (Act::Done, _) => "done".into(),
+            (_, Some(stage)) => format!("a retry of {stage}"),
+            (_, None) => "a retry of the submission".into(),
+        }
+    }
+}
+
+/// A caller's act on a place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Act {
+    Retry,
+    Stop,
+    Drop,
+    Done,
+    Finish,
+    Tell,
+    Needs,
+    Priority,
+    Hold,
+}
+
+/// Why a place waits on its caller (56, 130).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Waits {
+    /// A stage, or the submission, on hold (47).
+    OnHold,
+    /// A stage ended short needing an answer, or having found work
+    /// outside the kind's last stage (42, 131).
+    Answer,
+    /// A stage whose agent was lost (45).
+    Lost,
+    /// A stage whose prompt was never begun (38).
+    NeverBegun,
+    /// A first stage waiting on the place's readiness (12).
+    Unready,
+    /// A stage whose prompt asks for a part with nothing to fill it
+    /// (27).
+    Refused,
+    /// A stage whose agent the caller stopped (51).
+    Stopped,
+    /// The place went back as often as its kind allows (23, 112).
+    PastBound,
+    /// The merge queue withdrew or refused the submission (112).
+    Submission,
+    /// The last stage delivered, and the kind does not land (114).
+    Delivered,
 }
 
 /// An end of a place, recorded once by its key when a settle or an act

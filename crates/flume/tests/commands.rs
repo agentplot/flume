@@ -519,6 +519,101 @@ fn holds_and_recipients_at_the_launch() {
     assert!(two.hold_words.is_empty());
 }
 
+#[test]
+fn a_hold_after_the_launch_and_a_stall_bound() {
+    // 7, 47, 130: `flume hold` with its words, refused naming why; a
+    // launch's stall bound kept on the place.
+    let host = Host::new("hold");
+    let repository = repository("hold", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--stall-after",
+            "30m",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = format!("{}/places/change--one", repository.name());
+    assert_eq!(held_of(&host, &place).state.stall_after, 30 * 60);
+    let held = answered(
+        &host.flume(
+            &repository.dir,
+            &[
+                "hold",
+                "change--one",
+                "--stage",
+                "code",
+                "waiting on the schema card",
+                "--json",
+            ],
+            &[],
+        ),
+        0,
+    );
+    let hold = &held["acted"]["status"]["holds"][0];
+    assert_eq!(held["acted"]["act"], "hold", "{held}");
+    assert_eq!(hold["on"], "stage", "{held}");
+    assert_eq!(hold["stage"], "code", "{held}");
+    assert_eq!(hold["words"], "waiting on the schema card", "{held}");
+    let running = answered(
+        &host.flume(
+            &repository.dir,
+            &["hold", "change--one", "--stage", "construct", "x", "--json"],
+            &[],
+        ),
+        1,
+    );
+    let reason = running["refused"]["refusal"]["reason"].to_string();
+    assert!(reason.contains("construct"), "{reason}");
+    let submission = answered(
+        &host.flume(
+            &repository.dir,
+            &["hold", "change--one", "--submission", "x", "--json"],
+            &[],
+        ),
+        1,
+    );
+    let reason = submission["refused"]["refusal"]["reason"].to_string();
+    assert!(reason.contains("does not land"), "{reason}");
+    let neither = host.flume(&repository.dir, &["hold", "change--one", "x"], &[]);
+    assert_eq!(neither.code, 2, "{}", neither.text);
+    let person = host.flume(&repository.dir, &["status", "change--one"], &[]);
+    assert!(
+        person.text.contains("code on hold since ")
+            && person.text.contains(": waiting on the schema card"),
+        "{}",
+        person.text
+    );
+    let no_time = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "two",
+            "--kinds",
+            &kinds,
+            "--stall-after",
+            "soon",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(no_time.code, 1, "{}", no_time.text);
+    assert!(no_time.text.contains("soon is no time"), "{}", no_time.text);
+}
+
 /// The current agent's stage, settings and their layers, as flume's
 /// binary gives them.
 fn current_agent(host: &Host, dir: &Path, place: &str) -> Value {

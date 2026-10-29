@@ -209,7 +209,36 @@ fn held() -> HeldState {
         shown: Some("code · working; 1 running".into()),
         ends: ends(),
         role: Some("madswan/planner".into()),
+        holds: holds_put(),
+        waiting: Some(Waiting {
+            on: WaitingOn {
+                act: Act::Retry,
+                stage: Some("review".into()),
+                why: Waits::OnHold,
+                since: Some(140),
+                words: Some("until the design is ruled".into()),
+            },
+            stalled: true,
+        }),
+        stall_after: 30 * 60,
     }
+}
+
+fn holds_put() -> Vec<Hold> {
+    vec![
+        Hold {
+            on: HoldOn::Stage {
+                stage: "review".into(),
+            },
+            words: Some("until the design is ruled".into()),
+            since: 10,
+        },
+        Hold {
+            on: HoldOn::Submission,
+            words: None,
+            since: 10,
+        },
+    ]
 }
 
 fn ends() -> Vec<EndHeld> {
@@ -299,7 +328,100 @@ fn a_launch() {
         hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
         priority: 5,
         recipients: vec!["operator".into()],
+        stall_after: Some(30 * 60),
     });
+}
+
+#[test]
+fn holds_the_waiting_move_and_the_stall_bound() {
+    let held = held();
+    for hold in held.holds.clone() {
+        round_trips(hold.on.clone());
+        round_trips(hold);
+    }
+    round_trips(held.waiting.clone().unwrap());
+    for act in [
+        Act::Retry,
+        Act::Stop,
+        Act::Drop,
+        Act::Done,
+        Act::Finish,
+        Act::Tell,
+        Act::Needs,
+        Act::Priority,
+        Act::Hold,
+    ] {
+        round_trips(act);
+    }
+    for why in [
+        Waits::OnHold,
+        Waits::Answer,
+        Waits::Lost,
+        Waits::NeverBegun,
+        Waits::Unready,
+        Waits::Refused,
+        Waits::Stopped,
+        Waits::PastBound,
+        Waits::Submission,
+        Waits::Delivered,
+    ] {
+        round_trips(why);
+    }
+    let value = serde_json::to_value(&held.holds).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!([
+            {"on": "stage", "stage": "review", "words": "until the design is ruled", "since": 10},
+            {"on": "submission", "since": 10},
+        ])
+    );
+    assert_eq!(held.hold_on("review"), Some(&held.holds[0]));
+    assert_eq!(held.hold_on("code"), None);
+    assert_eq!(held.submission_hold(), Some(&held.holds[1]));
+    let mut value = serde_json::to_value(&held).unwrap();
+    for field in ["holds", "waiting", "stall_after"] {
+        value.as_object_mut().unwrap().remove(field);
+    }
+    let before: HeldState = serde_json::from_value(value).unwrap();
+    assert!(before.holds.is_empty() && before.waiting.is_none());
+    assert_eq!(
+        before.stall_after, STALL_AFTER,
+        "five minutes where none is set"
+    );
+    round_trips(HeldState {
+        waiting: None,
+        ..held
+    });
+    let mut launch = serde_json::to_value(Launch::default()).unwrap();
+    assert!(launch.get("stall_after").is_none(), "no bound written");
+    launch.as_object_mut().unwrap().remove("stall_after");
+    let launch: Launch = serde_json::from_value(launch).unwrap();
+    assert_eq!(launch.stall_after, None);
+}
+
+#[test]
+fn a_moves_words() {
+    let on = |act, stage: Option<&str>| WaitingOn {
+        act,
+        stage: stage.map(str::to_string),
+        why: Waits::Answer,
+        since: Some(1),
+        words: Some("which?".into()),
+    };
+    assert_eq!(
+        on(Act::Retry, Some("construct")).move_words(),
+        "a retry of construct"
+    );
+    assert_eq!(
+        on(Act::Retry, None).move_words(),
+        "a retry of the submission"
+    );
+    assert_eq!(on(Act::Done, None).move_words(), "done");
+    let mut other = on(Act::Retry, Some("construct"));
+    other.words = None;
+    other.since = Some(9);
+    assert!(other.same_move(&on(Act::Retry, Some("construct"))));
+    assert!(!other.same_move(&on(Act::Retry, Some("code"))));
 }
 
 #[test]

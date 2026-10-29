@@ -127,6 +127,9 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         },
         ends: vec![],
         role: None,
+        holds: vec![],
+        waiting: None,
+        stall_after: STALL_AFTER,
         phase: Phase::Live,
         readiness: Readiness::default(),
         stages: vec![StageHeld {

@@ -4,6 +4,7 @@
 pub mod agent_settings;
 pub mod answers;
 pub mod caller_acts;
+pub mod caller_waits;
 pub mod end_delivery;
 pub mod held_state;
 pub mod host_queue;
@@ -38,5 +39,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(host_queue::scenarios());
     every.extend(agent_settings::scenarios());
     every.extend(end_delivery::scenarios());
+    every.extend(caller_waits::scenarios());
     every
 }

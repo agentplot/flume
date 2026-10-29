@@ -125,7 +125,7 @@ impl Engine {
                     send_backs: held.submission.send_backs,
                     verdict: held.submission.verdict.clone(),
                     waiting: held.submission.waiting.clone(),
-                    held: place.hold_submission,
+                    held: held.submission_hold().is_some(),
                 }
             }),
             _ => None,
@@ -171,7 +171,9 @@ impl Engine {
             failures: held.failures.clone(),
             recipients: place.recipients.clone(),
             hold_words: place.hold_words.clone(),
-            waiting_on: waiting_on(held),
+            waiting_on: held.waiting.as_ref().map(|waiting| waiting.on.clone()),
+            stalled: held.waiting.as_ref().is_some_and(|waiting| waiting.stalled),
+            holds: held.holds.clone(),
             priority: held.priority,
             ends: held
                 .ends
@@ -186,8 +188,9 @@ impl Engine {
 }
 
 /// The move a live place waits on its caller for, why, since when and
-/// with what words; none where it waits on nobody, its next step being
-/// flume's or an agent's (56, 130).
+/// with what words, read from its held state alone; none where it waits
+/// on nobody, its next step being flume's or an agent's, or the host's
+/// room (56, 70, 130).
 pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
     if held.phase != Phase::Live {
         return None;
@@ -248,7 +251,8 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
                 Some(index),
                 Waits::OnHold,
                 stage.since,
-                place.hold_words.get(&stage.name).cloned(),
+                held.hold_on(&stage.name)
+                    .and_then(|hold| hold.words.clone()),
             ),
             _ => waits(
                 Act::Retry,
@@ -286,8 +290,14 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
         StageState::Delivered | StageState::Finished if index == last => {
             if !place.kind.lands {
                 waits(Act::Done, None, Waits::Delivered, stage.since, None)
-            } else if place.hold_submission && submission.due {
-                waits(Act::Retry, None, Waits::OnHold, stage.since, None)
+            } else if let Some(hold) = held.submission_hold().filter(|_| submission.due) {
+                waits(
+                    Act::Retry,
+                    None,
+                    Waits::OnHold,
+                    stage.since,
+                    hold.words.clone(),
+                )
             } else {
                 None
             }

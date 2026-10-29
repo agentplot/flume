@@ -4,10 +4,11 @@
 //! decided again, so two acts on one place leave it as one or the other
 //! would have (75).
 
+use crate::status::waiting_on;
 use crate::Engine;
 use flume_seams::{
     EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageEnd, StageState, Verdict,
-    Versioned, Written,
+    Versioned, Waiting, Waits, Written,
 };
 
 /// What an act decided of a place's held state.
@@ -81,6 +82,7 @@ impl Engine {
         } else if submission.waiting != was.submission.waiting {
             submission.waiting_since = Some(now);
         }
+        refresh_waiting(next, now);
         record_ends(next, now);
     }
 
@@ -176,5 +178,54 @@ fn record_ends(next: &mut HeldState, now: Seconds) {
                 deliveries: vec![],
             });
         }
+    }
+}
+
+/// Reads, from the held state alone, the move the place waits on its
+/// caller for: a move read for the first time is kept with since when
+/// it stood so, the same move keeps its since and whether it stalled,
+/// and none clears it (56, 130; design 5).
+pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
+    next.waiting = waiting_on(next).map(|mut on| match &next.waiting {
+        Some(was) if was.on.same_move(&on) => {
+            on.since = was.on.since;
+            Waiting {
+                on,
+                stalled: was.stalled,
+            }
+        }
+        _ => {
+            on.since = Some(on.since.unwrap_or(now));
+            Waiting { on, stalled: false }
+        }
+    });
+}
+
+/// Reads the place stalled where it has waited on its caller under no
+/// hold's words for its bound, recording the stall as an end once, to
+/// be delivered to each recipient (43, 130; core.24). A hold with words
+/// never stalls, and a stage waiting for room is no move of its
+/// caller's (70).
+pub(crate) fn read_stall(next: &mut HeldState, now: Seconds) {
+    refresh_waiting(next, now);
+    let Some(waiting) = &mut next.waiting else {
+        return;
+    };
+    let held = waiting.on.why == Waits::OnHold && waiting.on.words.is_some();
+    let since = waiting.on.since.unwrap_or(now);
+    if waiting.stalled || held || now.saturating_sub(since) < next.stall_after {
+        return;
+    }
+    waiting.stalled = true;
+    let of = EndOf::Stall {
+        since,
+        waiting: waiting.on.move_words(),
+    };
+    if !next.ends.iter().any(|end| end.same(&of)) {
+        next.ends.push(EndHeld {
+            of,
+            read_at: now,
+            deliveries: vec![],
+        });
     }
 }

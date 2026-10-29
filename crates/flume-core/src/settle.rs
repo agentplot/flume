@@ -7,17 +7,13 @@
 //! written, and the settle delivers each end pending for a recipient
 //! (43, core.25).
 
+use crate::held::read_stall;
 use crate::start::Starts;
-use crate::status::waiting_on;
 use crate::{Answer, Engine, Step, Tidied};
 use flume_seams::*;
 
 /// How many steps one settle of a place takes at most.
 const STEPS: usize = 64;
-
-/// How long a place waits on its caller under no hold's words before it
-/// is stalled (core.24).
-const STALLED_AFTER: Seconds = 5 * 60;
 
 impl Engine {
     /// Settles the place, or every place on the host.
@@ -67,10 +63,24 @@ impl Engine {
                 break;
             }
         }
+        self.stall(id);
         self.deliver_ends(id);
         self.show(id);
         self.start_waiting();
         tidied
+    }
+
+    /// Reads the move a live place waits on its caller for, and records
+    /// it stalled once its bound has passed under no hold's words (130).
+    fn stall(&self, id: &PlaceId) {
+        let now = self.host.now();
+        self.update(id, |held| {
+            if held.phase != Phase::Live {
+                return Step::Keep(());
+            }
+            read_stall(held, now);
+            Step::Write(())
+        });
     }
 
     /// Shows the place's clues where they changed since last shown: its
@@ -98,7 +108,6 @@ impl Engine {
         };
         let place = &held.place;
         let mut base = BaseCount::default();
-        let now = self.host.now();
         for other in self.store.read_every() {
             let other = other.state;
             if other.phase != Phase::Live
@@ -107,9 +116,8 @@ impl Engine {
             {
                 continue;
             }
-            if let Some(waiting) = waiting_on(&other) {
-                let since = waiting.since.unwrap_or(now);
-                if waiting.words.is_none() && now.saturating_sub(since) >= STALLED_AFTER {
+            if let Some(waiting) = &other.waiting {
+                if waiting.stalled {
                     base.stalled += 1;
                 } else {
                     base.waiting_on_caller += 1;
@@ -189,7 +197,7 @@ impl Engine {
                 return Step::Keep(None);
             }
             let declared = &held.place.kind.stages[next];
-            if held.place.hold.contains(&declared.name) || declared.waits {
+            if held.hold_on(&declared.name).is_some() || declared.waits {
                 held.stages[next].state = StageState::OnHold;
                 return Step::Write(None);
             }

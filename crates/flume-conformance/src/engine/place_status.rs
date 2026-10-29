@@ -39,6 +39,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "130", "45", "51", "114"],
             run: the_moves_waited_on,
         },
+        Scenario {
+            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another",
+            cites: &["56", "130", "43"],
+            run: a_stalled_place_with_a_pending_end,
+        },
     ]
 }
 
@@ -260,6 +265,50 @@ fn a_place_gone(_: &()) -> Outcome {
     ensure!(
         places(world.engine.status(None))?.is_empty(),
         "a gone place is answered for"
+    );
+    Ok(())
+}
+
+fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Working);
+    let (id, asked) =
+        super::caller_waits::construct_asks(&world, "plan", &["ops", "madswan/planner"], None)?;
+    world.host.advance(STALL_AFTER);
+    let stalled_at = world.host.now();
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (
+            waiting.act,
+            waiting.stage.as_deref(),
+            waiting.why,
+            waiting.since
+        ),
+        (Act::Retry, Some("construct"), Waits::Answer, Some(asked)),
+        "the move and since when"
+    );
+    ensure!(status.stalled, "status does not say stalled");
+    let stall = status
+        .ends
+        .iter()
+        .find(|end| matches!(end.end.of, EndOf::Stall { .. }))
+        .ok_or("no stall among the ends")?;
+    ensure_eq!(
+        stall
+            .end
+            .deliveries
+            .iter()
+            .map(|delivery| (delivery.recipient.as_str(), delivery.at))
+            .collect::<Vec<_>>(),
+        vec![("ops", stalled_at)],
+        "the stall's deliveries"
+    );
+    ensure_eq!(
+        stall.pending_for,
+        vec!["madswan/planner".to_string()],
+        "pending for"
     );
     Ok(())
 }

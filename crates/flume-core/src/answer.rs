@@ -3,6 +3,7 @@
 //! answer of the same form (2).
 
 use flume_seams::*;
+pub use flume_seams::{Act, WaitingOn, Waits};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -105,19 +106,6 @@ impl Answer {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Act {
-    Retry,
-    Stop,
-    Drop,
-    Done,
-    Finish,
-    Tell,
-    Needs,
-    Priority,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Refusal {
     pub reason: String,
@@ -165,6 +153,14 @@ pub struct PlaceStatus {
     /// The move the place waits on its caller for, and since when; none
     /// where it waits on nobody (56, 130).
     pub waiting_on: Option<WaitingOn>,
+    /// The place waited on its caller under no hold's words past its
+    /// bound, read so by a settle (130).
+    #[serde(default)]
+    pub stalled: bool,
+    /// Each hold on a stage or the submission, with its words and since
+    /// when (47, 130).
+    #[serde(default)]
+    pub holds: Vec<Hold>,
     /// The place's priority, its caller's (7, 70).
     #[serde(default)]
     pub priority: i64,
@@ -217,48 +213,6 @@ pub struct Queued {
     pub stage: String,
     pub priority: i64,
     pub since: Option<Seconds>,
-}
-
-/// The move a place waits on its caller for, why, since when, and the
-/// words that go with it: a hold's, the question, or the merge queue's
-/// (56, 130).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WaitingOn {
-    /// A retry, or done.
-    pub act: Act,
-    /// The stage the retry names; none where it names the submission.
-    pub stage: Option<String>,
-    pub why: Waits,
-    pub since: Option<Seconds>,
-    pub words: Option<String>,
-}
-
-/// Why a place waits on its caller (56, 130).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Waits {
-    /// A stage, or the submission, the launch holds (47).
-    OnHold,
-    /// A stage ended short needing an answer, or having found work
-    /// outside the kind's last stage (42, 131).
-    Answer,
-    /// A stage whose agent was lost (45).
-    Lost,
-    /// A stage whose prompt was never begun (38).
-    NeverBegun,
-    /// A first stage waiting on the place's readiness (12).
-    Unready,
-    /// A stage whose prompt asks for a part with nothing to fill it
-    /// (27).
-    Refused,
-    /// A stage whose agent the caller stopped (51).
-    Stopped,
-    /// The place went back as often as its kind allows (23, 112).
-    PastBound,
-    /// The merge queue withdrew or refused the submission (112).
-    Submission,
-    /// The last stage delivered, and the kind does not land (114).
-    Delivered,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -341,7 +295,7 @@ pub struct SubmissionStatus {
     pub verdict: Option<Verdict>,
     /// Why the place waits for its caller (112).
     pub waiting: Option<String>,
-    /// The launch holds the submission (47).
+    /// The submission is on hold (47).
     pub held: bool,
 }
 

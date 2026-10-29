@@ -4,6 +4,7 @@
 //! spells it.
 
 use flume_core::{Answer, HostStatus, PlaceStatus, Tidied};
+use flume_seams::HoldOn;
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -224,13 +225,27 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
                 .unwrap_or_default(),
             word(json!(waiting.why))
         );
+        if let Some(since) = waiting.since {
+            line.push_str(&format!(" since {since}"));
+        }
+        if place.stalled {
+            line.push_str(", stalled");
+        }
         if let Some(words) = &waiting.words {
             line.push_str(&format!(": {words}"));
         }
         lines.push(line);
     }
-    for (stage, words) in &place.hold_words {
-        lines.push(format!("  {stage} held: {words}"));
+    for hold in &place.holds {
+        let what = match &hold.on {
+            HoldOn::Stage { stage } => stage.as_str(),
+            HoldOn::Submission => "the submission",
+        };
+        let mut line = format!("  {what} on hold since {}", hold.since);
+        if let Some(words) = &hold.words {
+            line.push_str(&format!(": {words}"));
+        }
+        lines.push(line);
     }
     if !place.recipients.is_empty() {
         lines.push(format!("  recipients: {}", place.recipients.join(", ")));
