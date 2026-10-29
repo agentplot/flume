@@ -8,11 +8,18 @@ use flume_seams::*;
 /// The facts of a place read at one head.
 pub(crate) struct Facts {
     pub head: Revision,
-    /// Whether the stage's deliverable exists, made since it started.
+    /// Whether the stage's deliverable exists, made since it started,
+    /// and every thing it declares it makes has a line (129).
     pub delivered: bool,
+    /// Whether the deliverable alone exists, made since it started.
+    pub deliverable: bool,
     /// The report it delivered, for a report form.
     pub report: Option<String>,
     pub change: Option<ChangeRead>,
+    /// Each thing the stage declares it makes that no line its run wrote
+    /// since its start names: while one is, the stage is not delivered
+    /// (129, 44).
+    pub unmade: Vec<String>,
 }
 
 /// An agent's state as flume reads it.
@@ -94,15 +101,55 @@ impl Engine {
             };
             let again = head_now();
             if again == head {
+                let unmade = index
+                    .map(|index| self.unmade(held, index))
+                    .unwrap_or_default();
                 return Facts {
                     head,
-                    delivered,
+                    delivered: delivered && unmade.is_empty(),
+                    deliverable: delivered,
                     report,
                     change,
+                    unmade,
                 };
             }
             head = again;
         }
+    }
+
+    /// The path of `made.jsonl` in the place's own folder, which
+    /// `{{made}}` renders (129).
+    pub(crate) fn made_path(&self, place: &PlaceId) -> String {
+        format!("{}/{MADE}", self.store.folder(place))
+    }
+
+    /// The lines the start's run wrote to `made.jsonl` since it started,
+    /// each as written (129).
+    pub(crate) fn made_since(&self, place: &PlaceId, start: &StartHeld) -> Vec<Made> {
+        self.store
+            .made(place)
+            .iter()
+            .skip(start.made_from)
+            .map(|line| Made::read(line))
+            .collect()
+    }
+
+    /// Each name the stage at `index` declares it makes that no line of
+    /// its current start's names (129).
+    pub(crate) fn unmade(&self, held: &HeldState, index: usize) -> Vec<String> {
+        let makes = &held.place.kind.stages[index].makes;
+        let Some(start) = held.stages[index].start.as_ref() else {
+            return makes.clone();
+        };
+        if makes.is_empty() {
+            return vec![];
+        }
+        let made = self.made_since(&held.place.id, start);
+        makes
+            .iter()
+            .filter(|name| !made.iter().any(|line| line.name() == Some(name.as_str())))
+            .cloned()
+            .collect()
     }
 
     /// Whether the stage's deliverable exists at `head`, made since its
@@ -245,6 +292,7 @@ impl Engine {
             screen: never_begun
                 .then(|| self.terminal.screen(&start.identity))
                 .flatten(),
+            made: self.made_since(&place.id, start),
             ..StageEnd::default()
         }
     }

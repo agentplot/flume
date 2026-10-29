@@ -10,9 +10,12 @@
 //! are the settings the host gives a kind's agents in every repository and
 //! in one, each value kept as written (32, C.7; record 0017); a
 //! repository's key has a leading `~` read as the home, so it names the
-//! repository by its location as a launch does.
+//! repository by its location as a launch does. Its
+//! `[roles."<partition>/<role>"]` tables are the runs the host wakes for
+//! each role's address, with `repository`, `kind`, `priority`, `base` and
+//! `brief`, an address it names nothing for woken by nothing (132, C.7).
 
-use flume_seams::{KindSettings, Settings};
+use flume_seams::{is_address, KindSettings, RoleRun, Settings};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use toml::{Table, Value};
@@ -32,6 +35,8 @@ pub struct HostConfig {
     /// The settings given each kind's agents in one repository, by its
     /// location and the kind's name (32).
     pub repos: BTreeMap<String, BTreeMap<String, KindSettings>>,
+    /// The run woken for each role's address, by the address (132, C.7).
+    pub roles: BTreeMap<String, RoleRun>,
 }
 
 impl HostConfig {
@@ -70,10 +75,15 @@ impl HostConfig {
                 repos.insert(home(repository), kinds);
             }
         }
+        let roles = match table.get("roles") {
+            None => BTreeMap::new(),
+            Some(roles) => role_runs(roles)?,
+        };
         let Some(host) = table.get("host") else {
             return Ok(HostConfig {
                 kinds,
                 repos,
+                roles,
                 ..HostConfig::default()
             });
         };
@@ -103,6 +113,7 @@ impl HostConfig {
             terminal,
             kinds,
             repos,
+            roles,
         })
     }
 
@@ -172,6 +183,57 @@ fn kinds_settings(kinds: &Value, at: &str) -> Result<BTreeMap<String, KindSettin
         );
     }
     Ok(settings)
+}
+
+/// The `roles` table: each address's run, its repository and kind named,
+/// its priority zero, its base the repository's default branch and its
+/// brief none where the table gives none; a key that is no address, or a
+/// key the run does not know, refused naming it (132, C.7).
+fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
+    let roles = roles
+        .as_table()
+        .ok_or("[roles] is not a table of addresses".to_string())?;
+    let mut runs = BTreeMap::new();
+    for (address, table) in roles {
+        let at = format!("roles.{}", quoted(address));
+        if !is_address(address) {
+            return Err(format!(
+                "[{at}] names no role's address, which is <partition>/<role>"
+            ));
+        }
+        let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
+        if let Some(unknown) = table.keys().find(|key| {
+            !matches!(
+                key.as_str(),
+                "repository" | "kind" | "priority" | "base" | "brief"
+            )
+        }) {
+            return Err(format!("[{at}] {unknown} is no word of a role's run"));
+        }
+        let text = |name: &str| match table.get(name) {
+            None => Ok(None),
+            Some(Value::String(value)) => Ok(Some(value.clone())),
+            Some(_) => Err(format!("[{at}] {name} is not a string")),
+        };
+        let named = |name: &str| text(name)?.ok_or(format!("[{at}] names no {name}"));
+        let priority = match table.get("priority") {
+            None => 0,
+            Some(value) => value
+                .as_integer()
+                .ok_or(format!("[{at}] priority is not a whole number"))?,
+        };
+        runs.insert(
+            address.clone(),
+            RoleRun {
+                repository: home(&named("repository")?),
+                kind: named("kind")?,
+                priority,
+                base: text("base")?,
+                brief: text("brief")?,
+            },
+        );
+    }
+    Ok(runs)
 }
 
 /// One agents table's `program`, `model`, `instructions` and `env`, each
@@ -277,6 +339,87 @@ mod tests {
             "{refused}"
         );
         assert!(HostConfig::parse("[kinds.change.agents]\nenv = { A = 1 }\n").is_err());
+    }
+
+    #[test]
+    fn a_role_named() {
+        let config = HostConfig::parse(
+            "[roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\npriority = 5\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.roles["madswan/planner"],
+            RoleRun {
+                repository: "/r".into(),
+                kind: "planner".into(),
+                priority: 5,
+                base: None,
+                brief: None,
+            },
+            "no base, the repository's default branch, and no brief"
+        );
+    }
+
+    #[test]
+    fn a_role_with_a_base_and_a_brief() {
+        let config = HostConfig::parse(
+            "[roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\npriority = 5\n\
+             base = \"next\"\nbrief = \"Read the records and plan the next unit.\"\n",
+        )
+        .unwrap();
+        let run = &config.roles["madswan/planner"];
+        assert_eq!(run.base.as_deref(), Some("next"));
+        assert_eq!(
+            run.brief.as_deref(),
+            Some("Read the records and plan the next unit.")
+        );
+    }
+
+    #[test]
+    fn two_roles() {
+        let config = HostConfig::parse(
+            "[host]\nagents = 2\n\
+             [roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\npriority = 5\n\
+             [roles.\"madswan/ops\"]\nrepository = \"/s\"\nkind = \"ops\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.agents, Some(2));
+        assert_eq!(
+            config.roles.keys().collect::<Vec<_>>(),
+            vec!["madswan/ops", "madswan/planner"]
+        );
+        assert_eq!(config.roles["madswan/ops"].repository, "/s");
+        assert_eq!(config.roles["madswan/ops"].priority, 0, "none given");
+    }
+
+    #[test]
+    fn no_role_named() {
+        let config = HostConfig::parse("[host]\nagents = 2\n").unwrap();
+        assert!(config.roles.is_empty());
+        assert_eq!(config.roles.get("madswan/planner"), None);
+    }
+
+    #[test]
+    fn a_role_the_table_cannot_run_is_refused() {
+        for (text, named) in [
+            (
+                "[roles.planner]\nrepository = \"/r\"\nkind = \"planner\"\n",
+                "address",
+            ),
+            ("[roles.\"a/b\"]\nkind = \"planner\"\n", "repository"),
+            ("[roles.\"a/b\"]\nrepository = \"/r\"\n", "kind"),
+            (
+                "[roles.\"a/b\"]\nrepository = \"/r\"\nkind = \"k\"\npriority = \"high\"\n",
+                "priority",
+            ),
+            (
+                "[roles.\"a/b\"]\nrepository = \"/r\"\nkind = \"k\"\nbranch = \"main\"\n",
+                "branch",
+            ),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(refused.contains(named), "{refused}");
+        }
     }
 
     #[test]

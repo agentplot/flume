@@ -49,6 +49,7 @@ pub fn bump(agents: usize) -> Kind {
             quiet_limit: Some(45 * 60),
             send_back_to: Some("code".into()),
             send_back_limit: Some(3),
+            makes: vec![],
         }],
     }
 }
@@ -76,6 +77,11 @@ pub fn scenarios<H: KindsHarness>() -> Vec<Scenario<H>> {
             name: "kinds: a stage's two agents are kept, so the core can refuse it",
             cites: &["23", "4"],
             run: two_agents_are_kept::<H>,
+        },
+        Scenario {
+            name: "kinds: a stage that declares what it makes is read with its names, one that declares nothing with none",
+            cites: &["129", "23"],
+            run: what_a_stage_makes::<H>,
         },
         Scenario {
             name: "kinds: flume's own declaration holds fix, chore and change, each landing and sent back to code",
@@ -140,6 +146,40 @@ fn two_agents_are_kept<H: KindsHarness>(harness: &H) -> Outcome {
     let (repository, revision) = harness.declaring(&[bump(2)]);
     let kinds = read(harness, &repository, &revision)?;
     ensure_eq!(kinds[0].stages[0].agents.len(), 2, "the stage's agents");
+    Ok(())
+}
+
+/// A kind whose code stage makes a preview and a spike, and whose verify
+/// stage declares nothing it makes (129).
+pub fn making() -> Kind {
+    let mut kind = bump(1);
+    kind.name = "spike".into();
+    kind.branch_prefix = "spike".into();
+    kind.stages[0].makes = vec!["preview".into(), "spike".into()];
+    let mut verify = bump(1).stages.remove(0);
+    verify.name = "verify".into();
+    verify.send_back_to = None;
+    verify.send_back_limit = None;
+    kind.stages[0].send_back_to = None;
+    kind.stages[0].send_back_limit = None;
+    kind.stages.push(verify);
+    kind
+}
+
+fn what_a_stage_makes<H: KindsHarness>(harness: &H) -> Outcome {
+    let (repository, revision) = harness.declaring(&[making()]);
+    let kinds = read(harness, &repository, &revision)?;
+    ensure_eq!(kinds, vec![making()], "the kinds read");
+    ensure_eq!(
+        kinds[0].stages[0].makes,
+        vec!["preview".to_string(), "spike".to_string()],
+        "what the code stage makes"
+    );
+    ensure!(
+        kinds[0].stages[1].makes.is_empty(),
+        "a stage declaring nothing reads {:?}",
+        kinds[0].stages[1].makes
+    );
     Ok(())
 }
 

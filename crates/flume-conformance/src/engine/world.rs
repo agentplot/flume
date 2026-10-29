@@ -127,6 +127,7 @@ pub fn stage(name: &str, deliverable: Option<Deliverable>, prompt: &str) -> Stag
         quiet_limit: None,
         send_back_to: None,
         send_back_limit: None,
+        makes: vec![],
     }
 }
 

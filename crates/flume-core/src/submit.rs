@@ -6,7 +6,8 @@
 //! over, a failure or a conflict starts the kind's fix round, as found
 //! work from its last stage does, every going-back counted together up to
 //! the kind's bound. A withdrawal, and a landing before flume
-//! submits, are read from the merge queue's record of the branch; an
+//! submits, are read from the merge queue's record of the branch, never
+//! one it held before the place's launch (3, 99); an
 //! open submission's base is driven one round per command, and never
 //! submitted anew.
 
@@ -30,7 +31,10 @@ impl Engine {
         if ours.submits > 0 && self.collect(id, queue.as_ref(), &place.place_ref()) {
             return true;
         }
-        match queue.read_submission(&place.repository, &place.branch) {
+        match own_read(
+            held,
+            queue.read_submission(&place.repository, &place.branch),
+        ) {
             SubmissionRead::CouldNotRead { .. } => false,
             SubmissionRead::Found { submission } => match &submission.state {
                 SubmissionState::Landed { commit } if submission.target == place.base => {
@@ -100,7 +104,7 @@ impl Engine {
     /// live (47, 111).
     fn due(&self, held: &HeldState) -> bool {
         let ours = &held.submission;
-        if ours.due && !held.place.hold_submission && held.live_start().is_none() {
+        if ours.due && held.submission_hold().is_none() && held.live_start().is_none() {
             return self.submit(&held.place.id, false);
         }
         false
@@ -252,6 +256,20 @@ impl Engine {
             held.submission.due = false;
             Step::Write(())
         });
+    }
+}
+
+/// The merge queue's read of the place's branch as the place's own: a
+/// submission it held before the place was launched, an earlier place's
+/// of the same name, reads as none (3, 99, 132).
+pub(crate) fn own_read(held: &HeldState, read: SubmissionRead) -> SubmissionRead {
+    match read {
+        SubmissionRead::Found { submission }
+            if held.submission.before.as_ref() == Some(&submission.id) =>
+        {
+            SubmissionRead::None
+        }
+        read => read,
     }
 }
 

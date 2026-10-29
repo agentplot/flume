@@ -1,7 +1,7 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
     AgentCommand, AgentState, Closed, Clues, Host, Identity, Opened, PlaceRef, Seconds, Sent,
-    Shown, Terminal, TerminalTidy, Watch,
+    Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -13,7 +13,10 @@ use std::sync::{Arc, Mutex};
 /// An open not beside a pane makes a tab for its place in a workspace
 /// for its repository and base; a tidy closes the place's tab, and the
 /// workspace once no tab of a live place and no person's pane is in it.
-/// What show was given is kept, and a show may be made to fail.
+/// What show was given is kept, and a show may be made to fail. It
+/// holds recipients' sessions by name, each with a state a test sets,
+/// and keeps every text sent to each in order; an agent opened under a
+/// session name is that session while it is live (43, 95, 132).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -38,6 +41,12 @@ struct TerminalState {
     persons: BTreeMap<String, String>,
     shows_fail: bool,
     shown: Vec<(String, Clues)>,
+    /// Recipients' sessions by name, each with its state.
+    sessions: BTreeMap<String, AgentState>,
+    /// The agent each session name an open gave names, by its identity.
+    agent_sessions: BTreeMap<String, String>,
+    /// Every text sent to a session by its name, in order.
+    notices: Vec<(String, String)>,
 }
 
 /// What the next opens answer.
@@ -107,6 +116,9 @@ impl FakeTerminal {
                 persons: BTreeMap::new(),
                 shows_fail: false,
                 shown: vec![],
+                sessions: BTreeMap::new(),
+                agent_sessions: BTreeMap::new(),
+                notices: vec![],
             }),
             log: Log::default(),
         }
@@ -197,6 +209,41 @@ impl FakeTerminal {
     /// The clues each show was given, by place location, in order.
     pub fn shown(&self) -> Vec<(String, Clues)> {
         lock(&self.state).shown.clone()
+    }
+
+    /// A recipient's session named `name`, reading `state`, as one the
+    /// terminal holds; standing already, its state is set.
+    pub fn add_session(&self, name: &str, state: AgentState) {
+        lock(&self.state).sessions.insert(name.into(), state);
+    }
+
+    /// The recipient's session named `name` is gone, as a session that
+    /// exited or restarted under another name.
+    pub fn remove_session(&self, name: &str) {
+        lock(&self.state).sessions.remove(name);
+    }
+
+    /// The recipient's session named `name` reads `state`.
+    pub fn set_session_state(&self, name: &str, state: AgentState) {
+        if let Some(standing) = lock(&self.state).sessions.get_mut(name) {
+            *standing = state;
+        }
+    }
+
+    /// Every text sent to the session named `name`, in order.
+    pub fn notices(&self, name: &str) -> Vec<String> {
+        lock(&self.state)
+            .notices
+            .iter()
+            .filter(|(to, _)| to == name)
+            .map(|(_, text)| text.clone())
+            .collect()
+    }
+
+    /// Every text sent to any session by its name, with the name, in
+    /// order.
+    pub fn every_notice(&self) -> Vec<(String, String)> {
+        lock(&self.state).notices.clone()
     }
 
     pub fn refuse_opens(&self, reason: &str) {
@@ -311,6 +358,7 @@ impl Terminal for FakeTerminal {
         command: &AgentCommand,
         identity: &Identity,
         beside: Option<&str>,
+        session: Option<&str>,
     ) -> Opened {
         self.log.push(format!("open {identity} {}", place.location));
         let key = identity.to_string();
@@ -318,6 +366,14 @@ impl Terminal for FakeTerminal {
             return Opened::Refused {
                 reason: format!("an agent is live under {key}"),
             };
+        }
+        if let Some(name) = session {
+            let holder = lock(&self.state).agent_sessions.get(name).cloned();
+            if let Some(holder) = holder.filter(|holder| self.read(holder) != AgentState::Stopped) {
+                return Opened::Refused {
+                    reason: format!("the live agent {holder} carries the session name {name}"),
+                };
+            }
         }
         let mut state = lock(&self.state);
         if let Some(reason) = &state.open_refusal {
@@ -351,6 +407,9 @@ impl Terminal for FakeTerminal {
         running.folder = Some(folder.to_string());
         if let Opened::Held { screen } = &answer {
             running.screen = Some(screen.clone());
+        }
+        if let Some(name) = session {
+            state.agent_sessions.insert(name.into(), key.clone());
         }
         state.agents.insert(key, running);
         answer
@@ -387,6 +446,51 @@ impl Terminal for FakeTerminal {
     fn state(&self, agent: &Identity) -> AgentState {
         self.log.push(format!("state {agent}"));
         self.read(&agent.to_string())
+    }
+
+    fn send_to(&self, session: &str, text: &str) -> ToSession {
+        self.log.push(format!("send_to {session}"));
+        let agent = lock(&self.state).agent_sessions.get(session).cloned();
+        if let Some(key) = agent.filter(|key| self.read(key) != AgentState::Stopped) {
+            let mut state = lock(&self.state);
+            if !state.sends {
+                return ToSession::Refused {
+                    reason: "this terminal cannot send to a running agent".into(),
+                };
+            }
+            if let Some(running) = state.agents.get_mut(&key) {
+                if !running.typed.is_empty() {
+                    running.typed.clear();
+                    running.cleared += 1;
+                }
+            }
+            state.sent.push((key, text.into()));
+            state.notices.push((session.into(), text.into()));
+            return ToSession::Sent;
+        }
+        let mut state = lock(&self.state);
+        if !state.sessions.contains_key(session) {
+            return ToSession::NotFound;
+        }
+        if !state.sends {
+            return ToSession::Refused {
+                reason: "this terminal cannot send to a session".into(),
+            };
+        }
+        state.notices.push((session.into(), text.into()));
+        ToSession::Sent
+    }
+
+    fn session_state(&self, session: &str) -> Option<AgentState> {
+        self.log.push(format!("session_state {session}"));
+        let agent = lock(&self.state).agent_sessions.get(session).cloned();
+        if let Some(read) = agent
+            .map(|key| self.read(&key))
+            .filter(|read| *read != AgentState::Stopped)
+        {
+            return Some(read);
+        }
+        lock(&self.state).sessions.get(session).copied()
     }
 
     fn screen(&self, agent: &Identity) -> Option<String> {
@@ -475,6 +579,27 @@ impl Terminal for FakeTerminal {
         }
         state.shown.push((place.location.clone(), clues.clone()));
         Shown::Shown
+    }
+
+    /// The tab made for the place, the agent while it runs, and the
+    /// workspace of its repository and base while it stands, each by the
+    /// name the fake gives it; nothing logged, since it asks nothing.
+    fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
+        let state = lock(&self.state);
+        let label = workspace(place);
+        ShownAt {
+            place: state
+                .tabs
+                .get(&place.location)
+                .map(|(tab, _)| format!("tab {tab}")),
+            agent: agent
+                .filter(|agent| state.agents.contains_key(&agent.to_string()))
+                .map(|agent| format!("pane {agent}")),
+            base: state
+                .workspaces
+                .contains(&label)
+                .then(|| format!("workspace {label}")),
+        }
     }
 
     fn watch(&self) -> Watch {

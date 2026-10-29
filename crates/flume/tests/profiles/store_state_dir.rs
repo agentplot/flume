@@ -45,6 +45,17 @@ impl StoreHarness for Harness {
             .to_string_lossy()
             .into_owned()
     }
+
+    fn record_made(&self, place: &PlaceId, line: &str) {
+        use std::io::Write;
+        let path = Path::new(&self.seam.folder(place)).join(MADE);
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .expect("made.jsonl");
+        writeln!(file, "{line}").expect("a line of made.jsonl");
+    }
 }
 
 #[test]

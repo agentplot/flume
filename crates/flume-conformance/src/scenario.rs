@@ -101,6 +101,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             quiet_limit: None,
             send_back_to: Some("code".into()),
             send_back_limit: Some(2),
+            makes: vec![],
         }],
     };
     HeldState {
@@ -125,6 +126,12 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             hold_words: BTreeMap::new(),
             recipients: vec![],
         },
+        ends: vec![],
+        role: None,
+        unwoken: Default::default(),
+        holds: vec![],
+        waiting: None,
+        stall_after: STALL_AFTER,
         phase: Phase::Live,
         readiness: Readiness::default(),
         stages: vec![StageHeld {

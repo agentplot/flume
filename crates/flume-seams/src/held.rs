@@ -30,6 +30,298 @@ pub struct HeldState {
     /// only when they change (139); never read to decide anything.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shown: Option<String>,
+    /// Every end the place has had, in order, each recorded once by its
+    /// key with what flume read of it, and each delivery of it; an end is
+    /// pending for every recipient it has no delivery to (43).
+    #[serde(default)]
+    pub ends: Vec<EndHeld>,
+    /// The role's address `<partition>/<role>` a role's run serves, by
+    /// which a command run in it collects for the address (132); none
+    /// for any other place.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Each hold on a stage or the submission, the launch's and those put
+    /// after it, with its words and since when; a retry naming its stage
+    /// or the submission ends it, and nothing else does (47, 49, 130).
+    #[serde(default)]
+    pub holds: Vec<Hold>,
+    /// The move the place waits on its caller for, since when, and
+    /// whether a settle read it stalled; none where it waits on nobody
+    /// (56, 130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<Waiting>,
+    /// How long the place waits on its caller under no hold's words
+    /// before it is stalled: the launch's bound, five minutes where it
+    /// sets none (130).
+    #[serde(default = "stall_after")]
+    pub stall_after: Seconds,
+    /// Why a role's address this place has an end pending for was not
+    /// woken at the last settle, by the address: the configuration naming
+    /// nothing for it, or the wake's launch refused; gone once it is
+    /// woken (132; core.28).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub unwoken: BTreeMap<String, String>,
+}
+
+/// How long a place waits on its caller under no hold's words before it
+/// is stalled, where its launch sets no bound (130).
+pub const STALL_AFTER: Seconds = 5 * 60;
+
+fn stall_after() -> Seconds {
+    STALL_AFTER
+}
+
+impl HeldState {
+    /// The recipients each end stands pending for, in order, each named
+    /// once (43).
+    pub fn pending_for(&self) -> Vec<String> {
+        let mut pending: Vec<String> = vec![];
+        for end in &self.ends {
+            for recipient in end.pending(&self.place.recipients) {
+                if !pending.contains(&recipient) {
+                    pending.push(recipient);
+                }
+            }
+        }
+        pending
+    }
+
+    /// The hold on the stage `name`, if it is held (47).
+    pub fn hold_on(&self, name: &str) -> Option<&Hold> {
+        self.holds
+            .iter()
+            .find(|hold| matches!(&hold.on, HoldOn::Stage { stage } if stage == name))
+    }
+
+    /// The hold on the submission, if it is held (47).
+    pub fn submission_hold(&self) -> Option<&Hold> {
+        self.holds.iter().find(|hold| hold.on == HoldOn::Submission)
+    }
+}
+
+/// A hold on a stage or the submission, with its caller's words and
+/// since when (47, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hold {
+    #[serde(flatten)]
+    pub on: HoldOn,
+    /// What the hold waits for, in its caller's words; the caller's to
+    /// make good, since flume watches no event for it (130).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words: Option<String>,
+    pub since: Seconds,
+}
+
+/// What a hold holds: a stage, or the submission (47).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "on", rename_all = "snake_case")]
+pub enum HoldOn {
+    Stage { stage: String },
+    Submission,
+}
+
+/// The move a place waits on its caller for, as the settle last read it,
+/// and whether it read the place stalled on it (56, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Waiting {
+    #[serde(flatten)]
+    pub on: WaitingOn,
+    #[serde(default)]
+    pub stalled: bool,
+}
+
+/// The move a place waits on its caller for, why, since when, and the
+/// words that go with it: a hold's, the question, or the merge queue's
+/// (56, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitingOn {
+    /// A retry, or done.
+    pub act: Act,
+    /// The stage the retry names; none where it names the submission.
+    pub stage: Option<String>,
+    pub why: Waits,
+    pub since: Option<Seconds>,
+    pub words: Option<String>,
+}
+
+impl WaitingOn {
+    /// Whether it is the same move as `other`, whatever its words.
+    pub fn same_move(&self, other: &WaitingOn) -> bool {
+        self.act == other.act && self.stage == other.stage && self.why == other.why
+    }
+
+    /// The move, in the words a stall's notice gives it (130).
+    pub fn move_words(&self) -> String {
+        match (self.act, &self.stage) {
+            (Act::Done, _) => "done".into(),
+            (_, Some(stage)) => format!("a retry of {stage}"),
+            (_, None) => "a retry of the submission".into(),
+        }
+    }
+}
+
+/// A caller's act on a place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Act {
+    Retry,
+    Stop,
+    Drop,
+    Done,
+    Finish,
+    Tell,
+    Needs,
+    Priority,
+    Hold,
+}
+
+/// Why a place waits on its caller (56, 130).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Waits {
+    /// A stage, or the submission, on hold (47).
+    OnHold,
+    /// A stage ended short needing an answer, or having found work
+    /// outside the kind's last stage (42, 131).
+    Answer,
+    /// A stage whose agent was lost (45).
+    Lost,
+    /// A stage whose prompt was never begun (38).
+    NeverBegun,
+    /// A first stage waiting on the place's readiness (12).
+    Unready,
+    /// A stage whose prompt asks for a part with nothing to fill it
+    /// (27).
+    Refused,
+    /// A stage whose agent the caller stopped (51).
+    Stopped,
+    /// The place went back as often as its kind allows (23, 112).
+    PastBound,
+    /// The merge queue withdrew or refused the submission (112).
+    Submission,
+    /// The last stage delivered, and the kind does not land (114).
+    Delivered,
+}
+
+/// An end of a place, recorded once by its key when a settle or an act
+/// reads it, with what 43 names of it, and delivered once to each
+/// recipient (43, 74).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndHeld {
+    /// What ended, which is the end's key with what was read of it.
+    #[serde(flatten)]
+    pub of: EndOf,
+    /// When flume read it.
+    pub read_at: Seconds,
+    /// Each delivery of it, to whom, when and by what.
+    #[serde(default)]
+    pub deliveries: Vec<Delivery>,
+}
+
+impl EndHeld {
+    /// Whether this end is the one `other` keys.
+    pub fn same(&self, other: &EndOf) -> bool {
+        self.of.key() == other.key()
+    }
+
+    /// Whether the end was delivered to `recipient`.
+    pub fn delivered_to(&self, recipient: &str) -> bool {
+        self.deliveries
+            .iter()
+            .any(|delivery| delivery.recipient == recipient)
+    }
+
+    /// The recipients of `recipients` it stands pending for (43).
+    pub fn pending(&self, recipients: &[String]) -> Vec<String> {
+        recipients
+            .iter()
+            .filter(|recipient| !self.delivered_to(recipient))
+            .cloned()
+            .collect()
+    }
+}
+
+/// What ended: a stage's start, ended, lost, never begun or stuck; a
+/// submission's outcome from the merge queue; or a stall, each with what
+/// flume read of it (43, 45, 130, 133).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "of", rename_all = "snake_case")]
+pub enum EndOf {
+    Stage {
+        stage: String,
+        /// The start's number (48).
+        start: u32,
+        /// How the start ended: delivered, ended short, finished, lost,
+        /// never begun or stuck.
+        state: StageState,
+        /// For a stuck start, the first quiet reading it ran from (44).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        quiet_from: Option<Seconds>,
+        /// What was read of it: the head or report, the agent's words and
+        /// whether it needs an answer or found work, or what flume read of
+        /// an agent lost, never begun or stuck.
+        end: StageEnd,
+    },
+    Submission {
+        /// The submit's number (48).
+        submit: u32,
+        /// The outcome, the commit landed as or the merge queue's words.
+        verdict: Verdict,
+    },
+    Stall {
+        /// Since when the place waited on its caller (130).
+        since: Seconds,
+        /// The move it waits on.
+        waiting: String,
+    },
+}
+
+impl EndOf {
+    /// The end's key: what ended, without what was read of it.
+    pub fn key(&self) -> String {
+        match self {
+            EndOf::Stage {
+                stage,
+                start,
+                state,
+                quiet_from,
+                ..
+            } => format!(
+                "stage {stage} {start} {state:?} {}",
+                quiet_from.map(|at| at.to_string()).unwrap_or_default()
+            ),
+            EndOf::Submission { submit, verdict } => {
+                let outcome = match verdict {
+                    Verdict::Landed { .. } => "landed",
+                    Verdict::Failed { .. } => "failed",
+                    Verdict::Conflict { .. } => "conflict",
+                    Verdict::Withdrawn => "withdrawn",
+                    Verdict::Refused { .. } => "refused",
+                };
+                format!("submission {submit} {outcome}")
+            }
+            EndOf::Stall { since, .. } => format!("stall {since}"),
+        }
+    }
+}
+
+/// A delivery of an end to one recipient: to whom, when, and by what
+/// (43).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delivery {
+    pub recipient: String,
+    pub at: Seconds,
+    pub by: DeliveredBy,
+}
+
+/// What delivered an end: a notice through the terminal, a wait by
+/// place, or the inbox (43).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeliveredBy {
+    Notice,
+    Wait,
+    Inbox,
 }
 
 /// What a launch fixed of a place (8, 21).
@@ -100,9 +392,19 @@ pub enum Phase {
         over: Over,
         kept: Option<Kept>,
     },
-    /// Removed, its branch and held state still to go (66).
+    /// Removed, its branch and held state still to go (66), since `at`.
     Gone {
         over: Over,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        at: Option<Seconds>,
+    },
+    /// Its worktree and branch removed, its document kept apart from a
+    /// live place's for the ends pending for `pending_for`, since `at`
+    /// (43, 62, 66).
+    Tidied {
+        over: Over,
+        at: Seconds,
+        pending_for: Vec<String>,
     },
 }
 
@@ -222,6 +524,44 @@ pub struct StageEnd {
     /// For a never-begun end, what the terminal showed of the agent (43).
     #[serde(default)]
     pub screen: Option<String>,
+    /// What the stage's run recorded it made since the start, each line
+    /// as written (129).
+    #[serde(default)]
+    pub made: Vec<Made>,
+}
+
+/// One line a stage's run wrote of what it made (129): a JSON object
+/// naming the thing, kept whole with every field as the run wrote it, or
+/// a line that is no such object, kept as its text so the run's mistake
+/// is seen and not dropped. flume builds, checks and rewrites no address
+/// of it (core.23).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Made {
+    Thing(serde_json::Map<String, serde_json::Value>),
+    Text(String),
+}
+
+impl Made {
+    /// A line of `made.jsonl` as flume carries it.
+    pub fn read(line: &str) -> Made {
+        match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(serde_json::Value::Object(thing))
+                if thing.get("name").is_some_and(serde_json::Value::is_string) =>
+            {
+                Made::Thing(thing)
+            }
+            _ => Made::Text(line.to_string()),
+        }
+    }
+
+    /// The thing's name, none for a line that names none.
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Made::Thing(thing) => thing.get("name").and_then(serde_json::Value::as_str),
+            Made::Text(_) => None,
+        }
+    }
 }
 
 /// One start of a stage and its agent.
@@ -231,6 +571,10 @@ pub struct StartHeld {
     pub started_at: Seconds,
     /// The branch's head when the stage started (25).
     pub start_head: Revision,
+    /// How many lines `made.jsonl` in the place's folder held when the
+    /// stage started: the lines after them are this start's (129).
+    #[serde(default)]
+    pub made_from: usize,
     /// A retry's or a failed submission's words.
     pub words: Option<String>,
     pub identity: Identity,
@@ -276,6 +620,11 @@ pub struct SubmissionHeld {
     /// withdrawal of it is told from a hand's (99, 112).
     #[serde(default)]
     pub id: Option<String>,
+    /// The newest submission of the branch the merge queue held when the
+    /// place was launched, by its id: an earlier place's of the same
+    /// name, which this place never reads as its own (3, 99, 132).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
     /// The last outcome flume collected, or its refusal at submit.
     pub verdict: Option<Verdict>,
     /// Why the place waits for its caller's retry or drop (112, 130).

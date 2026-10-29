@@ -14,6 +14,7 @@ pub mod guard;
 pub mod hook;
 pub mod record;
 pub mod transcript;
+pub mod wrapper;
 
 use flume_seams::{
     Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
@@ -179,8 +180,9 @@ impl Claude {
 impl Agent for Claude {
     /// `claude --plugin-dir <plugin> [--model <m>] [--append-system-prompt
     /// <instructions>]` in the place, the program the settings name by
-    /// name or path, the resolved environment and the four `FLUME_*`
-    /// words, the prompt as its argument where the terminal cannot send
+    /// name or path, or the program it runs where it is a nix wrapper,
+    /// with the variables the wrapper sets ([`wrapper`]), the resolved
+    /// environment and the four `FLUME_*` words, the prompt as its argument where the terminal cannot send
     /// it; nothing of the caller's session (29, 32, 33, 88, C.4). The
     /// host user's login environment is the terminal's to give, set on
     /// the pane under herdr and the person's shell's under the printed
@@ -205,12 +207,24 @@ impl Agent for Claude {
             args.extend(["--append-system-prompt".to_string(), instructions.clone()]);
         }
         let mut env: BTreeMap<String, String> = settings.env.clone();
+        let mut program = settings.program.clone().unwrap_or_else(|| NAME.into());
+        let path = env
+            .get("PATH")
+            .cloned()
+            .or_else(|| std::env::var("PATH").ok())
+            .unwrap_or_default();
+        if let Some(wrapped) =
+            wrapper::located(&program, &path).and_then(|file| wrapper::unwrapped(&file))
+        {
+            program = wrapped.program.to_string_lossy().into_owned();
+            wrapped.environment(&mut env);
+        }
         env.insert(AGENT.into(), identity.to_string());
         env.insert(SECRET.into(), secret.0.clone());
         env.insert(PLACE.into(), place.location.clone());
         env.insert(STAGE.into(), identity.stage.clone());
         AgentCommand {
-            program: settings.program.clone().unwrap_or_else(|| NAME.into()),
+            program,
             args,
             env,
             prompt_args: vec![prompt.to_string()],

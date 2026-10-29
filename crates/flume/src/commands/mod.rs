@@ -10,8 +10,8 @@ pub mod place;
 mod print;
 
 use clap::{Args, Parser, Subcommand};
-use flume_core::{Answer, Engine, Retry};
-use flume_seams::{AgentState, Launch, PlaceId, Reading, Seconds, StopKind};
+use flume_core::{Answer, Engine, Retry, WaitFor};
+use flume_seams::{AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -23,6 +23,10 @@ pub const AGENT: &str = "FLUME_AGENT";
 
 /// The variable an agent's start's secret is in (41, C.4).
 pub const SECRET: &str = "FLUME_SECRET";
+
+/// The variable an agent flume started names its place in, by which a
+/// command run in a role's run finds the role it serves (132, C.4).
+pub const PLACE: &str = "FLUME_PLACE";
 
 /// How long `settle --on-quiet` reads the agent for until it is quiet
 /// (121; design 14).
@@ -86,6 +90,23 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Put the place's next stage, or its submission, on hold with words
+    /// saying what for; only a retry naming it ends the hold (47, 130).
+    Hold {
+        place: String,
+        /// The stage held: one not started since the current stage began.
+        #[arg(
+            long,
+            conflicts_with = "submission",
+            required_unless_present = "submission"
+        )]
+        stage: Option<String>,
+        /// Hold the place's submission, not yet made.
+        #[arg(long)]
+        submission: bool,
+        /// What the hold waits for, the caller's to make good.
+        words: String,
+    },
     /// Remove what is over (63 to 68).
     Tidy { place: Option<String> },
     /// Move a place, or every place, on (46, 119 to 121).
@@ -122,6 +143,49 @@ enum Command {
     Ack {
         #[command(subcommand)]
         ack: Ack,
+    },
+    /// Wait on a place's stage or submission as a recipient: an end
+    /// pending for it is answered and delivered, one already delivered is
+    /// read, and otherwise the host's state is followed until one comes
+    /// (43). Exits 0 for a stage delivered or finished or a submission
+    /// landed, 2 for any other end, 3 for still waiting at the timeout.
+    Wait {
+        /// A location, or `<kind>--<name>` in the repository.
+        place: String,
+        /// The stage whose current start's end is waited on.
+        #[arg(
+            long,
+            conflicts_with = "submission",
+            required_unless_present = "submission"
+        )]
+        stage: Option<String>,
+        /// The place's submission's outcome is waited on.
+        #[arg(long)]
+        submission: bool,
+        /// The recipient waited as; `$FLUME_RECIPIENT`, a role's run's
+        /// address, or the terminal's session, where none is named.
+        #[arg(long)]
+        recipient: Option<String>,
+        /// How long to follow the host's state, as `<n>`, `<n>s`, `<n>m`
+        /// or `<n>h`; with none, until an end comes.
+        #[arg(long)]
+        timeout: Option<String>,
+    },
+    /// Collect every end pending for a recipient, of every place on the
+    /// host, each then delivered to it (43).
+    Inbox {
+        /// The recipient collected for; `$FLUME_RECIPIENT`, a role's
+        /// run's address, or the terminal's session, where none is named.
+        #[arg(long)]
+        recipient: Option<String>,
+    },
+    /// Wake a role's address, `<partition>/<role>`: its run, the kind the
+    /// host's `[roles]` table names for it, launched where none stands,
+    /// and otherwise nothing made, the answer saying the run is live or
+    /// waits (132).
+    Wake {
+        /// The role's address, `<partition>/<role>`.
+        address: String,
     },
     /// flume's status over MCP on standard input and output, one tool,
     /// `status`, settling nothing (57, 60).
@@ -190,6 +254,11 @@ struct LaunchArgs {
     mark: Option<String>,
     #[arg(long, allow_negative_numbers = true)]
     priority: Option<i64>,
+    /// How long the place may wait on its caller under no hold's words
+    /// before it is stalled, as `<n>`, `<n>s`, `<n>m` or `<n>h`; five
+    /// minutes where none is given (130).
+    #[arg(long, value_name = "TIME")]
+    stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
     /// field one of program, model, instructions, env.<NAME> and beside.
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
@@ -296,7 +365,7 @@ where
     Outcome {
         text,
         usage: false,
-        code: u8::from(answer.refusal().is_some()),
+        code: answer.exit(),
     }
 }
 
@@ -357,6 +426,21 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             };
             build()?.retry(&place, target, words.clone(), *force)
         }
+        Command::Hold {
+            place,
+            stage,
+            submission: _,
+            words,
+        } => {
+            let place = named(place)?;
+            let on = match stage {
+                Some(stage) => HoldOn::Stage {
+                    stage: stage.clone(),
+                },
+                None => HoldOn::Submission,
+            };
+            build()?.hold(&place, on, words)
+        }
         Command::Tidy { place } => {
             let place = maybe(place)?;
             build()?.tidy(place.as_ref())
@@ -375,9 +459,48 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let place = named(place)?;
             build()?.priority(&place, *priority)
         }
+        Command::Wait {
+            place,
+            stage,
+            submission: _,
+            recipient,
+            timeout,
+        } => {
+            let place = named(place)?;
+            let of = match stage {
+                Some(stage) => WaitFor::Stage(stage.clone()),
+                None => WaitFor::Submission,
+            };
+            let timeout = timeout.as_deref().map(seconds).transpose()?;
+            let core = build()?;
+            let recipient = recipient_of(&core, recipient)?;
+            core.wait(&place, &of, &recipient, timeout)
+        }
+        Command::Inbox { recipient } => {
+            let core = build()?;
+            let recipient = recipient_of(&core, recipient)?;
+            core.inbox(&recipient)
+        }
+        Command::Wake { address } => build()?.wake(address),
         Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
             unreachable!("answered before the core's acts")
         }
+    })
+}
+
+/// The recipient named, else the one the core reads for a command that
+/// names none: `$FLUME_RECIPIENT`, the address of the role's run
+/// `$FLUME_PLACE` names, or the terminal's session (7, 132; design 7).
+fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String> {
+    if let Some(named) = named {
+        return Ok(named.clone());
+    }
+    let here = std::env::var(PLACE)
+        .ok()
+        .filter(|place| !place.is_empty())
+        .map(PlaceId::new);
+    core.recipient(here.as_ref()).ok_or_else(|| {
+        format!("no recipient is named: name one with --recipient or ${}, or run in a terminal's session or a role's run", crate::host::RECIPIENT)
     })
 }
 
@@ -456,6 +579,7 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         hold_words,
         priority: args.priority.unwrap_or(0),
         recipients: args.recipient.clone(),
+        stall_after: args.stall_after.as_deref().map(seconds).transpose()?,
     })
 }
 

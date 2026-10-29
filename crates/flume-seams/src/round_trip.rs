@@ -32,6 +32,7 @@ fn stage() -> Stage {
         quiet_limit: Some(45 * 60),
         send_back_to: Some("code".into()),
         send_back_limit: Some(3),
+        makes: vec!["preview".into(), "spike".into()],
     }
 }
 
@@ -45,6 +46,19 @@ fn kind() -> Kind {
         agents: kind_settings(),
         stages: vec![stage()],
     }
+}
+
+/// What a run made: a spike by its address, a preview by the branch
+/// and revision that bring it up, and a line that is no object.
+fn made() -> Vec<Made> {
+    [
+        r#"{"name":"spike","what":"spike","address":"https://forge.example/o/r/tree/spike/x?ref=a%2Fb"}"#,
+        r#"{"name":"preview","what":"preview","branch":"fix/one","revision":"c3"}"#,
+        "a preview at port 4000",
+    ]
+    .into_iter()
+    .map(Made::read)
+    .collect()
 }
 
 fn kind_settings() -> KindSettings {
@@ -148,6 +162,7 @@ fn held() -> HeldState {
                 last_words: Some("I could not sign in".into()),
                 commits: vec![Revision::new("c3")],
                 screen: Some("Bypass Permissions mode".into()),
+                made: made(),
             }),
             room: Some(RoomWait {
                 order: 3,
@@ -157,6 +172,7 @@ fn held() -> HeldState {
                 n: 2,
                 started_at: 5,
                 start_head: Revision::new("c2"),
+                made_from: 2,
                 words: Some("the second".into()),
                 identity: identity(),
                 secret: Secret("s3cret".into()),
@@ -196,6 +212,7 @@ fn held() -> HeldState {
             submits: 2,
             send_backs: 1,
             id: Some("7".into()),
+            before: Some("3".into()),
             verdict: Some(Verdict::Conflict {
                 files: vec!["src/lib.rs".into()],
                 words: "conflicts with main".into(),
@@ -207,7 +224,112 @@ fn held() -> HeldState {
         failures: vec!["the agent did not end".into()],
         priority: -3,
         shown: Some("code · working; 1 running".into()),
+        ends: ends(),
+        role: Some("madswan/planner".into()),
+        unwoken: BTreeMap::from([(
+            "madswan/ops".to_string(),
+            "the host's configuration names no role for madswan/ops".to_string(),
+        )]),
+        holds: holds_put(),
+        waiting: Some(Waiting {
+            on: WaitingOn {
+                act: Act::Retry,
+                stage: Some("review".into()),
+                why: Waits::OnHold,
+                since: Some(140),
+                words: Some("until the design is ruled".into()),
+            },
+            stalled: true,
+        }),
+        stall_after: 30 * 60,
     }
+}
+
+fn holds_put() -> Vec<Hold> {
+    vec![
+        Hold {
+            on: HoldOn::Stage {
+                stage: "review".into(),
+            },
+            words: Some("until the design is ruled".into()),
+            since: 10,
+        },
+        Hold {
+            on: HoldOn::Submission,
+            words: None,
+            since: 10,
+        },
+    ]
+}
+
+fn ends() -> Vec<EndHeld> {
+    vec![
+        EndHeld {
+            of: EndOf::Stage {
+                stage: "code".into(),
+                start: 2,
+                state: StageState::Delivered,
+                quiet_from: None,
+                end: StageEnd {
+                    head: Some(Revision::new("c3")),
+                    ..StageEnd::default()
+                },
+            },
+            read_at: 140,
+            deliveries: vec![
+                Delivery {
+                    recipient: "operator".into(),
+                    at: 141,
+                    by: DeliveredBy::Notice,
+                },
+                Delivery {
+                    recipient: "role:planner".into(),
+                    at: 150,
+                    by: DeliveredBy::Inbox,
+                },
+            ],
+        },
+        EndHeld {
+            of: EndOf::Stage {
+                stage: "code".into(),
+                start: 3,
+                state: StageState::Stuck,
+                quiet_from: Some(160),
+                end: StageEnd {
+                    last_words: Some("I am waiting".into()),
+                    commits: vec![Revision::new("c4")],
+                    screen: Some("the agent's screen".into()),
+                    ..StageEnd::default()
+                },
+            },
+            read_at: 170,
+            deliveries: vec![],
+        },
+        EndHeld {
+            of: EndOf::Submission {
+                submit: 2,
+                verdict: Verdict::Landed {
+                    commit: Revision::new("c9"),
+                    place_removed: false,
+                    branch_removed: false,
+                },
+            },
+            read_at: 180,
+            deliveries: vec![Delivery {
+                recipient: "operator".into(),
+                at: 181,
+                by: DeliveredBy::Wait,
+            }],
+        },
+        EndHeld {
+            of: EndOf::Stall {
+                since: 190,
+                waiting: "a retry of code".into(),
+            },
+            read_at: 490,
+            deliveries: vec![],
+        },
+    ]
 }
 
 #[test]
@@ -227,7 +349,100 @@ fn a_launch() {
         hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
         priority: 5,
         recipients: vec!["operator".into()],
+        stall_after: Some(30 * 60),
     });
+}
+
+#[test]
+fn holds_the_waiting_move_and_the_stall_bound() {
+    let held = held();
+    for hold in held.holds.clone() {
+        round_trips(hold.on.clone());
+        round_trips(hold);
+    }
+    round_trips(held.waiting.clone().unwrap());
+    for act in [
+        Act::Retry,
+        Act::Stop,
+        Act::Drop,
+        Act::Done,
+        Act::Finish,
+        Act::Tell,
+        Act::Needs,
+        Act::Priority,
+        Act::Hold,
+    ] {
+        round_trips(act);
+    }
+    for why in [
+        Waits::OnHold,
+        Waits::Answer,
+        Waits::Lost,
+        Waits::NeverBegun,
+        Waits::Unready,
+        Waits::Refused,
+        Waits::Stopped,
+        Waits::PastBound,
+        Waits::Submission,
+        Waits::Delivered,
+    ] {
+        round_trips(why);
+    }
+    let value = serde_json::to_value(&held.holds).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!([
+            {"on": "stage", "stage": "review", "words": "until the design is ruled", "since": 10},
+            {"on": "submission", "since": 10},
+        ])
+    );
+    assert_eq!(held.hold_on("review"), Some(&held.holds[0]));
+    assert_eq!(held.hold_on("code"), None);
+    assert_eq!(held.submission_hold(), Some(&held.holds[1]));
+    let mut value = serde_json::to_value(&held).unwrap();
+    for field in ["holds", "waiting", "stall_after"] {
+        value.as_object_mut().unwrap().remove(field);
+    }
+    let before: HeldState = serde_json::from_value(value).unwrap();
+    assert!(before.holds.is_empty() && before.waiting.is_none());
+    assert_eq!(
+        before.stall_after, STALL_AFTER,
+        "five minutes where none is set"
+    );
+    round_trips(HeldState {
+        waiting: None,
+        ..held
+    });
+    let mut launch = serde_json::to_value(Launch::default()).unwrap();
+    assert!(launch.get("stall_after").is_none(), "no bound written");
+    launch.as_object_mut().unwrap().remove("stall_after");
+    let launch: Launch = serde_json::from_value(launch).unwrap();
+    assert_eq!(launch.stall_after, None);
+}
+
+#[test]
+fn a_moves_words() {
+    let on = |act, stage: Option<&str>| WaitingOn {
+        act,
+        stage: stage.map(str::to_string),
+        why: Waits::Answer,
+        since: Some(1),
+        words: Some("which?".into()),
+    };
+    assert_eq!(
+        on(Act::Retry, Some("construct")).move_words(),
+        "a retry of construct"
+    );
+    assert_eq!(
+        on(Act::Retry, None).move_words(),
+        "a retry of the submission"
+    );
+    assert_eq!(on(Act::Done, None).move_words(), "done");
+    let mut other = on(Act::Retry, Some("construct"));
+    other.words = None;
+    other.since = Some(9);
+    assert!(other.same_move(&on(Act::Retry, Some("construct"))));
+    assert!(!other.same_move(&on(Act::Retry, Some("code"))));
 }
 
 #[test]
@@ -238,6 +453,18 @@ fn a_held_state() {
         Phase::Live,
         Phase::Gone {
             over: Over::Dropped,
+            at: None,
+        },
+        Phase::Gone {
+            over: Over::Done,
+            at: Some(200),
+        },
+        Phase::Tidied {
+            over: Over::Landed {
+                commit: Revision::new("c9"),
+            },
+            at: 200,
+            pending_for: vec!["operator".into()],
         },
         Phase::Over {
             over: Over::Done,
@@ -261,6 +488,115 @@ fn a_held_state() {
     ] {
         round_trips(phase);
     }
+}
+
+#[test]
+fn an_end_and_its_deliveries() {
+    for end in ends() {
+        round_trips(end.of.clone());
+        round_trips(end.deliveries.clone());
+        round_trips(end);
+    }
+    for by in [DeliveredBy::Notice, DeliveredBy::Wait, DeliveredBy::Inbox] {
+        round_trips(by);
+    }
+    let before: HeldState = serde_json::from_value({
+        let mut value = serde_json::to_value(held()).unwrap();
+        value.as_object_mut().unwrap().remove("ends");
+        value
+    })
+    .unwrap();
+    assert!(before.ends.is_empty(), "a document from before ends");
+}
+
+#[test]
+fn a_role_runs_address() {
+    let held = held();
+    assert_eq!(held.role.as_deref(), Some("madswan/planner"));
+    let mut value = serde_json::to_value(&held).unwrap();
+    assert_eq!(value["role"], "madswan/planner");
+    value.as_object_mut().unwrap().remove("role");
+    let before: HeldState = serde_json::from_value(value).unwrap();
+    assert_eq!(before.role, None, "a document from before roles");
+    round_trips(HeldState { role: None, ..held });
+}
+
+#[test]
+fn a_wake_not_made_and_the_submission_before_the_launch() {
+    let held = held();
+    let mut value = serde_json::to_value(&held).unwrap();
+    assert_eq!(
+        value["unwoken"]["madswan/ops"],
+        "the host's configuration names no role for madswan/ops"
+    );
+    assert_eq!(value["submission"]["before"], "3");
+    value.as_object_mut().unwrap().remove("unwoken");
+    value["submission"]
+        .as_object_mut()
+        .unwrap()
+        .remove("before");
+    let before: HeldState = serde_json::from_value(value).unwrap();
+    assert!(before.unwoken.is_empty(), "a document from before wakes");
+    assert_eq!(before.submission.before, None);
+    round_trips(HeldState {
+        unwoken: BTreeMap::new(),
+        ..held
+    });
+}
+
+#[test]
+fn a_role_run_as_the_configuration_names_it() {
+    let run = RoleRun {
+        repository: "/r".into(),
+        kind: "planner".into(),
+        priority: 5,
+        base: Some("next".into()),
+        brief: Some("read the records".into()),
+    };
+    round_trips(run.clone());
+    round_trips(RoleRun {
+        base: None,
+        brief: None,
+        ..run
+    });
+}
+
+#[test]
+fn an_address_is_a_partition_and_a_role() {
+    assert!(is_address("madswan/planner"));
+    assert!(is_address("slc-2/ops.1"));
+    assert_eq!(role_of("madswan/planner"), "planner");
+    for session in [
+        "ops",
+        "term:p1@/tmp/term.sock",
+        "a/b/c",
+        "/planner",
+        "madswan/",
+        "role:planner",
+    ] {
+        assert!(!is_address(session), "{session} is a session's name");
+    }
+}
+
+#[test]
+fn an_ends_key_and_its_pending_recipients() {
+    let ends = ends();
+    let mut read_again = ends[0].of.clone();
+    if let EndOf::Stage { end, .. } = &mut read_again {
+        end.report = Some("read again".into());
+    }
+    assert!(
+        ends[0].same(&read_again),
+        "an end read again is the same end"
+    );
+    assert!(!ends[0].same(&ends[1].of), "a later start is another end");
+    let recipients = vec!["operator".to_string(), "ops".to_string()];
+    assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
+    assert_eq!(ends[1].pending(&recipients), recipients);
+    assert_eq!(
+        held().pending_for(),
+        vec!["operator".to_string(), "role:planner".to_string()]
+    );
 }
 
 #[test]
@@ -386,6 +722,54 @@ fn an_identity_a_secret_and_a_stop_short() {
         serde_json::from_str(r#"{"head":"c3","report":null,"words":null}"#).unwrap();
     assert_eq!(before.commits, Vec::<Revision>::new());
     assert_eq!(before.screen, None);
+}
+
+#[test]
+fn what_a_stage_made() {
+    let made = made();
+    assert_eq!(
+        made.iter().map(Made::name).collect::<Vec<_>>(),
+        vec![Some("spike"), Some("preview"), None]
+    );
+    for line in &made {
+        round_trips(line.clone());
+    }
+    round_trips(StageEnd {
+        head: Some(Revision::new("c3")),
+        made: made.clone(),
+        ..StageEnd::default()
+    });
+    let Made::Thing(spike) = &made[0] else {
+        panic!("the spike read as text");
+    };
+    assert_eq!(
+        spike["address"], "https://forge.example/o/r/tree/spike/x?ref=a%2Fb",
+        "the address as written"
+    );
+    assert_eq!(
+        Made::read(r#"{"what":"spike"}"#),
+        Made::Text(r#"{"what":"spike"}"#.into()),
+        "a line naming nothing"
+    );
+    assert_eq!(
+        Made::read(r#"["spike"]"#),
+        Made::Text(r#"["spike"]"#.into()),
+        "a line that is no object"
+    );
+    let before: StageEnd = serde_json::from_str(r#"{"head":"c3"}"#).unwrap();
+    assert!(before.made.is_empty(), "an end before made");
+    let start: StartHeld = {
+        let mut json = serde_json::to_value(held().stages[0].start.clone().unwrap()).unwrap();
+        json.as_object_mut().unwrap().remove("made_from");
+        serde_json::from_value(json).unwrap()
+    };
+    assert_eq!(start.made_from, 0, "a start before made");
+    let stage: Stage = {
+        let mut json = serde_json::to_value(stage()).unwrap();
+        json.as_object_mut().unwrap().remove("makes");
+        serde_json::from_value(json).unwrap()
+    };
+    assert!(stage.makes.is_empty(), "a stage declaring nothing");
 }
 
 #[test]
@@ -673,6 +1057,12 @@ fn the_terminal_seams_answers() {
         .to_string(),
         "3 running · 1 asking · 1 waiting on caller · 0 stalled"
     );
+    round_trips(ShownAt {
+        place: Some("tab w1:t2".into()),
+        agent: Some("pane w1:p3".into()),
+        base: Some("workspace w1".into()),
+    });
+    round_trips(ShownAt::default());
     round_trips(Shown::Shown);
     round_trips(Shown::ShowsNone);
     round_trips(Shown::Failed {
@@ -682,6 +1072,13 @@ fn the_terminal_seams_answers() {
     round_trips(Sent::Refused {
         reason: "cannot send".into(),
     });
+    round_trips(ToSession::Sent);
+    round_trips(ToSession::NotFound);
+    round_trips(ToSession::Refused {
+        reason: "the session asks a question".into(),
+    });
+    round_trips(Some(AgentState::Waiting));
+    round_trips(None::<AgentState>);
     round_trips(Closed::Closed);
     round_trips(Closed::Refused {
         reason: "still running".into(),

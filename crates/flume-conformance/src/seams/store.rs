@@ -15,6 +15,10 @@ pub trait StoreHarness {
 
     /// A repository on the host whose content the store must not touch.
     fn repository(&self) -> String;
+
+    /// A line appended to `made.jsonl` in the place's own folder, as a
+    /// stage's run records what it made (129).
+    fn record_made(&self, place: &PlaceId, line: &str);
 }
 
 fn place<H: StoreHarness>(harness: &H, name: &str) -> (PlaceId, HeldState) {
@@ -54,6 +58,11 @@ pub fn scenarios<H: StoreHarness>() -> Vec<Scenario<H>> {
             name: "store: writing nothing removes the held state",
             cites: &["103", "62"],
             run: removal::<H>,
+        },
+        Scenario {
+            name: "store: the lines of made.jsonl in a place's folder are read in order as written, and go with the place",
+            cites: &["128", "129", "62"],
+            run: made_lines::<H>,
         },
         Scenario {
             name: "store: every flume process reaches the same store, outside every repository",
@@ -118,6 +127,37 @@ fn removal<H: StoreHarness>(harness: &H) -> Outcome {
     ensure!(
         harness.seam().read(&id).is_none(),
         "removed held state is read"
+    );
+    Ok(())
+}
+
+fn made_lines<H: StoreHarness>(harness: &H) -> Outcome {
+    let (id, held) = place(harness, "made");
+    let version = written(harness.seam().write(&id, None, Some(&held)))?;
+    ensure_eq!(
+        harness.seam().made(&id),
+        Vec::<String>::new(),
+        "lines before any"
+    );
+    let lines = [
+        r#"{"name":"spike","what":"spike","address":"https://forge.example/o/r/tree/spike/x?ref=a%2Fb"}"#,
+        r#"{"name":"preview","what":"preview","branch":"fix/made","revision":"c3"}"#,
+        "not one object",
+    ];
+    for line in lines {
+        harness.record_made(&id, line);
+    }
+    ensure_eq!(harness.seam().made(&id), lines.to_vec(), "the lines read");
+    ensure_eq!(
+        harness.another().made(&id),
+        lines.to_vec(),
+        "another process's read"
+    );
+    written(harness.seam().write(&id, Some(version), None))?;
+    ensure_eq!(
+        harness.seam().made(&id),
+        Vec::<String>::new(),
+        "the lines after the place is removed"
     );
     Ok(())
 }

@@ -7,7 +7,11 @@
 //! with the host's configuration as it stands, so a program no agent
 //! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
 //! one the caller's environment names, or the session the terminal says
-//! launched it (7, 8). A refusal after the place's held state
+//! launched it (7, 8), and a role's run has none, its agents' session
+//! named by its address (132). The newest submission the merge queue
+//! holds of the branch at the launch is an earlier place's of the same
+//! name, kept so it is never read as this place's (3, 99). A refusal
+//! after the place's held state
 //! is created undoes what was made, so nothing is left (2, 76).
 
 use crate::reading::reads_change;
@@ -19,7 +23,7 @@ impl Engine {
     /// Launches one place, or refuses naming why (2).
     pub fn launch(&self, launch: &Launch) -> Answer {
         self.settle_attended();
-        match self.make_place(launch) {
+        match self.make_place(launch, None) {
             Ok(held) => Answer::Launched {
                 place: self.place_status(&held),
             },
@@ -103,7 +107,14 @@ impl Engine {
         Ok(())
     }
 
-    fn make_place(&self, launch: &Launch) -> Result<HeldState, String> {
+    /// Makes the launch's place, a role's run where `role` names the
+    /// address it serves: its agents' session named by the address and no
+    /// recipient of its own (132).
+    pub(crate) fn make_place(
+        &self,
+        launch: &Launch,
+        role: Option<&str>,
+    ) -> Result<HeldState, String> {
         let repository = &launch.repository;
         let kinds = self.resolver.kinds();
         let binding = match kinds.read_binding(repository) {
@@ -191,8 +202,10 @@ impl Engine {
                 }
             }
             if let Some(other) = self.store.read_every().into_iter().find(|other| {
+                let tidied = matches!(other.state.phase, Phase::Tidied { .. });
                 let other = &other.state.place;
-                other.repository == *repository
+                !tidied
+                    && other.repository == *repository
                     && other.name == launch.name
                     && reads_change(&other.kind)
             }) {
@@ -202,7 +215,16 @@ impl Engine {
                 ));
             }
         }
-        let recipients = if launch.recipients.is_empty() {
+        let before = match (&merge_queue, kind.lands) {
+            (Some(queue), true) => match queue.read_submission(repository, &branch) {
+                SubmissionRead::Found { submission } => Some(submission.id),
+                SubmissionRead::None | SubmissionRead::CouldNotRead { .. } => None,
+            },
+            _ => None,
+        };
+        let recipients = if role.is_some() {
+            vec![]
+        } else if launch.recipients.is_empty() {
             self.host
                 .recipient()
                 .or_else(|| self.terminal.session())
@@ -253,10 +275,19 @@ impl Engine {
                 })
                 .collect(),
             current: None,
-            submission: SubmissionHeld::default(),
+            submission: SubmissionHeld {
+                before,
+                ..SubmissionHeld::default()
+            },
             failures: vec![],
             priority: launch.priority,
             shown: None,
+            ends: vec![],
+            role: role.map(str::to_string),
+            unwoken: Default::default(),
+            holds: launch_holds(launch, self.host.now()),
+            waiting: None,
+            stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
         };
         for stage in &kind.stages {
             let resolved = self.resolve(&held.place, stage);
@@ -281,7 +312,7 @@ impl Engine {
         let readiness = place_seam.ready(&place_ref, &base_revision);
         let failed = readiness.failed().is_some();
         let first = &kind.stages[0];
-        let holds = launch.hold.contains(&first.name) || first.waits;
+        let holds = held.hold_on(&first.name).is_some() || first.waits;
         self.update(&id, |held| {
             held.readiness = readiness.clone();
             if failed && !kind.starts_unready {
@@ -303,4 +334,28 @@ impl Engine {
             .map(|read| read.state)
             .ok_or_else(|| format!("the place {id} was removed while it was launched"))
     }
+}
+
+/// The holds a launch puts, each stage's with its words, and the
+/// submission's, since the launch (7, 47, 130).
+fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
+    let mut holds: Vec<Hold> = launch
+        .hold
+        .iter()
+        .map(|stage| Hold {
+            on: HoldOn::Stage {
+                stage: stage.clone(),
+            },
+            words: launch.hold_words.get(stage).cloned(),
+            since: now,
+        })
+        .collect();
+    if launch.hold_submission {
+        holds.push(Hold {
+            on: HoldOn::Submission,
+            words: None,
+            since: now,
+        });
+    }
+    holds
 }

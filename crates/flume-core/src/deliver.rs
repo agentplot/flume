@@ -70,11 +70,15 @@ impl Engine {
             let state = self.state_of(Some(agent.as_ref()), &folder, identity);
             if state == AgentState::Stopped {
                 let end = self.read_out(&held, &start, false);
-                self.with_start(id, identity, |start, state| {
-                    start.live = false;
-                    *state = StageState::Lost;
-                });
-                self.end_with(id, identity, end);
+                self.end_start(
+                    id,
+                    identity,
+                    |start, state| {
+                        start.live = false;
+                        *state = StageState::Lost;
+                    },
+                    Some(end),
+                );
                 return true;
             }
             let now = self.host.now();
@@ -126,13 +130,17 @@ impl Engine {
         stopped: bool,
     ) {
         let end = self.read_out(held, start, true);
-        self.with_start(id, &start.identity, |start, state| {
-            if stopped {
-                start.live = false;
-            }
-            *state = StageState::NeverBegun;
-        });
-        self.end_with(id, &start.identity, end);
+        self.end_start(
+            id,
+            &start.identity,
+            |start, state| {
+                if stopped {
+                    start.live = false;
+                }
+                *state = StageState::NeverBegun;
+            },
+            Some(end),
+        );
     }
 
     /// The start under `identity` reported never begun at once, the
@@ -152,19 +160,12 @@ impl Engine {
         };
         let mut end = self.read_out(&held, &start, false);
         end.screen = Some(screen);
-        self.with_start(id, identity, |_, state| *state = StageState::NeverBegun);
-        self.end_with(id, identity, end);
-    }
-
-    /// Writes what a stuck, lost or never-begun end read as the stage's
-    /// end (43).
-    pub(crate) fn end_with(&self, id: &PlaceId, identity: &Identity, end: StageEnd) {
-        self.update(id, |held| {
-            if let Some(index) = held.index_of(identity) {
-                held.stages[index].end = Some(end.clone());
-            }
-            Step::Write(())
-        });
+        self.end_start(
+            id,
+            identity,
+            |_, state| *state = StageState::NeverBegun,
+            Some(end),
+        );
     }
 
     /// Records a sending at `now`, if the start has made `made` so far;

@@ -47,6 +47,10 @@ pub struct Stage {
     /// On a kind's last stage, how many times a place may go back before
     /// it waits on its caller (23, 112).
     pub send_back_limit: Option<u32>,
+    /// What the stage makes besides its deliverable, each by the name its
+    /// declaration gives it; none where it declares nothing (129, C.2).
+    #[serde(default)]
+    pub makes: Vec<String>,
 }
 
 /// What must exist for a stage to end, in one of the six forms (24), or

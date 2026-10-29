@@ -6,10 +6,11 @@
 //! version, and writes a temporary file renamed over the document, or
 //! refuses where the version moved; a new place's first write creates
 //! the document by a link that fails where one exists (75, 103); a write
-//! of none removes the document and the folder (62). Nothing is written
+//! of none removes the document and the folder (62), and with it the
+//! lines of `made.jsonl` a stage's run wrote there (129). Nothing is written
 //! into a repository (104, core.16).
 
-use flume_seams::{HeldState, PlaceId, Store, Versioned, Written};
+use flume_seams::{HeldState, PlaceId, Store, Versioned, Written, MADE};
 use std::fs::{self, File, OpenOptions};
 use std::io::ErrorKind;
 use std::os::unix::fs::MetadataExt;
@@ -200,5 +201,16 @@ impl Store for StateDir {
 
     fn folder(&self, place: &PlaceId) -> String {
         self.folder_path(place).to_string_lossy().into_owned()
+    }
+
+    fn made(&self, place: &PlaceId) -> Vec<String> {
+        fs::read_to_string(self.folder_path(place).join(MADE))
+            .map(|text| {
+                text.lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }

@@ -48,6 +48,10 @@ pub trait History: Send + Sync {
     /// which its id is taken (33, C.4); none where git cannot say.
     fn common_dir(&self, repository: &str) -> Option<String>;
 
+    /// The repository's default branch, the one its common git
+    /// directory's `HEAD` names; none where git cannot say (132, C.7).
+    fn default_branch(&self, repository: &str) -> Option<String>;
+
     /// Whether `name` is a valid branch name (C.1).
     fn valid_branch(&self, name: &str) -> bool;
 }

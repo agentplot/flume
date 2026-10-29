@@ -3,7 +3,8 @@
 //! A word of the answer's own, a state or a layer, is printed as the JSON
 //! spells it.
 
-use flume_core::{Answer, HostStatus, PlaceStatus, Tidied};
+use flume_core::{Answer, HostStatus, PlaceStatus, Tidied, Woke};
+use flume_seams::{HoldOn, Made};
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -61,6 +62,51 @@ pub fn person(answer: &Answer) -> String {
             None => "the agent may go quiet".to_string(),
         }),
         Answer::Refused { refusal } => lines.push(format!("refused: {}", refusal.reason)),
+        Answer::Waited {
+            place,
+            recipient,
+            end,
+            delivered,
+        } => lines.push(match end {
+            None => format!("still waiting on {place} as {recipient}"),
+            Some(end) => {
+                let how = if *delivered {
+                    "delivered by this wait"
+                } else {
+                    "read; delivered before"
+                };
+                format!(
+                    "{place} {} for {recipient}: {how}",
+                    flume_core::what_ended(&end.end.of)
+                )
+            }
+        }),
+        Answer::Inbox { recipient, ends } => {
+            if ends.is_empty() {
+                lines.push(format!("nothing pending for {recipient}"));
+            }
+            for collected in ends {
+                lines.push(format!(
+                    "{}--{} {}; read: flume status {}",
+                    collected.kind,
+                    collected.name,
+                    flume_core::what_ended(&collected.end.end.of),
+                    collected.place
+                ));
+            }
+        }
+        Answer::Woken {
+            address,
+            woke,
+            place,
+        } => {
+            lines.push(match woke {
+                Woke::Launched => format!("woke {address}: launched {}", place.place),
+                Woke::Live => format!("{address}'s run {} is live; nothing made", place.place),
+                Woke::Waiting => format!("{address}'s run {} waits; nothing made", place.place),
+            });
+            lines.extend(place_lines(place));
+        }
     }
     lines.join("\n")
 }
@@ -130,6 +176,13 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             line.push_str(&format!(", refused: {setting}"));
         }
         lines.push(line);
+        for made in stage.end.iter().flat_map(|end| &end.made) {
+            let line = match made {
+                Made::Thing(thing) => json!(thing).to_string(),
+                Made::Text(text) => text.clone(),
+            };
+            lines.push(format!("    made: {line}"));
+        }
     }
     if let Some(agent) = &place.agent {
         let mut line = format!(
@@ -191,16 +244,49 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
                 .unwrap_or_default(),
             word(json!(waiting.why))
         );
+        if let Some(since) = waiting.since {
+            line.push_str(&format!(" since {since}"));
+        }
+        if place.stalled {
+            line.push_str(", stalled");
+        }
         if let Some(words) = &waiting.words {
             line.push_str(&format!(": {words}"));
         }
         lines.push(line);
     }
-    for (stage, words) in &place.hold_words {
-        lines.push(format!("  {stage} held: {words}"));
+    for hold in &place.holds {
+        let what = match &hold.on {
+            HoldOn::Stage { stage } => stage.as_str(),
+            HoldOn::Submission => "the submission",
+        };
+        let mut line = format!("  {what} on hold since {}", hold.since);
+        if let Some(words) = &hold.words {
+            line.push_str(&format!(": {words}"));
+        }
+        lines.push(line);
+    }
+    if let Some(role) = &place.role {
+        lines.push(format!("  the run of {role}"));
     }
     if !place.recipients.is_empty() {
         lines.push(format!("  recipients: {}", place.recipients.join(", ")));
+    }
+    for end in &place.ends {
+        let mut line = format!("  ended: {}", flume_core::what_ended(&end.end.of));
+        let delivered: Vec<&str> = end
+            .end
+            .deliveries
+            .iter()
+            .map(|delivery| delivery.recipient.as_str())
+            .collect();
+        if !delivered.is_empty() {
+            line.push_str(&format!("; delivered to {}", delivered.join(", ")));
+        }
+        if !end.pending_for.is_empty() {
+            line.push_str(&format!("; pending for {}", end.pending_for.join(", ")));
+        }
+        lines.push(line);
     }
     for (name, list) in [
         ("refused act", &place.refused_acts),
@@ -230,6 +316,24 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     }
     for kept in &host.terminal_kept {
         lines.push(format!("  the terminal keeps {kept}"));
+    }
+    for address in &host.addresses {
+        let run = match (&address.run, &address.role) {
+            (Some(run), _) => format!("its run {run}"),
+            (None, Some(role)) => format!("no run; it wakes {} in {}", role.kind, role.repository),
+            (None, None) => "no role configured".to_string(),
+        };
+        lines.push(format!(
+            "  {} ends pending for {}, {run}",
+            address.pending.len(),
+            address.address
+        ));
+        for end in &address.pending {
+            lines.push(format!("    {}: {}", end.place, end.what));
+        }
+        if let Some(unwoken) = &address.unwoken {
+            lines.push(format!("    not woken: {unwoken}"));
+        }
     }
     lines
 }

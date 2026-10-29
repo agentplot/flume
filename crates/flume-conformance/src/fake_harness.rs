@@ -25,6 +25,7 @@ pub fn flumes_own() -> Vec<Kind> {
         quiet_limit: None,
         send_back_to: None,
         send_back_limit: None,
+        makes: vec![],
     };
     let mut code = stage(
         "code",
@@ -280,7 +281,7 @@ impl AgentHarness for FakeAgentHarness {
 
     fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str) {
         self.terminal
-            .open(&a_place(), folder, command, identity, None);
+            .open(&a_place(), folder, command, identity, None, None);
         self.agent.keep_record_in(identity, folder);
     }
 
@@ -414,6 +415,19 @@ impl TerminalHarness for FakeTerminalHarness {
     fn shows_clues(&self) -> bool {
         true
     }
+
+    fn recipient(&self) -> Option<String> {
+        self.terminal.add_session("ops", AgentState::Waiting);
+        Some("ops".into())
+    }
+
+    fn received(&self, session: &str) -> Vec<String> {
+        self.terminal.notices(session)
+    }
+
+    fn no_session(&self) -> String {
+        "nobody".into()
+    }
 }
 
 pub struct FakeMergeQueueHarness {
@@ -536,6 +550,10 @@ impl StoreHarness for FakeStoreHarness {
     fn repository(&self) -> String {
         REPOSITORY.into()
     }
+
+    fn record_made(&self, place: &PlaceId, line: &str) {
+        self.store.record_made(place, line);
+    }
 }
 
 pub struct FakeHistoryHarness {
@@ -571,5 +589,9 @@ impl HistoryHarness for FakeHistoryHarness {
 
     fn reset(&self, repository: &str, branch: &str, revision: &Revision) {
         self.git.set_branch(repository, branch, revision);
+    }
+
+    fn made_default(&self) -> String {
+        "fix/one".into()
     }
 }

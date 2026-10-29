@@ -4,9 +4,9 @@
 //! since, `log -1 --format=%H -- <path>` for the newest
 //! commit touching a path, `log <start>..<head> -- <path>` for a path in
 //! a commit since, `rev-parse --git-common-dir` for the repository's
-//! common git directory, and `check-ref-format --branch` (24, 25, 33,
-//! C.1). A revision git cannot read holds nothing since and touches
-//! nothing.
+//! common git directory, `symbolic-ref` for its default branch, and
+//! `check-ref-format --branch` (24, 25, 33, 132, C.1). A revision git
+//! cannot read holds nothing since and touches nothing.
 
 use crate::git::Git;
 use flume_seams::{History, Revision, Touch};
@@ -91,6 +91,29 @@ impl History for GitHistory {
         let common = std::path::PathBuf::from(common.trim());
         let common = common.canonicalize().unwrap_or(common);
         Some(common.to_string_lossy().into_owned())
+    }
+
+    /// The branch the remote `origin`'s `HEAD` names where the repository
+    /// tracks one, else the one its common git directory's `HEAD` names,
+    /// as a bare repository beside its worktrees holds it (132, C.7).
+    fn default_branch(&self, repository: &str) -> Option<String> {
+        let git = Git::at(repository);
+        if let Ok(remote) = git.text(&[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ]) {
+            if let Some(branch) = remote.trim().strip_prefix("origin/") {
+                return Some(branch.to_string());
+            }
+        }
+        let common = self.common_dir(repository)?;
+        let branch = Git::at(&common)
+            .text(&["symbolic-ref", "--quiet", "--short", "HEAD"])
+            .ok()?;
+        let branch = branch.trim();
+        (!branch.is_empty()).then(|| branch.to_string())
     }
 
     fn valid_branch(&self, name: &str) -> bool {

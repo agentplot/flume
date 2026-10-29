@@ -153,6 +153,7 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
         &AgentCommand::default(),
         &who,
         None,
+        None,
     );
     agent.set_own_work(&who, Reading::Unknown);
     agent.set_asking(&who, Reading::Yes);
@@ -203,6 +204,7 @@ fn the_agents_record_is_read_in_its_folder_alone() {
         &AgentCommand::default(),
         &who,
         None,
+        None,
     );
     agent.keep_record_in(&who, "/state/fix--one");
     assert_eq!(agent.asking("/state/fix--one", &who), Reading::No);
@@ -235,6 +237,7 @@ fn the_terminals_states_follow_the_fake_clock() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
+        None,
         None,
     );
     terminal.schedule(&who, host.now() + 240, AgentState::Waiting);
@@ -497,4 +500,60 @@ fn the_settings_of_the_host_and_of_a_repository_are_set() {
     };
     assert_eq!(settings(&base)["change"], given("opus"));
     assert_eq!(settings(&next)["change"], given("sonnet"));
+}
+
+#[test]
+fn the_terminal_holds_recipients_sessions_by_name() {
+    let host = Arc::new(FakeHost::default());
+    let terminal = FakeTerminal::new(host);
+    assert_eq!(terminal.session_state("ops"), None);
+    assert_eq!(terminal.send_to("ops", "one"), ToSession::NotFound);
+    terminal.add_session("ops", AgentState::Asking);
+    assert_eq!(terminal.session_state("ops"), Some(AgentState::Asking));
+    terminal.set_session_state("ops", AgentState::Waiting);
+    assert_eq!(terminal.send_to("ops", "two"), ToSession::Sent);
+    terminal.remove_session("ops");
+    assert_eq!(terminal.send_to("ops", "three"), ToSession::NotFound);
+    terminal.add_session("ops", AgentState::Working);
+    assert_eq!(terminal.send_to("ops", "four"), ToSession::Sent);
+    assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
+
+    let who = identity("code", 1);
+    let opened = terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        None,
+        Some("madswan/planner"),
+    );
+    assert!(matches!(opened, Opened::Opened { .. }));
+    assert_eq!(
+        terminal.session_state("madswan/planner"),
+        Some(AgentState::Waiting)
+    );
+    assert_eq!(terminal.send_to("madswan/planner", "five"), ToSession::Sent);
+    assert_eq!(terminal.sent_to(&who), vec!["five"]);
+    let second = terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &identity("code", 2),
+        None,
+        Some("madswan/planner"),
+    );
+    assert!(matches!(second, Opened::Refused { .. }), "{second:?}");
+    terminal.kill(&who);
+    assert_eq!(terminal.session_state("madswan/planner"), None);
+    assert_eq!(
+        terminal.send_to("madswan/planner", "six"),
+        ToSession::NotFound
+    );
+
+    terminal.cannot_send();
+    assert!(matches!(
+        terminal.send_to("ops", "seven"),
+        ToSession::Refused { .. }
+    ));
+    assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
 }

@@ -1,4 +1,5 @@
-//! The terminal seam's scenarios (B.5, 94 to 98, 122, 136 to 139, 7).
+//! The terminal seam's scenarios (B.5, 94 to 98, 122, 136 to 139, 7),
+//! and a recipient's session reached by its name (43, 132).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -62,6 +63,18 @@ pub trait TerminalHarness {
 
     /// Whether the terminal shows clues at all (139).
     fn shows_clues(&self) -> bool;
+
+    /// A recipient's session the harness started, which is no agent of
+    /// flume's, by the name the terminal gives it, waiting for input; none
+    /// where the terminal reaches no session (43, 95).
+    fn recipient(&self) -> Option<String>;
+
+    /// Each input the recipient's session named `session` took as
+    /// submitted, in order.
+    fn received(&self, session: &str) -> Vec<String>;
+
+    /// A session name the terminal holds no session by.
+    fn no_session(&self) -> String;
 }
 
 fn identity(start: u32) -> Identity {
@@ -80,6 +93,7 @@ fn opened<H: TerminalHarness>(harness: &H, start: u32) -> Result<Identity, Strin
         &harness.folder(),
         &harness.command(),
         &who,
+        None,
         None,
     ) {
         Opened::Opened { .. } => Ok(who),
@@ -166,7 +180,102 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             cites: &["S46", "95", "96", "30"],
             run: a_moved_pane_found_again::<H>,
         },
+        Scenario {
+            name: "terminal: a recipient's session is sent to and read by its name, and a name no session holds is not found",
+            cites: &["43", "95", "96", "98"],
+            run: a_session_by_its_name::<H>,
+        },
+        Scenario {
+            name: "terminal: an agent opened under a session name is reached by it, and no second agent carries it while it lives",
+            cites: &["94", "98", "43", "107", "132"],
+            run: an_agent_under_a_session_name::<H>,
+        },
     ]
+}
+
+fn a_session_by_its_name<H: TerminalHarness>(harness: &H) -> Outcome {
+    let nobody = harness.no_session();
+    ensure_eq!(
+        harness.seam().session_state(&nobody),
+        None,
+        "the state of a name no session holds"
+    );
+    match harness.seam().send_to(&nobody, "words") {
+        ToSession::NotFound => {}
+        ToSession::Refused { .. } if !harness.sends() => {}
+        other => return Err(format!("a send to a name no session holds gave {other:?}")),
+    }
+    let Some(session) = harness.recipient() else {
+        return Ok(());
+    };
+    let state = harness.seam().session_state(&session);
+    ensure!(
+        state.is_some_and(|state| state != AgentState::Stopped),
+        "the recipient's session read {state:?}"
+    );
+    let sent = harness.seam().send_to(&session, "a notice");
+    if !harness.sends() {
+        ensure!(
+            matches!(sent, ToSession::Refused { .. }),
+            "a terminal that cannot send sent {sent:?}"
+        );
+        return Ok(());
+    }
+    ensure_eq!(sent, ToSession::Sent, "the send to the recipient");
+    ensure_eq!(
+        harness.received(&session).last().cloned(),
+        Some("a notice".to_string()),
+        "what the recipient took"
+    );
+    Ok(())
+}
+
+fn an_agent_under_a_session_name<H: TerminalHarness>(harness: &H) -> Outcome {
+    if !harness.sends() {
+        return Ok(());
+    }
+    let name = "madswan/planner";
+    let first = identity(1);
+    let opened = harness.seam().open(
+        &harness.place(),
+        &harness.folder(),
+        &harness.command(),
+        &first,
+        None,
+        Some(name),
+    );
+    ensure!(
+        matches!(opened, Opened::Opened { .. }),
+        "open under a session name gave {opened:?}"
+    );
+    let state = harness.seam().session_state(name);
+    ensure!(
+        state.is_some_and(|state| state != AgentState::Stopped),
+        "the session {name} read {state:?}"
+    );
+    ensure_eq!(
+        harness.seam().send_to(name, "a notice"),
+        ToSession::Sent,
+        "the send by the session name"
+    );
+    ensure_eq!(
+        harness.submitted(&first).last().cloned(),
+        Some("a notice".to_string()),
+        "what the agent took"
+    );
+    let second = harness.seam().open(
+        &harness.place(),
+        &harness.folder(),
+        &harness.command(),
+        &identity(2),
+        None,
+        Some(name),
+    );
+    ensure!(
+        matches!(second, Opened::Refused { .. }),
+        "a second agent opened under the live session name {name}: {second:?}"
+    );
+    Ok(())
 }
 
 fn open_answers_held<H: TerminalHarness>(harness: &H) -> Outcome {
@@ -174,10 +283,14 @@ fn open_answers_held<H: TerminalHarness>(harness: &H) -> Outcome {
         return Ok(());
     };
     let who = identity(1);
-    match harness
-        .seam()
-        .open(&harness.place(), &harness.folder(), &command, &who, None)
-    {
+    match harness.seam().open(
+        &harness.place(),
+        &harness.folder(),
+        &command,
+        &who,
+        None,
+        None,
+    ) {
         Opened::Held { screen } => {
             ensure!(!screen.trim().is_empty(), "a held start with no screen");
             Ok(())
@@ -193,10 +306,14 @@ fn open_answers_not_come_up<H: TerminalHarness>(harness: &H) -> Outcome {
         return Ok(());
     };
     let who = identity(1);
-    match harness
-        .seam()
-        .open(&harness.place(), &harness.folder(), &command, &who, None)
-    {
+    match harness.seam().open(
+        &harness.place(),
+        &harness.folder(),
+        &command,
+        &who,
+        None,
+        None,
+    ) {
         Opened::NotComeUp { .. } => Ok(()),
         other => Err(format!(
             "open of a program that never comes up gave {other:?}"
@@ -359,6 +476,7 @@ fn no_second_agent<H: TerminalHarness>(harness: &H) -> Outcome {
                 &harness.folder(),
                 &harness.command(),
                 &who,
+                None,
                 None
             ),
             Opened::Refused { .. }

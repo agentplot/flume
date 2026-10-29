@@ -3,6 +3,7 @@
 //! answer of the same form (2).
 
 use flume_seams::*;
+pub use flume_seams::{Act, WaitingOn, Waits};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -40,6 +41,42 @@ pub enum Answer {
     StopCheck { words: Option<String> },
     /// An act refused, naming why.
     Refused { refusal: Refusal },
+    /// A wait by place: the end of the stage's current start or of the
+    /// submission it answers, delivered to the recipient by this wait or
+    /// answered as a read of one already delivered; no end where the
+    /// wait was still waiting when its timeout passed (43, design 9).
+    Waited {
+        place: PlaceId,
+        recipient: String,
+        end: Option<EndStatus>,
+        /// This wait delivered the end; false for a read.
+        delivered: bool,
+    },
+    /// Every end pending for the recipient that the inbox collected and
+    /// delivered, of every place on the host, tidied places kept for
+    /// their ends among them (43, design 9).
+    Inbox {
+        recipient: String,
+        ends: Vec<Collected>,
+    },
+    /// A wake of a role's address: its run launched, or the run that
+    /// stands for it, live or waiting, and nothing made (132).
+    Woken {
+        address: String,
+        woke: Woke,
+        place: PlaceStatus,
+    },
+}
+
+/// What a wake of a role's address came to (132): its run launched by
+/// this wake, or the run that stood, its agent live or the run waiting,
+/// for room, on its caller or for another settle's launch to finish.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Woke {
+    Launched,
+    Live,
+    Waiting,
 }
 
 impl Answer {
@@ -59,22 +96,32 @@ impl Answer {
         }
     }
 
+    /// The exit a command gives the answer (design 9): 1 for a refusal;
+    /// for a wait, 0 for a stage delivered or finished or a submission
+    /// landed, 2 for any other end, and 3 for still waiting at its
+    /// timeout; 0 for every other answer.
+    pub fn exit(&self) -> u8 {
+        match self {
+            Answer::Refused { .. } => 1,
+            Answer::Waited { end: None, .. } => 3,
+            Answer::Waited { end: Some(end), .. } => match &end.end.of {
+                EndOf::Stage {
+                    state: StageState::Delivered | StageState::Finished,
+                    ..
+                }
+                | EndOf::Submission {
+                    verdict: Verdict::Landed { .. },
+                    ..
+                } => 0,
+                _ => 2,
+            },
+            _ => 0,
+        }
+    }
+
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).expect("an answer is always written")
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Act {
-    Retry,
-    Stop,
-    Drop,
-    Done,
-    Finish,
-    Tell,
-    Needs,
-    Priority,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -124,15 +171,55 @@ pub struct PlaceStatus {
     /// The move the place waits on its caller for, and since when; none
     /// where it waits on nobody (56, 130).
     pub waiting_on: Option<WaitingOn>,
+    /// The place waited on its caller under no hold's words past its
+    /// bound, read so by a settle (130).
+    #[serde(default)]
+    pub stalled: bool,
+    /// Each hold on a stage or the submission, with its words and since
+    /// when (47, 130).
+    #[serde(default)]
+    pub holds: Vec<Hold>,
     /// The place's priority, its caller's (7, 70).
     #[serde(default)]
     pub priority: i64,
+    /// Every end of the place, with whom it was delivered to and when,
+    /// and for whom it stands pending (43).
+    #[serde(default)]
+    pub ends: Vec<EndStatus>,
+    /// The role's address the place is a run of, none for any other
+    /// place (132).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// The clues show gives the place while it is live, with where the
+    /// terminal shows them (139).
+    #[serde(default)]
+    pub clues: Option<PlaceClues>,
+}
+
+/// An end of a place as status gives it: what ended and what was read of
+/// it, each delivery, and the recipients it stands pending for (43).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndStatus {
+    #[serde(flatten)]
+    pub end: EndHeld,
+    pub pending_for: Vec<String>,
+}
+
+/// An end the inbox collected: the place it is of, by its location and
+/// as its agents name it, and the end whole with its deliveries, this
+/// one among them (43).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Collected {
+    pub place: PlaceId,
+    pub kind: String,
+    pub name: String,
+    pub end: EndStatus,
 }
 
 /// The host's agents running, its bound, the room left and the stages
 /// waiting for room in the order they would start (56, 70); a host that
 /// states no bound has no room to judge and no queue.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostStatus {
     pub running: u32,
     pub bound: Option<u32>,
@@ -142,6 +229,85 @@ pub struct HostStatus {
     /// named with what holds it (56, 137, 138).
     #[serde(default)]
     pub terminal_kept: Vec<String>,
+    /// Each role's address an end stands pending for, with the run the
+    /// host's configuration names for it, the run standing, and why it
+    /// was not woken (132; core.28).
+    #[serde(default)]
+    pub addresses: Vec<AddressStatus>,
+    /// The watch the terminal keeps, with its bound, or none (122).
+    #[serde(default = "no_watch")]
+    pub watch: Watch,
+    /// Each repository's base a live place stands on, with the count of
+    /// its places show gives and where the terminal shows it (139).
+    #[serde(default)]
+    pub bases: Vec<BaseClues>,
+}
+
+fn no_watch() -> Watch {
+    Watch::None
+}
+
+impl Default for HostStatus {
+    fn default() -> HostStatus {
+        HostStatus {
+            running: 0,
+            bound: None,
+            room: None,
+            queue: vec![],
+            terminal_kept: vec![],
+            addresses: vec![],
+            watch: Watch::None,
+            bases: vec![],
+        }
+    }
+}
+
+/// A repository's base as show counts it (139): the count of its live
+/// places running, asking, waiting on their caller and stalled, that
+/// count in its one line, and where the terminal shows it, in the
+/// terminal's words.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BaseClues {
+    pub repository: String,
+    pub base: String,
+    pub count: BaseCount,
+    pub line: String,
+    pub shown_at: Option<String>,
+}
+
+/// A live place's clues as show gives them (139): its current stage and
+/// that stage's state, the title `<stage> · <state>` its agent is shown
+/// under, the name `<kind>--<name>` the agent is shown as, and where the
+/// terminal shows them, in the terminal's words.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceClues {
+    pub stage: String,
+    pub state: String,
+    pub title: String,
+    pub display_agent: String,
+    pub shown_at: ShownAt,
+}
+
+/// A role's address with ends pending for it (132): the run the host's
+/// configuration names for it, none where it names none and nothing
+/// wakes it; its run where one stands; each end pending for it; and why
+/// the last settle did not wake it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AddressStatus {
+    pub address: String,
+    pub role: Option<RoleRun>,
+    pub run: Option<PlaceId>,
+    pub pending: Vec<PendingEnd>,
+    pub unwoken: Option<String>,
+}
+
+/// An end pending for a role's address: the place it is of, its key, and
+/// what ended in a notice's words (43, 132).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingEnd {
+    pub place: PlaceId,
+    pub key: String,
+    pub what: String,
 }
 
 /// A stage waiting for room on the host: it waits on the host, never on
@@ -152,48 +318,6 @@ pub struct Queued {
     pub stage: String,
     pub priority: i64,
     pub since: Option<Seconds>,
-}
-
-/// The move a place waits on its caller for, why, since when, and the
-/// words that go with it: a hold's, the question, or the merge queue's
-/// (56, 130).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WaitingOn {
-    /// A retry, or done.
-    pub act: Act,
-    /// The stage the retry names; none where it names the submission.
-    pub stage: Option<String>,
-    pub why: Waits,
-    pub since: Option<Seconds>,
-    pub words: Option<String>,
-}
-
-/// Why a place waits on its caller (56, 130).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Waits {
-    /// A stage, or the submission, the launch holds (47).
-    OnHold,
-    /// A stage ended short needing an answer, or having found work
-    /// outside the kind's last stage (42, 131).
-    Answer,
-    /// A stage whose agent was lost (45).
-    Lost,
-    /// A stage whose prompt was never begun (38).
-    NeverBegun,
-    /// A first stage waiting on the place's readiness (12).
-    Unready,
-    /// A stage whose prompt asks for a part with nothing to fill it
-    /// (27).
-    Refused,
-    /// A stage whose agent the caller stopped (51).
-    Stopped,
-    /// The place went back as often as its kind allows (23, 112).
-    PastBound,
-    /// The merge queue withdrew or refused the submission (112).
-    Submission,
-    /// The last stage delivered, and the kind does not land (114).
-    Delivered,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -276,7 +400,7 @@ pub struct SubmissionStatus {
     pub verdict: Option<Verdict>,
     /// Why the place waits for its caller (112).
     pub waiting: Option<String>,
-    /// The launch holds the submission (47).
+    /// The submission is on hold (47).
     pub held: bool,
 }
 

@@ -17,6 +17,10 @@ pub trait HistoryHarness {
 
     /// The branch moved back to `revision`, as an agent's reset does.
     fn reset(&self, repository: &str, branch: &str, revision: &Revision);
+
+    /// The default branch the harness made the repository of
+    /// [`HistoryHarness::branch`] with.
+    fn made_default(&self) -> String;
 }
 
 // ---- git's history: a unit that reads git appends its own scenarios at the list's end ----
@@ -49,7 +53,22 @@ pub fn scenarios<H: HistoryHarness>() -> Vec<Scenario<H>> {
             cites: &["43", "25"],
             run: the_commits_since_a_start::<H>,
         },
+        Scenario {
+            name: "history: a repository's default branch, which a role's run is cut from where its table names no base",
+            cites: &["132", "9"],
+            run: the_default_branch::<H>,
+        },
     ]
+}
+
+fn the_default_branch<H: HistoryHarness>(harness: &H) -> Outcome {
+    let (repository, _, _) = harness.branch();
+    ensure_eq!(
+        harness.seam().default_branch(&repository),
+        Some(harness.made_default()),
+        "the default branch"
+    );
+    Ok(())
 }
 
 fn the_commits_since_a_start<H: HistoryHarness>(harness: &H) -> Outcome {

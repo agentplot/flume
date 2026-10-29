@@ -54,6 +54,17 @@ pub enum Sent {
     Refused { reason: String },
 }
 
+/// send to a recipient's session by its name: the text delivered as
+/// input, no session found by that name, or a refusal; never left typed
+/// (43, 95).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToSession {
+    Sent,
+    NotFound,
+    Refused { reason: String },
+}
+
 /// close: the agent's end, or a refusal because it did not end (97).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -122,13 +133,31 @@ pub enum Shown {
     Failed { reason: String },
 }
 
+/// Where the terminal shows a place's clues, each named in the
+/// terminal's own words: what holds the place's agents, the pane of its
+/// live agent, and what holds the places of its repository on its base;
+/// none where it holds none. Status gives them so a plugin of the
+/// terminal's refreshes the clues show gives, copying status (139, C.5).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShownAt {
+    #[serde(default)]
+    pub place: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub base: Option<String>,
+}
+
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
 /// never reports an end that did not happen (98).
 pub trait Terminal: Send + Sync {
     /// An agent running `command` in the place under `identity`, beside
-    /// the pane the settings name, if any; what the terminal keeps of the
-    /// start it keeps in the place's own `folder` (94, 107, 128).
+    /// the pane the settings name, if any, and carrying the session name
+    /// `session`, a role run's address, where one is given, so a send or
+    /// a state read by that name reaches it; refused where a live agent
+    /// carries that name already. What the terminal keeps of the start it
+    /// keeps in the place's own `folder` (94, 98, 107, 128, 132).
     fn open(
         &self,
         place: &crate::PlaceRef,
@@ -136,6 +165,7 @@ pub trait Terminal: Send + Sync {
         command: &crate::AgentCommand,
         identity: &crate::Identity,
         beside: Option<&str>,
+        session: Option<&str>,
     ) -> Opened;
 
     /// `text` delivered as input the agent receives, any text it holds
@@ -145,6 +175,16 @@ pub trait Terminal: Send + Sync {
     /// The agent's state: stopped only when its program no longer runs,
     /// unknown for anything the terminal cannot classify (96).
     fn state(&self, agent: &crate::Identity) -> AgentState;
+
+    /// `text` delivered as input to the recipient's session named
+    /// `session`, as the terminal names sessions or as an agent's open
+    /// named it, any text it holds typed cleared first; not found where
+    /// the terminal holds no such session, never guessed (43, 95, 98).
+    fn send_to(&self, session: &str, text: &str) -> ToSession;
+
+    /// The state of the recipient's session named `session`, read as an
+    /// agent's is; none where the terminal holds no such session (43, 96).
+    fn session_state(&self, session: &str) -> Option<AgentState>;
 
     /// What the terminal shows of the agent, for status and a prompt
     /// never begun; none where it shows nothing (136, 35, 43).
@@ -166,6 +206,12 @@ pub trait Terminal: Send + Sync {
     /// Clues beside the place's agents, display only: nothing flume
     /// decides reads them back (139).
     fn show(&self, place: &crate::PlaceRef, clues: &Clues) -> Shown;
+
+    /// Where the terminal shows the place's clues, the agent's by
+    /// `agent` where one is live, as it last recorded them, asking
+    /// nothing of the terminal's program; none of each where it shows
+    /// none (139).
+    fn shown_at(&self, place: &crate::PlaceRef, agent: Option<&crate::Identity>) -> ShownAt;
 
     /// The watch the terminal keeps, if any (122).
     fn watch(&self) -> Watch;

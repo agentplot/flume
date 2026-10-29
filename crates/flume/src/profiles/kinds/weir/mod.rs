@@ -325,6 +325,7 @@ fn map_stage(
         quiet_limit: stage.quiet.map(|quiet| quiet.as_secs()),
         send_back_to: stage.on_fail.clone(),
         send_back_limit,
+        makes: stage.makes.clone(),
     }
 }
 

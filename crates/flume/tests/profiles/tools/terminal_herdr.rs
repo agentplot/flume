@@ -18,7 +18,10 @@
 //! named pane, a launch from a herdr pane, herdr's readings, a prompt
 //! left typed (S43), a pane herdr could not bring back, long
 //! instructions, a herdr call that never answers, a quiet pane not ended
-//! and a finished turn nobody looked at (S42).
+//! and a finished turn nobody looked at (S42); a nix-wrapped Claude Code
+//! started from the agent profile, a role run's pane reached by its
+//! address after a move, and a recipient on another server reached
+//! through its own socket.
 
 use crate::common::*;
 use flume::host::config::HostConfig;
@@ -44,6 +47,9 @@ use std::time::{Duration, Instant};
 /// agent by its kind, and it reports its state to herdr with the pane's
 /// own `HERDR_*` left out, as herdr's reading of the screen would give
 /// it, so herdr lists no agent once it exits.
+/// Once up, it reads ctrl+c as a key, as Claude Code does, clearing what
+/// the line held before it, never as a signal the shell would take while
+/// it reads the line that follows.
 const STAND_IN: &str = r#"#!/bin/sh
 log="$STAND_IN_LOG/$HERDR_PANE_ID"
 mkdir -p "$log"
@@ -69,10 +75,19 @@ if [ -n "$STAND_IN_WARNING" ]; then
 fi
 : > "$log/started"
 report idle
+ctrl_c=$(printf '\003')
+stty -isig 2>/dev/null
 while :; do
   IFS= read -r line
   case $? in
-    0) printf '%s\n' "$line" >> "$log/got" ;;
+    0)
+      while :; do
+        case $line in
+          *"$ctrl_c"*) echo cleared >> "$log/events"; line=${line#*"$ctrl_c"} ;;
+          *) break ;;
+        esac
+      done
+      printf '%s\n' "$line" >> "$log/got" ;;
     1) exit 0 ;;
   esac
 done
@@ -92,6 +107,21 @@ const SHORT_START: Duration = Duration::from_millis(3001);
 /// The bound on an agent's start the seam's scenarios give herdr: room
 /// for the stand-in on a loaded host, short for a program never up.
 const HARNESS_START: Duration = Duration::from_secs(20);
+
+/// How many short links this run has made, which names the next.
+static LINKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// A folder short enough for a link whose socket path fits a socket's
+/// limit: the temporary folder, which a sandboxed run may write and which
+/// sluice keeps short, or `/tmp` where the temporary folder is long.
+fn short_folder() -> PathBuf {
+    let temporary = std::env::temp_dir();
+    if temporary.as_os_str().len() <= 80 {
+        temporary
+    } else {
+        PathBuf::from("/tmp")
+    }
+}
 
 /// A herdr server of the test's own, headless on a scratch socket.
 struct TestServer {
@@ -147,9 +177,14 @@ impl TestServer {
             ),
         );
         let (socket, link) = if scratch.root.as_os_str().len() > 90 {
-            let link = PathBuf::from(format!("/tmp/flume-h-{}-{}", std::process::id(), label));
+            let link = short_folder().join(format!(
+                "h{}-{}",
+                std::process::id(),
+                LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
             let _ = fs::remove_file(&link);
-            std::os::unix::fs::symlink(&scratch.root, &link).expect("a short link");
+            std::os::unix::fs::symlink(&scratch.root, &link)
+                .unwrap_or_else(|error| panic!("a short link at {}: {error}", link.display()));
             (link.join("s"), Some(link))
         } else {
             (scratch.path("s"), None)
@@ -423,7 +458,7 @@ fn opened_in(
     who: &Identity,
     command: &AgentCommand,
 ) -> Pane {
-    let opened = profile.open(place, &server.folder(), command, who, None);
+    let opened = profile.open(place, &server.folder(), command, who, None, None);
     assert!(
         matches!(opened, Opened::Opened { .. }),
         "open gave {opened:?}"
@@ -582,6 +617,40 @@ impl TerminalHarness for Harness {
     fn shows_clues(&self) -> bool {
         true
     }
+
+    /// A stand-in opened in a place of its own, as a person's or a
+    /// caller's agent stands in a pane, by its pane on the server.
+    fn recipient(&self) -> Option<String> {
+        let who = identity_of("ops--caller", 1);
+        let pane = opened_in(
+            &self.server,
+            &self.seam,
+            &self.server.place("ops--caller"),
+            &who,
+            &self.server.command(&[]),
+        );
+        Some(pane.session())
+    }
+
+    fn received(&self, session: &str) -> Vec<String> {
+        let pane = Pane::named(session).expect("a session the profile named");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let got = self.server.kept(&pane.id, "got");
+            if !got.is_empty() || Instant::now() >= deadline {
+                return got;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn no_session(&self) -> String {
+        Pane {
+            id: "w9:p99".into(),
+            socket: self.server.socket.clone(),
+        }
+        .session()
+    }
 }
 
 impl Harness {
@@ -634,6 +703,7 @@ fn s40_the_bypass_warning_holds_the_start_with_its_lines() {
         &server.command(&[("STAND_IN_WARNING", warning)]),
         &who,
         None,
+        None,
     );
     let Opened::Held { screen } = answer else {
         panic!("open at the bypass warning gave {answer:?}");
@@ -659,6 +729,7 @@ fn s45_a_program_that_never_comes_up_is_not_come_up_with_the_screen() {
         &command,
         &identity(1),
         None,
+        None,
     );
     assert!(
         matches!(&answer, Opened::NotComeUp { screen } if screen.contains("claude")),
@@ -668,6 +739,112 @@ fn s45_a_program_that_never_comes_up_is_not_come_up_with_the_screen() {
         began.elapsed() < SHORT_START + Duration::from_secs(10),
         "open waited {:?}",
         began.elapsed()
+    );
+}
+
+/// A role run's agent, opened under the role's address, moved into
+/// another workspace: a notice to the address finds its pane by the
+/// start's herdr name, records the new id and reaches it there (132;
+/// record 0018).
+#[test]
+fn a_role_runs_pane_moved_to_another_workspace_is_reached_by_its_address() {
+    let server = TestServer::start("herdr-role");
+    let profile = server.profile();
+    let who = identity(1);
+    let opened = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &server.command(&[]),
+        &who,
+        None,
+        Some("madswan/planner"),
+    );
+    assert!(
+        matches!(opened, Opened::Opened { .. }),
+        "open gave {opened:?}"
+    );
+    let pane = profile.pane(&who).expect("the pane recorded");
+    server.within("the stand-in did not come up waiting", || {
+        profile.session_state("madswan/planner") == Some(AgentState::Waiting)
+    });
+    server.herdr(&[
+        "pane",
+        "move",
+        &pane.id,
+        "--new-workspace",
+        "--label",
+        "moved",
+        "--no-focus",
+    ]);
+    assert_eq!(
+        profile.send_to("madswan/planner", "flume: fix--two code delivered"),
+        ToSession::Sent,
+        "the notice to the role's address"
+    );
+    let moved = profile.pane(&who).expect("the pane recorded");
+    assert_ne!(
+        moved.id, pane.id,
+        "the moved pane's new id was not recorded"
+    );
+    server.within("the moved agent did not receive the notice", || {
+        server.kept(&pane.id, "got") == vec!["flume: fix--two code delivered".to_string()]
+    });
+    assert_eq!(profile.close(&who), Closed::Closed);
+    assert_eq!(profile.session_state("madswan/planner"), None);
+    assert_eq!(
+        profile.send_to("madswan/planner", "another"),
+        ToSession::NotFound,
+        "a notice to an address whose run has ended"
+    );
+}
+
+/// A recipient on another herdr server than the one the profile opens
+/// on: the notice goes through the recipient's own socket, and a
+/// recipient asking takes nothing (43, 95, 98; record 0016).
+#[test]
+fn a_recipient_on_another_server_is_sent_to_through_its_own_socket() {
+    let server = TestServer::start("herdr-mine");
+    let theirs = TestServer::start("herdr-theirs");
+    let profile = server.profile();
+    let other = theirs.profile();
+    let who = identity_of("ops--caller", 1);
+    let pane = opened_in(
+        &theirs,
+        &other,
+        &theirs.place("ops--caller"),
+        &who,
+        &theirs.command(&[]),
+    );
+    let session = pane.session();
+    assert_eq!(
+        profile.session_state(&session),
+        Some(AgentState::Waiting),
+        "the recipient's state read on its own server"
+    );
+    assert_eq!(
+        profile.send_to(&session, "flume: fix--one code delivered"),
+        ToSession::Sent
+    );
+    theirs.within("the recipient did not receive the notice", || {
+        theirs.kept(&pane.id, "got") == vec!["flume: fix--one code delivered".to_string()]
+    });
+    theirs.report(&pane, "blocked");
+    assert_eq!(
+        profile.session_state(&session),
+        Some(AgentState::Asking),
+        "the recipient asking"
+    );
+    assert!(
+        matches!(
+            profile.send_to(&session, "another"),
+            ToSession::Refused { .. }
+        ),
+        "a notice typed into a question"
+    );
+    assert_eq!(
+        theirs.kept(&pane.id, "got"),
+        vec!["flume: fix--one code delivered".to_string()],
+        "what the asking recipient took"
     );
 }
 
@@ -736,6 +913,61 @@ fn the_environment_is_set_on_the_pane_and_nothing_is_typed() {
     );
 }
 
+/// A nix-wrapped Claude Code, `bin/claude` a wrapper that sets a variable
+/// and runs `bin/.claude` in its place, as devenv pins it: the agent
+/// profile names the wrapped program, which herdr starts under the kind's
+/// name, with the wrapper's variable, and the foreground check takes it
+/// (record 0018; C.5).
+#[test]
+fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
+    use flume::profiles::agent::claude::Claude;
+    let server = TestServer::start("herdr-wrapped");
+    let nix = server.scratch.path("nix/bin");
+    fs::create_dir_all(&nix).expect("the wrapper's folder");
+    let wrapped = nix.join(".claude");
+    fs::write(&wrapped, STAND_IN).expect("the wrapped program");
+    fs::set_permissions(&wrapped, fs::Permissions::from_mode(0o755)).expect("executable");
+    let wrapper = nix.join("claude");
+    fs::write(
+        &wrapper,
+        format!(
+            "#! /bin/sh -e\nexport STAND_IN_VALUE='set by the wrapper'\nexec \"{}\"  \"$@\"\n",
+            wrapped.display()
+        ),
+    )
+    .expect("the wrapper");
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("executable");
+    let claude = Claude::new(
+        &server.scratch.path("data"),
+        &server.scratch.path("bin/flume"),
+    );
+    let settings = Settings {
+        program: Some(wrapper.to_string_lossy().into()),
+        env: server.command(&[]).env,
+        ..Settings::default()
+    };
+    let place = server.place("fix--one");
+    let who = identity(1);
+    let command = claude.command(&settings, &place, &who, &Secret("s".into()), "go");
+    assert_eq!(
+        Path::new(&command.program),
+        wrapped.as_path(),
+        "the program the agent profile names"
+    );
+    let profile = server.profile();
+    let pane = opened(&server, &profile, &who, &command);
+    assert_eq!(
+        server.kept(&pane.id, "env"),
+        vec!["set by the wrapper".to_string()],
+        "the wrapper's variable the started program read"
+    );
+    let listed = server.herdr(&["pane", "get", &pane.id]);
+    assert!(
+        !listed["pane"]["agent"].is_null(),
+        "herdr lists no agent in the pane: {listed}"
+    );
+}
+
 #[test]
 fn startup_files_that_put_another_claude_first_leave_the_program_the_settings_name() {
     let server = TestServer::start("herdr-startup");
@@ -791,6 +1023,7 @@ fn a_program_that_runs_another_in_its_place_is_refused_naming_it() {
         &command,
         &who,
         None,
+        None,
     );
     let other = server
         .scratch
@@ -824,6 +1057,7 @@ fn a_herdr_name_taken_refuses_the_open() {
         &server.folder(),
         &server.command(&[]),
         &who,
+        None,
         None,
     );
     assert!(
@@ -1033,6 +1267,7 @@ fn a_conversation_opens_beside_a_named_pane() {
             &server.command(&[]),
             &who,
             Some(named),
+            None,
         );
         assert!(
             matches!(answer, Opened::Opened { .. }),
@@ -1060,6 +1295,7 @@ fn a_conversation_opens_beside_a_named_pane() {
         &server.command(&[]),
         &identity(4),
         Some("nobody"),
+        None,
     );
     assert!(
         matches!(&refused, Opened::Refused { reason } if reason.contains("nobody")),

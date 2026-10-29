@@ -4,7 +4,8 @@
 //! remove-branch's judgement, named once when kept; nothing is removed
 //! while the merge queue cannot be read; what the terminal made for it
 //! is tidied, kept where what flume did not make holds it (137, 138);
-//! its held state and folder go last.
+//! its held state and folder go last, its document alone kept apart from
+//! a live place's while an end of it stands pending (43, 62).
 
 use crate::start::Starts;
 use crate::{Answer, BranchKept, Engine, KeptPlace, Step, TerminalTidied, Tidied};
@@ -32,7 +33,9 @@ impl Engine {
         };
         for id in &targets {
             match self.store.read(id).map(|read| read.state.phase) {
-                Some(Phase::Over { .. } | Phase::Gone { .. }) => tidy.add(self.settle_place(id)),
+                Some(Phase::Over { .. } | Phase::Gone { .. } | Phase::Tidied { .. }) => {
+                    tidy.add(self.settle_place(id))
+                }
                 Some(_) => tidy.not_over.push(id.clone()),
                 None => {}
             }
@@ -61,7 +64,7 @@ impl Engine {
         let held = read.state;
         let place = &held.place;
         let over = match &held.phase {
-            Phase::Over { over, .. } | Phase::Gone { over } => over.clone(),
+            Phase::Over { over, .. } | Phase::Gone { over, .. } => over.clone(),
             _ => {
                 tidied.not_over.push(id.clone());
                 return false;
@@ -119,8 +122,12 @@ impl Engine {
                     }
                 }
             }
+            let now = self.host.now();
             self.update(id, |held| {
-                held.phase = Phase::Gone { over: over.clone() };
+                held.phase = Phase::Gone {
+                    over: over.clone(),
+                    at: Some(now),
+                };
                 Step::Write(())
             });
         }
@@ -136,6 +143,10 @@ impl Engine {
             });
         }
         let terminal = self.terminal.tidy(&at);
+        self.deliver_ends(id);
+        if let Some(read) = self.store.read(id) {
+            self.keep_for_ends(&read.state, &over);
+        }
         if self.remove_held(id) {
             tidied.removed.push(id.clone());
             if !terminal.closed.is_empty() || !terminal.kept.is_empty() {

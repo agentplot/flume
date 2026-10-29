@@ -5,12 +5,15 @@
 #   check-fast    the site's prose and its build; each crate's format,
 #                 lint and tests over the fakes, and every profile over
 #                 real git and files on scratch repositories; the plugin's
-#                 hooks against the built binary; the conformance suite's
-#                 clause coverage; the root's format, toolchain, records,
-#                 specs, changes, hooks and layers. Every branch requires
-#                 it, and CI runs it on Linux and macOS
+#                 hooks against the built binary; the herdr plugin's
+#                 manifest, its lint and its scripts against stand-in
+#                 herdr and flume; the conformance suite's clause
+#                 coverage; the root's format, toolchain, records, specs,
+#                 changes, hooks and layers. Every branch requires it, and
+#                 CI runs it on Linux and macOS
 #   check-tools   the sluice and herdr profiles against the pinned tools,
-#                 and the walkthroughs with a stand-in agent program. main
+#                 the herdr plugin linked into the pinned herdr, and the
+#                 walkthroughs with a stand-in agent program. main
 #                 requires it
 #   check-live    the walkthroughs with the pinned Claude Code under herdr:
 #                 outside the sandboxed gate, required by no branch, run by
@@ -29,6 +32,7 @@ projects:
   conformance: 'crates/flume-conformance'
   flume: 'crates/flume'
   plugin-claude: 'plugins/claude'
+  plugin-herdr: 'plugins/herdr'
   site: 'site'
   root: '.'
 

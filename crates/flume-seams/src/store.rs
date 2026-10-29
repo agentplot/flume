@@ -38,4 +38,13 @@ pub trait Store: Send + Sync {
     /// The place's own folder beside its held state, for what its stages
     /// write for flume (123, design 2).
     fn folder(&self, place: &crate::PlaceId) -> String;
+
+    /// Every line of `made.jsonl` in the place's own folder, in order and
+    /// as written, where a stage's run records what it made; none where
+    /// the file is absent. The lines go with the folder (128, 129, 62).
+    fn made(&self, place: &crate::PlaceId) -> Vec<String>;
 }
+
+/// The name of the file in a place's own folder that a stage's run
+/// records what it made in, one line per thing (129).
+pub const MADE: &str = "made.jsonl";

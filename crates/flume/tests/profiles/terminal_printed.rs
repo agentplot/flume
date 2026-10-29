@@ -95,6 +95,19 @@ impl TerminalHarness for Harness {
     fn shows_clues(&self) -> bool {
         false
     }
+
+    /// No session is the printed command's to reach.
+    fn recipient(&self) -> Option<String> {
+        None
+    }
+
+    fn received(&self, _session: &str) -> Vec<String> {
+        vec![]
+    }
+
+    fn no_session(&self) -> String {
+        "ops".into()
+    }
 }
 
 #[test]

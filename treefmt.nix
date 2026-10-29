@@ -76,6 +76,9 @@ in
   settings.formatter.shellcheck.priority = 1;
   settings.formatter.shfmt.pipeline = "shell";
   settings.formatter.shfmt.priority = 2;
+  # The herdr plugin's stand-ins: #!/bin/sh scripts with no extension.
+  settings.formatter.shellcheck.includes = [ "plugins/herdr/tests/fake/*" ];
+  settings.formatter.shfmt.includes = [ "plugins/herdr/tests/fake/*" ];
 
   # .prototools is TOML and .versionrc convco's YAML, under names with no
   # extension.

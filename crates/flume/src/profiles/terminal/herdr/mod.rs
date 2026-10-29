@@ -36,9 +36,27 @@
 //! flume did not open is in it, keeping and naming either where a pane
 //! flume did not open stands (137, 138). show titles the agent's pane
 //! with its stage and state and gives the base's workspace its count as
-//! the token `flume` (139). There is no watch (122); and the session a
-//! command runs in is `herdr:<pane>@<socket>`, its pane on its server
-//! (7).
+//! the token `flume` (139), and says where it shows them, the place's
+//! tab, its agent's pane and its base's workspace each as
+//! `herdr:<id>@<socket>` from its records, for flume's herdr plugin to
+//! refresh them (C.5). The watch is flume's herdr plugin's: while a
+//! watch of it has renewed its lease within the lease's term, a minute,
+//! the profile answers its bound, thirty seconds, and no watch
+//! otherwise, reading the lease and starting nothing (119, 122; design
+//! 10). The session a command runs in is `herdr:<pane>@<socket>`, its
+//! pane on its server (7).
+//!
+//! A recipient's session is reached by its name (43, 132; records 0016,
+//! 0018): `herdr:<pane>@<socket>` by that pane on that server, its id
+//! alone, since a plain recipient's pane carries no name of flume's; and
+//! a name an open gave an agent, a role run's address, by the pane its
+//! live start holds, found again by that start's herdr name where the id
+//! no longer answers, its new id recorded before anything is sent. A
+//! notice goes by herdr's agent prompt into a session working or
+//! waiting, the held input cleared first in one that waits, and is
+//! refused, nothing typed, for a session asking or unread; a working
+//! session is not interrupted to clear it, its program queuing the
+//! notice as its next turn.
 //!
 //! Every herdr call runs under a bound, ten seconds where the call states
 //! none, and one that does not answer within it is unknown or a refusal
@@ -46,8 +64,8 @@
 //! the recorded server's socket passed (98, core.29).
 
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, Terminal,
-    TerminalTidy, Watch,
+    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, ShownAt,
+    Terminal, TerminalTidy, ToSession, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -66,6 +84,14 @@ pub const NAME: &str = "herdr";
 
 /// The bound on a herdr call that states none (98).
 pub const BOUND: Duration = Duration::from_secs(10);
+
+/// The bound flume's herdr plugin settles every place on while its watch
+/// runs (122).
+pub const WATCH_BOUND: flume_seams::Seconds = 30;
+
+/// How long a lease of the plugin's watch is fresh after it was last
+/// renewed; the watch renews it four times as often.
+pub const LEASE_TERM: Duration = Duration::from_secs(60);
 
 /// How long agent start waits for the program to be ready: room for
 /// SessionStart hooks slow under load (record 0018).
@@ -169,6 +195,7 @@ pub struct Herdr {
     start_timeout: Duration,
     caller: Option<Pane>,
     login: Arc<OnceLock<BTreeMap<String, String>>>,
+    plugin: Option<PathBuf>,
 }
 
 /// A pane as open recorded it for an agent: its id, its server, the
@@ -187,17 +214,26 @@ enum Found {
     Unknown(String),
 }
 
+/// What a session name an open gave an agent names: the agent.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct Named {
+    session: String,
+    identity: Identity,
+}
+
 impl Herdr {
     /// The host's herdr: flume's own session, the panes, tabs and
     /// workspaces recorded under `$XDG_STATE_HOME/flume/terminal/herdr`,
     /// and the pane the calling command runs in, as herdr's environment
     /// names it.
     pub fn of_host() -> Result<Herdr, String> {
+        let state = crate::host::config::flume_state()?;
         Ok(Herdr::new(
             Server::Session(SESSION.into()),
-            crate::host::config::flume_state()?.join("terminal/herdr"),
+            state.join("terminal/herdr"),
         )
-        .with_caller(caller()))
+        .with_caller(caller())
+        .with_plugin(plugin_state(&state)))
     }
 
     /// herdr opening on `server`, recording what it makes under
@@ -211,7 +247,38 @@ impl Herdr {
             start_timeout: START_TIMEOUT,
             caller: None,
             login: Arc::default(),
+            plugin: None,
         }
+    }
+
+    /// The state directory of flume's herdr plugin, whose watch's lease
+    /// says the terminal keeps watch; none, no watch.
+    pub fn with_plugin(mut self, plugin: Option<PathBuf>) -> Herdr {
+        self.plugin = plugin;
+        self
+    }
+
+    /// Whether a watch of flume's herdr plugin, on any herdr server, has
+    /// renewed its lease within the lease's term: the lease's first line
+    /// is the watch's pid and when it last renewed, in seconds since the
+    /// epoch (design 10).
+    pub fn watch_kept(&self) -> bool {
+        let Some(plugin) = &self.plugin else {
+            return false;
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs());
+        fs::read_dir(plugin.join("servers"))
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .filter_map(|server| fs::read_to_string(server.path().join("watch.lease")).ok())
+            .filter_map(|lease| {
+                let first = lease.lines().next()?.to_string();
+                first.split_whitespace().nth(1)?.parse::<u64>().ok()
+            })
+            .any(|renewed| renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs())
     }
 
     /// Exactly `variables` for the host user's login environment, in
@@ -490,6 +557,92 @@ impl Herdr {
                 Found::Unknown(format!("herdr refused ({code}): {words}"))
             }
             Call::Unanswered(words) => Found::Unknown(words),
+        }
+    }
+
+    fn session_record(&self, session: &str) -> PathBuf {
+        self.records
+            .join("sessions")
+            .join(format!("{}.json", digest(session)))
+    }
+
+    /// The agent an open named `session`, as recorded.
+    fn named(&self, session: &str) -> Option<Identity> {
+        let record = read_json(&self.session_record(session))?;
+        let named: Named = serde_json::from_value(record).ok()?;
+        (named.session == session).then_some(named.identity)
+    }
+
+    /// The pane a session name reaches: `herdr:<pane>@<socket>` by its id
+    /// alone while herdr lists it there, and a name an open gave an agent
+    /// by the pane its live start holds, found again by its herdr name
+    /// (43, 132; record 0018).
+    fn reach(&self, session: &str) -> Found {
+        if let Some(pane) = Pane::named(session) {
+            return match self.ask(&pane.socket, &["pane", "get", &pane.id]) {
+                Call::Answered(info)
+                    if info["pane"]["pane_id"].as_str() == Some(pane.id.as_str()) =>
+                {
+                    Found::At(pane)
+                }
+                Call::Answered(_) => Found::Gone,
+                Call::Refused { code, .. }
+                    if code == "pane_not_found" || code == "server_not_running" =>
+                {
+                    Found::Gone
+                }
+                Call::Refused { code, words } => {
+                    Found::Unknown(format!("herdr refused ({code}): {words}"))
+                }
+                Call::Unanswered(words) => Found::Unknown(words),
+            };
+        }
+        match self.named(session) {
+            Some(identity) => self.found(&identity),
+            None => Found::Gone,
+        }
+    }
+
+    /// The state of the agent in `pane`, as herdr reads it (96).
+    fn pane_state(&self, pane: &Pane) -> AgentState {
+        let info = match self.ask(&pane.socket, &["pane", "get", &pane.id]) {
+            Call::Answered(info) => info,
+            Call::Refused { code, .. }
+                if code == "pane_not_found" || code == "server_not_running" =>
+            {
+                return AgentState::Stopped
+            }
+            Call::Refused { .. } | Call::Unanswered(_) => return AgentState::Unknown,
+        };
+        let info = info.get("pane").cloned().unwrap_or_default();
+        if info
+            .get("restore_error")
+            .is_some_and(|error| !error.is_null())
+        {
+            return AgentState::Stopped;
+        }
+        if info.get("agent").is_some_and(|agent| !agent.is_null()) {
+            return match info.get("agent_status").and_then(Value::as_str) {
+                Some("working") => AgentState::Working,
+                Some("idle" | "done") => AgentState::Waiting,
+                Some("blocked") => AgentState::Asking,
+                _ => AgentState::Unknown,
+            };
+        }
+        let Call::Answered(processes) =
+            self.ask(&pane.socket, &["pane", "process-info", "--pane", &pane.id])
+        else {
+            return AgentState::Unknown;
+        };
+        let processes = processes.get("process_info").cloned().unwrap_or_default();
+        let shell = processes.get("shell_pid").and_then(Value::as_u64);
+        let foreground = processes
+            .get("foreground_process_group_id")
+            .and_then(Value::as_u64);
+        if shell.is_some() && shell == foreground {
+            AgentState::Stopped
+        } else {
+            AgentState::Unknown
         }
     }
 
@@ -994,6 +1147,18 @@ pub fn caller() -> Option<Pane> {
     })
 }
 
+/// The state directory herdr gives flume's herdr plugin, beside flume's
+/// own state directory `flume_state`: `$XDG_STATE_HOME/herdr/plugins/
+/// agentplot.flume` where flume's is `$XDG_STATE_HOME/flume` (design 10).
+pub fn plugin_state(flume_state: &Path) -> Option<PathBuf> {
+    flume_state
+        .parent()
+        .map(|state| state.join("herdr/plugins").join(PLUGIN))
+}
+
+/// flume's herdr plugin's id (`plugins/herdr/herdr-plugin.toml`).
+pub const PLUGIN: &str = "agentplot.flume";
+
 /// The agent's herdr name, made from the identity: at most 32 of the
 /// characters herdr's rule `[a-z][a-z0-9_-]{0,31}` allows, ending in a
 /// digest of the whole identity, so it is unique on the server (C.5;
@@ -1139,11 +1304,21 @@ impl Terminal for Herdr {
         command: &AgentCommand,
         identity: &Identity,
         beside: Option<&str>,
+        session: Option<&str>,
     ) -> Opened {
         if self.state(identity) != AgentState::Stopped {
             return Opened::Refused {
                 reason: format!("an agent is live under {identity}"),
             };
+        }
+        if let Some(name) = session {
+            if let Some(holder) = self.named(name) {
+                if holder != *identity && self.state(&holder) != AgentState::Stopped {
+                    return Opened::Refused {
+                        reason: format!("the live agent {holder} carries the session name {name}"),
+                    };
+                }
+            }
         }
         let Some(kind) = command.kind.as_deref() else {
             return Opened::Refused {
@@ -1284,6 +1459,19 @@ impl Terminal for Herdr {
             self.abandon(identity, &pane, &bin);
             return Opened::Refused { reason };
         }
+        if let Some(name) = session {
+            let named = Named {
+                session: name.into(),
+                identity: identity.clone(),
+            };
+            let written = serde_json::to_value(&named)
+                .map_err(|error| error.to_string())
+                .and_then(|value| write_json(&self.session_record(name), &value));
+            if let Err(reason) = written {
+                self.abandon(identity, &pane, &bin);
+                return Opened::Refused { reason };
+            }
+        }
         Opened::Opened {
             carried: false,
             printed: None,
@@ -1312,49 +1500,51 @@ impl Terminal for Herdr {
     }
 
     fn state(&self, agent: &Identity) -> AgentState {
-        let pane = match self.found(agent) {
+        match self.found(agent) {
+            Found::At(pane) => self.pane_state(&pane),
+            Found::Gone => AgentState::Stopped,
+            Found::Unknown(_) => AgentState::Unknown,
+        }
+    }
+
+    fn send_to(&self, session: &str, text: &str) -> ToSession {
+        let pane = match self.reach(session) {
             Found::At(pane) => pane,
-            Found::Gone => return AgentState::Stopped,
-            Found::Unknown(_) => return AgentState::Unknown,
+            Found::Gone => return ToSession::NotFound,
+            Found::Unknown(reason) => return ToSession::Refused { reason },
         };
-        let info = match self.ask(&pane.socket, &["pane", "get", &pane.id]) {
-            Call::Answered(info) => info,
-            Call::Refused { code, .. }
-                if code == "pane_not_found" || code == "server_not_running" =>
-            {
-                return AgentState::Stopped
+        let mut calls = vec![];
+        match self.pane_state(&pane) {
+            AgentState::Waiting => {
+                calls.push(vec!["agent", "send-keys", pane.id.as_str(), "ctrl+c"])
             }
-            Call::Refused { .. } | Call::Unanswered(_) => return AgentState::Unknown,
-        };
-        let info = info.get("pane").cloned().unwrap_or_default();
-        if info
-            .get("restore_error")
-            .is_some_and(|error| !error.is_null())
-        {
-            return AgentState::Stopped;
+            AgentState::Working => {}
+            AgentState::Stopped => return ToSession::NotFound,
+            state => {
+                return ToSession::Refused {
+                    reason: format!(
+                        "the session {session} reads {state:?}, so nothing was typed into it"
+                    ),
+                }
+            }
         }
-        if info.get("agent").is_some_and(|agent| !agent.is_null()) {
-            return match info.get("agent_status").and_then(Value::as_str) {
-                Some("working") => AgentState::Working,
-                Some("idle" | "done") => AgentState::Waiting,
-                Some("blocked") => AgentState::Asking,
-                _ => AgentState::Unknown,
-            };
+        calls.push(vec!["agent", "prompt", pane.id.as_str(), text]);
+        for args in calls {
+            if let Err(reason) = self.answered(&pane.socket, &args) {
+                return ToSession::Refused { reason };
+            }
         }
-        let Call::Answered(processes) =
-            self.ask(&pane.socket, &["pane", "process-info", "--pane", &pane.id])
-        else {
-            return AgentState::Unknown;
-        };
-        let processes = processes.get("process_info").cloned().unwrap_or_default();
-        let shell = processes.get("shell_pid").and_then(Value::as_u64);
-        let foreground = processes
-            .get("foreground_process_group_id")
-            .and_then(Value::as_u64);
-        if shell.is_some() && shell == foreground {
-            AgentState::Stopped
-        } else {
-            AgentState::Unknown
+        ToSession::Sent
+    }
+
+    fn session_state(&self, session: &str) -> Option<AgentState> {
+        match self.reach(session) {
+            Found::At(pane) => match self.pane_state(&pane) {
+                AgentState::Stopped => None,
+                state => Some(state),
+            },
+            Found::Gone => None,
+            Found::Unknown(_) => Some(AgentState::Unknown),
         }
     }
 
@@ -1520,11 +1710,114 @@ impl Terminal for Herdr {
         }
     }
 
+    fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
+        let named = |id: &str, socket: &Path| format!("herdr:{id}@{}", socket.display());
+        ShownAt {
+            place: self.tab(place).map(|(tab, socket)| named(&tab, &socket)),
+            agent: agent
+                .and_then(|agent| self.pane(agent))
+                .map(|pane| pane.session()),
+            base: self
+                .workspace(place)
+                .map(|(workspace, socket)| named(&workspace, &socket)),
+        }
+    }
+
     fn watch(&self) -> Watch {
-        Watch::None
+        if self.watch_kept() {
+            Watch::Bound {
+                seconds: WATCH_BOUND,
+            }
+        } else {
+            Watch::None
+        }
     }
 
     fn session(&self) -> Option<String> {
         self.caller.as_ref().map(Pane::session)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The profile over records in a scratch directory of its own.
+    fn over_records(name: &str) -> (Herdr, PathBuf) {
+        let records =
+            std::env::temp_dir().join(format!("flume-herdr-records-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&records);
+        (
+            Herdr::new(Server::Socket("/run/h.sock".into()), &records),
+            records,
+        )
+    }
+
+    fn place() -> PlaceRef {
+        PlaceRef {
+            repository: "/r".into(),
+            location: "/r/places/fix--one".into(),
+            branch: "fix/one".into(),
+            base: "main".into(),
+        }
+    }
+
+    fn identity() -> Identity {
+        Identity {
+            repository: "r1".into(),
+            place: "fix--one".into(),
+            stage: "code".into(),
+            start: 1,
+        }
+    }
+
+    #[test]
+    fn where_the_clues_show_is_read_from_the_records_alone() {
+        // 139, C.5, design 10: the place's tab, its agent's pane and its
+        // base's workspace, each as `herdr:<id>@<socket>` from what open
+        // recorded, asking herdr nothing (the socket answers no server).
+        let (herdr, records) = over_records("shown");
+        let place = place();
+        write_json(
+            &herdr.tab_record(&place.location),
+            &json!({"tab": "w1:t2", "socket": "/run/h.sock"}),
+        )
+        .unwrap();
+        write_json(
+            &herdr.workspace_record(&place),
+            &json!({"workspace": "w1", "socket": "/run/h.sock"}),
+        )
+        .unwrap();
+        herdr
+            .keep(
+                &identity(),
+                &Kept {
+                    pane: Pane {
+                        id: "w1:p3".into(),
+                        socket: "/run/h.sock".into(),
+                    },
+                    name: herdr_name(&identity()),
+                    place: Some(place.location.clone()),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            herdr.shown_at(&place, Some(&identity())),
+            ShownAt {
+                place: Some("herdr:w1:t2@/run/h.sock".into()),
+                agent: Some("herdr:w1:p3@/run/h.sock".into()),
+                base: Some("herdr:w1@/run/h.sock".into()),
+            }
+        );
+        let _ = fs::remove_dir_all(records);
+    }
+
+    #[test]
+    fn a_place_open_never_made_shows_nowhere() {
+        let (herdr, _) = over_records("none");
+        assert_eq!(
+            herdr.shown_at(&place(), Some(&identity())),
+            ShownAt::default()
+        );
     }
 }

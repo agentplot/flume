@@ -519,6 +519,101 @@ fn holds_and_recipients_at_the_launch() {
     assert!(two.hold_words.is_empty());
 }
 
+#[test]
+fn a_hold_after_the_launch_and_a_stall_bound() {
+    // 7, 47, 130: `flume hold` with its words, refused naming why; a
+    // launch's stall bound kept on the place.
+    let host = Host::new("hold");
+    let repository = repository("hold", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--stall-after",
+            "30m",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = format!("{}/places/change--one", repository.name());
+    assert_eq!(held_of(&host, &place).state.stall_after, 30 * 60);
+    let held = answered(
+        &host.flume(
+            &repository.dir,
+            &[
+                "hold",
+                "change--one",
+                "--stage",
+                "code",
+                "waiting on the schema card",
+                "--json",
+            ],
+            &[],
+        ),
+        0,
+    );
+    let hold = &held["acted"]["status"]["holds"][0];
+    assert_eq!(held["acted"]["act"], "hold", "{held}");
+    assert_eq!(hold["on"], "stage", "{held}");
+    assert_eq!(hold["stage"], "code", "{held}");
+    assert_eq!(hold["words"], "waiting on the schema card", "{held}");
+    let running = answered(
+        &host.flume(
+            &repository.dir,
+            &["hold", "change--one", "--stage", "construct", "x", "--json"],
+            &[],
+        ),
+        1,
+    );
+    let reason = running["refused"]["refusal"]["reason"].to_string();
+    assert!(reason.contains("construct"), "{reason}");
+    let submission = answered(
+        &host.flume(
+            &repository.dir,
+            &["hold", "change--one", "--submission", "x", "--json"],
+            &[],
+        ),
+        1,
+    );
+    let reason = submission["refused"]["refusal"]["reason"].to_string();
+    assert!(reason.contains("does not land"), "{reason}");
+    let neither = host.flume(&repository.dir, &["hold", "change--one", "x"], &[]);
+    assert_eq!(neither.code, 2, "{}", neither.text);
+    let person = host.flume(&repository.dir, &["status", "change--one"], &[]);
+    assert!(
+        person.text.contains("code on hold since ")
+            && person.text.contains(": waiting on the schema card"),
+        "{}",
+        person.text
+    );
+    let no_time = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "two",
+            "--kinds",
+            &kinds,
+            "--stall-after",
+            "soon",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(no_time.code, 1, "{}", no_time.text);
+    assert!(no_time.text.contains("soon is no time"), "{}", no_time.text);
+}
+
 /// The current agent's stage, settings and their layers, as flume's
 /// binary gives them.
 fn current_agent(host: &Host, dir: &Path, place: &str) -> Value {
@@ -745,4 +840,346 @@ fn status_over_mcp() {
     assert_eq!(replies[4]["result"]["isError"], true);
     assert_eq!(replies[5]["error"]["code"], -32601);
     assert_eq!(files_under(&host.state()), before, "status over MCP wrote");
+}
+
+/// The place's held state as the store holds it.
+fn held_of(host: &Host, place: &str) -> Versioned {
+    StateDir::at(host.state())
+        .read(&PlaceId::new(place))
+        .expect("the place's held state")
+}
+
+/// A wait's or an inbox's answer, its exit and its JSON as one value.
+fn answered(ran: &Ran, code: i32) -> Value {
+    assert_eq!(ran.code, code, "{}", ran.text);
+    ran.json()
+}
+
+#[test]
+fn a_wait_exits_by_its_outcome() {
+    // 43, design 9: 3 still waiting, 0 delivered and read again, 2 ended
+    // short, 1 refused.
+    let host = Host::new("wait-exits");
+    let repository = repository("wait-exits", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--recipient",
+            "ops",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = format!("{}/places/change--one", repository.name());
+    let wait = |stage: &str| {
+        host.stand_in(
+            &repository.dir,
+            &[
+                "wait",
+                "change--one",
+                "--stage",
+                stage,
+                "--recipient",
+                "ops",
+                "--timeout",
+                "1s",
+                "--json",
+            ],
+            &[],
+        )
+    };
+    let waiting = answered(&wait("construct"), 3);
+    assert!(waiting["waited"]["end"].is_null(), "{waiting}");
+    assert_eq!(waiting["waited"]["recipient"], "ops");
+
+    deliver(&host, &repository.dir, &place, "construct");
+    let delivered = answered(&wait("construct"), 0);
+    assert_eq!(delivered["waited"]["delivered"], true, "{delivered}");
+    assert_eq!(delivered["waited"]["end"]["state"], "delivered");
+    assert_eq!(
+        delivered["waited"]["end"]["deliveries"][0]["by"], "wait",
+        "{delivered}"
+    );
+    let read = answered(&wait("construct"), 0);
+    assert_eq!(read["waited"]["delivered"], false, "{read}");
+    let person = host.stand_in(
+        &repository.dir,
+        &[
+            "wait",
+            "change--one",
+            "--stage",
+            "construct",
+            "--recipient",
+            "ops",
+        ],
+        &[],
+    );
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert!(
+        person.text.contains("construct delivered for ops"),
+        "{}",
+        person.text
+    );
+
+    let held = held_of(&host, &place).state;
+    let start = held.stages[1].start.clone().expect("code's start");
+    let needs = host.stand_in(
+        &repository.dir,
+        &["needs", "which design?", "--json"],
+        &[
+            ("FLUME_AGENT", &start.identity.to_string()),
+            ("FLUME_SECRET", &start.secret.0),
+        ],
+    );
+    assert_eq!(needs.code, 0, "{}", needs.text);
+    let short = answered(&wait("code"), 2);
+    assert_eq!(short["waited"]["end"]["state"], "ended_short", "{short}");
+    assert_eq!(short["waited"]["end"]["end"]["words"], "which design?");
+
+    let none = answered(
+        &host.stand_in(
+            &repository.dir,
+            &[
+                "wait",
+                "change--none",
+                "--submission",
+                "--recipient",
+                "ops",
+                "--json",
+            ],
+            &[],
+        ),
+        1,
+    );
+    assert!(none["refused"].is_object(), "{none}");
+    let unlanded = answered(
+        &host.stand_in(
+            &repository.dir,
+            &[
+                "wait",
+                "change--one",
+                "--submission",
+                "--recipient",
+                "ops",
+                "--json",
+            ],
+            &[],
+        ),
+        1,
+    );
+    assert!(
+        unlanded["refused"]["refusal"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("does not land")),
+        "{unlanded}"
+    );
+    let unnamed = host.stand_in(&repository.dir, &["wait", "change--one"], &[]);
+    assert_eq!(unnamed.code, 2, "{}", unnamed.text);
+}
+
+#[test]
+fn the_recipient_a_wait_and_an_inbox_default_to() {
+    // 7, 132, design 7: $FLUME_RECIPIENT, then a role's run's address read
+    // from the place $FLUME_PLACE names, and a refusal where none names
+    // one; the terminal's session is its profile's to name, tested beside
+    // it under profiles/.
+    let host = Host::new("recipients");
+    let repository = repository("recipients", None);
+    let kinds = kinds_file(&host, false);
+    for (name, recipient) in [("one", "ops"), ("two", "madswan/planner")] {
+        let launched = host.stand_in(
+            &repository.dir,
+            &[
+                "launch",
+                "--kind",
+                "change",
+                "--name",
+                name,
+                "--kinds",
+                &kinds,
+                "--recipient",
+                recipient,
+                "--json",
+            ],
+            &[],
+        );
+        assert_eq!(launched.code, 0, "{}", launched.text);
+        let place = format!("{}/places/change--{name}", repository.name());
+        deliver(&host, &repository.dir, &place, "construct");
+    }
+    let two = format!("{}/places/change--two", repository.name());
+    let store = StateDir::at(host.state());
+    let read = held_of(&host, &two);
+    let mut role = read.state.clone();
+    role.role = Some("madswan/planner".into());
+    assert!(matches!(
+        store.write(&PlaceId::new(&two), Some(read.version), Some(&role)),
+        Written::Written { .. }
+    ));
+
+    let unnamed = answered(
+        &host.stand_in(&repository.dir, &["inbox", "--json"], &[]),
+        1,
+    );
+    assert!(
+        unnamed["refused"]["refusal"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("--recipient")),
+        "{unnamed}"
+    );
+
+    let by_variable = answered(
+        &host.stand_in(
+            &repository.dir,
+            &["inbox", "--json"],
+            &[("FLUME_RECIPIENT", "ops"), ("FLUME_PLACE", &two)],
+        ),
+        0,
+    );
+    assert_eq!(by_variable["inbox"]["recipient"], "ops", "{by_variable}");
+    let ends = by_variable["inbox"]["ends"].as_array().expect("ends");
+    assert_eq!(ends.len(), 1, "{by_variable}");
+    assert_eq!(ends[0]["kind"], "change");
+    assert_eq!(ends[0]["name"], "one");
+    assert_eq!(ends[0]["end"]["state"], "delivered");
+    assert_eq!(ends[0]["end"]["deliveries"][0]["by"], "inbox");
+
+    let by_role = answered(
+        &host.stand_in(
+            &repository.dir,
+            &["inbox", "--json"],
+            &[("FLUME_PLACE", &two)],
+        ),
+        0,
+    );
+    assert_eq!(
+        by_role["inbox"]["recipient"], "madswan/planner",
+        "{by_role}"
+    );
+    assert_eq!(
+        by_role["inbox"]["ends"].as_array().map(Vec::len),
+        Some(1),
+        "{by_role}"
+    );
+    let again = answered(
+        &host.stand_in(
+            &repository.dir,
+            &["inbox", "--recipient", "madswan/planner", "--json"],
+            &[],
+        ),
+        0,
+    );
+    assert_eq!(
+        again["inbox"]["ends"].as_array().map(Vec::len),
+        Some(0),
+        "{again}"
+    );
+    let person = host.stand_in(&repository.dir, &["inbox", "--recipient", "ops"], &[]);
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert_eq!(person.text.trim(), "nothing pending for ops");
+
+    let waited = answered(
+        &host.stand_in(
+            &repository.dir,
+            &["wait", "change--one", "--stage", "construct", "--json"],
+            &[("FLUME_RECIPIENT", "ops")],
+        ),
+        0,
+    );
+    assert_eq!(waited["waited"]["recipient"], "ops", "{waited}");
+    assert_eq!(waited["waited"]["delivered"], false, "{waited}");
+}
+
+#[test]
+fn a_wake_of_a_roles_address() {
+    // 132, C.7: the host's [roles] table names the planner's run, a kind
+    // the repository declares; `flume wake` launches it once, answers the
+    // run that stands after, refuses an address the table names nothing
+    // for and a name that is no address, and the run's inbox collects for
+    // its address.
+    let host = Host::new("wake");
+    let repository = Repository::new("wake");
+    repository.write(
+        ".config/flume.toml",
+        &format!(
+            "[profiles]\nplace = \"git-worktree\"\n\n[kinds.planner]\nversion = 1\nbranch = \"planner\"\nstarts_unready = false\nlands = false\n\n[[kinds.planner.stages]]\nname = \"plan\"\nprompt = \"prompts/plan.md\"\ndeliverables = [\"commits\"]\nagents = [{{ program = \"{STAND_IN}\" }}]\n"
+        ),
+    );
+    repository.write(".config/prompts/plan.md", "Read what is pending for you.\n");
+    repository.write(".gitignore", "places/\n");
+    repository.commit("the binding and the planner");
+    host.configure(&format!(
+        "[roles.\"madswan/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
+        repository.name()
+    ));
+
+    let woke = answered(
+        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        0,
+    );
+    assert_eq!(woke["woken"]["woke"], "launched", "{woke}");
+    assert_eq!(woke["woken"]["address"], "madswan/planner", "{woke}");
+    let run = &woke["woken"]["place"];
+    assert_eq!(run["role"], "madswan/planner", "{woke}");
+    assert_eq!(run["kind"], "planner");
+    assert_eq!(run["name"], "planner");
+    assert_eq!(run["base"], "main", "the repository's default branch");
+    assert_eq!(run["priority"], 5);
+    assert_eq!(run["recipients"], serde_json::json!([]));
+    let place = format!("{}/places/planner--planner", repository.name());
+    assert_eq!(run["place"], place.as_str());
+
+    let again = answered(
+        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        0,
+    );
+    assert_ne!(again["woken"]["woke"], "launched", "{again}");
+    assert_eq!(again["woken"]["place"]["place"], place.as_str(), "{again}");
+    let person = host.stand_in(&repository.dir, &["wake", "madswan/planner"], &[]);
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert!(
+        person.text.starts_with("madswan/planner's run"),
+        "{}",
+        person.text
+    );
+
+    let unnamed = answered(
+        &host.stand_in(&repository.dir, &["wake", "madswan/ops", "--json"], &[]),
+        1,
+    );
+    assert!(
+        unnamed["refused"]["refusal"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("names no role for madswan/ops")),
+        "{unnamed}"
+    );
+    let no_address = answered(
+        &host.stand_in(&repository.dir, &["wake", "planner", "--json"], &[]),
+        1,
+    );
+    assert!(
+        no_address["refused"]["refusal"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("<partition>/<role>")),
+        "{no_address}"
+    );
+
+    let inbox = answered(
+        &host.stand_in(
+            &repository.dir,
+            &["inbox", "--json"],
+            &[("FLUME_PLACE", &place)],
+        ),
+        0,
+    );
+    assert_eq!(inbox["inbox"]["recipient"], "madswan/planner", "{inbox}");
 }

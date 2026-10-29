@@ -40,8 +40,8 @@ branch requires:
 
 | layer | what | who requires it |
 |---|---|---|
-| `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the plugin's hooks against the built binary; the conformance suite's clause coverage; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks and layers | every branch, and CI on Linux and macOS |
-| `check-tools` | the sluice and herdr profiles against the pinned tools, and the walkthroughs with the stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/`) | main |
+| `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the Claude Code plugin's hooks against the built binary; the herdr plugin's manifest, its lint (shellcheck) and its scripts against stand-in herdr and flume under sh and dash; the conformance suite's clause coverage; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks and layers | every branch, and CI on Linux and macOS |
+| `check-tools` | the sluice and herdr profiles against the pinned tools, the herdr plugin linked into the pinned herdr, and the walkthroughs with the stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/`) | main |
 | `check-live` | the walkthroughs with the pinned Claude Code under herdr (`crates/flume/tests/profiles/live/`) | no branch: run by hand in the devenv shell, `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live`, the token a test account's from `claude setup-token` |
 
 Run suites through sluice, so the agents on this host take turns under
@@ -49,7 +49,7 @@ its bound: once your work is committed, `sluice exec main` for the
 gate's checks, and while iterating `sluice exec main -- moon run
 <project>:<task>`. The projects are those `.moon/workspace.yml` lists:
 `seams`, `core`, `fakes`, `conformance` and `flume` (the crates under
-`crates/`), `plugin-claude` (`plugins/claude`), `site` and `root`. A quick, narrow call, `cargo check` or one unit test,
+`crates/`), `plugin-claude` (`plugins/claude`), `plugin-herdr` (`plugins/herdr`), `site` and `root`. A quick, narrow call, `cargo check` or one unit test,
 is fine to run directly. `devenv shell -- moon run :#check-fast` runs
 the fast layer, `:#check-tools` the tools layer; `site-build` and
 `prose` run one each, `lint` the workspace's clippy, `disk` what `target/` has grown to, and `moon run

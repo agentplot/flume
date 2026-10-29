@@ -1,0 +1,16 @@
+#!/bin/sh
+# A stand-in herdr: logs each call, answers the pane listing from the
+# test's file, and refuses a metadata report while the test says so.
+printf '%s\n' "$*" >>"$FAKE/herdr-calls"
+[ -f "$FAKE/down" ] && exit 1
+case "$1 $2" in
+"pane list") cat "$FAKE/panes.json" 2>/dev/null || echo '{"result":{"panes":[]}}' ;;
+"pane report-metadata" | "workspace report-metadata")
+  if [ -f "$FAKE/refuse-report" ]; then
+    echo "error: pane_not_found: no such pane" >&2
+    exit 1
+  fi
+  echo '{"result":{}}'
+  ;;
+*) echo '{"result":{}}' ;;
+esac

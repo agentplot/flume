@@ -20,6 +20,8 @@ pub(crate) struct Claim {
     /// The settings the agent starts with, the host's values read (29).
     settings: Settings,
     agent: Arc<dyn Agent>,
+    /// The session name the agent carries: a role's run's address (132).
+    session: Option<String>,
 }
 
 /// What a start came to.
@@ -119,6 +121,7 @@ impl Engine {
                 PromptPart::Words => words.map(str::to_string),
                 PromptPart::Unready => Some(unready(&held.readiness)),
                 PromptPart::Needs => stop_short.clone(),
+                PromptPart::Made => (!stage.makes.is_empty()).then(|| self.made_path(&place.id)),
             }
         };
         let mut text = render(&stage.prompt, fill)?;
@@ -171,6 +174,7 @@ impl Engine {
         let place = &read.state.place;
         let resolution = self.resolution(place, &place.kind.stages[index]);
         let now = self.host.now();
+        let made_from = self.store.made(id).len();
         let claimed = self.update(id, |held| {
             if let Admit::Waiting = admit {
                 if held.phase != Phase::Live
@@ -239,6 +243,7 @@ impl Engine {
                 n: identity.start,
                 started_at: now,
                 start_head: head.clone(),
+                made_from,
                 words: words.clone(),
                 identity: identity.clone(),
                 secret: secret.clone(),
@@ -271,6 +276,7 @@ impl Engine {
                 place: held.place.place_ref(),
                 settings: resolution.settings.clone(),
                 agent: resolution.agent.clone(),
+                session: held.role.clone(),
             }))
         });
         claimed.unwrap_or(Err(Start::NoPlace))
@@ -286,6 +292,7 @@ impl Engine {
             place,
             settings,
             agent,
+            session,
         } = claim;
         let command = agent.command(&settings, &place, &identity, &secret, &text);
         let folder = self.store.folder(id);
@@ -295,6 +302,7 @@ impl Engine {
             &command,
             &identity,
             settings.beside.as_deref(),
+            session.as_deref(),
         ) {
             Opened::Opened { carried, printed } => {
                 if carried || printed.is_some() {
@@ -325,6 +333,30 @@ impl Engine {
                 Start::NotOpened(reason)
             }
         }
+    }
+
+    /// Changes the start under `identity`, if it is still the stage's,
+    /// and writes `end` as its stage's end in the same write, so the end
+    /// is recorded whole with what was read of it (43).
+    pub(crate) fn end_start(
+        &self,
+        id: &PlaceId,
+        identity: &Identity,
+        mut change: impl FnMut(&mut StartHeld, &mut StageState),
+        end: Option<StageEnd>,
+    ) {
+        self.update(id, |held| {
+            if let Some(index) = held.index_of(identity) {
+                let stage = &mut held.stages[index];
+                if let Some(start) = stage.start.as_mut() {
+                    change(start, &mut stage.state);
+                }
+                if let Some(end) = &end {
+                    stage.end = Some(end.clone());
+                }
+            }
+            Step::Write(())
+        });
     }
 
     /// Changes the start under `identity`, if it is still the stage's.

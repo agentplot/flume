@@ -19,10 +19,13 @@ pub enum PromptPart {
     Words,
     Unready,
     Needs,
+    /// The path of `made.jsonl` in the place's own folder, for a stage
+    /// that declares what it makes (129).
+    Made,
 }
 
 impl PromptPart {
-    pub const ALL: [PromptPart; 12] = [
+    pub const ALL: [PromptPart; 13] = [
         PromptPart::Brief,
         PromptPart::Name,
         PromptPart::Kind,
@@ -35,6 +38,7 @@ impl PromptPart {
         PromptPart::Words,
         PromptPart::Unready,
         PromptPart::Needs,
+        PromptPart::Made,
     ];
 
     pub fn name(self) -> &'static str {
@@ -51,6 +55,7 @@ impl PromptPart {
             PromptPart::Words => "words",
             PromptPart::Unready => "unready",
             PromptPart::Needs => "needs",
+            PromptPart::Made => "made",
         }
     }
 

@@ -88,7 +88,7 @@ impl Live {
         std::os::unix::fs::symlink(walk.home(), &link).expect("a short link to the home");
         let walk = walk.with_home(link.clone());
 
-        let program = pinned_claude(&walk);
+        let program = pinned_claude();
         let config = walk.repository.scratch.path("claude-config");
         std::fs::create_dir_all(&config).expect("the agents' Claude Code folder");
         std::fs::write(
@@ -109,7 +109,7 @@ impl Live {
                 text.push_str(&format!("model = {model:?}\n"));
             }
             text.push_str(&format!(
-                "\n[kinds.{kind}.agents.env]\nCLAUDE_CONFIG_DIR = {:?}\nCLAUDE_CODE_OAUTH_TOKEN = {token:?}\nDISABLE_AUTOUPDATER = \"1\"\nDISABLE_INSTALLATION_CHECKS = \"1\"\n",
+                "\n[kinds.{kind}.agents.env]\nCLAUDE_CONFIG_DIR = {:?}\nCLAUDE_CODE_OAUTH_TOKEN = {token:?}\n",
                 config.display().to_string()
             ));
         }
@@ -256,10 +256,9 @@ fn failing(place: &str, status: &Value) {
 }
 
 /// The pinned Claude Code, as `devenv.nix` states its version, the first
-/// `claude` on `PATH`; where a wrapper of nix's starts it, a link of the
-/// walkthrough's own named `claude` to the program the wrapper runs, so
-/// herdr reads the process by its name.
-fn pinned_claude(walk: &Walk) -> PathBuf {
+/// `claude` on `PATH`, named as it stands: nix's wrapper, whose wrapped
+/// program and variables the agent profile runs.
+fn pinned_claude() -> PathBuf {
     let nix =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../devenv.nix"))
             .expect("devenv.nix");
@@ -287,14 +286,5 @@ fn pinned_claude(walk: &Walk) -> PathBuf {
         "the first claude on PATH, {}, is {version:?}, not the pinned {pinned}: run in the devenv shell",
         found.display()
     );
-    let folder = found.parent().expect("claude's folder");
-    let program = [".claude-wrapped", ".claude"]
-        .iter()
-        .map(|name| folder.join(name))
-        .find(|wrapped| wrapped.is_file())
-        .unwrap_or(found);
-    let link = walk.repository.scratch.path("claude-code/claude");
-    std::fs::create_dir_all(link.parent().expect("the link's folder")).expect("a folder");
-    std::os::unix::fs::symlink(&program, &link).expect("the pinned Claude Code as claude");
-    link
+    found
 }

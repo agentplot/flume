@@ -39,7 +39,61 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "130", "45", "51", "114"],
             run: the_moves_waited_on,
         },
+        Scenario {
+            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another",
+            cites: &["56", "130", "43"],
+            run: a_stalled_place_with_a_pending_end,
+        },
+        Scenario {
+            name: "status: a live place's clues and its base's count are the ones show was given, with where the terminal shows them",
+            cites: &["139", "56", "60"],
+            run: clues_in_status,
+        },
     ]
+}
+
+fn clues_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    let one = world.begun("build", Some(Deliverable::TasksTicked), "one")?;
+    let two = World::id("build", "two");
+    launched(&world.engine.launch(&launch("build", "two", Some("x"))))?;
+    world.settle(&two);
+    let asking = World::identity("build", "two", "work", 1);
+    world.terminal.set_state(&asking, AgentState::Working);
+    world.settle(&one);
+    world.settle(&two);
+    let shown = world.terminal.shown();
+    let (_, last) = shown.last().ok_or("nothing shown")?;
+    let Answer::Status { places, host } = world.engine().status(None) else {
+        return Err("status refused".into());
+    };
+    let base = host.bases.first().ok_or("no base")?;
+    ensure_eq!(host.bases.len(), 1, "the bases");
+    ensure_eq!(base.base.as_str(), "main", "the base");
+    ensure_eq!(base.count, last.base, "the count show was given");
+    ensure_eq!(base.line, last.base.to_string(), "the count's line");
+    ensure!(base.shown_at.is_some(), "the base's workspace unnamed");
+    let two = places
+        .iter()
+        .find(|place| place.place == two)
+        .ok_or("no place two")?;
+    let clues = two.clues.as_ref().ok_or("no clues")?;
+    ensure_eq!(
+        (clues.title.as_str(), clues.display_agent.as_str()),
+        ("work · working", "build--two"),
+        "the title and the agent's name"
+    );
+    ensure_eq!(
+        format!("{} · {}", last.stage, last.state),
+        clues.title,
+        "the title show was given"
+    );
+    ensure!(
+        clues.shown_at.agent.is_some() && clues.shown_at.place.is_some(),
+        "the place's tab or its agent's pane unnamed: {:?}",
+        clues.shown_at
+    );
+    Ok(())
 }
 
 fn waiting_on_an_answer(_: &()) -> Outcome {
@@ -260,6 +314,50 @@ fn a_place_gone(_: &()) -> Outcome {
     ensure!(
         places(world.engine.status(None))?.is_empty(),
         "a gone place is answered for"
+    );
+    Ok(())
+}
+
+fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Working);
+    let (id, asked) =
+        super::caller_waits::construct_asks(&world, "plan", &["ops", "madswan/planner"], None)?;
+    world.host.advance(STALL_AFTER);
+    let stalled_at = world.host.now();
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (
+            waiting.act,
+            waiting.stage.as_deref(),
+            waiting.why,
+            waiting.since
+        ),
+        (Act::Retry, Some("construct"), Waits::Answer, Some(asked)),
+        "the move and since when"
+    );
+    ensure!(status.stalled, "status does not say stalled");
+    let stall = status
+        .ends
+        .iter()
+        .find(|end| matches!(end.end.of, EndOf::Stall { .. }))
+        .ok_or("no stall among the ends")?;
+    ensure_eq!(
+        stall
+            .end
+            .deliveries
+            .iter()
+            .map(|delivery| (delivery.recipient.as_str(), delivery.at))
+            .collect::<Vec<_>>(),
+        vec![("ops", stalled_at)],
+        "the stall's deliveries"
+    );
+    ensure_eq!(
+        stall.pending_for,
+        vec!["madswan/planner".to_string()],
+        "pending for"
     );
     Ok(())
 }

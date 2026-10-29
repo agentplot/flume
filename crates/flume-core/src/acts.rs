@@ -72,17 +72,19 @@ impl Engine {
                 return Err(format!("the agent {identity} did not end: {reason}"));
             }
         }
-        self.with_start(id, &identity, |start, state| {
-            start.live = false;
-            if *state == StageState::Starting {
-                *state = StageState::NeverBegun;
-            } else if state.running() {
-                *state = StageState::Stopped;
-            }
-        });
-        if let Some(end) = starting {
-            self.end_with(id, &identity, end);
-        }
+        self.end_start(
+            id,
+            &identity,
+            |start, state| {
+                start.live = false;
+                if *state == StageState::Starting {
+                    *state = StageState::NeverBegun;
+                } else if state.running() {
+                    *state = StageState::Stopped;
+                }
+            },
+            starting,
+        );
         Ok(())
     }
 
@@ -122,6 +124,16 @@ impl Engine {
         if let Err(reason) = self.end_agent(place, force) {
             return Answer::refused(reason);
         }
+        let ends = match index {
+            Some(index) => HoldOn::Stage {
+                stage: held.stages[index].name.clone(),
+            },
+            None => HoldOn::Submission,
+        };
+        self.update(place, |held| {
+            held.holds.retain(|hold| hold.on != ends);
+            Step::Write(())
+        });
         let Some(index) = index else {
             self.submit(place, true);
             self.settle_place(place);
@@ -174,6 +186,92 @@ impl Engine {
         }
     }
 
+    /// Puts the place's stage, or its submission, on hold with the
+    /// caller's words: taken for a stage not started since the place's
+    /// current stage began, one waiting for room taken out of the queue,
+    /// or for a submission not made; refused naming why for a stage
+    /// started, a submission made and undecided, a hold already put, or
+    /// a place whose work is over. Only a retry naming it ends it (8, 47,
+    /// 49, 130; core.24).
+    pub fn hold(&self, place: &PlaceId, on: HoldOn, words: &str) -> Answer {
+        self.settle_attended();
+        let now = self.host.now();
+        let refused = self.update(place, |held| {
+            if held.phase != Phase::Live {
+                return Step::Keep(Some(format!("the work of the place {place} is over")));
+            }
+            let index = match &on {
+                HoldOn::Stage { stage } => {
+                    match held.stages.iter().position(|held| &held.name == stage) {
+                        Some(index) => Some(index),
+                        None => {
+                            return Step::Keep(Some(format!(
+                                "the place {place} has no stage {stage}"
+                            )))
+                        }
+                    }
+                }
+                HoldOn::Submission if !held.place.kind.lands => {
+                    return Step::Keep(Some(format!(
+                        "the place {place}'s kind does not land, so it has no submission"
+                    )))
+                }
+                HoldOn::Submission => None,
+            };
+            if let Some(hold) = held.holds.iter().find(|hold| hold.on == on) {
+                let what = match &on {
+                    HoldOn::Stage { stage } => format!("the stage {stage}"),
+                    HoldOn::Submission => "the submission".into(),
+                };
+                return Step::Keep(Some(format!(
+                    "{what} of the place {place} is on hold already, since {}",
+                    hold.since
+                )));
+            }
+            match index {
+                Some(index) => {
+                    let stage = &mut held.stages[index];
+                    let unstarted = matches!(
+                        stage.state,
+                        StageState::NotReached
+                            | StageState::OnHold
+                            | StageState::WaitingForRoom
+                            | StageState::WaitingOnReadiness
+                    );
+                    if held.current == Some(index) && !unstarted {
+                        return Step::Keep(Some(format!(
+                            "the stage {} of the place {place} has started; a hold is put on a stage not started",
+                            stage.name
+                        )));
+                    }
+                    if stage.state == StageState::WaitingForRoom {
+                        stage.state = StageState::OnHold;
+                        stage.room = None;
+                    }
+                }
+                None => {
+                    let submission = &held.submission;
+                    if submission.submits > 0 && submission.verdict.is_none() {
+                        return Step::Keep(Some(format!(
+                            "the submission of the place {place} is made and not yet decided"
+                        )));
+                    }
+                }
+            }
+            held.holds.push(Hold {
+                on: on.clone(),
+                words: Some(words.to_string()),
+                since: now,
+            });
+            Step::Write(None)
+        });
+        match refused {
+            None => Answer::refused(format!("no place {place} stands on this host")),
+            Some(Some(reason)) => Answer::refused(reason),
+            Some(None) => self.acted(Act::Hold, place),
+        }
+    }
+
     /// Ends the place's agent and nothing else: the stage neither ends nor
     /// moves on, and waits for a retry or a drop (51).
     pub fn stop(&self, place: &PlaceId, force: bool) -> Answer {
@@ -193,6 +291,26 @@ impl Engine {
     /// Gives up the place's work: its agent ended, nothing more started,
     /// and the place tidied (52, 63).
     pub fn drop_place(&self, place: &PlaceId, force: bool) -> Answer {
+        let live = self
+            .store
+            .read(place)
+            .is_some_and(|read| !matches!(read.state.phase, Phase::Tidied { .. }));
+        let tidied = if live { vec![] } else { self.tidied_of(place) };
+        if !tidied.is_empty() {
+            let removed = tidied
+                .into_iter()
+                .filter(|id| self.remove_held(id))
+                .collect();
+            return Answer::Acted {
+                act: Act::Drop,
+                place: place.clone(),
+                status: None,
+                tidy: Some(Tidied {
+                    removed,
+                    ..Tidied::default()
+                }),
+            };
+        }
         self.give_up(place, force, Act::Drop, Over::Dropped)
     }
 

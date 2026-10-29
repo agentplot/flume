@@ -18,6 +18,8 @@ pub struct FakeStore {
 #[derive(Default)]
 struct StoreState {
     documents: BTreeMap<PlaceId, Versioned>,
+    /// The lines of each place's `made.jsonl`, which go with its folder.
+    made: BTreeMap<PlaceId, Vec<String>>,
     next: u64,
 }
 
@@ -52,6 +54,21 @@ impl FakeStore {
 
     pub fn places(&self) -> Vec<PlaceId> {
         lock(&self.state).documents.keys().cloned().collect()
+    }
+
+    /// A line written to the place's `made.jsonl`, as a stage's run
+    /// records what it made (129).
+    pub fn record_made(&self, place: &PlaceId, line: &str) {
+        lock(&self.state)
+            .made
+            .entry(place.clone())
+            .or_default()
+            .push(line.to_string());
+    }
+
+    /// Whether the place's folder holds a line of what was made.
+    pub fn holds_made(&self, place: &PlaceId) -> bool {
+        lock(&self.state).made.contains_key(place)
     }
 
     /// The held state set as it stands, past every check, for a scenario
@@ -112,6 +129,7 @@ impl Store for FakeStore {
             }
             None => {
                 state.documents.remove(place);
+                state.made.remove(place);
             }
         }
         Written::Written { version }
@@ -123,5 +141,14 @@ impl Store for FakeStore {
             self.root,
             place.0.trim_start_matches('/').replace('/', "%")
         )
+    }
+
+    fn made(&self, place: &PlaceId) -> Vec<String> {
+        self.log.push(format!("made {place}"));
+        lock(&self.state)
+            .made
+            .get(place)
+            .cloned()
+            .unwrap_or_default()
     }
 }

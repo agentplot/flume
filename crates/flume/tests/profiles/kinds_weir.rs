@@ -90,6 +90,14 @@ fn written(kinds: &[Kind]) -> (String, Vec<(String, String)>) {
             if let Some(times) = stage.send_back_limit {
                 text.push_str(&format!("max_send_backs = {times}\n"));
             }
+            if !stage.makes.is_empty() {
+                let names: Vec<String> = stage
+                    .makes
+                    .iter()
+                    .map(|name| format!("\"{name}\""))
+                    .collect();
+                text.push_str(&format!("makes = [{}]\n", names.join(", ")));
+            }
             text.push('\n');
         }
     }
@@ -329,6 +337,7 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
                 quiet_limit: None,
                 send_back_to: None,
                 send_back_limit: None,
+                makes: vec![],
             })
             .collect(),
     }
