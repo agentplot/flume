@@ -55,6 +55,14 @@ impl Git {
         }
     }
 
+    /// Where git is run: the directory it finds the repository from, or
+    /// the bare repository beside the worktrees.
+    pub fn path(&self) -> &Path {
+        match &self.at {
+            At::Directory(dir) | At::GitDir(dir) => dir,
+        }
+    }
+
     fn command(&self, args: &[&str]) -> Command {
         let mut command = Command::new("git");
         match &self.at {

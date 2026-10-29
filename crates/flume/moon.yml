@@ -4,8 +4,8 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 # written as JSON. Its tests run each seam's scenarios against its
 # profile on scratch repositories, the pinned openspec among the tools
 # they read. Each check is one task, in the fast layer, but `tools`: the
-# profiles against the pinned herdr, on servers the tests start, in the
-# check-tools layer.
+# profiles against the pinned herdr and sluice, on servers and scratch
+# repositories the tests make, in the check-tools layer.
 language: 'rust'
 layer: 'application'
 dependsOn: [seams, core, fakes, conformance]

@@ -30,6 +30,9 @@ pub mod terminal {
 }
 
 // ---- the merge queue seam's profiles: a profile unit appends its module line below ----
+pub mod merge_queue {
+    pub mod sluice;
+}
 
 // ---- the store seam's profiles: a profile unit appends its module line below ----
 pub mod store {

@@ -6,4 +6,5 @@
 #[path = "../../common/mod.rs"]
 mod common;
 
+mod merge_queue_sluice;
 mod terminal_herdr;
