@@ -150,7 +150,7 @@ impl Harness {
             let state = self
                 .record(branch)
                 .and_then(|record| record["state"].as_str().map(str::to_string));
-            if !matches!(state.as_deref(), Some("queued" | "testing")) {
+            if !matches!(state.as_deref(), Some("queued" | "testing" | "landing")) {
                 return;
             }
             assert!(
@@ -396,7 +396,9 @@ fn a_step_beside_a_live_driver_does_nothing_and_answers() {
             .record("fix/one")
             .and_then(|record| record["state"].as_str().map(str::to_string))
         {
-            Some(state) if state != "queued" && state != "testing" => break state,
+            Some(state) if !matches!(state.as_str(), "queued" | "testing" | "landing") => {
+                break state
+            }
             _ if Instant::now() >= deadline => break "undecided".into(),
             _ => std::thread::sleep(Duration::from_millis(300)),
         }

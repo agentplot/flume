@@ -31,6 +31,14 @@ libc.workspace = true
 # layer (flume:tools).
 tools = []
 
+# The stand-in for Claude Code the walkthroughs run as `claude` (design
+# 18), built only for the check-tools layer.
+[[bin]]
+name = "flume-stand-in"
+path = "tests/stand-in/claude.rs"
+test = false
+required-features = ["tools"]
+
 [[test]]
 name = "tools"
 path = "tests/profiles/tools/main.rs"
