@@ -446,6 +446,10 @@ pub enum StageState {
     Lost,
     Stopped,
     Delivered,
+    /// A repetition of a repeating stage delivered its group, its agent
+    /// to be ended, and a task of the change still unticked: the next
+    /// repetition is due, and nothing of the stage has ended (140).
+    Repeating,
     EndedShort,
     Finished,
 }
@@ -604,6 +608,26 @@ pub struct StartHeld {
     /// the terminal printed it rather than ran it (C.5).
     #[serde(default)]
     pub printed: Option<String>,
+    /// For a repetition of a repeating stage, the task group it was
+    /// given: the first holding a task unticked at `start_head`, or none
+    /// where every task was ticked there (140).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<GroupHeld>,
+}
+
+/// The task group a repetition was given, as the change gave it at the
+/// start's head: its place among the change's groups, its number, its
+/// title and its tasks' texts (86, 140).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GroupHeld {
+    /// Its index among the change's groups.
+    pub index: usize,
+    #[serde(default)]
+    pub number: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub tasks: Vec<String>,
 }
 
 /// A landing kind's submission as flume keeps it, with no wait held on

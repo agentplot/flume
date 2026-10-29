@@ -204,6 +204,12 @@ fn held() -> HeldState {
                 last_head_move: 90,
                 past_limit: true,
                 printed: Some("cd /r/places/bump--one && agent 'bump it'".into()),
+                group: Some(GroupHeld {
+                    index: 1,
+                    number: Some("2".into()),
+                    title: Some("Task groups".into()),
+                    tasks: vec!["2.1 add the groups".into(), "2.2 read them".into()],
+                }),
             }),
             since: Some(120),
         }],
@@ -800,6 +806,23 @@ fn a_stage_held_before_it_could_repeat() {
 }
 
 #[test]
+fn a_start_held_before_it_had_a_group() {
+    let mut json = serde_json::to_value(held().stages[0].start.clone().unwrap()).unwrap();
+    json.as_object_mut().unwrap().remove("group");
+    let before: StartHeld = serde_json::from_value(json).unwrap();
+    assert_eq!(before.group, None, "a start held before groups");
+    let none = serde_json::to_value(&before).unwrap();
+    assert!(
+        none.get("group").is_none(),
+        "a start with no group writes none"
+    );
+    let group: GroupHeld = serde_json::from_str(r#"{"index":0}"#).unwrap();
+    assert_eq!(group, GroupHeld::default(), "the group above every heading");
+    round_trips(group);
+    round_trips(held().stages[0].start.clone().unwrap().group.unwrap());
+}
+
+#[test]
 fn a_submission_and_its_outcomes() {
     for state in [
         SubmissionState::Waiting,
@@ -935,6 +958,7 @@ fn agent_and_stage_states() {
         StageState::Lost,
         StageState::Stopped,
         StageState::Delivered,
+        StageState::Repeating,
         StageState::EndedShort,
         StageState::Finished,
     ] {

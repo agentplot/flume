@@ -267,6 +267,7 @@ impl Engine {
                 last_head_move: now,
                 past_limit: false,
                 printed: None,
+                group: None,
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
