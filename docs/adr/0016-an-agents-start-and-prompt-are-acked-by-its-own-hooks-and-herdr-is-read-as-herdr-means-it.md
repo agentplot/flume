@@ -11,7 +11,7 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-28, on their Pending You card ("Approved"), on the review of crew's lessons driving Claude Code agents through herdr against flume's design.
 
-Amended 2026-10-28 by record 0018, accepted by the user: herdr's `agent start` runs the program in a pane made with its environment, with no launcher file; a start herdr reads held at a question other than folder trust is never begun at once with its screen; and a pane is held by its id and socket and found again by the agent's herdr name, made from the identity and unique on the server.
+Amended 2026-10-28 by record 0018, accepted by the user: herdr's `agent start` runs the program in a pane made with its environment, with no launcher file; a start herdr reads held at a question other than folder trust is never begun at once with its screen; a pane is held by its id and socket and found again by the agent's herdr name, made from the identity and unique on the server; and a repository's places are kept in a workspace of its own, a tab per place, closed once nothing live is in them.
 
 Deciders: the user; the recommendations are the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at 4fe1522, clauses 35, 37, 38, 43, 77, 89, 90, 95, 96, 98, 135, 136, C.4, C.5, S39 to S43; crew's rules teams.2, teams.6, teams.7, teams.8, teams.11, teams.15, teams.19, read.1, read.2, its records 0007 and 0046, and `plugin/lib/crew.py`, `plugin/lib/transcript.py`, `plugin/hooks/`; sluice's `profiles/worktrunk/herdr.rs` and `plugins/herdr`; herdr 0.9.5's own skill text (`herdr --skill`); rules core.9 to core.12.
