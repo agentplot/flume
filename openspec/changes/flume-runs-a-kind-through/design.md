@@ -368,25 +368,43 @@ The terminal is bound once for the host by `[host] terminal`, `herdr`
 or `printed`, `printed` where none is named (105). C.7 names no such
 word in C.7 (105).
 
-- **herdr** (C.5; record 0016): every command, state name, error code
+- **herdr** (C.5; records 0016, 0018): every command, state name, error code
   and field is checked against the pinned herdr, 0.9.5 or later
   (core.29), and every call runs under a bound, ten seconds where the
   call states none, read unknown or refused in herdr's words past it,
   with the caller's `HERDR_*` stripped and the recorded server's socket
   passed (98), since a crew team once waited two hours inside an
   `agent prompt` that never returned. open makes a pane in the herdr
-  session the launch's settings name, flume's own otherwise, one tab
-  per place named `<kind>--<name>`, or a split beside the pane the
-  settings name. The pane is held by its id and its server's socket;
-  the agent gets a herdr name of at most 32 of herdr's legal characters
-  made from the identity, for display only, since herdr refuses the
-  identity as a name and drops any name when the pane's session
-  changes. What open types into the shell is one line running a
-  launcher file it writes in the place's state folder, since herdr
-  refuses a line past the terminal's limit and the agent's instructions
-  pass it. It reads the pane until the agent program shows its
-  folder-trust question, answered with the key the agent profile names
-  in its command (34, decision 14), or its first wait. `session` is
+  session the launch's settings name, flume's own otherwise: in the
+  repository's workspace, labelled with its name and made `--no-focus`
+  when its first place opens, one tab per place named `<kind>--<name>`,
+  each recorded by id and socket in the host's state; or a split beside
+  the pane the settings name, left where its caller put it. The pane is
+  made with `--cwd <place>` and an `--env` for each variable of the
+  agent's environment and flume's `FLUME_*`, `PATH` led by a folder of
+  the start's own linking the kind's name to the program the settings
+  name, since herdr's `agent start` takes no environment and types the
+  kind's name into the shell. open then runs `agent start <name> --kind
+  <kind> --pane <id> --timeout 120000 -- <arguments>`, bounded ten
+  seconds past it, which hands the arguments over whole; nothing is
+  typed and no launcher file written. `agent_not_ready` is the start
+  held at a question: the folder-trust question, found in the pane's
+  visible lines, is answered with the keys the agent profile names (34,
+  decision 14) and `agent wait --until idle --timeout 30000` follows;
+  any other is answered held with the screen, and `timeout` not come up
+  with the screen, each read never begun by the core (decision 12b).
+  herdr's `agent_started` is a second word: the started ack is the
+  start (35). Once started, the program in the pane's foreground,
+  read from `pane process-info` and the host's process table, must be
+  the one the settings name, or the start is closed and refused naming
+  what ran (32). The pane is held by its id and its server's socket and
+  found again by the agent's herdr name where the id no longer answers,
+  as after a move to another workspace: a name of at most 32 of herdr's
+  legal characters made from the identity and ending in its digest,
+  unique on the server, a pane found by it taken only once herdr lists
+  it under that name and its new id recorded before anything is sent.
+  A kind the pinned herdr does not list cannot run under herdr and
+  refuses the launch (32). `session` is
   `herdr:<pane>@<socket>` (7). send clears the held input with one
   ctrl+c while the agent waits, types the text and submits it, received
   then read through the agent (89, 95); the core's second sending and a
@@ -400,13 +418,20 @@ word in C.7 (105).
   process-info shows the shell in its foreground, or herdr lists the
   pane with a `restore_error` after its server's restart (96). screen
   is `pane read --source visible` (136). close ends the pane and its
-  process group and reads that it is gone (97). watch is none: the
+  process group and reads that it is gone (97). tidy closes the place's
+  recorded tab, and the repository's recorded workspace once it holds no
+  tab of a live place and no pane flume did not open; either is kept,
+  named, where a pane flume did not open stands, and nothing flume did
+  not make is closed (137, 138). show reports `pane report-metadata
+  <pane> --source flume --title "<stage> · <state>" --display-agent
+  <kind>--<name>` and `workspace report-metadata <w> --source flume
+  --token flume=<summary>`, a failure logged (139). watch is none: the
   herdr plugin keeps it in the next change (122). A fresh pane per
   start makes moot crew's escape codes left by a bad exit and the
   exit's question about background work.
 - **printed command** (C.5): open answers the command, the prompt
   carried in it, which status gives with the agent; send and close are
-  refused, so a tell is refused and a prompt not received is never
+  refused, tidy and show do nothing, so a tell is refused and a prompt not received is never
   begun (38); screen is nothing (136); state is unknown from the terminal, and the agent is read
   stopped once the agent profile's own record says its session ended
   (decision 14); watch is none, so flume runs attended (119).
@@ -435,6 +460,23 @@ from the start until `started` reads yes. The core:
 
 The clause list moves to blueprints 4fe1522, adding 135, 136 and S39 to
 S43, each cited by an engine scenario.
+
+### 12b. A start held, a place's terminal tidied, and clues shown
+
+Record 0018 (35, 94, 137 to 139, S45 to S49). `AgentCommand` gains the
+program's kind, which the agent profile gives (`claude`, C.4). The
+terminal seam's `open` answers, beside opened and refused, a start held
+at a question its program asks before it starts and a program that did
+not come up within the terminal's bound, each with the screen; the core
+reads either as never begun at once, delivered with the screen, and
+sends no prompt (35, 43). The seam gains `tidy`, which the core calls
+when a place goes, landed or dropped (137, 138), status naming what
+the terminal kept and why; and `show`, which the core calls at each
+settle that changes a stage's state with the stage, its state and the
+repository's count of places running, asking, waiting on their caller
+and stalled, a failure logged and failing nothing, and nothing read
+back (139). The clause list moves to blueprints ad5ffeb, adding 137 to
+139 and S45 to S49.
 
 ### 13. The merge queue through sluice
 
@@ -549,7 +591,10 @@ and the held state gain the recipients and each hold's words (7, 8,
 130); `AgentCommand` gains
 the folder-trust question and its answer; `StageState` gains
 `WaitingForRoom`, and `Starting` (decision 12a); the agent seam gains
-`started` (135) and the terminal seam `screen` (136); the held state gains the place's priority and, per
+`started` (135) and the terminal seam `screen` (136); `AgentCommand`
+gains the program's kind, the terminal seam's `open` its held and
+not-come-up answers with the screen, and the seam gains `tidy` (138)
+and `show` (139) (decision 12b); the held state gains the place's priority and, per
 stage, since when it waits for room; `Host` gains `bound` and `room`;
 the resolver lists the place profiles it holds and binds a place
 profile with the merge queue profile's data. Every type round-trips
@@ -710,6 +755,11 @@ settle, a session outside flume), and the root's `format` and
   are read as showing before SessionStart; a start held at one stays
   starting with its screen until the stage's limit (35), so a dialog
   measured to come after the hook costs nothing but the limit.
+- [Which program herdr's `agent start` ran] → herdr types the kind's
+  name, so a shell startup file can put another `claude` ahead of the
+  start's own folder on `PATH`; the profile reads the pane's foreground
+  program from the host's process table and refuses the start naming
+  what ran (record 0018), so it is seen at the first start.
 - [herdr headless in the gate] → the herdr profile's tests start a
   server of their own on a private socket; if the pinned herdr cannot,
   those tests move to `check-live`.
