@@ -12,8 +12,8 @@
 
 use flume_seams::{HeldState, PlaceId, Store, Versioned, Written, MADE};
 use std::fs::{self, File, OpenOptions};
-use std::io::ErrorKind;
-use std::os::unix::fs::MetadataExt;
+use std::io::{ErrorKind, Write};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -92,7 +92,9 @@ impl StateDir {
         }
     }
 
-    /// A temporary file beside the documents holding `versioned`.
+    /// A temporary file beside the documents holding `versioned`,
+    /// readable and writable by the host's user alone, since a launch's
+    /// settings hold their environment's values (32).
     fn temporary(&self, place: &PlaceId, versioned: &Versioned) -> std::io::Result<PathBuf> {
         let path = self.places().join(format!(
             ".{}.{}-{}.tmp",
@@ -101,8 +103,13 @@ impl StateDir {
             TEMPORARY.fetch_add(1, Ordering::Relaxed)
         ));
         let text = serde_json::to_string_pretty(versioned).map_err(std::io::Error::other)?;
-        fs::write(&path, text)?;
-        File::open(&path)?.sync_all()?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
         Ok(path)
     }
 

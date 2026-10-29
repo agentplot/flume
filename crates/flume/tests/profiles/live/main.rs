@@ -65,6 +65,8 @@ const SUITE: &str = "sleep 120\necho 'the suite passed'\n";
 pub struct Live {
     pub walk: Walk,
     link: PathBuf,
+    /// The test account's token, which no answer of flume's may hold.
+    token: String,
 }
 
 impl Live {
@@ -120,7 +122,7 @@ impl Live {
         repository.write("suite.sh", SUITE);
         repository.commit("Claude Code's settings and the slow suite");
         repository.git(&["push", "--quiet", "origin", "main"]);
-        Live { walk, link }
+        Live { walk, link, token }
     }
 
     /// herdr's answer on flume's own session's server, as JSON.
@@ -186,6 +188,11 @@ impl Live {
             Duration::from_secs(minutes * 60),
             Duration::from_secs(5),
             |status| {
+                // Checked before anything prints the status (32, 56).
+                assert!(
+                    !status.to_string().contains(&self.token),
+                    "{place}'s status holds the value of the test account's token"
+                );
                 failing(place, status);
                 holds(status)
             },

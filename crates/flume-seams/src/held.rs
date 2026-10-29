@@ -342,8 +342,14 @@ pub struct PlaceRecord {
     pub binding: Binding,
     pub brief: Option<String>,
     pub mark: Option<String>,
+    /// The launch's settings by stage. They keep their environment's
+    /// values, since each later start reads the launch's layer as the
+    /// launch gave it and the caller who gave it may be gone (8, 32): the
+    /// one record of flume's that holds an environment value, written
+    /// readable by the host's user alone and printed by no answer (56).
     pub settings: BTreeMap<String, Settings>,
-    /// The launch's settings for every stage's agent (7, 8, 32).
+    /// The launch's settings for every stage's agent, kept as `settings`
+    /// is (7, 8, 32).
     #[serde(default)]
     pub every_stage: Settings,
     /// The repository's settings for the kind, which it does not
@@ -581,10 +587,12 @@ pub struct StartHeld {
     pub secret: Secret,
     pub program: String,
     /// The settings it started with, each value as its layer wrote it
+    /// but the environment's, kept by name alone, each value [`crate::SET`]
     /// (32, 56).
     pub settings: Settings,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>` (32, 56).
+    /// `instructions` or `env.<NAME>`, an environment variable's value
+    /// [`crate::SET`] (32, 56).
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
     /// The agent's own record, once a reading names it (77).

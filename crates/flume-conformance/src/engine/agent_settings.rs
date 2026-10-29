@@ -175,9 +175,9 @@ fn s44_settings_from_four_layers(_: &()) -> Outcome {
         from.get("env.AGENT_HOME"),
         Some(&Given {
             layer: Layer::HostKind,
-            value: "~/.agent-work".into()
+            value: SET.into()
         }),
-        "the variable's layer, unexpanded"
+        "the variable's layer, its value unsaid"
     );
     ensure_eq!(
         agent
@@ -186,8 +186,8 @@ fn s44_settings_from_four_layers(_: &()) -> Outcome {
             .env
             .get("AGENT_HOME")
             .map(String::as_str),
-        Some("~/.agent-work"),
-        "status gives the value as written"
+        Some(SET),
+        "status names the variable and gives no value"
     );
     ensure_eq!(
         from.get("program").map(|given| given.layer),
@@ -203,8 +203,8 @@ fn s44_settings_from_four_layers(_: &()) -> Outcome {
     let kept = held.stages[1].start.as_ref().ok_or("no start of code")?;
     ensure_eq!(
         kept.settings.env.get("AGENT_HOME").map(String::as_str),
-        Some("~/.agent-work"),
-        "code keeps what it started with"
+        Some(SET),
+        "code's start keeps the variable by its name alone"
     );
     to_verify(&world, &id, "plan")?;
     let verify = opened(&world, &World::identity("change", "plan", "verify", 1))?;

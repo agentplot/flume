@@ -169,12 +169,19 @@ impl Host {
         let status = self.status(place);
         let agent = &status["places"][0]["agent"];
         let printed = agent["printed"].as_str().expect("a printed command");
+        // The command's environment is in the file the line names, never
+        // in the line (32, 56).
+        let env = printed
+            .split(' ')
+            .map(|word| word.trim_matches('\''))
+            .find(|word| word.ends_with(".env"))
+            .map(|file| std::fs::read_to_string(file).expect("the command's environment"))
+            .unwrap_or_else(|| panic!("no environment file in {printed}"));
         let word = |name: &str| {
-            printed
-                .split(' ')
-                .find_map(|word| word.strip_prefix(&format!("{name}=")))
+            env.lines()
+                .find_map(|line| line.strip_prefix(&format!("{name}=")))
                 .map(|value| value.trim_matches('\'').to_string())
-                .unwrap_or_else(|| panic!("{name} in {printed}"))
+                .unwrap_or_else(|| panic!("{name} in {env}"))
         };
         let plugin = printed
             .split(' ')
