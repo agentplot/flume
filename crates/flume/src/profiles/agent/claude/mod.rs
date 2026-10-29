@@ -105,10 +105,58 @@ pub fn digest(text: &str) -> String {
         .collect()
 }
 
-/// `text` with every run of whitespace one space and none at its ends, as
-/// a prompt is compared with what the agent received (89).
+/// `text` with every run of whitespace one space and none at its ends.
 pub fn collapsed(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The name of the tags Claude Code 2.1.296 wraps pasted text in, where
+/// the account's features turn them on: `<pasted_content id="fad0">`
+/// before the paste and `</pasted_content id="fad0">` after it, the id
+/// four lowercase hex digits. A terminal sends a prompt as a paste, so the
+/// prompt Claude Code submits, which its UserPromptSubmit hook and its
+/// transcript hold, is the prompt sent inside these tags.
+pub const PASTE_TAG: &str = "pasted_content";
+
+/// The length of the paste tag `text` starts with, opening or closing;
+/// none where it starts with no such tag.
+fn paste_tag(text: &str) -> Option<usize> {
+    let rest = text.strip_prefix("</").or_else(|| text.strip_prefix('<'))?;
+    let rest = rest.strip_prefix(PASTE_TAG)?.strip_prefix(" id=\"")?;
+    let id = rest.get(..4)?;
+    if !id
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return None;
+    }
+    let rest = rest[4..].strip_prefix("\">")?;
+    Some(text.len() - rest.len())
+}
+
+/// `text` with each paste tag Claude Code wrapped around pasted text taken
+/// off, every run of whitespace then one space and none at its ends: a
+/// prompt as it is compared with what the agent received (89; record
+/// 0016).
+pub fn as_received(text: &str) -> String {
+    let mut bare = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('<') {
+        bare.push_str(&rest[..at]);
+        let from = &rest[at..];
+        match paste_tag(from) {
+            Some(length) => {
+                bare.push(' ');
+                rest = &from[length..];
+            }
+            None => {
+                bare.push('<');
+                rest = &from[1..];
+            }
+        }
+    }
+    bare.push_str(rest);
+    collapsed(&bare)
 }
 
 /// Claude Code with flume's plugin.
@@ -265,15 +313,16 @@ impl Agent for Claude {
 
     /// The start's received ack, the prompt's digest matched; where none
     /// came, the transcript's user turn or queued record holding the
-    /// prompt, a slash command by its name and arguments, whitespace
-    /// collapsed; a transcript not yet written reads not received (38,
-    /// 89).
+    /// prompt, a slash command by its name and arguments; each compared
+    /// with its paste tags taken off and its whitespace collapsed
+    /// ([`as_received`]); a transcript not yet written reads not received
+    /// (38, 89).
     fn received(&self, folder: &str, agent: &Identity, text: &str) -> Received {
         let record = Record::at(folder, agent);
         if !record.readable() {
             return Received::Unknown;
         }
-        match record.received(&digest(&collapsed(text))) {
+        match record.received(&digest(&as_received(text))) {
             Some(true) => {
                 return Received::Received {
                     record: record.received_path().to_string_lossy().into_owned(),
@@ -291,7 +340,7 @@ impl Agent for Claude {
         // is acked, a queued one when it is submitted; a slash command
         // Claude Code runs itself fires no UserPromptSubmit, and only its
         // transcript can say it was received (38, 89).
-        if !collapsed(text).starts_with('/') {
+        if !as_received(text).starts_with('/') {
             return Received::NotReceived {
                 record: record.received_path().to_string_lossy().into_owned(),
             };

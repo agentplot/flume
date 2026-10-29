@@ -322,7 +322,7 @@ case do nothing.
 |---|---|
 | `flume needs <words>` | The stage ends short with the words: it needs an answer. `--found` says it found work it cannot deliver past instead. |
 | `flume ack started --session <id> --transcript <path> --plugin-version <v> [--source <how>]` | The agent started under its identity and secret, in a session with a transcript. `--source` says how the session began, `startup` where none is given. |
-| `flume ack received --digest <hex>` | The agent received a prompt, by the SHA-256 digest of its text with whitespace collapsed. |
+| `flume ack received --digest <hex>` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. |
 | `flume hook <event>` | What the hook for the event does with the input on standard input: `session-start`, `user-prompt-submit`, `pre-tool-use`, `permission-request`, `post-tool-use`, `stop`, `stop-failure` or `session-end`. Any other event does nothing. It always exits `0`. |
 
 flume's Claude Code plugin runs `flume hook` for every event;

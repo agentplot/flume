@@ -10,7 +10,7 @@
 use crate::common::*;
 use flume::profiles::agent::claude::record::{Asking, Record, Started};
 use flume::profiles::agent::claude::{
-    collapsed, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
+    as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
     TRUST_QUESTION, VERSION,
 };
 use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
@@ -117,7 +117,7 @@ impl AgentHarness for Harness {
     /// its digest.
     fn deliver(&self, identity: &Identity, text: &str) {
         self.record(identity)
-            .ack_received(&digest(&collapsed(text)))
+            .ack_received(&digest(&as_received(text)))
             .expect("the received ack");
     }
 
@@ -377,6 +377,35 @@ fn a_prompt_queued_while_the_agent_worked() {
     harness.deliver(&who, "the reviewer  asks for\none more test\n");
     assert!(matches!(
         harness.seam.received(&folder, &who, text),
+        Received::Received { .. }
+    ));
+}
+
+#[test]
+fn a_prompt_inside_paste_tags_is_the_prompt_sent() {
+    // Claude Code 2.1.296 may submit a pasted prompt inside paste tags
+    // carrying a four-hex-digit id: the prompt is compared with them taken
+    // off, and text that only looks like a tag stays (89; record 0016).
+    let sent = "Fix the parser.\n\nCommit it.";
+    let submitted = "\n\n<pasted_content id=\"fad0\">\nFix the parser.\n\nCommit it.\n</pasted_content id=\"fad0\">\n";
+    assert_eq!(as_received(submitted), as_received(sent));
+    assert_eq!(as_received(sent), "Fix the parser. Commit it.");
+    assert_eq!(
+        as_received("see <pasted_content id=\"FAD0\"> and <b>"),
+        "see <pasted_content id=\"FAD0\"> and <b>"
+    );
+    assert_eq!(
+        as_received("words <pasted_content id=\"0a1b\">pasted</pasted_content id=\"0a1b\">"),
+        "words pasted"
+    );
+
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    harness.deliver(&who, submitted);
+    assert!(matches!(
+        harness.seam.received(&folder, &who, sent),
         Received::Received { .. }
     ));
 }

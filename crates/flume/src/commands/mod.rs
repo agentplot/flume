@@ -209,8 +209,8 @@ enum Ack {
         #[arg(long)]
         plugin_version: String,
     },
-    /// The agent received a prompt, by the digest of its text, whitespace
-    /// collapsed (89).
+    /// The agent received a prompt, by the digest of its text, paste tags
+    /// taken off and whitespace collapsed (89).
     Received {
         #[arg(long)]
         digest: String,

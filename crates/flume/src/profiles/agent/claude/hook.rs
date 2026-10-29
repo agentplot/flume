@@ -10,7 +10,7 @@
 
 use super::guard;
 use super::record::{Asking, Record, Started};
-use super::{collapsed, digest, AGENT, PLACE, SECRET, STAGE};
+use super::{as_received, collapsed, digest, AGENT, PLACE, SECRET, STAGE};
 use flume_core::{Answer, Engine};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -103,8 +103,9 @@ pub fn ack_started(
     ))
 }
 
-/// The received ack: the submitted prompt's digest, taken only with the
-/// start's secret; it clears the asking mark (89, 90).
+/// The received ack: the submitted prompt's digest, its paste tags taken
+/// off ([`as_received`]), taken only with the start's secret; it clears
+/// the asking mark (89, 90).
 pub fn ack_received(
     start: &Start,
     digest: &str,
@@ -158,7 +159,7 @@ pub fn hook(
             String::new()
         }
         "user-prompt-submit" if !subagent => {
-            let _ = ack_received(start, &digest(&collapsed(&text("prompt"))), build);
+            let _ = ack_received(start, &digest(&as_received(&text("prompt"))), build);
             String::new()
         }
         "pre-tool-use" => match input["tool_name"].as_str() {

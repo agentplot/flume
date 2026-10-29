@@ -56,7 +56,7 @@ every hook does nothing.
 | Hook | What flume does with it |
 |---|---|
 | SessionStart | the **started ack**: the session, its transcript and the plugin's version, taken only with the start's secret |
-| UserPromptSubmit | the **received ack**: a digest of the prompt the agent took, its whitespace collapsed |
+| UserPromptSubmit | the **received ack**: a digest of the prompt the agent took, the tags Claude Code may wrap a pasted prompt in taken off and its whitespace collapsed |
 | PreToolUse, for Bash | the **guard**: refuses `git push`, `sluice submit`, and worktrunk's `wt submit` and `wt merge`, wherever the line runs them, and records each refusal |
 | PreToolUse, for AskUserQuestion and ExitPlanMode | the **asking mark**: the agent is asking a person, until its transcript holds the answer |
 | PermissionRequest | the asking mark, for a permission prompt |
