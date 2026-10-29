@@ -285,9 +285,9 @@ let
 
   # sluice, which the merge-queue profile drives: its newest release. sluice
   # publishes no x86_64-darwin build. Its builds are Nix's: on Linux the
-  # loader, on macOS libiconv, are store paths of the machine that built
-  # them, set here to this tree's. Bump the version and the three checksums
-  # from the release's assets.
+  # loader and libgcc_s, on macOS libiconv, are store paths of the machine
+  # that built them, set here to this tree's. Bump the version and the three
+  # checksums from the release's assets.
   sluiceVersion = "0.57.1";
   sluiceHashes = {
     aarch64-darwin = "afedf1910ecafbeefb49f38da54795b9f92835dcde6ef37de454c1b9dd03df9f";
@@ -306,7 +306,9 @@ let
     };
     sourceRoot = ".";
     nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isElf [ pkgs.autoPatchelfHook ];
-    buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
+    buildInputs =
+      lib.optionals pkgs.stdenv.hostPlatform.isElf [ pkgs.stdenv.cc.cc.lib ]
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
     installPhase = ''
       runHook preInstall
       install -Dm755 -t $out/bin sluice wt-submit
@@ -397,15 +399,25 @@ in
   '';
 
   # The versions .prototools lists, installed on entering the shell, before
-  # enterShell activates them. A task, not part of enterShell: the script
-  # `devenv print-dev-env` prints holds enterShell and none of the tasks, so
-  # a check run sourcing it never installs.
+  # enterShell activates them and before devenv's own treefmt run formats
+  # with the pinned rustfmt. Rust is rustup's first, with the components
+  # rust-toolchain.toml names: proto's own install of it leaves them out,
+  # and on a host new to the pin it races the install rustup's proxies
+  # start under that file, leaving a toolchain with no librustc_driver.
+  # proto then finds it installed. A task, not part of enterShell: the
+  # script `devenv print-dev-env` prints holds enterShell and none of the
+  # tasks, so a check run sourcing it never installs.
   tasks."flume:proto:install" = {
     exec = ''
+      cd "$(${lib.getExe pkgs.git} rev-parse --show-toplevel)"
+      ${pkgs.rustup}/bin/rustup toolchain install
       ${protoHome}
       ${proto}/bin/proto install --config-mode upwards
     '';
-    before = [ "devenv:enterShell" ];
+    before = [
+      "devenv:enterShell"
+      "devenv:treefmt:run"
+    ];
   };
 
   treefmt.enable = true;

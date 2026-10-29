@@ -13,6 +13,10 @@ on:
       - .vale.ini
       - styles/**
       - .github/workflows/pages.yml
+      # The prose job runs in the devenv shell.
+      - devenv.nix
+      - devenv.yaml
+      - devenv.lock
   workflow_dispatch:
 
 permissions:

@@ -25,5 +25,5 @@ tasks:
   # transcript on a scratch state directory (tests/hooks.sh).
   test:
     command: 'bash tests/hooks.sh'
-    inputs: ['**/*', '/crates/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['**/*', '/crates/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]

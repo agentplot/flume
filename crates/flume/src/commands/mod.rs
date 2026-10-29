@@ -35,6 +35,7 @@ pub const ON_QUIET_WITHIN: Seconds = 60;
 #[derive(Debug, Parser)]
 #[command(
     name = "flume",
+    version = crate::VERSION,
     about = "One launch carried into one worktree of its own and worked through its kind's stages."
 )]
 struct Cli {

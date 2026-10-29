@@ -10,16 +10,16 @@ dependsOn: []
 tasks:
   format:
     command: 'cargo fmt --check -p flume-seams'
-    inputs: ['/crates/flume-seams/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-seams/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   lint:
     command: 'cargo clippy -p flume-seams --all-targets -- -D warnings'
-    inputs: ['/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   test:
     command: 'cargo test -p flume-seams'
-    inputs: ['/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume-seams/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
