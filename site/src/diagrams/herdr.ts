@@ -5,7 +5,8 @@
 // tell waits while its agent works and reaches it once it waits; a retry
 // with your words starts a stage that ended short again, with a fresh agent;
 // stop ends an agent that went the wrong way, and its stage waits for a
-// retry. A sounding waiting on you shows as a row too.
+// retry. A review, a repository's own conversation kind, waiting on you
+// shows as a row too.
 //
 // Timeline, percent of the loop:
 //   0-20 a change's tasks tick · 8-22 a fix lands, leaves · 24-34 tell
@@ -207,10 +208,10 @@ export function herdr(layout: Layout) {
     ],
     [[36, 62]],
   );
-  // sounding/parquet: a sounding waiting on you.
+  // review/parquet: a conversation waiting on you.
   row(
     "d",
-    "sounding/parquet",
+    "review/parquet",
     3,
     [
       [0, 3],
@@ -218,7 +219,7 @@ export function herdr(layout: Layout) {
       [100, 2],
     ],
     [-1, 100],
-    [["question · waiting on you", "warn", -1, END]],
+    [["review · waiting on you", "warn", -1, END]],
     [],
   );
   // fix/lint-config: its agent went the wrong way and waits; stopped, then
@@ -509,7 +510,7 @@ export function herdr(layout: Layout) {
     title: "flume’s herdr plugin: every place in flight, a place’s pane and status, and the keys",
     desc:
       "A herdr window. Its sidebar lists every place in flight with its kind, its stage and its agent’s state: change/csv-export in code, its tasks ticking from 3 of 6 to 6 of 6 before it moves on to verify; " +
-      "fix/bump-mise in sluice, which lands, is tidied and leaves the list; fix/flaky-test, whose code stage ended short; sounding/parquet, a question waiting on you; and fix/lint-config, working. " +
+      "fix/bump-mise in sluice, which lands, is tidied and leaves the list; fix/flaky-test, whose code stage ended short; review/parquet, a review waiting on you; and fix/lint-config, working. " +
       "Beside the selected place’s pane, its status gives the kind, the stage, the agent’s state, the deliverable and the submission. " +
       "The tell key sends check fields with commas too to change/csv-export: flume holds it while the agent works and sends it once the agent waits, and it reaches the transcript. " +
       "The open key shows fix/flaky-test, whose agent stopped short asking which CSV its test should read; the retry key starts the stage again with a fresh agent and the words use fixtures/small.csv. " +

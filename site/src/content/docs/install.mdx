@@ -53,64 +53,15 @@ flume keeps its state under `$XDG_STATE_HOME/flume`,
 `~/.local/state/flume` by default: one document per place, gone when the
 place is tidied. Nothing of flume's is written into a repository.
 
-## Agents' settings in layers
+## Agents' settings and roles
 
-Each agent runs with four settings: the `program`, the `model`, the
-`instructions` appended to its system prompt, and its `env`. Each
-setting comes from the first of six layers that gives it:
-
-| Layer | Where it is written |
-|---|---|
-| launch | `flume launch --agent [<stage>.]<field>=<value>` |
-| host-repository | the host's `[repos."<repository>".kinds.<kind>.agents]` |
-| host-kind | the host's `[kinds.<kind>.agents]` |
-| repository | the repository's `.config/flume.toml`, `[kinds.<kind>.agents]` for a kind it does not declare |
-| kind | the kind's declaration |
-| default | flume's own: the program `claude`, and nothing else |
-
-Within a layer, a stage's own setting, in a further `.stages.<stage>`
-table, comes before one given for every stage. The environment merges
-one variable at a time, so the host can name a configuration home while
-a launch adds a variable of its own. The program, the model and the
-instructions are each taken whole. For instance, this runs every
-change's agents on the host under a configuration home and its account,
-whoever launched them:
-
-```toml
-[kinds.change.agents]
-env = { CLAUDE_CONFIG_DIR = "~/.claude-work" }
-
-[kinds.change.agents.stages.verify]
-model = "opus"
-```
-
-In the host's `env` values, a leading `~` is your home and `$VAR` a
-variable of your login environment, never of the launching session. A
-repository's file gives no environment: what one machine needs is that
-machine's to say, so an `env` there refuses the launch.
-
-The host's file is read as it stands at each agent's start, so changing
-an account and retrying a stage moves the next agent to it, with no new
-launch. The other layers are what the launch read. `flume status`
-gives each setting of the current agent with the layer it came from.
-
-## Roles
-
-A recipient may be a role's address, `<group>/<role>`. The host's
-`[roles]` table names the work that serves each address:
-
-```toml
-[roles."acme/planner"]
-repository = "~/src/acme"
-kind = "planner"
-priority = 5
-base = "main"
-brief = "Read the records and plan the next unit."
-```
-
-An end pending for the address with no run live or waiting launches
-that kind there, and `flume wake acme/planner` does the same. An address
-the table names nothing for wakes nothing.
+The same file gives each kind's agents their settings, such as the
+model or a Claude Code configuration home of their own, and names the
+runs the host launches for role addresses.
+[Agent settings](/flume/guides/agent-settings/) and
+[roles and wake](/flume/guides/roles-and-wake/) say how, and the
+[configuration reference](/flume/reference/configuration/) lists every
+key.
 
 ## The herdr plugin
 
@@ -135,11 +86,10 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
   tab, tells its agent, stops it or retries its stage, each through
   flume's own commands.
 
-The plugin changes none of herdr's configuration. Add the key and the
+The plugin changes none of herdr's configuration: add its key and the
 sidebar rows to herdr's `config.toml` yourself, as
-[its README](https://github.com/agentplot/flume/tree/main/plugins/herdr#setting-it-up)
-shows. The pane titles show wherever herdr shows a pane; the rows show
-only where your sidebar names `$flume`.
+[places and herdr](/flume/guides/places-and-herdr/#the-herdr-plugin)
+shows.
 
 ## The Claude Code plugin
 
@@ -163,10 +113,19 @@ hooks do nothing in a session flume did not start.
 
 flume's own kinds all land, so a repository binds the merge queue they
 land through, and for a change the change tool, in its
-`.config/flume.toml`, as [How it works](/flume/how-it-works/#the-place)
-shows. A launch of a kind that lands, in a repository that binds no
-merge queue, is refused. The binding is read at the repository's default
-branch.
+`.config/flume.toml`:
+
+```toml
+[profiles]
+place = "git-worktree"
+change = "openspec"
+merge_queue = "sluice"
+```
+
+A launch of a kind that lands, in a repository that binds no merge
+queue, is refused. The binding is read at the repository's default
+branch. [Launching a fix](/flume/guides/walkthrough/) goes on from
+here.
 
 A pane's shell reads no startup files, so flume hands the agent your
 login environment. Text beyond ASCII in a prompt reaches the agent whole

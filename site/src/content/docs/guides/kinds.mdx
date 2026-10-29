@@ -1,0 +1,225 @@
+---
+title: Kinds
+description: flume's built-in fix, chore and change, how a kind runs through on its own, and how a repository writes kinds of its own with stages, prompts, deliverables and what a stage makes.
+sidebar:
+  order: 1
+---
+
+import Diagram from '../../../components/Diagram.astro';
+
+A kind is a list of stages. Each stage names a prompt and the one
+deliverable that ends it, and the kind says whether its work lands. A
+launch names its kind, `--kind fix`, and flume runs that kind's stages
+in order in the place, a fresh agent for each.
+
+<Diagram name="kinds" caption="flume’s three kinds side by side. Each stage waits on its deliverable, and the next starts only once it exists. A change's tasks tick one by one, flume submits the work to the merge queue once the last stage delivers, and tidies the place once it lands." />
+
+## The built-in kinds
+
+flume carries three kinds in its binary:
+
+| Kind | Stage | Its deliverable | Prefix | Starts unready |
+|---|---|---|---|---|
+| `fix` | `code` | commits on the place's branch | `fix` | yes |
+| `chore` | `code` | commits on the place's branch | `chore` | yes |
+| `change` | `construct` | the OpenSpec change written, its planning complete | `change` | no |
+| | `code` | every task of the change ticked | | |
+| | `verify` | the change archived | | |
+
+All three land: once the last stage delivers, flume submits the place
+to the merge queue. A failed or conflicting submission goes back to
+`code`, the stage each kind names for a failure, with the merge queue's
+words in its prompt.
+
+**Starts unready** says what happens when the place could not be made
+ready. A fix or a chore starts its first stage anyway, and the prompt
+says which step failed and what it printed, since the fix may be the
+failing step. A change waits instead, and `flume status` shows the
+failed step.
+
+A change's three stages each read the change at
+`openspec/changes/<name>`, named for the place. A launch is refused when
+the base already holds a change of that name, archived or not, or when
+another live place of the repository is building one. The `verify`
+stage writes its report to `verify.md` in the change, and where the
+work falls short it archives nothing and stops short having found work,
+which sends the place back to `code` with its words.
+
+## How a kind runs through
+
+A kind runs through on its own:
+
+1. flume starts the first stage's agent with the stage's prompt.
+2. Once the deliverable exists at the place's branch head and the agent
+   is quiet, flume ends the agent and starts the next stage's.
+3. Once the last stage delivers, flume submits the place, when the kind
+   lands. A kind that does not land waits for `flume done`.
+4. Once the merge queue lands the work, flume tidies the place.
+
+Nothing waits on your word unless the launch or a hold asks for it
+([callers, holds and ends](/flume/guides/callers-and-holds/)). Three
+things send the work back to the stage the kind names for a failure,
+with words for its agent: a failed submission, a conflicting one, and
+found work from the kind's last stage, `flume needs --found`. Each
+going-back counts toward the kind's bound, three unless the last stage
+sets `max_send_backs`. Past the bound the place waits for you. A
+conflict's words name the contested files and the base revision the
+merge queue tested against. The built-in prompts tell the agent to
+merge that revision into the place's branch, resolve the files and
+commit, never to rebase.
+
+A stop-short that needs an answer, `flume needs "<words>"`, starts no
+next stage: the place waits until a retry carries the answer.
+
+## Where kinds come from
+
+A launch's kind resolves from the first of three declarations that
+holds its name:
+
+1. the file the launch names with `--kinds <file>`;
+2. the repository's `.config/flume.toml`, read at the base's current
+   revision;
+3. flume's own.
+
+So a repository that declares `fix` stands its own over flume's. A
+place keeps the kind its launch read for its whole life: a change to
+the declaration reaches the next launch, never a place already running.
+`flume status` gives each place's kind with its version and where it
+came from, as in `fix@1 (flume)` or `spike@1 (repository)`.
+
+## Writing a kind
+
+Kinds are TOML, one table per kind under `[kinds]`, each with its
+stages as an array of tables in order. This kind explores an idea and
+commits a note, and lands nothing:
+
+```toml
+# .config/flume.toml
+[profiles]
+place = "git-worktree"
+merge_queue = "sluice"
+
+[kinds.spike]
+branch = "spike"
+
+[[kinds.spike.stages]]
+name = "explore"
+prompt = "prompts/spike.md"
+deliverables = ["committed:notes/spike.md"]
+makes = ["preview"]
+agents = [{}]
+```
+
+and its prompt, `.config/prompts/spike.md`, beside the file:
+
+```markdown
+You are the {{stage}} stage of the spike {{name}}, in {{place}} on {{branch}}.
+
+{{brief}}
+
+Write what you found to {{report}} and commit it. Record each thing you
+bring up as one JSON line in {{made}}.
+```
+
+`flume launch --kind spike --name try-it --brief "Try a faster tokenizer."`
+then makes `places/spike--try-it` on `spike/try-it` and starts
+`explore`. Since the kind does not land, the place waits once the note
+is committed, until `flume done spike--try-it` declares the work
+complete and flume tidies it.
+
+### A kind's fields
+
+| Field | Meaning | Left out |
+|---|---|---|
+| `version` | a whole number of at least 1, shown with the kind's name | `1` |
+| `branch` | the prefix of its places' branches | the kind's name |
+| `starts_unready` | the first stage starts in a place that could not be made ready | `false` |
+| `lands` | flume submits the place once the last stage delivers | `false` |
+| `agents` | settings for every stage's agent, and for the stages named under `agents.stages.<stage>` | none |
+| `stages` | the stages, at least one, in order | refused |
+
+### A stage's fields
+
+| Field | Meaning | Left out |
+|---|---|---|
+| `name` | the stage's name, unique in its kind | refused |
+| `prompt` | the path of its prompt, relative to the declaration's own folder | refused |
+| `deliverables` | its one deliverable, in a list of one | refused, unless a conversation |
+| `conversation` | `true` for a stage with no deliverable, ended by `flume finish` | `false` |
+| `agents` | a list of exactly one table: the stage's agent and its settings | refused by flume |
+| `makes` | names of what the stage makes besides its deliverable | none |
+| `wait` | the stage is held before it starts, until a retry names it | `false` |
+| `quiet` | how long its agent may be quiet with nothing delivered before status says it is stuck, as `45m` | 30 minutes |
+| `on_fail` | the stage a failed submission or found work sends the place back to, read from the last stage; that stage and every one after it run again | the last stage |
+| `max_send_backs` | how many times the place may go back, read from the last stage | 3 |
+
+flume ignores every table and key it does not know, so a declaration
+can carry sections another tool reads. A field of the wrong type, a
+deliverable flume cannot read or an `on_fail` naming no stage refuses
+the launch, naming each field that fails.
+
+flume runs one agent per stage and one deliverable per stage, so a
+stage that names no agent, or several, refuses the launch: write
+`agents = [{}]` for a stage with no settings of its own. A kind that
+lands needs the repository to bind a merge queue, and a kind with a
+change deliverable needs it to bind a change tool; a launch of either
+without the binding is refused.
+
+### Deliverables
+
+| Spelling | The stage ends when, since it started |
+|---|---|
+| `commits` | a commit is on the place's branch |
+| `change` | the place's OpenSpec change is written, its planning complete, in a commit |
+| `tasks` | every task of the change is ticked, in a commit |
+| `archived` | the change is archived on the place's branch, in a commit |
+| `report:<path>` | the file at the path is written; a path starting `{{state}}` lies in the place's own folder on the host, outside the worktree |
+| `committed:<path>` | a commit touches the file at the path |
+
+flume reads a deliverable at one head of the place's branch and counts
+it only when made since the stage started. Once it exists flume waits
+until the agent is quiet, then ends the agent.
+
+### What a stage makes
+
+`makes` names things a stage leaves besides its deliverable: a
+preview, a branch for someone to try, a document. The stage's run
+records each as one JSON line in `made.jsonl` in the place's own
+folder, whose path the prompt part `{{made}}` gives. A line names the
+thing by `name` and says what it is, with its address, or the branch
+and revision that bring it up.
+
+A stage is not delivered while a thing it declares has no line, and
+the Stop hook sends the agent back naming it. flume carries each line
+as written in the stage's end, in status, and in a wait's and the
+inbox's answer. It builds, checks and rewrites no address, and keeps
+none of the lines once the place is tidied.
+
+### Settings
+
+A kind's `agents` table, and a stage's one agent table, give the
+agent's `program`, `model`, `instructions` and `env`, and `beside` for
+where its pane opens. A repository may also give settings to a kind it
+does not declare, flume's own among them, with a table that holds only
+`agents`:
+
+```toml
+[kinds.change.agents.stages.verify]
+model = "opus"
+```
+
+A repository's file gives no `env`: a launch whose repository sets one
+is refused, since what a machine's environment needs is that machine's
+to say. [Agent settings](/flume/guides/agent-settings/) gives the
+layers in order.
+
+### Prompts
+
+A prompt is text with parts in double braces, filled at each start:
+`{{brief}}`, `{{name}}`, `{{place}}`, `{{branch}}` and the rest.
+`{{#words}}…{{/words}}` holds text sent only with a retry's or a
+failure's words. A part with nothing to fill it refuses the stage,
+naming the part, and starts no agent. The way to stop short is always
+in the prompt: where the template does not place `{{needs}}`, flume
+adds it at the end. [Prompt parts](/flume/reference/prompt-parts/)
+lists every part.

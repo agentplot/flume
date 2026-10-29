@@ -1,0 +1,161 @@
+---
+title: The Claude Code plugin
+description: The plugin flume hands every agent it starts, how its hooks tell flume an agent started and received its prompt, and the plugin for your own sessions, with /launch and status over MCP.
+sidebar:
+  order: 3
+---
+
+import Delivery from '../../../components/Delivery.astro';
+
+Every agent flume starts is Claude Code with flume's own plugin. Its
+hooks are how flume knows what the agent did: that it started, that it
+received its prompt, that it is asking a person something, and that it
+went quiet. The same plugin, installed in your own sessions, gives you
+`/launch` and flume's status over MCP, and its hooks do nothing there.
+
+## The plugin flume hands its agents
+
+flume writes the plugin itself, once per version of flume and binary,
+under `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>`, and
+starts each agent with it:
+
+```sh
+claude --plugin-dir <plugin> [--model <model>] [--append-system-prompt <instructions>] '<prompt>'
+```
+
+in the place, with the agent's environment and four variables of
+flume's:
+
+| Variable | What it holds |
+|---|---|
+| `FLUME_AGENT` | the agent's identity, `flume:<repository>:<place>:<stage>:<start>` |
+| `FLUME_SECRET` | a secret of this start, which every ack must carry |
+| `FLUME_PLACE` | the place's location |
+| `FLUME_STAGE` | the stage's name |
+
+The plugin's hooks name the binary that wrote it by its absolute path,
+so an agent's hooks always match the flume that started it. Nothing
+needs installing for this. When the agent's plugin is of another
+version than the flume reading it, status says so in the agent's notes.
+
+The program is `claude` unless the agent's settings name another path
+to Claude Code. Where that path is a nix wrapper, flume runs the program
+it wraps, with the variables the wrapper sets, so herdr recognises the
+agent as Claude Code. Any other program refuses the launch, since
+Claude Code is the one agent program flume runs.
+
+flume checks the plugin's hooks against the Claude Code release its
+repository pins, 2.1.296.
+
+## What each hook does
+
+Each hook runs `flume hook <event>` and always exits 0. In a session
+flume did not start, one with no `FLUME_AGENT` and `FLUME_SECRET`,
+every hook does nothing.
+
+| Hook | What flume does with it |
+|---|---|
+| SessionStart | the **started ack**: the session, its transcript and the plugin's version, taken only with the start's secret |
+| UserPromptSubmit | the **received ack**: a digest of the prompt the agent took, its whitespace collapsed |
+| PreToolUse, for Bash | the **guard**: refuses `git push`, `sluice submit`, and worktrunk's `wt submit` and `wt merge`, wherever the line runs them, and records each refusal |
+| PreToolUse, for AskUserQuestion and ExitPlanMode | the **asking mark**: the agent is asking a person, until its transcript holds the answer |
+| PermissionRequest | the asking mark, for a permission prompt |
+| PostToolUse | clears the asking mark once the question it marks is answered |
+| Stop | the **stop check**, then a settle once the agent is quiet |
+| StopFailure | the agent's **last words**: why its turn failed |
+| SessionEnd | marks the agent's session ended |
+
+A subagent's hooks take no ack, and the guard refuses its commands as
+its agent's.
+
+**The guard.** flume submits the place once its last stage delivers,
+so an agent never submits, merges or pushes its branch itself. The
+guard reads the shell line as the commands it runs, after `&&`, in a
+pipeline, in `bash -c` or behind `env`, and refuses with words telling
+the agent to commit and leave the rest to flume. `git merge` stays
+allowed, since a conflict's fix merges the base into the place's
+branch. Status lists each refused act under the place's
+`refused_acts`.
+
+**The stop check.** When the agent is about to go quiet, the Stop hook
+asks flume whether the stage's deliverable exists. It may be missing
+while the agent has no background work running and no question open.
+Then the hook blocks the stop with words naming the deliverable, each
+declared thing with no line in `made.jsonl`, and the way to stop short.
+Otherwise it starts `flume settle <place> --on-quiet` in the
+background, which waits up to sixty seconds for the agent to be quiet
+and then moves the place on. A conversation stage is never sent back.
+
+## Prompt delivery
+
+<Delivery caption="The first sending is lost, and flume reads that it never arrived: it sends the prompt once more and reads it received. Later the pane goes quiet while the checks run; with no deliverable, the stage goes on until the change is committed." />
+
+Keys typed into a pane prove nothing about what the agent took, so
+flume reads the agent's own word:
+
+1. flume starts the agent and waits for its started ack, under the
+   identity and secret flume gave it. herdr's own reading that the
+   agent is ready does not count, since herdr reads a first run's setup
+   screens as ready.
+2. It sends the stage's prompt once the agent waits and is asking
+   nothing, clearing anything typed in its input first.
+3. It waits up to sixty seconds for the received ack, whose digest must
+   match the prompt sent.
+4. When none comes, flume clears the input and sends the prompt once
+   more. When the second sending is not received either, the stage is
+   **never begun**, and status says so.
+
+Under the printed command, the prompt rides in the command line, and
+its one sending counts from the started ack. A prompt that is a slash
+command fires no UserPromptSubmit hook, so flume reads it as received
+from the transcript instead.
+
+Text left typed in a pane is never a stage's state. A `flume tell`,
+your words to a place's agent, reaches it the same way: as a prompt the
+agent says it received, or not at all. flume holds a tell while the
+agent works and sends it once the agent waits, for up to ten minutes or
+the `--within` you give. It refuses a tell, with nothing typed, when no
+agent is live or the agent is asking a person a question. A tell never
+starts, ends or moves a stage.
+
+## How flume reads an agent
+
+`flume status` gives the current agent's state, read when asked:
+
+| State | Under herdr |
+|---|---|
+| `working` | herdr reads it working |
+| `waiting` | herdr reads it idle or done |
+| `asking` | herdr reads it blocked and the plugin left the asking mark |
+| `stopped` | its pane is gone, or herdr lists no agent in it with the shell in front, or its session ended |
+| `unknown` | flume cannot read it, as under the printed command |
+
+with `started`, `asking` and `own_work`, whether background shells or
+tasks the transcript shows are still running. A stage whose agent
+stopped with nothing delivered is **lost**; one quiet past the stage's
+`quiet` limit with nothing delivered is **stuck**; and one working past
+it is said to be. flume ends none of these: a retry or a drop is
+yours.
+
+## In your own sessions
+
+For `/launch` and status in your own Claude Code sessions, add flume's
+marketplace and install the plugin from it:
+
+```text
+/plugin marketplace add agentplot/flume
+/plugin install flume@flume
+```
+
+- **`/launch <brief>`** chooses a kind and a name with you, runs
+  `flume launch --kind <kind> --name <name> --brief "<brief>" --json`
+  in the repository, and reports the place, its branch, and whether its
+  first stage started, waits for room or is held. It passes `--base`
+  only when you name a base other than the default branch.
+- **The `flume` MCP server** runs `flume mcp` and serves one tool,
+  `status`, which answers as `flume status --json` does and settles
+  nothing.
+
+The launching session is the place's recipient unless the launch names
+another, so under herdr each end of its stages reaches that session's
+pane as a notice.

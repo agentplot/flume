@@ -1,16 +1,16 @@
 // The start page's diagram: one launch whole, in one 26 s loop. Three
-// callers stand at the head of the flume: your session's /launch, millpond's
-// send and headwater's fix key. millpond sends item 7 as a change on main,
-// and the launch runs down the flume into its place, a worktree on
-// change/csv-export cut from main, which flume makes ready. Each stage
-// lights in turn with a fresh agent, its prompt confirmed in the agent's
-// transcript, and ends when its deliverable exists: the change written,
-// every task ticked, the report, and the landing. The submit stage's agent
-// submits; sluice tests the work as merged and lands it, which ends the
-// stage, and flume tidies the place.
+// callers stand at the head of the flume: your session's /launch, an
+// inbox's send and a release tool's fix key. The inbox sends item 7 as a
+// change on main, and the launch runs down the flume into its place, a
+// worktree on change/csv-export cut from main, which flume makes ready.
+// Each stage lights in turn with a fresh agent, its prompt confirmed by the
+// agent's own hooks, and ends when its deliverable exists: the change
+// written, every task ticked, the change archived. flume then submits the
+// place; sluice tests the work as merged and lands it, and flume tidies the
+// place.
 //
 // Timeline, percent of the loop:
-//   2-16 launch · 16-22 ready · 22-62 stages · 62-80 submit, land · 84-96 tidy
+//   2-16 launch · 16-22 ready · 22-62 stages · 62-80 landing · 84-96 tidy
 import { Diagram, esc, type Layout } from "./kit";
 
 const T = 26;
@@ -28,7 +28,7 @@ interface Pt {
   y: number;
 }
 
-// The four stages: each with its window, what it waits on, its deliverable
+// The three stages and the landing: each with its window, what it waits on, its deliverable
 // and the agent's lines, each line with when it appears.
 const STAGES: {
   name: string;
@@ -66,23 +66,24 @@ const STAGES: {
     name: "verify",
     a: 54,
     b: 62,
-    waits: "its report",
-    done: ["report:", "0 to fix"],
+    waits: "the archive",
+    done: ["the change", "archived"],
     log: [
-      ["checked the code against the change", 56.5, "t"],
-      ["ended: the report exists", 61, "ok"],
+      ["checked the work against the change", 56.5, "t"],
+      ["archived the change with its report", 59, "t"],
+      ["ended: the change archived", 61, "ok"],
     ],
   },
   {
-    name: "submit",
+    name: "landing",
     a: 62,
     b: 80,
-    waits: "the landing",
-    done: ["landed,", "change archived"],
+    waits: "the merge queue",
+    done: ["landed", "on main"],
     log: [
-      ["archived the change", 64, "t"],
-      ["sluice submit main --no-wait", 66, "ac"],
-      ["ended: landed on main", 80, "ok"],
+      ["flume: sluice submit main --no-wait", 64, "ac"],
+      ["sluice tests main + the change", 70, "t"],
+      ["landed on main", 80, "ok"],
     ],
   },
 ];
@@ -156,17 +157,17 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
   }
   if (!n) add(`<text class="hd" x="${g.tidy.x}" y="${g.tidy.y - 10}">TIDY</text>`);
 
-  // ---- the callers: your session, millpond, headwater; millpond sends.
+  // ---- the callers: your session, an inbox, a release tool; the inbox sends.
   const doors: [string, string, string, string][] = n
     ? [
         ["your session", "t", "/launch", "mono"],
-        ["millpond", "pd", "send", ""],
-        ["headwater", "hw", "fix key", ""],
+        ["an inbox", "pd", "send", ""],
+        ["a release tool", "hw", "fix key", ""],
       ]
     : [
         ["your session", "t", "/launch <brief>", "mono"],
-        ["millpond", "pd", "sends item 7 as a change", ""],
-        ["headwater", "hw", "its fix key on a release", ""],
+        ["an inbox", "pd", "sends item 7 as a change", ""],
+        ["a release tool", "hw", "its fix key on a release", ""],
       ];
   doors.forEach(([who, cls, what, mono], i) => {
     const D = g.door(i);
@@ -245,7 +246,7 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
       );
   }
 
-  // The launch, written out as millpond hands it to flume.
+  // The launch, written out as the inbox hands it to flume.
   {
     const C = g.card;
     add(
@@ -336,7 +337,7 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
   {
     const y = g.readyY;
     const x = g.pathAt.x;
-    add(`<text class="m xxs" x="${x}" y="${y}">made ready by the repository’s declaration</text>`);
+    add(`<text class="m xxs" x="${x}" y="${y}">made ready by the merge queue’s policy</text>`);
     const rx = n ? x : x + 234;
     const ry = n ? y + 0 : y;
     if (!n) {
@@ -426,21 +427,27 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
       `<rect class="${d.show(`pf${i}`, s.a, s.a + 1.5)}" x="${S.x}" y="${S.y}" width="${S.w}" height="${S.h}" rx="6" style="fill:none;stroke:var(--dg-accent);stroke-width:1.5"/>`,
     );
     add(`<g class="${d.show(`pt${i}`, s.a, until)}">`);
-    add(`<text class="t b xs" x="${S.x + 10}" y="${S.y + 20}">agent ${i + 1} · ${s.name}</text>`);
+    const landing = i === STAGES.length - 1;
     add(
-      `<text class="m xxs" x="${S.x + S.w - 10}" y="${S.y + 20}" text-anchor="end">a fresh agent</text>`,
+      `<text class="t b xs" x="${S.x + 10}" y="${S.y + 20}">${landing ? "flume · the landing" : `agent ${i + 1} · ${s.name}`}</text>`,
+    );
+    add(
+      `<text class="m xxs" x="${S.x + S.w - 10}" y="${S.y + 20}" text-anchor="end">${landing ? "no agent" : "a fresh agent"}</text>`,
     );
     add(
       `<line x1="${S.x}" y1="${S.y + 30}" x2="${S.x + S.w}" y2="${S.y + 30}" style="stroke:var(--dg-rule)"/>`,
     );
     add("</g>");
-    // The prompt: typed once the agent takes input, then found in its transcript.
-    add(
-      `<text class="m mono xxs ${d.show(`pp${i}`, s.a + 0.4, s.a + 1.6)}" x="${S.x + 10}" y="${S.y + 48}">prompt sent: ${s.name}…</text>`,
-    );
-    add(
-      `<g class="${d.show(`pc${i}`, s.a + 1.6, until)}"><circle class="ok" cx="${S.x + 14}" cy="${S.y + 44}" r="4"/><text class="ok xxs b" x="${S.x + 24}" y="${S.y + 48}">prompt in its transcript</text></g>`,
-    );
+    // The prompt: sent once the agent says it started, then acknowledged
+    // by its own hook. The landing has no agent and no prompt.
+    if (!landing) {
+      add(
+        `<text class="m mono xxs ${d.show(`pp${i}`, s.a + 0.4, s.a + 1.6)}" x="${S.x + 10}" y="${S.y + 48}">prompt sent: ${s.name}…</text>`,
+      );
+      add(
+        `<g class="${d.show(`pc${i}`, s.a + 1.6, until)}"><circle class="ok" cx="${S.x + 14}" cy="${S.y + 44}" r="4"/><text class="ok xxs b" x="${S.x + 24}" y="${S.y + 48}">prompt received</text></g>`,
+      );
+    }
     s.log.forEach(([line, at, cls], k) => {
       add(
         `<text class="mono xxs ${cls} ${d.show(`pl${i}${k}`, at, until)}" x="${S.x + 10}" y="${logY(k)}">${esc(line)}</text>`,
@@ -466,7 +473,7 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
   // ---- sluice: the submission is tested as merged and lands on main.
   const L = g.sluice;
   {
-    // The submission travels from the submit stage to sluice.
+    // The submission travels from the landing to sluice.
     const N = g.node(3);
     const from = n ? { x: N.x + N.w, y: N.y + N.h / 2 } : { x: N.x + N.w / 2, y: N.y };
     const to = n ? { x: L.x + 30, y: L.y + 14 } : { x: L.x + 30, y: L.y + 40 };
@@ -583,14 +590,14 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
         ["A launch: repository, kind, brief, name, base.", 2, 16],
         ["flume makes the place, and makes it ready.", 16, 22],
         ["A fresh agent per stage, ended by its deliverable.", 22, 68],
-        ["The last stage submits; sluice lands the work.", 68, 84],
+        ["flume submits; sluice lands the work.", 68, 84],
         ["flume tidies the place it made.", 84, 96],
       ]
     : [
         ["A launch: a repository,|a kind, brief, name, base.", 2, 16],
         ["flume makes the place|and makes it ready.", 16, 22],
         ["A fresh agent per stage,|ended by its deliverable.", 22, 68],
-        ["The last stage submits;|sluice lands the work.", 68, 84],
+        ["flume submits;|sluice lands the work.", 68, 84],
         ["flume tidies the place|it made.", 84, 96],
       ];
   caps.forEach(([txt, a, b], i) => {
@@ -619,11 +626,11 @@ export function hero(layout: Layout, opts: { id?: string; standalone?: boolean }
     height: g.H,
     title: "flume: one launch, one place, a fresh agent for each stage",
     desc:
-      "Three callers stand at the head of the flume: your session’s /launch, millpond’s send and headwater’s fix key. millpond sends item 7 as a change: " +
+      "Three callers stand at the head of the flume: your session’s /launch, an inbox’s send and a release tool’s fix key. The inbox sends item 7 as a change: " +
       "the launch names the repository ledger, the kind change, the name csv-export, the base main and the brief, export the ledger as CSV. It runs down the flume into its place, " +
-      "a worktree at ledger/places/change--csv-export on the branch change/csv-export, cut from main, which flume makes ready by the repository’s declaration. " +
-      "Four stages light in turn, each with a fresh agent in a herdr pane whose prompt flume confirms in the agent’s transcript: construct ends when the OpenSpec change is written, " +
-      "code when all five of its tasks are ticked, and verify when its report exists. submit’s agent archives the change and submits the branch to main; sluice tests main with the change as merged and lands it, which ends the stage. " +
+      "a worktree at ledger/places/change--csv-export on the branch change/csv-export, cut from main, which flume makes ready by the merge queue’s policy. " +
+      "Three stages light in turn, each with a fresh agent in a herdr pane whose prompt the agent’s own hook acknowledges: construct ends when the OpenSpec change is written, " +
+      "code when all five of its tasks are ticked, and verify when the change is archived with its report. flume then submits the branch to main, with no agent; sluice tests main with the change as merged and lands it. " +
       "flume then tidies the place: the worktree is removed, and the branch with it, since it holds nothing main lacks.",
     still: 82,
     standalone: opts.standalone,

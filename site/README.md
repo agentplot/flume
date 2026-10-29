@@ -15,15 +15,14 @@ devenv shell -- site-shots <dir>   # screenshots: every page, both widths, both 
 The family's look is `@agentplot/site-theme`: its `starlight.css` carries
 the type, the ink and paper of both themes and the accent, `--ap-accent`,
 which its family bar sets from the family list (flume's teal). Its header
-puts the family bar above Starlight's, its footer adds the family's, and
-How it fits shows its family diagram with flume highlighted. Its banner,
+puts the family bar above Starlight's and its footer adds the family's. Its banner,
 which says a tool is designed and not built, is not used: flume runs.
 
 ## Where things live
 
 | path | what |
 |---|---|
-| `src/content/docs/` | one page per file: start, how it works, install and set up, how it fits, design, roadmap |
+| `src/content/docs/` | one page per file: start, install and set up, `guides/`, `reference/`, `architecture/` and the roadmap |
 | `src/diagrams/` | the SVG diagrams, drawn at build time: `kit.ts` the builder, one file per diagram |
 | `src/components/Diagram.astro` | inlines a diagram's wide and narrow layouts and shows the one its column fits |
 | `src/components/Delivery.astro` | prompt delivery and stage ends, drawn on a canvas from the time in its loop |
@@ -49,8 +48,8 @@ theme changes, and draws every frame from the time in its loop, so its
 still and a screenshot's frame are exact; an `fl:frame` event on its
 figure holds one.
 
-The callers' accents, millpond's `--dg-pond`, headwater's `--dg-head` and
-sounding's `--dg-sound`, come from the family list too.
+The callers' accents, `--dg-pond`, `--dg-head` and `--dg-sound`, come from
+the family list too.
 
 `bun run readme-diagram` writes the hero as a standalone SVG with its own
 palette, `docs/diagrams/flume.svg`, for the README.
