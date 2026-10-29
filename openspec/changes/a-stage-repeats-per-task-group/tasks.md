@@ -15,8 +15,8 @@ The kind format is weir's (core.4), so the group begins in
 agentplot/weir (`~/Code/github_agentplot/weir`).
 
 - [x] 1.1 In agentplot/weir, add `repeat` to a stage in weir-kinds as design 1 has it: `Stage::repeat` an `Option<Repeat>` with the one variant `PerTaskGroup` spelled `per-task-group`, `repeat` in `STAGE_FIELDS`, and the read refusing, naming the field, any other value and the field on a conversation or a stage whose deliverable is not `tasks` (weir 53, 57, C.4), with fixtures and tests, through an OpenSpec change of weir's own on a branch of its own, landed through sluice there (`sluice exec main` then `sluice submit main`, under weir's `.config/sluice.toml`). True when weir's gate passes on the landing.
-- [ ] 1.2 Have flume take that weir revision in `Cargo.toml` and `Cargo.lock`, add `repeats` to `flume_seams::Stage`, serde default false, and set it in `map_stage` from `repeat` (design 1; kinds-profile spec, a stage's repeat read through weir's crate). True when `sluice exec main -- moon run seams:test flume:test` passes with a round-trip test of a held state written before the field, and a kinds profile test per scenario of that requirement over scratch repositories.
-- [ ] 1.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test flume:format flume:lint flume:test` passes.
+- [x] 1.2 Have flume take that weir revision in `Cargo.toml` and `Cargo.lock`, add `repeats` to `flume_seams::Stage`, serde default false, and set it in `map_stage` from `repeat` (design 1; kinds-profile spec, a stage's repeat read through weir's crate). True when `sluice exec main -- moon run seams:test flume:test` passes with a round-trip test of a held state written before the field, and a kinds profile test per scenario of that requirement over scratch repositories.
+- [x] 1.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test flume:format flume:lint flume:test` passes.
 
 ## 2. A change's task groups
 
