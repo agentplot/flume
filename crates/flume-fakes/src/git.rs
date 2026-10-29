@@ -260,6 +260,12 @@ impl History for FakeHistory {
         !self.git.since(head, start).is_empty()
     }
 
+    fn commits_since(&self, repository: &str, head: &Revision, start: &Revision) -> Vec<Revision> {
+        self.log
+            .push(format!("commits_since {repository} {head} {start}"));
+        self.git.since(head, start)
+    }
+
     fn newest_touching(
         &self,
         repository: &str,
@@ -284,6 +290,12 @@ impl History for FakeHistory {
             "in_commit_since {repository} {head} {start} {path}"
         ));
         self.git.touched_since(head, start, path)
+    }
+
+    /// The repository's own `.git`, as for a repository with its main
+    /// worktree; unlogged, since every start reads it.
+    fn common_dir(&self, repository: &str) -> Option<String> {
+        Some(format!("{repository}/.git"))
     }
 
     fn valid_branch(&self, name: &str) -> bool {

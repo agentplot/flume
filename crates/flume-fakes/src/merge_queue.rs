@@ -1,29 +1,36 @@
-use crate::{lock, FakeGit, FakePlace, Log};
+use crate::{lock, FakeGit, Log};
 use flume_seams::{
-    BaseRevision, MergeQueue, PlaceRef, Revision, Submission, SubmissionRead, SubmissionState,
-    Verdict,
+    BaseRevision, Inbox, MergeQueue, PlaceRef, Revision, Stepped, Submission, SubmissionOutcome,
+    SubmissionRead, SubmissionState, Submitted,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-/// What the fake merge queue does with the next submission or wait.
+/// What the fake merge queue does with a submission: refused at submit,
+/// or held and decided by the round that next reaches it.
 #[derive(Clone, Debug)]
 pub enum Plan {
     /// It lands, merged into its base.
     Land,
     Fail(String),
+    /// It conflicts with its base on the files named, with the words.
+    Conflict(Vec<String>, String),
+    /// It is withdrawn, which no inbox gives (99).
     Withdraw,
+    /// Submit refuses it with the reason.
     Refuse(String),
-    /// It stays under test, and the command waiting on it is killed.
-    Hang,
+    /// It stays open through every round.
+    Hold,
 }
 
 /// The merge queue seam over the fake git: where each base lives, what
-/// each submission and wait comes to, and every submission of each
-/// branch, whoever made it.
+/// each submission comes to, every submission of each branch whoever
+/// made it, and each place's pending outcomes. Submit holds no wait: a
+/// submission is decided by a round, which `step` drives unless the
+/// queue moves on its own, and its outcome is delivered once through
+/// the place's inbox. It removes nothing of a place (113).
 pub struct FakeMergeQueue {
     git: Arc<FakeGit>,
-    place: Option<Arc<FakePlace>>,
     state: Mutex<QueueState>,
     pub log: Log,
 }
@@ -32,20 +39,20 @@ pub struct FakeMergeQueue {
 struct QueueState {
     bases: BTreeMap<(String, String), BaseRevision>,
     submits: VecDeque<Plan>,
-    waits: VecDeque<Plan>,
     submissions: BTreeMap<(String, String), Vec<Submission>>,
+    /// Each submission's plan and the place it came from, by id.
+    plans: BTreeMap<String, (Plan, Option<String>)>,
+    /// Each place's outcomes not yet delivered, by location.
+    inboxes: BTreeMap<String, Vec<SubmissionOutcome>>,
     unreadable: Option<String>,
-    removes_places: bool,
+    moves_on_its_own: bool,
     next: u64,
 }
 
 impl FakeMergeQueue {
-    /// A merge queue that, given the fake place, removes a landed place
-    /// through it once told to.
-    pub fn new(git: Arc<FakeGit>, place: Option<Arc<FakePlace>>) -> FakeMergeQueue {
+    pub fn new(git: Arc<FakeGit>) -> FakeMergeQueue {
         FakeMergeQueue {
             git,
-            place,
             state: Mutex::default(),
             log: Log::default(),
         }
@@ -63,10 +70,8 @@ impl FakeMergeQueue {
         lock(&self.state).submits.extend(plans);
     }
 
-    pub fn plan_waits(&self, plans: Vec<Plan>) {
-        lock(&self.state).waits.extend(plans);
-    }
-
+    /// Submit, inbox, step and read-submission each answer that the merge
+    /// queue could not be read.
     pub fn unreadable(&self, reason: &str) {
         lock(&self.state).unreadable = Some(reason.into());
     }
@@ -75,9 +80,10 @@ impl FakeMergeQueue {
         lock(&self.state).unreadable = None;
     }
 
-    /// A landed place is removed through its teardown by the merge queue.
-    pub fn removes_places(&self) {
-        lock(&self.state).removes_places = true;
+    /// The queue moves on its own, as one a driver runs: step drives
+    /// nothing, and a test runs each round with `run_round`.
+    pub fn moves_on_its_own(&self) {
+        lock(&self.state).moves_on_its_own = true;
     }
 
     /// A hand's submission of `branch` to `target`, in `state`.
@@ -89,7 +95,7 @@ impl FakeMergeQueue {
         state: SubmissionState,
     ) -> Submission {
         let mut queue = lock(&self.state);
-        Self::record(&mut queue, repository, branch, target, state)
+        Self::record(&mut queue, repository, branch, target, state, None)
     }
 
     /// A hand's submission of `branch` to `target` that lands.
@@ -105,8 +111,43 @@ impl FakeMergeQueue {
             SubmissionState::Landed {
                 commit: commit.clone(),
             },
+            None,
         );
         commit
+    }
+
+    /// The newest open submission of `branch` decided now by `plan`, as a
+    /// round the queue ran on its own would.
+    pub fn decide(&self, repository: &str, branch: &str, plan: Plan) {
+        let open = self
+            .submissions(repository, branch)
+            .into_iter()
+            .rev()
+            .find(|submission| submission.state.open());
+        if let Some(submission) = open {
+            lock(&self.state)
+                .plans
+                .entry(submission.id.clone())
+                .or_insert((Plan::Land, None))
+                .0 = plan;
+            self.settle(repository, &submission);
+        }
+    }
+
+    /// One round of `base`'s queue: every open submission to it decided by
+    /// its plan, a held one left open.
+    pub fn run_round(&self, repository: &str, base: &str) {
+        let open: Vec<Submission> = lock(&self.state)
+            .submissions
+            .iter()
+            .filter(|((at, _), _)| at == repository)
+            .flat_map(|(_, all)| all.iter())
+            .filter(|submission| submission.target == base && submission.state.open())
+            .cloned()
+            .collect();
+        for submission in open {
+            self.settle(repository, &submission);
+        }
     }
 
     pub fn submissions(&self, repository: &str, branch: &str) -> Vec<Submission> {
@@ -117,12 +158,22 @@ impl FakeMergeQueue {
             .unwrap_or_default()
     }
 
+    /// The outcomes pending for the place at `location`, undelivered.
+    pub fn pending(&self, location: &str) -> Vec<SubmissionOutcome> {
+        lock(&self.state)
+            .inboxes
+            .get(location)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     fn record(
         queue: &mut QueueState,
         repository: &str,
         branch: &str,
         target: &str,
         state: SubmissionState,
+        from: Option<(Plan, String)>,
     ) -> Submission {
         queue.next += 1;
         let submission = Submission {
@@ -131,6 +182,11 @@ impl FakeMergeQueue {
             target: target.into(),
             state,
         };
+        if let Some((plan, location)) = from {
+            queue
+                .plans
+                .insert(submission.id.clone(), (plan, Some(location)));
+        }
         queue
             .submissions
             .entry((repository.into(), branch.into()))
@@ -139,101 +195,108 @@ impl FakeMergeQueue {
         submission
     }
 
-    fn set_state(&self, repository: &str, submission: &str, branch: &str, state: SubmissionState) {
+    fn set_state(&self, repository: &str, submission: &Submission, state: SubmissionState) {
         let mut queue = lock(&self.state);
         if let Some(found) = queue
             .submissions
-            .get_mut(&(repository.to_string(), branch.to_string()))
-            .and_then(|all| all.iter_mut().find(|one| one.id == submission))
+            .get_mut(&(repository.to_string(), submission.branch.clone()))
+            .and_then(|all| all.iter_mut().find(|one| one.id == submission.id))
         {
             found.state = state;
         }
     }
 
-    fn decide(
-        &self,
-        repository: &str,
-        location: &str,
-        submission: &Submission,
-        plan: Plan,
-    ) -> Verdict {
-        match plan {
+    /// Decides an open submission by its plan, and leaves its outcome in
+    /// its place's inbox.
+    fn settle(&self, repository: &str, submission: &Submission) {
+        let (plan, location) = lock(&self.state)
+            .plans
+            .get(&submission.id)
+            .cloned()
+            .unwrap_or((Plan::Land, None));
+        let (state, outcome) = match plan {
+            Plan::Hold | Plan::Refuse(_) => return,
             Plan::Land => {
                 let head = self
                     .git
                     .branch_head(repository, &submission.branch)
                     .expect("a submitted branch");
                 let commit = self.git.merge(repository, &submission.target, &head);
-                let removes = lock(&self.state).removes_places;
-                let place_removed = match (&self.place, removes) {
-                    (Some(place), true) => {
-                        place.vanish(location);
-                        true
-                    }
-                    _ => false,
-                };
-                self.set_state(
-                    repository,
-                    &submission.id,
-                    &submission.branch,
+                (
                     SubmissionState::Landed {
                         commit: commit.clone(),
                     },
-                );
-                Verdict::Landed {
-                    commit,
-                    place_removed,
-                    branch_removed: false,
-                }
+                    Some(SubmissionOutcome::Landed { commit }),
+                )
             }
-            Plan::Fail(words) => {
-                self.set_state(
-                    repository,
-                    &submission.id,
-                    &submission.branch,
-                    SubmissionState::Failed {
+            Plan::Fail(words) => (
+                SubmissionState::Failed {
+                    words: words.clone(),
+                },
+                Some(SubmissionOutcome::Failed { words }),
+            ),
+            Plan::Conflict(files, words) => {
+                let base = self
+                    .git
+                    .branch_head(repository, &submission.target)
+                    .expect("a base");
+                (
+                    SubmissionState::Conflict {
+                        files: files.clone(),
                         words: words.clone(),
                     },
-                );
-                Verdict::Failed { words }
+                    Some(SubmissionOutcome::Conflict { files, base, words }),
+                )
             }
-            Plan::Withdraw => {
-                self.set_state(
-                    repository,
-                    &submission.id,
-                    &submission.branch,
-                    SubmissionState::Withdrawn,
-                );
-                Verdict::Withdrawn
-            }
-            Plan::Refuse(reason) => Verdict::Refused { reason },
-            Plan::Hang => panic!(
-                "the command waiting on submission {} was killed",
-                submission.id
-            ),
+            Plan::Withdraw => (SubmissionState::Withdrawn, None),
+        };
+        self.set_state(repository, submission, state);
+        if let (Some(outcome), Some(location)) = (outcome, location) {
+            lock(&self.state)
+                .inboxes
+                .entry(location)
+                .or_default()
+                .push(outcome);
         }
     }
 }
 
 impl MergeQueue for FakeMergeQueue {
-    fn submit(&self, place: &PlaceRef, head: &Revision) -> Verdict {
+    fn submit(&self, place: &PlaceRef, head: &Revision) -> Submitted {
         self.log
             .push(format!("submit {} {head} {}", place.branch, place.base));
-        let plan = lock(&self.state).submits.pop_front().unwrap_or(Plan::Land);
-        if let Plan::Refuse(reason) = plan {
-            return Verdict::Refused { reason };
+        let mut queue = lock(&self.state);
+        if let Some(reason) = &queue.unreadable {
+            return Submitted::Refused {
+                reason: reason.clone(),
+            };
         }
-        let submission = {
-            let mut queue = lock(&self.state);
-            Self::record(
-                &mut queue,
-                &place.repository,
-                &place.branch,
-                &place.base,
-                SubmissionState::UnderTest,
-            )
-        };
-        self.decide(&place.repository, &place.location, &submission, plan)
+        let plan = queue.submits.pop_front().unwrap_or(Plan::Land);
+        if let Plan::Refuse(reason) = plan {
+            return Submitted::Refused { reason };
+        }
+        let submission = Self::record(
+            &mut queue,
+            &place.repository,
+            &place.branch,
+            &place.base,
+            SubmissionState::Waiting,
+            Some((plan, place.location.clone())),
+        );
+        Submitted::Submitted { submission }
+    }
+
+    fn inbox(&self, place: &PlaceRef) -> Inbox {
+        self.log.push(format!("inbox {}", place.location));
+        let mut queue = lock(&self.state);
+        if let Some(reason) = &queue.unreadable {
+            return Inbox::CouldNotRead {
+                reason: reason.clone(),
+            };
+        }
+        Inbox::Outcomes {
+            outcomes: queue.inboxes.remove(&place.location).unwrap_or_default(),
+        }
     }
 
     fn read_submission(&self, repository: &str, branch: &str) -> SubmissionRead {
@@ -257,12 +320,21 @@ impl MergeQueue for FakeMergeQueue {
         }
     }
 
-    fn wait(&self, repository: &str, submission: &Submission) -> Verdict {
-        self.log
-            .push(format!("wait {repository} {}", submission.id));
-        let plan = lock(&self.state).waits.pop_front().unwrap_or(Plan::Land);
-        let location = String::new();
-        self.decide(repository, &location, submission, plan)
+    fn step(&self, repository: &str, base: &str) -> Stepped {
+        self.log.push(format!("step {repository} {base}"));
+        {
+            let queue = lock(&self.state);
+            if let Some(reason) = &queue.unreadable {
+                return Stepped::CouldNotRead {
+                    reason: reason.clone(),
+                };
+            }
+            if queue.moves_on_its_own {
+                return Stepped::MovesOnItsOwn;
+            }
+        }
+        self.run_round(repository, base);
+        Stepped::Stepped
     }
 
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision {

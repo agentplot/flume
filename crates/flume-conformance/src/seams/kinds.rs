@@ -2,6 +2,7 @@
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 /// What the kinds scenarios need: repositories and declarations holding
 /// the kinds a scenario names.
@@ -31,6 +32,7 @@ pub fn bump(agents: usize) -> Kind {
         branch_prefix: "bump".into(),
         starts_unready: false,
         lands: true,
+        agents: KindSettings::default(),
         stages: vec![Stage {
             name: "code".into(),
             prompt: "{{brief}}\n\n{{needs}}".into(),
@@ -76,8 +78,8 @@ pub fn scenarios<H: KindsHarness>() -> Vec<Scenario<H>> {
             run: two_agents_are_kept::<H>,
         },
         Scenario {
-            name: "kinds: flume's own declaration holds fix and change, both landing",
-            cites: &["22", "19"],
+            name: "kinds: flume's own declaration holds fix, chore and change, each landing and sent back to code",
+            cites: &["22", "19", "S35"],
             run: flumes_own::<H>,
         },
         Scenario {
@@ -94,7 +96,7 @@ fn read<H: KindsHarness>(
     revision: &Revision,
 ) -> Result<Vec<Kind>, String> {
     match harness.seam().read_kinds(repository, revision) {
-        KindsRead::Read { kinds } => Ok(kinds),
+        KindsRead::Read { kinds, .. } => Ok(kinds),
         other => Err(format!("read-kinds gave {other:?}")),
     }
 }
@@ -114,7 +116,10 @@ fn the_same_revision_the_same_kinds<H: KindsHarness>(harness: &H) -> Outcome {
     let declaration = harness.launch_declaration(&[bump(1)]);
     ensure_eq!(
         harness.seam().read_declaration(&declaration),
-        KindsRead::Read { kinds: first },
+        KindsRead::Read {
+            kinds: first,
+            settings: BTreeMap::new(),
+        },
         "a launch's declaration of the same kind"
     );
     Ok(())
@@ -140,11 +145,13 @@ fn two_agents_are_kept<H: KindsHarness>(harness: &H) -> Outcome {
 
 fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
     let own = harness.seam().flumes_own();
-    let names: Vec<&str> = own.iter().map(|kind| kind.name.as_str()).collect();
-    ensure_eq!(names, vec!["fix", "change"], "flume's own kinds");
+    let mut names: Vec<&str> = own.iter().map(|kind| kind.name.as_str()).collect();
+    names.sort_unstable();
+    ensure_eq!(names, vec!["change", "chore", "fix"], "flume's own kinds");
+    let named = |name: &str| own.iter().find(|kind| kind.name == name);
     ensure!(
-        own.iter().all(|kind| kind.lands),
-        "a kind of flume's own does not land"
+        own.iter().all(|kind| kind.lands && kind.version == 1),
+        "a kind of flume's own does not land at version 1"
     );
     let stages = |kind: &Kind| -> Vec<(String, Vec<Deliverable>)> {
         kind.stages
@@ -152,36 +159,33 @@ fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
             .map(|stage| (stage.name.clone(), stage.deliverables.clone()))
             .collect()
     };
+    for (name, unready) in [("fix", true), ("chore", true), ("change", false)] {
+        let kind = named(name).ok_or(format!("no {name}"))?;
+        ensure_eq!(kind.branch_prefix, name, "the branch prefix");
+        ensure_eq!(kind.starts_unready, unready, "whether it starts unready");
+        ensure_eq!(
+            kind.stages
+                .last()
+                .and_then(|stage| stage.send_back_to.clone()),
+            Some("code".to_string()),
+            "where it goes back, never verify (22, S35)"
+        );
+    }
+    for name in ["fix", "chore"] {
+        ensure_eq!(
+            stages(named(name).ok_or("no kind")?),
+            vec![("code".to_string(), vec![Deliverable::Commits])],
+            "the stages of a fix or a chore"
+        );
+    }
     ensure_eq!(
-        stages(&own[0]),
-        vec![("code".to_string(), vec![Deliverable::Commits])],
-        "fix's stages"
-    );
-    ensure!(own[0].starts_unready, "fix does not start unready");
-    ensure_eq!(
-        stages(&own[1]),
+        stages(named("change").ok_or("no change")?),
         vec![
             ("construct".to_string(), vec![Deliverable::ChangeWritten]),
             ("code".to_string(), vec![Deliverable::TasksTicked]),
             ("verify".to_string(), vec![Deliverable::ChangeArchived]),
         ],
         "change's stages"
-    );
-    ensure_eq!(
-        own[0]
-            .stages
-            .last()
-            .and_then(|stage| stage.send_back_to.clone()),
-        Some("code".to_string()),
-        "where fix goes back"
-    );
-    ensure_eq!(
-        own[1]
-            .stages
-            .last()
-            .and_then(|stage| stage.send_back_to.clone()),
-        Some("verify".to_string()),
-        "where change goes back"
     );
     Ok(())
 }

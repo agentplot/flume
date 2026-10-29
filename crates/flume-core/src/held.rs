@@ -51,6 +51,7 @@ impl Engine {
                     if next == read.state {
                         return Some(answer);
                     }
+                    self.stamp(&read.state, &mut next);
                     match self.store.write(place, Some(read.version), Some(&next)) {
                         Written::Written { .. } => return Some(answer),
                         Written::Moved => continue,
@@ -59,6 +60,24 @@ impl Engine {
             }
         }
         None
+    }
+
+    /// Stamps since when each stage stands in its state and the place
+    /// waits for its caller, wherever an act changed them, so status says
+    /// since when a place waits (56, 130).
+    fn stamp(&self, was: &HeldState, next: &mut HeldState) {
+        let now = self.host.now();
+        for (index, stage) in next.stages.iter_mut().enumerate() {
+            if was.stages.get(index).map(|was| was.state) != Some(stage.state) {
+                stage.since = Some(now);
+            }
+        }
+        let submission = &mut next.submission;
+        if submission.waiting.is_none() {
+            submission.waiting_since = None;
+        } else if submission.waiting != was.submission.waiting {
+            submission.waiting_since = Some(now);
+        }
     }
 
     /// Removes the place's held state, and its folder with it, at the

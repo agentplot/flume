@@ -11,6 +11,47 @@ name = "flume"
 path = "src/main.rs"
 test = true
 
+[lib]
+path = "src/lib.rs"
+doctest = false
+
 [dependencies]
 flume-core = { path = "../flume-core" }
+flume-seams = { path = "../flume-seams" }
+serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+weir-kinds.workspace = true
+toml.workspace = true
+clap.workspace = true
+libc.workspace = true
+
+[features]
+# The profiles' tests against the tools the tree pins, the check-tools
+# layer (flume:tools).
+tools = []
+# The walkthroughs with the pinned Claude Code under herdr, the check-live
+# layer (flume:live), run by hand with a test account's sign-in.
+live = ["tools"]
+
+# The stand-in for Claude Code the walkthroughs run as `claude` (design
+# 18), built only for the check-tools layer.
+[[bin]]
+name = "flume-stand-in"
+path = "tests/profiles/stand-in/claude.rs"
+test = false
+required-features = ["tools"]
+
+[[test]]
+name = "tools"
+path = "tests/profiles/tools/main.rs"
+required-features = ["tools"]
+
+[[test]]
+name = "live"
+path = "tests/profiles/live/main.rs"
+required-features = ["live"]
+
+[dev-dependencies]
+flume-conformance = { path = "../flume-conformance" }
+flume-fakes = { path = "../flume-fakes" }

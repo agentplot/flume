@@ -1,0 +1,17 @@
+[kinds.fix]
+version = 1
+branch = "fix"
+starts_unready = true
+lands = false
+
+[[kinds.fix.stages]]
+name = "code"
+prompt = "work.md"
+deliverables = ["commits"]
+agents = [{}]
+
+[[kinds.fix.stages]]
+name = "review"
+prompt = "work.md"
+deliverables = ["commits"]
+agents = [{}]

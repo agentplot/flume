@@ -1,10 +1,19 @@
 $schema: 'https://moonrepo.dev/schemas/project.json'
 
 # The binary: the core built over the profiles built in, each answer
-# written as JSON. Each check is one task, in the fast layer.
+# written as JSON. Its tests run each seam's scenarios against its
+# profile on scratch repositories, the pinned openspec among the tools
+# they read. Each check is one task, in the fast layer, but `tools`: the
+# profiles against the pinned herdr and sluice, on servers and scratch
+# repositories the tests make, and the walkthroughs, the built binary
+# under the printed command with the stand-in for Claude Code
+# (`tests/profiles/stand-in/`) on scratch repositories landing on a local bare
+# remote, in the check-tools layer; and `live`, the walkthroughs with the
+# pinned Claude Code under herdr, in the check-live layer, run by hand
+# with a test account's token (`tests/profiles/live/`).
 language: 'rust'
 layer: 'application'
-dependsOn: [core]
+dependsOn: [seams, core, fakes, conformance]
 
 tasks:
   format:
@@ -13,12 +22,22 @@ tasks:
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   lint:
-    command: 'cargo clippy -p flume --all-targets -- -D warnings'
-    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    command: 'cargo clippy -p flume --all-targets --all-features -- -D warnings'
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/.config/flume.toml', '/plugins/claude/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   test:
     command: 'cargo test -p flume'
-    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/.config/flume.toml', '/plugins/claude/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
+  tools:
+    command: 'cargo test -p flume --features tools --test tools'
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/plugins/claude/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-tools]
+    options: {runFromWorkspaceRoot: true}
+  live:
+    command: 'cargo test -p flume --features live --test live -- --nocapture'
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/plugins/claude/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-live]
+    options: {runFromWorkspaceRoot: true, cache: false, runInCI: false}

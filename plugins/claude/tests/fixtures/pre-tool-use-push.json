@@ -1,0 +1,1 @@
+{"session_id":"4e3c05c8-51c4-4449-8577-4f7038e394bf","transcript_path":"__TRANSCRIPT__","cwd":"__CWD__","permission_mode":"bypassPermissions","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git add -A && git push origin HEAD","description":"Push the branch"},"tool_use_id":"toolu_01Push"}

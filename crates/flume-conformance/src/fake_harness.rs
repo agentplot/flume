@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 const REPOSITORY: &str = "/repository";
 
-/// flume's own kinds as Part C's table gives them: fix@1 and change@1.
+/// flume's own kinds as Part C's table gives them: fix@1, chore@1 and
+/// change@1, each sent back to code (22, C.2).
 pub fn flumes_own() -> Vec<Kind> {
     let stage = |name: &str, deliverable: Deliverable, prompt: &str| Stage {
         name: name.into(),
@@ -36,7 +37,7 @@ pub fn flumes_own() -> Vec<Kind> {
         Deliverable::ChangeArchived,
         "Verify {{change}} against the work, commit the report, and archive it.\n\n{{#words}}{{words}}\n\n{{/words}}{{needs}}",
     );
-    verify.send_back_to = Some("verify".into());
+    verify.send_back_to = Some("code".into());
     vec![
         Kind {
             name: "fix".into(),
@@ -44,6 +45,16 @@ pub fn flumes_own() -> Vec<Kind> {
             branch_prefix: "fix".into(),
             starts_unready: true,
             lands: true,
+            agents: KindSettings::default(),
+            stages: vec![code.clone()],
+        },
+        Kind {
+            name: "chore".into(),
+            version: 1,
+            branch_prefix: "chore".into(),
+            starts_unready: true,
+            lands: true,
+            agents: KindSettings::default(),
             stages: vec![code],
         },
         Kind {
@@ -52,6 +63,7 @@ pub fn flumes_own() -> Vec<Kind> {
             branch_prefix: "change".into(),
             starts_unready: false,
             lands: true,
+            agents: KindSettings::default(),
             stages: vec![
                 stage(
                     "construct",
@@ -262,8 +274,14 @@ impl AgentHarness for FakeAgentHarness {
         a_place()
     }
 
-    fn start(&self, command: &AgentCommand, identity: &Identity) {
-        self.terminal.open(&a_place(), command, identity, None);
+    fn folder(&self) -> String {
+        "/host/state/flume/places/fix--one".into()
+    }
+
+    fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str) {
+        self.terminal
+            .open(&a_place(), folder, command, identity, None);
+        self.agent.keep_record_in(identity, folder);
     }
 
     fn deliver(&self, identity: &Identity, text: &str) {
@@ -286,6 +304,14 @@ impl AgentHarness for FakeAgentHarness {
     fn try_push(&self, identity: &Identity) {
         self.agent.refuse_act(identity, "push of fix/one");
     }
+
+    fn end_session(&self, identity: &Identity) {
+        self.agent.set_ended(identity, Reading::Yes);
+    }
+
+    fn say_last(&self, identity: &Identity, words: &str) {
+        self.agent.set_last_words(identity, words);
+    }
 }
 
 pub struct FakeTerminalHarness {
@@ -299,7 +325,9 @@ impl FakeTerminalHarness {
     pub fn new(sends: bool) -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = FakeTerminal::new(host.clone());
-        if !sends {
+        if sends {
+            terminal.set_session(Some("pane-1"));
+        } else {
             terminal.cannot_send();
         }
         FakeTerminalHarness {
@@ -332,8 +360,59 @@ impl TerminalHarness for FakeTerminalHarness {
         self.sends
     }
 
+    fn closes(&self) -> bool {
+        true
+    }
+
     fn stubborn(&self, identity: &Identity) {
         self.terminal.refuse_close(identity);
+    }
+
+    fn session(&self) -> Option<String> {
+        self.sends.then(|| "pane-1".to_string())
+    }
+
+    fn folder(&self) -> String {
+        "/host/state/flume/places/fix--one".into()
+    }
+
+    fn shows(&self) -> bool {
+        self.sends
+    }
+
+    fn leave_typed(&self, identity: &Identity, text: &str) {
+        self.terminal.leave_typed(identity, text);
+    }
+
+    fn submitted(&self, identity: &Identity) -> Vec<String> {
+        self.terminal.sent_to(identity)
+    }
+
+    fn held(&self) -> Option<AgentCommand> {
+        self.terminal
+            .hold_opens("WARNING: running in Bypass Permissions mode");
+        Some(self.command())
+    }
+
+    fn never_up(&self) -> Option<AgentCommand> {
+        self.terminal
+            .opens_never_come_up("sh: agent: command not found");
+        Some(self.command())
+    }
+
+    fn makes(&self) -> bool {
+        true
+    }
+
+    fn person_pane(&self, place: &PlaceRef) {
+        self.terminal.person_pane(place, "p9");
+    }
+
+    /// The fake holds its agents by identity, wherever a pane goes.
+    fn move_pane(&self, _identity: &Identity) {}
+
+    fn shows_clues(&self) -> bool {
+        true
     }
 }
 
@@ -347,7 +426,7 @@ impl Default for FakeMergeQueueHarness {
         let git = FakeGit::new();
         git.init(REPOSITORY, "main");
         FakeMergeQueueHarness {
-            queue: FakeMergeQueue::new(git.clone(), None),
+            queue: FakeMergeQueue::new(git.clone()),
             git,
         }
     }
@@ -370,6 +449,25 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
 
     fn will_fail(&self, words: &str) {
         self.queue.plan_submits(vec![Plan::Fail(words.into())]);
+    }
+
+    fn will_conflict(&self, place: &PlaceRef, file: &str) {
+        self.git.commit(&place.repository, &place.base, &[file]);
+        self.queue.plan_submits(vec![Plan::Conflict(
+            vec![file.into()],
+            format!("{file} conflicts with {}", place.base),
+        )]);
+    }
+
+    fn will_hold(&self) {
+        self.queue.plan_submits(vec![Plan::Hold]);
+    }
+
+    fn until_decided(&self, _place: &PlaceRef) {}
+
+    fn withdraw(&self, place: &PlaceRef) {
+        self.queue
+            .decide(&place.repository, &place.branch, Plan::Withdraw);
     }
 
     fn land_elsewhere(&self, place: &PlaceRef) {

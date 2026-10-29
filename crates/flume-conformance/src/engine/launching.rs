@@ -3,6 +3,7 @@
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::{Act, WaitingOn, Waits};
 use flume_fakes::Log;
 use flume_seams::*;
 
@@ -14,9 +15,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_fix_launched,
         },
         Scenario {
-            name: "launch: the first stage on hold starts no agent",
-            cites: &["7", "47", "I6"],
+            name: "launch: the first stage on hold starts no agent, and reads on hold with its words",
+            cites: &["7", "47", "130", "I6"],
             run: the_first_stage_on_hold,
+        },
+        Scenario {
+            name: "launch: recipients named, from the caller's environment, or the launching session, fixed at the launch",
+            cites: &["7", "8", "43"],
+            run: recipients_at_the_launch,
         },
         Scenario {
             name: "launch: readiness fails; a change's place waits, a fix's starts with the step in its prompt",
@@ -42,6 +48,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "launch: a repository binding nothing refuses a landing kind and runs one that does not land",
             cites: &["S33", "105", "4"],
             run: no_binding,
+        },
+        Scenario {
+            name: "launch: a binding naming a place profile flume does not hold is refused, naming the place profiles there are, nothing made",
+            cites: &["105", "2", "20"],
+            run: a_place_profile_flume_does_not_hold,
         },
         Scenario {
             name: "launch: two launches of one place at once make one place",
@@ -99,7 +110,11 @@ fn a_fix_launched(_: &()) -> Outcome {
         "the place's revision"
     );
     ensure_eq!(world.place.log.count("ready"), 1, "readiness runs");
-    ensure_eq!(place.stages[0].state, StageState::Started, "the code stage");
+    ensure_eq!(
+        place.stages[0].state,
+        StageState::Starting,
+        "the code stage"
+    );
     let agent = place.agent.ok_or("no agent in the answer")?;
     ensure_eq!(agent.state, AgentState::Unknown, "the agent's state");
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
@@ -114,11 +129,60 @@ fn a_fix_launched(_: &()) -> Outcome {
 fn the_first_stage_on_hold(_: &()) -> Outcome {
     let world = World::new();
     let mut held = launch("fix", "held", Some("x"));
+    let words = "until the release branch is cut";
     held.hold = vec!["code".into()];
+    held.hold_words = [("code".to_string(), words.to_string())].into();
+    let now = world.host.now();
     let place = launched(&world.engine.launch(&held))?;
     ensure_eq!(place.stages[0].state, StageState::OnHold, "the code stage");
     ensure_eq!(world.place.log.count("ready"), 1, "readiness");
     ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    ensure_eq!(
+        place.hold_words.get("code").map(String::as_str),
+        Some(words),
+        "the hold's words status gives"
+    );
+    ensure_eq!(
+        place.waiting_on,
+        Some(WaitingOn {
+            act: Act::Retry,
+            stage: Some("code".into()),
+            why: Waits::OnHold,
+            since: Some(now),
+            words: Some(words.into()),
+        }),
+        "the move the place waits on"
+    );
+    Ok(())
+}
+
+fn recipients_at_the_launch(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_session(Some("pane-7"));
+    let mut named = launch("fix", "named", Some("x"));
+    named.recipients = vec!["operator".into(), "role:planner".into()];
+    launched(&world.engine.launch(&named))?;
+    world.host.set_recipient(Some("conductor"));
+    launched(&world.engine().launch(&launch("fix", "variable", Some("x"))))?;
+    world.host.set_recipient(None);
+    launched(&world.engine().launch(&launch("fix", "session", Some("x"))))?;
+    world.terminal.set_session(None);
+    world.host.set_recipient(Some("someone else"));
+    world.settle(&World::id("fix", "named"));
+    for (name, recipients) in [
+        ("named", vec!["operator", "role:planner"]),
+        ("variable", vec!["conductor"]),
+        ("session", vec!["pane-7"]),
+    ] {
+        ensure_eq!(
+            world.status(&World::id("fix", name))?.recipients,
+            recipients
+                .iter()
+                .map(|recipient| recipient.to_string())
+                .collect::<Vec<_>>(),
+            format!("the recipients of {name}")
+        );
+    }
     Ok(())
 }
 
@@ -151,7 +215,7 @@ fn readiness_fails(_: &()) -> Outcome {
     let fix = launched(&world.engine.launch(&launch("fix", "mend", Some("mend it"))))?;
     ensure_eq!(
         fix.stages[0].state,
-        StageState::Started,
+        StageState::Starting,
         "the fix's code stage"
     );
     let prompt = world
@@ -249,13 +313,32 @@ fn no_binding(_: &()) -> Outcome {
     let mut notes = launch("notes", "one", Some("x"));
     notes.repository = plain.into();
     let place = launched(&world.engine.launch(&notes))?;
-    ensure_eq!(place.stages[0].state, StageState::Started, "the stage");
+    ensure_eq!(place.stages[0].state, StageState::Starting, "the stage");
     ensure_eq!(
         makes(&world.place.log),
         1,
         "makes through the no-tool place"
     );
     ensure_eq!(world.queue.log.calls().len(), 0, "merge queue calls");
+    Ok(())
+}
+
+fn a_place_profile_flume_does_not_hold(_: &()) -> Outcome {
+    let world = World::new();
+    world.kinds.set_binding(
+        REPOSITORY,
+        Binding {
+            place: Some("groves".into()),
+            change: Some("plans".into()),
+            merge_queue: Some("queue".into()),
+        },
+    );
+    let reason = refused(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure!(
+        reason.contains("groves") && reason.contains("trees"),
+        "the refusal names not the profile asked for and the ones there are: {reason}"
+    );
+    nothing_made(&world)?;
     Ok(())
 }
 
@@ -308,7 +391,7 @@ fn a_kinds_version_changes(_: &()) -> Outcome {
     ensure_eq!(held.place.kind.version, 1, "the first place's kind");
     ensure_eq!(held.stages.len(), 1, "the first place's stages");
     let status = match world.engine.status(None) {
-        flume_core::Answer::Status { places } => places,
+        flume_core::Answer::Status { places, .. } => places,
         other => return Err(format!("status answered {other:?}")),
     };
     let versions: Vec<(String, u32)> = status

@@ -1,6 +1,8 @@
-//! Tidying (16, 62 to 68): a place whose work is over removed through its
-//! repository's teardown, or kept naming what it holds; a branch kept
-//! while it holds work its base lacks.
+//! Tidying (16, 62 to 68, 137, 138): a place whose work is over removed
+//! through its repository's teardown, or kept naming what it holds; a
+//! branch kept while it holds work its base lacks; what the terminal
+//! made for a place closed with it, and for its base once nothing live
+//! is in it, never what a person put there.
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -33,6 +35,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "tidy: a teardown the fake place refuses keeps the place, after its one remove",
             cites: &["66", "81"],
             run: a_scripted_refusal,
+        },
+        Scenario {
+            name: "tidy: the last place on a base tidied closes its tab and the base's workspace",
+            cites: &["S47", "137", "138", "64"],
+            run: s47_the_last_place_on_a_base,
+        },
+        Scenario {
+            name: "tidy: a person's pane in the base's workspace keeps it open, named in status, its place's tab closed",
+            cites: &["S48", "137", "138", "56"],
+            run: s48_a_persons_pane,
         },
         Scenario {
             name: "tidy: a place whose agent works is kept until the agent stops",
@@ -267,5 +279,76 @@ fn a_scripted_refusal(_: &()) -> Outcome {
         vec![format!("remove {}", id.0)],
         "the removes"
     );
+    Ok(())
+}
+
+/// Two places of the repository on `main`, each begun.
+fn two_on_main(world: &World) -> Result<(PlaceId, PlaceId), String> {
+    let one = world.begun("notes", Some(Deliverable::Commits), "one")?;
+    launched(&world.engine.launch(&launch("notes", "two", Some("x"))))?;
+    let two = World::id("notes", "two");
+    world.settle(&two);
+    Ok((one, two))
+}
+
+fn s47_the_last_place_on_a_base(_: &()) -> Outcome {
+    let world = World::new();
+    let (one, two) = two_on_main(&world)?;
+    ensure_eq!(
+        world.terminal.made(),
+        (
+            vec![one.0.clone(), two.0.clone()],
+            vec!["repository main".to_string()]
+        ),
+        "the tabs and workspace made"
+    );
+    world.engine.done(&one, true);
+    ensure_eq!(
+        world.terminal.made(),
+        (vec![two.0.clone()], vec!["repository main".to_string()]),
+        "what stands once the first place went"
+    );
+    let answer = world.engine.done(&two, true);
+    let tidy = match answer {
+        Answer::Acted {
+            tidy: Some(tidy), ..
+        } => tidy,
+        other => return Err(format!("done answered {other:?}")),
+    };
+    ensure_eq!(
+        tidy.terminal.first().map(|tidied| tidied.closed.clone()),
+        Some(vec![
+            "the tab notes--two".to_string(),
+            "the workspace repository main".to_string()
+        ]),
+        "what the terminal closed with the last place"
+    );
+    ensure_eq!(
+        world.terminal.made(),
+        (vec![], vec![]),
+        "what stands once the last place went"
+    );
+    Ok(())
+}
+
+fn s48_a_persons_pane(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("notes", Some(Deliverable::Commits), "one")?;
+    let place = world.held(&id).ok_or("no place")?.place.place_ref();
+    world.terminal.person_pane(&place, "p9");
+    world.engine.drop_place(&id, true);
+    let held_by = "the workspace repository main, held by the pane p9".to_string();
+    ensure_eq!(
+        world.terminal.made(),
+        (vec![], vec!["repository main".to_string()]),
+        "what stands once the place was dropped"
+    );
+    match world.engine.status(None) {
+        Answer::Status { host, .. } => {
+            ensure_eq!(host.terminal_kept, vec![held_by], "status's host part")
+        }
+        other => return Err(format!("status answered {other:?}")),
+    }
+    ensure_eq!(world.terminal.log.count("close"), 1, "agents ended");
     Ok(())
 }

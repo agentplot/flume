@@ -1,9 +1,12 @@
-//! The merge queue seam's answers (99, 101, 117, 125, 9).
+//! The merge queue seam's answers (99, 101, 117, 125, 126, 133, 9).
 
 use crate::Revision;
 use serde::{Deserialize, Serialize};
 
-/// The outcome of a submission the merge queue decided (117).
+/// The outcome of a submission as an answer reports it (117, 133).
+/// `place_removed` and `branch_removed` are always false under a merge
+/// queue that removes nothing of a place (113); they stay, since an
+/// answer's form only gains fields (61).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
@@ -13,6 +16,12 @@ pub enum Verdict {
         branch_removed: bool,
     },
     Failed {
+        words: String,
+    },
+    /// The submission conflicted with its base, naming the files
+    /// contested (112).
+    Conflict {
+        files: Vec<String>,
         words: String,
     },
     Withdrawn,
@@ -27,8 +36,17 @@ pub enum Verdict {
 pub enum SubmissionState {
     Waiting,
     UnderTest,
-    Landed { commit: Revision },
-    Failed { words: String },
+    Landed {
+        commit: Revision,
+    },
+    Failed {
+        words: String,
+    },
+    /// It conflicted with its base, naming the files contested (112).
+    Conflict {
+        files: Vec<String>,
+        words: String,
+    },
     Withdrawn,
 }
 
@@ -48,6 +66,55 @@ pub struct Submission {
     pub state: SubmissionState,
 }
 
+/// submit: the submission once the merge queue holds it, with no wait on
+/// its verdict, or why the merge queue would not take it (117).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Submitted {
+    Submitted { submission: Submission },
+    Refused { reason: String },
+}
+
+/// One outcome of a place's submission, delivered to the place once
+/// (133). A withdrawal is never one: it is read from read-submission
+/// (99).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubmissionOutcome {
+    Landed {
+        commit: Revision,
+    },
+    Failed {
+        words: String,
+    },
+    /// The files contested, the base's revision the merge queue tested
+    /// against, and its words (112).
+    Conflict {
+        files: Vec<String>,
+        base: Revision,
+        words: String,
+    },
+}
+
+/// inbox: the outcomes pending for a place, each given once, or why the
+/// merge queue could not be read (133, 68).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Inbox {
+    Outcomes { outcomes: Vec<SubmissionOutcome> },
+    CouldNotRead { reason: String },
+}
+
+/// step: one round of the base's queue driven, or that the merge queue
+/// moves on its own, or why it could not be read (125).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Stepped {
+    Stepped,
+    MovesOnItsOwn,
+    CouldNotRead { reason: String },
+}
+
 /// read-submission: the newest submission of a branch, whoever made it,
 /// or none, or that the merge queue could not be read (99).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,7 +126,7 @@ pub enum SubmissionRead {
 }
 
 /// Where the base's current revision lives, or why it cannot be read (9,
-/// core.7).
+/// 126, core.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BaseRevision {
@@ -70,21 +137,24 @@ pub enum BaseRevision {
 /// The merge queue seam (B.6), bound once for each repository. The
 /// guarantee: landed is said only of a submission of that branch that
 /// the merge queue itself landed, never inferred from what the base
-/// holds, and submit removes a place only after its landing and only
-/// through its repository's teardown (101).
+/// holds, and the merge queue removes nothing of a place (101, 113).
 pub trait MergeQueue: Send + Sync {
-    /// The place's branch at `head` submitted to its base, and a wait
-    /// until the merge queue decides (117).
-    fn submit(&self, place: &crate::PlaceRef, head: &Revision) -> Verdict;
+    /// The place's branch at `head` submitted to its base, answered once
+    /// the merge queue holds it, with no wait on its verdict (117).
+    fn submit(&self, place: &crate::PlaceRef, head: &Revision) -> Submitted;
+
+    /// The outcomes of the place's submissions pending for it, each
+    /// given once (133).
+    fn inbox(&self, place: &crate::PlaceRef) -> Inbox;
 
     /// The newest submission of `branch`, whoever made it (99).
     fn read_submission(&self, repository: &str, branch: &str) -> SubmissionRead;
 
-    /// A wait on a submission still open until the merge queue decides,
-    /// which keeps the queue moving (125).
-    fn wait(&self, repository: &str, submission: &Submission) -> Verdict;
+    /// One round of `base`'s queue, so it moves where nothing else
+    /// drives it (125).
+    fn step(&self, repository: &str, base: &str) -> Stepped;
 
     /// Where `base`'s current revision lives, where work lands on it (9,
-    /// core.7).
+    /// 126, core.7).
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision;
 }

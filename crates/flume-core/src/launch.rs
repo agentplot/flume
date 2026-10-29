@@ -2,10 +2,16 @@
 //! declarations and the binding read, the base's revision where the
 //! merge queue says it lives, every refusal made before anything is
 //! made, then one place made, readied, and its first stage started, held
-//! or left waiting on readiness. A refusal after the place's held state
+//! or left waiting on readiness. The repository's settings for the kind
+//! are read with its kinds and kept, and every stage's agent is resolved
+//! with the host's configuration as it stands, so a program no agent
+//! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
+//! one the caller's environment names, or the session the terminal says
+//! launched it (7, 8). A refusal after the place's held state
 //! is created undoes what was made, so nothing is left (2, 76).
 
 use crate::reading::reads_change;
+use crate::settings::{no_repository_env, no_stage_lacking};
 use crate::{Answer, Bound, Engine, Step};
 use flume_seams::*;
 
@@ -22,19 +28,32 @@ impl Engine {
     }
 
     /// The kind a launch names, from the launch's declaration over the
-    /// repository's at the base's revision over flume's own (19, 20).
+    /// repository's at the base's revision over flume's own (19, 20), and
+    /// the settings the repository gives a kind of that name it does not
+    /// declare, which join whichever declaration the name resolves to
+    /// (32, C.2).
     fn resolve_kind(
         &self,
         launch: &Launch,
         revision: &Revision,
-    ) -> Result<(Kind, Declared), String> {
+    ) -> Result<(Kind, Declared, KindSettings), String> {
         let kinds = self.resolver.kinds();
         let named = |all: Vec<Kind>| all.into_iter().find(|kind| kind.name == launch.kind);
+        let (declared, mut given) = match kinds.read_kinds(&launch.repository, revision) {
+            KindsRead::Read { kinds, settings } => (kinds, settings),
+            KindsRead::CouldNotRead { reason } => {
+                return Err(format!(
+                    "the kinds {} declares at {revision} could not be read: {reason}",
+                    launch.repository
+                ))
+            }
+        };
+        let given = given.remove(&launch.kind).unwrap_or_default();
         if let Some(declaration) = &launch.declaration {
             match kinds.read_declaration(declaration) {
-                KindsRead::Read { kinds } => {
+                KindsRead::Read { kinds, .. } => {
                     if let Some(kind) = named(kinds) {
-                        return Ok((kind, Declared::Launch));
+                        return Ok((kind, Declared::Launch, given));
                     }
                 }
                 KindsRead::CouldNotRead { reason } => {
@@ -44,21 +63,11 @@ impl Engine {
                 }
             }
         }
-        match kinds.read_kinds(&launch.repository, revision) {
-            KindsRead::Read { kinds } => {
-                if let Some(kind) = named(kinds) {
-                    return Ok((kind, Declared::Repository));
-                }
-            }
-            KindsRead::CouldNotRead { reason } => {
-                return Err(format!(
-                    "the kinds {} declares at {revision} could not be read: {reason}",
-                    launch.repository
-                ))
-            }
+        if let Some(kind) = named(declared) {
+            return Ok((kind, Declared::Repository, given));
         }
         named(kinds.flumes_own())
-            .map(|kind| (kind, Declared::Flume))
+            .map(|kind| (kind, Declared::Flume, given))
             .ok_or_else(|| format!("the kind {} resolves to no declaration", launch.kind))
     }
 
@@ -110,7 +119,7 @@ impl Engine {
             change,
             merge_queue,
         } = self
-            .bind(&binding)
+            .bind(repository, &binding)
             .map_err(|reason| format!("{repository}'s binding: {reason}"))?;
         let base_revision = match &merge_queue {
             Some(queue) => match queue.base_revision(repository, &launch.base) {
@@ -127,8 +136,14 @@ impl Engine {
                 .head(repository, &launch.base)
                 .ok_or_else(|| format!("{repository} has no base {}", launch.base))?,
         };
-        let (kind, declared) = self.resolve_kind(launch, &base_revision)?;
+        let (kind, declared, repository_settings) = self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind)?;
+        no_repository_env(
+            &kind,
+            declared == Declared::Repository,
+            &repository_settings,
+        )?;
+        no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
         let named = format!("the kind {}@{}", kind.name, kind.version);
         if kind.lands && merge_queue.is_none() {
             return Err(format!(
@@ -142,19 +157,6 @@ impl Engine {
             ));
         }
         for stage in &kind.stages {
-            let mut settings = self.defaults.settings.under(&stage.agents[0]);
-            if let Some(launched) = launch.settings.get(&stage.name) {
-                settings = settings.under(launched);
-            }
-            let program = settings
-                .program
-                .ok_or_else(|| format!("no agent program is named for the stage {}", stage.name))?;
-            if self.agent(&program).is_none() {
-                return Err(format!(
-                    "no agent profile runs the program {program} the stage {} names",
-                    stage.name
-                ));
-            }
             if launch.brief.is_none() && crate::prompt::asks(&stage.prompt, PromptPart::Brief) {
                 return Err(format!(
                     "the stage {} asks for the brief, and the launch gives none",
@@ -200,6 +202,15 @@ impl Engine {
                 ));
             }
         }
+        let recipients = if launch.recipients.is_empty() {
+            self.host
+                .recipient()
+                .or_else(|| self.terminal.session())
+                .into_iter()
+                .collect()
+        } else {
+            launch.recipients.clone()
+        };
         let held = HeldState {
             place: PlaceRecord {
                 id: id.clone(),
@@ -215,8 +226,12 @@ impl Engine {
                 brief: launch.brief.clone(),
                 mark: launch.mark.clone(),
                 settings: launch.settings.clone(),
+                every_stage: launch.every_stage.clone(),
+                repository_settings,
                 hold: launch.hold.clone(),
                 hold_submission: launch.hold_submission,
+                hold_words: launch.hold_words.clone(),
+                recipients,
             },
             phase: Phase::Making {
                 by: self.host.command(),
@@ -230,14 +245,23 @@ impl Engine {
                     state: StageState::NotReached,
                     starts: 0,
                     refused_part: None,
+                    refused_setting: None,
                     end: None,
                     start: None,
+                    since: None,
+                    room: None,
                 })
                 .collect(),
             current: None,
             submission: SubmissionHeld::default(),
             failures: vec![],
+            priority: launch.priority,
+            shown: None,
         };
+        for stage in &kind.stages {
+            let resolved = self.resolve(&held.place, stage);
+            self.agent_for(&resolved, &stage.name)?;
+        }
         if self.create(&held).is_none() {
             return Err(format!("the place {id} already stands"));
         }

@@ -1,0 +1,9 @@
+{
+  "name": "flume",
+  "version": "0.0.0",
+  "description": "flume's hooks for the agents it starts, /launch to start a place from a session, and flume's status over MCP.",
+  "author": { "name": "agentplot" },
+  "repository": "https://github.com/agentplot/flume",
+  "license": "MIT",
+  "keywords": ["agents", "worktrees", "git"]
+}

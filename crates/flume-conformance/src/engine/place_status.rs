@@ -4,7 +4,7 @@
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, PlaceStatus};
+use flume_core::{Act, Answer, PlaceStatus, WaitingOn, Waits};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -29,12 +29,104 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["62", "58"],
             run: a_place_gone,
         },
+        Scenario {
+            name: "status: a place whose construct ended short waits on a retry of construct, since then, with the question whole",
+            cites: &["56", "130", "42", "41"],
+            run: waiting_on_an_answer,
+        },
+        Scenario {
+            name: "status: a lost stage, a stopped one and a done round each name the move they wait on",
+            cites: &["56", "130", "45", "51", "114"],
+            run: the_moves_waited_on,
+        },
     ]
+}
+
+fn waiting_on_an_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("change", "plan");
+    launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    world.settle(&id);
+    let construct = World::identity("change", "plan", "construct", 1);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    world.host.advance(300);
+    let asked = world.host.now();
+    let question = "Which design does the brief mean: the queue,\nor the log?";
+    let answer = world.engine.needs(
+        &construct.to_string(),
+        &secret.0,
+        question,
+        StopKind::NeedsAnswer,
+    );
+    ensure!(answer.refusal().is_none(), "the stop-short was refused");
+    world.host.advance(60);
+    world.settle(&id);
+    ensure_eq!(
+        world.status(&id)?.waiting_on,
+        Some(WaitingOn {
+            act: Act::Retry,
+            stage: Some("construct".into()),
+            why: Waits::Answer,
+            since: Some(asked),
+            words: Some(question.into()),
+        }),
+        "the move the place waits on"
+    );
+    Ok(())
+}
+
+fn the_moves_waited_on(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::Commits), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    ensure_eq!(world.status(&id)?.waiting_on, None, "a working place");
+    world.terminal.kill(&work);
+    world.settle(&id);
+    let lost = world
+        .status(&id)?
+        .waiting_on
+        .ok_or("a lost stage waits on nobody")?;
+    ensure_eq!(
+        (lost.act, lost.stage.as_deref(), lost.why),
+        (Act::Retry, Some("work"), Waits::Lost),
+        "a lost stage"
+    );
+    let id = world.begun("tend", Some(Deliverable::Commits), "two")?;
+    ensure!(
+        world.engine.stop(&id, true).refusal().is_none(),
+        "the stop was refused"
+    );
+    let stopped = world
+        .status(&id)?
+        .waiting_on
+        .ok_or("a stopped stage waits on nobody")?;
+    ensure_eq!(
+        (stopped.act, stopped.why),
+        (Act::Retry, Waits::Stopped),
+        "a stopped stage"
+    );
+    let id = world.begun("sweep", Some(Deliverable::Commits), "three")?;
+    world.commit("sweep/three", &["swept.rs"]);
+    world.settle(&id);
+    let done = world
+        .status(&id)?
+        .waiting_on
+        .ok_or("a delivered round waits on nobody")?;
+    ensure_eq!(
+        (done.act, done.stage, done.why),
+        (Act::Done, None, Waits::Delivered),
+        "a round delivered whose kind does not land"
+    );
+    Ok(())
 }
 
 fn places(answer: Answer) -> Result<Vec<PlaceStatus>, String> {
     match answer {
-        Answer::Status { places } => Ok(places),
+        Answer::Status { places, .. } => Ok(places),
         other => Err(format!("status answered {other:?}")),
     }
 }
@@ -138,7 +230,7 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
     let agent = one.agent.clone().ok_or("no agent")?;
     ensure_eq!(agent.identity, code.to_string(), "the agent's identity");
     ensure_eq!(
-        agent.settings.program.as_deref(),
+        agent.settings.settings.program.as_deref(),
         Some("agent"),
         "the agent's settings"
     );

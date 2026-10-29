@@ -9,6 +9,7 @@ description = "flume's one core: the engine that launches a place, runs its kind
 flume-seams = { path = "../flume-seams" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 flume-fakes = { path = "../flume-fakes" }

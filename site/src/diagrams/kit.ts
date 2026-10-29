@@ -6,7 +6,7 @@
 // of src/styles/brand.css, drawn from the family theme's tokens, so a diagram
 // follows the site's theme toggle; a standalone copy (the README's) carries
 // its own palette instead.
-import { member } from '@agentplot/site-theme/family';
+import { member } from "@agentplot/site-theme/family";
 
 export type Frames = [number, string][];
 
@@ -23,21 +23,21 @@ export interface RenderOptions {
 // The accents a diagram reads from the family list: flume's own, and the
 // callers' where a diagram draws them: millpond's inbox, headwater's
 // releases and sounding's questions.
-const own = member('flume').accent;
-export const pond = member('millpond').accent;
-export const head = member('headwater').accent;
-export const sound = member('sounding').accent;
+const own = member("flume").accent;
+export const pond = member("millpond").accent;
+export const head = member("headwater").accent;
+export const sound = member("sounding").accent;
 
 // The palette a standalone copy carries: brand.css's --dg-* as they
 // resolve from @agentplot/site-theme's tokens and the family's accents.
 const LIGHT =
-  '--dg-bg:#e9e7e0;--dg-panel:#f2f1ec;--dg-soft:#dbd9d1;--dg-rule:#c9c7bf;--dg-fg:#0e1116;--dg-muted:#5d6370;' +
+  "--dg-bg:#e9e7e0;--dg-panel:#f2f1ec;--dg-soft:#dbd9d1;--dg-rule:#c9c7bf;--dg-fg:#0e1116;--dg-muted:#5d6370;" +
   `--dg-accent:${own.light};--dg-accent-soft:color-mix(in oklab,${own.light} 20%,#f2f1ec);--dg-pond:${pond.light};--dg-head:${head.light};--dg-sound:${sound.light};` +
-  '--dg-ink:#f7f6f2;--dg-ok:#1f8a4c;--dg-warn:#8a5a00;--dg-bad:#c0392b';
+  "--dg-ink:#f7f6f2;--dg-ok:#1f8a4c;--dg-warn:#8a5a00;--dg-bad:#c0392b";
 const DARK =
-  '--dg-bg:#161a21;--dg-panel:#1b2029;--dg-soft:#21232b;--dg-rule:#2a2f38;--dg-fg:#f2f1ec;--dg-muted:#8c92a0;' +
+  "--dg-bg:#161a21;--dg-panel:#1b2029;--dg-soft:#21232b;--dg-rule:#2a2f38;--dg-fg:#f2f1ec;--dg-muted:#8c92a0;" +
   `--dg-accent:${own.dark};--dg-accent-soft:color-mix(in oklab,${own.dark} 20%,#1b2029);--dg-pond:${pond.dark};--dg-head:${head.dark};--dg-sound:${sound.dark};` +
-  '--dg-ink:#0e1116;--dg-ok:#45c27a;--dg-warn:#e9b44c;--dg-bad:#f08a7e';
+  "--dg-ink:#0e1116;--dg-ok:#45c27a;--dg-warn:#e9b44c;--dg-bad:#f08a7e";
 
 // What every diagram draws with. ROOT_W is the copy's root class.
 const BASE = `
@@ -90,7 +90,7 @@ export class Diagram {
   }
 
   kf(name: string, frames: Frames) {
-    const body = frames.map(([p, v]) => `${+p.toFixed(3)}%{${v}}`).join(' ');
+    const body = frames.map(([p, v]) => `${+p.toFixed(3)}%{${v}}`).join(" ");
     this.css.push(`@keyframes k-${name}{${body}}`);
   }
 
@@ -153,7 +153,8 @@ export class Diagram {
   // A move from (dx, dy) to (0, 0) between a and b, hidden before `from` and
   // after `gone`.
   fly(cls: string, dx: number, dy: number, from: number, a: number, b: number, gone: number) {
-    const at = (x: number, y: number, o: number) => `transform:translate(${x}px,${y}px);opacity:${o}`;
+    const at = (x: number, y: number, o: number) =>
+      `transform:translate(${x}px,${y}px);opacity:${o}`;
     const fr: Frames = [
       [0, at(dx, dy, 0)],
       [Math.max(from - 0.5, 0), at(dx, dy, 0)],
@@ -172,7 +173,8 @@ export class Diagram {
   // between a and b, the time shared by length; hidden before a, gone after.
   route(cls: string, pts: { x: number; y: number }[], a: number, b: number, gone: number) {
     const end = pts[pts.length - 1];
-    const at = (p: { x: number; y: number }, o: number) => `transform:translate(${p.x - end.x}px,${p.y - end.y}px);opacity:${o}`;
+    const at = (p: { x: number; y: number }, o: number) =>
+      `transform:translate(${p.x - end.x}px,${p.y - end.y}px);opacity:${o}`;
     const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
     const total = lens.reduce((x, y) => x + y, 0);
     const fr: Frames = [
@@ -196,7 +198,7 @@ export class Diagram {
   flow(cls: string, period: number, speed: number) {
     const n = Math.max(1, Math.round((speed * this.T) / period));
     this.kf(cls, [
-      [0, 'stroke-dashoffset:0'],
+      [0, "stroke-dashoffset:0"],
       [100, `stroke-dashoffset:${-n * period}`],
     ]);
     return this.anim(cls);
@@ -212,24 +214,29 @@ export class Diagram {
     const p = o.id;
     const root = `.${p}-root`;
     const prefix = (css: string) =>
-      css
-        .replace(/\.(?=[a-zA-Z])/g, `.${p}-`)
-        .replace(/\bk-/g, `${p}-k-`);
+      css.replace(/\.(?=[a-zA-Z])/g, `.${p}-`).replace(/\bk-/g, `${p}-k-`);
     // The element selectors hang off :where(root), so they weigh nothing and
     // a class such as .m wins over them.
-    let style = prefix(BASE).replaceAll('ROOT_W ', `:where(${root}) `);
-    style += prefix(this.css.join(''));
-    const keep = this.keepOnStill.map((c) => `.${p}-${c}`).join(',');
+    let style = prefix(BASE).replaceAll("ROOT_W ", `:where(${root}) `);
+    style += prefix(this.css.join(""));
+    const keep = this.keepOnStill.map((c) => `.${p}-${c}`).join(",");
     style +=
       `@media (prefers-reduced-motion:reduce){${root} *{animation-play-state:paused!important;` +
       `animation-delay:${(-(o.still / 100) * this.T).toFixed(2)}s!important}` +
-      (keep ? `${keep}{animation:none!important;opacity:1!important}` : '') +
+      (keep ? `${keep}{animation:none!important;opacity:1!important}` : "") +
       `}`;
-    if (o.standalone) style = `:root{${LIGHT}}@media (prefers-color-scheme:dark){:root{${DARK}}}` + style;
-    const body = this.parts
-      .join('\n')
-      .replace(/class="([^"]*)"/g, (_, c: string) => `class="${c.split(/\s+/).filter(Boolean).map((x) => `${p}-${x}`).join(' ')}"`);
-    const size = o.standalone ? ` width="${o.width}" height="${o.height}"` : '';
+    if (o.standalone)
+      style = `:root{${LIGHT}}@media (prefers-color-scheme:dark){:root{${DARK}}}${style}`;
+    const body = this.parts.join("\n").replace(
+      /class="([^"]*)"/g,
+      (_, c: string) =>
+        `class="${c
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((x) => `${p}-${x}`)
+          .join(" ")}"`,
+    );
+    const size = o.standalone ? ` width="${o.width}" height="${o.height}"` : "";
     return (
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${o.width} ${o.height}"${size} class="${p}-root dg" role="img" aria-labelledby="${p}-ttl ${p}-dsc">` +
       `<title id="${p}-ttl">${o.title}</title><desc id="${p}-dsc">${o.desc}</desc>` +
@@ -238,6 +245,7 @@ export class Diagram {
   }
 }
 
-export type Layout = 'wide' | 'narrow';
+export type Layout = "wide" | "narrow";
 
-export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

@@ -4,12 +4,17 @@
 
 use flume_seams::*;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Answer {
-    /// Status of one place or every place (56).
-    Status { places: Vec<PlaceStatus> },
+    /// Status of one place or every place, and of the host (56, 70).
+    Status {
+        places: Vec<PlaceStatus>,
+        #[serde(default)]
+        host: HostStatus,
+    },
     /// A launch's place, once its first stage is started, on hold or
     /// waiting (2, 6).
     Launched { place: PlaceStatus },
@@ -69,6 +74,7 @@ pub enum Act {
     Finish,
     Tell,
     Needs,
+    Priority,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,6 +116,84 @@ pub struct PlaceStatus {
     pub cannot_read: Vec<String>,
     /// Each end flume asked for that the agent did not take (31).
     pub failures: Vec<String>,
+    /// The recipients of the place's ends, as its launch fixed them (7,
+    /// 8, 43).
+    pub recipients: Vec<String>,
+    /// The words of each hold the launch put, by stage name (7, 130).
+    pub hold_words: BTreeMap<String, String>,
+    /// The move the place waits on its caller for, and since when; none
+    /// where it waits on nobody (56, 130).
+    pub waiting_on: Option<WaitingOn>,
+    /// The place's priority, its caller's (7, 70).
+    #[serde(default)]
+    pub priority: i64,
+}
+
+/// The host's agents running, its bound, the room left and the stages
+/// waiting for room in the order they would start (56, 70); a host that
+/// states no bound has no room to judge and no queue.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostStatus {
+    pub running: u32,
+    pub bound: Option<u32>,
+    pub room: Option<u32>,
+    pub queue: Vec<Queued>,
+    /// What the terminal made and keeps for what it did not make, each
+    /// named with what holds it (56, 137, 138).
+    #[serde(default)]
+    pub terminal_kept: Vec<String>,
+}
+
+/// A stage waiting for room on the host: it waits on the host, never on
+/// its caller (70, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Queued {
+    pub place: PlaceId,
+    pub stage: String,
+    pub priority: i64,
+    pub since: Option<Seconds>,
+}
+
+/// The move a place waits on its caller for, why, since when, and the
+/// words that go with it: a hold's, the question, or the merge queue's
+/// (56, 130).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitingOn {
+    /// A retry, or done.
+    pub act: Act,
+    /// The stage the retry names; none where it names the submission.
+    pub stage: Option<String>,
+    pub why: Waits,
+    pub since: Option<Seconds>,
+    pub words: Option<String>,
+}
+
+/// Why a place waits on its caller (56, 130).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Waits {
+    /// A stage, or the submission, the launch holds (47).
+    OnHold,
+    /// A stage ended short needing an answer, or having found work
+    /// outside the kind's last stage (42, 131).
+    Answer,
+    /// A stage whose agent was lost (45).
+    Lost,
+    /// A stage whose prompt was never begun (38).
+    NeverBegun,
+    /// A first stage waiting on the place's readiness (12).
+    Unready,
+    /// A stage whose prompt asks for a part with nothing to fill it
+    /// (27).
+    Refused,
+    /// A stage whose agent the caller stopped (51).
+    Stopped,
+    /// The place went back as often as its kind allows (23, 112).
+    PastBound,
+    /// The merge queue withdrew or refused the submission (112).
+    Submission,
+    /// The last stage delivered, and the kind does not land (114).
+    Delivered,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +206,10 @@ pub struct StageStatus {
     pub end: Option<StageEnd>,
     /// The part a refused stage could not fill (27).
     pub refused_part: Option<String>,
+    /// The setting a stage was refused at its start for, with its layer
+    /// (27, 32).
+    #[serde(default)]
+    pub refused_setting: Option<String>,
     pub conversation: bool,
 }
 
@@ -131,12 +219,49 @@ pub struct AgentStatus {
     pub identity: String,
     pub stage: String,
     pub program: String,
-    pub settings: Settings,
+    pub settings: AgentSettings,
     pub state: AgentState,
+    /// Whether the agent said it started under its start's identity
+    /// (135).
+    #[serde(default = "unknown")]
+    pub started: Reading,
     pub asking: Reading,
     pub own_work: Reading,
     /// Working past its stage's limit (118).
     pub past_limit: bool,
+    /// While the start is starting, what the terminal shows of the agent
+    /// (35, 136).
+    #[serde(default)]
+    pub screen: Option<String>,
+    /// The command a person runs in the place to start the agent, where
+    /// the terminal printed it (C.5).
+    #[serde(default)]
+    pub printed: Option<String>,
+    /// The agent's last words as its own record holds them, a failed
+    /// turn's reason among them (43).
+    #[serde(default)]
+    pub last_words: Option<String>,
+    /// What the agent's own record says of its start that no reading
+    /// answers, a plugin of another version than flume's among it (135).
+    #[serde(default)]
+    pub notes: Vec<String>,
+}
+
+/// The settings an agent started with, each value as its layer wrote it,
+/// and where each came from (32, 56).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSettings {
+    #[serde(flatten)]
+    pub settings: Settings,
+    /// Each setting's layer and value as written, by `program`, `model`,
+    /// `instructions` or `env.<NAME>`; a host's value before its `~` and
+    /// variables are read.
+    #[serde(default)]
+    pub from: BTreeMap<String, Given>,
+}
+
+fn unknown() -> Reading {
+    Reading::Unknown
 }
 
 /// The place's submission as the merge queue holds it, and how often
@@ -146,7 +271,8 @@ pub struct SubmissionStatus {
     pub read: SubmissionRead,
     pub submits: u32,
     pub send_backs: u32,
-    /// The last verdict flume waited on, with the merge queue's words.
+    /// The last outcome flume collected, or its refusal at submit, with
+    /// the merge queue's words (133).
     pub verdict: Option<Verdict>,
     /// Why the place waits for its caller (112).
     pub waiting: Option<String>,
@@ -162,6 +288,10 @@ pub struct Tidied {
     pub branches_kept: Vec<BranchKept>,
     /// Places asked of whose work is not over.
     pub not_over: Vec<PlaceId>,
+    /// What the terminal closed and kept of what it made for each place
+    /// removed (137, 138).
+    #[serde(default)]
+    pub terminal: Vec<TerminalTidied>,
 }
 
 impl Tidied {
@@ -170,7 +300,17 @@ impl Tidied {
         self.kept.extend(other.kept);
         self.branches_kept.extend(other.branches_kept);
         self.not_over.extend(other.not_over);
+        self.terminal.extend(other.terminal);
     }
+}
+
+/// What the terminal closed of what it made for a place removed, and what
+/// it kept, each named with what holds it (137, 138).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalTidied {
+    pub place: PlaceId,
+    pub closed: Vec<String>,
+    pub kept: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

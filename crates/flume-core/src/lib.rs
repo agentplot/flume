@@ -16,6 +16,8 @@ mod held;
 mod launch;
 mod prompt;
 mod reading;
+mod room;
+mod settings;
 mod settle;
 mod start;
 mod status;
@@ -30,7 +32,8 @@ use flume_seams::{
     Agent, Binding, Change, History, Host, MergeQueue, Place, PlaceRecord, Resolver, Seconds,
     Settings, Store, Terminal,
 };
-use std::sync::Arc;
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// A stage's quiet limit where its declaration sets none (44).
 pub const QUIET_LIMIT: Seconds = 30 * 60;
@@ -48,7 +51,7 @@ pub const POLL: Seconds = 5;
 
 /// What the statement leaves to flume's own default and the engine is
 /// built with, holding no value of its own (design 10): the agent's
-/// settings where neither launch nor stage gives them (32), and the
+/// settings where no other layer gives them (32), and the
 /// send-backs a kind allows where it sets none (23, 112).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Defaults {
@@ -66,6 +69,28 @@ pub struct Engine {
     history: Arc<dyn History>,
     host: Arc<dyn Host>,
     defaults: Defaults,
+    /// The repositories and bases whose queue this command drove a round
+    /// of, each at most once (125).
+    stepped: Mutex<BTreeSet<(String, String)>>,
+}
+
+/// A repository's id from its common git directory's path: the first
+/// twelve hex digits of the path's SHA-256 (33, C.4).
+pub fn repository_id(common_dir: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(common_dir.as_bytes())
+        .iter()
+        .take(6)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// The guard of the engine's own state, read through a panic a caller
+/// caught.
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// The seams a place's binding resolved to (105).
@@ -91,6 +116,7 @@ impl Engine {
             history,
             host,
             defaults,
+            stepped: Mutex::default(),
         }
     }
 
@@ -98,17 +124,21 @@ impl Engine {
         &self.defaults
     }
 
-    /// The seams a binding names (105, core.3): an unbound place seam is
-    /// the one that needs nothing beyond git, and an unbound change or
-    /// merge queue stays unbound.
-    pub(crate) fn bind(&self, binding: &Binding) -> Result<Bound, String> {
-        let place = self
-            .resolver
-            .place(binding.place.as_deref())
-            .ok_or_else(|| match &binding.place {
-                Some(name) => format!("no place profile is named {name}"),
-                None => "no place profile needs nothing beyond git".to_string(),
-            })?;
+    /// The seams a repository's binding names (105, core.3): an unbound
+    /// place seam is the one that needs nothing beyond git, bound with the
+    /// merge queue profile's data by the resolver, and an unbound change
+    /// or merge queue stays unbound.
+    pub(crate) fn bind(&self, repository: &str, binding: &Binding) -> Result<Bound, String> {
+        let place =
+            self.resolver
+                .place(repository, binding)
+                .ok_or_else(|| match &binding.place {
+                    Some(name) => format!(
+                        "no place profile is named {name}; the place profiles there are: {}",
+                        self.resolver.place_profiles().join(", ")
+                    ),
+                    None => "no place profile needs nothing beyond git".to_string(),
+                })?;
         let change = match &binding.change {
             Some(name) => Some(
                 self.resolver
@@ -134,7 +164,7 @@ impl Engine {
 
     /// The seams of a place's binding as its launch resolved it (21).
     pub(crate) fn bound(&self, place: &PlaceRecord) -> Result<Bound, String> {
-        self.bind(&place.binding)
+        self.bind(&place.repository, &place.binding)
     }
 
     /// The agent profile a stage's settings name by its program (32,
@@ -148,7 +178,7 @@ impl Engine {
 mod tests {
     use super::*;
     use flume_fakes::*;
-    use flume_seams::{Binding, Declared, Kind, PlaceId, Readiness, Revision};
+    use flume_seams::{Binding, Declared, Kind, KindSettings, PlaceId, Readiness, Revision};
     use std::collections::BTreeMap;
 
     fn record(binding: Binding) -> PlaceRecord {
@@ -161,6 +191,7 @@ mod tests {
                 branch_prefix: "fix".into(),
                 starts_unready: true,
                 lands: true,
+                agents: KindSettings::default(),
                 stages: vec![],
             },
             declared: Declared::Flume,
@@ -173,8 +204,12 @@ mod tests {
             brief: None,
             mark: None,
             settings: BTreeMap::new(),
+            every_stage: Settings::default(),
+            repository_settings: KindSettings::default(),
             hold: vec![],
             hold_submission: false,
+            hold_words: BTreeMap::new(),
+            recipients: vec![],
         }
     }
 
@@ -187,7 +222,7 @@ mod tests {
         let place = Arc::new(FakePlace::new(git.clone()));
         resolver.bind_no_tool_place(place.clone());
         resolver.bind_place("trees", place);
-        resolver.bind_merge_queue("queue", Arc::new(FakeMergeQueue::new(git.clone(), None)));
+        resolver.bind_merge_queue("queue", Arc::new(FakeMergeQueue::new(git.clone())));
         let defaults = Defaults {
             settings: Settings {
                 program: Some("agent".into()),
