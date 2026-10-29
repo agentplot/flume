@@ -48,6 +48,10 @@ impl HistoryHarness for Harness {
         self.repository
             .git(&["reset", "--quiet", "--hard", &revision.0]);
     }
+
+    fn made_default(&self) -> String {
+        "main".into()
+    }
 }
 
 #[test]

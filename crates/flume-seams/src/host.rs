@@ -33,6 +33,43 @@ pub struct HostSettings {
     pub kind: KindSettings,
 }
 
+/// The run a host wakes for a role's address, as its configuration's
+/// `[roles."<partition>/<role>"]` table gives it: the repository and kind
+/// it is launched as, at the priority given, on the base named or the
+/// repository's default branch where it names none, with the brief where
+/// one is given (132, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleRun {
+    pub repository: String,
+    pub kind: String,
+    #[serde(default)]
+    pub priority: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brief: Option<String>,
+}
+
+/// Whether a recipient's name is a role's address, `<partition>/<role>`,
+/// each part a word of letters, digits, `.`, `_` and `-`; any other name
+/// is a session's (132; design 1).
+pub fn is_address(name: &str) -> bool {
+    let word = |part: &str| {
+        !part.is_empty()
+            && part
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    };
+    name.split_once('/')
+        .is_some_and(|(partition, role)| word(partition) && word(role))
+}
+
+/// The role an address names, its part after the partition: the name a
+/// run of the role is launched under (132).
+pub fn role_of(address: &str) -> &str {
+    address.split_once('/').map_or(address, |(_, role)| role)
+}
+
 /// The host's facts (design 3).
 pub trait Host: Send + Sync {
     /// The host's clock.
@@ -68,6 +105,10 @@ pub trait Host: Send + Sync {
     /// `repository`, as it stands now: read at every start, never kept
     /// in held state (32, C.7).
     fn settings(&self, repository: &str, kind: &str) -> HostSettings;
+
+    /// The run the host's configuration names for a role's address, as
+    /// it stands now; none where it names nothing for it (132, C.7).
+    fn role(&self, address: &str) -> Option<RoleRun>;
 
     /// A variable of the host user's login environment, `HOME` among
     /// them, never of the calling command's session; none where it lacks

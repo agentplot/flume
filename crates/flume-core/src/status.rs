@@ -112,7 +112,10 @@ impl Engine {
         });
         let submission = match (&bound, place.kind.lands) {
             (Some(bound), true) if read_facts => bound.merge_queue.as_ref().map(|queue| {
-                let read = queue.read_submission(&place.repository, &place.branch);
+                let read = crate::submit::own_read(
+                    held,
+                    queue.read_submission(&place.repository, &place.branch),
+                );
                 if let SubmissionRead::CouldNotRead { reason } = &read {
                     cannot_read.push(format!("the merge queue: {reason}"));
                 }
@@ -183,6 +186,7 @@ impl Engine {
                     pending_for: end.pending(&place.recipients),
                 })
                 .collect(),
+            role: held.role.clone(),
         }
     }
 }

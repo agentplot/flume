@@ -590,4 +590,8 @@ impl HistoryHarness for FakeHistoryHarness {
     fn reset(&self, repository: &str, branch: &str, revision: &Revision) {
         self.git.set_branch(repository, branch, revision);
     }
+
+    fn made_default(&self) -> String {
+        "fix/one".into()
+    }
 }

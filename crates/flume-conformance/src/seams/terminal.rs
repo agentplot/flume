@@ -187,7 +187,7 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
         },
         Scenario {
             name: "terminal: an agent opened under a session name is reached by it, and no second agent carries it while it lives",
-            cites: &["94", "98", "43", "107"],
+            cites: &["94", "98", "43", "107", "132"],
             run: an_agent_under_a_session_name::<H>,
         },
     ]

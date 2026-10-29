@@ -179,6 +179,14 @@ enum Command {
         #[arg(long)]
         recipient: Option<String>,
     },
+    /// Wake a role's address, `<partition>/<role>`: its run, the kind the
+    /// host's `[roles]` table names for it, launched where none stands,
+    /// and otherwise nothing made, the answer saying the run is live or
+    /// waits (132).
+    Wake {
+        /// The role's address, `<partition>/<role>`.
+        address: String,
+    },
     /// flume's status over MCP on standard input and output, one tool,
     /// `status`, settling nothing (57, 60).
     Mcp,
@@ -473,6 +481,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let recipient = recipient_of(&core, recipient)?;
             core.inbox(&recipient)
         }
+        Command::Wake { address } => build()?.wake(address),
         Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
             unreachable!("answered before the core's acts")
         }

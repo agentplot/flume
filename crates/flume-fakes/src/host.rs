@@ -1,5 +1,5 @@
 use crate::{lock, Log};
-use flume_seams::{Host, HostSettings, KindSettings, RoomGuard, Seconds, Secret};
+use flume_seams::{Host, HostSettings, KindSettings, RoleRun, RoomGuard, Seconds, Secret};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -46,6 +46,8 @@ struct HostState {
     /// The agents' settings by repository and kind.
     repos: BTreeMap<(String, String), KindSettings>,
     login: BTreeMap<String, String>,
+    /// The role runs the configuration names, by address (132, C.7).
+    roles: BTreeMap<String, RoleRun>,
 }
 
 impl Default for FakeHost {
@@ -62,6 +64,7 @@ impl Default for FakeHost {
                 kinds: BTreeMap::new(),
                 repos: BTreeMap::new(),
                 login: BTreeMap::from([("HOME".to_string(), "/home/user".to_string())]),
+                roles: BTreeMap::new(),
             }),
             room: Arc::default(),
             log: Log::default(),
@@ -153,6 +156,15 @@ impl FakeHost {
         };
     }
 
+    /// The run the configuration names for a role's address, or none.
+    pub fn set_role(&self, address: &str, run: Option<RoleRun>) {
+        let mut state = lock(&self.state);
+        match run {
+            Some(run) => state.roles.insert(address.to_string(), run),
+            None => state.roles.remove(address),
+        };
+    }
+
     /// Whether the room lock is held now.
     pub fn room_taken(&self) -> bool {
         *lock(&self.room.taken)
@@ -196,6 +208,11 @@ impl Host for FakeHost {
     fn recipient(&self) -> Option<String> {
         self.log.push("recipient");
         lock(&self.state).recipient.clone()
+    }
+
+    fn role(&self, address: &str) -> Option<RoleRun> {
+        self.log.push(format!("role {address}"));
+        lock(&self.state).roles.get(address).cloned()
     }
 
     fn settings(&self, repository: &str, kind: &str) -> HostSettings {

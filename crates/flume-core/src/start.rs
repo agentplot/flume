@@ -20,6 +20,8 @@ pub(crate) struct Claim {
     /// The settings the agent starts with, the host's values read (29).
     settings: Settings,
     agent: Arc<dyn Agent>,
+    /// The session name the agent carries: a role's run's address (132).
+    session: Option<String>,
 }
 
 /// What a start came to.
@@ -274,6 +276,7 @@ impl Engine {
                 place: held.place.place_ref(),
                 settings: resolution.settings.clone(),
                 agent: resolution.agent.clone(),
+                session: held.role.clone(),
             }))
         });
         claimed.unwrap_or(Err(Start::NoPlace))
@@ -289,6 +292,7 @@ impl Engine {
             place,
             settings,
             agent,
+            session,
         } = claim;
         let command = agent.command(&settings, &place, &identity, &secret, &text);
         let folder = self.store.folder(id);
@@ -298,7 +302,7 @@ impl Engine {
             &command,
             &identity,
             settings.beside.as_deref(),
-            None,
+            session.as_deref(),
         ) {
             Opened::Opened { carried, printed } => {
                 if carried || printed.is_some() {

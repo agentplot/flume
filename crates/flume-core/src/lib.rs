@@ -25,6 +25,7 @@ mod status;
 mod submit;
 mod tidy;
 mod wait;
+mod wake;
 
 pub use acts::Retry;
 pub use answer::*;

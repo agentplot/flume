@@ -13,6 +13,7 @@ pub mod made_things;
 pub mod place_status;
 pub mod places;
 pub mod restart;
+pub mod role_waking;
 pub mod running_through;
 pub mod settling;
 pub mod stage_runs;
@@ -42,5 +43,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(end_delivery::scenarios());
     every.extend(caller_waits::scenarios());
     every.extend(made_things::scenarios());
+    every.extend(role_waking::scenarios());
     every
 }

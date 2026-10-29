@@ -4,8 +4,9 @@
 //! a command of flume's, started by an agent going quiet, by the
 //! terminal's watch, or by a caller, and waits on no merge queue (120,
 //! core.13). Each end it or an act reads is recorded once as it is
-//! written, and the settle delivers each end pending for a recipient
-//! (43, core.25).
+//! written, and the settle delivers each end pending for a recipient,
+//! then wakes each role's address one stands pending for with no run
+//! (43, 132, core.25).
 
 use crate::held::read_stall;
 use crate::start::Starts;
@@ -65,6 +66,7 @@ impl Engine {
         }
         self.stall(id);
         self.deliver_ends(id);
+        self.wake_roles(id);
         self.show(id);
         self.start_waiting();
         tidied

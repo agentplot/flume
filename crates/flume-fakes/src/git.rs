@@ -20,6 +20,9 @@ struct GitState {
     /// A branch's head moved once a number of further reads of it are
     /// made: a commit landing while the core reads (25).
     moves: BTreeMap<(String, String), (usize, Revision)>,
+    /// Each repository's default branch: the branch it was first made
+    /// with, unless set.
+    defaults: BTreeMap<String, String>,
 }
 
 struct Node {
@@ -52,7 +55,23 @@ impl FakeGit {
         state
             .branches
             .insert((repository.into(), branch.into()), revision.clone());
+        state
+            .defaults
+            .entry(repository.into())
+            .or_insert_with(|| branch.into());
         revision
+    }
+
+    /// The repository's default branch made `branch`.
+    pub fn set_default_branch(&self, repository: &str, branch: &str) {
+        lock(&self.state)
+            .defaults
+            .insert(repository.into(), branch.into());
+    }
+
+    /// The repository's default branch, if it was made.
+    pub fn default_branch(&self, repository: &str) -> Option<String> {
+        lock(&self.state).defaults.get(repository).cloned()
     }
 
     /// A commit on `branch` over its head, touching `touches`.
@@ -296,6 +315,11 @@ impl History for FakeHistory {
     /// worktree; unlogged, since every start reads it.
     fn common_dir(&self, repository: &str) -> Option<String> {
         Some(format!("{repository}/.git"))
+    }
+
+    fn default_branch(&self, repository: &str) -> Option<String> {
+        self.log.push(format!("default_branch {repository}"));
+        self.git.default_branch(repository)
     }
 
     fn valid_branch(&self, name: &str) -> bool {

@@ -55,6 +55,12 @@ pub struct HeldState {
     /// sets none (130).
     #[serde(default = "stall_after")]
     pub stall_after: Seconds,
+    /// Why a role's address this place has an end pending for was not
+    /// woken at the last settle, by the address: the configuration naming
+    /// nothing for it, or the wake's launch refused; gone once it is
+    /// woken (132; core.28).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub unwoken: BTreeMap<String, String>,
 }
 
 /// How long a place waits on its caller under no hold's words before it
@@ -614,6 +620,11 @@ pub struct SubmissionHeld {
     /// withdrawal of it is told from a hand's (99, 112).
     #[serde(default)]
     pub id: Option<String>,
+    /// The newest submission of the branch the merge queue held when the
+    /// place was launched, by its id: an earlier place's of the same
+    /// name, which this place never reads as its own (3, 99, 132).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
     /// The last outcome flume collected, or its refusal at submit.
     pub verdict: Option<Verdict>,
     /// Why the place waits for its caller's retry or drop (112, 130).

@@ -1098,3 +1098,88 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     assert_eq!(waited["waited"]["recipient"], "ops", "{waited}");
     assert_eq!(waited["waited"]["delivered"], false, "{waited}");
 }
+
+#[test]
+fn a_wake_of_a_roles_address() {
+    // 132, C.7: the host's [roles] table names the planner's run, a kind
+    // the repository declares; `flume wake` launches it once, answers the
+    // run that stands after, refuses an address the table names nothing
+    // for and a name that is no address, and the run's inbox collects for
+    // its address.
+    let host = Host::new("wake");
+    let repository = Repository::new("wake");
+    repository.write(
+        ".config/flume.toml",
+        &format!(
+            "[profiles]\nplace = \"git-worktree\"\n\n[kinds.planner]\nversion = 1\nbranch = \"planner\"\nstarts_unready = false\nlands = false\n\n[[kinds.planner.stages]]\nname = \"plan\"\nprompt = \"prompts/plan.md\"\ndeliverables = [\"commits\"]\nagents = [{{ program = \"{STAND_IN}\" }}]\n"
+        ),
+    );
+    repository.write(".config/prompts/plan.md", "Read what is pending for you.\n");
+    repository.write(".gitignore", "places/\n");
+    repository.commit("the binding and the planner");
+    host.configure(&format!(
+        "[roles.\"madswan/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
+        repository.name()
+    ));
+
+    let woke = answered(
+        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        0,
+    );
+    assert_eq!(woke["woken"]["woke"], "launched", "{woke}");
+    assert_eq!(woke["woken"]["address"], "madswan/planner", "{woke}");
+    let run = &woke["woken"]["place"];
+    assert_eq!(run["role"], "madswan/planner", "{woke}");
+    assert_eq!(run["kind"], "planner");
+    assert_eq!(run["name"], "planner");
+    assert_eq!(run["base"], "main", "the repository's default branch");
+    assert_eq!(run["priority"], 5);
+    assert_eq!(run["recipients"], serde_json::json!([]));
+    let place = format!("{}/places/planner--planner", repository.name());
+    assert_eq!(run["place"], place.as_str());
+
+    let again = answered(
+        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        0,
+    );
+    assert_ne!(again["woken"]["woke"], "launched", "{again}");
+    assert_eq!(again["woken"]["place"]["place"], place.as_str(), "{again}");
+    let person = host.stand_in(&repository.dir, &["wake", "madswan/planner"], &[]);
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert!(
+        person.text.starts_with("madswan/planner's run"),
+        "{}",
+        person.text
+    );
+
+    let unnamed = answered(
+        &host.stand_in(&repository.dir, &["wake", "madswan/ops", "--json"], &[]),
+        1,
+    );
+    assert!(
+        unnamed["refused"]["refusal"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("names no role for madswan/ops")),
+        "{unnamed}"
+    );
+    let no_address = answered(
+        &host.stand_in(&repository.dir, &["wake", "planner", "--json"], &[]),
+        1,
+    );
+    assert!(
+        no_address["refused"]["refusal"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("<partition>/<role>")),
+        "{no_address}"
+    );
+
+    let inbox = answered(
+        &host.stand_in(
+            &repository.dir,
+            &["inbox", "--json"],
+            &[("FLUME_PLACE", &place)],
+        ),
+        0,
+    );
+    assert_eq!(inbox["inbox"]["recipient"], "madswan/planner", "{inbox}");
+}

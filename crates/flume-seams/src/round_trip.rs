@@ -212,6 +212,7 @@ fn held() -> HeldState {
             submits: 2,
             send_backs: 1,
             id: Some("7".into()),
+            before: Some("3".into()),
             verdict: Some(Verdict::Conflict {
                 files: vec!["src/lib.rs".into()],
                 words: "conflicts with main".into(),
@@ -225,6 +226,10 @@ fn held() -> HeldState {
         shown: Some("code · working; 1 running".into()),
         ends: ends(),
         role: Some("madswan/planner".into()),
+        unwoken: BTreeMap::from([(
+            "madswan/ops".to_string(),
+            "the host's configuration names no role for madswan/ops".to_string(),
+        )]),
         holds: holds_put(),
         waiting: Some(Waiting {
             on: WaitingOn {
@@ -514,6 +519,63 @@ fn a_role_runs_address() {
     let before: HeldState = serde_json::from_value(value).unwrap();
     assert_eq!(before.role, None, "a document from before roles");
     round_trips(HeldState { role: None, ..held });
+}
+
+#[test]
+fn a_wake_not_made_and_the_submission_before_the_launch() {
+    let held = held();
+    let mut value = serde_json::to_value(&held).unwrap();
+    assert_eq!(
+        value["unwoken"]["madswan/ops"],
+        "the host's configuration names no role for madswan/ops"
+    );
+    assert_eq!(value["submission"]["before"], "3");
+    value.as_object_mut().unwrap().remove("unwoken");
+    value["submission"]
+        .as_object_mut()
+        .unwrap()
+        .remove("before");
+    let before: HeldState = serde_json::from_value(value).unwrap();
+    assert!(before.unwoken.is_empty(), "a document from before wakes");
+    assert_eq!(before.submission.before, None);
+    round_trips(HeldState {
+        unwoken: BTreeMap::new(),
+        ..held
+    });
+}
+
+#[test]
+fn a_role_run_as_the_configuration_names_it() {
+    let run = RoleRun {
+        repository: "/r".into(),
+        kind: "planner".into(),
+        priority: 5,
+        base: Some("next".into()),
+        brief: Some("read the records".into()),
+    };
+    round_trips(run.clone());
+    round_trips(RoleRun {
+        base: None,
+        brief: None,
+        ..run
+    });
+}
+
+#[test]
+fn an_address_is_a_partition_and_a_role() {
+    assert!(is_address("madswan/planner"));
+    assert!(is_address("slc-2/ops.1"));
+    assert_eq!(role_of("madswan/planner"), "planner");
+    for session in [
+        "ops",
+        "term:p1@/tmp/term.sock",
+        "a/b/c",
+        "/planner",
+        "madswan/",
+        "role:planner",
+    ] {
+        assert!(!is_address(session), "{session} is a session's name");
+    }
 }
 
 #[test]

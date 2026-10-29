@@ -42,17 +42,11 @@ pub fn all() -> Vec<String> {
     all
 }
 
-/// The change that builds what no change has built yet.
-pub const NEXT_CHANGE: &str = "the next change, which delivers a place's ends";
-
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
-/// asks none to be cited.
+/// asks none to be cited. Every clause is built, so none.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
-    ["132", "S38"]
-        .into_iter()
-        .map(|clause| (clause.to_string(), NEXT_CHANGE))
-        .collect()
+    vec![]
 }
 
 #[cfg(test)]
@@ -86,17 +80,7 @@ mod tests {
     }
 
     #[test]
-    fn what_the_next_change_builds() {
-        let unbuilt = unbuilt();
-        assert_eq!(
-            unbuilt
-                .iter()
-                .map(|(clause, _)| clause.as_str())
-                .collect::<Vec<_>>(),
-            ["132", "S38"]
-        );
-        assert!(unbuilt
-            .iter()
-            .all(|(clause, change)| all().contains(clause) && *change == NEXT_CHANGE));
+    fn every_clause_is_built() {
+        assert_eq!(unbuilt(), vec![]);
     }
 }

@@ -59,6 +59,24 @@ pub enum Answer {
         recipient: String,
         ends: Vec<Collected>,
     },
+    /// A wake of a role's address: its run launched, or the run that
+    /// stands for it, live or waiting, and nothing made (132).
+    Woken {
+        address: String,
+        woke: Woke,
+        place: PlaceStatus,
+    },
+}
+
+/// What a wake of a role's address came to (132): its run launched by
+/// this wake, or the run that stood, its agent live or the run waiting,
+/// for room, on its caller or for another settle's launch to finish.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Woke {
+    Launched,
+    Live,
+    Waiting,
 }
 
 impl Answer {
@@ -168,6 +186,10 @@ pub struct PlaceStatus {
     /// and for whom it stands pending (43).
     #[serde(default)]
     pub ends: Vec<EndStatus>,
+    /// The role's address the place is a run of, none for any other
+    /// place (132).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 /// An end of a place as status gives it: what ended and what was read of
@@ -203,6 +225,33 @@ pub struct HostStatus {
     /// named with what holds it (56, 137, 138).
     #[serde(default)]
     pub terminal_kept: Vec<String>,
+    /// Each role's address an end stands pending for, with the run the
+    /// host's configuration names for it, the run standing, and why it
+    /// was not woken (132; core.28).
+    #[serde(default)]
+    pub addresses: Vec<AddressStatus>,
+}
+
+/// A role's address with ends pending for it (132): the run the host's
+/// configuration names for it, none where it names none and nothing
+/// wakes it; its run where one stands; each end pending for it; and why
+/// the last settle did not wake it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AddressStatus {
+    pub address: String,
+    pub role: Option<RoleRun>,
+    pub run: Option<PlaceId>,
+    pub pending: Vec<PendingEnd>,
+    pub unwoken: Option<String>,
+}
+
+/// An end pending for a role's address: the place it is of, its key, and
+/// what ended in a notice's words (43, 132).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingEnd {
+    pub place: PlaceId,
+    pub key: String,
+    pub what: String,
 }
 
 /// A stage waiting for room on the host: it waits on the host, never on

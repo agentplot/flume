@@ -170,6 +170,7 @@ impl Engine {
                 })
                 .collect(),
             terminal_kept: self.terminal.kept(),
+            addresses: self.addresses(),
         }
     }
 

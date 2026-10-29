@@ -3,7 +3,7 @@
 //! A word of the answer's own, a state or a layer, is printed as the JSON
 //! spells it.
 
-use flume_core::{Answer, HostStatus, PlaceStatus, Tidied};
+use flume_core::{Answer, HostStatus, PlaceStatus, Tidied, Woke};
 use flume_seams::{HoldOn, Made};
 use serde_json::{json, Value};
 
@@ -94,6 +94,18 @@ pub fn person(answer: &Answer) -> String {
                     collected.place
                 ));
             }
+        }
+        Answer::Woken {
+            address,
+            woke,
+            place,
+        } => {
+            lines.push(match woke {
+                Woke::Launched => format!("woke {address}: launched {}", place.place),
+                Woke::Live => format!("{address}'s run {} is live; nothing made", place.place),
+                Woke::Waiting => format!("{address}'s run {} waits; nothing made", place.place),
+            });
+            lines.extend(place_lines(place));
         }
     }
     lines.join("\n")
@@ -254,6 +266,9 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         }
         lines.push(line);
     }
+    if let Some(role) = &place.role {
+        lines.push(format!("  the run of {role}"));
+    }
     if !place.recipients.is_empty() {
         lines.push(format!("  recipients: {}", place.recipients.join(", ")));
     }
@@ -301,6 +316,24 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     }
     for kept in &host.terminal_kept {
         lines.push(format!("  the terminal keeps {kept}"));
+    }
+    for address in &host.addresses {
+        let run = match (&address.run, &address.role) {
+            (Some(run), _) => format!("its run {run}"),
+            (None, Some(role)) => format!("no run; it wakes {} in {}", role.kind, role.repository),
+            (None, None) => "no role configured".to_string(),
+        };
+        lines.push(format!(
+            "  {} ends pending for {}, {run}",
+            address.pending.len(),
+            address.address
+        ));
+        for end in &address.pending {
+            lines.push(format!("    {}: {}", end.place, end.what));
+        }
+        if let Some(unwoken) = &address.unwoken {
+            lines.push(format!("    not woken: {unwoken}"));
+        }
     }
     lines
 }
