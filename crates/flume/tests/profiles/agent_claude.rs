@@ -10,7 +10,8 @@
 use crate::common::*;
 use flume::profiles::agent::claude::record::{Asking, Record, Started};
 use flume::profiles::agent::claude::{
-    collapsed, digest, written, Claude, NAME, PLUGIN, TRUST_ANSWER, TRUST_QUESTION, VERSION,
+    collapsed, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
+    TRUST_QUESTION, VERSION,
 };
 use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
@@ -451,9 +452,11 @@ fn a_question_answered_in_the_transcript_is_no_longer_asked() {
 #[test]
 fn the_trust_screen() {
     // The command names the folder-trust dialog of Claude Code 2.1.296 by
-    // a line its screen shows, and the keys that answer it yes: the
-    // dialog lists "No, exit" first and focused, so the answer moves down
-    // to the trusting choice and confirms (34; record 0018).
+    // a line its screen shows, the mark of the choice in focus and the
+    // keys that move and confirm it: the dialog lists "No, exit" first
+    // and focused, with or without the warning that the folder's settings
+    // pre-approve tools, so the terminal moves the focus down to the
+    // trusting choice before it confirms (34; record 0018).
     let harness = Harness::new();
     let command = harness.seam.command(
         &Settings::default(),
@@ -464,15 +467,34 @@ fn the_trust_screen() {
     );
     let trust = command.folder_trust.expect("the folder-trust question");
     assert_eq!(trust.question, TRUST_QUESTION);
-    assert_eq!(trust.answer, TRUST_ANSWER);
-    let screen = fixture("trust-screen-2.1.296.txt");
-    assert!(screen.contains(&trust.question), "{screen}");
-    let no = screen.find("❯ No, exit").expect("the focused refusal");
-    let yes = screen.find(&trust.question).expect("the trusting choice");
-    assert!(no < yes, "the trusting choice is not below the focused one");
-    assert_eq!(
-        trust.answer.split(' ').collect::<Vec<_>>(),
-        ["down", "enter"]
-    );
-    assert!(!screen.contains("Bypass Permissions"));
+    assert_eq!(trust.focus, TRUST_FOCUS);
+    assert_eq!(trust.next, TRUST_NEXT);
+    assert_eq!(trust.confirm, TRUST_CONFIRM);
+    for name in [
+        "trust-screen-2.1.296.txt",
+        "trust-screen-settings-2.1.296.txt",
+    ] {
+        let screen = fixture(name);
+        let yes = screen
+            .lines()
+            .find(|line| line.contains(&trust.question))
+            .unwrap_or_else(|| panic!("no trusting choice in {name}: {screen}"));
+        assert!(
+            !yes.contains(&trust.focus),
+            "the trusting choice is in focus at first in {name}"
+        );
+        let no = screen
+            .lines()
+            .position(|line| line.contains(&trust.focus) && line.contains("No, exit"))
+            .unwrap_or_else(|| panic!("no focused refusal in {name}"));
+        let at = screen
+            .lines()
+            .position(|line| line.contains(&trust.question))
+            .expect("the trusting choice");
+        assert!(
+            no < at,
+            "the trusting choice is not below the focused one in {name}"
+        );
+        assert!(!screen.contains("Bypass Permissions"));
+    }
 }

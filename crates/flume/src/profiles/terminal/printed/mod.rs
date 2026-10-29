@@ -10,7 +10,9 @@
 //! nothing and shows no clue (138, 139); there is no watch, so flume runs attended
 //! (119); and it names no session (7). A command printed once for an
 //! identity is printed for it never again, kept as a mark in the place's
-//! own folder (98, 128).
+//! own folder (98, 128). The command's environment is kept beside the
+//! mark in a file the host's user alone may read, which the line names,
+//! so no value of it, a secret's or a token's, is printed (32, 56).
 
 use crate::shell;
 use flume_seams::{
@@ -19,6 +21,7 @@ use flume_seams::{
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 /// The profile's name in the host's configuration, `[host] terminal`, and
@@ -37,22 +40,57 @@ fn mark(folder: &str, identity: &Identity) -> PathBuf {
         .join(identity.to_string().replace('/', "%"))
 }
 
-/// The line a person runs: into the place, the command's environment
-/// over theirs, the program with its arguments and the prompt (88, 38).
-pub fn line(place: &PlaceRef, command: &AgentCommand) -> String {
+/// Where the environment of the command printed for `identity` is kept,
+/// beside its mark: the line names the file and never a value, since a
+/// value may be a secret (32, 56).
+fn environment(folder: &str, identity: &Identity) -> PathBuf {
+    let mut path = mark(folder, identity).into_os_string();
+    path.push(".env");
+    PathBuf::from(path)
+}
+
+/// The environment file's text: one `NAME=value` line a POSIX shell
+/// reads per variable, each value quoted.
+fn environment_text(command: &AgentCommand) -> String {
+    command
+        .env
+        .iter()
+        .map(|(name, value)| format!("{name}={}\n", shell::quote(value)))
+        .collect()
+}
+
+/// The line a person runs: into the place, then a POSIX shell that reads
+/// the command's environment from `env` over theirs and runs the program
+/// with its arguments and the prompt (88, 38). No value of the
+/// environment is in it, only the file's path; the person's own shell is
+/// left as it was.
+pub fn line(place: &PlaceRef, command: &AgentCommand, env: &Path) -> String {
     let mut words: Vec<String> = vec!["cd".into(), shell::quote(&place.location), "&&".into()];
-    words.extend(
-        command
-            .env
-            .iter()
-            .map(|(name, value)| format!("{name}={}", shell::quote(value))),
-    );
+    if !command.env.is_empty() {
+        words.push(shell::words([
+            "sh",
+            "-c",
+            "set -a && . \"$0\" && set +a && exec \"$@\"",
+            &env.to_string_lossy(),
+        ]));
+    }
     words.push(shell::words(
         std::iter::once(command.program.as_str())
             .chain(command.args.iter().map(String::as_str))
             .chain(command.prompt_args.iter().map(String::as_str)),
     ));
     words.join(" ")
+}
+
+/// Writes `text` to a new file at `path` that the host's user alone may
+/// read, refusing one that stands.
+fn write_new(path: &Path, text: &str, private: bool) -> std::io::Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    if private {
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(text.as_bytes())
 }
 
 impl Terminal for Printed {
@@ -65,13 +103,18 @@ impl Terminal for Printed {
         _beside: Option<&str>,
         _session: Option<&str>,
     ) -> Opened {
-        let printed = line(place, command);
+        let env = environment(folder, identity);
+        let printed = line(place, command, &env);
         let mark = mark(folder, identity);
         let made = mark
             .parent()
             .map_or(Ok(()), fs::create_dir_all)
-            .and_then(|()| OpenOptions::new().write(true).create_new(true).open(&mark))
-            .and_then(|mut file| file.write_all(printed.as_bytes()));
+            .and_then(|()| write_new(&mark, &printed, false))
+            .and_then(|()| match fs::remove_file(&env) {
+                Err(error) if error.kind() != ErrorKind::NotFound => Err(error),
+                _ => Ok(()),
+            })
+            .and_then(|()| write_new(&env, &environment_text(command), true));
         match made {
             Ok(()) => Opened::Opened {
                 carried: true,

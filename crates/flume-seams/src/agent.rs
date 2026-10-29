@@ -37,14 +37,19 @@ impl fmt::Display for Identity {
 pub struct Secret(pub String);
 
 /// The question the agent program asks before it works in a folder new
-/// to it, and the key that answers it, which the terminal reads and
-/// answers (34).
+/// to it, and how its choices show and are chosen, which the terminal
+/// reads off the screen and answers yes (34).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FolderTrust {
-    /// Text the program shows while it asks.
+    /// The yes choice's text, which the program shows while it asks.
     pub question: String,
-    /// The input that answers yes.
-    pub answer: String,
+    /// The mark the program shows on the line of the choice in focus.
+    pub focus: String,
+    /// The key that moves the focus to the next choice.
+    pub next: String,
+    /// The key that confirms the choice in focus, sent only while the
+    /// yes choice has it.
+    pub confirm: String,
 }
 
 /// command: how to start an agent so it works in its place under its

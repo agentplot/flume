@@ -71,14 +71,19 @@ status() {
   (cd "$repo" && "$flume" status "$place" --json) | jq '.status.places[0]'
 }
 printed=$(status | jq -r '.agent.printed')
+# The command's environment is in the file the line names, never in the
+# line (32, 56).
+envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
+[ -f "$envfile" ] || fail "the printed command names no environment file: $printed"
 word() {
-  printf '%s\n' "$printed" | tr ' ' '\n' | sed -n "s/^$1=//p" | tr -d "'"
+  sed -n "s/^$1=//p" "$envfile" | tr -d "'"
 }
 plugin=$(printf '%s\n' "$printed" | tr ' ' '\n' | sed -n '/^--plugin-dir$/{n;p;}')
 agent=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"
 FLUME_PLACE="$(word FLUME_PLACE)" FLUME_STAGE="$(word FLUME_STAGE)"
 CLAUDE_PLUGIN_ROOT="$plugin")
-[ -n "$(word FLUME_SECRET)" ] || fail "the printed command names no secret: $printed"
+[ -n "$(word FLUME_SECRET)" ] || fail "the printed command's environment holds no secret"
+case $printed in *"$(word FLUME_SECRET)"*) fail "the printed command holds its secret" ;; esac
 [ -f "$plugin/hooks/hooks.json" ] || fail "no plugin at $plugin"
 grep -q "\"command\": \"$flume\"" "$plugin/hooks/hooks.json" ||
   grep -q "\"command\": \"$(cd "$(dirname "$flume")" && pwd -P)/flume\"" "$plugin/hooks/hooks.json" ||

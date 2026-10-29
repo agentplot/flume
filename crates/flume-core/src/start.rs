@@ -302,8 +302,10 @@ impl Engine {
                     .program
                     .clone()
                     .unwrap_or_default(),
-                settings: resolution.resolved.settings.clone(),
-                from: resolution.resolved.from.clone(),
+                // Names only: the values reach the agent's command and
+                // nothing kept (32, 56).
+                settings: resolution.resolved.settings.unvalued(),
+                from: flume_seams::unvalued_from(&resolution.resolved.from),
                 record: None,
                 prompt: Prompt {
                     text: text.clone(),

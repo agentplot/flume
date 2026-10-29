@@ -45,6 +45,10 @@ impl Engine {
                     sent = true;
                     continue;
                 }
+                // The program may ask whether it may work in the place
+                // after the open returned: the terminal answers it where
+                // it shows it now (34, 35).
+                let _ = self.terminal.answer_trust(identity);
                 let stopped =
                     self.state_of(Some(agent.as_ref()), &folder, identity) == AgentState::Stopped;
                 let limit = held.place.kind.stages[index]

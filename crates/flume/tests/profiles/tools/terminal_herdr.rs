@@ -63,10 +63,46 @@ report() {
 }
 trap 'echo cleared >> "$log/events"' INT
 if [ -n "$STAND_IN_TRUST" ]; then
-  printf 'Accessing workspace:\nYes, I trust this folder\n'
-  report blocked
-  IFS= read -r answer
-  echo trusted >> "$log/events"
+  # Claude Code's folder-trust dialog: "No, exit" first and in focus, the
+  # focus moved by the arrow keys and confirmed by enter, one key at a
+  # time. STAND_IN_TRUST=late tells herdr it is held at a question and
+  # draws the choices only a while later; =ready tells herdr it is ready
+  # and draws the dialog a while later, =after only once open has
+  # returned; =silent draws the dialog and
+  # tells herdr nothing, as a dialog herdr does not know.
+  focus=no
+  draw() {
+    printf '\033[2J\033[H Accessing workspace:\n Quick safety check\n'
+    if [ "$focus" = no ]; then
+      printf ' \342\235\257 No, exit\n   Yes, I trust this folder\n'
+    else
+      printf '   No, exit\n \342\235\257 Yes, I trust this folder\n'
+    fi
+  }
+  case $STAND_IN_TRUST in
+    late) printf '\033[2J\033[H Accessing workspace:\n'; report blocked; sleep 1; draw ;;
+    ready) report idle; sleep 1; draw ;;
+    after) report idle; sleep 12; draw ;;
+    silent) draw ;;
+    *) draw; report blocked ;;
+  esac
+  stty -icanon -echo min 1 2>/dev/null
+  esc=$(printf '\033')
+  while :; do
+    key=$(dd bs=1 count=1 2>/dev/null)
+    case $key in
+      "$esc")
+        case $(dd bs=1 count=2 2>/dev/null) in
+          '[B'|OB) focus=yes ;;
+          '[A'|OA) focus=no ;;
+        esac
+        draw ;;
+      '')
+        if [ "$focus" = yes ]; then printf '\033[2J\033[H'; echo trusted >> "$log/events"; break; fi
+        echo refused >> "$log/events"; exit 1 ;;
+    esac
+  done
+  stty icanon echo 2>/dev/null
 fi
 if [ -n "$STAND_IN_WARNING" ]; then
   printf '%s\n' "$STAND_IN_WARNING"
@@ -361,7 +397,9 @@ impl TestServer {
             prompt_args: vec![],
             folder_trust: Some(FolderTrust {
                 question: TRUST.into(),
-                answer: "down enter".into(),
+                focus: "\u{276f}".into(),
+                next: "down".into(),
+                confirm: "enter".into(),
             }),
             kind: Some("claude".into()),
         }
@@ -688,6 +726,106 @@ fn s39_the_folder_trust_question_is_answered_and_the_agent_comes_up() {
     assert!(
         fs::metadata(server.scratch.path("log").join(&pane.id).join("started")).is_ok(),
         "the stand-in did not start once trusted"
+    );
+}
+
+/// The folder-trust question drawn a while after herdr was told the
+/// program is held at a question: the choices are waited for, read off
+/// the screen and answered yes, never "No, exit" (34; record 0018).
+#[test]
+fn s39_a_folder_trust_question_drawn_late_is_answered_from_the_screen() {
+    let server = TestServer::start("herdr-trust-late");
+    let profile = server.profile();
+    let who = identity(1);
+    let pane = opened(
+        &server,
+        &profile,
+        &who,
+        &server.command(&[("STAND_IN_TRUST", "late")]),
+    );
+    assert_eq!(
+        server.kept(&pane.id, "events"),
+        vec!["trusted".to_string()],
+        "the stand-in read yes to its question"
+    );
+}
+
+/// The folder-trust question drawn a while after herdr read the program
+/// ready: the screen is read until the program draws, and the question
+/// answered yes (34; record 0018).
+#[test]
+fn s39_a_folder_trust_question_drawn_after_herdr_reads_ready_is_answered() {
+    let server = TestServer::start("herdr-trust-ready");
+    let profile = server.profile();
+    let who = identity(1);
+    let pane = opened(
+        &server,
+        &profile,
+        &who,
+        &server.command(&[("STAND_IN_TRUST", "ready")]),
+    );
+    assert_eq!(
+        server.kept(&pane.id, "events"),
+        vec!["trusted".to_string()],
+        "the stand-in read yes to its question"
+    );
+}
+
+/// The folder-trust question drawn only once open has returned: a settle
+/// of the start, which its agent has not said it started, answers it from
+/// the screen (34, 35; record 0018).
+#[test]
+fn s39_a_folder_trust_question_drawn_after_the_open_is_answered_at_a_settle() {
+    let server = TestServer::start("herdr-trust-after");
+    let profile = server.profile();
+    let who = identity(1);
+    let opened = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &server.command(&[("STAND_IN_TRUST", "after")]),
+        &who,
+        None,
+        None,
+    );
+    assert!(
+        matches!(opened, Opened::Opened { .. }),
+        "open gave {opened:?}"
+    );
+    assert!(
+        !profile.answer_trust(&who),
+        "a question not yet asked was answered"
+    );
+    let pane = profile.pane(&who).expect("the pane recorded");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !profile.answer_trust(&who) {
+        assert!(Instant::now() < deadline, "the question was never answered");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    assert_eq!(
+        server.kept(&pane.id, "events"),
+        vec!["trusted".to_string()],
+        "the stand-in read yes to its question"
+    );
+}
+
+/// The folder-trust question in a dialog herdr does not know, so its
+/// agent start times out: the question is read off the screen and
+/// answered yes, and the agent comes up (34; record 0018).
+#[test]
+fn s39_a_folder_trust_question_herdr_does_not_see_is_answered_from_the_screen() {
+    let server = TestServer::start("herdr-trust-silent");
+    let profile = server.profile().with_start_timeout(SHORT_START);
+    let who = identity(1);
+    let pane = opened(
+        &server,
+        &profile,
+        &who,
+        &server.command(&[("STAND_IN_TRUST", "silent")]),
+    );
+    assert_eq!(
+        server.kept(&pane.id, "events"),
+        vec!["trusted".to_string()],
+        "the stand-in read yes to its question"
     );
 }
 

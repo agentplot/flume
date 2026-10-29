@@ -1124,8 +1124,10 @@ fn the_agent_seams_answers() {
         env: BTreeMap::from([("ID".into(), identity().to_string())]),
         prompt_args: vec!["do it".into()],
         folder_trust: Some(FolderTrust {
-            question: "Do you trust the files in this folder?".into(),
-            answer: "1".into(),
+            question: "Yes, I trust this folder".into(),
+            focus: ">".into(),
+            next: "down".into(),
+            confirm: "enter".into(),
         }),
         kind: Some("agent".into()),
     });

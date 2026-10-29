@@ -14,10 +14,13 @@
 //! kind to the program the settings name, since herdr's agent start
 //! types the kind's name into the pane's shell; agent start then runs
 //! it with the command's arguments whole, under the agent's herdr name,
-//! and nothing is typed (94, 107). A start held at a question answers
-//! the folder-trust question with the keys the command names and waits
-//! for the agent to idle, and any other is held with the screen; one
-//! herdr never sees ready is not come up with the screen (34, 35). The
+//! and nothing is typed (94, 107). Whatever agent start answers, the
+//! folder-trust question is read off the pane's screen and answered yes
+//! with the keys the command names, the focus moved to the yes choice and
+//! confirmed only there, read again until it is gone; a start held at
+//! any other question is held with the screen, and one herdr never sees
+//! ready, with no trust question on its screen, is not come up with the
+//! screen (34, 35). The
 //! program in the pane's foreground must be the one the settings name,
 //! or the start is closed and refused naming what ran (32). A pane is
 //! held by its id and its server's socket, and found again by the
@@ -64,8 +67,8 @@
 //! the recorded server's socket passed (98, core.29).
 
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, ShownAt,
-    Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Closed, Clues, FolderTrust, Identity, Opened, PlaceRef, Sent, Shown,
+    ShownAt, Terminal, TerminalTidy, ToSession, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -100,6 +103,27 @@ pub const START_TIMEOUT: Duration = Duration::from_secs(120);
 /// How long, once the folder-trust question is answered, herdr is waited
 /// on for the agent to idle: herdr's own default for a start.
 pub const TRUST_WAIT: Duration = Duration::from_secs(30);
+
+/// How long apart the screen is read while the folder-trust question is
+/// answered.
+const TRUST_BEAT: Duration = Duration::from_millis(250);
+
+/// How long the screen is read for the folder-trust question to be drawn
+/// or the program's screen to hold still without it.
+const TRUST_SETTLE: Duration = Duration::from_secs(10);
+
+/// How long a program's screen holds still without the folder-trust
+/// question before it is read as not asking.
+const TRUST_STILL: Duration = Duration::from_secs(1);
+
+/// How long a screen still as it was when herdr answered is given for the
+/// program to draw before it is read as not asking.
+const TRUST_DRAW: Duration = Duration::from_secs(3);
+
+/// How long a key sent at the folder-trust question is given to show on
+/// the screen before it is sent again, as one sent before the program
+/// read its keys is lost.
+const TRUST_REDRAW: Duration = Duration::from_secs(2);
 
 /// How far past the timeout it passes a call that states one is bounded.
 const PAST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -205,6 +229,9 @@ struct Kept {
     pane: Pane,
     name: String,
     place: Option<String>,
+    /// The folder-trust question the open was given, which a settle
+    /// answers where the program asks it after the open (34).
+    trust: Option<FolderTrust>,
 }
 
 /// Where a pane was found: there, gone, or not readable now.
@@ -366,7 +393,7 @@ impl Herdr {
         } else {
             Call::Refused {
                 code: "failed".into(),
-                words: format!("herdr {}: {}", args.join(" "), stderr.trim()),
+                words: format!("herdr {}: {}", unvalued(args), stderr.trim()),
             }
         }
     }
@@ -472,6 +499,9 @@ impl Herdr {
                 .get("place")
                 .and_then(Value::as_str)
                 .map(str::to_string),
+            trust: record
+                .get("trust")
+                .and_then(|trust| serde_json::from_value(trust.clone()).ok()),
         })
     }
 
@@ -483,6 +513,7 @@ impl Herdr {
                 "socket": kept.pane.socket,
                 "name": kept.name,
                 "place": kept.place,
+                "trust": kept.trust,
             }),
         )
     }
@@ -922,6 +953,78 @@ impl Herdr {
         Ok(None)
     }
 
+    /// The pane's visible lines once they show the folder-trust question,
+    /// or once the program has drawn and its screen holds still without
+    /// it, so neither a dialog half drawn nor one not yet drawn is taken
+    /// for what the screen shows; for up to [`TRUST_SETTLE`]. herdr may
+    /// call the program ready before it draws anything, so a screen still
+    /// as it was at the first read is settled only after [`TRUST_DRAW`];
+    /// where herdr said the program is held at a question, `blocked`, the
+    /// question is waited for until the bound, as it may be drawn late.
+    fn settled(&self, pane: &Pane, trust: &FolderTrust, blocked: bool) -> String {
+        let began = Instant::now();
+        let deadline = began + TRUST_SETTLE;
+        let first = self.visible(pane);
+        let mut last = first.clone();
+        let mut still = Instant::now();
+        while !asks(&last, trust) && Instant::now() < deadline {
+            std::thread::sleep(TRUST_BEAT);
+            let screen = self.visible(pane);
+            if screen != last {
+                still = Instant::now();
+            } else if !blocked
+                && still.elapsed() >= TRUST_STILL
+                && (screen != first || began.elapsed() >= TRUST_DRAW)
+            {
+                break;
+            }
+            last = screen;
+        }
+        last
+    }
+
+    /// Answers the folder-trust question in `pane` from its screen, within
+    /// [`TRUST_WAIT`]: the next key while another choice has the focus,
+    /// the confirming key only while the yes choice has it, each key sent
+    /// once the screen shows what the last did, and read again until the
+    /// question is gone. Nothing is ever confirmed on another choice, so
+    /// "No, exit" is never answered. Where the question is not on the
+    /// screen once it holds still, or by [`TRUST_SETTLE`] where herdr said
+    /// the program is `blocked`, it was not asked (34; record 0018).
+    fn trust(&self, pane: &Pane, trust: &FolderTrust, blocked: bool) -> Trusted {
+        let deadline = Instant::now() + TRUST_WAIT;
+        let mut screen = self.settled(pane, trust, blocked);
+        if !asks(&screen, trust) {
+            return Trusted::NotAsked(screen);
+        }
+        // The screen a key was last sent at, and when.
+        let mut sent: Option<(String, Instant)> = None;
+        loop {
+            let Some(focused) = focused(&screen, trust) else {
+                return Trusted::Answered;
+            };
+            if Instant::now() >= deadline {
+                return Trusted::Unanswered(screen);
+            }
+            let waiting = sent
+                .as_ref()
+                .is_some_and(|(at, when)| *at == screen && when.elapsed() < TRUST_REDRAW);
+            if !waiting {
+                let key = if focused { &trust.confirm } else { &trust.next };
+                // By the pane, which herdr answers whether or not it
+                // lists an agent in it.
+                let mut keys = vec!["pane", "send-keys", pane.id.as_str()];
+                keys.extend(key.split_whitespace());
+                if let Err(reason) = self.answered(&pane.socket, &keys) {
+                    return Trusted::Unanswered(format!("{screen}\n{reason}"));
+                }
+                sent = Some((screen.clone(), Instant::now()));
+            }
+            std::thread::sleep(TRUST_BEAT);
+            screen = self.visible(pane);
+        }
+    }
+
     /// The pane's visible lines, or herdr's words where it gave none.
     fn visible(&self, pane: &Pane) -> String {
         match self.ask(
@@ -1286,6 +1389,47 @@ fn field(value: &Value, name: &str) -> String {
         .to_string()
 }
 
+/// `args` as words a refusal may carry: each `--env NAME=value` given as
+/// `NAME=<set>`, since a value may be a secret (32, 56).
+fn unvalued(args: &[&str]) -> String {
+    let mut words = Vec::with_capacity(args.len());
+    let mut env = false;
+    for arg in args {
+        if env {
+            let name = arg.split_once('=').map_or(*arg, |(name, _)| name);
+            words.push(format!("{name}={}", flume_seams::SET));
+        } else {
+            words.push((*arg).to_string());
+        }
+        env = *arg == "--env";
+    }
+    words.join(" ")
+}
+
+/// What came of the folder-trust question at a start.
+enum Trusted {
+    /// The screen held still without the question.
+    NotAsked(String),
+    /// The question was answered yes and is gone from the screen.
+    Answered,
+    /// The question still stands, with the screen.
+    Unanswered(String),
+}
+
+/// Whether `screen` shows the folder-trust question: its yes choice.
+fn asks(screen: &str, trust: &FolderTrust) -> bool {
+    screen.lines().any(|line| line.contains(&trust.question))
+}
+
+/// Whether the yes choice has the focus on `screen`, or none where the
+/// question is not shown.
+fn focused(screen: &str, trust: &FolderTrust) -> Option<bool> {
+    screen
+        .lines()
+        .find(|line| line.contains(&trust.question))
+        .map(|line| !trust.focus.is_empty() && line.contains(&trust.focus))
+}
+
 /// The pane id under `key` of a herdr result.
 fn pane_id(result: &Value, key: &str) -> Result<String, String> {
     result
@@ -1378,6 +1522,10 @@ impl Terminal for Herdr {
             pane: pane.clone(),
             name: herdr_name(identity),
             place: beside.is_none().then(|| place.location.clone()),
+            trust: command
+                .folder_trust
+                .clone()
+                .filter(|trust| !trust.question.is_empty()),
         };
         if let Err(reason) = self.keep(identity, &kept) {
             self.abandon(identity, &pane, &bin);
@@ -1398,23 +1546,33 @@ impl Terminal for Herdr {
         ];
         args.extend(command.args.iter().map(String::as_str));
         let started = self.call(&pane.socket, &args, self.start_timeout + PAST_TIMEOUT);
+        // herdr's answer is one signal and the screen another: the trust
+        // question is read off the screen and answered whatever herdr
+        // answered, since herdr may read the dialog ready, blocked or
+        // neither, and may answer before it is drawn (34; record 0018).
+        let trust = command
+            .folder_trust
+            .as_ref()
+            .filter(|trust| !trust.question.is_empty());
         match started {
-            Call::Answered(_) => {}
+            Call::Answered(_) => {
+                if let Some(trust) = trust {
+                    if let Trusted::Unanswered(screen) = self.trust(&pane, trust, false) {
+                        return Opened::Held { screen };
+                    }
+                }
+            }
             Call::Refused { code, .. } if code == "agent_not_ready" => {
-                let screen = self.visible(&pane);
-                let trust = command
-                    .folder_trust
-                    .as_ref()
-                    .filter(|trust| !trust.question.is_empty() && screen.contains(&trust.question));
                 let Some(trust) = trust else {
-                    return Opened::Held { screen };
-                };
-                let mut keys = vec!["agent", "send-keys", kept.name.as_str()];
-                keys.extend(trust.answer.split_whitespace());
-                if let Err(reason) = self.answered(&pane.socket, &keys) {
                     return Opened::Held {
-                        screen: format!("{screen}\n{reason}"),
+                        screen: self.visible(&pane),
                     };
+                };
+                match self.trust(&pane, trust, true) {
+                    Trusted::Answered => {}
+                    Trusted::NotAsked(screen) | Trusted::Unanswered(screen) => {
+                        return Opened::Held { screen }
+                    }
                 }
                 let wait = TRUST_WAIT.as_millis().to_string();
                 let waited = self.call(
@@ -1437,9 +1595,16 @@ impl Terminal for Herdr {
                 }
             }
             Call::Refused { code, .. } if code == "timeout" => {
-                return Opened::NotComeUp {
-                    screen: self.visible(&pane),
-                };
+                let answered = trust.map(|trust| self.trust(&pane, trust, false));
+                match answered {
+                    Some(Trusted::Answered) => {}
+                    Some(Trusted::Unanswered(screen)) => return Opened::Held { screen },
+                    Some(Trusted::NotAsked(_)) | None => {
+                        return Opened::NotComeUp {
+                            screen: self.visible(&pane),
+                        }
+                    }
+                }
             }
             Call::Refused { code, words } => {
                 self.abandon(identity, &pane, &bin);
@@ -1561,6 +1726,22 @@ impl Terminal for Herdr {
             Call::Answered(Value::String(text)) => Some(text),
             _ => None,
         }
+    }
+
+    /// The folder-trust question the open was given, answered from the
+    /// pane's screen as open answers it, where the screen shows it now
+    /// (34; record 0018).
+    fn answer_trust(&self, agent: &Identity) -> bool {
+        let Some(trust) = self.kept(agent).and_then(|kept| kept.trust) else {
+            return false;
+        };
+        let Found::At(pane) = self.found(agent) else {
+            return false;
+        };
+        if !asks(&self.visible(&pane), &trust) {
+            return false;
+        }
+        matches!(self.trust(&pane, &trust, false), Trusted::Answered)
     }
 
     fn close(&self, agent: &Identity) -> Closed {
@@ -1753,6 +1934,24 @@ mod tests {
         )
     }
 
+    #[test]
+    fn a_refusals_words_name_each_variable_and_hold_no_value() {
+        let words = unvalued(&[
+            "pane",
+            "split",
+            "w1:p1",
+            "--env",
+            "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-secret",
+            "--env",
+            "PATH=/bin",
+            "--no-focus",
+        ]);
+        assert_eq!(
+            words,
+            "pane split w1:p1 --env CLAUDE_CODE_OAUTH_TOKEN=<set> --env PATH=<set> --no-focus"
+        );
+    }
+
     fn place() -> PlaceRef {
         PlaceRef {
             repository: "/r".into(),
@@ -1798,6 +1997,7 @@ mod tests {
                     },
                     name: herdr_name(&identity()),
                     place: Some(place.location.clone()),
+                    trust: None,
                 },
             )
             .unwrap();
