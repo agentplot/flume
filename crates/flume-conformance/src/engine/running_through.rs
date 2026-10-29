@@ -17,6 +17,11 @@ use flume_seams::*;
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
+            name: "run through: under a terminal that keeps watch a fix runs from its launch to its landing on the watch's and its agent's settles alone, the landing delivered to its recipient and the place tidied",
+            cites: &["119", "122", "131", "I8", "43"],
+            run: a_fix_runs_unattended,
+        },
+        Scenario {
             name: "run through: a change launched with nothing on hold runs construct, code and verify to its landing on its agents' going quiet alone",
             cites: &["S35", "S2", "40", "111", "121", "131"],
             run: s35_a_change_runs_through,
@@ -307,6 +312,54 @@ fn construct_finds_work(_: &()) -> Outcome {
         world.held(&id).map(|held| held.submission.send_backs),
         Some(0),
         "goings-back"
+    );
+    Ok(())
+}
+
+fn a_fix_runs_unattended(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let id = World::id("fix", "one");
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.recipients = vec!["ops".into()];
+    launched(&world.engine.launch(&fix))?;
+    // From here only the watch settles every place on its bound, and the
+    // agent's going quiet settles its own; no caller acts.
+    world.engine().settle(None);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code, at the watch's first settle"
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    for _ in 0..3 {
+        world.host.advance(30);
+        world.engine().settle(None);
+    }
+    ensure!(world.held(&id).is_none(), "the place's document stands");
+    ensure!(!world.place.exists(&id.0), "the place's worktree stands");
+    ensure!(
+        world.queue.log.count("submit") == 1,
+        "submissions: {:?}",
+        world.queue.log.of("submit")
+    );
+    let notices = world.terminal.notices("ops");
+    ensure!(
+        notices
+            .iter()
+            .any(|notice| notice.contains("code delivered"))
+            && notices.iter().any(|notice| notice.contains("landed")),
+        "the notices to ops: {notices:?}"
+    );
+    ensure!(
+        world
+            .store
+            .read_every()
+            .iter()
+            .all(|read| read.state.place.id != id),
+        "a tidied document stands with every end delivered"
     );
     Ok(())
 }
