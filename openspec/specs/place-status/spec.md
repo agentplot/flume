@@ -9,18 +9,42 @@ reads, from one core, that only ever gains fields (43, 56 to 62, 69).
 
 ### Requirement: Status gives every fact of a place
 
-Status SHALL give, for one place or every place, what clause 56 lists:
-the place's repository, kind at its version with its declaration, name,
-branch, base and mark; each stage's state, end and start count; the
-current agent with its identity, settings, state and whether it works
-past its limit; whether the deliverable exists; the submission and how
-often flume submitted; the change's tasks; refused acts; a refused
-stage's part; and a stop-short's or failed submission's words.
+Status SHALL give, for one place or every place, what clause 56 lists of
+it: the place's repository, kind at its version with its declaration,
+name, branch, base, mark, priority and recipients; each stage's state,
+end and start count; whether the deliverable exists; the submission, how
+often flume submitted and how often the place went back; the change's
+tasks; refused acts; and a refused stage's part, the host's part being
+the host queue's (56, 70).
 
 #### Scenario: A stage's end with what it delivered
 
 - **WHEN** status is asked of a place whose code stage delivered
-- **THEN** the stage's end carries the head it delivered at, and a stage that ended short carries the agent's words (43, 56)
+- **THEN** the stage's end carries the head it delivered at, and a stage that ended short carries the agent's words and its kind (43, 56)
+
+### Requirement: Status gives a place's current agent
+
+Status SHALL give a place's current agent with its identity, its
+settings each with the layer it came from and its value as that layer
+wrote it, its state and whether it works past its limit, and the command
+to run under a terminal that prints it (32, 56).
+
+#### Scenario: Each setting with its layer
+
+- **WHEN** status is asked of a change whose code agent took its model from the repository and `CLAUDE_CONFIG_DIR = "~/.claude-work"` from the host's configuration for the kind
+- **THEN** the agent's settings give the model from `repository` and the variable from `host-kind` as `~/.claude-work`, unexpanded (32, 56, S44)
+
+### Requirement: Status says what a waiting place waits on
+
+Status SHALL give a stop-short's words and whether it needs an answer or
+found work, or a failed submission's words, and, for a place waiting on
+its caller, the move it waits on and since when, a hold's words among it
+(56, 130).
+
+#### Scenario: A place waiting on an answer
+
+- **WHEN** status is asked of a place whose construct ended short needing an answer
+- **THEN** it gives the move waited on as a retry of construct, since when, and the question whole (56, 130)
 
 ### Requirement: Status reads where each fact lives and writes nothing
 
