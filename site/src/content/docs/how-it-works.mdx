@@ -72,7 +72,7 @@ refused.
 
 ## Kinds and stages
 
-<Diagram name="kinds" caption="Each stage waits on its deliverable, and the next starts only once it exists. A change's tasks tick one by one, the work is submitted once the last stage delivers, and the place is tidied once it lands." />
+<Diagram name="kinds" caption="flume's three kinds. Each stage waits on its deliverable, and the next starts only once it exists. A change's tasks tick one by one, the work is submitted to the merge queue once the last stage delivers, and the place is tidied once it lands." />
 
 A kind is a list of stages, and each stage names its prompt and its
 deliverable. flume's own kinds are built into the binary:
