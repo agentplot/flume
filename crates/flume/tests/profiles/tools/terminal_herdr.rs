@@ -47,6 +47,9 @@ use std::time::{Duration, Instant};
 /// agent by its kind, and it reports its state to herdr with the pane's
 /// own `HERDR_*` left out, as herdr's reading of the screen would give
 /// it, so herdr lists no agent once it exits.
+/// Once up, it reads ctrl+c as a key, as Claude Code does, clearing what
+/// the line held before it, never as a signal the shell would take while
+/// it reads the line that follows.
 const STAND_IN: &str = r#"#!/bin/sh
 log="$STAND_IN_LOG/$HERDR_PANE_ID"
 mkdir -p "$log"
@@ -72,10 +75,19 @@ if [ -n "$STAND_IN_WARNING" ]; then
 fi
 : > "$log/started"
 report idle
+ctrl_c=$(printf '\003')
+stty -isig 2>/dev/null
 while :; do
   IFS= read -r line
   case $? in
-    0) printf '%s\n' "$line" >> "$log/got" ;;
+    0)
+      while :; do
+        case $line in
+          *"$ctrl_c"*) echo cleared >> "$log/events"; line=${line#*"$ctrl_c"} ;;
+          *) break ;;
+        esac
+      done
+      printf '%s\n' "$line" >> "$log/got" ;;
     1) exit 0 ;;
   esac
 done
