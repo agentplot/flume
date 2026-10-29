@@ -22,3 +22,9 @@ brought to the rule.
   agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
   operator rules (Part C's preamble; core.19). The item leaves when it
   lands.
+- **weir's crate does not yet read a stage's `repeat`.** Record 0019
+  (accepted 2026-10-29) makes it a field of the kind format, named by
+  weir's statement at blueprints d75cf53 (53, 57, C.4), and flume reads
+  it only through weir-kinds (core.4). Until weir-kinds reads it and
+  flume's pin moves, flume's own change stays at version 1. The item
+  leaves when the pin moves.
