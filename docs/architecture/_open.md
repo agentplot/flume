@@ -28,3 +28,14 @@ brought to the rule.
   it only through weir-kinds (core.4). Until weir-kinds reads it and
   flume's pin moves, flume's own change stays at version 1. The item
   leaves when the pin moves.
+- **Records 0020 and 0021 wait on a plan.** Streams, pools, spent
+  accounts and affinity (record 0020; core.26, core.30, core.32), and
+  the standing prompt with cache use in status (record 0021; core.33),
+  both accepted 2026-10-29 and stated at blueprints 6e5aae2, are built
+  only once the user approves a plan for them. Until then the code
+  stands against core.26's streams, core.30's eight layers, core.32
+  and core.33. The item leaves when the code is brought to them.
+- **weir's crate does not yet read a stage's `standing`.** Record 0021
+  makes it a field of the kind format (weir 53, C.4, at blueprints
+  6e5aae2), and flume reads it only through weir-kinds (core.4). The
+  item leaves when weir-kinds reads it and flume's pin moves.
