@@ -27,3 +27,8 @@ brought to the rule.
   agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
   operator rules (Part C's preamble; core.19). The item leaves when it
   lands.
+- **Record 0017 waits on weir's crate.** A kind-level `agents` table
+  and a settings-only kind table are fields of the kind format (weir
+  52, 57, C.4, at blueprints 4d1f88b); until weir's crate reads them and
+  flume's pin of it moves, the repository's layer of an agent's settings
+  (clause 32, rule core.30) has nothing to read it with (core.4).
