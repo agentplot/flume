@@ -1,0 +1,222 @@
+---
+title: Places and herdr
+description: The worktree flume makes for each launch, how it is made ready and removed, and how flume runs its agents in herdr, one workspace per base, a tab per place and a pane per agent, with the herdr plugin's watch and sidebar.
+sidebar:
+  order: 2
+---
+
+import Diagram from '../../../components/Diagram.astro';
+
+A place is the worktree flume makes for one launch. Every stage of the
+work runs there, one agent at a time, and flume removes it once the
+work lands or is dropped. Where the agents run is the host's choice:
+in herdr panes, or as commands flume prints.
+
+## The place
+
+flume makes a plain `git worktree` of the repository at
+`<repository>/places/<kind>--<name>`, on the branch `<prefix>/<name>`,
+where the prefix is the kind's. It cuts the branch from the base's
+current revision. Where the repository's sluice policy lands the base
+on a remote, flume fetches that remote first and cuts the branch from
+the remote's revision; a launch whose fetch fails is refused. With no
+merge queue bound, it cuts from the local base.
+
+The repository is the directory git finds one in. In a bare layout,
+`project/project.git` with its worktrees beside it, the repository is
+`project`, and places go under `project/places/`. List `places/` in
+the repository's `.gitignore` where the places would otherwise show as
+untracked files.
+
+A repository binds the place tool in its `.config/flume.toml`:
+
+```toml
+[profiles]
+place = "git-worktree"
+```
+
+`git-worktree` is the one place profile, and a repository that names
+none gets it. flume reads the `[profiles]` table at the default branch,
+and never guesses a tool from another tool's files.
+
+A launch is refused whole when anything of it already stands: the
+place's directory, its branch, or a live place of the same kind and
+name. Nothing is left behind by a refused launch.
+
+## Making a place ready
+
+What a worktree needs before an agent works in it is the merge queue's
+policy to say. With sluice bound, flume reads `.config/sluice.toml` at
+the base's revision and runs, in the new place:
+
+1. `[tests] toolchain`, when it names one, such as
+   `["devenv", "print-dev-env"]`. Its output is the environment every
+   later step runs under, kept in the place's own git directory.
+2. `moon setup`, when `[tests] runner = "moon"`.
+
+Each step runs with the host user's login environment, nothing of the
+caller's session. A step that fails leaves the place made: a fix or a
+chore starts anyway and its prompt names the failed step, and a change
+waits with the step in `flume status`. A repository with no such steps
+is ready at once, and the prompt says it declares no readiness.
+
+## The terminal: printed or herdr
+
+The host's configuration names the terminal:
+
+```toml
+# ~/.config/flume/config.toml
+[host]
+terminal = "herdr"
+```
+
+With none, or `terminal = "printed"`, flume prints each agent's
+command, `cd` into the place and the program with its environment and
+prompt, for you to run. It can send nothing into a pane it does not
+hold, so it cannot deliver a `tell` or a notice. Ends stay pending
+until `flume wait` or `flume inbox` collects them, and the place moves
+on at each command of flume's that acts.
+
+Under herdr 0.9.5 or later, flume opens each agent in a pane itself,
+sends its prompts, reads its state, and delivers ends to the panes of
+the recipients.
+
+## Places under herdr
+
+<Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
+
+flume keeps its agents in a herdr session of its own, named `flume`:
+
+- **A workspace per repository and base**, labelled
+  `<repository> <base>` from the repository's directory name, such as
+  `acme main`. flume opens it the first time a place on that base
+  starts.
+- **A tab per place**, `<kind>--<name>`, in its base's workspace.
+- **A pane per agent** in the place's tab. flume starts each agent with
+  herdr's `agent start`, with the agent's environment set on the pane,
+  so nothing is typed into a shell. The pane's shell reads no startup
+  file, so nothing in your shell's files reorders the pane's `PATH`.
+
+Each agent carries a herdr name made from its identity, at most 32
+characters and ending in a digest of it. flume holds a pane by its id
+and server, and finds it again by that name when the id no longer
+answers, as after you move the pane to another workspace.
+
+flume answers one question on an agent's behalf: whether it may work
+in the place's folder, which Claude Code asks in a folder new to it.
+A permission prompt, a sign-in, a first run's setup and a repository's
+MCP servers' approval are left for a person: the start ends never
+begun, with the screen it stopped on in `flume status`. flume also
+checks the program in the pane's foreground. When it is not the one
+the settings name, such as a `claude` your shell found earlier on the
+`PATH`, flume closes the pane and refuses the start, naming what ran.
+
+An agent's `beside` setting opens its pane as a split beside another
+pane instead, named by its label or id on flume's server, or as
+`herdr:<pane>@<socket>`. A conversation stage uses it to open beside
+the caller's own pane.
+
+Every herdr call flume makes runs under a bound, ten seconds where the
+call states none, with the calling session's `HERDR_*` variables
+stripped and the recorded server's socket passed. A call that does not
+answer in time reads as unknown, never as an answer.
+
+## The herdr plugin
+
+flume's herdr plugin keeps places moving with no command of yours and
+shows them in herdr. Install it at the tag of the flume you run, so the
+plugin and the binary are one version:
+
+```sh
+herdr plugin install agentplot/flume/plugins/herdr --ref v<version>
+```
+
+It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
+`terminal = "herdr"` in the host's configuration. It brings:
+
+- **The watch.** herdr starts it with its server, one per server. Every
+  two seconds it reads every pane's agent state in one listing. When one
+  of flume's agents changes state, or thirty seconds pass, it runs
+  `flume settle`, then writes `flume status --json` for the sidebar and
+  the popup. An agent that crashed, hung or was killed is read within
+  that bound. While the watch's lease is fresh, flume's commands leave
+  the settling to it; once it stops, each command settles every place
+  first, as with no watch.
+- **Display hints.** After each settle the watch titles each agent's
+  pane `<stage> · <state>` and names it `<kind>--<name>`, and gives
+  each base's workspace the token `flume`, a count of its places:
+  `1 running · 0 asking · 1 waiting on caller · 0 stalled`. They show
+  what status says, and nothing flume decides reads them back.
+- **A sidebar row** on each agent's entry, the `$flume` token, such as
+  `change · code · working · 2/5`: the kind, the stage, its state, the
+  change's tasks ticked, the submission, and whether the place waits on
+  you or is stalled.
+- **A popup** of every place in flight, `agentplot.flume.places`. Type a
+  place's number and a key, then Enter: `o` opens its tab, `t` tells
+  its agent the words you give, `s` stops its agent, `r` retries its
+  stage, and `q` closes the popup. Each key runs one flume command or
+  focuses the tab, and none types into an agent's pane.
+
+The plugin changes none of herdr's configuration. Add the key and the
+rows to herdr's `config.toml` yourself:
+
+```toml
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "agentplot.flume.places"
+description = "flume: the places in flight"
+
+[ui.sidebar.agents]
+rows = [
+  ["state_icon", "machine", "workspace", "tab"],
+  ["agent"],
+  ["$flume"],
+]
+
+[ui.sidebar.spaces]
+rows = [
+  ["state_icon", "workspace", "$flume"],
+  ["branch", "git_status"],
+]
+```
+
+If you have rows of your own, add only the `$flume` entries. The pane
+titles show wherever herdr shows a pane; the rows show only where your
+sidebar names `$flume`. The plugin keeps its lease, the status it last
+wrote and its log, `watch.log`, under
+`$XDG_STATE_HOME/herdr/plugins/agentplot.flume`, one directory per
+herdr server.
+
+## Tidying
+
+<Diagram name="tidy" caption="flume removes the landed fix's place and branch, removes the dropped change's place and keeps its branch, and leaves a worktree made by hand alone." />
+
+A settle tidies a place once its work is over, landed, dropped or done,
+and its agent has stopped. `flume tidy` does the same at once, for one
+place or all. flume:
+
+1. runs the teardown the merge queue's policy gives, `sluice release`
+   for sluice, in the place;
+2. removes the worktree with `git worktree remove`, never forced, so a
+   place holding uncommitted or unignored work, or a lock, stays and
+   flume names what holds it;
+3. removes the branch only when `git cherry` against the base finds no
+   commit the base lacks, judged against the remote's copy of the base
+   where it lands on one. A branch with commits not landed stays, and
+   flume names it once:
+
+   ```text
+   removed ~/src/acme/places/chore--tidy-the-readme
+   kept the branch chore/tidy-the-readme of ~/src/acme/places/chore--tidy-the-readme, 1 commits not landed
+   ```
+
+4. under herdr, closes the place's tab, and its base's workspace once
+   that holds no tab of a live place and no pane flume did not open. A
+   workspace where you opened a pane of your own stays open, and status
+   names it under the host's `terminal_kept`.
+
+flume removes nothing it did not make: no worktree made by hand, no
+repository's main worktree, and no herdr workspace, tab or pane of
+yours. Its record of the place goes last, kept apart only while an end
+of it is still pending for a recipient.

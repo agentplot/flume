@@ -41,10 +41,10 @@ export default defineConfig({
       plugins: [starlightLinksValidator()],
       sidebar: [
         { label: "Start", link: "/" },
-        { label: "How it works", link: "/how-it-works/" },
         { label: "Install and set up", link: "/install/" },
-        { label: "How it fits", link: "/how-it-fits/" },
-        { label: "Design", link: "/design/" },
+        { label: "Guides", items: [{ autogenerate: { directory: "guides" } }] },
+        { label: "Reference", items: [{ autogenerate: { directory: "reference" } }] },
+        { label: "Architecture", items: [{ autogenerate: { directory: "architecture" } }] },
         { label: "Roadmap", link: "/roadmap/" },
       ],
     }),
