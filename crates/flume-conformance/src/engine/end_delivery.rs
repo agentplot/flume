@@ -53,7 +53,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "end delivery: under a terminal that cannot send, nothing is sent and status gives every end pending",
-            cites: &["43", "C.5", "38"],
+            cites: &["43", "38", "119"],
             run: under_the_printed_command,
         },
         Scenario {

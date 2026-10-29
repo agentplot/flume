@@ -96,6 +96,21 @@ const SHORT_START: Duration = Duration::from_millis(3001);
 /// for the stand-in on a loaded host, short for a program never up.
 const HARNESS_START: Duration = Duration::from_secs(20);
 
+/// How many short links this run has made, which names the next.
+static LINKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// A folder short enough for a link whose socket path fits a socket's
+/// limit: the temporary folder, which a sandboxed run may write and which
+/// sluice keeps short, or `/tmp` where the temporary folder is long.
+fn short_folder() -> PathBuf {
+    let temporary = std::env::temp_dir();
+    if temporary.as_os_str().len() <= 80 {
+        temporary
+    } else {
+        PathBuf::from("/tmp")
+    }
+}
+
 /// A herdr server of the test's own, headless on a scratch socket.
 struct TestServer {
     scratch: Scratch,
@@ -150,9 +165,14 @@ impl TestServer {
             ),
         );
         let (socket, link) = if scratch.root.as_os_str().len() > 90 {
-            let link = PathBuf::from(format!("/tmp/flume-h-{}-{}", std::process::id(), label));
+            let link = short_folder().join(format!(
+                "h{}-{}",
+                std::process::id(),
+                LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
             let _ = fs::remove_file(&link);
-            std::os::unix::fs::symlink(&scratch.root, &link).expect("a short link");
+            std::os::unix::fs::symlink(&scratch.root, &link)
+                .unwrap_or_else(|error| panic!("a short link at {}: {error}", link.display()));
             (link.join("s"), Some(link))
         } else {
             (scratch.path("s"), None)
