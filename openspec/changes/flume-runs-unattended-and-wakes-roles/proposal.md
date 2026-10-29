@@ -84,8 +84,8 @@ where nobody is there to deliver to.
 - `seam-fakes`: the fake terminal holds recipients' sessions and records
   each notice sent.
 - `clause-coverage`: the suite's list holds every clause, invariant and
-  scenario of the statement at e5f92f6, 128 to 134 and S35 to S38 among
-  them.
+  scenario of the statement at 480dbb4, 128 to 139 and S35 to S49 among
+  them, none left unbuilt.
 
 ## Impact
 
@@ -97,7 +97,7 @@ where nobody is there to deliver to.
   are pending.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake terminal's
   recipients; the engine scenarios for every new requirement, S38 among
-  them; the clause list at e5f92f6.
+  them; the clause list at 480dbb4.
 - `crates/flume`: `flume wait`, `flume inbox`, `flume hold`,
   `flume wake`, and `--hold <stage>=<words>` on `flume launch` where the
   earlier change does not take it; the herdr terminal

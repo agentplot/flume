@@ -43,11 +43,11 @@ main (28c0c6e), and record 0015 with core.11 in its words since
 core.24, core.25 and core.28, are cited in those words. Record 0016
 (accepted 2026-10-28; the statement at blueprints 4fe1522, C.5) names a
 herdr session by its pane and socket and bounds every herdr call
-(core.29); groups 1 and 6 carry it, in task 1.5 and task 6.3. Record
+(core.29); groups 1 and 6 carry it, in task 1.3 and task 6.3. Record
 0018 (accepted 2026-10-28; the statement at blueprints f44ec91, 137 to
 139, C.5) finds a flume agent's pane again by its herdr name where the
 id no longer answers, keeps a workspace per repository and base and a
-tab per place, and shows display clues; task 1.5 carries the role run's pane
+tab per place, and shows display clues; task 1.3 carries the role run's pane
 found again, and task 6.8 the plugin's clues at each tick. The one rules page is
 `docs/architecture/core.md`; this change adds no area page and touches
 no area another page would own.
@@ -378,8 +378,8 @@ engine's new scenarios live in `flume-conformance/src/engine/`, one
 file per capability (`end_delivery.rs`, `caller_waits.rs`,
 `made_things.rs`, `role_waking.rs`), each citing its clauses as data
 (106); the terminal's recipient scenarios join `seams/terminal.rs`. The
-clause list moves to the statement's revision e5f92f6 or later, holding
-128 to 134 and S35 to S38, wherever the earlier change has not. The
+clause list moves to the statement's revision 480dbb4, holding
+128 to 139 and S35 to S49, and names no clause as unbuilt. The
 last group runs `sluice exec main`, the gate's checks with the root's
 `changes` task among them, and `openspec validate` on this change.
 
