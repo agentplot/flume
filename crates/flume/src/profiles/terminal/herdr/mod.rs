@@ -40,6 +40,18 @@
 //! command runs in is `herdr:<pane>@<socket>`, its pane on its server
 //! (7).
 //!
+//! A recipient's session is reached by its name (43, 132; records 0016,
+//! 0018): `herdr:<pane>@<socket>` by that pane on that server, its id
+//! alone, since a plain recipient's pane carries no name of flume's; and
+//! a name an open gave an agent, a role run's address, by the pane its
+//! live start holds, found again by that start's herdr name where the id
+//! no longer answers, its new id recorded before anything is sent. A
+//! notice goes by herdr's agent prompt into a session working or
+//! waiting, the held input cleared first in one that waits, and is
+//! refused, nothing typed, for a session asking or unread; a working
+//! session is not interrupted to clear it, its program queuing the
+//! notice as its next turn.
+//!
 //! Every herdr call runs under a bound, ten seconds where the call states
 //! none, and one that does not answer within it is unknown or a refusal
 //! naming the bound; each runs with the caller's `HERDR_*` stripped and
@@ -47,7 +59,7 @@
 
 use flume_seams::{
     AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, Terminal,
-    TerminalTidy, Watch,
+    TerminalTidy, ToSession, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -185,6 +197,13 @@ enum Found {
     At(Pane),
     Gone,
     Unknown(String),
+}
+
+/// What a session name an open gave an agent names: the agent.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct Named {
+    session: String,
+    identity: Identity,
 }
 
 impl Herdr {
@@ -490,6 +509,92 @@ impl Herdr {
                 Found::Unknown(format!("herdr refused ({code}): {words}"))
             }
             Call::Unanswered(words) => Found::Unknown(words),
+        }
+    }
+
+    fn session_record(&self, session: &str) -> PathBuf {
+        self.records
+            .join("sessions")
+            .join(format!("{}.json", digest(session)))
+    }
+
+    /// The agent an open named `session`, as recorded.
+    fn named(&self, session: &str) -> Option<Identity> {
+        let record = read_json(&self.session_record(session))?;
+        let named: Named = serde_json::from_value(record).ok()?;
+        (named.session == session).then_some(named.identity)
+    }
+
+    /// The pane a session name reaches: `herdr:<pane>@<socket>` by its id
+    /// alone while herdr lists it there, and a name an open gave an agent
+    /// by the pane its live start holds, found again by its herdr name
+    /// (43, 132; record 0018).
+    fn reach(&self, session: &str) -> Found {
+        if let Some(pane) = Pane::named(session) {
+            return match self.ask(&pane.socket, &["pane", "get", &pane.id]) {
+                Call::Answered(info)
+                    if info["pane"]["pane_id"].as_str() == Some(pane.id.as_str()) =>
+                {
+                    Found::At(pane)
+                }
+                Call::Answered(_) => Found::Gone,
+                Call::Refused { code, .. }
+                    if code == "pane_not_found" || code == "server_not_running" =>
+                {
+                    Found::Gone
+                }
+                Call::Refused { code, words } => {
+                    Found::Unknown(format!("herdr refused ({code}): {words}"))
+                }
+                Call::Unanswered(words) => Found::Unknown(words),
+            };
+        }
+        match self.named(session) {
+            Some(identity) => self.found(&identity),
+            None => Found::Gone,
+        }
+    }
+
+    /// The state of the agent in `pane`, as herdr reads it (96).
+    fn pane_state(&self, pane: &Pane) -> AgentState {
+        let info = match self.ask(&pane.socket, &["pane", "get", &pane.id]) {
+            Call::Answered(info) => info,
+            Call::Refused { code, .. }
+                if code == "pane_not_found" || code == "server_not_running" =>
+            {
+                return AgentState::Stopped
+            }
+            Call::Refused { .. } | Call::Unanswered(_) => return AgentState::Unknown,
+        };
+        let info = info.get("pane").cloned().unwrap_or_default();
+        if info
+            .get("restore_error")
+            .is_some_and(|error| !error.is_null())
+        {
+            return AgentState::Stopped;
+        }
+        if info.get("agent").is_some_and(|agent| !agent.is_null()) {
+            return match info.get("agent_status").and_then(Value::as_str) {
+                Some("working") => AgentState::Working,
+                Some("idle" | "done") => AgentState::Waiting,
+                Some("blocked") => AgentState::Asking,
+                _ => AgentState::Unknown,
+            };
+        }
+        let Call::Answered(processes) =
+            self.ask(&pane.socket, &["pane", "process-info", "--pane", &pane.id])
+        else {
+            return AgentState::Unknown;
+        };
+        let processes = processes.get("process_info").cloned().unwrap_or_default();
+        let shell = processes.get("shell_pid").and_then(Value::as_u64);
+        let foreground = processes
+            .get("foreground_process_group_id")
+            .and_then(Value::as_u64);
+        if shell.is_some() && shell == foreground {
+            AgentState::Stopped
+        } else {
+            AgentState::Unknown
         }
     }
 
@@ -1139,11 +1244,21 @@ impl Terminal for Herdr {
         command: &AgentCommand,
         identity: &Identity,
         beside: Option<&str>,
+        session: Option<&str>,
     ) -> Opened {
         if self.state(identity) != AgentState::Stopped {
             return Opened::Refused {
                 reason: format!("an agent is live under {identity}"),
             };
+        }
+        if let Some(name) = session {
+            if let Some(holder) = self.named(name) {
+                if holder != *identity && self.state(&holder) != AgentState::Stopped {
+                    return Opened::Refused {
+                        reason: format!("the live agent {holder} carries the session name {name}"),
+                    };
+                }
+            }
         }
         let Some(kind) = command.kind.as_deref() else {
             return Opened::Refused {
@@ -1284,6 +1399,19 @@ impl Terminal for Herdr {
             self.abandon(identity, &pane, &bin);
             return Opened::Refused { reason };
         }
+        if let Some(name) = session {
+            let named = Named {
+                session: name.into(),
+                identity: identity.clone(),
+            };
+            let written = serde_json::to_value(&named)
+                .map_err(|error| error.to_string())
+                .and_then(|value| write_json(&self.session_record(name), &value));
+            if let Err(reason) = written {
+                self.abandon(identity, &pane, &bin);
+                return Opened::Refused { reason };
+            }
+        }
         Opened::Opened {
             carried: false,
             printed: None,
@@ -1312,49 +1440,51 @@ impl Terminal for Herdr {
     }
 
     fn state(&self, agent: &Identity) -> AgentState {
-        let pane = match self.found(agent) {
+        match self.found(agent) {
+            Found::At(pane) => self.pane_state(&pane),
+            Found::Gone => AgentState::Stopped,
+            Found::Unknown(_) => AgentState::Unknown,
+        }
+    }
+
+    fn send_to(&self, session: &str, text: &str) -> ToSession {
+        let pane = match self.reach(session) {
             Found::At(pane) => pane,
-            Found::Gone => return AgentState::Stopped,
-            Found::Unknown(_) => return AgentState::Unknown,
+            Found::Gone => return ToSession::NotFound,
+            Found::Unknown(reason) => return ToSession::Refused { reason },
         };
-        let info = match self.ask(&pane.socket, &["pane", "get", &pane.id]) {
-            Call::Answered(info) => info,
-            Call::Refused { code, .. }
-                if code == "pane_not_found" || code == "server_not_running" =>
-            {
-                return AgentState::Stopped
+        let mut calls = vec![];
+        match self.pane_state(&pane) {
+            AgentState::Waiting => {
+                calls.push(vec!["agent", "send-keys", pane.id.as_str(), "ctrl+c"])
             }
-            Call::Refused { .. } | Call::Unanswered(_) => return AgentState::Unknown,
-        };
-        let info = info.get("pane").cloned().unwrap_or_default();
-        if info
-            .get("restore_error")
-            .is_some_and(|error| !error.is_null())
-        {
-            return AgentState::Stopped;
+            AgentState::Working => {}
+            AgentState::Stopped => return ToSession::NotFound,
+            state => {
+                return ToSession::Refused {
+                    reason: format!(
+                        "the session {session} reads {state:?}, so nothing was typed into it"
+                    ),
+                }
+            }
         }
-        if info.get("agent").is_some_and(|agent| !agent.is_null()) {
-            return match info.get("agent_status").and_then(Value::as_str) {
-                Some("working") => AgentState::Working,
-                Some("idle" | "done") => AgentState::Waiting,
-                Some("blocked") => AgentState::Asking,
-                _ => AgentState::Unknown,
-            };
+        calls.push(vec!["agent", "prompt", pane.id.as_str(), text]);
+        for args in calls {
+            if let Err(reason) = self.answered(&pane.socket, &args) {
+                return ToSession::Refused { reason };
+            }
         }
-        let Call::Answered(processes) =
-            self.ask(&pane.socket, &["pane", "process-info", "--pane", &pane.id])
-        else {
-            return AgentState::Unknown;
-        };
-        let processes = processes.get("process_info").cloned().unwrap_or_default();
-        let shell = processes.get("shell_pid").and_then(Value::as_u64);
-        let foreground = processes
-            .get("foreground_process_group_id")
-            .and_then(Value::as_u64);
-        if shell.is_some() && shell == foreground {
-            AgentState::Stopped
-        } else {
-            AgentState::Unknown
+        ToSession::Sent
+    }
+
+    fn session_state(&self, session: &str) -> Option<AgentState> {
+        match self.reach(session) {
+            Found::At(pane) => match self.pane_state(&pane) {
+                AgentState::Stopped => None,
+                state => Some(state),
+            },
+            Found::Gone => None,
+            Found::Unknown(_) => Some(AgentState::Unknown),
         }
     }
 

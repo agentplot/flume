@@ -295,6 +295,7 @@ impl Engine {
             &command,
             &identity,
             settings.beside.as_deref(),
+            None,
         ) {
             Opened::Opened { carried, printed } => {
                 if carried || printed.is_some() {
@@ -325,6 +326,30 @@ impl Engine {
                 Start::NotOpened(reason)
             }
         }
+    }
+
+    /// Changes the start under `identity`, if it is still the stage's,
+    /// and writes `end` as its stage's end in the same write, so the end
+    /// is recorded whole with what was read of it (43).
+    pub(crate) fn end_start(
+        &self,
+        id: &PlaceId,
+        identity: &Identity,
+        mut change: impl FnMut(&mut StartHeld, &mut StageState),
+        end: Option<StageEnd>,
+    ) {
+        self.update(id, |held| {
+            if let Some(index) = held.index_of(identity) {
+                let stage = &mut held.stages[index];
+                if let Some(start) = stage.start.as_mut() {
+                    change(start, &mut stage.state);
+                }
+                if let Some(end) = &end {
+                    stage.end = Some(end.clone());
+                }
+            }
+            Step::Write(())
+        });
     }
 
     /// Changes the start under `identity`, if it is still the stage's.

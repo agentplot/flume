@@ -191,8 +191,10 @@ impl Engine {
                 }
             }
             if let Some(other) = self.store.read_every().into_iter().find(|other| {
+                let tidied = matches!(other.state.phase, Phase::Tidied { .. });
                 let other = &other.state.place;
-                other.repository == *repository
+                !tidied
+                    && other.repository == *repository
                     && other.name == launch.name
                     && reads_change(&other.kind)
             }) {
@@ -257,6 +259,7 @@ impl Engine {
             failures: vec![],
             priority: launch.priority,
             shown: None,
+            ends: vec![],
         };
         for stage in &kind.stages {
             let resolved = self.resolve(&held.place, stage);

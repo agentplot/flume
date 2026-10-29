@@ -207,7 +207,78 @@ fn held() -> HeldState {
         failures: vec!["the agent did not end".into()],
         priority: -3,
         shown: Some("code · working; 1 running".into()),
+        ends: ends(),
     }
+}
+
+fn ends() -> Vec<EndHeld> {
+    vec![
+        EndHeld {
+            of: EndOf::Stage {
+                stage: "code".into(),
+                start: 2,
+                state: StageState::Delivered,
+                quiet_from: None,
+                end: StageEnd {
+                    head: Some(Revision::new("c3")),
+                    ..StageEnd::default()
+                },
+            },
+            read_at: 140,
+            deliveries: vec![
+                Delivery {
+                    recipient: "operator".into(),
+                    at: 141,
+                    by: DeliveredBy::Notice,
+                },
+                Delivery {
+                    recipient: "role:planner".into(),
+                    at: 150,
+                    by: DeliveredBy::Inbox,
+                },
+            ],
+        },
+        EndHeld {
+            of: EndOf::Stage {
+                stage: "code".into(),
+                start: 3,
+                state: StageState::Stuck,
+                quiet_from: Some(160),
+                end: StageEnd {
+                    last_words: Some("I am waiting".into()),
+                    commits: vec![Revision::new("c4")],
+                    screen: Some("the agent's screen".into()),
+                    ..StageEnd::default()
+                },
+            },
+            read_at: 170,
+            deliveries: vec![],
+        },
+        EndHeld {
+            of: EndOf::Submission {
+                submit: 2,
+                verdict: Verdict::Landed {
+                    commit: Revision::new("c9"),
+                    place_removed: false,
+                    branch_removed: false,
+                },
+            },
+            read_at: 180,
+            deliveries: vec![Delivery {
+                recipient: "operator".into(),
+                at: 181,
+                by: DeliveredBy::Wait,
+            }],
+        },
+        EndHeld {
+            of: EndOf::Stall {
+                since: 190,
+                waiting: "a retry of code".into(),
+            },
+            read_at: 490,
+            deliveries: vec![],
+        },
+    ]
 }
 
 #[test]
@@ -238,6 +309,18 @@ fn a_held_state() {
         Phase::Live,
         Phase::Gone {
             over: Over::Dropped,
+            at: None,
+        },
+        Phase::Gone {
+            over: Over::Done,
+            at: Some(200),
+        },
+        Phase::Tidied {
+            over: Over::Landed {
+                commit: Revision::new("c9"),
+            },
+            at: 200,
+            pending_for: vec!["operator".into()],
         },
         Phase::Over {
             over: Over::Done,
@@ -261,6 +344,46 @@ fn a_held_state() {
     ] {
         round_trips(phase);
     }
+}
+
+#[test]
+fn an_end_and_its_deliveries() {
+    for end in ends() {
+        round_trips(end.of.clone());
+        round_trips(end.deliveries.clone());
+        round_trips(end);
+    }
+    for by in [DeliveredBy::Notice, DeliveredBy::Wait, DeliveredBy::Inbox] {
+        round_trips(by);
+    }
+    let before: HeldState = serde_json::from_value({
+        let mut value = serde_json::to_value(held()).unwrap();
+        value.as_object_mut().unwrap().remove("ends");
+        value
+    })
+    .unwrap();
+    assert!(before.ends.is_empty(), "a document from before ends");
+}
+
+#[test]
+fn an_ends_key_and_its_pending_recipients() {
+    let ends = ends();
+    let mut read_again = ends[0].of.clone();
+    if let EndOf::Stage { end, .. } = &mut read_again {
+        end.report = Some("read again".into());
+    }
+    assert!(
+        ends[0].same(&read_again),
+        "an end read again is the same end"
+    );
+    assert!(!ends[0].same(&ends[1].of), "a later start is another end");
+    let recipients = vec!["operator".to_string(), "ops".to_string()];
+    assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
+    assert_eq!(ends[1].pending(&recipients), recipients);
+    assert_eq!(
+        held().pending_for(),
+        vec!["operator".to_string(), "role:planner".to_string()]
+    );
 }
 
 #[test]
@@ -682,6 +805,13 @@ fn the_terminal_seams_answers() {
     round_trips(Sent::Refused {
         reason: "cannot send".into(),
     });
+    round_trips(ToSession::Sent);
+    round_trips(ToSession::NotFound);
+    round_trips(ToSession::Refused {
+        reason: "the session asks a question".into(),
+    });
+    round_trips(Some(AgentState::Waiting));
+    round_trips(None::<AgentState>);
     round_trips(Closed::Closed);
     round_trips(Closed::Refused {
         reason: "still running".into(),

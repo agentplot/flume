@@ -12,6 +12,7 @@ mod agent_acts;
 mod answer;
 mod deliver;
 mod end;
+mod ends;
 mod held;
 mod launch;
 mod prompt;
@@ -26,6 +27,7 @@ mod tidy;
 
 pub use acts::Retry;
 pub use answer::*;
+pub use ends::{notice, what_ended};
 pub use held::Step;
 
 use flume_seams::{

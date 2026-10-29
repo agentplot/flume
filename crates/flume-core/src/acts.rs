@@ -72,17 +72,19 @@ impl Engine {
                 return Err(format!("the agent {identity} did not end: {reason}"));
             }
         }
-        self.with_start(id, &identity, |start, state| {
-            start.live = false;
-            if *state == StageState::Starting {
-                *state = StageState::NeverBegun;
-            } else if state.running() {
-                *state = StageState::Stopped;
-            }
-        });
-        if let Some(end) = starting {
-            self.end_with(id, &identity, end);
-        }
+        self.end_start(
+            id,
+            &identity,
+            |start, state| {
+                start.live = false;
+                if *state == StageState::Starting {
+                    *state = StageState::NeverBegun;
+                } else if state.running() {
+                    *state = StageState::Stopped;
+                }
+            },
+            starting,
+        );
         Ok(())
     }
 
@@ -193,6 +195,26 @@ impl Engine {
     /// Gives up the place's work: its agent ended, nothing more started,
     /// and the place tidied (52, 63).
     pub fn drop_place(&self, place: &PlaceId, force: bool) -> Answer {
+        let live = self
+            .store
+            .read(place)
+            .is_some_and(|read| !matches!(read.state.phase, Phase::Tidied { .. }));
+        let tidied = if live { vec![] } else { self.tidied_of(place) };
+        if !tidied.is_empty() {
+            let removed = tidied
+                .into_iter()
+                .filter(|id| self.remove_held(id))
+                .collect();
+            return Answer::Acted {
+                act: Act::Drop,
+                place: place.clone(),
+                status: None,
+                tidy: Some(Tidied {
+                    removed,
+                    ..Tidied::default()
+                }),
+            };
+        }
         self.give_up(place, force, Act::Drop, Over::Dropped)
     }
 

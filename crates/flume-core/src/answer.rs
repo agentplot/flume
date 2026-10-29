@@ -127,6 +127,19 @@ pub struct PlaceStatus {
     /// The place's priority, its caller's (7, 70).
     #[serde(default)]
     pub priority: i64,
+    /// Every end of the place, with whom it was delivered to and when,
+    /// and for whom it stands pending (43).
+    #[serde(default)]
+    pub ends: Vec<EndStatus>,
+}
+
+/// An end of a place as status gives it: what ended and what was read of
+/// it, each delivery, and the recipients it stands pending for (43).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndStatus {
+    #[serde(flatten)]
+    pub end: EndHeld,
+    pub pending_for: Vec<String>,
 }
 
 /// The host's agents running, its bound, the room left and the stages

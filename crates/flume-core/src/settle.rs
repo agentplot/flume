@@ -3,7 +3,9 @@
 //! submission's outcomes first, safe to repeat (74, 133). It runs inside
 //! a command of flume's, started by an agent going quiet, by the
 //! terminal's watch, or by a caller, and waits on no merge queue (120,
-//! core.13).
+//! core.13). Each end it or an act reads is recorded once as it is
+//! written, and the settle delivers each end pending for a recipient
+//! (43, core.25).
 
 use crate::start::Starts;
 use crate::status::waiting_on;
@@ -59,11 +61,13 @@ impl Engine {
     /// (46, 70), and gives what its tidy did.
     pub(crate) fn settle_place(&self, id: &PlaceId) -> Tidied {
         let mut tidied = Tidied::default();
+        self.deliver_ends(id);
         for _ in 0..STEPS {
             if !self.step(id, &mut tidied) {
                 break;
             }
         }
+        self.deliver_ends(id);
         self.show(id);
         self.start_waiting();
         tidied
@@ -151,6 +155,7 @@ impl Engine {
         match &held.phase {
             Phase::Making { by } => return !self.host.alive(by) && self.undo(&held),
             Phase::Over { .. } | Phase::Gone { .. } => return self.tidy_place(id, tidied),
+            Phase::Tidied { .. } => return self.settle_tidied(id),
             Phase::Live => {}
         }
         if self.submission(&held) {

@@ -202,6 +202,22 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     if !place.recipients.is_empty() {
         lines.push(format!("  recipients: {}", place.recipients.join(", ")));
     }
+    for end in &place.ends {
+        let mut line = format!("  ended: {}", flume_core::what_ended(&end.end.of));
+        let delivered: Vec<&str> = end
+            .end
+            .deliveries
+            .iter()
+            .map(|delivery| delivery.recipient.as_str())
+            .collect();
+        if !delivered.is_empty() {
+            line.push_str(&format!("; delivered to {}", delivered.join(", ")));
+        }
+        if !end.pending_for.is_empty() {
+            line.push_str(&format!("; pending for {}", end.pending_for.join(", ")));
+        }
+        lines.push(line);
+    }
     for (name, list) in [
         ("refused act", &place.refused_acts),
         ("cannot read", &place.cannot_read),

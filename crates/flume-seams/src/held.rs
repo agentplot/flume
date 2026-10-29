@@ -30,6 +30,148 @@ pub struct HeldState {
     /// only when they change (139); never read to decide anything.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shown: Option<String>,
+    /// Every end the place has had, in order, each recorded once by its
+    /// key with what flume read of it, and each delivery of it; an end is
+    /// pending for every recipient it has no delivery to (43).
+    #[serde(default)]
+    pub ends: Vec<EndHeld>,
+}
+
+impl HeldState {
+    /// The recipients each end stands pending for, in order, each named
+    /// once (43).
+    pub fn pending_for(&self) -> Vec<String> {
+        let mut pending: Vec<String> = vec![];
+        for end in &self.ends {
+            for recipient in end.pending(&self.place.recipients) {
+                if !pending.contains(&recipient) {
+                    pending.push(recipient);
+                }
+            }
+        }
+        pending
+    }
+}
+
+/// An end of a place, recorded once by its key when a settle or an act
+/// reads it, with what 43 names of it, and delivered once to each
+/// recipient (43, 74).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndHeld {
+    /// What ended, which is the end's key with what was read of it.
+    #[serde(flatten)]
+    pub of: EndOf,
+    /// When flume read it.
+    pub read_at: Seconds,
+    /// Each delivery of it, to whom, when and by what.
+    #[serde(default)]
+    pub deliveries: Vec<Delivery>,
+}
+
+impl EndHeld {
+    /// Whether this end is the one `other` keys.
+    pub fn same(&self, other: &EndOf) -> bool {
+        self.of.key() == other.key()
+    }
+
+    /// Whether the end was delivered to `recipient`.
+    pub fn delivered_to(&self, recipient: &str) -> bool {
+        self.deliveries
+            .iter()
+            .any(|delivery| delivery.recipient == recipient)
+    }
+
+    /// The recipients of `recipients` it stands pending for (43).
+    pub fn pending(&self, recipients: &[String]) -> Vec<String> {
+        recipients
+            .iter()
+            .filter(|recipient| !self.delivered_to(recipient))
+            .cloned()
+            .collect()
+    }
+}
+
+/// What ended: a stage's start, ended, lost, never begun or stuck; a
+/// submission's outcome from the merge queue; or a stall, each with what
+/// flume read of it (43, 45, 130, 133).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "of", rename_all = "snake_case")]
+pub enum EndOf {
+    Stage {
+        stage: String,
+        /// The start's number (48).
+        start: u32,
+        /// How the start ended: delivered, ended short, finished, lost,
+        /// never begun or stuck.
+        state: StageState,
+        /// For a stuck start, the first quiet reading it ran from (44).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        quiet_from: Option<Seconds>,
+        /// What was read of it: the head or report, the agent's words and
+        /// whether it needs an answer or found work, or what flume read of
+        /// an agent lost, never begun or stuck.
+        end: StageEnd,
+    },
+    Submission {
+        /// The submit's number (48).
+        submit: u32,
+        /// The outcome, the commit landed as or the merge queue's words.
+        verdict: Verdict,
+    },
+    Stall {
+        /// Since when the place waited on its caller (130).
+        since: Seconds,
+        /// The move it waits on.
+        waiting: String,
+    },
+}
+
+impl EndOf {
+    /// The end's key: what ended, without what was read of it.
+    pub fn key(&self) -> String {
+        match self {
+            EndOf::Stage {
+                stage,
+                start,
+                state,
+                quiet_from,
+                ..
+            } => format!(
+                "stage {stage} {start} {state:?} {}",
+                quiet_from.map(|at| at.to_string()).unwrap_or_default()
+            ),
+            EndOf::Submission { submit, verdict } => {
+                let outcome = match verdict {
+                    Verdict::Landed { .. } => "landed",
+                    Verdict::Failed { .. } => "failed",
+                    Verdict::Conflict { .. } => "conflict",
+                    Verdict::Withdrawn => "withdrawn",
+                    Verdict::Refused { .. } => "refused",
+                };
+                format!("submission {submit} {outcome}")
+            }
+            EndOf::Stall { since, .. } => format!("stall {since}"),
+        }
+    }
+}
+
+/// A delivery of an end to one recipient: to whom, when, and by what
+/// (43).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delivery {
+    pub recipient: String,
+    pub at: Seconds,
+    pub by: DeliveredBy,
+}
+
+/// What delivered an end: a notice through the terminal, a wait by
+/// place, or the inbox (43).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeliveredBy {
+    Notice,
+    Wait,
+    Inbox,
 }
 
 /// What a launch fixed of a place (8, 21).
@@ -100,9 +242,19 @@ pub enum Phase {
         over: Over,
         kept: Option<Kept>,
     },
-    /// Removed, its branch and held state still to go (66).
+    /// Removed, its branch and held state still to go (66), since `at`.
     Gone {
         over: Over,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        at: Option<Seconds>,
+    },
+    /// Its worktree and branch removed, its document kept apart from a
+    /// live place's for the ends pending for `pending_for`, since `at`
+    /// (43, 62, 66).
+    Tidied {
+        over: Over,
+        at: Seconds,
+        pending_for: Vec<String>,
     },
 }
 

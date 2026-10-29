@@ -125,6 +125,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             hold_words: BTreeMap::new(),
             recipients: vec![],
         },
+        ends: vec![],
         phase: Phase::Live,
         readiness: Readiness::default(),
         stages: vec![StageHeld {

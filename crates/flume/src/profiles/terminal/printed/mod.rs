@@ -2,7 +2,9 @@
 //! answers the command, the prompt carried in it, for a person to run in
 //! the place, and status gives it with the agent; send and close are
 //! refused, so a tell is refused and a prompt not received is never begun
-//! (38, 53); state is unknown from the terminal, the core reading the
+//! (38, 53), as is every send to a recipient's session, which it holds
+//! none of, so every end stays pending, read from status, a wait or the
+//! inbox (43); state is unknown from the terminal, the core reading the
 //! agent stopped once its own record says the session ended (134);
 //! screen is nothing (136); tidy and show do nothing, as it makes
 //! nothing and shows no clue (138, 139); there is no watch, so flume runs attended
@@ -13,7 +15,7 @@
 use crate::shell;
 use flume_seams::{
     AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, Terminal,
-    TerminalTidy, Watch,
+    TerminalTidy, ToSession, Watch,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -61,6 +63,7 @@ impl Terminal for Printed {
         command: &AgentCommand,
         identity: &Identity,
         _beside: Option<&str>,
+        _session: Option<&str>,
     ) -> Opened {
         let printed = line(place, command);
         let mark = mark(folder, identity);
@@ -92,6 +95,19 @@ impl Terminal for Printed {
 
     fn state(&self, _agent: &Identity) -> AgentState {
         AgentState::Unknown
+    }
+
+    fn send_to(&self, session: &str, _text: &str) -> ToSession {
+        ToSession::Refused {
+            reason: format!(
+                "the printed command sends nothing to a session, {session} among them; nothing was typed"
+            ),
+        }
+    }
+
+    /// The printed command holds no session to read.
+    fn session_state(&self, _session: &str) -> Option<AgentState> {
+        None
     }
 
     fn screen(&self, _agent: &Identity) -> Option<String> {

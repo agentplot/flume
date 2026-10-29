@@ -5,18 +5,30 @@
 use crate::reading::reads_change;
 use crate::start::Starts;
 use crate::{
-    Act, AgentSettings, AgentStatus, Answer, Engine, PlaceStatus, StageStatus, SubmissionStatus,
-    WaitingOn, Waits,
+    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, PlaceStatus, StageStatus,
+    SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 
 impl Engine {
-    /// Status of the place, or of every place on the host.
+    /// Status of the place, or of every place on the host; a place tidied
+    /// whose document stays for its pending ends among them (43, 62).
     pub fn status(&self, place: Option<&PlaceId>) -> Answer {
         let held: Vec<HeldState> = match place {
             Some(id) => match self.store.read(id) {
                 Some(read) => vec![read.state],
-                None => return Answer::refused(format!("no place {id} stands on this host")),
+                None => {
+                    let tidied: Vec<HeldState> = self
+                        .tidied_of(id)
+                        .iter()
+                        .filter_map(|id| self.store.read(id))
+                        .map(|read| read.state)
+                        .collect();
+                    if tidied.is_empty() {
+                        return Answer::refused(format!("no place {id} stands on this host"));
+                    }
+                    tidied
+                }
             },
             None => self
                 .store
@@ -37,7 +49,10 @@ impl Engine {
         let mut cannot_read = vec![];
         let mut refused_acts = vec![];
         let current = held.current;
-        let read_facts = !matches!(held.phase, Phase::Gone { .. } | Phase::Making { .. });
+        let read_facts = !matches!(
+            held.phase,
+            Phase::Gone { .. } | Phase::Making { .. } | Phase::Tidied { .. }
+        );
         let bound = match self.bound(place) {
             Ok(bound) => Some(bound),
             Err(reason) => {
@@ -158,6 +173,14 @@ impl Engine {
             hold_words: place.hold_words.clone(),
             waiting_on: waiting_on(held),
             priority: held.priority,
+            ends: held
+                .ends
+                .iter()
+                .map(|end| EndStatus {
+                    end: end.clone(),
+                    pending_for: end.pending(&place.recipients),
+                })
+                .collect(),
         }
     }
 }

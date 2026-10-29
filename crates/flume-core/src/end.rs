@@ -53,11 +53,15 @@ impl Engine {
         if gone {
             let end = self.read_out(&held, &start, false);
             let stopped = reading.state == AgentState::Stopped;
-            self.with_start(id, &identity, |start, state| {
-                start.live = !stopped;
-                *state = StageState::Lost;
-            });
-            self.end_with(id, &identity, end);
+            self.end_start(
+                id,
+                &identity,
+                |start, state| {
+                    start.live = !stopped;
+                    *state = StageState::Lost;
+                },
+                Some(end),
+            );
             if !stopped {
                 self.end_foreign(id, &identity, &reading);
             }
