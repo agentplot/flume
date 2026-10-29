@@ -285,9 +285,9 @@ let
 
   # sluice, which the merge-queue profile drives: its newest release. sluice
   # publishes no x86_64-darwin build. Its builds are Nix's: on Linux the
-  # loader, on macOS libiconv, are store paths of the machine that built
-  # them, set here to this tree's. Bump the version and the three checksums
-  # from the release's assets.
+  # loader and libgcc_s, on macOS libiconv, are store paths of the machine
+  # that built them, set here to this tree's. Bump the version and the three
+  # checksums from the release's assets.
   sluiceVersion = "0.57.1";
   sluiceHashes = {
     aarch64-darwin = "afedf1910ecafbeefb49f38da54795b9f92835dcde6ef37de454c1b9dd03df9f";
@@ -306,7 +306,9 @@ let
     };
     sourceRoot = ".";
     nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isElf [ pkgs.autoPatchelfHook ];
-    buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
+    buildInputs =
+      lib.optionals pkgs.stdenv.hostPlatform.isElf [ pkgs.stdenv.cc.cc.lib ]
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
     installPhase = ''
       runHook preInstall
       install -Dm755 -t $out/bin sluice wt-submit
