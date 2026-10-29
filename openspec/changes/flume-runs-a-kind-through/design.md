@@ -381,11 +381,18 @@ word in C.7 (105).
   opens, one tab per place named `<kind>--<name>`, whose panes are the
   place's agents, each recorded by id and socket in the host's state; or a split beside
   the pane the settings name, left where its caller put it. The pane is
-  made with `--cwd <place>` and an `--env` for each variable of the
-  agent's environment and flume's `FLUME_*`, `PATH` led by a folder of
-  the start's own linking the kind's name to the program the settings
-  name, since herdr's `agent start` takes no environment and types the
-  kind's name into the shell. open then runs `agent start <name> --kind
+  made with `--cwd <place>` and an `--env` for each variable of the host
+  user's login environment, read once as the host reads it, with the
+  agent's environment and flume's `FLUME_*` over it, `PATH` led by a
+  folder of the start's own linking the kind's name to the program the
+  settings name, since herdr's `agent start` takes no environment and
+  types the kind's name into the shell; and `SHELL` a script of the
+  start's own, which herdr runs as the pane's shell, that sets `SHELL`
+  back to the user's and execs a shell reading no startup file (`zsh
+  -f`, `bash --noprofile --norc`, else `/bin/sh -i`, `ENV` and
+  `BASH_ENV` unset), so no login shell or rc file of the host's, a
+  nix-darwin `/etc/zshenv` or a path_helper among them, reorders that
+  `PATH` (C.5; record 0018 as amended). open then runs `agent start <name> --kind
   <kind> --pane <id> --timeout 120000 -- <arguments>`, bounded ten
   seconds past it, which hands the arguments over whole; nothing is
   typed and no launcher file written. `agent_not_ready` is the start

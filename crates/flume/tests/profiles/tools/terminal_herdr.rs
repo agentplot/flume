@@ -116,7 +116,7 @@ fn herdr_program() -> PathBuf {
 impl TestServer {
     fn start(label: &str) -> TestServer {
         let scratch = Scratch::new(label);
-        for dir in ["home", "bin", "other", "log", "records", "state"] {
+        for dir in ["home", "bin", "other", "zdot", "log", "records", "state"] {
             fs::create_dir_all(scratch.path(dir)).expect("a scratch directory");
         }
         let executable = |path: PathBuf, text: &str| {
@@ -129,9 +129,22 @@ impl TestServer {
         // A shell that reads no startup file of the host's, so the pane's
         // `PATH` is the one flume sets.
         executable(scratch.path("bin/shell"), "#!/bin/sh\nexec /bin/sh -i\n");
+        // Startup files of each shell that put another `claude` first.
+        let first = format!(
+            "PATH={}:$PATH\nexport PATH\n",
+            scratch.path("other").display()
+        );
+        executable(scratch.path("bin/rc"), &first);
+        for file in [".zshenv", ".zshrc", ".zprofile", ".bashrc", ".profile"] {
+            fs::write(scratch.path("zdot").join(file), &first).expect("a startup file");
+        }
+        // A program the settings name that runs another in its place.
         executable(
-            scratch.path("bin/rc"),
-            &format!("PATH={}:$PATH\n", scratch.path("other").display()),
+            scratch.path("bin/wrapper"),
+            &format!(
+                "#!/bin/sh\nexec {} \"$@\"\n",
+                scratch.path("other/claude").display()
+            ),
         );
         let (socket, link) = if scratch.root.as_os_str().len() > 90 {
             let link = PathBuf::from(format!("/tmp/flume-h-{}-{}", std::process::id(), label));
@@ -243,13 +256,33 @@ impl TestServer {
             .unwrap_or_else(|words| panic!("herdr {}: {words}", args.join(" ")))
     }
 
-    /// The profile on this server.
+    /// The profile on this server, the host user's login environment a
+    /// scratch home and `/bin/sh`.
     fn profile(&self) -> Herdr {
+        self.profile_with_login(&[("SHELL", "/bin/sh")])
+    }
+
+    /// The profile on this server, the host user's login environment
+    /// `variables` over a scratch home and a UTF-8 locale.
+    fn profile_with_login(&self, variables: &[(&str, &str)]) -> Herdr {
+        let mut login = vec![
+            (
+                "HOME".to_string(),
+                self.scratch.path("home").to_string_lossy().into_owned(),
+            ),
+            ("LANG".to_string(), "en_US.UTF-8".to_string()),
+        ];
+        login.extend(
+            variables
+                .iter()
+                .map(|(name, value)| (name.to_string(), value.to_string())),
+        );
         Herdr::new(
             Server::Socket(self.socket.clone()),
             self.scratch.path("records"),
         )
         .with_bound(BOUND)
+        .with_login(&login)
     }
 
     /// The place `short` of the scratch repository on `base`.
@@ -674,9 +707,17 @@ fn s46_a_pane_moved_to_another_workspace_is_found_by_its_agents_name() {
 #[test]
 fn the_environment_is_set_on_the_pane_and_nothing_is_typed() {
     let server = TestServer::start("herdr-env");
-    let profile = server.profile();
     let who = identity(1);
     let value = "a value with spaces, 'quotes' and $dollars";
+    let profile = server.profile_with_login(&[("SHELL", "/bin/sh"), ("STAND_IN_VALUE", "login")]);
+    let from_login = identity(2);
+    let pane = opened(&server, &profile, &from_login, &server.command(&[]));
+    assert_eq!(
+        server.kept(&pane.id, "env"),
+        vec!["login".to_string()],
+        "the login environment's variable the started program read"
+    );
+    assert_eq!(profile.close(&from_login), Closed::Closed);
     let pane = opened(
         &server,
         &profile,
@@ -696,15 +737,58 @@ fn the_environment_is_set_on_the_pane_and_nothing_is_typed() {
 }
 
 #[test]
-fn a_claude_earlier_on_the_shells_path_is_refused_naming_it() {
+fn startup_files_that_put_another_claude_first_leave_the_program_the_settings_name() {
+    let server = TestServer::start("herdr-startup");
+    let rc = server.scratch.path("bin/rc").to_string_lossy().into_owned();
+    let zdot = server.scratch.path("zdot").to_string_lossy().into_owned();
+    let home = zdot.clone();
+    let other = server.scratch.path("other").to_string_lossy().into_owned();
+    let shells: Vec<&str> = ["/bin/zsh", "/bin/bash", "/bin/sh"]
+        .into_iter()
+        .filter(|shell| Path::new(shell).is_file())
+        .collect();
+    for (n, shell) in shells.iter().enumerate() {
+        // The login shell's every startup file, by `HOME`, `ZDOTDIR`,
+        // `ENV` and `BASH_ENV`, would put `other/claude` first.
+        let profile = server.profile_with_login(&[
+            ("SHELL", shell),
+            ("HOME", &home),
+            ("ZDOTDIR", &zdot),
+            ("ENV", &rc),
+            ("BASH_ENV", &rc),
+        ]);
+        let who = identity(n as u32 + 1);
+        let pane = opened(
+            &server,
+            &profile,
+            &who,
+            &server.command(&[("ENV", &rc), ("BASH_ENV", &rc)]),
+        );
+        let program = server.kept(&pane.id, "program");
+        assert!(
+            program.len() == 1 && !program[0].starts_with(&other),
+            "under {shell} the pane ran {program:?}, not the program the settings name"
+        );
+        let closed = profile.close(&who);
+        assert_eq!(closed, Closed::Closed, "under {shell}");
+    }
+}
+
+#[test]
+fn a_program_that_runs_another_in_its_place_is_refused_naming_it() {
     let server = TestServer::start("herdr-program");
     let profile = server.profile();
     let who = identity(1);
-    let rc = server.scratch.path("bin/rc").to_string_lossy().into_owned();
+    let mut command = server.command(&[]);
+    command.program = server
+        .scratch
+        .path("bin/wrapper")
+        .to_string_lossy()
+        .into_owned();
     let answer = profile.open(
         &server.place("fix--one"),
         &server.folder(),
-        &server.command(&[("ENV", &rc)]),
+        &command,
         &who,
         None,
     );
@@ -715,7 +799,7 @@ fn a_claude_earlier_on_the_shells_path_is_refused_naming_it() {
         .into_owned();
     assert!(
         matches!(&answer, Opened::Refused { reason } if reason.contains(&other)),
-        "open where the shell found another claude gave {answer:?}"
+        "open where the program ran another gave {answer:?}"
     );
     assert_eq!(profile.pane(&who), None, "the refused start's pane kept");
     assert!(

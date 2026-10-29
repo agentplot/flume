@@ -182,8 +182,8 @@ impl Agent for Claude {
     /// name or path, the resolved environment and the four `FLUME_*`
     /// words, the prompt as its argument where the terminal cannot send
     /// it; nothing of the caller's session (29, 32, 33, 88, C.4). The
-    /// host user's login environment is the terminal's to give, the pane's
-    /// login shell under herdr and the person's shell under the printed
+    /// host user's login environment is the terminal's to give, set on
+    /// the pane under herdr and the person's shell's under the printed
     /// command.
     fn command(
         &self,

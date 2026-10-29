@@ -92,12 +92,19 @@ record 0018).
 
 The herdr profile SHALL lead the pane's `PATH` with a folder of the
 start's own linking the kind's name to the program the settings name,
-and SHALL close and refuse, naming what ran, a start whose pane runs any
-other program (32, C.4, C.5; record 0018).
+SHALL give the pane the host user's login environment under the agent's
+and a shell of the start's own that reads no startup file, and SHALL
+close and refuse, naming what ran, a start whose pane runs any other
+program (29, 32, C.4, C.5; record 0018).
 
-#### Scenario: Another program the shell finds first
+#### Scenario: Startup files that put another program first
 
-- **WHEN** a shell startup file puts another `claude` ahead of the start's own folder on `PATH`
+- **WHEN** the host user's login shell is zsh, bash or sh, and its every startup file puts another `claude` ahead of the start's own folder on `PATH`
+- **THEN** the pane's shell reads none of them, and the program the settings name starts
+
+#### Scenario: A program that runs another in its place
+
+- **WHEN** the program the settings name execs another `claude`
 - **THEN** the start is closed and refused, naming the program that ran
 
 ### Requirement: herdr's panes by id and socket, found again by name

@@ -64,43 +64,9 @@ impl RealHost {
         }
     }
 
-    /// The host user's login environment: what their login shell sets,
-    /// started from their own variables alone, read once; those variables
-    /// alone where the shell cannot be run (29).
+    /// The host user's login environment, read once (29).
     fn login_environment(&self) -> &BTreeMap<String, String> {
-        self.login.get_or_init(|| {
-            let own: BTreeMap<String, String> = LOGIN_NAMES
-                .iter()
-                .filter_map(|name| {
-                    std::env::var(name)
-                        .ok()
-                        .map(|value| (name.to_string(), value))
-                })
-                .collect();
-            let shell = own
-                .get("SHELL")
-                .cloned()
-                .unwrap_or_else(|| "/bin/sh".into());
-            let read = Command::new(&shell)
-                .args(["-l", "-c", "env -0"])
-                .env_clear()
-                .envs(&own)
-                .output()
-                .ok()
-                .filter(|output| output.status.success());
-            match read {
-                Some(output) => output
-                    .stdout
-                    .split(|byte| *byte == 0)
-                    .filter_map(|pair| {
-                        let pair = String::from_utf8_lossy(pair);
-                        pair.split_once('=')
-                            .map(|(name, value)| (name.to_string(), value.to_string()))
-                    })
-                    .collect(),
-                None => own,
-            }
-        })
+        self.login.get_or_init(login_environment)
     }
 
     /// The host as this command finds it: `$XDG_STATE_HOME/flume`, the
@@ -117,6 +83,44 @@ impl RealHost {
     /// The room lock's file.
     pub fn room_lock(&self) -> PathBuf {
         self.state.join("room.lock")
+    }
+}
+
+/// The host user's login environment: what their login shell sets,
+/// started from their own variables alone; those variables alone where
+/// the shell cannot be run (29). Each read runs the shell again, so a
+/// caller keeps what it read.
+pub fn login_environment() -> BTreeMap<String, String> {
+    let own: BTreeMap<String, String> = LOGIN_NAMES
+        .iter()
+        .filter_map(|name| {
+            std::env::var(name)
+                .ok()
+                .map(|value| (name.to_string(), value))
+        })
+        .collect();
+    let shell = own
+        .get("SHELL")
+        .cloned()
+        .unwrap_or_else(|| "/bin/sh".into());
+    let read = Command::new(&shell)
+        .args(["-l", "-c", "env -0"])
+        .env_clear()
+        .envs(&own)
+        .output()
+        .ok()
+        .filter(|output| output.status.success());
+    match read {
+        Some(output) => output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter_map(|pair| {
+                let pair = String::from_utf8_lossy(pair);
+                pair.split_once('=')
+                    .map(|(name, value)| (name.to_string(), value.to_string()))
+            })
+            .collect(),
+        None => own,
     }
 }
 

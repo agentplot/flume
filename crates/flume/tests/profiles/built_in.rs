@@ -144,9 +144,9 @@ fn a_terminal_the_host_names_is_bound_or_refused() {
     let scratch = Scratch::new("terminal");
     let state = scratch.path("state");
     for name in [None, Some("printed"), Some("herdr")] {
-        assert!(terminal(name, &state).is_ok(), "{name:?}");
+        assert!(terminal(name, &state, None).is_ok(), "{name:?}");
     }
-    let Err(reason) = terminal(Some("tmux"), &state) else {
+    let Err(reason) = terminal(Some("tmux"), &state, None) else {
         panic!("a terminal no profile is named was bound");
     };
     assert!(

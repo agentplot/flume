@@ -286,18 +286,27 @@ pub fn terminal_profiles() -> Vec<String> {
 }
 
 /// The terminal profile `name` binds for the host, its records under
-/// flume's state directory `state`, or the refusal naming the profiles
-/// there are (105, C.5).
-pub fn terminal(name: Option<&str>, state: &Path) -> Result<Arc<dyn Terminal>, String> {
+/// flume's state directory `state`, its panes given exactly `login` for
+/// the host user's login environment where it is given one, or the
+/// refusal naming the profiles there are (105, C.5).
+pub fn terminal(
+    name: Option<&str>,
+    state: &Path,
+    login: Option<&[(String, String)]>,
+) -> Result<Arc<dyn Terminal>, String> {
     match name {
         None | Some(terminal::printed::NAME) => Ok(Arc::new(terminal::printed::Printed)),
-        Some(terminal::herdr::NAME) => Ok(Arc::new(
-            terminal::herdr::Herdr::new(
+        Some(terminal::herdr::NAME) => {
+            let mut herdr = terminal::herdr::Herdr::new(
                 terminal::herdr::Server::Session(terminal::herdr::SESSION.into()),
                 state.join("terminal/herdr"),
             )
-            .with_caller(terminal::herdr::caller()),
-        )),
+            .with_caller(terminal::herdr::caller());
+            if let Some(login) = login {
+                herdr = herdr.with_login(login);
+            }
+            Ok(Arc::new(herdr))
+        }
         Some(other) => Err(format!(
             "the host's configuration names the terminal {other}, and no terminal profile is named {other}; the terminal profiles there are: {}",
             terminal_profiles().join(", ")
@@ -345,7 +354,7 @@ pub fn core_with(
     resolver: Arc<dyn Resolver>,
     login: Option<Vec<(String, String)>>,
 ) -> Result<Engine, String> {
-    let terminal = terminal(config.terminal.as_deref(), state)?;
+    let terminal = terminal(config.terminal.as_deref(), state, login.as_deref())?;
     let mut host = RealHost::new(state, config, recipient);
     if let Some(login) = &login {
         host = host.with_login(login);

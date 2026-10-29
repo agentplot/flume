@@ -3,7 +3,9 @@
 //! against the herdr the tree pins, 0.9.5 (core.29).
 //!
 //! open makes a pane in the place with the agent's environment set on
-//! it: a split beside the pane the settings name, by its label or id on
+//! it, the host user's login environment under it, and a shell of the
+//! start's own that reads no startup file, so nothing the host's shell
+//! files do reorders the pane's `PATH`: a split beside the pane the settings name, by its label or id on
 //! flume's server or as `herdr:<pane>@<socket>`; otherwise, in flume's
 //! own herdr session, the place's tab `<kind>--<name>` in the workspace
 //! of the place's repository and base, labelled `<repository> <base>`,
@@ -52,8 +54,10 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 /// The profile's name in the host's configuration, `[host] terminal`
@@ -164,6 +168,7 @@ pub struct Herdr {
     bound: Duration,
     start_timeout: Duration,
     caller: Option<Pane>,
+    login: Arc<OnceLock<BTreeMap<String, String>>>,
 }
 
 /// A pane as open recorded it for an agent: its id, its server, the
@@ -205,7 +210,24 @@ impl Herdr {
             bound: BOUND,
             start_timeout: START_TIMEOUT,
             caller: None,
+            login: Arc::default(),
         }
+    }
+
+    /// Exactly `variables` for the host user's login environment, in
+    /// place of what the user's login shell sets.
+    pub fn with_login(self, variables: &[(String, String)]) -> Herdr {
+        let login = OnceLock::new();
+        let _ = login.set(variables.iter().cloned().collect());
+        Herdr {
+            login: Arc::new(login),
+            ..self
+        }
+    }
+
+    /// The host user's login environment, read once (29).
+    fn login(&self) -> &BTreeMap<String, String> {
+        self.login.get_or_init(crate::host::login_environment)
     }
 
     /// The bound on each call, in place of ten seconds.
@@ -580,27 +602,47 @@ impl Herdr {
         }
     }
 
-    /// The `--cwd` and `--env` arguments of a pane made for the agent:
-    /// the place, and each variable of its environment, `PATH` led by
-    /// `bin`, the start's own folder linking the kind to the program.
-    fn pane_args(place: &PlaceRef, command: &AgentCommand, bin: &Path) -> Vec<String> {
-        let mut args = vec!["--cwd".to_string(), place.location.clone()];
+    /// The `--cwd` and `--env` arguments of a pane made for the agent in
+    /// `start`, the start's own folder: the place, and the host user's
+    /// login environment with the agent's environment over it, `PATH`
+    /// led by `start`'s `bin`, linking the kind to the program, and
+    /// `SHELL` the start's `shell`, which herdr runs as the pane's shell
+    /// and which reads no startup file, so nothing reorders that `PATH`
+    /// (29, 32, C.5).
+    fn made(
+        &self,
+        place: &PlaceRef,
+        command: &AgentCommand,
+        start: &Path,
+    ) -> Result<Vec<String>, String> {
+        let login = self.login();
+        let shell = start.join("shell");
+        let script = pane_shell(login.get("SHELL").map_or("/bin/sh", String::as_str));
+        fs::write(&shell, script)
+            .and_then(|()| fs::set_permissions(&shell, fs::Permissions::from_mode(0o755)))
+            .map_err(|error| format!("{}: {error}", shell.display()))?;
         let path = command
             .env
             .get("PATH")
             .cloned()
             .or_else(|| std::env::var("PATH").ok())
             .unwrap_or_else(|| "/usr/bin:/bin".into());
-        for (name, value) in &command.env {
-            if name != "PATH" {
-                args.extend(["--env".to_string(), format!("{name}={value}")]);
-            }
+        let mut env: BTreeMap<String, String> = login
+            .iter()
+            .filter(|(name, _)| !UNSET.contains(&name.as_str()) && !name.starts_with("HERDR_"))
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
+        env.extend(command.env.clone());
+        env.insert("SHELL".into(), shell.display().to_string());
+        env.insert(
+            "PATH".into(),
+            format!("{}:{path}", start.join("bin").display()),
+        );
+        let mut args = vec!["--cwd".to_string(), place.location.clone()];
+        for (name, value) in env {
+            args.extend(["--env".to_string(), format!("{name}={value}")]);
         }
-        args.extend([
-            "--env".to_string(),
-            format!("PATH={}:{path}", bin.display()),
-        ]);
-        args
+        Ok(args)
     }
 
     /// A new pane for the agent in the place, made with `made`'s cwd and
@@ -972,6 +1014,36 @@ pub fn herdr_name(identity: &Identity) -> String {
     format!("{words}-{}", &digest(&identity.to_string())[..8])
 }
 
+/// The variables of the login environment a pane is not given: the
+/// shell's own of the shell that read it, and those the pane's own
+/// shell and flume set.
+const UNSET: [&str; 6] = ["PATH", "SHELL", "PWD", "OLDPWD", "SHLVL", "_"];
+
+/// The pane's shell for a host user whose login shell is `login`: zsh
+/// with `-f`, bash with `--noprofile --norc`, any other `/bin/sh`, each
+/// reading no startup file, `ENV` and `BASH_ENV` unset, and `SHELL` the
+/// user's own again for what runs in it (C.5).
+pub fn pane_shell(login: &str) -> String {
+    let name = Path::new(login)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let exec = match name.as_str() {
+        "zsh" => format!("{} -f", quoted(login)),
+        "bash" => format!("{} --noprofile --norc", quoted(login)),
+        _ => "/bin/sh -i".to_string(),
+    };
+    format!(
+        "#!/bin/sh\n# flume's pane shell: no startup file is read, so PATH stays as flume set it.\nunset ENV BASH_ENV\nSHELL={}\nexport SHELL\nexec {exec}\n",
+        quoted(login)
+    )
+}
+
+/// `text` quoted for a POSIX shell.
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
 /// The label of the workspace of a place's repository and base,
 /// `<repository> <base>`, the repository by its directory's name.
 pub fn workspace_label(place: &PlaceRef) -> String {
@@ -1103,10 +1175,10 @@ impl Terminal for Herdr {
         };
         // A folder named by the identity's digest, since an identity's
         // `:` would split `PATH`.
-        let bin = Path::new(folder)
+        let start = Path::new(folder)
             .join("herdr")
-            .join(digest(&identity.to_string()))
-            .join("bin");
+            .join(digest(&identity.to_string()));
+        let bin = start.join("bin");
         let link = bin.join(kind);
         let linked = fs::create_dir_all(&bin)
             .and_then(|()| match fs::remove_file(&link) {
@@ -1119,7 +1191,10 @@ impl Terminal for Herdr {
                 reason: format!("{}: {error}", link.display()),
             };
         }
-        let made = Herdr::pane_args(place, command, &bin);
+        let made = match self.made(place, command, &start) {
+            Ok(made) => made,
+            Err(reason) => return Opened::Refused { reason },
+        };
         let pane = match self.new_pane(place, &identity.place, beside, &made) {
             Ok(pane) => pane,
             Err(reason) => return Opened::Refused { reason },
