@@ -104,3 +104,20 @@ an address the host names no role for (43, 56, 129, 130, 132).
 
 - **WHEN** the suite's field list is read after this change
 - **THEN** it holds the recipients, the ends with their deliveries, the waiting move, the hold's words, stalled, the role address and the made lines, and an answer lacking one fails the suite (61)
+
+### Requirement: Status gives a repeating stage's group
+
+Status SHALL give a repeating stage with its current group's place among
+the change's groups at the head and how many there are, with the group's
+number and title, read from the change when asked and never from the
+notes; the person's form SHALL print it as `code 3/7` (56, 58, 142).
+
+#### Scenario: Status mid-stage
+
+- **WHEN** status is asked while a repeating code stage's repetition works on the second of three groups
+- **THEN** the JSON form gives the group's place 2 of 3 with its number and title, and the person's form prints `code 2/3`
+
+#### Scenario: A group added mid-stage
+
+- **WHEN** a repetition adds a fourth group to a change of three and status is asked
+- **THEN** status gives the count as 4, read at the head
