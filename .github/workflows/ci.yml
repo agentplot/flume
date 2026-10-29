@@ -18,7 +18,7 @@ jobs:
         with:
           name: devenv
       - run: nix profile add nixpkgs#devenv
-      - run: devenv shell -- true || true
+      - run: devenv shell -- moon run ':#check-fast'
       - run: |
           ls ~/.rustup/toolchains
           for t in ~/.rustup/toolchains/*; do echo "== $t"; ls "$t/bin" "$t/lib"; cat "$t/lib/rustlib/components"; done
