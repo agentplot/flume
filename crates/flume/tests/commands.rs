@@ -894,8 +894,9 @@ fn a_wait_exits_by_its_outcome() {
 #[test]
 fn the_recipient_a_wait_and_an_inbox_default_to() {
     // 7, 132, design 7: $FLUME_RECIPIENT, then a role's run's address read
-    // from the place $FLUME_PLACE names, then the terminal's session, and
-    // a refusal where none names one.
+    // from the place $FLUME_PLACE names, and a refusal where none names
+    // one; the terminal's session is its profile's to name, tested beside
+    // it under profiles/.
     let host = Host::new("recipients");
     let repository = repository("recipients", None);
     let kinds = kinds_file(&host, false);
@@ -1001,22 +1002,4 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     );
     assert_eq!(waited["waited"]["recipient"], "ops", "{waited}");
     assert_eq!(waited["waited"]["delivered"], false, "{waited}");
-
-    let session = Host::new("recipients-session");
-    session.configure("[host]\nterminal = \"herdr\"\n");
-    let socket = session.scratch.path("no-herdr.sock");
-    let socket = socket.to_string_lossy();
-    let from_terminal = answered(
-        &session.flume(
-            &repository.dir,
-            &["inbox", "--json"],
-            &[("HERDR_PANE_ID", "w1-p2"), ("HERDR_SOCKET_PATH", &socket)],
-        ),
-        0,
-    );
-    assert_eq!(
-        from_terminal["inbox"]["recipient"],
-        format!("herdr:w1-p2@{socket}"),
-        "{from_terminal}"
-    );
 }
