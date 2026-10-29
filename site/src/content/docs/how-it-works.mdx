@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: How flume makes a place for a launch, runs its kind's stages with a fresh agent each, confirms every prompt in the agent's transcript, ends each stage on its deliverable, and tidies the place.
+description: How flume makes a place for a launch, runs its kind's stages with a fresh agent each, confirms every prompt, ends each stage on its deliverable, submits the work, tells whoever waits on it, and tidies the place.
 ---
 
 import Diagram from '../../components/Diagram.astro';
@@ -8,86 +8,145 @@ import Delivery from '../../components/Delivery.astro';
 
 A **launch** names a repository, a kind, a brief, a name and a base. flume
 makes a **place** for it, runs the kind's **stages** there with a fresh
-agent each, follows the work until it lands, and then tidies the place.
-flume runs on one host and launches there.
+agent each, submits the work once the last stage delivers, and tidies the
+place once the work lands. flume runs on one host and launches there.
 
 ## A launch
 
 | Field | What it names |
 |---|---|
-| repository | the repository the work changes |
-| kind | the list of stages the work runs through: `fix`, `change`, `question`, or a kind the repository or the launch declares |
-| brief | what the work is, as the caller wrote it; every stage that asks for it gets it whole |
+| repository | the repository the work changes: the one the command runs in, or `--repository <dir>` |
+| kind | the list of stages the work runs through: `fix`, `chore`, `change`, or a kind the repository or the launch declares |
+| brief | what the work is, as the caller wrote it, given whole to every stage that asks for it |
 | name | the work's name, which names its branch and its place |
-| base | the branch the place is cut from and the only one its work lands on: the repository's shared branch unless the launch names another |
+| base | the branch the place is cut from and the only one its work lands on: the repository's default branch unless the launch names another |
 
-A launch may also carry its agents' settings, the stages that wait on
-the caller's word, and a mark the caller finds its places by.
+```sh
+flume launch --kind fix --name the-parser-reads-tabs --brief "The parser drops a tab after a quote."
+```
 
-Five callers launch:
+A launch may also carry:
 
-| Caller | Launches |
-|---|---|
-| You | `/launch <brief>` in any Claude Code session, or the herdr plugin's key |
-| millpond | an item's send, as a fix or a change |
-| headwater | its fix key, as a fix with the release's brief |
-| sounding | a question, as the place and session of a sounding |
-| crew | each unit, chore or fix of a team, as a place of a kind crew carries in the launch, every stage after the first waiting on crew's word |
+- **recipients**, who are told how its stages end: `--recipient`, the
+  launching session where none is named;
+- **holds**, stages that wait on the caller's word: `--hold <stage>=<words>`
+  and `--hold-submission`;
+- **its agents' settings**: `--agent [<stage>.]<field>=<value>`;
+- **a priority** among the host's waiting stages, `--priority <n>`;
+- **a bound** after which a place left waiting on its caller is said
+  stalled, `--stall-after <time>`;
+- **a declaration of kinds** of its own, `--kinds <file>`, and a mark
+  the caller finds its places by, `--mark`.
+
+A launch is taken whole or refused whole: when anything of it already
+stands, or its kind asks for more than flume runs, flume refuses it and
+leaves nothing behind.
 
 ## The place
 
-flume makes a worktree of the repository at
+flume makes a plain `git worktree` of the repository at
 `<repository>/places/<kind>--<name>`, on a branch of its own,
 `<prefix>/<name>`, cut from the base's current revision. The prefix is
-the kind's: its own name, unless the kind names another. The
-repository's own declaration of what a worktree needs makes it
-ready, so flume runs whatever the repository names and assumes no tool
-of its own. Every stage of the work runs in that one place, and the
-place lasts until the work lands or is dropped.
+the kind's: `fix/`, `chore/` or `change/` for flume's own kinds. Where
+the base lives on a remote, flume cuts the branch from the remote's
+revision, and a launch that cannot read it is refused. The merge
+queue's profile declares what a worktree needs to be ready and to be
+torn down, so flume assumes no tool of its own. Every stage of the work
+runs in that one place, and the place lasts until the work lands or is
+dropped.
+
+A repository binds its tools in the `[profiles]` table of its
+`.config/flume.toml`:
+
+```toml
+[profiles]
+place = "git-worktree"
+change = "openspec"
+merge_queue = "sluice"
+```
+
+flume reads the table at the default branch and nothing else, and
+never guesses a tool from another tool's files. A kind that lands needs
+the merge queue bound, and a launch of one where none is bound is
+refused.
 
 ## Kinds and stages
 
-<Diagram name="kinds" caption="Each stage waits on its deliverable, and the next starts only once it exists. A change's tasks tick one by one, each submit stage waits on the landing, and a question waits on you once, through sounding, and ends on sounding conclude." />
+<Diagram name="kinds" caption="Each stage waits on its deliverable, and the next starts only once it exists. A change's tasks tick one by one, the work is submitted once the last stage delivers, and the place is tidied once it lands." />
 
 A kind is a list of stages, and each stage names its prompt and its
-deliverable:
+deliverable. flume's own kinds are built into the binary:
 
-| Kind | Stages |
-|---|---|
-| fix | code, then a submission to sluice |
-| change | construct, which writes the OpenSpec change; code, which ticks its tasks; verify; then a submission to sluice |
-| question | sounding's session, which ends on `sounding conclude` |
+| Kind | Stages | Its course |
+|---|---|---|
+| fix | code | commits a fix, then flume submits it |
+| chore | code | commits a chore, then flume submits it |
+| change | construct, code, verify | writes the OpenSpec change, ticks its tasks, verifies and archives it, then flume submits it |
 
-A repository, or a launch itself, may declare kinds of its own in the
-same form. The question kind's branch prefix is `sounding/`, so a
-question's place is a sounding's, on `sounding/<name>`. flume makes it
-and runs the session, and sounding keeps the question, its rounds and
-the conclusion you decide.
+A repository declares kinds of its own in its `.config/flume.toml`, and
+a launch in the file it names, in weir's kind format, the format every
+tool of the family reads. A kind declared under the name of one of
+flume's own stands over it.
+
+A kind runs through on its own. A stage's delivery starts the next
+stage, and the last stage's delivery submits the place to the merge
+queue, with nobody's word between, unless the launch or a hold asks for
+one. A submission may fail or conflict, or the last stage may find work
+it cannot deliver past. Then flume starts the stage the kind names for a
+failure, `code` for flume's own kinds, with the merge queue's or the
+agent's words, up to the kind's bound on such rounds.
 
 ## A fresh agent for each stage
 
-Each stage starts a new agent in a herdr pane, or as a command flume
+Each stage starts a new agent: in a herdr pane, or as a command flume
 prints for you to run. The agent before it has ended, so no stage
 inherits another's conversation, and each starts from its prompt and
-what the place holds.
+what the place holds. A place has at most one agent at any moment.
+
+The agent is Claude Code with flume's own plugin, which the binary
+writes and hands the agent at its start. Its hooks tell flume that the
+agent started, that it received its prompt, when it asks a person a
+question and when it goes quiet. They also stop the agent submitting,
+merging or pushing its branch itself.
+
+### Places under herdr
+
+Under herdr, flume keeps one workspace per repository and base,
+labelled `<repository> <base>`, such as `sluice main`, and opens it the
+first time a place on that base starts. Each place is a tab in it,
+`<kind>--<name>`, and the place's agents are panes in that tab. flume
+starts each agent with herdr's `agent start` and sets the agent's
+environment on the pane, so nothing is typed into a shell. It finds a
+pane again by the agent's name when the pane moves. When a place is
+tidied, its tab closes, and the workspace closes once it holds no tab of
+a live place. flume never closes a workspace, tab or pane it did not
+make: a workspace where you opened a pane of your own stays open, and
+status names what holds it.
+
+flume answers one question on an agent's behalf, whether it may work in
+the place's folder. A permission prompt, a sign-in or a first run's
+setup is left for a person: the start ends never begun, with the screen
+it stopped on.
 
 ## Prompt delivery
 
-<Delivery caption="The first sending is lost, and the transcript shows it: flume sends the prompt once more and finds it there. Later the pane goes quiet while the checks run; with no deliverable, the stage goes on until the change is committed." />
+<Delivery caption="The first sending is lost, and flume reads that it never arrived: it sends the prompt once more and reads it received. Later the pane goes quiet while the checks run; with no deliverable, the stage goes on until the change is committed." />
 
-Keys typed into a pane prove nothing about what the agent took. The
-agent's transcript records every message it took, so flume reads that:
+Keys typed into a pane prove nothing about what the agent took, so flume
+reads the agent's own word:
 
-1. flume starts the agent and waits until it takes input.
+1. flume starts the agent and waits for its started hook, under the
+   identity and secret flume gave it.
 2. It sends the stage's prompt.
-3. It reads the transcript for the prompt as a message from the user.
-4. When the transcript lacks it, flume sends the prompt once more and
-   reads again. When the second sending is missing too, flume reports
-   that the stage never began.
+3. It waits for the agent's received hook, which carries a digest of
+   the prompt the agent took.
+4. When none comes within a minute, flume clears the input and sends the
+   prompt once more. When the second sending is missing too, flume
+   reports that the stage never began.
 
 Text left typed in a pane is never a stage's state. A `tell`, your
-words to a place's agent, reaches it the same way: as a prompt the
-transcript holds, or not at all. flume holds a tell while the agent
+words to a place's agent, reaches it the same way: as a prompt the agent
+says it received, or not at all. flume holds a tell while the agent
 works and sends it once the agent waits, and refuses it, with nothing
 typed, when no agent is live or the agent is asking a person a
 question. A tell never starts, ends or moves a stage.
@@ -95,64 +154,139 @@ question. A tell never starts, ends or moves a stage.
 ## A stage ends on its deliverable
 
 A stage ends when its deliverable exists, or when its agent stops short
-and says what it needs. It never ends because its pane went quiet: an
-agent waiting on a long test run shows nothing in its pane, and its
-work is not done.
+and says why. It never ends because its pane went quiet: an agent
+waiting on a long test run shows nothing in its pane, and its work is
+not done.
 
 - **When the deliverable exists,** flume waits until the agent is
-  quiet, then ends it and starts the next stage, unless that stage
-  waits on its caller's word.
-- **When the agent stops short,** no next stage starts. The place waits
-  for a retry or a drop, and the agent's words reach whoever waits on
-  the stage.
+  quiet, then ends it and starts the next stage, unless that stage is
+  held.
+- **When the agent stops short,** it runs `flume needs "<words>"` when
+  it needs an answer, or `flume needs --found "<words>"` when it found
+  work it cannot deliver past. No next stage starts on a question: the
+  place waits, and the agent's words reach the place's recipients.
+  `flume retry <place> --words "<answer>"` starts the stage again with
+  a fresh agent, its prompt carrying the question and the answer.
 
-A deliverable takes one of five forms, and counts only when made since
-its stage started:
+A deliverable counts only when made since its stage started:
 
 | Kind | Stage | Its deliverable |
 |---|---|---|
-| fix | code | a new commit on the place's branch |
-| fix | submit | the landing on its base |
+| fix, chore | code | a new commit on the place's branch |
 | change | construct | the change written, its planning complete, in a new commit |
 | change | code | every task of the change ticked, in a new commit |
-| change | verify | its report |
-| change | submit | the landing, with the change archived |
-| question | sounding's session | its conclusion, as a report: `conclusion.md` |
+| change | verify | the change archived, in a new commit |
+
+The landing is no stage. flume submits the place to the merge queue,
+`sluice submit --no-wait`, and never waits on the verdict: each settle
+after it reads the merge queue's record, and the landing ends the work.
+
+## Holds and words
+
+A place waits on its caller only where a hold says so. A hold names a
+stage not yet started, or the submission, with the caller's words
+saying what it waits for:
+
+```sh
+flume launch ... --hold verify="Wait until the schema change is reviewed."
+flume hold change--csv-export --submission "Hold until the release is cut."
+flume retry change--csv-export --submission
+```
+
+Only a retry naming the stage or the submission ends a hold: flume
+watches nothing for it and ends none itself. Status says, for a place
+waiting on its caller, which move it waits on, since when, and the
+hold's words. A place that waits on its caller under no hold's words,
+five minutes or the launch's `--stall-after`, is said **stalled**, and
+each recipient is told that once.
+
+## Who is told, and how
+
+<Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
+
+flume delivers each end of a stage, a submission's outcome and a stall
+once to each recipient of the place, as a notice through the terminal
+into the recipient's own pane. It records on the place that it was
+delivered, to whom and when. Until then it is pending, and a caller whose session
+restarted loses nothing.
+
+- **`flume wait <place> --stage <stage>`**, or `--submission`, waits as
+  a recipient. It answers an end pending for it at once, and otherwise
+  follows the host's state until one comes or `--timeout` passes. It
+  exits 0 for a stage delivered or a submission landed, 2 for any other
+  end, and 3 when the timeout passes first.
+- **`flume inbox`** collects every end pending for a recipient, on
+  every place of the host, and marks each delivered. A session that
+  starts runs it to catch up on what it missed.
+- **`flume wake <address>`** wakes a role. A recipient may be a role's
+  address, `<group>/<role>`, rather than a session. The host's
+  configuration names, for each address, the work that serves it: a
+  place of a kind it names, on its repository and base. An end pending
+  for an address with no run live or waiting launches that run, and
+  `flume wake` does the same on another tool's word. One run per
+  address stands at a time.
+
+The recipient is `--recipient` where a command names one, otherwise
+`$FLUME_RECIPIENT`, otherwise the terminal's session the command runs
+in.
+
+## The host's queue
+
+The host's configuration may state a bound on the agents running at
+once, every caller's counted together. A stage starts only while the
+host is under it, and otherwise waits for room. Each settle starts the
+waiting stages in priority order, as many as there is room for, and
+ends no agent to make room. A place's priority is its caller's, given
+at the launch and changed with `flume priority <place> <n>`. Every
+launch is taken, and none refused for want of room. A host that states
+no bound has no queue.
+
+## Settling
+
+flume runs no process of its own between commands. A **settle** moves
+places on: it reads each stage's deliverable, starts the next stage,
+submits, reads a submission's outcome and delivers what is pending. The
+herdr plugin's watch runs `flume settle` every time an agent changes
+state and at the bound, so the work moves on with no command of yours.
+With no watch, every command of flume's settles first, and an agent's
+own hook settles when it goes quiet.
 
 ## Tidying
 
 <Diagram name="tidy" caption="flume removes the landed fix's place and branch, removes the dropped change's place and keeps its branch, and leaves a worktree made by hand alone." />
 
 flume tidies a place once its work lands or is dropped. It removes only
-places it made. Before it removes a branch, it compares the branch with
-its base: a branch that holds commits its base lacks stays, and flume
-names it, so dropping the work never loses a commit.
+places it made, never one holding uncommitted work. Before it removes a
+branch, it compares the branch with its base: a branch that holds
+commits its base lacks stays, and flume names it, so dropping the work
+never loses a commit.
 
 ## What flume reports
 
-`flume status --json` gives each place:
+`flume status --json` gives each place, read where each fact lives
+when asked:
 
 - its kind and its stage;
 - its agent's state: working, waiting, asking a person, stopped, or
   unknown when flume cannot read it;
-- whether the stage's deliverable exists;
-- its submission.
-
-For a change, flume reads the OpenSpec change's own files, so the status
-shows its tasks ticked as the agent ticks them. flume keeps only the
-live state of the places it runs. An item's record is millpond's.
+- whether the stage's deliverable exists, and for a change, its tasks
+  ticked as the agent ticks them;
+- its submission;
+- what it waits on, its hold's words and whether it is stalled;
+- each setting of its agent with the layer it came from;
+- for the host, the agents running, the bound, the room and the queue.
 
 ## Where you work with it
 
-- **The command line:** `flume launch`, `status`, `tell`, `stop`,
-  `retry`, `drop`, `tidy`, and `prompt`, which shows the prompt a stage
-  would be sent and starts nothing. An agent runs `flume needs` to stop
-  short.
+- **The command line:** `flume launch`, `status`, `prompt`, `tell`,
+  `hold`, `retry`, `stop`, `finish`, `drop`, `done`, `priority`,
+  `tidy`, `settle`, `wait`, `inbox` and `wake`. `prompt` shows the
+  prompt a stage would be sent and starts nothing. Every command
+  answers as JSON with `--json`.
 - **The Claude Code plugin** gives every session `/launch <brief>` and
   serves `status` over MCP.
-- **The herdr plugin** shows every place in flight in the sidebar, with
-  its kind, its stage, its agent's state and a change's tasks ticked.
-  Keys open a place's pane, tell its agent, stop it and retry its stage.
-  A sounding waiting on you shows as a row there too.
+- **The herdr plugin** settles places as their agents change state. It
+  shows every place in flight in herdr's sidebar and a popup, with keys
+  that open a place's tab, tell its agent, stop it and retry its stage.
 
-<Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
+[Install and set up](/flume/install/) says how to install each.

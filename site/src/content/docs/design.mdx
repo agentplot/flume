@@ -20,19 +20,16 @@ design book and the statement define it.
 
 - **The capture design**, `design/capture/design.md`, covers every part
   that turns an outside event into landed work: headwater, eddy,
-  millpond, flume, sounding, sluice, crew, Flywheel and the first fleet
-  that runs them. Its section "Launching: flume" is flume's. `plan.md`
+  millpond, flume, sounding, sluice, crew and Flywheel, and the hosts
+  that run them. Its section "Launching: flume" is flume's. `plan.md`
   beside it orders the work, and its decision 12 settles what flume is.
 - **flume's statement**, `design/flume/requirements.md`, holds flume's
   invariants as numbered clauses, which the code cites by number. It is
-  written from that design and from the rules of crew's it takes over: a
-  launch, places, kinds and stages, prompt delivery, stage ends, status,
-  tidying, and what flume never does. A fresh model has reconstructed
-  flume from it alone, and the statement now awaits its ruling. The
-  operator rules the questions that model asked, they are folded back
-  in, and then the statement lands on blueprints' `main` (plan step L1).
-  Until then it is not published, and this site cites none of its
-  clauses.
+  written from that design and from the rules for teams and plans it
+  takes over: a launch, places, kinds and stages, prompt delivery, stage
+  ends, status, tidying, and what flume never does. It is ruled, and a
+  question the code raises is ruled and folded back into it before the
+  code changes.
 - **The design book** explains the design chapter by chapter, with the
   statement as its appendix.
 
@@ -44,8 +41,8 @@ behind them, follow the statement into `docs/architecture/` and
 `docs/adr/`. The founding decisions are three: one place, one agent per
 stage; a stage ends on its deliverable; and plugins outside the core.
 
-crew's rules for teams and plans, `teams.2` to `teams.4`, `teams.11`,
-`teams.15`, and `plan.9`, `plan.10`, `plan.12` and `plan.17`, hold
-today's version of what flume takes over. Once flume's statement lands,
-crew amends them to name flume, and a question about places or stages
-goes to flume's statement first.
+The records in `docs/adr/` hold each decision since. One says how an end
+reaches its recipient or stays pending, and that a place is a plain
+`git worktree`. Others say that an agent's own hooks ack its start and
+its prompt, and that an agent's settings come in layers. The last says
+how herdr starts an agent in its place's tab of its base's workspace.

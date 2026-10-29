@@ -8,9 +8,9 @@ hero:
     - text: How it works
       link: /flume/how-it-works/
       icon: right-arrow
-    - text: Read the design
-      link: https://agentplot.github.io/blueprints/flume/
-      icon: external
+    - text: Install
+      link: /flume/install/
+      icon: right-arrow
       variant: secondary
     - text: GitHub
       link: https://github.com/agentplot/flume
@@ -38,9 +38,9 @@ headwater, sounding and crew start work the same way.
     worktree needs.
   </Card>
   <Card title="A fresh agent for each stage" icon="rocket">
-    Each stage starts a new agent in a herdr pane. flume sends the
-    stage's prompt once the agent takes input, and confirms it in the
-    agent's transcript.
+    Each stage starts a new agent, in a herdr pane or as a command flume
+    prints. flume sends the stage's prompt once the agent says it
+    started, and waits for the agent to say it received it.
   </Card>
   <Card title="Ended by its deliverable" icon="approve-check">
     A stage ends when its deliverable exists, or when its agent stops
@@ -61,17 +61,26 @@ does the work. sluice gates what lands, and the Flywheel keeps turning.
 
 ## Where it stands
 
-flume is designed and not built. Its design lives in
-[agentplot/blueprints](https://github.com/agentplot/blueprints) with
-the design of every tool around it, and its statement is written and
-awaits its ruling. The
-[roadmap](/flume/roadmap/) says what gets built in what order.
+flume runs. A fix, a chore and a change are carried from their launch to
+their landing through sluice, and their places tidied, with nobody's
+word between the stages. Under herdr a watch keeps every place moving,
+and each end reaches whoever waits on it. Releases for Linux and macOS
+are on [GitHub](https://github.com/agentplot/flume/releases), and
+[Install and set up](/flume/install/) says how to start. Its design
+lives in [agentplot/blueprints](https://github.com/agentplot/blueprints)
+with the design of every tool around it, and the
+[roadmap](/flume/roadmap/) says where it meets them.
 
 <CardGrid>
   <LinkCard
     title="How it works"
-    description="A launch and its place, kinds and their stages, prompt delivery, stage ends, tidying and status."
+    description="A launch and its place, kinds and their stages, prompt delivery, stage ends, holds, who is told, tidying and status."
     href="/flume/how-it-works/"
+  />
+  <LinkCard
+    title="Install and set up"
+    description="The release for your platform, the host's configuration, agents' settings in layers, and the herdr and Claude Code plugins."
+    href="/flume/install/"
   />
   <LinkCard
     title="How it fits"
