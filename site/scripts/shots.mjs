@@ -49,9 +49,23 @@ const origin = `http://127.0.0.1:${server.address().port}${BASE}`;
 
 const pages = [
   ["start", "/"],
-  ["how-it-works", "/how-it-works/"],
-  ["how-it-fits", "/how-it-fits/"],
-  ["design", "/design/"],
+  ["install", "/install/"],
+  ...[
+    "new-to-flume",
+    "walkthrough",
+    "kinds",
+    "places-and-herdr",
+    "claude-code",
+    "callers-and-holds",
+    "roles-and-wake",
+    "agent-settings",
+    "merge-queue",
+  ].map((slug) => [slug, `/guides/${slug}/`]),
+  ...["commands", "configuration", "state", "prompt-parts"].map((slug) => [
+    slug,
+    `/reference/${slug}/`,
+  ]),
+  ...["overview", "rules"].map((slug) => [slug, `/architecture/${slug}/`]),
   ["roadmap", "/roadmap/"],
 ].filter(([slug]) => !onlyPage || slug === onlyPage);
 const widths = [1280, 390];

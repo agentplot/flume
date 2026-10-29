@@ -50,3 +50,11 @@ brought to the rule.
   from outside, and a launch names a kind by its name alone, or by its
   name and version once record 0019's change lets it. The item leaves
   when the code is brought to core.34.
+- **The command line still says `<partition>/<role>`.** `flume wake
+  --help` and the refusals of a name that is no address, in
+  `commands/mod.rs`, `host/config.rs` and `flume-core`'s `wake.rs`,
+  name a role's address `<partition>/<role>`, a word core.35 rules out;
+  the site says `<group>/<role>`. The change touches the `flume` crate,
+  so its gate runs the herdr profile's tests, which open a pseudo-terminal
+  that sluice 0.56.0's sandbox refuses (sluice #289 allows it). The item
+  leaves when the strings say `<group>/<role>`.
