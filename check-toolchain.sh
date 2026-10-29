@@ -1,7 +1,7 @@
 #!/bin/sh
 # Every tool the gate runs is the version the tree pins, on every host
 # (rule core.22): rustc, cargo, clippy and rustfmt the build .prototools
-# pins, and Claude Code, OpenSpec, herdr and sluice the releases devenv.nix
+# pins, which rust-toolchain.toml names too, and Claude Code, OpenSpec, herdr and sluice the releases devenv.nix
 # pins. A tool found outside its pin, a runner's rustup default or the
 # host's own `claude` say, fails here rather than holding the tree to
 # another version's rules.
@@ -14,6 +14,8 @@ fail() {
 
 pin=$(sed -n 's/^rust *= *"\(.*\)"$/\1/p' .prototools)
 [ -n "$pin" ] || fail ".prototools pins no rust"
+channel=$(sed -n 's/^channel *= *"\(.*\)"$/\1/p' rust-toolchain.toml)
+[ "$channel" = "$pin" ] || fail "rust-toolchain.toml names ${channel:-no channel}, .prototools pins $pin"
 
 rustc=$(rustc -vV)
 [ "$(printf '%s\n' "$rustc" | sed -n 's/^release: //p')" = "$pin" ] ||

@@ -1,20 +1,13 @@
 { pkgs, ... }:
 let
-  # treefmt's rustfmt: the toolchain .prototools pins, which proto installs
-  # through rustup on entering the shell, so the hook and the crates' format
-  # tasks run one rustfmt (core.21, core.22).
+  # treefmt's rustfmt: rustup's proxy, which runs the toolchain
+  # rust-toolchain.toml names, the version .prototools pins, and installs
+  # its rustfmt where a host's toolchain lacks it, so the hook and the
+  # crates' format tasks run one rustfmt (core.21, core.22).
   rustfmt = pkgs.writeShellApplication {
     name = "rustfmt";
-    runtimeInputs = [
-      pkgs.git
-      pkgs.gnused
-      pkgs.rustup
-    ];
-    text = ''
-      root="$(git rev-parse --show-toplevel)"
-      version="$(sed -n 's/^rust = "\(.*\)"$/\1/p' "$root/.prototools")"
-      exec rustup run "$version" rustfmt "$@"
-    '';
+    runtimeInputs = [ pkgs.rustup ];
+    text = ''exec rustfmt "$@"'';
   };
 in
 {
