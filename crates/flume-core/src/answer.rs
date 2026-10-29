@@ -233,6 +233,14 @@ pub struct AgentStatus {
     /// the terminal printed it (C.5).
     #[serde(default)]
     pub printed: Option<String>,
+    /// The agent's last words as its own record holds them, a failed
+    /// turn's reason among them (43).
+    #[serde(default)]
+    pub last_words: Option<String>,
+    /// What the agent's own record says of its start that no reading
+    /// answers, a plugin of another version than flume's among it (135).
+    #[serde(default)]
+    pub notes: Vec<String>,
 }
 
 /// The settings an agent started with, each value as its layer wrote it,

@@ -157,6 +157,14 @@ pub trait Agent: Send + Sync {
     /// or cannot be read (43, 128).
     fn last_words(&self, folder: &str, agent: &Identity) -> Option<String>;
 
+    /// What the agent's own record says of its start that no reading
+    /// answers and status reports with the agent, such as the agent
+    /// program's part of flume being of another version than the one
+    /// that started it (135); none by default.
+    fn notes(&self, _folder: &str, _agent: &Identity) -> Vec<String> {
+        vec![]
+    }
+
     /// The one way the agent tells flume it stops short, filled in for
     /// its place and stage, as its prompt gives it (92, 28).
     fn stop_short(&self, agent: &Identity) -> String;

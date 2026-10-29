@@ -32,6 +32,9 @@ pub mod change {
 }
 
 // ---- the agent seam's profiles: a profile unit appends its module line below ----
+pub mod agent {
+    pub mod claude;
+}
 
 // ---- the terminal seam's profiles: a profile unit appends its module line below ----
 pub mod terminal {
@@ -136,11 +139,39 @@ impl Resolver for BuiltIn {
         }
     }
 
-    /// No agent profile is built in yet: Claude Code's, which answers to
-    /// [`DEFAULT_PROGRAM`], comes with flume's plugin, and until then a
-    /// launch is refused naming the program no profile runs (32, 105).
-    fn agent(&self, _program: &str) -> Option<Arc<dyn Agent>> {
-        None
+    /// Claude Code's profile for the program [`DEFAULT_PROGRAM`] names,
+    /// by that name or by a path to it, with flume's plugin; any other
+    /// program resolves to nothing, and a launch naming it is refused
+    /// (32, 105, C.4).
+    /// The plugin is written under the login environment's
+    /// `$XDG_DATA_HOME`, or its `$HOME/.local/share`, where the resolver
+    /// was given one.
+    fn agent(&self, program: &str) -> Option<Arc<dyn Agent>> {
+        let name = Path::new(program).file_name()?.to_str()?;
+        if name != agent::claude::NAME {
+            return None;
+        }
+        let claude = match &self.login {
+            None => agent::claude::Claude::of_host(),
+            Some(variables) => {
+                let given = |name: &str| {
+                    variables
+                        .iter()
+                        .find(|(variable, value)| variable == name && !value.is_empty())
+                        .map(|(_, value)| std::path::PathBuf::from(value))
+                };
+                let data = given("XDG_DATA_HOME").unwrap_or_else(|| {
+                    given("HOME")
+                        .unwrap_or_else(std::env::temp_dir)
+                        .join(".local/share")
+                });
+                let binary = std::env::current_exe()
+                    .and_then(std::fs::canonicalize)
+                    .unwrap_or_else(|_| "flume".into());
+                agent::claude::Claude::new(&data, &binary)
+            }
+        };
+        Some(Arc::new(claude))
     }
 }
 
@@ -327,4 +358,60 @@ pub fn core_with(
         Arc::new(host),
         defaults(),
     ))
+}
+
+/// The words `flume hook` takes, one per hook of the agent program's
+/// plugin (C.4).
+pub fn hook_events() -> Vec<&'static str> {
+    agent::claude::hook::EVENTS
+        .iter()
+        .map(|(word, _)| *word)
+        .collect()
+}
+
+/// What the agent program's hook for `event` answers to `input`, in the
+/// agent this process's environment names, the core built by `build`
+/// where the hook needs it: nothing outside an agent flume started (C.4;
+/// design 14).
+pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>) -> String {
+    let binary = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .unwrap_or_else(|_| "flume".into());
+    agent::claude::hook::hook(
+        event,
+        input,
+        &agent::claude::hook::Start::of_process(),
+        build,
+        &binary,
+    )
+}
+
+/// The started ack of the agent this process's environment names: its
+/// session, transcript, source and plugin version (135).
+pub fn ack_started(
+    session: &str,
+    transcript: &str,
+    source: &str,
+    plugin_version: &str,
+    build: &dyn Fn() -> Result<Engine, String>,
+) -> Result<String, String> {
+    agent::claude::hook::ack_started(
+        &agent::claude::hook::Start::of_process(),
+        &agent::claude::record::Started {
+            session_id: session.into(),
+            transcript_path: transcript.into(),
+            source: source.into(),
+            plugin_version: plugin_version.into(),
+        },
+        build,
+    )
+}
+
+/// The received ack of the agent this process's environment names: the
+/// submitted prompt's digest (89).
+pub fn ack_received(
+    digest: &str,
+    build: &dyn Fn() -> Result<Engine, String>,
+) -> Result<String, String> {
+    agent::claude::hook::ack_received(&agent::claude::hook::Start::of_process(), digest, build)
 }

@@ -151,6 +151,8 @@ fn place_status() -> PlaceStatus {
             past_limit: true,
             screen: Some("Bypass Permissions mode".into()),
             printed: Some("cd /r/places/fix--one && agent 'fix it'".into()),
+            last_words: Some("I hit my usage limit".into()),
+            notes: vec!["the agent's plugin is another version".into()],
         }),
         head: Some(Revision::new("c3")),
         delivered: Some(false),

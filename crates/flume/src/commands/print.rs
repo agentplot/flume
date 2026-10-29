@@ -152,6 +152,12 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         if let Some(printed) = &agent.printed {
             lines.push(format!("    run: {printed}"));
         }
+        if let Some(words) = &agent.last_words {
+            lines.push(format!("    last words: {words}"));
+        }
+        for note in &agent.notes {
+            lines.push(format!("    note: {note}"));
+        }
     }
     if let Some(delivered) = place.delivered {
         lines.push(format!(

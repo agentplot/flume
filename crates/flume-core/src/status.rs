@@ -63,12 +63,15 @@ impl Engine {
         let agent = held.live_start().map(|(index, start)| {
             let reading = self.read_agent(&place.id, start);
             cannot_read.extend(reading.unread());
+            let folder = self.store.folder(&place.id);
+            let mut last_words = None;
+            let mut notes = vec![];
             if let Some(agent) = self.agent(&start.program) {
-                if let Guarded::Refused { acts } =
-                    agent.guard(&self.store.folder(&place.id), &start.identity)
-                {
+                if let Guarded::Refused { acts } = agent.guard(&folder, &start.identity) {
                     refused_acts.extend(acts);
                 }
+                last_words = agent.last_words(&folder, &start.identity);
+                notes = agent.notes(&folder, &start.identity);
             }
             let starting = held.stages[index].state == StageState::Starting;
             AgentStatus {
@@ -88,6 +91,8 @@ impl Engine {
                     .then(|| self.terminal.screen(&start.identity))
                     .flatten(),
                 printed: start.printed.clone(),
+                last_words,
+                notes,
             }
         });
         let submission = match (&bound, place.kind.lands) {

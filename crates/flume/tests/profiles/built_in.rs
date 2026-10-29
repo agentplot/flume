@@ -72,9 +72,10 @@ fn the_engine_is_built_over_a_scratch_state_and_configuration() {
     assert_eq!(host.bound, Some(2));
 
     // A kind that does not land, launched from a declaration the launch
-    // carries: the binding is read, the place bound, the base read and
-    // the kind resolved, and the launch refused at the agent, which no
-    // profile built in runs yet, with nothing made (2, 32).
+    // carries: the binding is read, the place bound, the base read, the
+    // kind resolved and its agent bound to Claude Code's profile, whose
+    // command the printed terminal gives, its plugin written under the
+    // login environment's home (2, 32, C.4).
     std::fs::create_dir_all(scratch.path("kinds/prompts")).expect("prompts");
     std::fs::write(scratch.path("kinds/prompts/code.md"), "{{brief}}").expect("the prompt");
     std::fs::write(
@@ -100,18 +101,22 @@ agents = [{}]
         declaration: Some(scratch.path("kinds/kinds.toml").to_string_lossy().into()),
         ..Launch::default()
     });
-    let reason = answer.refusal().unwrap_or_default().to_string();
+    let Answer::Launched { place } = answer else {
+        panic!("the launch answered otherwise: {answer:?}");
+    };
+    let agent = place.agent.expect("the stage's agent");
+    assert_eq!(agent.program, DEFAULT_PROGRAM);
+    let printed = agent.printed.expect("the command printed");
+    assert!(printed.contains("--plugin-dir"), "{printed}");
     assert!(
-        reason.contains(&format!(
-            "no agent profile runs the program {DEFAULT_PROGRAM}"
-        )),
-        "{reason}"
+        printed.contains(
+            &*scratch
+                .path("home/.local/share/flume/plugins")
+                .to_string_lossy()
+        ),
+        "{printed}"
     );
-    assert!(!repository.dir.join("places").exists(), "a place was made");
-    assert!(
-        std::fs::read_dir(state.join("places")).map_or(true, |mut dir| dir.next().is_none()),
-        "held state was left"
-    );
+    assert!(repository.dir.join("places/survey--first").is_dir());
 }
 
 #[test]
@@ -130,7 +135,8 @@ fn the_resolver_names_the_profiles_built_in() {
     assert!(resolver.change("other").is_none());
     assert!(resolver.merge_queue("sluice").is_some());
     assert!(resolver.merge_queue("other").is_none());
-    assert!(resolver.agent(DEFAULT_PROGRAM).is_none());
+    assert!(resolver.agent(DEFAULT_PROGRAM).is_some());
+    assert!(resolver.agent("other").is_none());
 }
 
 #[test]

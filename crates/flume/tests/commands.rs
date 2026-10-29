@@ -4,14 +4,12 @@
 //! host's configuration under the test's scratch directories, nothing of
 //! the caller's session in its environment.
 //!
-//! Until an agent profile is built in, flume's binary refuses every
-//! launch for want of one, so the launches run through this test binary
-//! re-run as flume: the same commands over the profiles built in, beside
-//! a stand-in agent program bound by its name, which reads its start and
-//! its end from marks the test writes in the place's folder, and a
-//! stand-in merge queue for the one scenario that needs a kind that lands.
-//! Every answer read back is read through flume's own binary where the
-//! scenario allows.
+//! The launches run through this test binary re-run as flume: the same
+//! commands over the profiles built in, beside a stand-in agent program
+//! bound by its name, which reads its start and its end from marks the
+//! test writes in the place's folder, and a stand-in merge queue for the
+//! one scenario that needs a kind that lands. Every answer read back is
+//! read through flume's own binary where the scenario allows.
 
 mod common;
 
@@ -654,4 +652,96 @@ fn a_place_named_from_inside_it() {
         &[],
     );
     assert_eq!(by_location.answer(), answer);
+}
+
+/// Every file under `dir` and its bytes.
+fn files_under(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut found = vec![];
+    let mut todo = vec![dir.to_path_buf()];
+    while let Some(dir) = todo.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                todo.push(path);
+            } else {
+                found.push((path.clone(), std::fs::read(&path).unwrap_or_default()));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn status_over_mcp() {
+    // A scripted MCP session initializes `flume mcp`, lists its tools and
+    // calls `status`: the tool's result is the JSON `flume status --json`
+    // gives over the same state, and nothing is written (57, 60).
+    let host = Host::new("mcp");
+    let repository = repository("mcp", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = format!("{}/places/fix--one", repository.name());
+    let status = host.flume(&repository.dir, &["status", &place, "--json"], &[]);
+    let every = host.flume(&repository.dir, &["status", "--json"], &[]);
+    let before = files_under(&host.state());
+
+    let requests = [
+        serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}}),
+        serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "status", "arguments": {"place": place}}}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "status", "arguments": {}}}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "status", "arguments": {"place": "/nowhere/places/fix--none"}}}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 6, "method": "settle"}),
+    ];
+    let input: String = requests
+        .iter()
+        .map(|request| format!("{request}\n"))
+        .collect();
+    let mut child = host
+        .command(Path::new(env!("CARGO_BIN_EXE_flume")), &repository.dir, &[])
+        .arg("mcp")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("flume mcp runs");
+    child
+        .stdin
+        .take()
+        .expect("its input")
+        .write_all(input.as_bytes())
+        .expect("the session written");
+    let output = child.wait_with_output().expect("flume mcp ends");
+    assert!(output.status.success());
+    let replies: Vec<Value> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("a JSON-RPC reply"))
+        .collect();
+    assert_eq!(replies.len(), 6, "one reply a request: {replies:?}");
+    assert_eq!(replies[0]["id"], 1);
+    assert_eq!(replies[0]["result"]["protocolVersion"], "2025-06-18");
+    assert_eq!(replies[0]["result"]["serverInfo"]["name"], "flume");
+    let tools = replies[1]["result"]["tools"].as_array().expect("the tools");
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0]["name"], "status");
+    let text = |reply: &Value| {
+        reply["result"]["content"][0]["text"]
+            .as_str()
+            .expect("the tool's text")
+            .to_string()
+    };
+    assert_eq!(text(&replies[2]), status.text.trim());
+    assert_eq!(replies[2]["result"]["isError"], false);
+    assert_eq!(text(&replies[3]), every.text.trim());
+    assert_eq!(replies[4]["result"]["isError"], true);
+    assert_eq!(replies[5]["error"]["code"], -32601);
+    assert_eq!(files_under(&host.state()), before, "status over MCP wrote");
 }

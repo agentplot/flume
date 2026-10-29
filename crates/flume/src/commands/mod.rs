@@ -5,6 +5,7 @@
 //! its own (core.14), and none names a tool (core.1).
 
 mod launch;
+pub mod mcp;
 pub mod place;
 mod print;
 
@@ -109,6 +110,46 @@ enum Command {
         #[arg(allow_negative_numbers = true)]
         priority: i64,
     },
+    /// From an agent program's hook: what the hook for `event` does with
+    /// the input on standard input, in an agent flume started; nothing
+    /// elsewhere. It always exits 0 (C.4).
+    Hook {
+        /// One of the plugin's hooks; any other does nothing.
+        event: String,
+    },
+    /// From an agent flume started: it started, or it received a prompt
+    /// (35, 89, 135).
+    Ack {
+        #[command(subcommand)]
+        ack: Ack,
+    },
+    /// flume's status over MCP on standard input and output, one tool,
+    /// `status`, settling nothing (57, 60).
+    Mcp,
+}
+
+#[derive(Debug, Subcommand)]
+enum Ack {
+    /// The agent started under the identity and secret its environment
+    /// names, in a session with a transcript (135).
+    Started {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        transcript: String,
+        /// How the session began.
+        #[arg(long, default_value = "startup")]
+        source: String,
+        /// The version of flume's plugin the agent loaded.
+        #[arg(long)]
+        plugin_version: String,
+    },
+    /// The agent received a prompt, by the digest of its text, whitespace
+    /// collapsed (89).
+    Received {
+        #[arg(long)]
+        digest: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -169,7 +210,7 @@ impl Outcome {
     pub fn exit(self) -> ExitCode {
         if self.usage {
             eprintln!("{}", self.text.trim_end());
-        } else {
+        } else if !self.text.is_empty() {
             println!("{}", self.text);
         }
         ExitCode::from(self.code)
@@ -194,6 +235,58 @@ where
             };
         }
     };
+    match &cli.command {
+        Command::Hook { event } => {
+            let mut input = String::new();
+            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            return Outcome {
+                text: crate::profiles::hook(event, &input, build),
+                usage: false,
+                code: 0,
+            };
+        }
+        Command::Ack { ack } => {
+            let acked = match ack {
+                Ack::Started {
+                    session,
+                    transcript,
+                    source,
+                    plugin_version,
+                } => {
+                    crate::profiles::ack_started(session, transcript, source, plugin_version, build)
+                }
+                Ack::Received { digest } => crate::profiles::ack_received(digest, build),
+            };
+            return match acked {
+                Ok(text) => Outcome {
+                    text,
+                    usage: false,
+                    code: 0,
+                },
+                Err(reason) => Outcome {
+                    text: format!("refused: {reason}"),
+                    usage: false,
+                    code: 1,
+                },
+            };
+        }
+        Command::Mcp => {
+            let stdin = std::io::stdin();
+            let stdout = std::io::stdout();
+            mcp::serve(
+                stdin.lock(),
+                stdout.lock(),
+                build,
+                cli.repository.as_deref(),
+            );
+            return Outcome {
+                text: String::new(),
+                usage: false,
+                code: 0,
+            };
+        }
+        _ => {}
+    }
     let answer = act(&cli, build).unwrap_or_else(Answer::refused);
     let text = if cli.json {
         answer.to_json()
@@ -281,6 +374,9 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
         Command::Priority { place, priority } => {
             let place = named(place)?;
             build()?.priority(&place, *priority)
+        }
+        Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
+            unreachable!("answered before the core's acts")
         }
     })
 }

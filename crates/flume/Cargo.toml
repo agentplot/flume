@@ -18,7 +18,9 @@ doctest = false
 [dependencies]
 flume-core = { path = "../flume-core" }
 flume-seams = { path = "../flume-seams" }
+serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 weir-kinds.workspace = true
 toml.workspace = true
 clap.workspace = true

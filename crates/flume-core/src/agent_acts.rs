@@ -66,6 +66,23 @@ impl Engine {
         self.acted(Act::Needs, &id)
     }
 
+    /// The place's own folder, where the agent of the live current start
+    /// `identity` names keeps its record, given only with that start's
+    /// secret: the folder an agent program's acks and marks are written in
+    /// (128, 135).
+    pub fn agent_folder(&self, identity: &str, secret: &str) -> Result<String, String> {
+        let Some((held, index)) = self.current_start(identity) else {
+            return Err(format!(
+                "no live agent of a place's current stage is {identity}"
+            ));
+        };
+        let start = held.stages[index].start.as_ref().expect("a live start");
+        if start.secret.0 != secret {
+            return Err(format!("the secret is not {identity}'s start's"));
+        }
+        Ok(self.store.folder(&held.place.id))
+    }
+
     /// The stop check: words naming the deliverable and the way to stop
     /// short for an agent of a stage that is not a conversation, about to
     /// go quiet with its deliverable missing, nothing said, no own work

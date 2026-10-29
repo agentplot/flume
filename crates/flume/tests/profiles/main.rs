@@ -6,8 +6,10 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod agent_claude;
 mod built_in;
 mod change_openspec;
+mod hooks_claude;
 mod kinds_weir;
 mod place_git_worktree;
 mod store_state_dir;
