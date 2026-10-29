@@ -39,6 +39,25 @@ nothing, and a server started in a stopped one's place starts its own
 - **WHEN** the lease names a pid now held by another process with a different start time
 - **THEN** the lease is read stale and a new watch takes it (record 0016)
 
+### Requirement: The watch refreshes the display clues
+
+After writing status at each tick, the watch SHALL report each flume
+pane's title and each base's workspace's count line, copied from status, by
+`herdr pane report-metadata` and `herdr workspace report-metadata` with
+`--source flume`, each under the bound, computing nothing, and a report
+that fails SHALL be logged while the tick goes on (139, C.5; record
+0018; core.14).
+
+#### Scenario: Clues copied from status
+
+- **WHEN** a tick writes status in which a place's stage is asking
+- **THEN** the watch reports that pane's title `<stage> · asking` and its base's workspace's count line as status gives them, and sends nothing to any pane
+
+#### Scenario: A clue that fails
+
+- **WHEN** herdr refuses a metadata report
+- **THEN** the failure is logged and the tick settles and writes status as before
+
 ### Requirement: flume runs unattended only while the watch is kept
 
 The herdr terminal SHALL answer that it keeps watch, with its bound,

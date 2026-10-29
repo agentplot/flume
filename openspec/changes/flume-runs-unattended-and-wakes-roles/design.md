@@ -43,7 +43,12 @@ main (28c0c6e), and record 0015 with core.11 in its words since
 core.24, core.25 and core.28, are cited in those words. Record 0016
 (accepted 2026-10-28; the statement at blueprints 4fe1522, C.5) names a
 herdr session by its pane and socket and bounds every herdr call
-(core.29); groups 1 and 6 carry it, in task 1.3 and task 6.3. The one rules page is
+(core.29); groups 1 and 6 carry it, in task 1.3 and task 6.3. Record
+0018 (accepted 2026-10-28; the statement at blueprints f44ec91, 137 to
+139, C.5) finds a flume agent's pane again by its herdr name where the
+id no longer answers, keeps a workspace per repository and base and a
+tab per place, and shows display clues; task 1.3 carries the role run's pane
+found again, and task 6.8 the plugin's clues at each tick. The one rules page is
 `docs/architecture/core.md`; this change adds no area page and touches
 no area another page would own.
 
@@ -232,9 +237,13 @@ caller's session is an agent the terminal sends to; the operations are
 identity, and no operation is added to the statement. The herdr
 terminal profile names a session `herdr:<pane>@<socket>`, the pane's id
 and its server's socket (C.5; record 0016), and reaches it by that pane
-on that server, never by a herdr agent name, which herdr drops whenever
-a pane's session changes and whose rule refuses flume's names; a role
-run's session is the pane its live start holds. It sends by herdr's
+on that server. A role run's session is the pane its live start holds,
+held by its id and socket and found again by that start's herdr name
+where the id no longer answers, as after a move to another workspace,
+taken only once herdr lists it under that name and its new id recorded
+before anything is sent (record 0018); a plain recipient's pane carries
+no name of flume's and is reached by its id alone, an end for a pane
+that no longer answers staying pending. It sends by herdr's
 agent prompt, the held input cleared first, every call under the
 profile's bound with the caller's `HERDR_*` stripped and the socket
 passed (98, core.29); the printed command answers every send
@@ -323,6 +332,16 @@ herdr's configuration.
   from the status the watch last wrote: kind, stage, agent state, tasks
   ticked, submission, and waiting on the caller or stalled. They read
   status and compute nothing (core.14).
+- **The clues.** After writing status the watch reports the display
+  clues the herdr profile shows at each settle (139, C.5; record
+  0018), so they stay fresh between settles: each flume pane's title,
+  `<stage> · <state>`, by `herdr pane report-metadata <pane> --source
+  flume --title <title> --display-agent <kind>--<name>`, and each
+  base's workspace's count line by `herdr workspace report-metadata <w>
+  --source flume --token flume=<summary>`, both copied from status's
+  host part, which gives them, and computed by nothing of the plugin's
+  (core.14). Each call runs under the bound, and one that fails is
+  logged and the tick goes on.
 - **The terminal's watch.** The herdr terminal profile's `watch`
   answers the bound while the plugin's lease is fresh, read from the
   plugin's state directory, and no watch otherwise, so flume runs
