@@ -39,3 +39,14 @@ brought to the rule.
   makes it a field of the kind format (weir 53, C.4, at blueprints
   6e5aae2), and flume reads it only through weir-kinds (core.4). The
   item leaves when weir-kinds reads it and flume's pin moves.
+- **Record 0022 waits on a plan.** Kinds named by source, name and
+  version, versions side by side, the repository's and the host's
+  locks with a content hash per kind, packages held under the host's
+  kinds directory and `flume kinds lock` (record 0022; core.34),
+  accepted 2026-10-29 and stated at blueprints 57a1ba9 (154 to 160;
+  weir 88 to 93), are built only once the user approves a build plan
+  for them, weir-kinds' packages, identities, hash and locks first,
+  since the format is weir's (core.4). Until then flume runs no kind
+  from outside, and a launch names a kind by its name alone, or by its
+  name and version once record 0019's change lets it. The item leaves
+  when the code is brought to core.34.

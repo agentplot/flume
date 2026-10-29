@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user, 2026-10-29, in their design session ("Yes, write it and plan the build"), on how a change's code stage builds a change of many task groups without one agent holding all of it.
 
+Amended 2026-10-29 by record 0022, accepted by the user: flume's own change@1 and change@2 are both kept, side by side, each a package of its own; a launch that names no version takes the version its repository's lock records, else change@2, the newest; and a repository picks change@1 by locking `flume/change@1`, a launch by naming `change@1`. The versioning below, under which flume's own `change` moved to version 2 outright and a repository wanting change@1 declared it itself, no longer holds.
+
 Deciders: the user, who chose a fresh agent per task group with flume as the orchestrator, the two prompt parts, the notes flume never reads, and that change@2 repeats its code stage; the field's home in weir, the reading of a repetition's end, the prompt's order and the versioning as the code allows are the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at d75cf53, clauses 22, 23, 30, 86, 140 to 142, C.2, C.3, C.7, S44 and S50 to S52, and `design/weir/requirements.md` clauses 53, 57, C.4 and S10, both as amended with this record; records 0003, 0004, 0008, 0011, 0017; rules core.4, core.10, core.31; weir-kinds at a214b95 (`Stage`, `STAGE_FIELDS`); `crates/flume-core/src/prompt.rs` and `start.rs`; `crates/flume/src/profiles/kinds/weir/flume.toml`.
 
