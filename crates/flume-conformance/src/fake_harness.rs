@@ -25,6 +25,7 @@ pub fn flumes_own() -> Vec<Kind> {
         quiet_limit: None,
         send_back_to: None,
         send_back_limit: None,
+        makes: vec![],
     };
     let mut code = stage(
         "code",
@@ -548,6 +549,10 @@ impl StoreHarness for FakeStoreHarness {
 
     fn repository(&self) -> String {
         REPOSITORY.into()
+    }
+
+    fn record_made(&self, place: &PlaceId, line: &str) {
+        self.store.record_made(place, line);
     }
 }
 

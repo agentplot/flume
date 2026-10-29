@@ -81,6 +81,17 @@ fn settings() -> Settings {
     }
 }
 
+/// What a run made: a spike by its address, and a line that is no
+/// object (129).
+fn made() -> Vec<Made> {
+    vec![
+        Made::read(
+            r#"{"name":"spike","what":"spike","address":"https://forge.example/o/r/tree/spike/x"}"#,
+        ),
+        Made::read("not one object"),
+    ]
+}
+
 fn place_status() -> PlaceStatus {
     PlaceStatus {
         place: PlaceId::new("/r/places/fix--one"),
@@ -124,6 +135,7 @@ fn place_status() -> PlaceStatus {
                 last_words: Some("I need the design".into()),
                 commits: vec![Revision::new("c3")],
                 screen: None,
+                made: made(),
             }),
             refused_part: Some("words".into()),
             refused_setting: None,
@@ -218,6 +230,7 @@ fn place_status() -> PlaceStatus {
                         end: StageEnd {
                             words: Some("which design?".into()),
                             needs: Some(StopKind::NeedsAnswer),
+                            made: made(),
                             ..StageEnd::default()
                         },
                     },
@@ -473,6 +486,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].ends[].deliveries[].recipient",
             "status.places[].ends[].end",
             "status.places[].ends[].end.head",
+            "status.places[].ends[].end.made",
+            "status.places[].ends[].end.made[].name",
             "status.places[].ends[].end.needs",
             "status.places[].ends[].end.report",
             "status.places[].ends[].end.words",
@@ -526,6 +541,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].stages[].conversation",
             "status.places[].stages[].end",
             "status.places[].stages[].end.head",
+            "status.places[].stages[].end.made",
+            "status.places[].stages[].end.made[].name",
             "status.places[].stages[].end.needs",
             "status.places[].stages[].end.report",
             "status.places[].stages[].end.words",
@@ -595,6 +612,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.ends[].deliveries[].recipient",
             "launched.place.ends[].end",
             "launched.place.ends[].end.head",
+            "launched.place.ends[].end.made",
+            "launched.place.ends[].end.made[].name",
             "launched.place.ends[].end.needs",
             "launched.place.ends[].end.report",
             "launched.place.ends[].end.words",
@@ -648,6 +667,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.stages[].conversation",
             "launched.place.stages[].end",
             "launched.place.stages[].end.head",
+            "launched.place.stages[].end.made",
+            "launched.place.stages[].end.made[].name",
             "launched.place.stages[].end.needs",
             "launched.place.stages[].end.report",
             "launched.place.stages[].end.words",
@@ -723,6 +744,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.ends[].deliveries[].recipient",
             "acted.status.ends[].end",
             "acted.status.ends[].end.head",
+            "acted.status.ends[].end.made",
+            "acted.status.ends[].end.made[].name",
             "acted.status.ends[].end.needs",
             "acted.status.ends[].end.report",
             "acted.status.ends[].end.words",
@@ -776,6 +799,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.stages[].conversation",
             "acted.status.stages[].end",
             "acted.status.stages[].end.head",
+            "acted.status.stages[].end.made",
+            "acted.status.stages[].end.made[].name",
             "acted.status.stages[].end.needs",
             "acted.status.stages[].end.report",
             "acted.status.stages[].end.words",
@@ -902,6 +927,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "inbox.ends[].end.end",
             "inbox.ends[].end.end.commits",
             "inbox.ends[].end.end.head",
+            "inbox.ends[].end.end.made",
+            "inbox.ends[].end.end.made[].name",
             "inbox.ends[].end.end.last_words",
             "inbox.ends[].end.end.needs",
             "inbox.ends[].end.end.report",

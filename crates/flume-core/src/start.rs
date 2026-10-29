@@ -119,6 +119,7 @@ impl Engine {
                 PromptPart::Words => words.map(str::to_string),
                 PromptPart::Unready => Some(unready(&held.readiness)),
                 PromptPart::Needs => stop_short.clone(),
+                PromptPart::Made => (!stage.makes.is_empty()).then(|| self.made_path(&place.id)),
             }
         };
         let mut text = render(&stage.prompt, fill)?;
@@ -171,6 +172,7 @@ impl Engine {
         let place = &read.state.place;
         let resolution = self.resolution(place, &place.kind.stages[index]);
         let now = self.host.now();
+        let made_from = self.store.made(id).len();
         let claimed = self.update(id, |held| {
             if let Admit::Waiting = admit {
                 if held.phase != Phase::Live
@@ -239,6 +241,7 @@ impl Engine {
                 n: identity.start,
                 started_at: now,
                 start_head: head.clone(),
+                made_from,
                 words: words.clone(),
                 identity: identity.clone(),
                 secret: secret.clone(),

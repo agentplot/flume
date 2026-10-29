@@ -42,6 +42,7 @@ impl Engine {
             return Answer::refused(format!("the agent {identity} is not live"));
         }
         let id = held.place.id.clone();
+        let made = self.made_since(&id, &start);
         let taken = self
             .update(&id, |held| {
                 let Some(index) = held.index_of(&start.identity) else {
@@ -55,6 +56,7 @@ impl Engine {
                 stage.end = Some(StageEnd {
                     words: Some(words.to_string()),
                     needs: Some(kind),
+                    made: made.clone(),
                     ..StageEnd::default()
                 });
                 Step::Write(true)
@@ -83,10 +85,11 @@ impl Engine {
         Ok(self.store.folder(&held.place.id))
     }
 
-    /// The stop check: words naming the deliverable and the way to stop
-    /// short for an agent of a stage that is not a conversation, about to
-    /// go quiet with its deliverable missing, nothing said, no own work
-    /// and no question open; none otherwise (110, 115).
+    /// The stop check: words naming the deliverable, each thing the stage
+    /// declares it makes with no line, and the way to stop short, for an
+    /// agent of a stage that is not a conversation, about to go quiet
+    /// with its deliverable missing or a thing unmade, nothing said, no
+    /// own work and no question open; none otherwise (110, 115, 129).
     pub fn stop_check(&self, identity: &str) -> Answer {
         let words = self.stop_words(identity);
         Answer::StopCheck { words }
@@ -108,8 +111,25 @@ impl Engine {
             return None;
         }
         let bound = self.bound(place).ok()?;
-        if self.facts(&held, &bound, Some(index)).delivered {
+        let facts = self.facts(&held, &bound, Some(index));
+        if facts.delivered {
             return None;
+        }
+        let stop_short = agent.stop_short(&start.identity);
+        let unmade = (!facts.unmade.is_empty()).then(|| {
+            format!(
+                "It makes {} besides, and {} holds no line naming {} since the stage started: write one JSON line for each thing, its name and what it is, with its address, or the branch and revision that bring it up.",
+                facts.unmade.join(", "),
+                self.made_path(&place.id),
+                if facts.unmade.len() == 1 { "it" } else { "each" },
+            )
+        });
+        if facts.deliverable {
+            return Some(format!(
+                "The {} stage's deliverable is not yet made. {} Do so before you stop, or stop short: {stop_short}",
+                declared.name,
+                unmade?,
+            ));
         }
         let change = bound.change.as_ref().map(|change| change.path(&place.name));
         let change = change.as_deref().unwrap_or("the place's change");
@@ -137,10 +157,12 @@ impl Engine {
             ),
             Deliverable::Unreadable { .. } => return None,
         };
+        let unmade = unmade
+            .map(|unmade| format!(" {unmade}"))
+            .unwrap_or_default();
         Some(format!(
-            "The {} stage's deliverable does not exist yet. It is {what}. Deliver it before you stop, or stop short: {}",
+            "The {} stage's deliverable does not exist yet. It is {what}.{unmade} Deliver it before you stop, or stop short: {stop_short}",
             declared.name,
-            agent.stop_short(&start.identity)
         ))
     }
 }

@@ -4,7 +4,7 @@
 //! spells it.
 
 use flume_core::{Answer, HostStatus, PlaceStatus, Tidied};
-use flume_seams::HoldOn;
+use flume_seams::{HoldOn, Made};
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -164,6 +164,13 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             line.push_str(&format!(", refused: {setting}"));
         }
         lines.push(line);
+        for made in stage.end.iter().flat_map(|end| &end.made) {
+            let line = match made {
+                Made::Thing(thing) => json!(thing).to_string(),
+                Made::Text(text) => text.clone(),
+            };
+            lines.push(format!("    made: {line}"));
+        }
     }
     if let Some(agent) = &place.agent {
         let mut line = format!(

@@ -49,7 +49,7 @@ pub const NEXT_CHANGE: &str = "the next change, which delivers a place's ends";
 /// builds it: no scenario of the suite cites one, and the coverage check
 /// asks none to be cited.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
-    ["129", "132", "S38"]
+    ["132", "S38"]
         .into_iter()
         .map(|clause| (clause.to_string(), NEXT_CHANGE))
         .collect()
@@ -93,7 +93,7 @@ mod tests {
                 .iter()
                 .map(|(clause, _)| clause.as_str())
                 .collect::<Vec<_>>(),
-            ["129", "132", "S38"]
+            ["132", "S38"]
         );
         assert!(unbuilt
             .iter()

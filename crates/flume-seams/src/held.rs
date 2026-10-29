@@ -518,6 +518,44 @@ pub struct StageEnd {
     /// For a never-begun end, what the terminal showed of the agent (43).
     #[serde(default)]
     pub screen: Option<String>,
+    /// What the stage's run recorded it made since the start, each line
+    /// as written (129).
+    #[serde(default)]
+    pub made: Vec<Made>,
+}
+
+/// One line a stage's run wrote of what it made (129): a JSON object
+/// naming the thing, kept whole with every field as the run wrote it, or
+/// a line that is no such object, kept as its text so the run's mistake
+/// is seen and not dropped. flume builds, checks and rewrites no address
+/// of it (core.23).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Made {
+    Thing(serde_json::Map<String, serde_json::Value>),
+    Text(String),
+}
+
+impl Made {
+    /// A line of `made.jsonl` as flume carries it.
+    pub fn read(line: &str) -> Made {
+        match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(serde_json::Value::Object(thing))
+                if thing.get("name").is_some_and(serde_json::Value::is_string) =>
+            {
+                Made::Thing(thing)
+            }
+            _ => Made::Text(line.to_string()),
+        }
+    }
+
+    /// The thing's name, none for a line that names none.
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Made::Thing(thing) => thing.get("name").and_then(serde_json::Value::as_str),
+            Made::Text(_) => None,
+        }
+    }
 }
 
 /// One start of a stage and its agent.
@@ -527,6 +565,10 @@ pub struct StartHeld {
     pub started_at: Seconds,
     /// The branch's head when the stage started (25).
     pub start_head: Revision,
+    /// How many lines `made.jsonl` in the place's folder held when the
+    /// stage started: the lines after them are this start's (129).
+    #[serde(default)]
+    pub made_from: usize,
     /// A retry's or a failed submission's words.
     pub words: Option<String>,
     pub identity: Identity,

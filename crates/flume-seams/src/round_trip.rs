@@ -32,6 +32,7 @@ fn stage() -> Stage {
         quiet_limit: Some(45 * 60),
         send_back_to: Some("code".into()),
         send_back_limit: Some(3),
+        makes: vec!["preview".into(), "spike".into()],
     }
 }
 
@@ -45,6 +46,19 @@ fn kind() -> Kind {
         agents: kind_settings(),
         stages: vec![stage()],
     }
+}
+
+/// What a run made: a spike by its address, a preview by the branch
+/// and revision that bring it up, and a line that is no object.
+fn made() -> Vec<Made> {
+    [
+        r#"{"name":"spike","what":"spike","address":"https://forge.example/o/r/tree/spike/x?ref=a%2Fb"}"#,
+        r#"{"name":"preview","what":"preview","branch":"fix/one","revision":"c3"}"#,
+        "a preview at port 4000",
+    ]
+    .into_iter()
+    .map(Made::read)
+    .collect()
 }
 
 fn kind_settings() -> KindSettings {
@@ -148,6 +162,7 @@ fn held() -> HeldState {
                 last_words: Some("I could not sign in".into()),
                 commits: vec![Revision::new("c3")],
                 screen: Some("Bypass Permissions mode".into()),
+                made: made(),
             }),
             room: Some(RoomWait {
                 order: 3,
@@ -157,6 +172,7 @@ fn held() -> HeldState {
                 n: 2,
                 started_at: 5,
                 start_head: Revision::new("c2"),
+                made_from: 2,
                 words: Some("the second".into()),
                 identity: identity(),
                 secret: Secret("s3cret".into()),
@@ -644,6 +660,54 @@ fn an_identity_a_secret_and_a_stop_short() {
         serde_json::from_str(r#"{"head":"c3","report":null,"words":null}"#).unwrap();
     assert_eq!(before.commits, Vec::<Revision>::new());
     assert_eq!(before.screen, None);
+}
+
+#[test]
+fn what_a_stage_made() {
+    let made = made();
+    assert_eq!(
+        made.iter().map(Made::name).collect::<Vec<_>>(),
+        vec![Some("spike"), Some("preview"), None]
+    );
+    for line in &made {
+        round_trips(line.clone());
+    }
+    round_trips(StageEnd {
+        head: Some(Revision::new("c3")),
+        made: made.clone(),
+        ..StageEnd::default()
+    });
+    let Made::Thing(spike) = &made[0] else {
+        panic!("the spike read as text");
+    };
+    assert_eq!(
+        spike["address"], "https://forge.example/o/r/tree/spike/x?ref=a%2Fb",
+        "the address as written"
+    );
+    assert_eq!(
+        Made::read(r#"{"what":"spike"}"#),
+        Made::Text(r#"{"what":"spike"}"#.into()),
+        "a line naming nothing"
+    );
+    assert_eq!(
+        Made::read(r#"["spike"]"#),
+        Made::Text(r#"["spike"]"#.into()),
+        "a line that is no object"
+    );
+    let before: StageEnd = serde_json::from_str(r#"{"head":"c3"}"#).unwrap();
+    assert!(before.made.is_empty(), "an end before made");
+    let start: StartHeld = {
+        let mut json = serde_json::to_value(held().stages[0].start.clone().unwrap()).unwrap();
+        json.as_object_mut().unwrap().remove("made_from");
+        serde_json::from_value(json).unwrap()
+    };
+    assert_eq!(start.made_from, 0, "a start before made");
+    let stage: Stage = {
+        let mut json = serde_json::to_value(stage()).unwrap();
+        json.as_object_mut().unwrap().remove("makes");
+        serde_json::from_value(json).unwrap()
+    };
+    assert!(stage.makes.is_empty(), "a stage declaring nothing");
 }
 
 #[test]

@@ -162,8 +162,8 @@ impl Engine {
     }
 
     /// The stage under `identity` ended as `state`, with what it
-    /// delivered, its agent ended or lost (40, 43, 45); false when it had
-    /// ended.
+    /// delivered and the lines its run wrote of what it made, its agent
+    /// ended or lost (40, 43, 45, 129); false when it had ended.
     pub(crate) fn ended(
         &self,
         id: &PlaceId,
@@ -172,6 +172,7 @@ impl Engine {
         head: Revision,
         report: Option<String>,
     ) -> bool {
+        let lines = self.store.made(id);
         self.update(id, |held| {
             let Some(index) = held.index_of(identity) else {
                 return Step::Keep(false);
@@ -185,9 +186,15 @@ impl Engine {
             start.first_quiet = None;
             start.past_limit = false;
             stage.state = state;
+            let made = lines
+                .iter()
+                .skip(start.made_from)
+                .map(|line| Made::read(line))
+                .collect();
             stage.end = Some(StageEnd {
                 head: Some(head.clone()),
                 report: report.clone(),
+                made,
                 ..StageEnd::default()
             });
             if index + 1 == held.stages.len() && held.place.kind.lands {
