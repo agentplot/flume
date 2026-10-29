@@ -5,8 +5,8 @@ template: splash
 hero:
   tagline: "flume carries one piece of work into a worktree of its own, runs each stage with a fresh agent, and tidies the place once the work lands."
   actions:
-    - text: How it works
-      link: /flume/how-it-works/
+    - text: New to flume
+      link: /flume/guides/new-to-flume/
       icon: right-arrow
     - text: Install
       link: /flume/install/
@@ -27,8 +27,8 @@ failures. The agent starts before it can take a prompt, and the prompt
 is lost. A pane goes quiet while a test runs, and someone takes the
 quiet for done. A worktree outlives its work, or a branch goes with its
 worktree while it still holds commits nobody landed. flume handles all
-four once, for one place at a time, so your own `/launch`, millpond,
-headwater, sounding and crew start work the same way.
+four once, for one place at a time, so your own `/launch`, a script
+and any tool that launches work all start it the same way.
 
 <CardGrid>
   <Card title="One launch, one place" icon="code-branch">
@@ -55,9 +55,9 @@ headwater, sounding and crew start work the same way.
 ## The name
 
 In a watermill the flume is the channel that carries water from the
-pond to the wheel, a measured flow to where it does work. In the family,
-flume carries one item from millpond to one worktree, where an agent
-does the work. sluice gates what lands, and the Flywheel keeps turning.
+pond to the wheel, a measured flow to where it does work. flume carries
+one piece of work to one worktree, where an agent does it, and sluice
+gates what lands.
 
 ## Where it stands
 
@@ -66,25 +66,28 @@ their landing through sluice, and their places tidied, with nobody's
 word between the stages. Under herdr a watch keeps every place moving,
 and each end reaches whoever waits on it. Releases for Linux and macOS
 are on [GitHub](https://github.com/agentplot/flume/releases), and
-[Install and set up](/flume/install/) says how to start. Its design
-lives in [agentplot/blueprints](https://github.com/agentplot/blueprints)
-with the design of every tool around it, and the
-[roadmap](/flume/roadmap/) says where it meets them.
+[Install and set up](/flume/install/) says how to start. The
+[roadmap](/flume/roadmap/) says what is decided and not yet built.
 
 <CardGrid>
   <LinkCard
-    title="How it works"
-    description="A launch and its place, kinds and their stages, prompt delivery, stage ends, holds, who is told, tidying and status."
-    href="/flume/how-it-works/"
+    title="New to flume"
+    description="Launches, kinds, stages, places, holds and the host's queue, in one page."
+    href="/flume/guides/new-to-flume/"
+  />
+  <LinkCard
+    title="Launching a fix"
+    description="One fix from its launch to its landing, with each command and what it printed."
+    href="/flume/guides/walkthrough/"
   />
   <LinkCard
     title="Install and set up"
-    description="The release for your platform, the host's configuration, agents' settings in layers, and the herdr and Claude Code plugins."
+    description="The release for your platform, the host's configuration, and the herdr and Claude Code plugins."
     href="/flume/install/"
   />
   <LinkCard
-    title="How it fits"
-    description="Who launches through it, what crew keeps for itself, and what flume never does."
-    href="/flume/how-it-fits/"
+    title="Commands"
+    description="Every command and flag, what each answers and how it exits."
+    href="/flume/reference/commands/"
   />
 </CardGrid>

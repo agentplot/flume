@@ -39,7 +39,7 @@ const KINDS: Kind[] = [
   {
     kind: "fix",
     branch: "fix/bump-mise",
-    from: "headwater’s fix key",
+    from: "a release tool’s fix key",
     cls: "hw",
     stages: [
       { name: "code", a: 3, b: 30, waits: "a new commit", done: "committed: bump mise" },
@@ -57,7 +57,7 @@ const KINDS: Kind[] = [
   {
     kind: "change",
     branch: "change/csv-export",
-    from: "millpond’s send",
+    from: "an inbox’s send",
     cls: "pd",
     stages: [
       { name: "construct", a: 3, b: 20, waits: "the OpenSpec change", done: "the change, written" },
@@ -277,8 +277,8 @@ export function kinds(layout: Layout) {
     height: g.H,
     title: "flume’s three kinds, each a track of stages that end on their deliverables",
     desc:
-      "Three tracks side by side. A fix, on fix/bump-mise from headwater’s fix key: code waits on a new commit, then the merge queue lands it, and the place is tidied. " +
-      "A change, on change/csv-export from millpond’s send: construct waits on the OpenSpec change written; code waits on every task ticked, and its six tasks tick one by one; " +
+      "Three tracks side by side. A fix, on fix/bump-mise from a release tool’s fix key: code waits on a new commit, then the merge queue lands it, and the place is tidied. " +
+      "A change, on change/csv-export from an inbox’s send: construct waits on the OpenSpec change written; code waits on every task ticked, and its six tasks tick one by one; " +
       "verify waits on the change archived; the merge queue lands it; the place is tidied. A chore, on chore/bump-deps from your /launch: code works, its place waits on you once under a hold, works again " +
       "and commits; the merge queue lands it, and the place is tidied. Each stage starts a fresh agent and lights the next only once its deliverable exists. " +
       "A repository or a launch may declare kinds of its own in the same form.",
