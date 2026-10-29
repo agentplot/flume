@@ -5,7 +5,7 @@
 //! terminal, never while another of the place's is live, and only under
 //! the host's bound (70).
 
-use crate::prompt::{asks, render};
+use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
 use crate::{repository_id, Engine, Step};
 use flume_seams::*;
@@ -91,6 +91,10 @@ impl Engine {
     /// short is in every prompt (28), as `agent`, the profile of the
     /// stage's program, gives it; and a first stage started in a place
     /// that could not be made ready carries the step and its words (12).
+    /// A repeating stage fills `{{group}}` with `group`, the start's,
+    /// which none fills where the change could not be read, and
+    /// `{{notes}}` with its notes' path; a stage that does not repeat
+    /// fills neither (27, 141).
     pub(crate) fn fill(
         &self,
         held: &HeldState,
@@ -98,6 +102,7 @@ impl Engine {
         identity: &Identity,
         words: Option<&str>,
         agent: Option<&dyn Agent>,
+        group: Option<Option<&GroupHeld>>,
     ) -> Result<String, PromptPart> {
         let place = &held.place;
         let stage = &place.kind.stages[index];
@@ -122,6 +127,10 @@ impl Engine {
                 PromptPart::Unready => Some(unready(&held.readiness)),
                 PromptPart::Needs => stop_short.clone(),
                 PromptPart::Made => (!stage.makes.is_empty()).then(|| self.made_path(&place.id)),
+                PromptPart::Group => group.filter(|_| stage.repeats).map(group_text),
+                PromptPart::Notes => stage
+                    .repeats
+                    .then(|| notes_path(&self.store.folder(&place.id), &stage.name)),
             }
         };
         let mut text = render(&stage.prompt, fill)?;
@@ -241,7 +250,14 @@ impl Engine {
             let group = self.group_at(held, index, &head);
             let identity = self.next_identity(held, index);
             let agent = resolution.agent.as_ref();
-            let text = match self.fill(held, index, &identity, words.as_deref(), Some(agent)) {
+            let text = match self.fill(
+                held,
+                index,
+                &identity,
+                words.as_deref(),
+                Some(agent),
+                group.as_ref().map(Option::as_ref),
+            ) {
                 Err(part) => {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::Refused;

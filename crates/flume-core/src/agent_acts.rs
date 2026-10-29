@@ -4,6 +4,8 @@
 //! work, and the stop check, which keeps at work an agent that
 //! would go quiet with its deliverable missing and nothing said.
 
+use crate::prompt::group_text;
+use crate::reading::find_group;
 use crate::start::Starts;
 use crate::{Act, Answer, Engine, Step};
 use flume_seams::*;
@@ -141,9 +143,12 @@ impl Engine {
             Deliverable::ChangeWritten => format!(
                 "change written: the change {change}, its planning complete, in a commit made since the stage started"
             ),
-            Deliverable::TasksTicked => format!(
-                "tasks ticked: every task of the change {change} ticked, in a commit made since the stage started"
-            ),
+            Deliverable::TasksTicked => match start.group.as_ref().filter(|_| declared.repeats) {
+                Some(group) => group_words(group, facts.change.as_ref(), change),
+                None => format!(
+                    "tasks ticked: every task of the change {change} ticked, in a commit made since the stage started"
+                ),
+            },
             Deliverable::ChangeArchived => format!(
                 "change archived: the change {change} archived on {}, in a commit made since the stage started",
                 place.branch
@@ -165,4 +170,39 @@ impl Engine {
             declared.name,
         ))
     }
+}
+
+/// What a repetition delivers, in the stop check's words: its group, by
+/// its number and title, every task of it ticked in a commit made since
+/// it started, and the tasks of it left unticked at the head; or, where
+/// the change no longer holds the group, that its heading is to stay as
+/// it was (110, 140).
+fn group_words(group: &GroupHeld, change: Option<&ChangeRead>, path: &str) -> String {
+    let named = group_text(Some(group));
+    let named = named.lines().next().unwrap_or_default();
+    let facts = match change {
+        Some(ChangeRead::Read { facts }) => Some(facts),
+        _ => None,
+    };
+    let left = facts.and_then(|facts| {
+        find_group(facts, group).map(|at| {
+            facts
+                .tasks_of(at)
+                .filter(|task| !task.ticked)
+                .map(|task| task.text.clone())
+                .collect::<Vec<_>>()
+        })
+    });
+    let left = match left {
+        Some(left) if left.is_empty() => String::new(),
+        Some(left) => format!(". Left unticked: {}", left.join("; ")),
+        None if facts.is_some() => format!(
+            ". The change no longer holds {named}: leave its heading as it was, and tick its tasks: {}",
+            group.tasks.join("; ")
+        ),
+        None => String::new(),
+    };
+    format!(
+        "tasks ticked: every task of your task group, {named}, of the change {path} ticked, in a commit made since the stage started{left}"
+    )
 }

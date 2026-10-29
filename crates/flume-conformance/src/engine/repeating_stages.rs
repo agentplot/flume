@@ -4,11 +4,14 @@
 //! task is ticked; a repetition delivers once its group is ticked in a
 //! commit since it started, and flume ends it and starts the next as any
 //! start, waiting for room; the stage delivers, and its one end is
-//! recorded and delivered, once every task is ticked.
+//! recorded and delivered, once every task is ticked. `{{group}}` and
+//! `{{notes}}` fill for a repeating stage alone, and flume never reads
+//! the notes (141; core.31).
 
 use super::world::*;
 use crate::fake_harness::flumes_own;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::Answer;
 use flume_fakes::Plan;
 use flume_seams::*;
 
@@ -40,6 +43,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: one_notice_for_the_stage,
         },
         Scenario {
+            name: "repeating stages: flume prompt renders a repeating code stage on group 2 with Group 2., its title and tasks, and the notes' path under the place's folder",
+            cites: &["141", "27", "29"],
+            run: the_parts_rendered,
+        },
+        Scenario {
+            name: "repeating stages: notes a repetition writes are never read: status, the end and the next prompt hold nothing of them, the file is as the agent left it, and it goes with the place's folder at the tidy",
+            cites: &["141", "62"],
+            run: notes_never_read,
+        },
+        Scenario {
+            name: "repeating stages: a stage that does not repeat asking for {{group}} is refused naming the part, and no agent starts",
+            cites: &["27", "141"],
+            run: a_part_asked_for_by_a_stage_that_does_not_repeat,
+        },
+        Scenario {
+            name: "repeating stages: a repetition on group 2 going quiet with a task of it unticked is sent back naming group 2 and the task left",
+            cites: &["110", "S51", "140"],
+            run: quiet_with_its_group_unticked,
+        },
+        Scenario {
             name: "repeating stages: a repetition ending on a full host lets a stage of higher priority start first, and the next repetition waits for room in the queue",
             cites: &["70", "140", "46"],
             run: a_full_host_between_repetitions,
@@ -58,6 +81,7 @@ pub fn repeating_change() -> Kind {
         .find(|kind| kind.name == "change")
         .expect("flume's own change");
     change.stages[1].repeats = true;
+    change.stages[1].prompt = "Build {{change}}, one task group of it, ticking each task.\n\n{{needs}}\n\n{{group}}\n\nThe notes: {{notes}}{{#words}}\n\n{{words}}{{/words}}".into();
     change
 }
 
@@ -328,6 +352,151 @@ fn one_notice_for_the_stage(_: &()) -> Outcome {
             if end.head.as_ref() == Some(&last)),
         "code's end: {:?}",
         ends[0]
+    );
+    Ok(())
+}
+
+/// The notes' path of the place's code stage.
+fn notes(world: &World, id: &PlaceId) -> String {
+    format!("{}/notes/code.md", world.store.folder(id))
+}
+
+fn the_parts_rendered(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    let text = match world.engine.prompt(&id, "code") {
+        Answer::Prompt { text, .. } => text,
+        other => return Err(format!("prompt answered {other:?}")),
+    };
+    for named in [
+        "Group 2. Two",
+        "- 2.1 task",
+        "- 2.2 task",
+        &format!("The notes: {}", notes(&world, &id)),
+    ] {
+        ensure!(text.contains(named), "{named} is not in {text}");
+    }
+    ensure!(!text.contains("1.1 task"), "group 1 is in {text}");
+    let second = World::identity("change", "plan", "code", 2);
+    let sent = world.prompt(&id, &second).ok_or("no second repetition")?;
+    ensure!(
+        sent.contains("Group 2. Two"),
+        "the second repetition was not sent group 2: {sent}"
+    );
+    Ok(())
+}
+
+fn notes_never_read(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    let first = world
+        .prompt(&id, &World::identity("change", "plan", "code", 1))
+        .ok_or("no first prompt")?;
+    let path = notes(&world, &id);
+    world.host.write_file(&path);
+    let written = world.host.now();
+    world.host.advance(60);
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    let second = world
+        .prompt(&id, &World::identity("change", "plan", "code", 2))
+        .ok_or("no second repetition")?;
+    let shared = |text: &str| text.split("Group ").next().unwrap_or_default().to_string();
+    let one = World::identity("change", "plan", "code", 1).to_string();
+    let two = World::identity("change", "plan", "code", 2).to_string();
+    ensure_eq!(
+        shared(&second).replace(&two, &one),
+        shared(&first),
+        "the two repetitions' prompts up to the group, the fake agent's way to stop short naming each start"
+    );
+    let status = serde_json::to_string(&world.status(&id)?).map_err(|error| error.to_string())?;
+    ensure!(
+        !status.contains("notes/code.md"),
+        "status names the notes: {status}"
+    );
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 5);
+    world.settle(&id);
+    let ends = serde_json::to_string(&world.held(&id).ok_or("the place is gone")?.ends)
+        .map_err(|error| error.to_string())?;
+    ensure!(!ends.contains("notes"), "an end names the notes: {ends}");
+    ensure!(
+        world
+            .host
+            .log
+            .calls()
+            .iter()
+            .all(|call| !call.contains("notes/")),
+        "flume asked the host of the notes: {:?}",
+        world.host.log.calls()
+    );
+    ensure_eq!(
+        world.host.write_time(&path),
+        Some(written),
+        "the notes, as the agent left them"
+    );
+    super::settling::archive(&world, "plan");
+    world.settle(&id);
+    ensure!(world.held(&id).is_none(), "the landed place is kept");
+    ensure!(
+        world
+            .store
+            .log
+            .of("remove")
+            .iter()
+            .any(|call| call.contains(&id.0)),
+        "the place's held state and its folder, the notes with it, were not removed"
+    );
+    Ok(())
+}
+
+fn a_part_asked_for_by_a_stage_that_does_not_repeat(_: &()) -> Outcome {
+    let world = World::new();
+    world.kinds.set_kinds(
+        REPOSITORY,
+        vec![kind(
+            "bump",
+            false,
+            vec![stage(
+                "work",
+                Some(Deliverable::Commits),
+                "{{group}} {{needs}}",
+            )],
+        )],
+    );
+    launched(&world.engine.launch(&launch("bump", "one", Some("x"))))?;
+    let id = World::id("bump", "one");
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(held.stages[0].state, StageState::Refused, "the stage");
+    ensure_eq!(
+        held.stages[0].refused_part.as_deref(),
+        Some("group"),
+        "the part named"
+    );
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    Ok(())
+}
+
+fn quiet_with_its_group_unticked(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 3);
+    world.settle(&id);
+    let second = World::identity("change", "plan", "code", 2);
+    let words = match world.engine.stop_check(&second.to_string()) {
+        Answer::StopCheck { words } => words.ok_or("the repetition was not sent back")?,
+        other => return Err(format!("the stop check answered {other:?}")),
+    };
+    for named in ["Group 2. Two", "Left unticked: 2.2 task"] {
+        ensure!(words.contains(named), "{named} is not in {words}");
+    }
+    ensure!(
+        !words.contains("2.1 task"),
+        "a ticked task is named: {words}"
     );
     Ok(())
 }

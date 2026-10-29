@@ -33,7 +33,19 @@ impl Engine {
         let declared = &held.place.kind.stages[index];
         let resolved = self.resolve(&held.place, declared);
         let agent = self.agent_for(&resolved, stage).ok();
-        match self.fill(&held, index, &identity, None, agent.as_deref()) {
+        let head = self
+            .history
+            .head(&held.place.repository, &held.place.branch)
+            .unwrap_or_else(|| held.place.base_revision.clone());
+        let group = self.group_at(&held, index, &head);
+        match self.fill(
+            &held,
+            index,
+            &identity,
+            None,
+            agent.as_deref(),
+            group.as_ref().map(Option::as_ref),
+        ) {
             Ok(text) => Answer::Prompt {
                 place: place.clone(),
                 stage: stage.into(),
