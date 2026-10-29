@@ -26,6 +26,7 @@ pub fn flumes_own() -> Vec<Kind> {
         send_back_to: None,
         send_back_limit: None,
         makes: vec![],
+        repeats: false,
     };
     let mut code = stage(
         "code",

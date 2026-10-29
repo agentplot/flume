@@ -1,8 +1,8 @@
 //! The kinds profile over weir's kind format (C.2; design 7): the kinds
-//! seam's scenarios against it on scratch repositories, S13, S33, an
-//! elaboration section, the binding from the default branch, a place
-//! profile flume does not hold, flume's own kinds and what their prompts
-//! ask.
+//! seam's scenarios against it on scratch repositories, S13, S33, a
+//! stage's repeat (140; weir 53, 57), an elaboration section, the binding
+//! from the default branch, a place profile flume does not hold, flume's
+//! own kinds and what their prompts ask.
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -97,6 +97,9 @@ fn written(kinds: &[Kind]) -> (String, Vec<(String, String)>) {
                     .map(|name| format!("\"{name}\""))
                     .collect();
                 text.push_str(&format!("makes = [{}]\n", names.join(", ")));
+            }
+            if stage.repeats {
+                text.push_str("repeat = \"per-task-group\"\n");
             }
             text.push('\n');
         }
@@ -338,6 +341,7 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
                 send_back_to: None,
                 send_back_limit: None,
                 makes: vec![],
+                repeats: false,
             })
             .collect(),
     }
@@ -398,6 +402,93 @@ fn s33_a_repository_with_no_table_refuses_a_fix_naming_the_merge_queue_it_needs(
     assert!(
         reason.contains("fix") && reason.contains("merge queue"),
         "the refusal names not the kind and the merge queue: {reason}"
+    );
+    assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
+}
+
+/// A declaration of `kind` whose stage `code` delivers `delivers` and
+/// repeats per task group, beside stages that declare no repeat.
+fn repeating(kind: &str, delivers: &str) -> String {
+    format!(
+        r#"[kinds.{kind}]
+
+[[kinds.{kind}.stages]]
+name = "construct"
+prompt = "prompts/construct.md"
+deliverables = ["change"]
+agents = [{{}}]
+
+[[kinds.{kind}.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["{delivers}"]
+agents = [{{}}]
+repeat = "per-task-group"
+
+[[kinds.{kind}.stages]]
+name = "verify"
+prompt = "prompts/verify.md"
+deliverables = ["archived"]
+agents = [{{}}]
+"#
+    )
+}
+
+/// A scratch repository declaring `declaration`, each stage's prompt
+/// beside it, and its head.
+fn declaring_repeat(name: &str, declaration: &str) -> (Repository, String) {
+    let repository = Repository::new(name);
+    repository.write(DECLARATION, declaration);
+    for stage in ["construct", "code", "verify"] {
+        repository.write(
+            &format!(".config/prompts/{stage}.md"),
+            "{{brief}}\n\n{{needs}}",
+        );
+    }
+    let head = repository.commit("a stage that repeats per task group");
+    (repository, head)
+}
+
+#[test]
+fn a_repeating_stage_is_read_through_weirs_crate() {
+    let (repository, head) = declaring_repeat("repeat", &repeating("build", "tasks"));
+    let KindsRead::Read { kinds, .. } = Weir.read_kinds(&repository.name(), &Revision::new(head))
+    else {
+        panic!("the declaration did not read");
+    };
+    let repeats: Vec<(&str, bool)> = kinds[0]
+        .stages
+        .iter()
+        .map(|stage| (stage.name.as_str(), stage.repeats))
+        .collect();
+    assert_eq!(
+        repeats,
+        vec![("construct", false), ("code", true), ("verify", false)],
+        "the stage delivering tasks repeats, and every other stage not"
+    );
+}
+
+#[test]
+fn a_repeat_on_a_stage_of_commits_refuses_the_launch_naming_the_field() {
+    let (repository, head) = declaring_repeat("repeat-commits", &repeating("build", "commits"));
+    let name = repository.name();
+    match Weir.read_kinds(&name, &Revision::new(head.clone())) {
+        KindsRead::CouldNotRead { reason } => assert!(
+            reason.contains("kinds.build.stages[1].repeat"),
+            "the read names not the stage's repeat: {reason}"
+        ),
+        other => panic!("a repeat on a stage of commits read as {other:?}"),
+    }
+    let world = World::new();
+    base_at(&world, &name, &head);
+    let mut build = launch("build", "one", Some("x"));
+    build.repository = name;
+    let reason =
+        refused(&engine(&world, Arc::new(Weir)).launch(&build)).expect("the launch refused");
+    assert!(
+        reason.contains("kinds.build.stages[1].repeat"),
+        "the refusal names not the stage's repeat: {reason}"
     );
     assert_eq!(world.place.log.count("make"), 0, "places made");
     assert!(world.store.places().is_empty(), "held state was left");

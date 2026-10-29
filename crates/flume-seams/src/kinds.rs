@@ -51,6 +51,11 @@ pub struct Stage {
     /// declaration gives it; none where it declares nothing (129, C.2).
     #[serde(default)]
     pub makes: Vec<String>,
+    /// Whether the stage repeats per task group: a fresh agent for each
+    /// group of its change's tasks in turn, in the same place (140); false
+    /// where it declares nothing, and in a held state written before.
+    #[serde(default)]
+    pub repeats: bool,
 }
 
 /// What must exist for a stage to end, in one of the six forms (24), or

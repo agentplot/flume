@@ -33,6 +33,7 @@ fn stage() -> Stage {
         send_back_to: Some("code".into()),
         send_back_limit: Some(3),
         makes: vec!["preview".into(), "spike".into()],
+        repeats: true,
     }
 }
 
@@ -770,6 +771,32 @@ fn what_a_stage_made() {
         serde_json::from_value(json).unwrap()
     };
     assert!(stage.makes.is_empty(), "a stage declaring nothing");
+}
+
+#[test]
+fn a_stage_held_before_it_could_repeat() {
+    let mut json = serde_json::to_value(kind()).unwrap();
+    json["stages"][0].as_object_mut().unwrap().remove("repeats");
+    let before: Kind = serde_json::from_value(json).unwrap();
+    assert!(!before.stages[0].repeats, "a stage held before repeats not");
+    assert_eq!(
+        Kind {
+            stages: vec![Stage {
+                repeats: true,
+                ..before.stages[0].clone()
+            }],
+            ..before.clone()
+        },
+        kind(),
+        "every other field as held"
+    );
+    let mut state = serde_json::to_value(held()).unwrap();
+    state["place"]["kind"]["stages"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("repeats");
+    let state: HeldState = serde_json::from_value(state).unwrap();
+    assert!(!state.place.kind.stages[0].repeats, "a place held before");
 }
 
 #[test]

@@ -326,6 +326,13 @@ fn map_stage(
         send_back_to: stage.on_fail.clone(),
         send_back_limit,
         makes: stage.makes.clone(),
+        // weir has refused a repeat on a stage that does not deliver tasks
+        // (weir 57); a way of repeating weir names and flume does not run
+        // fails here to compile, never to read as not repeating.
+        repeats: match stage.repeat {
+            None => false,
+            Some(weir_kinds::Repeat::PerTaskGroup) => true,
+        },
     }
 }
 

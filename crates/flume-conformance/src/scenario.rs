@@ -102,6 +102,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             send_back_to: Some("code".into()),
             send_back_limit: Some(2),
             makes: vec![],
+            repeats: false,
         }],
     };
     HeldState {

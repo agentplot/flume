@@ -50,6 +50,7 @@ pub fn bump(agents: usize) -> Kind {
             send_back_to: Some("code".into()),
             send_back_limit: Some(3),
             makes: vec![],
+            repeats: false,
         }],
     }
 }
