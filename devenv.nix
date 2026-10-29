@@ -399,19 +399,20 @@ in
   '';
 
   # The versions .prototools lists, installed on entering the shell, before
-  # enterShell activates them, with the components rust-toolchain.toml names,
-  # which proto's minimal install of Rust leaves out; and before devenv's
-  # own treefmt run formats with the pinned rustfmt, which on a host new to
-  # the pin would otherwise race this install for the toolchain. A task,
-  # not part of enterShell: the script `devenv print-dev-env` prints holds
-  # enterShell and none of the tasks, so a check run sourcing it never
-  # installs.
+  # enterShell activates them and before devenv's own treefmt run formats
+  # with the pinned rustfmt. Rust is rustup's first, with the components
+  # rust-toolchain.toml names: proto's own install of it leaves them out,
+  # and on a host new to the pin it races the install rustup's proxies
+  # start under that file, leaving a toolchain with no librustc_driver.
+  # proto then finds it installed. A task, not part of enterShell: the
+  # script `devenv print-dev-env` prints holds enterShell and none of the
+  # tasks, so a check run sourcing it never installs.
   tasks."flume:proto:install" = {
     exec = ''
-      ${protoHome}
-      ${proto}/bin/proto install --config-mode upwards
       cd "$(${lib.getExe pkgs.git} rev-parse --show-toplevel)"
       ${pkgs.rustup}/bin/rustup toolchain install
+      ${protoHome}
+      ${proto}/bin/proto install --config-mode upwards
     '';
     before = [
       "devenv:enterShell"
