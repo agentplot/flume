@@ -1,7 +1,8 @@
 # flume on GitHub: the fast layer runs in the devenv shell a session uses,
 # on Linux and macOS, so CI and `sluice exec` hold a tree to the same rules
-# (core.22). flume's own gate is sluice (.config/sluice.toml); this is the
-# public check.
+# (core.22), and each push to main that git-cliff finds a new version in is
+# released (cliff.toml). flume's own gate is sluice (.config/sluice.toml);
+# this is the public check.
 name: ci
 
 on:
@@ -41,3 +42,106 @@ jobs:
           key: fast-${{ runner.os }}-${{ hashFiles('Cargo.lock', '.prototools') }}
           restore-keys: fast-${{ runner.os }}-
       - run: devenv shell -- moon run ':#check-fast'
+
+  # The commits since the last release are conventional (.versionrc): a
+  # session can skip the commit-msg hook, and git-cliff releases from them.
+  # Merge commits are not checked.
+  conventional:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+      - run: |
+          last="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          nix shell nixpkgs#convco -c convco check ${last:+"$last..HEAD"}
+
+  # The next version from the commits since the last v* tag; empty when
+  # it is already tagged.
+  version:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+      - id: next
+        run: |
+          tag="$(nix shell nixpkgs#git-cliff -c git-cliff --bumped-version)"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag is already released"
+          else
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The binary for each platform, built by the Rust rust-toolchain.toml
+  # names. Linux's is static, against musl, and macOS's links only the
+  # system's libraries, so each runs on a host with no Nix and no Rust.
+  binaries:
+    if: needs.version.outputs.tag != ''
+    needs: [version, fast, conventional]
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: x86_64-linux
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            system: aarch64-linux
+            target: aarch64-unknown-linux-musl
+          - os: macos-latest
+            system: aarch64-darwin
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET: ${{ matrix.target }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: |
+          if ! command -v rustup >/dev/null; then
+            curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install
+          rustup target add "$TARGET"
+      - run: |
+          FLUME_VERSION="${TAG#v}" cargo build --release --locked -p flume --bin flume --target "$TARGET"
+          "target/$TARGET/release/flume" --version
+          tar -czf "flume-${{ matrix.system }}.tar.gz" -C "target/$TARGET/release" flume
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flume-${{ matrix.system }}
+          path: flume-${{ matrix.system }}.tar.gz
+
+  # Tags the pushed commit and publishes the binaries with git-cliff's
+  # notes for the range. Nothing is committed back to main.
+  release:
+    needs: [version, binaries]
+    runs-on: ubuntu-latest
+    concurrency: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: |
+          nix shell nixpkgs#git-cliff -c \
+            git-cliff --unreleased --tag "$TAG" --strip all > notes.md
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
+            --notes-file notes.md flume-*.tar.gz
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
