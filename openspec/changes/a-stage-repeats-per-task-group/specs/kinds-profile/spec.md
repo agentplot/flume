@@ -35,16 +35,22 @@ the notes and never commit them (141, C.2; core.31).
 
 ### Requirement: flume's own three kinds and their prompts
 
-flume's own declaration and its prompts SHALL be built into the binary
-and read like any other: fix@1, chore@1 and change@2 as C.2 gives them,
-change@2's code stage repeating per task group, each prompt naming its
-deliverable and the way to stop short, and none asking for a submit, a
-push or a rebase (22, 28, 71, 140, C.2).
+flume's own kinds SHALL be built into the binary one declaration per
+version, each with its prompts beside it, and each read like any other:
+fix@1, chore@1, change@1 and change@2 as C.2 gives them, change@2's
+code stage repeating per task group and change@1's not, each prompt
+naming its deliverable and the way to stop short, and none asking for
+a submit, a push or a rebase (22, 28, 71, 140, 157, C.2).
 
 #### Scenario: The kinds built in
 
-- **WHEN** flume's own declaration is read
-- **THEN** it holds fix@1 on `fix/`, chore@1 on `chore/`, change@2 on `change/` with construct, code repeating per task group, and verify, all landing, each last stage's `on_fail` `code`
+- **WHEN** flume's own kinds are read
+- **THEN** they are fix@1 on `fix/`, chore@1 on `chore/`, and change@1 and change@2 on `change/`, each change with construct, code and verify, change@2's code repeating per task group and change@1's not, all landing, each last stage's `on_fail` `code`
+
+#### Scenario: Each version's prompts are its own
+
+- **WHEN** flume's own declarations are read
+- **THEN** each version's prompts are read from its own directory, and change@1's code prompt is the one flume held before change@2 (157)
 
 #### Scenario: No prompt asks to submit
 
@@ -53,8 +59,8 @@ push or a rebase (22, 28, 71, 140, C.2).
 
 #### Scenario: A place launched at change@1
 
-- **WHEN** a place launched at change@1 is settled by a flume whose own change is at version 2
-- **THEN** it keeps change@1's stages, its code stage not repeating, and status names change@1 (21)
+- **WHEN** a place launched at change@1 is settled by a flume that holds change@1 and change@2
+- **THEN** it keeps change@1's stages as its launch read them, its code stage not repeating, and status names change@1 (21)
 
 ### Requirement: What flume's own prompts ask
 

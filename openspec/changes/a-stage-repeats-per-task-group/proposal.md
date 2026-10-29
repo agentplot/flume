@@ -34,11 +34,14 @@ group (140 to 142).
   working past it and a stall count per repetition; an end, a stop and a
   hold name the group, and a hold on a running repeating stage holds its
   next repetition; a retry starts the first unticked group again (142).
-- **change@2.** flume's own `change` moves to version 2, its code stage
+- **change@1 and change@2.** flume's own kinds are held one declaration
+  per version, and change@2 joins change@1 beside it, its code stage
   repeating, with a code prompt whose stable parts come first and whose
   group, notes and words come last, so each fresh agent's start is read
-  from the prompt cache (22, C.2; core.31). Places launched at change@1
-  keep it (21).
+  from the prompt cache (22, C.2; core.31). change@1 stays as it is. A
+  launch that names no version takes change@2, the newest, and one may
+  name `change@1` (154; record 0022). Places launched at change@1 keep
+  it (21).
 
 ## Capabilities
 
@@ -50,8 +53,11 @@ group (140 to 142).
 
 ### Modified Capabilities
 
-- `kinds-profile`: `repeat` read through weir-kinds; flume's own change
-  at version 2 with its repeating code stage and its prompt's order.
+- `kinds-profile`: `repeat` read through weir-kinds; flume's own kinds
+  one declaration per version, change@1 and change@2 side by side,
+  change@2 with its repeating code stage and its prompt's order.
+- `launching`: a launch's kind named with its version, or with none for
+  the newest of flume's own.
 - `change-profile`: each task with its task group.
 - `caller-waits`: a hold on a running repeating stage holds its next
   repetition, and names its group.
@@ -68,12 +74,13 @@ group (140 to 142).
   `PromptPart` `Group` and `Notes`, and a start its group.
 - `crates/flume-core`: the repetition in the settle, the deliverable of
   a repetition, the parts filled, status, holds, stops and retries per
-  group.
+  group, and the launch resolving a kind's name and version.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake change's
   groups; the engine scenarios for each new requirement, S50 to S52
   among them; the clause list at d75cf53.
 - `crates/flume`: the weir revision in `Cargo.toml` and `Cargo.lock`,
   the kinds profile's mapping, the OpenSpec profile's groups, flume's
-  own `change` at version 2 and its code prompt, the status line, and
+  own kinds one declaration per version with change@2 and its code
+  prompt beside change@1, the status line, and
   the walkthrough of a repeating change with the stand-in agent.
 - No new crate, plugin or site part, so no new moon project.

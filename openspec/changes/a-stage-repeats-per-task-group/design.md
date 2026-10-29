@@ -20,7 +20,10 @@ checkbox lines of `tasks.md` and nothing of its headings.
 Record 0019 (accepted 2026-10-29) lets a stage repeat per task group.
 The statement carries it at agentplot/blueprints d75cf53: 140 to 142
 added, 22, 23, 30, 86, C.2, C.3, C.7 and S44 amended, S50 to S52 added,
-and weir's 53, 57, C.4 and S10 amended. The rules this design relies on
+and weir's 53, 57, C.4 and S10 amended. Record 0022 (accepted
+2026-10-29, at blueprints 57a1ba9) keeps flume's own change@1 and
+change@2 side by side, a launch naming no version taking the newest
+where no lock records one (19, 22, 154). The rules this design relies on
 are core.4 (the format is weir's), core.9 (an end read from the
 deliverable at one head), core.10 (one fresh agent per start, a
 repetition among them), core.15 (status reads where facts live),
@@ -38,9 +41,10 @@ binds (kit:specs.3, kit:testing.5).
 - A stage that declares `repeat = "per-task-group"` is worked one task
   group at a time, one fresh agent per group, with flume settling
   between them (140, 142).
-- flume's own change at version 2 repeats its code stage, its prompt
-  ordered so each repetition's start is read from the prompt cache (22,
-  C.2; core.31).
+- flume's own change@2 repeats its code stage, its prompt ordered so
+  each repetition's start is read from the prompt cache (22, C.2;
+  core.31), and sits beside change@1, which a launch may still name
+  (22, 154).
 
 **Non-Goals:**
 
@@ -49,9 +53,11 @@ binds (kit:specs.3, kit:testing.5).
 - Several agents at once in one place, or groups worked side by side
   (30; core.10).
 - Reading, seeding or summarizing the notes (141; core.31).
-- Keeping change@1 as a second built-in kind: a declaration holds one
-  kind per name (19), so places launched at change@1 keep it (21) and a
-  repository that wants it declares it.
+- Sources, locks, content hashes and packages from outside (155 to
+  160; weir 88 to 93): they are record 0022's own build, on weir-kinds'
+  packages and locks, waiting on its plan. This change keeps flume's own
+  versions side by side in a form that needs neither, and a launch names
+  no source.
 
 ## Decisions
 
@@ -158,12 +164,40 @@ first unticked group: the group that ended short, never the stage's
 first (49, 142). The stall counts from the moment the place began to
 wait, which is the repetition's end (130).
 
-### 7. change@2 and its code prompt
+### 7. change@1 and change@2, and change@2's code prompt
 
-flume's own declaration, `crates/flume/src/profiles/kinds/weir/flume.toml`,
-gives `change` version 2 and its code stage `repeat = "per-task-group"`;
-construct and verify are as they were (22, C.2). Its code prompt,
-`prompts/change-code.md`, is in this order: the stage's instructions,
+flume's own kinds are held one declaration per version, each in a
+directory of its own under `crates/flume/src/profiles/kinds/weir/own/`,
+`<name>@<version>/kind.toml` with its prompts beside it under
+`prompts/`, shaped as record 0022's packages are (157): `fix@1`,
+`chore@1`, `change@1` and `change@2`. Each is read through
+`weir_kinds::read_kinds` as `flume.toml` is today, so weir keys each
+declaration's one kind by name and needs no change. `flumes_own`
+returns every kind of every one, two versions of `change` among them.
+A version's prompts lie in its own directory, so fix@1 and chore@1 each
+carry the code prompt and change@1 and change@2 each their construct
+and verify, the same text twice (157). change@1 is today's `change`,
+unchanged. change@2 is change@1 with its code stage
+`repeat = "per-task-group"` and the code prompt below; its construct and
+verify are change@1's (22, C.2).
+
+`Launch::kind` is a name, or a name and a version written
+`<name>@<version>` (154, C.2). `Engine::resolve_kind` splits it, then
+resolves the name as today, the launch's declaration over the
+repository's over flume's own (19). In the launch's and the
+repository's, which hold one version of a name, a named version other
+than the one declared refuses the launch naming it. In flume's own it
+takes the named version, else the newest, and a version flume does not
+hold refuses the launch naming it and the versions it holds (4). An
+identity with a source, `flume/change@1`, and a lock's choice of
+version are record 0022's build; until then a `/` in the kind is a name
+no declaration holds, refused as today.
+
+Rejected: one declaration holding both versions, which the format
+refuses, since a declaration keys its kinds by name (weir 88).
+
+change@2's code prompt, `own/change@2/prompts/change-code.md`, is in
+this order: the stage's instructions,
 which say the agent is one repetition, reads the change at `{{change}}`
 and the notes, builds only its group, ticks each task and commits as it
 goes, leaves in the notes what the next repetition needs, and never
@@ -173,7 +207,7 @@ commits the notes; the place, branch and base; the way to stop short
 unarchive and the fix it asks for today (112, 131). Everything before
 the group is the same for every repetition of a place, so a fresh
 agent's prompt matches the one before it up to its group (141;
-core.31). fix@1's and chore@1's prompt is unchanged.
+core.31). fix@1's, chore@1's and change@1's prompts are unchanged.
 
 ## Risks / Trade-offs
 
