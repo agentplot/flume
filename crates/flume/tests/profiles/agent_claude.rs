@@ -308,6 +308,13 @@ fn the_plugin_an_agent_loads() {
         "{hooks}"
     );
     assert!(!hooks.contains("\"command\": \"flume\""), "{hooks}");
+    // The manifest carries the binary's version, a release's where the
+    // repository's says the workspace's, which the started ack reports
+    // back (135).
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest).expect("the manifest"))
+            .expect("the manifest as JSON");
+    assert_eq!(manifest["version"], flume::VERSION, "{manifest}");
 
     // Every file of the plugin is one the binary writes: only the
     // project's own files are left out.
