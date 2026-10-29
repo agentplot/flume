@@ -139,6 +139,38 @@ impl Engine {
         Ok(text)
     }
 
+    /// The task group a start of the stage at `index` takes at `head`,
+    /// for a repeating stage: the first of the change's groups holding a
+    /// task unticked there, or none where every task is ticked or the
+    /// change holds none (140). None for a stage that does not repeat,
+    /// and for a change that cannot be read at `head`, which gives a
+    /// repetition nothing to work from.
+    pub(crate) fn group_at(
+        &self,
+        held: &HeldState,
+        index: usize,
+        head: &Revision,
+    ) -> Option<Option<GroupHeld>> {
+        let place = &held.place;
+        if !place.kind.stages[index].repeats {
+            return None;
+        }
+        let change = self.bound(place).ok()?.change?;
+        let ChangeRead::Read { facts } = change.read_change(&place.repository, head, &place.name)
+        else {
+            return None;
+        };
+        Some(facts.first_unticked_group().map(|at| {
+            let group = &facts.groups[at];
+            GroupHeld {
+                index: at,
+                number: group.number.clone(),
+                title: group.title.clone(),
+                tasks: facts.tasks_of(at).map(|task| task.text.clone()).collect(),
+            }
+        }))
+    }
+
     /// Starts the stage at `index` with one fresh agent and `words` in
     /// its prompt, admitted under the host's room lock: the start is
     /// written to held state as live while there is room and no stage
@@ -202,6 +234,11 @@ impl Engine {
                     return Step::Write(Err(Start::Unresolved(reason.clone())));
                 }
             };
+            let head = self
+                .history
+                .head(&held.place.repository, &held.place.branch)
+                .unwrap_or_else(|| held.place.base_revision.clone());
+            let group = self.group_at(held, index, &head);
             let identity = self.next_identity(held, index);
             let agent = resolution.agent.as_ref();
             let text = match self.fill(held, index, &identity, words.as_deref(), Some(agent)) {
@@ -227,10 +264,6 @@ impl Engine {
                     return Step::Write(Err(Start::WaitingForRoom));
                 }
             }
-            let head = self
-                .history
-                .head(&held.place.repository, &held.place.branch)
-                .unwrap_or_else(|| held.place.base_revision.clone());
             let secret = self.host.secret();
             let stage = &mut held.stages[index];
             stage.state = StageState::Starting;
@@ -267,7 +300,7 @@ impl Engine {
                 last_head_move: now,
                 past_limit: false,
                 printed: None,
-                group: None,
+                group: group.clone().flatten(),
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {

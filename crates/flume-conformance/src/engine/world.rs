@@ -237,6 +237,27 @@ impl World {
         revision
     }
 
+    /// A commit on `branch` to the change `name`, its planning complete,
+    /// written as task groups, each `(number, title, tasks)`, with the
+    /// first `ticked` of its tasks ticked (86).
+    pub fn tick_groups(
+        &self,
+        branch: &str,
+        name: &str,
+        groups: &[(&str, &str, usize)],
+        ticked: usize,
+    ) -> Revision {
+        let path = format!("plans/{name}/tasks.md");
+        let revision = self.commit(branch, &[&path]);
+        self.change.set(
+            REPOSITORY,
+            &revision,
+            name,
+            FakeChange::groups(groups, ticked),
+        );
+        revision
+    }
+
     /// Settles the place as an agent going quiet or the watch does.
     pub fn settle(&self, place: &PlaceId) {
         self.engine().settle(Some(place));

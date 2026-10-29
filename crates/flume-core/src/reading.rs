@@ -64,6 +64,30 @@ impl AgentReading {
     }
 }
 
+/// Whether the change holds the repetition's group, found by its number
+/// and title, with no task of it unticked; a group no longer found is
+/// not delivered (140).
+pub(crate) fn group_ticked(facts: &ChangeFacts, group: &GroupHeld) -> bool {
+    find_group(facts, group).is_some_and(|at| facts.tasks_of(at).all(|task| task.ticked))
+}
+
+/// The index of the repetition's group among the change's groups, found
+/// by its number and title (140).
+pub(crate) fn find_group(facts: &ChangeFacts, group: &GroupHeld) -> Option<usize> {
+    facts
+        .groups
+        .iter()
+        .position(|found| found.number == group.number && found.title == group.title)
+}
+
+/// Whether a delivered start of the stage at `index` is a repetition with
+/// a task of the change still unticked at the head its facts were read
+/// at: then the stage repeats, and has not ended (140).
+pub(crate) fn repeats_on(held: &HeldState, index: usize, facts: &Facts) -> bool {
+    held.place.kind.stages[index].repeats
+        && matches!(&facts.change, Some(ChangeRead::Read { facts }) if facts.tasks.iter().any(|task| !task.ticked))
+}
+
 /// Whether a kind reads a change (3, 4).
 pub(crate) fn reads_change(kind: &Kind) -> bool {
     kind.stages.iter().any(|stage| {
@@ -189,12 +213,15 @@ impl Engine {
                 facts.is_some_and(|facts| facts.exists && facts.planning_complete) && touched(),
                 None,
             ),
-            Some(Deliverable::TasksTicked) => (
-                facts.is_some_and(|facts| {
-                    !facts.tasks.is_empty() && facts.tasks.iter().all(|task| task.ticked)
-                }) && touched(),
-                None,
-            ),
+            Some(Deliverable::TasksTicked) => {
+                let ticked = match start.group.as_ref().filter(|_| stage.repeats) {
+                    Some(group) => facts.is_some_and(|facts| group_ticked(facts, group)),
+                    None => facts.is_some_and(|facts| {
+                        !facts.tasks.is_empty() && facts.tasks.iter().all(|task| task.ticked)
+                    }),
+                };
+                (ticked && touched(), None)
+            }
             Some(Deliverable::ChangeArchived) => (
                 facts.is_some_and(|facts| facts.archived)
                     && self.history.holds_since(&place.repository, head, since),
