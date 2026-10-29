@@ -28,6 +28,18 @@ pub(crate) fn group_text(group: Option<&GroupHeld>) -> String {
     format!("{heading}\n\n{}", tasks.join("\n"))
 }
 
+/// A task group named in a line, as status, an end's notice and a
+/// person's form give it: `group <n>. <title>`, or for the tasks above
+/// every heading words naming them so (142).
+pub fn group_name(number: Option<&str>, title: Option<&str>) -> String {
+    match (number, title) {
+        (Some(number), Some(title)) => format!("group {number}. {title}"),
+        (Some(number), None) => format!("group {number}"),
+        (None, Some(title)) => format!("group {title}"),
+        (None, None) => "the tasks above every heading".into(),
+    }
+}
+
 /// The path of a repeating stage's notes in the place's own folder,
 /// which `{{notes}}` renders: flume names it and never creates, reads or
 /// removes what is there; it goes with the folder (62, 141; core.31).

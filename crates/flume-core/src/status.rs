@@ -2,11 +2,11 @@
 //! deliverable, a change or a submission read where it lives when asked,
 //! at one head per place; nothing written, sent or started (57, 58).
 
-use crate::reading::reads_change;
+use crate::reading::{find_group, reads_change};
 use crate::start::Starts;
 use crate::{
-    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, PlaceStatus, StageStatus,
-    SubmissionStatus, WaitingOn, Waits,
+    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, GroupStatus, PlaceStatus,
+    StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -67,6 +67,10 @@ impl Engine {
             .as_ref()
             .filter(|_| read_facts)
             .map(|bound| self.facts(held, bound, with_start));
+        let change = match facts.as_ref().and_then(|facts| facts.change.as_ref()) {
+            Some(ChangeRead::Read { facts }) => Some(facts),
+            _ => None,
+        };
         let tasks = match facts.as_ref().and_then(|facts| facts.change.as_ref()) {
             Some(ChangeRead::Read { facts }) => Some(facts.tasks.clone()),
             Some(ChangeRead::CouldNotRead { reason }) => {
@@ -137,6 +141,23 @@ impl Engine {
         if reads_change(&place.kind) && bound.as_ref().is_some_and(|bound| bound.change.is_none()) {
             cannot_read.push("the change: no change profile is bound".into());
         }
+        let stages: Vec<StageStatus> = held
+            .stages
+            .iter()
+            .zip(&place.kind.stages)
+            .enumerate()
+            .map(|(index, (stage, declared))| StageStatus {
+                name: stage.name.clone(),
+                state: stage.state,
+                starts: stage.starts,
+                end: stage.end.clone(),
+                refused_part: stage.refused_part.clone(),
+                refused_setting: stage.refused_setting.clone(),
+                conversation: declared.conversation,
+                group: change.and_then(|change| group_status(held, index, change)),
+            })
+            .collect();
+        let group = current.and_then(|index| stages[index].group.clone());
         PlaceStatus {
             place: place.id.clone(),
             repository: place.repository.clone(),
@@ -150,20 +171,7 @@ impl Engine {
             lands: place.kind.lands,
             phase: held.phase.clone(),
             readiness: held.readiness.clone(),
-            stages: held
-                .stages
-                .iter()
-                .zip(&place.kind.stages)
-                .map(|(stage, declared)| StageStatus {
-                    name: stage.name.clone(),
-                    state: stage.state,
-                    starts: stage.starts,
-                    end: stage.end.clone(),
-                    refused_part: stage.refused_part.clone(),
-                    refused_setting: stage.refused_setting.clone(),
-                    conversation: declared.conversation,
-                })
-                .collect(),
+            stages,
             current: current.map(|index| held.stages[index].name.clone()),
             agent,
             head: facts.as_ref().map(|facts| facts.head.clone()),
@@ -188,9 +196,77 @@ impl Engine {
                 })
                 .collect(),
             role: held.role.clone(),
-            clues: self.place_clues(held, agent_state),
+            clues: self.place_clues(held, agent_state, group.as_ref()),
         }
     }
+}
+
+impl Engine {
+    /// The task group of the place's current stage where it repeats, as
+    /// status gives it, read from the change at the branch's head (58,
+    /// 139, 142).
+    pub(crate) fn current_group(&self, held: &HeldState) -> Option<GroupStatus> {
+        let index = held.current?;
+        let place = &held.place;
+        if !place.kind.stages[index].repeats {
+            return None;
+        }
+        let change = self.bound(place).ok()?.change?;
+        let head = self
+            .history
+            .head(&place.repository, &place.branch)
+            .unwrap_or_else(|| place.base_revision.clone());
+        match change.read_change(&place.repository, &head, &place.name) {
+            ChangeRead::Read { facts } => group_status(held, index, &facts),
+            ChangeRead::CouldNotRead { .. } => None,
+        }
+    }
+}
+
+/// The task group status gives the stage at `index` where it repeats,
+/// read from `facts`, the change at the head: the group its repetition
+/// works on, or ended short, stuck, lost, never begun or stopped on,
+/// found there by its number and title; or, for a stage on hold, waiting
+/// for room, refused or between repetitions, the group its next
+/// repetition would take, the first holding a task unticked. None for a
+/// stage that does not repeat, has not reached its repetitions or has
+/// delivered, and for a repetition given no group (56, 58, 142;
+/// core.15).
+pub(crate) fn group_status(
+    held: &HeldState,
+    index: usize,
+    facts: &ChangeFacts,
+) -> Option<GroupStatus> {
+    if !held.place.kind.stages[index].repeats {
+        return None;
+    }
+    let stage = &held.stages[index];
+    let at = match stage.state {
+        StageState::Starting
+        | StageState::Started
+        | StageState::Begun
+        | StageState::Stuck
+        | StageState::Lost
+        | StageState::NeverBegun
+        | StageState::Stopped
+        | StageState::EndedShort => {
+            let given = stage.start.as_ref()?.group.as_ref()?;
+            find_group(facts, given)?
+        }
+        StageState::OnHold
+        | StageState::WaitingForRoom
+        | StageState::WaitingOnReadiness
+        | StageState::Refused
+        | StageState::Repeating => facts.first_unticked_group()?,
+        StageState::NotReached | StageState::Delivered | StageState::Finished => return None,
+    };
+    let group = &facts.groups[at];
+    Some(GroupStatus {
+        place: at + 1,
+        of: facts.groups.len(),
+        number: group.number.clone(),
+        title: group.title.clone(),
+    })
 }
 
 /// The move a live place waits on its caller for, why, since when and

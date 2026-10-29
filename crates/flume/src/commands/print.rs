@@ -3,7 +3,7 @@
 //! A word of the answer's own, a state or a layer, is printed as the JSON
 //! spells it.
 
-use flume_core::{Answer, HostStatus, PlaceStatus, Tidied, Woke};
+use flume_core::{group_name, Answer, HostStatus, PlaceStatus, StageStatus, Tidied, Woke};
 use flume_seams::{HoldOn, Made};
 use serde_json::{json, Value};
 
@@ -155,34 +155,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         );
     }
     for stage in &place.stages {
-        let mut line = format!(
-            "  stage {}: {}, started {} times",
-            stage.name,
-            word(json!(stage.state)),
-            stage.starts
-        );
-        if let Some(end) = &stage.end {
-            if let Some(head) = &end.head {
-                line.push_str(&format!(", ended at {head}"));
-            }
-            if let Some(words) = &end.words {
-                line.push_str(&format!(", saying: {words}"));
-            }
-        }
-        if let Some(part) = &stage.refused_part {
-            line.push_str(&format!(", refused for want of {part}"));
-        }
-        if let Some(setting) = &stage.refused_setting {
-            line.push_str(&format!(", refused: {setting}"));
-        }
-        lines.push(line);
-        for made in stage.end.iter().flat_map(|end| &end.made) {
-            let line = match made {
-                Made::Thing(thing) => json!(thing).to_string(),
-                Made::Text(text) => text.clone(),
-            };
-            lines.push(format!("    made: {line}"));
-        }
+        lines.extend(stage_lines(stage));
     }
     if let Some(agent) = &place.agent {
         let mut line = format!(
@@ -300,6 +273,47 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     lines
 }
 
+/// A stage's line, a repeating one named with its group's place among
+/// the change's groups, `code 2/3`, and the group it names; then each
+/// line its end carries of what it made (61, 129, 142).
+fn stage_lines(stage: &StageStatus) -> Vec<String> {
+    let mut line = format!(
+        "  stage {}: {}, started {} times",
+        stage.label(),
+        word(json!(stage.state)),
+        stage.starts
+    );
+    if let Some(group) = &stage.group {
+        line.push_str(&format!(
+            ", on {}",
+            group_name(group.number.as_deref(), group.title.as_deref())
+        ));
+    }
+    if let Some(end) = &stage.end {
+        if let Some(head) = &end.head {
+            line.push_str(&format!(", ended at {head}"));
+        }
+        if let Some(words) = &end.words {
+            line.push_str(&format!(", saying: {words}"));
+        }
+    }
+    if let Some(part) = &stage.refused_part {
+        line.push_str(&format!(", refused for want of {part}"));
+    }
+    if let Some(setting) = &stage.refused_setting {
+        line.push_str(&format!(", refused: {setting}"));
+    }
+    let mut lines = vec![line];
+    for made in stage.end.iter().flat_map(|end| &end.made) {
+        let line = match made {
+            Made::Thing(thing) => json!(thing).to_string(),
+            Made::Text(text) => text.clone(),
+        };
+        lines.push(format!("    made: {line}"));
+    }
+    lines
+}
+
 fn host_lines(host: &HostStatus) -> Vec<String> {
     let mut lines = vec![match (host.bound, host.room) {
         (Some(bound), Some(room)) => format!(
@@ -382,6 +396,37 @@ mod tests {
         assert_eq!(
             person(&status),
             "no place stands on this host\nhost: 0 agents running, no bound"
+        );
+    }
+
+    #[test]
+    fn a_repeating_stage_with_its_groups_place() {
+        let stage = StageStatus {
+            name: "code".into(),
+            state: flume_seams::StageState::Begun,
+            starts: 2,
+            end: None,
+            refused_part: None,
+            refused_setting: None,
+            conversation: false,
+            group: Some(flume_core::GroupStatus {
+                place: 2,
+                of: 3,
+                number: Some("2".into()),
+                title: Some("Two".into()),
+            }),
+        };
+        assert_eq!(
+            stage_lines(&stage),
+            vec!["  stage code 2/3: begun, started 2 times, on group 2. Two".to_string()]
+        );
+        let once = StageStatus {
+            group: None,
+            ..stage
+        };
+        assert_eq!(
+            stage_lines(&once),
+            vec!["  stage code: begun, started 2 times".to_string()]
         );
     }
 

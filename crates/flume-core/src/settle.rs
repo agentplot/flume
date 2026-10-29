@@ -85,7 +85,8 @@ impl Engine {
     }
 
     /// Shows the place's clues where they changed since last shown: its
-    /// current stage and that stage's state, and the count of the places
+    /// current stage, a repeating one with its group's place, and that
+    /// stage's state, and the count of the places
     /// of its repository on its base. A clue is display only: one that
     /// fails is logged and fails nothing, and nothing reads one back
     /// (139).
@@ -94,7 +95,8 @@ impl Engine {
             return;
         };
         let held = read.state;
-        let Some(mut clues) = self.clues(&held, None) else {
+        let group = self.current_group(&held);
+        let Some(mut clues) = self.clues(&held, None, group.as_ref()) else {
             return;
         };
         clues.base = self.base_count(&held.place);
