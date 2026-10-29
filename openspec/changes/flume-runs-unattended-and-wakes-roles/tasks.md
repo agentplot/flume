@@ -61,5 +61,5 @@ agentplot/weir (`~/Code/github_agentplot/weir`).
 
 ## 7. Coverage and the gate
 
-- [ ] 7.1 Have the suite's clause list hold Part A, Part B, I1 to I8 and S1 to S49 at the statement's current revision, 480dbb4, as the clause-coverage spec lists them, naming no clause as unbuilt, and cite 128, 129, 130, 132 and S38 from this change's scenarios, adding a scenario wherever a clause has none (clause-coverage spec). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 7.2 Run the gate's checks on the committed work and validate the change. True when `sluice exec main` passes, the root's `changes` task among its checks, and `openspec validate flume-runs-unattended-and-wakes-roles --strict` reports the change valid.
+- [x] 7.1 Have the suite's clause list hold Part A, Part B, I1 to I8 and S1 to S49 at the statement's current revision, 480dbb4, as the clause-coverage spec lists them, naming no clause as unbuilt, and cite 128, 129, 130, 132 and S38 from this change's scenarios, adding a scenario wherever a clause has none (clause-coverage spec). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
+- [x] 7.2 Run the gate's checks on the committed work and validate the change. True when `sluice exec main` passes, the root's `changes` task among its checks, and `openspec validate flume-runs-unattended-and-wakes-roles --strict` reports the change valid.
