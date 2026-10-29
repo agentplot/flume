@@ -1737,3 +1737,87 @@ impl Terminal for Herdr {
         self.caller.as_ref().map(Pane::session)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The profile over records in a scratch directory of its own.
+    fn over_records(name: &str) -> (Herdr, PathBuf) {
+        let records =
+            std::env::temp_dir().join(format!("flume-herdr-records-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&records);
+        (
+            Herdr::new(Server::Socket("/run/h.sock".into()), &records),
+            records,
+        )
+    }
+
+    fn place() -> PlaceRef {
+        PlaceRef {
+            repository: "/r".into(),
+            location: "/r/places/fix--one".into(),
+            branch: "fix/one".into(),
+            base: "main".into(),
+        }
+    }
+
+    fn identity() -> Identity {
+        Identity {
+            repository: "r1".into(),
+            place: "fix--one".into(),
+            stage: "code".into(),
+            start: 1,
+        }
+    }
+
+    #[test]
+    fn where_the_clues_show_is_read_from_the_records_alone() {
+        // 139, C.5, design 10: the place's tab, its agent's pane and its
+        // base's workspace, each as `herdr:<id>@<socket>` from what open
+        // recorded, asking herdr nothing (the socket answers no server).
+        let (herdr, records) = over_records("shown");
+        let place = place();
+        write_json(
+            &herdr.tab_record(&place.location),
+            &json!({"tab": "w1:t2", "socket": "/run/h.sock"}),
+        )
+        .unwrap();
+        write_json(
+            &herdr.workspace_record(&place),
+            &json!({"workspace": "w1", "socket": "/run/h.sock"}),
+        )
+        .unwrap();
+        herdr
+            .keep(
+                &identity(),
+                &Kept {
+                    pane: Pane {
+                        id: "w1:p3".into(),
+                        socket: "/run/h.sock".into(),
+                    },
+                    name: herdr_name(&identity()),
+                    place: Some(place.location.clone()),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            herdr.shown_at(&place, Some(&identity())),
+            ShownAt {
+                place: Some("herdr:w1:t2@/run/h.sock".into()),
+                agent: Some("herdr:w1:p3@/run/h.sock".into()),
+                base: Some("herdr:w1@/run/h.sock".into()),
+            }
+        );
+        let _ = fs::remove_dir_all(records);
+    }
+
+    #[test]
+    fn a_place_open_never_made_shows_nowhere() {
+        let (herdr, _) = over_records("none");
+        assert_eq!(
+            herdr.shown_at(&place(), Some(&identity())),
+            ShownAt::default()
+        );
+    }
+}
