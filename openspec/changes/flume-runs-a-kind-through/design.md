@@ -619,10 +619,18 @@ for a person or as JSON with `--json` (60, 61, section 9):
 | `needs [--found] <words>` | 41, C.4 |
 | `priority <place> <n>` | 70 |
 
-A place is named by its location or by `<kind>--<name>` in the
-repository the command runs in. The repository is the one the command
-runs in, or `--repository`. Exit status 0 for an answer, 1 for a
-refusal. `flume hook <event>` and `flume mcp` are the plugin's.
+A place is named by its location, any word holding a `/`, or by
+`<kind>--<name>` in the repository the command runs in. The repository
+is the one the command runs in, or `--repository`: the directory above
+the git directory its worktrees share, so from inside a place it is
+still the repository the place was launched in. A launch naming no base
+takes the repository's default branch, `origin/HEAD`'s where it names
+one. `settle --on-quiet` reads the place's current agent through status
+once a second until it is waiting or stopped, not asking and with no own
+work, for up to 60 seconds, then settles; `needs` refuses before the
+core is built when `FLUME_AGENT` or `FLUME_SECRET` is missing. Exit
+status 0 for an answer, 1 for a refusal, 2 for words that are no
+command. `flume hook <event>` and `flume mcp` are the plugin's.
 The engine is built per command over the resolver, the host's terminal
 and store, the real history and host, and `Defaults`: Claude Code with
 no model where no layer gives settings (32, decision 16a), three
@@ -659,8 +667,10 @@ environment variable, the layer that gave it.
   The launch keeps, in the place's held state, the repository's
   settings for the kind the name resolved to and the kind's own, as it
   read them at the base's revision, so a later start reads them from
-  held state, never from the base again (8, 20, 21). A repository's
-  declaration that a launch's resolves over gives nothing (C.2).
+  held state, never from the base again (8, 20, 21). The repository's
+  settings-only tables for a kind apply to whichever declaration the
+  kind's name resolves to, a kind the launch's own `--kinds` file
+  declares included (32, C.2; record 0017).
 - **Expansion.** Host-layer `env` values only: a leading `~` is the host
   user's home and `$VAR` or `${VAR}` a variable of the login
   environment the agent profile already reads (29); a variable it lacks
