@@ -745,8 +745,16 @@ settle, a session outside flume), and the root's `format` and
   in `check-tools` (an executable first on `PATH` that writes a
   transcript as Claude Code does, runs the plugin's hooks as
   `hooks.json` names them, and acts a script: commit, tick tasks,
-  write a report, `flume needs`), and the real Claude Code in
-  `check-live`.
+  write a report, `flume needs`), and the pinned Claude Code under
+  herdr in `check-live` (`crates/flume/tests/profiles/live/`): flume's
+  own herdr session on a server of the walkthrough's scratch home, each
+  agent a scratch `CLAUDE_CONFIG_DIR` signed in by a test account's
+  token the operator names in `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN`,
+  never the host's own sign-in, which a scratch `HOME` could not reach
+  in macOS's keychain anyway. herdr reads a process by its name, and
+  the pinned Claude Code is nix's wrapper `claude` around `.claude`, so
+  the walkthrough names a link `claude` to `.claude` as the program,
+  with the two variables the wrapper sets.
 
 ## Risks / Trade-offs
 
@@ -783,7 +791,8 @@ settle, a session outside flume), and the root's `format` and
   those tests move to `check-live`.
 - [`check-live` needs the network and a signed-in Claude Code] → it
   stays out of the sandboxed gate and is run by hand in the devenv
-  shell.
+  shell with a test account's token, failing at once, naming the
+  variable, without one.
 - [Ten groups in one change] → each group lands its own checks green
   and names what it leaves to the next; the seams' changes come first,
   so the profile groups code against settled traits.

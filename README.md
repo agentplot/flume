@@ -82,8 +82,9 @@ moon runs the checks (`.moon/workspace.yml`), each tagged with its
 layer: `check-fast` (every crate's format, lint and tests, the plugin's,
 the site's prose and build, and the root's checks over the whole tree),
 `check-tools` (the sluice and herdr profiles against the pinned tools,
-and the walkthroughs) and `check-live` (the walkthroughs with a real
-Claude Code under herdr, run by hand).
+and the walkthroughs) and `check-live` (the walkthroughs with the pinned
+Claude Code under herdr, run by hand with a test account's token in
+`FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN`).
 
 ```sh
 devenv shell -- moon run :#check-fast

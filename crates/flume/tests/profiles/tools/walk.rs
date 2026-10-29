@@ -1,7 +1,9 @@
 //! A walkthrough's host (design 18): flume's built binary under the
 //! printed command, on a scratch repository bound to `git-worktree`,
 //! `openspec` and `sluice`, its base landing on a local bare remote, and
-//! the stand-in for Claude Code first on `PATH` as `claude`. Every process
+//! the stand-in for Claude Code first on `PATH` as `claude`; or, for the
+//! check-live layer, no stand-in and the host's terminal and agent
+//! program as its configuration names them. Every process
 //! the walkthrough starts, flume, sluice, git and the stand-in, runs in the
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
@@ -58,8 +60,21 @@ pub struct Walk {
 
 impl Walk {
     /// A repository on `main` holding the binding, the gate and
-    /// OpenSpec's root, pushed to its bare remote, which it tracks.
+    /// OpenSpec's root, pushed to its bare remote, which it tracks, and
+    /// the stand-in first on `PATH` as `claude`.
     pub fn new(label: &str) -> Walk {
+        Walk::made(label, true)
+    }
+
+    /// The walkthrough's repository and host with no stand-in on `PATH`:
+    /// the agent program is the one the host's configuration names.
+    // The check-live layer's, which the tools layer does not use.
+    #[allow(dead_code)]
+    pub fn without_stand_in(label: &str) -> Walk {
+        Walk::made(label, false)
+    }
+
+    fn made(label: &str, stand_in: bool) -> Walk {
         let repository = Repository::new(label);
         repository.write(".config/sluice.toml", POLICY);
         repository.write(".config/flume.toml", BINDING);
@@ -78,8 +93,10 @@ impl Walk {
         for dir in [&home, &bin] {
             std::fs::create_dir_all(dir).expect("the walkthrough's folder");
         }
-        std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_flume-stand-in"), bin.join("claude"))
-            .expect("the stand-in as claude");
+        if stand_in {
+            std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_flume-stand-in"), bin.join("claude"))
+                .expect("the stand-in as claude");
+        }
         let flume = Path::new(env!("CARGO_BIN_EXE_flume"))
             .parent()
             .expect("flume's folder")
@@ -99,6 +116,22 @@ impl Walk {
         }
     }
 
+    /// The walkthrough's home at `home`, a path to the same folder, as a
+    /// short link is where a socket beneath the home must fit.
+    // The check-live layer's, which the tools layer does not use.
+    #[allow(dead_code)]
+    pub fn with_home(mut self, home: PathBuf) -> Walk {
+        self.home = home;
+        self
+    }
+
+    /// The walkthrough's home.
+    // The check-live layer's, which the tools layer does not use.
+    #[allow(dead_code)]
+    pub fn home(&self) -> &Path {
+        &self.home
+    }
+
     /// The host's configuration, `[host]` and beside it (C.7).
     pub fn configure(&self, text: &str) {
         let dir = self.home.join("config/flume");
@@ -107,7 +140,7 @@ impl Walk {
     }
 
     /// `program` with the walkthrough's environment, in `dir`.
-    fn command(&self, program: &str, dir: &Path) -> Command {
+    pub fn command(&self, program: &str, dir: &Path) -> Command {
         let mut command = Command::new(program);
         command.current_dir(dir);
         for (name, _) in std::env::vars() {
@@ -190,6 +223,25 @@ impl Walk {
     /// Settles the place and reads its status until `holds` holds of it,
     /// for up to two minutes, and gives that status.
     pub fn until(&self, place: &str, what: &str, holds: impl Fn(&Value) -> bool) -> Value {
+        self.until_within(
+            place,
+            what,
+            Duration::from_secs(120),
+            Duration::from_millis(300),
+            holds,
+        )
+    }
+
+    /// Settles the place every `pause` and reads its status until `holds`
+    /// holds of it, for up to `limit`, and gives that status.
+    pub fn until_within(
+        &self,
+        place: &str,
+        what: &str,
+        limit: Duration,
+        pause: Duration,
+        holds: impl Fn(&Value) -> bool,
+    ) -> Value {
         let began = Instant::now();
         loop {
             self.settle(place);
@@ -198,10 +250,10 @@ impl Walk {
                 return status;
             }
             assert!(
-                began.elapsed() < Duration::from_secs(120),
+                began.elapsed() < limit,
                 "{place} never came to {what}: {status}"
             );
-            std::thread::sleep(Duration::from_millis(300));
+            std::thread::sleep(pause);
         }
     }
 

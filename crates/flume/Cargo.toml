@@ -30,6 +30,9 @@ libc.workspace = true
 # The profiles' tests against the tools the tree pins, the check-tools
 # layer (flume:tools).
 tools = []
+# The walkthroughs with the pinned Claude Code under herdr, the check-live
+# layer (flume:live), run by hand with a test account's sign-in.
+live = ["tools"]
 
 # The stand-in for Claude Code the walkthroughs run as `claude` (design
 # 18), built only for the check-tools layer.
@@ -43,6 +46,11 @@ required-features = ["tools"]
 name = "tools"
 path = "tests/profiles/tools/main.rs"
 required-features = ["tools"]
+
+[[test]]
+name = "live"
+path = "tests/profiles/live/main.rs"
+required-features = ["live"]
 
 [dev-dependencies]
 flume-conformance = { path = "../flume-conformance" }

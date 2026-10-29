@@ -12,9 +12,10 @@
 #   check-tools   the sluice and herdr profiles against the pinned tools,
 #                 and the walkthroughs with a stand-in agent program. main
 #                 requires it
-#   check-live    the walkthroughs with a real Claude Code under herdr:
+#   check-live    the walkthroughs with the pinned Claude Code under herdr:
 #                 outside the sandboxed gate, required by no branch, run by
-#                 hand in the devenv shell on a host signed in to Claude Code
+#                 hand in the devenv shell with a test account's token in
+#                 FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN
 # A task in no layer says why above it (root:layers).
 # A task whose inputs are identical to a run that passed on this host, in
 # any worktree, replays from .moon/cache/outputs (a link into the git common

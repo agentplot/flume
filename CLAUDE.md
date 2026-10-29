@@ -42,7 +42,7 @@ branch requires:
 |---|---|---|
 | `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the plugin's hooks against the built binary; the conformance suite's clause coverage; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks and layers | every branch, and CI on Linux and macOS |
 | `check-tools` | the sluice and herdr profiles against the pinned tools, and the walkthroughs with the stand-in for Claude Code (`crates/flume/tests/stand-in/`) | main |
-| `check-live` | the walkthroughs with a real Claude Code under herdr | no branch: run by hand in the devenv shell, on a host signed in to Claude Code |
+| `check-live` | the walkthroughs with the pinned Claude Code under herdr (`crates/flume/tests/profiles/live/`) | no branch: run by hand in the devenv shell, `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live`, the token a test account's from `claude setup-token` |
 
 Run suites through sluice, so the agents on this host take turns under
 its bound: once your work is committed, `sluice exec main` for the

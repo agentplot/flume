@@ -2,8 +2,8 @@
 # checks moon tags, in flume's devenv shell (kit:gate.2), main and the
 # bolts on GitHub as the sluice app lands them (kit:gate.4). crew makes
 # each bolt there with `sluice branch create`. The layers are
-# .moon/workspace.yml's: check-live, run by hand in the devenv shell on a
-# host signed in to Claude Code, is required by no branch.
+# .moon/workspace.yml's: check-live, run by hand in the devenv shell with
+# a test account's Claude Code token, is required by no branch.
 [tests]
 runner = "moon"
 toolchain = ["devenv", "print-dev-env"]

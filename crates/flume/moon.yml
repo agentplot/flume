@@ -8,7 +8,9 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 # repositories the tests make, and the walkthroughs, the built binary
 # under the printed command with the stand-in for Claude Code
 # (`tests/stand-in/`) on scratch repositories landing on a local bare
-# remote, in the check-tools layer.
+# remote, in the check-tools layer; and `live`, the walkthroughs with the
+# pinned Claude Code under herdr, in the check-live layer, run by hand
+# with a test account's token (`tests/profiles/live/`).
 language: 'rust'
 layer: 'application'
 dependsOn: [seams, core, fakes, conformance]
@@ -34,3 +36,8 @@ tasks:
     inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/plugins/claude/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-tools]
     options: {runFromWorkspaceRoot: true}
+  live:
+    command: 'cargo test -p flume --features live --test live -- --nocapture'
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/plugins/claude/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-live]
+    options: {runFromWorkspaceRoot: true, cache: false, runInCI: false}
