@@ -1,14 +1,15 @@
-// How it works: the three kinds as tracks of stages, side by side, in one
-// 24 s loop. Each stage waits on its deliverable and lights the next only
-// once it exists, each with a fresh agent: a fix's code waits on a new
-// commit, a change's construct on the OpenSpec change written, its code on
-// every task ticked (they tick one by one), its verify on the report, and
-// each kind's submit stage on the landing; a question's one stage is
-// sounding's session, which waits on you once and ends on its conclusion.
-// Each track runs at its own pace, and a landed place is tidied.
+// How it works: flume's three built-in kinds as tracks of stages, side by
+// side, in one 24 s loop. Each stage waits on its deliverable and lights
+// the next only once it exists, each with a fresh agent: a fix's and a
+// chore's code waits on a new commit, a change's construct on the OpenSpec
+// change written, its code on every task ticked (they tick one by one), and
+// its verify on the change archived. The last stage's delivery submits the
+// place to the merge queue, whose landing ends the track; a hold makes the
+// chore's place wait on you once. Each track runs at its own pace, and a
+// landed place is tidied.
 //
 // Timeline, percent of the loop:
-//   fix 3-40, tidied 46 · change 3-80, tidied 86 · question 3-76
+//   fix 3-40, tidied 46 · change 3-80, tidied 86 · chore 3-60, tidied 66
 import { Diagram, esc, type Layout } from "./kit";
 
 const T = 24;
@@ -20,8 +21,10 @@ interface Stage {
   waits: string;
   done: string;
   ticks?: number[];
-  // A stretch inside [a, b] where the agent waits on you, by sounding ask.
+  // A stretch inside [a, b] where the place waits on you, under a hold.
   ask?: [number, number];
+  // The merge queue's landing, which no agent works.
+  queue?: boolean;
 }
 interface Kind {
   kind: string;
@@ -40,7 +43,14 @@ const KINDS: Kind[] = [
     cls: "hw",
     stages: [
       { name: "code", a: 3, b: 30, waits: "a new commit", done: "committed: bump mise" },
-      { name: "submit", a: 30, b: 40, waits: "the landing", done: "landed on main" },
+      {
+        name: "landing",
+        a: 30,
+        b: 40,
+        waits: "the merge queue",
+        done: "landed on main",
+        queue: true,
+      },
     ],
     end: ["tidied: place and branch", 46],
   },
@@ -59,27 +69,42 @@ const KINDS: Kind[] = [
         done: "6 of 6 tasks ticked",
         ticks: [25, 31, 37, 43, 49, 55],
       },
-      { name: "verify", a: 56, b: 70, waits: "its report", done: "report: 0 to fix" },
-      { name: "submit", a: 70, b: 80, waits: "the landing", done: "landed, the change archived" },
+      { name: "verify", a: 56, b: 70, waits: "the change archived", done: "the change, archived" },
+      {
+        name: "landing",
+        a: 70,
+        b: 80,
+        waits: "the merge queue",
+        done: "landed on main",
+        queue: true,
+      },
     ],
     end: ["tidied: place and branch", 86],
   },
   {
-    kind: "question",
-    branch: "sounding/parquet",
-    from: "sounding",
+    kind: "chore",
+    branch: "chore/bump-deps",
+    from: "your /launch",
     cls: "sd",
     stages: [
       {
-        name: "sounding’s session",
+        name: "code",
         a: 3,
-        b: 76,
-        waits: "its conclusion",
-        done: "conclusion.md written",
-        ask: [28, 40],
+        b: 50,
+        waits: "a new commit",
+        done: "committed: bump deps",
+        ask: [18, 30],
+      },
+      {
+        name: "landing",
+        a: 50,
+        b: 60,
+        waits: "the merge queue",
+        done: "landed on main",
+        queue: true,
       },
     ],
-    end: ["ended on sounding conclude", 76],
+    end: ["tidied: place and branch", 66],
   },
 ];
 
@@ -172,7 +197,7 @@ export function kinds(layout: Layout) {
         );
       } else {
         add(
-          `<text class="ac xxs b ${d.show(`${sid}s1`, s.a, s.b)}" x="${sx}" y="${N.y + 21}" text-anchor="end">agent ${i + 1} · working</text>`,
+          `<text class="ac xxs b ${d.show(`${sid}s1`, s.a, s.b)}" x="${sx}" y="${N.y + 21}" text-anchor="end">${s.queue ? "submitted" : `agent ${i + 1} · working`}</text>`,
         );
       }
       {
@@ -222,27 +247,8 @@ export function kinds(layout: Layout) {
       `<rect x="${c.x}" y="${ey}" width="${c.w}" height="28" rx="14" style="fill:none;stroke:var(--dg-rule);stroke-width:1;stroke-dasharray:4 3"/>`,
     );
     add(
-      `<text class="m xs ${d.show(`${id}pre`, 0, at)}" x="${c.x + c.w / 2}" y="${ey + 18}" text-anchor="middle">${K.kind === "question" ? "ends on sounding conclude" : "then flume tidies it"}</text>`,
+      `<text class="m xs ${d.show(`${id}pre`, 0, at)}" x="${c.x + c.w / 2}" y="${ey + 18}" text-anchor="middle">then flume tidies it</text>`,
     );
-    if (K.kind === "question") {
-      // Who owns what in a question.
-      const ny = ey + 52;
-      const lines = n
-        ? [
-            "flume makes the place and runs the session; sounding",
-            "keeps the question and the conclusion you decide.",
-          ]
-        : [
-            "flume makes the place and",
-            "runs the session. sounding",
-            "keeps the question, its",
-            "rounds and the conclusion",
-            "you decide.",
-          ];
-      lines.forEach((l, j) => {
-        add(`<text class="m xs" x="${c.x + 4}" y="${ny + j * 18}">${l}</text>`);
-      });
-    }
     add(
       `<g class="${d.show(`${id}end`, at, 96)}"><rect class="okbox" x="${c.x}" y="${ey}" width="${c.w}" height="28" rx="14" style="stroke-dasharray:none"/><text class="ok xs b" x="${c.x + c.w / 2}" y="${ey + 18}" text-anchor="middle">${esc(label)}</text></g>`,
     );
@@ -269,12 +275,12 @@ export function kinds(layout: Layout) {
     id: n ? "kn" : "kw",
     width: g.W,
     height: g.H,
-    title: "Three kinds, each a track of stages that end on their deliverables",
+    title: "flume’s three kinds, each a track of stages that end on their deliverables",
     desc:
-      "Three tracks side by side. A fix, on fix/bump-mise from headwater’s fix key: code waits on a new commit, then submit waits on the landing, and the place is tidied. " +
+      "Three tracks side by side. A fix, on fix/bump-mise from headwater’s fix key: code waits on a new commit, then the merge queue lands it, and the place is tidied. " +
       "A change, on change/csv-export from millpond’s send: construct waits on the OpenSpec change written; code waits on every task ticked, and its six tasks tick one by one; " +
-      "verify waits on its report; submit waits on the landing, with the change archived; the place is tidied. A question, on sounding/parquet: sounding’s session works, waits on you once, works again, " +
-      "and ends when sounding conclude writes conclusion.md. Each stage starts a fresh agent and lights the next only once its deliverable exists. " +
+      "verify waits on the change archived; the merge queue lands it; the place is tidied. A chore, on chore/bump-deps from your /launch: code works, its place waits on you once under a hold, works again " +
+      "and commits; the merge queue lands it, and the place is tidied. Each stage starts a fresh agent and lights the next only once its deliverable exists. " +
       "A repository or a launch may declare kinds of its own in the same form.",
     still: 92,
   });

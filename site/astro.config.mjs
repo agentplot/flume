@@ -22,13 +22,14 @@ export default defineConfig({
         alt: "flume",
       },
       favicon: "/favicon.svg",
-      // The family's header (its bar above Starlight's), footer and status
-      // banner, from @agentplot/site-theme; the start page's hero, with the
-      // animated diagram, is flume's own.
+      // The family's header (its bar above Starlight's) and footer, from
+      // @agentplot/site-theme; the start page's hero, with the animated
+      // diagram, is flume's own. The theme's banner says a tool is designed
+      // and not built while its family list says so, and flume runs, so
+      // Starlight's own banner stands.
       components: {
         Header: "@agentplot/site-theme/starlight/Header.astro",
         Footer: "@agentplot/site-theme/starlight/Footer.astro",
-        Banner: "@agentplot/site-theme/starlight/Banner.astro",
         Hero: "./src/components/Hero.astro",
       },
       // The family's type, ink and accent, then the diagrams' palette.
@@ -41,6 +42,7 @@ export default defineConfig({
       sidebar: [
         { label: "Start", link: "/" },
         { label: "How it works", link: "/how-it-works/" },
+        { label: "Install and set up", link: "/install/" },
         { label: "How it fits", link: "/how-it-fits/" },
         { label: "Design", link: "/design/" },
         { label: "Roadmap", link: "/roadmap/" },
