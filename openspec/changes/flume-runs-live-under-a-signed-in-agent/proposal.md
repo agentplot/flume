@@ -35,6 +35,13 @@ only the operator holds, so it is the operator's to run by hand, outside
   confirms only there, and reads again until the dialog is gone, within
   30 seconds (34; record 0018).
 
+- **A prompt submitted inside paste tags is received.** A terminal
+  sends the prompt as a paste, and the pinned Claude Code, where the
+  signed-in account's features turn them on, submits it inside
+  `<pasted_content id="....">` tags; the received ack and the
+  transcript's turn are compared with the tags taken off (38, 89;
+  record 0016).
+
 ## Capabilities
 
 ### New Capabilities
@@ -44,7 +51,7 @@ None.
 ### Modified Capabilities
 
 - `agent-profile`: a wrapped Claude Code is started as the program its
-  wrapper runs.
+  wrapper runs, and a prompt submitted inside paste tags is received.
 - `the-gate`: the `check-live` layer's walkthroughs pass under the
   pinned Claude Code, run by the operator.
 - `place-status`: an agent's environment is named with no value.
