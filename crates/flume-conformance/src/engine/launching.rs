@@ -1,5 +1,6 @@
-//! Launching (1 to 12, 19 to 23): one place made and its first stage
-//! started, held or waiting; or the launch refused whole, naming why.
+//! Launching (1 to 12, 19 to 23, 154): one place made and its first
+//! stage started, held or waiting, its kind named with its version or
+//! with none; or the launch refused whole, naming why.
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -79,7 +80,91 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["3", "26"],
             run: a_change_name_taken,
         },
+        Scenario {
+            name: "launch: a change launched naming no version runs change@2, the newest of flume's own, and status names change@2",
+            cites: &["22", "154", "19"],
+            run: no_version_named,
+        },
+        Scenario {
+            name: "launch: a change launched as change@1 runs change@1, its code stage one agent for the whole change, and status names change@1",
+            cites: &["22", "154", "19"],
+            run: change_1_named,
+        },
+        Scenario {
+            name: "launch: a launch naming change@3 is refused naming it and the versions flume holds, 1 and 2, nothing made",
+            cites: &["4", "22", "154"],
+            run: a_version_flume_does_not_hold,
+        },
+        Scenario {
+            name: "launch: a launch naming change@2 where the repository declares change at version 1 is refused naming the version, nothing made",
+            cites: &["4", "19", "154"],
+            run: a_version_the_repository_does_not_hold,
+        },
     ]
+}
+
+/// The change place `name` launched as `kind`, and its status.
+fn launched_as(world: &World, kind: &str, name: &str) -> Result<flume_core::PlaceStatus, String> {
+    launched(&world.engine.launch(&launch(kind, name, Some("plan it"))))?;
+    world.status(&World::id("change", name))
+}
+
+fn no_version_named(_: &()) -> Outcome {
+    let world = World::new();
+    let status = launched_as(&world, "change", "plan")?;
+    ensure_eq!(
+        (status.kind.as_str(), status.version),
+        ("change", 2),
+        "the kind status names"
+    );
+    let held = world.held(&World::id("change", "plan")).ok_or("no place")?;
+    ensure!(
+        held.place.kind.stages[1].repeats,
+        "change@2's code does not repeat"
+    );
+    Ok(())
+}
+
+fn change_1_named(_: &()) -> Outcome {
+    let world = World::new();
+    let status = launched_as(&world, "change@1", "plan")?;
+    ensure_eq!(
+        (status.kind.as_str(), status.version),
+        ("change", 1),
+        "the kind status names"
+    );
+    let held = world.held(&World::id("change", "plan")).ok_or("no place")?;
+    ensure_eq!(held.place.branch, "change/plan", "the place's branch");
+    ensure!(
+        !held.place.kind.stages[1].repeats,
+        "change@1's code repeats"
+    );
+    Ok(())
+}
+
+fn a_version_flume_does_not_hold(_: &()) -> Outcome {
+    let world = World::new();
+    let reason = refused(&world.engine.launch(&launch("change@3", "plan", Some("x"))))?;
+    ensure!(
+        reason.contains("change@3") && reason.contains("versions 1, 2"),
+        "the refusal names not the version and the versions held: {reason}"
+    );
+    nothing_made(&world)
+}
+
+fn a_version_the_repository_does_not_hold(_: &()) -> Outcome {
+    let world = World::new();
+    let declared = crate::fake_harness::flumes_own()
+        .into_iter()
+        .find(|kind| kind.name == "change" && kind.version == 1)
+        .ok_or("no change@1")?;
+    world.kinds.set_kinds(REPOSITORY, vec![declared]);
+    let reason = refused(&world.engine.launch(&launch("change@2", "plan", Some("x"))))?;
+    ensure!(
+        reason.contains("change@2") && reason.contains("version 1"),
+        "the refusal names not the version and the one declared: {reason}"
+    );
+    nothing_made(&world)
 }
 
 fn makes(log: &Log) -> usize {

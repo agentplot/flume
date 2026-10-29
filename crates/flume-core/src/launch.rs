@@ -31,18 +31,33 @@ impl Engine {
         }
     }
 
-    /// The kind a launch names, from the launch's declaration over the
-    /// repository's at the base's revision over flume's own (19, 20), and
-    /// the settings the repository gives a kind of that name it does not
-    /// declare, which join whichever declaration the name resolves to
-    /// (32, C.2).
+    /// The kind a launch names, `<name>` or `<name>@<version>`, from the
+    /// launch's declaration over the repository's at the base's revision
+    /// over flume's own (19, 20), and the settings the repository gives a
+    /// kind of that name it does not declare, which join whichever
+    /// declaration the name resolves to (32, C.2). The launch's and the
+    /// repository's declarations hold one version of a name, and a version
+    /// named that the resolved one does not hold refuses the launch; among
+    /// flume's own the version named is taken, else the newest, and a
+    /// version flume does not hold refuses the launch naming the versions
+    /// it holds (4, 22, 154).
     fn resolve_kind(
         &self,
         launch: &Launch,
         revision: &Revision,
     ) -> Result<(Kind, Declared, KindSettings), String> {
+        let (name, version) = named_version(&launch.kind)?;
         let kinds = self.resolver.kinds();
-        let named = |all: Vec<Kind>| all.into_iter().find(|kind| kind.name == launch.kind);
+        let named = |all: Vec<Kind>| all.into_iter().find(|kind| kind.name == name);
+        let held = |kind: Kind, declared: Declared, by: &str| {
+            match version {
+            Some(version) if version != kind.version => Err(format!(
+                "the kind {name}@{version} is not held: {by} declares {name} at version {}, and resolves the name (19, 154)",
+                kind.version
+            )),
+            _ => Ok((kind, declared)),
+        }
+        };
         let (declared, mut given) = match kinds.read_kinds(&launch.repository, revision) {
             KindsRead::Read { kinds, settings } => (kinds, settings),
             KindsRead::CouldNotRead { reason } => {
@@ -52,12 +67,14 @@ impl Engine {
                 ))
             }
         };
-        let given = given.remove(&launch.kind).unwrap_or_default();
+        let given = given.remove(name).unwrap_or_default();
         if let Some(declaration) = &launch.declaration {
             match kinds.read_declaration(declaration) {
                 KindsRead::Read { kinds, .. } => {
                     if let Some(kind) = named(kinds) {
-                        return Ok((kind, Declared::Launch, given));
+                        let by = format!("the launch's declaration {declaration}");
+                        let (kind, declared) = held(kind, Declared::Launch, &by)?;
+                        return Ok((kind, declared, given));
                     }
                 }
                 KindsRead::CouldNotRead { reason } => {
@@ -68,11 +85,41 @@ impl Engine {
             }
         }
         if let Some(kind) = named(declared) {
-            return Ok((kind, Declared::Repository, given));
+            let by = format!("{} at {revision}", launch.repository);
+            let (kind, declared) = held(kind, Declared::Repository, &by)?;
+            return Ok((kind, declared, given));
         }
-        named(kinds.flumes_own())
-            .map(|kind| (kind, Declared::Flume, given))
-            .ok_or_else(|| format!("the kind {} resolves to no declaration", launch.kind))
+        let mut own: Vec<Kind> = kinds
+            .flumes_own()
+            .into_iter()
+            .filter(|kind| kind.name == name)
+            .collect();
+        if own.is_empty() {
+            return Err(format!(
+                "the kind {} resolves to no declaration",
+                launch.kind
+            ));
+        }
+        own.sort_by_key(|kind| kind.version);
+        let versions = format!(
+            "version{} {}",
+            if own.len() > 1 { "s" } else { "" },
+            own.iter()
+                .map(|kind| kind.version.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let kind = match version {
+            None => own.pop(),
+            Some(version) => own.into_iter().find(|kind| kind.version == version),
+        };
+        kind.map(|kind| (kind, Declared::Flume, given))
+            .ok_or_else(|| {
+                format!(
+                    "the kind {} is not held: flume holds {name} at {versions} (22, 154)",
+                    launch.kind
+                )
+            })
     }
 
     /// Refuses a kind that asks for more than flume runs (4, 23).
@@ -359,4 +406,18 @@ fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
         });
     }
     holds
+}
+
+/// A launch's kind as its name and the version it names, if any:
+/// `<name>` or `<name>@<version>`, the version a whole number (154, C.2).
+fn named_version(kind: &str) -> Result<(&str, Option<u32>), String> {
+    match kind.split_once('@') {
+        None => Ok((kind, None)),
+        Some((name, version)) => version
+            .parse()
+            .map(|version| (name, Some(version)))
+            .map_err(|_| {
+                format!("the kind {kind} names no version flume reads: {version} is not a whole number (154)")
+            }),
+    }
 }
