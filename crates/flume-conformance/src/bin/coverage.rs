@@ -12,7 +12,7 @@ fn main() -> ExitCode {
     let problems = coverage::check(&clauses::all(), &clauses::unbuilt(), &scenarios);
     if problems.is_empty() {
         println!(
-            "every clause of Parts A and B, I1 to I8 and S1 to S44 at {} is cited by the suite's {} scenarios; {} are left to {}",
+            "every clause of Parts A and B, I1 to I8 and S1 to S49 at {} is cited by the suite's {} scenarios; {} are left to {}",
             clauses::REVISION,
             scenarios.len(),
             clauses::unbuilt()

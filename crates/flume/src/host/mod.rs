@@ -13,8 +13,8 @@ pub mod history;
 use config::HostConfig;
 use flume_seams::{Host, HostSettings, RoomGuard, Seconds, Secret};
 use std::collections::BTreeMap;
-use std::fs::{File, OpenOptions};
-use std::io::Read;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, OnceLock};
@@ -245,6 +245,21 @@ impl Host for RealHost {
 
     fn login(&self, name: &str) -> Option<String> {
         self.login_environment().get(name).cloned()
+    }
+
+    /// A line appended to `$XDG_STATE_HOME/flume/flume.log` with the
+    /// host's clock; a log that cannot be written loses the line and
+    /// fails nothing (139).
+    fn log(&self, line: &str) {
+        let path = self.state.join("flume.log");
+        let now = self.now();
+        let _ = fs::create_dir_all(&self.state).and_then(|()| {
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .and_then(|mut file| writeln!(file, "{now} {line}"))
+        });
     }
 
     fn room(&self) -> RoomGuard {

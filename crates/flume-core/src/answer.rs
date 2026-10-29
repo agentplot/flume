@@ -138,6 +138,10 @@ pub struct HostStatus {
     pub bound: Option<u32>,
     pub room: Option<u32>,
     pub queue: Vec<Queued>,
+    /// What the terminal made and keeps for what it did not make, each
+    /// named with what holds it (56, 137, 138).
+    #[serde(default)]
+    pub terminal_kept: Vec<String>,
 }
 
 /// A stage waiting for room on the host: it waits on the host, never on
@@ -284,6 +288,10 @@ pub struct Tidied {
     pub branches_kept: Vec<BranchKept>,
     /// Places asked of whose work is not over.
     pub not_over: Vec<PlaceId>,
+    /// What the terminal closed and kept of what it made for each place
+    /// removed (137, 138).
+    #[serde(default)]
+    pub terminal: Vec<TerminalTidied>,
 }
 
 impl Tidied {
@@ -292,7 +300,17 @@ impl Tidied {
         self.kept.extend(other.kept);
         self.branches_kept.extend(other.branches_kept);
         self.not_over.extend(other.not_over);
+        self.terminal.extend(other.terminal);
     }
+}
+
+/// What the terminal closed of what it made for a place removed, and what
+/// it kept, each named with what holds it (137, 138).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalTidied {
+    pub place: PlaceId,
+    pub closed: Vec<String>,
+    pub kept: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

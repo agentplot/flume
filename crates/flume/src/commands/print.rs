@@ -228,6 +228,9 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             queued.place, queued.stage, queued.priority
         ));
     }
+    for kept in &host.terminal_kept {
+        lines.push(format!("  the terminal keeps {kept}"));
+    }
     lines
 }
 
@@ -249,6 +252,14 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
     }
     for place in &tidy.not_over {
         lines.push(format!("{place}'s work is not over"));
+    }
+    for terminal in &tidy.terminal {
+        for closed in &terminal.closed {
+            lines.push(format!("closed {closed} of {}", terminal.place));
+        }
+        for kept in &terminal.kept {
+            lines.push(format!("kept {kept} of {}", terminal.place));
+        }
     }
     lines
 }

@@ -44,6 +44,10 @@ pub trait History: Send + Sync {
         path: &str,
     ) -> bool;
 
+    /// The repository's common git directory, by its absolute path, from
+    /// which its id is taken (33, C.4); none where git cannot say.
+    fn common_dir(&self, repository: &str) -> Option<String>;
+
     /// Whether `name` is a valid branch name (C.1).
     fn valid_branch(&self, name: &str) -> bool;
 }

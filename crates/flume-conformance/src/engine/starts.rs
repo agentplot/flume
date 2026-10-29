@@ -23,6 +23,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s40_held_at_a_dialog,
         },
         Scenario {
+            name: "start: held at the bypass warning by a terminal that says so, never begun at once with the warning, no prompt sent",
+            cites: &["S40", "34", "35", "43", "94"],
+            run: s40_held_never_begun_at_once,
+        },
+        Scenario {
+            name: "start: a program that never comes up within the terminal's bound is never begun with the screen, no prompt sent",
+            cites: &["S45", "35", "38", "43", "94"],
+            run: s45_never_came_up,
+        },
+        Scenario {
+            name: "clues: the pane's title follows the stage's state at each settle that changes it, a failed clue logged, nothing read back",
+            cites: &["S49", "139", "46", "56"],
+            run: s49_clues_follow_the_stage,
+        },
+        Scenario {
+            name: "identity: an agent's identity names its repository by the id of its common git directory",
+            cites: &["33", "29"],
+            run: the_identity_names_the_repository_by_its_id,
+        },
+        Scenario {
             name: "start: an agent that stops before it says it started is never begun at once",
             cites: &["35", "43", "96"],
             run: stopped_before_it_started,
@@ -379,5 +399,136 @@ fn ended_where_the_terminal_reads_nothing(_: &()) -> Outcome {
         ),
         other => return Err(format!("status answered {other:?}")),
     }
+    Ok(())
+}
+
+/// A start the terminal reads held or never come up: never begun at once,
+/// with the screen it gave, no prompt sent, then or at a later settle.
+fn never_begun_at_open(world: &World, screen: &str) -> Outcome {
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    world.agent.set_started(&code, Reading::No);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "the code stage once the terminal answered"
+    );
+    for _ in 0..2 {
+        world.settle(&id);
+        world.host.advance(60);
+    }
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "the code stage after two settles"
+    );
+    ensure_eq!(world.terminal.log.count("send"), 0, "prompts sent");
+    let status = world.status(&id)?;
+    let end = status.stages[0].end.clone().ok_or("no end in status")?;
+    ensure_eq!(end.screen.as_deref(), Some(screen), "the end's screen");
+    Ok(())
+}
+
+fn s40_held_never_begun_at_once(_: &()) -> Outcome {
+    let world = World::new();
+    let warning = "WARNING: the agent runs in Bypass Permissions mode";
+    world.terminal.hold_opens(warning);
+    never_begun_at_open(&world, warning)
+}
+
+fn s45_never_came_up(_: &()) -> Outcome {
+    let world = World::new();
+    let screen = "zsh: command not found: agent";
+    world.terminal.opens_never_come_up(screen);
+    never_begun_at_open(&world, screen)
+}
+
+fn s49_clues_follow_the_stage(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    world.agent.set_started(&code, Reading::No);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world.settle(&id);
+    world.agent.set_started(&code, Reading::Yes);
+    world.terminal.set_state(&code, AgentState::Waiting);
+    world.settle(&id);
+    world.terminal.set_state(&code, AgentState::Working);
+    world.settle(&id);
+    world.settle(&id);
+    world.agent.set_asking(&code, Reading::Yes);
+    world.terminal.set_state(&code, AgentState::Asking);
+    world.settle(&id);
+    let titles: Vec<String> = world
+        .terminal
+        .shown()
+        .into_iter()
+        .map(|(_, clues)| format!("{} · {}", clues.stage, clues.state))
+        .collect();
+    ensure_eq!(
+        titles,
+        vec![
+            "code · starting".to_string(),
+            "code · waiting".to_string(),
+            "code · working".to_string(),
+            "code · asking".to_string(),
+        ],
+        "the titles shown, once per change"
+    );
+    let (_, last) = world.terminal.shown().pop().ok_or("nothing shown")?;
+    ensure_eq!(
+        last.agent,
+        Some(code.clone()),
+        "the agent the clues are beside"
+    );
+    ensure_eq!(
+        last.base.to_string(),
+        "0 running · 1 asking · 0 waiting on caller · 0 stalled",
+        "the base's count"
+    );
+    world.terminal.shows_fail(true);
+    world.terminal.set_state(&code, AgentState::Working);
+    world.agent.set_asking(&code, Reading::No);
+    world.settle(&id);
+    ensure_eq!(
+        world.host.logged.count("the"),
+        1,
+        "the failed clue logged once"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the stage after a clue failed"
+    );
+    Ok(())
+}
+
+fn the_identity_names_the_repository_by_its_id(_: &()) -> Outcome {
+    let world = World::new();
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let (command, _) = world
+        .terminal
+        .opened(&World::identity("fix", "one", "code", 1))
+        .ok_or("not opened under the identity named by the repository's id")?;
+    let identity = command
+        .env
+        .get("AGENT_IDENTITY")
+        .ok_or("no identity in the command")?;
+    let id = flume_core::repository_id("/repository/.git");
+    ensure_eq!(
+        identity.split(':').nth(1),
+        Some(id.as_str()),
+        "the repository's part of the identity"
+    );
+    ensure_eq!(
+        identity.split(':').nth(1).map(str::len),
+        Some(12),
+        "the id's length"
+    );
+    ensure!(
+        !identity.contains(REPOSITORY),
+        "the identity names the path"
+    );
     Ok(())
 }

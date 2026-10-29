@@ -1,7 +1,7 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Host, Identity, Opened, PlaceRef, Seconds, Sent, Terminal,
-    Watch,
+    AgentCommand, AgentState, Closed, Clues, Host, Identity, Opened, PlaceRef, Seconds, Sent,
+    Shown, Terminal, TerminalTidy, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -10,6 +10,10 @@ use std::sync::{Arc, Mutex};
 /// as set or as scheduled by the fake clock, what each shows and holds
 /// typed, what was sent to each, and whether it sends, closes and
 /// watches. A send clears what the agent holds typed before it types.
+/// An open not beside a pane makes a tab for its place in a workspace
+/// for its repository and base; a tidy closes the place's tab, and the
+/// workspace once no tab of a live place and no person's pane is in it.
+/// What show was given is kept, and a show may be made to fail.
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -25,6 +29,33 @@ struct TerminalState {
     watch: Watch,
     sent: Vec<(String, String)>,
     session: Option<String>,
+    opens_as: OpensAs,
+    /// The tabs made, by place location, each with its workspace.
+    tabs: BTreeMap<String, (String, String)>,
+    /// The workspaces made, by `<repository> <base>`.
+    workspaces: BTreeSet<String>,
+    /// A person's panes, by the workspace they stand in.
+    persons: BTreeMap<String, String>,
+    shows_fail: bool,
+    shown: Vec<(String, Clues)>,
+}
+
+/// What the next opens answer.
+#[derive(Clone)]
+enum OpensAs {
+    Running,
+    Held(String),
+    NotComeUp(String),
+}
+
+/// The workspace label of a place's repository and base.
+fn workspace(place: &PlaceRef) -> String {
+    let repository = place
+        .repository
+        .rsplit('/')
+        .find(|part| !part.is_empty())
+        .unwrap_or(&place.repository);
+    format!("{repository} {}", place.base)
 }
 
 struct Running {
@@ -70,6 +101,12 @@ impl FakeTerminal {
                 watch: Watch::None,
                 sent: vec![],
                 session: None,
+                opens_as: OpensAs::Running,
+                tabs: BTreeMap::new(),
+                workspaces: BTreeSet::new(),
+                persons: BTreeMap::new(),
+                shows_fail: false,
+                shown: vec![],
             }),
             log: Log::default(),
         }
@@ -116,6 +153,50 @@ impl FakeTerminal {
     /// refused, and every open runs a command carrying its prompt.
     pub fn cannot_send(&self) {
         lock(&self.state).sends = false;
+    }
+
+    /// Every open from now holds its start at a question the program
+    /// asks before it starts, the agent left at it showing `screen`.
+    pub fn hold_opens(&self, screen: &str) {
+        lock(&self.state).opens_as = OpensAs::Held(screen.into());
+    }
+
+    /// Every open from now finds its program did not come up within the
+    /// terminal's bound, the terminal showing `screen`.
+    pub fn opens_never_come_up(&self, screen: &str) {
+        lock(&self.state).opens_as = OpensAs::NotComeUp(screen.into());
+    }
+
+    /// A person opens a pane of their own in the workspace of `place`'s
+    /// repository and base.
+    pub fn person_pane(&self, place: &PlaceRef, pane: &str) {
+        lock(&self.state)
+            .persons
+            .insert(workspace(place), pane.into());
+    }
+
+    /// The person's pane in `place`'s workspace is closed.
+    pub fn close_person_pane(&self, place: &PlaceRef) {
+        lock(&self.state).persons.remove(&workspace(place));
+    }
+
+    /// The tabs standing, by place location, and the workspaces.
+    pub fn made(&self) -> (Vec<String>, Vec<String>) {
+        let state = lock(&self.state);
+        (
+            state.tabs.keys().cloned().collect(),
+            state.workspaces.iter().cloned().collect(),
+        )
+    }
+
+    /// Every show fails, or none does.
+    pub fn shows_fail(&self, fail: bool) {
+        lock(&self.state).shows_fail = fail;
+    }
+
+    /// The clues each show was given, by place location, in order.
+    pub fn shown(&self) -> Vec<(String, Clues)> {
+        lock(&self.state).shown.clone()
     }
 
     pub fn refuse_opens(&self, reason: &str) {
@@ -244,17 +325,35 @@ impl Terminal for FakeTerminal {
                 reason: reason.clone(),
             };
         }
+        if beside.is_none() {
+            let label = workspace(place);
+            state.tabs.insert(
+                place.location.clone(),
+                (identity.place.clone(), label.clone()),
+            );
+            state.workspaces.insert(label);
+        }
         let carried = !state.sends;
-        let comes_up = state.comes_up;
+        let (comes_up, answer) = match state.opens_as.clone() {
+            OpensAs::Running => (
+                state.comes_up,
+                Opened::Opened {
+                    carried,
+                    printed: None,
+                },
+            ),
+            OpensAs::Held(screen) => (AgentState::Unknown, Opened::Held { screen }),
+            OpensAs::NotComeUp(screen) => return Opened::NotComeUp { screen },
+        };
         let mut running = Running::new(comes_up, command.clone());
         running.carried = carried;
         running.beside = beside.map(str::to_string);
         running.folder = Some(folder.to_string());
-        state.agents.insert(key, running);
-        Opened::Opened {
-            carried,
-            printed: None,
+        if let Opened::Held { screen } = &answer {
+            running.screen = Some(screen.clone());
         }
+        state.agents.insert(key, running);
+        answer
     }
 
     fn send(&self, agent: &Identity, text: &str) -> Sent {
@@ -316,6 +415,66 @@ impl Terminal for FakeTerminal {
             running.schedule.clear();
         }
         Closed::Closed
+    }
+
+    fn tidy(&self, place: &PlaceRef) -> TerminalTidy {
+        self.log.push(format!("tidy {}", place.location));
+        let mut state = lock(&self.state);
+        let mut tidy = TerminalTidy::default();
+        let label = workspace(place);
+        if let Some((tab, _)) = state.tabs.remove(&place.location) {
+            tidy.closed.push(format!("the tab {tab}"));
+        }
+        if !state.workspaces.contains(&label)
+            || state
+                .tabs
+                .values()
+                .any(|(_, workspace)| *workspace == label)
+        {
+            return tidy;
+        }
+        match state.persons.get(&label) {
+            Some(pane) => tidy
+                .kept
+                .push(format!("the workspace {label}, held by the pane {pane}")),
+            None => {
+                state.workspaces.remove(&label);
+                tidy.closed.push(format!("the workspace {label}"));
+            }
+        }
+        tidy
+    }
+
+    fn kept(&self) -> Vec<String> {
+        let state = lock(&self.state);
+        state
+            .workspaces
+            .iter()
+            .filter(|label| {
+                !state
+                    .tabs
+                    .values()
+                    .any(|(_, workspace)| workspace == *label)
+            })
+            .filter_map(|label| {
+                state
+                    .persons
+                    .get(label)
+                    .map(|pane| format!("the workspace {label}, held by the pane {pane}"))
+            })
+            .collect()
+    }
+
+    fn show(&self, place: &PlaceRef, clues: &Clues) -> Shown {
+        self.log.push(format!("show {}", place.location));
+        let mut state = lock(&self.state);
+        if state.shows_fail {
+            return Shown::Failed {
+                reason: "the terminal refused the clues".into(),
+            };
+        }
+        state.shown.push((place.location.clone(), clues.clone()));
+        Shown::Shown
     }
 
     fn watch(&self) -> Watch {

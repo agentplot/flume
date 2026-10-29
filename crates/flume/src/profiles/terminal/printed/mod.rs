@@ -4,14 +4,16 @@
 //! refused, so a tell is refused and a prompt not received is never begun
 //! (38, 53); state is unknown from the terminal, the core reading the
 //! agent stopped once its own record says the session ended (134);
-//! screen is nothing (136); there is no watch, so flume runs attended
+//! screen is nothing (136); tidy and show do nothing, as it makes
+//! nothing and shows no clue (138, 139); there is no watch, so flume runs attended
 //! (119); and it names no session (7). A command printed once for an
 //! identity is printed for it never again, kept as a mark in the place's
 //! own folder (98, 128).
 
 use crate::shell;
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Identity, Opened, PlaceRef, Sent, Terminal, Watch,
+    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, Terminal,
+    TerminalTidy, Watch,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -102,6 +104,21 @@ impl Terminal for Printed {
                 "the printed command ends no agent: {agent} ends where a person ran it"
             ),
         }
+    }
+
+    /// The printed command makes nothing to hold an agent, so it tidies
+    /// nothing (138).
+    fn tidy(&self, _place: &PlaceRef) -> TerminalTidy {
+        TerminalTidy::default()
+    }
+
+    fn kept(&self) -> Vec<String> {
+        vec![]
+    }
+
+    /// Nothing beside a person's own terminal shows a clue (139).
+    fn show(&self, _place: &PlaceRef, _clues: &Clues) -> Shown {
+        Shown::ShowsNone
     }
 
     fn watch(&self) -> Watch {

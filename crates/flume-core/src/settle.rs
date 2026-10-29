@@ -5,11 +5,17 @@
 //! terminal's watch, or by a caller, and waits on no merge queue (120,
 //! core.13).
 
+use crate::start::Starts;
+use crate::status::waiting_on;
 use crate::{Answer, Engine, Step, Tidied};
 use flume_seams::*;
 
 /// How many steps one settle of a place takes at most.
 const STEPS: usize = 64;
+
+/// How long a place waits on its caller under no hold's words before it
+/// is stalled (core.24).
+const STALLED_AFTER: Seconds = 5 * 60;
 
 impl Engine {
     /// Settles the place, or every place on the host.
@@ -58,8 +64,82 @@ impl Engine {
                 break;
             }
         }
+        self.show(id);
         self.start_waiting();
         tidied
+    }
+
+    /// Shows the place's clues where they changed since last shown: its
+    /// current stage and that stage's state, and the count of the places
+    /// of its repository on its base. A clue is display only: one that
+    /// fails is logged and fails nothing, and nothing reads one back
+    /// (139).
+    fn show(&self, id: &PlaceId) {
+        let Some(read) = self.store.read(id) else {
+            return;
+        };
+        let held = read.state;
+        if held.phase != Phase::Live {
+            return;
+        }
+        let Some(index) = held.current else {
+            return;
+        };
+        let stage = &held.stages[index];
+        let agent = stage.start.as_ref().filter(|start| start.live);
+        let state = match agent {
+            Some(_) if stage.state == StageState::Starting => "starting".to_string(),
+            Some(start) => word(&self.read_agent(id, start).state),
+            None => word(&stage.state),
+        };
+        let place = &held.place;
+        let mut base = BaseCount::default();
+        let now = self.host.now();
+        for other in self.store.read_every() {
+            let other = other.state;
+            if other.phase != Phase::Live
+                || other.place.repository != place.repository
+                || other.place.base != place.base
+            {
+                continue;
+            }
+            if let Some(waiting) = waiting_on(&other) {
+                let since = waiting.since.unwrap_or(now);
+                if waiting.words.is_none() && now.saturating_sub(since) >= STALLED_AFTER {
+                    base.stalled += 1;
+                } else {
+                    base.waiting_on_caller += 1;
+                }
+            } else if let Some((_, start)) = other.live_start() {
+                if self.read_agent(&other.place.id, start).state == AgentState::Asking {
+                    base.asking += 1;
+                } else {
+                    base.running += 1;
+                }
+            }
+        }
+        let clues = Clues {
+            stage: stage.name.clone(),
+            state,
+            agent: agent.map(|start| start.identity.clone()),
+            base,
+        };
+        let key = format!("{} · {}; {}", clues.stage, clues.state, clues.base);
+        if held.shown.as_ref() == Some(&key) {
+            return;
+        }
+        match self.terminal.show(&place.place_ref(), &clues) {
+            Shown::Failed { reason } => {
+                self.host
+                    .log(&format!("the clues of {id} did not show: {reason}"));
+            }
+            Shown::Shown | Shown::ShowsNone => {
+                self.update(id, |held| {
+                    held.shown = Some(key.clone());
+                    Step::Write(())
+                });
+            }
+        }
     }
 
     /// One step the place allows; true when it changed something.
@@ -137,4 +217,12 @@ impl Engine {
             .remove_branch(&place.repository, &place.branch, &place.base);
         self.remove_held(&place.id)
     }
+}
+
+/// A state as its JSON spells it, in words.
+fn word(state: &impl serde::Serialize) -> String {
+    serde_json::to_value(state)
+        .ok()
+        .and_then(|value| value.as_str().map(|word| word.replace('_', " ")))
+        .unwrap_or_else(|| "unknown".into())
 }

@@ -71,6 +71,7 @@ impl Agent for StandInAgent {
             env: settings.env.clone(),
             prompt_args: vec![prompt.to_string()],
             folder_trust: None,
+            kind: None,
         }
     }
     fn started(&self, _folder: &str, _agent: &Identity) -> Reading {

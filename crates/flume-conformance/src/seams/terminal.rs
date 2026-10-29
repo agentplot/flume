@@ -1,4 +1,4 @@
-//! The terminal seam's scenarios (B.5, 94 to 98, 122, 136, 7).
+//! The terminal seam's scenarios (B.5, 94 to 98, 122, 136 to 139, 7).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -39,11 +39,34 @@ pub trait TerminalHarness {
 
     /// Each input the agent took as submitted, in order.
     fn submitted(&self, identity: &Identity) -> Vec<String>;
+
+    /// A command whose program stops at a question it asks before it
+    /// starts, which flume does not answer; none where the terminal
+    /// cannot read a start held (35, 94).
+    fn held(&self) -> Option<AgentCommand>;
+
+    /// A command whose program never comes up; none where the terminal
+    /// cannot read that it did not (35, 94).
+    fn never_up(&self) -> Option<AgentCommand>;
+
+    /// Whether the terminal makes anything to hold a place's agents,
+    /// which its tidy closes (137, 138).
+    fn makes(&self) -> bool;
+
+    /// A person opens a pane of their own in what the terminal made for
+    /// the place's repository and base.
+    fn person_pane(&self, place: &PlaceRef);
+
+    /// A person moves the agent's pane elsewhere in the terminal.
+    fn move_pane(&self, identity: &Identity);
+
+    /// Whether the terminal shows clues at all (139).
+    fn shows_clues(&self) -> bool;
 }
 
 fn identity(start: u32) -> Identity {
     Identity {
-        repository: "/repository".into(),
+        repository: "0123456789ab".into(),
         place: "fix--one".into(),
         stage: "code".into(),
         start,
@@ -113,7 +136,170 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             cites: &["95", "38", "S43"],
             run: send_clears_what_is_typed::<H>,
         },
+        Scenario {
+            name: "terminal: open answers a start held at a question its program asks first, with the screen",
+            cites: &["94", "35", "34", "S40"],
+            run: open_answers_held::<H>,
+        },
+        Scenario {
+            name: "terminal: open answers a program that did not come up within the bound, with the screen",
+            cites: &["94", "35", "S45"],
+            run: open_answers_not_come_up::<H>,
+        },
+        Scenario {
+            name: "terminal: tidy closes what it made for a place gone, and its base's once nothing live is in it",
+            cites: &["138", "137", "S47"],
+            run: tidy_closes_what_it_made::<H>,
+        },
+        Scenario {
+            name: "terminal: tidy keeps what a person's pane holds, named, and closes nothing it did not make",
+            cites: &["138", "137", "S48"],
+            run: tidy_keeps_what_a_person_holds::<H>,
+        },
+        Scenario {
+            name: "terminal: show gives a place's clues or shows none, and nothing is read back",
+            cites: &["139"],
+            run: show_gives_clues::<H>,
+        },
+        Scenario {
+            name: "terminal: an agent's pane moved elsewhere is found again, read and sent to there",
+            cites: &["S46", "95", "96", "30"],
+            run: a_moved_pane_found_again::<H>,
+        },
     ]
+}
+
+fn open_answers_held<H: TerminalHarness>(harness: &H) -> Outcome {
+    let Some(command) = harness.held() else {
+        return Ok(());
+    };
+    let who = identity(1);
+    match harness
+        .seam()
+        .open(&harness.place(), &harness.folder(), &command, &who, None)
+    {
+        Opened::Held { screen } => {
+            ensure!(!screen.trim().is_empty(), "a held start with no screen");
+            Ok(())
+        }
+        other => Err(format!(
+            "open of a program held at a question gave {other:?}"
+        )),
+    }
+}
+
+fn open_answers_not_come_up<H: TerminalHarness>(harness: &H) -> Outcome {
+    let Some(command) = harness.never_up() else {
+        return Ok(());
+    };
+    let who = identity(1);
+    match harness
+        .seam()
+        .open(&harness.place(), &harness.folder(), &command, &who, None)
+    {
+        Opened::NotComeUp { .. } => Ok(()),
+        other => Err(format!(
+            "open of a program that never comes up gave {other:?}"
+        )),
+    }
+}
+
+fn tidy_closes_what_it_made<H: TerminalHarness>(harness: &H) -> Outcome {
+    let who = opened(harness, 1)?;
+    if harness.closes() {
+        ensure_eq!(harness.seam().close(&who), Closed::Closed, "close");
+    }
+    let tidy = harness.seam().tidy(&harness.place());
+    ensure!(
+        tidy.kept.is_empty(),
+        "kept with nothing of a person's: {tidy:?}"
+    );
+    if harness.makes() {
+        ensure!(
+            !tidy.closed.is_empty(),
+            "a terminal that makes closed nothing"
+        );
+    } else {
+        ensure!(
+            tidy.closed.is_empty(),
+            "a terminal that makes nothing closed {tidy:?}"
+        );
+    }
+    let again = harness.seam().tidy(&harness.place());
+    ensure!(
+        again.closed.is_empty() && again.kept.is_empty(),
+        "a second tidy did something: {again:?}"
+    );
+    ensure!(
+        harness.seam().kept().is_empty(),
+        "kept: {:?}",
+        harness.seam().kept()
+    );
+    Ok(())
+}
+
+fn tidy_keeps_what_a_person_holds<H: TerminalHarness>(harness: &H) -> Outcome {
+    if !harness.makes() {
+        return Ok(());
+    }
+    let who = opened(harness, 1)?;
+    harness.person_pane(&harness.place());
+    if harness.closes() {
+        ensure_eq!(harness.seam().close(&who), Closed::Closed, "close");
+    }
+    let tidy = harness.seam().tidy(&harness.place());
+    ensure!(
+        !tidy.kept.is_empty(),
+        "nothing kept for a person's pane: {tidy:?}"
+    );
+    ensure!(
+        !harness.seam().kept().is_empty(),
+        "kept names nothing a person's pane holds"
+    );
+    Ok(())
+}
+
+fn show_gives_clues<H: TerminalHarness>(harness: &H) -> Outcome {
+    let who = opened(harness, 1)?;
+    let clues = Clues {
+        stage: "code".into(),
+        state: "working".into(),
+        agent: Some(who),
+        base: BaseCount {
+            running: 1,
+            ..BaseCount::default()
+        },
+    };
+    let shown = harness.seam().show(&harness.place(), &clues);
+    if harness.shows_clues() {
+        ensure_eq!(shown, Shown::Shown, "the clues");
+    } else {
+        ensure_eq!(
+            shown,
+            Shown::ShowsNone,
+            "the clues of a terminal that shows none"
+        );
+    }
+    Ok(())
+}
+
+fn a_moved_pane_found_again<H: TerminalHarness>(harness: &H) -> Outcome {
+    if !harness.sends() {
+        return Ok(());
+    }
+    let who = opened(harness, 1)?;
+    harness.move_pane(&who);
+    ensure!(
+        harness.seam().state(&who) != AgentState::Stopped,
+        "a moved agent reads stopped"
+    );
+    ensure_eq!(harness.seam().send(&who, "words"), Sent::Sent, "a send");
+    ensure_eq!(
+        harness.submitted(&who).last().cloned(),
+        Some("words".to_string()),
+        "what the moved agent took"
+    );
+    Ok(())
 }
 
 fn screen_shows_the_agent<H: TerminalHarness>(harness: &H) -> Outcome {

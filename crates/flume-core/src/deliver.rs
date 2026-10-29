@@ -135,6 +135,27 @@ impl Engine {
         self.end_with(id, &start.identity, end);
     }
 
+    /// The start under `identity` reported never begun at once, the
+    /// terminal having read it held at a question its program asks before
+    /// it starts or its program not come up, with what the terminal
+    /// showed then; no prompt is sent (35, 43).
+    pub(crate) fn never_begun_with(&self, id: &PlaceId, identity: &Identity, screen: String) {
+        let Some(read) = self.store.read(id) else {
+            return;
+        };
+        let held = read.state;
+        let Some(start) = held
+            .index_of(identity)
+            .and_then(|index| held.stages[index].start.clone())
+        else {
+            return;
+        };
+        let mut end = self.read_out(&held, &start, false);
+        end.screen = Some(screen);
+        self.with_start(id, identity, |_, state| *state = StageState::NeverBegun);
+        self.end_with(id, identity, end);
+    }
+
     /// Writes what a stuck, lost or never-begun end read as the stage's
     /// end (43).
     pub(crate) fn end_with(&self, id: &PlaceId, identity: &Identity, end: StageEnd) {

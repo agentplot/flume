@@ -12,6 +12,8 @@ pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
     pub log: Log,
+    /// The lines written to the host's log (139).
+    pub logged: Log,
 }
 
 /// The room lock: taken while held, waited on by every other taker.
@@ -63,6 +65,7 @@ impl Default for FakeHost {
             }),
             room: Arc::default(),
             log: Log::default(),
+            logged: Log::default(),
         }
     }
 }
@@ -210,6 +213,10 @@ impl Host for FakeHost {
 
     fn login(&self, name: &str) -> Option<String> {
         lock(&self.state).login.get(name).cloned()
+    }
+
+    fn log(&self, line: &str) {
+        self.logged.push(line);
     }
 
     fn room(&self) -> RoomGuard {

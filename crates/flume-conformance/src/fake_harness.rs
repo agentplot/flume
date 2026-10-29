@@ -387,6 +387,33 @@ impl TerminalHarness for FakeTerminalHarness {
     fn submitted(&self, identity: &Identity) -> Vec<String> {
         self.terminal.sent_to(identity)
     }
+
+    fn held(&self) -> Option<AgentCommand> {
+        self.terminal
+            .hold_opens("WARNING: running in Bypass Permissions mode");
+        Some(self.command())
+    }
+
+    fn never_up(&self) -> Option<AgentCommand> {
+        self.terminal
+            .opens_never_come_up("sh: agent: command not found");
+        Some(self.command())
+    }
+
+    fn makes(&self) -> bool {
+        true
+    }
+
+    fn person_pane(&self, place: &PlaceRef) {
+        self.terminal.person_pane(place, "p9");
+    }
+
+    /// The fake holds its agents by identity, wherever a pane goes.
+    fn move_pane(&self, _identity: &Identity) {}
+
+    fn shows_clues(&self) -> bool {
+        true
+    }
 }
 
 pub struct FakeMergeQueueHarness {

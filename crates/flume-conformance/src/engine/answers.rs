@@ -206,6 +206,7 @@ fn host_status() -> HostStatus {
             priority: 1,
             since: Some(60),
         }],
+        terminal_kept: vec!["the workspace r main, held by the pane w1:p3".into()],
     }
 }
 
@@ -225,7 +226,12 @@ fn tidied() -> Tidied {
             branch: "fix/one".into(),
             commits: vec![Revision::new("c4")],
         }],
-        not_over: vec![place],
+        not_over: vec![place.clone()],
+        terminal: vec![TerminalTidied {
+            place,
+            closed: vec!["the tab fix--one".into()],
+            kept: vec!["the workspace r main, held by the pane w1:p3".into()],
+        }],
     }
 }
 

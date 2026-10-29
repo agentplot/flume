@@ -172,9 +172,11 @@ pub fn refused(answer: &flume_core::Answer) -> Result<String, String> {
 }
 
 impl World {
+    /// The identity the engine gives a start in the repository, named by
+    /// its id from the fake git's common directory (33, C.4).
     pub fn identity(kind: &str, name: &str, stage: &str, start: u32) -> Identity {
         Identity {
-            repository: REPOSITORY.into(),
+            repository: flume_core::repository_id(&format!("{REPOSITORY}/.git")),
             place: format!("{kind}--{name}"),
             stage: stage.into(),
             start,

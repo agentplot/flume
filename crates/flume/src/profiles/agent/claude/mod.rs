@@ -218,6 +218,7 @@ impl Agent for Claude {
                 question: TRUST_QUESTION.into(),
                 answer: TRUST_ANSWER.into(),
             }),
+            kind: Some(KIND.into()),
         }
     }
 

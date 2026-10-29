@@ -7,7 +7,7 @@
 
 use crate::prompt::{asks, render};
 use crate::room::Admit;
-use crate::{Engine, Step};
+use crate::{repository_id, Engine, Step};
 use flume_seams::*;
 use std::sync::Arc;
 
@@ -26,6 +26,10 @@ pub(crate) struct Claim {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Start {
     Opened(Identity),
+    /// The terminal read the start held at a question its program asks
+    /// before it starts, or its program not come up: never begun at once
+    /// (35).
+    NeverBegun(Identity),
     /// The host has no room, or stages waiting rank ahead of it (70).
     WaitingForRoom,
     /// The prompt asks for a part with nothing to fill it (27).
@@ -63,10 +67,17 @@ impl Engine {
         }
     }
 
-    /// The identity of the stage's next start (33).
+    /// The identity of the stage's next start, its repository named by
+    /// the id of its common git directory, or of its location where git
+    /// cannot say (33, C.4).
     pub(crate) fn next_identity(&self, held: &HeldState, index: usize) -> Identity {
+        let repository = &held.place.repository;
+        let common = self
+            .history
+            .common_dir(repository)
+            .unwrap_or_else(|| repository.clone());
         Identity {
-            repository: held.place.repository.clone(),
+            repository: repository_id(&common),
             place: held.place.short(),
             stage: held.place.kind.stages[index].name.clone(),
             start: held.stages[index].starts + 1,
@@ -293,6 +304,10 @@ impl Engine {
                     });
                 }
                 Start::Opened(identity)
+            }
+            Opened::Held { screen } | Opened::NotComeUp { screen } => {
+                self.never_begun_with(id, &identity, screen);
+                Start::NeverBegun(identity)
             }
             Opened::Refused { reason } => {
                 let failure = format!("the terminal did not open {identity}: {reason}");

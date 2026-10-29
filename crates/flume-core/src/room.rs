@@ -169,6 +169,7 @@ impl Engine {
                     since: waiting.since,
                 })
                 .collect(),
+            terminal_kept: self.terminal.kept(),
         }
     }
 

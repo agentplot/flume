@@ -1,43 +1,55 @@
-//! The terminal profile over herdr (C.5; design 12; record 0016) against
-//! the pinned herdr, on a server each test starts headless on a scratch
-//! socket with a scratch home, so no herdr session of the host's is
-//! touched and no `HERDR_*` of the caller's reaches it. The agent is a
-//! stand-in: a shell script herdr sees as a Claude Code agent by its
-//! program's name, which reports its own state to herdr, keeps what it
-//! received, and clears its input on ctrl+c as an agent does.
+//! The terminal profile over herdr (C.5; design 12; records 0016, 0018)
+//! against the pinned herdr, on a server each test starts headless on a
+//! scratch socket with a scratch home and a shell that reads no startup
+//! file of the host's, so no herdr session of the host's is touched, no
+//! `HERDR_*` of the caller's reaches it, and no agent program of the
+//! host's is on a pane's `PATH`. The agent is a stand-in: a shell script
+//! named `claude`, which herdr's agent start runs by that kind, which
+//! reports its own state to herdr, keeps what it received, clears its
+//! input on ctrl+c as an agent does, and, as its environment asks, shows
+//! the folder-trust question or a warning first.
 //!
-//! The terminal seam's scenarios run against the profile; then a
-//! conversation beside a named pane, a launch from a herdr pane, a quiet
-//! pane not ended, done read as waiting (S42), a prompt left typed (S43),
-//! a pane herdr could not bring back, instructions longer than the
-//! terminal's line, the folder-trust question, and a herdr call that
-//! never answers.
+//! The terminal seam's scenarios run against the profile; then the
+//! folder-trust question answered (S39), the bypass warning held (S40), a
+//! program that never comes up (S45), a pane found by name after a move
+//! (S46), the environment from the pane, the program the settings name, a
+//! name taken, the last place on a base (S47), two bases, a person's pane
+//! (S48), titles that follow the stage (S49), a conversation beside a
+//! named pane, a launch from a herdr pane, herdr's readings, a prompt
+//! left typed (S43), a pane herdr could not bring back, long
+//! instructions, a herdr call that never answers, a quiet pane not ended
+//! and a finished turn nobody looked at (S42).
 
 use crate::common::*;
 use flume::host::config::HostConfig;
 use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
-use flume::profiles::terminal::herdr::{display_name, Herdr, Pane, Server};
+use flume::profiles::terminal::herdr::{herdr_name, Herdr, Pane, Server, START_TIMEOUT};
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
 use flume_core::{Answer, Engine};
 use flume_seams::*;
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// The stand-in agent: herdr takes the pane's foreground program for a
-/// Claude Code agent by its name, and the script reports its state to
-/// herdr with the pane's own `HERDR_*` left out, as herdr's reading of
-/// the screen would give it, so herdr lists no agent once it exits.
-const STAND_IN: &str = r#"log="$STAND_IN_LOG/$HERDR_PANE_ID"
+/// The stand-in agent, run as `claude`: herdr takes it for a Claude Code
+/// agent by its kind, and it reports its state to herdr with the pane's
+/// own `HERDR_*` left out, as herdr's reading of the screen would give
+/// it, so herdr lists no agent once it exits.
+const STAND_IN: &str = r#"#!/bin/sh
+log="$STAND_IN_LOG/$HERDR_PANE_ID"
 mkdir -p "$log"
-for arg in "$@"; do printf '%s\n' "${#arg}"; done > "$log/args"
+printf '%s\0' "$@" > "$log/argv"
+printf '%s\n' "$0" > "$log/program"
+if [ -n "$STAND_IN_VALUE" ]; then printf '%s\n' "$STAND_IN_VALUE" > "$log/env"; fi
 pane="$HERDR_PANE_ID"
 report() {
   env -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_ENV \
@@ -45,12 +57,15 @@ report() {
 }
 trap 'echo cleared >> "$log/events"' INT
 if [ -n "$STAND_IN_TRUST" ]; then
-  printf 'Do you trust the files in this folder?\n'
+  printf 'Accessing workspace:\nYes, I trust this folder\n'
+  report blocked
   IFS= read -r answer
-  echo "trust:$answer" >> "$log/events"
+  echo trusted >> "$log/events"
 fi
 if [ -n "$STAND_IN_WARNING" ]; then
   printf '%s\n' "$STAND_IN_WARNING"
+  report blocked
+  while :; do sleep 1; done
 fi
 : > "$log/started"
 report idle
@@ -63,30 +78,73 @@ while :; do
 done
 "#;
 
+/// The folder-trust question as the stand-in shows it, and its answer.
+const TRUST: &str = "Yes, I trust this folder";
+
 /// The tight bound the tests give herdr's calls: herdr answers a local
 /// call in milliseconds, and a frozen server is read within it.
 const BOUND: Duration = Duration::from_secs(5);
+
+/// herdr's shortest bound on an agent's start, for a program that never
+/// comes up.
+const SHORT_START: Duration = Duration::from_millis(3001);
+
+/// The bound on an agent's start the seam's scenarios give herdr: room
+/// for the stand-in on a loaded host, short for a program never up.
+const HARNESS_START: Duration = Duration::from_secs(20);
 
 /// A herdr server of the test's own, headless on a scratch socket.
 struct TestServer {
     scratch: Scratch,
     socket: PathBuf,
+    /// A short link to the scratch, where its path is too long for a
+    /// socket's.
+    link: Option<PathBuf>,
     child: Option<Child>,
+}
+
+/// The pinned herdr, by its own path, whose folder holds nothing else.
+fn herdr_program() -> PathBuf {
+    let path = std::env::var("PATH").unwrap_or_default();
+    path.split(':')
+        .map(|dir| Path::new(dir).join("herdr"))
+        .find(|candidate| candidate.is_file())
+        .and_then(|found| found.canonicalize().ok())
+        .expect("the pinned herdr on PATH")
 }
 
 impl TestServer {
     fn start(label: &str) -> TestServer {
         let scratch = Scratch::new(label);
-        for dir in ["home", "bin", "log", "records", "state"] {
+        for dir in ["home", "bin", "other", "log", "records", "state"] {
             fs::create_dir_all(scratch.path(dir)).expect("a scratch directory");
         }
-        fs::write(scratch.path("bin/stand-in.sh"), STAND_IN).expect("the stand-in written");
-        std::os::unix::fs::symlink("/bin/sh", scratch.path("bin/claude"))
-            .expect("the stand-in's program");
-        let socket = scratch.path("s");
+        let executable = |path: PathBuf, text: &str| {
+            fs::write(&path, text).expect("a script written");
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+                .expect("the script made executable");
+        };
+        executable(scratch.path("bin/claude"), STAND_IN);
+        executable(scratch.path("other/claude"), STAND_IN);
+        // A shell that reads no startup file of the host's, so the pane's
+        // `PATH` is the one flume sets.
+        executable(scratch.path("bin/shell"), "#!/bin/sh\nexec /bin/sh -i\n");
+        executable(
+            scratch.path("bin/rc"),
+            &format!("PATH={}:$PATH\n", scratch.path("other").display()),
+        );
+        let (socket, link) = if scratch.root.as_os_str().len() > 90 {
+            let link = PathBuf::from(format!("/tmp/flume-h-{}-{}", std::process::id(), label));
+            let _ = fs::remove_file(&link);
+            std::os::unix::fs::symlink(&scratch.root, &link).expect("a short link");
+            (link.join("s"), Some(link))
+        } else {
+            (scratch.path("s"), None)
+        };
         let mut server = TestServer {
             scratch,
             socket,
+            link,
             child: None,
         };
         server.run();
@@ -96,15 +154,23 @@ impl TestServer {
         server
     }
 
-    /// Starts the server, or starts it again on the same socket and home.
+    /// Starts the server, or starts it again on the same socket and home,
+    /// with no folder on its `PATH` but herdr's own and the system's.
     fn run(&mut self) {
-        let child = Command::new("herdr")
+        let program = herdr_program();
+        let path = format!(
+            "{}:/usr/bin:/bin",
+            program.parent().expect("herdr's folder").display()
+        );
+        let child = Command::new(&program)
             .arg("server")
             .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("PATH", path)
             .env("HOME", self.scratch.path("home"))
-            .env("SHELL", "/bin/sh")
+            .env("SHELL", self.scratch.path("bin/shell"))
             .env("TERM", "xterm-256color")
+            // A shell that reads its input as UTF-8, as a host user's does.
+            .env("LANG", "en_US.UTF-8")
             .env("HERDR_SOCKET_PATH", &self.socket)
             .current_dir(self.scratch.path("home"))
             .stdin(Stdio::null())
@@ -186,47 +252,57 @@ impl TestServer {
         .with_bound(BOUND)
     }
 
-    fn place(&self, short: &str) -> PlaceRef {
+    /// The place `short` of the scratch repository on `base`.
+    fn place_on(&self, short: &str, base: &str) -> PlaceRef {
         let location = self.scratch.path(&format!("repository/places/{short}"));
         fs::create_dir_all(&location).expect("the place's directory");
         PlaceRef {
             repository: self.scratch.path("repository").to_string_lossy().into(),
             location: location.to_string_lossy().into(),
-            branch: "fix/one".into(),
-            base: "main".into(),
+            branch: format!("fix/{short}"),
+            base: base.into(),
         }
+    }
+
+    fn place(&self, short: &str) -> PlaceRef {
+        self.place_on(short, "main")
     }
 
     fn folder(&self) -> String {
         self.scratch.path("state/fix--one").to_string_lossy().into()
     }
 
-    /// The stand-in's command, with `env` over its own.
+    /// The stand-in's command, with `env` over its own and a `PATH` that
+    /// holds no agent program of the host's.
     fn command(&self, env: &[(&str, &str)]) -> AgentCommand {
-        let mut variables: BTreeMap<String, String> = env
-            .iter()
-            .map(|(name, value)| (name.to_string(), value.to_string()))
-            .collect();
-        variables.insert(
-            "STAND_IN_LOG".into(),
-            self.scratch.path("log").to_string_lossy().into(),
+        let mut variables: BTreeMap<String, String> = BTreeMap::from([
+            (
+                "STAND_IN_LOG".to_string(),
+                self.scratch.path("log").to_string_lossy().into_owned(),
+            ),
+            ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+        ]);
+        variables.extend(
+            env.iter()
+                .map(|(name, value)| (name.to_string(), value.to_string())),
         );
         AgentCommand {
             program: self.scratch.path("bin/claude").to_string_lossy().into(),
-            args: vec![self
-                .scratch
-                .path("bin/stand-in.sh")
-                .to_string_lossy()
-                .into()],
+            args: vec![],
             env: variables,
             prompt_args: vec![],
-            folder_trust: None,
+            folder_trust: Some(FolderTrust {
+                question: TRUST.into(),
+                answer: "down enter".into(),
+            }),
+            kind: Some("claude".into()),
         }
     }
 
-    /// What the stand-in in `pane` keeps under `name`, line by line.
-    fn kept(&self, pane: &Pane, name: &str) -> Vec<String> {
-        fs::read_to_string(self.scratch.path("log").join(&pane.id).join(name))
+    /// What the stand-in that started in `pane` keeps under `name`, line
+    /// by line.
+    fn kept(&self, pane: &str, name: &str) -> Vec<String> {
+        fs::read_to_string(self.scratch.path("log").join(pane).join(name))
             .map(|text| text.lines().map(str::to_string).collect())
             .unwrap_or_default()
     }
@@ -261,33 +337,60 @@ impl TestServer {
             state,
         ]);
     }
+
+    /// The labels of the workspaces herdr lists.
+    fn workspaces(&self) -> Vec<String> {
+        self.herdr(&["workspace", "list"])["workspaces"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|workspace| workspace["label"].as_str().map(str::to_string))
+            .collect()
+    }
+
+    /// The labels of the tabs herdr lists.
+    fn tabs(&self) -> Vec<String> {
+        self.herdr(&["tab", "list"])["tabs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|tab| tab["label"].as_str().map(str::to_string))
+            .collect()
+    }
 }
 
 impl Drop for TestServer {
     fn drop(&mut self) {
         self.thaw();
         self.stop();
+        if let Some(link) = &self.link {
+            let _ = fs::remove_file(link);
+        }
     }
 }
 
 fn identity(start: u32) -> Identity {
+    identity_of("fix--one", start)
+}
+
+fn identity_of(place: &str, start: u32) -> Identity {
     Identity {
         repository: "0123456789ab".into(),
-        place: "fix--one".into(),
+        place: place.into(),
         stage: "code".into(),
         start,
     }
 }
 
-/// An agent opened under `identity` and waiting, and its pane.
-fn opened(server: &TestServer, profile: &Herdr, who: &Identity, command: &AgentCommand) -> Pane {
-    let opened = profile.open(
-        &server.place("fix--one"),
-        &server.folder(),
-        command,
-        who,
-        None,
-    );
+/// An agent opened in `place` under `who` and waiting, and its pane.
+fn opened_in(
+    server: &TestServer,
+    profile: &Herdr,
+    place: &PlaceRef,
+    who: &Identity,
+    command: &AgentCommand,
+) -> Pane {
+    let opened = profile.open(place, &server.folder(), command, who, None);
     assert!(
         matches!(opened, Opened::Opened { .. }),
         "open gave {opened:?}"
@@ -299,10 +402,17 @@ fn opened(server: &TestServer, profile: &Herdr, who: &Identity, command: &AgentC
     pane
 }
 
+/// An agent opened under `identity` in the place `fix--one`, waiting.
+fn opened(server: &TestServer, profile: &Herdr, who: &Identity, command: &AgentCommand) -> Pane {
+    opened_in(server, profile, &server.place("fix--one"), who, command)
+}
+
 struct Harness {
     server: TestServer,
     seam: Herdr,
     caller: Pane,
+    /// The pane each moved agent started in, by identity.
+    moved: RefCell<BTreeMap<String, String>>,
 }
 
 impl Harness {
@@ -312,11 +422,15 @@ impl Harness {
             id: "w9:p9".into(),
             socket: server.socket.clone(),
         };
-        let seam = server.profile().with_caller(Some(caller.clone()));
+        let seam = server
+            .profile()
+            .with_start_timeout(HARNESS_START)
+            .with_caller(Some(caller.clone()));
         Harness {
             server,
             seam,
             caller,
+            moved: RefCell::default(),
         }
     }
 }
@@ -370,15 +484,81 @@ impl TerminalHarness for Harness {
     }
 
     fn submitted(&self, identity: &Identity) -> Vec<String> {
-        let pane = self.seam.pane(identity).expect("the pane recorded");
+        let started = self.started_in(identity);
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
-            let got = self.server.kept(&pane, "got");
+            let got = self.server.kept(&started, "got");
             if !got.is_empty() || Instant::now() >= deadline {
                 return got;
             }
             std::thread::sleep(Duration::from_millis(100));
         }
+    }
+
+    fn held(&self) -> Option<AgentCommand> {
+        Some(
+            self.server
+                .command(&[("STAND_IN_WARNING", "WARNING: Bypass Permissions mode")]),
+        )
+    }
+
+    fn never_up(&self) -> Option<AgentCommand> {
+        let mut command = self.server.command(&[]);
+        command.program = self
+            .server
+            .scratch
+            .path("bin/missing")
+            .to_string_lossy()
+            .into();
+        Some(command)
+    }
+
+    fn makes(&self) -> bool {
+        true
+    }
+
+    fn person_pane(&self, place: &PlaceRef) {
+        let (workspace, _) = self.seam.workspace(place).expect("the base's workspace");
+        self.server.herdr(&[
+            "tab",
+            "create",
+            "--workspace",
+            &workspace,
+            "--label",
+            "mine",
+            "--no-focus",
+        ]);
+    }
+
+    fn move_pane(&self, identity: &Identity) {
+        let pane = self.seam.pane(identity).expect("the pane recorded");
+        self.moved
+            .borrow_mut()
+            .insert(identity.to_string(), pane.id.clone());
+        self.server.herdr(&[
+            "pane",
+            "move",
+            &pane.id,
+            "--new-workspace",
+            "--label",
+            "moved",
+            "--no-focus",
+        ]);
+    }
+
+    fn shows_clues(&self) -> bool {
+        true
+    }
+}
+
+impl Harness {
+    /// The pane the agent's stand-in started in, which names its log.
+    fn started_in(&self, identity: &Identity) -> String {
+        self.moved
+            .borrow()
+            .get(&identity.to_string())
+            .cloned()
+            .unwrap_or_else(|| self.seam.pane(identity).expect("the pane recorded").id)
     }
 }
 
@@ -388,26 +568,185 @@ fn the_herdr_profile_passes_the_terminal_scenarios() {
 }
 
 #[test]
-fn a_place_has_a_tab_in_flumes_workspace_and_a_conversation_opens_beside_a_named_pane() {
-    let server = TestServer::start("herdr-panes");
+fn s39_the_folder_trust_question_is_answered_and_the_agent_comes_up() {
+    let server = TestServer::start("herdr-trust");
     let profile = server.profile();
-    let first = opened(&server, &profile, &identity(1), &server.command(&[]));
-    let tabs = server.herdr(&["tab", "list"]);
-    let tab = tabs["tabs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|tab| tab["label"] == "fix--one")
-        .expect("no tab named for the place");
-    let workspace = server.herdr(&["workspace", "get", tab["workspace_id"].as_str().unwrap()]);
-    assert_eq!(workspace["workspace"]["label"], "flume", "the workspace");
-    let agent = server.herdr(&["agent", "get", &first.id]);
-    assert_eq!(
-        agent["agent"]["name"].as_str(),
-        Some(display_name(&identity(1)).as_str()),
-        "the agent's display name"
+    let who = identity(1);
+    let pane = opened(
+        &server,
+        &profile,
+        &who,
+        &server.command(&[("STAND_IN_TRUST", "1")]),
     );
-    let name = display_name(&identity(1));
+    assert_eq!(
+        server.kept(&pane.id, "events"),
+        vec!["trusted".to_string()],
+        "the stand-in read an answer to its question"
+    );
+    assert!(
+        fs::metadata(server.scratch.path("log").join(&pane.id).join("started")).is_ok(),
+        "the stand-in did not start once trusted"
+    );
+}
+
+#[test]
+fn s40_the_bypass_warning_holds_the_start_with_its_lines() {
+    let server = TestServer::start("herdr-warning");
+    let profile = server.profile();
+    let who = identity(1);
+    let warning = "WARNING: running in Bypass Permissions mode";
+    let answer = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &server.command(&[("STAND_IN_WARNING", warning)]),
+        &who,
+        None,
+    );
+    let Opened::Held { screen } = answer else {
+        panic!("open at the bypass warning gave {answer:?}");
+    };
+    assert!(screen.contains(warning), "the screen held: {screen}");
+    let pane = profile.pane(&who).expect("the pane recorded");
+    assert!(
+        server.kept(&pane.id, "events").is_empty() && server.kept(&pane.id, "got").is_empty(),
+        "something was typed into the warning"
+    );
+}
+
+#[test]
+fn s45_a_program_that_never_comes_up_is_not_come_up_with_the_screen() {
+    let server = TestServer::start("herdr-timeout");
+    let profile = server.profile().with_start_timeout(SHORT_START);
+    let mut command = server.command(&[]);
+    command.program = server.scratch.path("bin/missing").to_string_lossy().into();
+    let began = Instant::now();
+    let answer = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &command,
+        &identity(1),
+        None,
+    );
+    assert!(
+        matches!(&answer, Opened::NotComeUp { screen } if screen.contains("claude")),
+        "open of a program not there gave {answer:?}"
+    );
+    assert!(
+        began.elapsed() < SHORT_START + Duration::from_secs(10),
+        "open waited {:?}",
+        began.elapsed()
+    );
+}
+
+#[test]
+fn s46_a_pane_moved_to_another_workspace_is_found_by_its_agents_name() {
+    let server = TestServer::start("herdr-moved");
+    let profile = server.profile();
+    let who = identity(1);
+    let pane = opened(&server, &profile, &who, &server.command(&[]));
+    server.herdr(&[
+        "pane",
+        "move",
+        &pane.id,
+        "--new-workspace",
+        "--label",
+        "moved",
+        "--no-focus",
+    ]);
+    assert_eq!(profile.state(&who), AgentState::Waiting, "the moved agent");
+    let moved = profile.pane(&who).expect("the pane recorded");
+    assert_ne!(
+        moved.id, pane.id,
+        "the moved pane's new id was not recorded"
+    );
+    let agent = server.herdr(&["agent", "get", &herdr_name(&who)]);
+    assert_eq!(
+        agent["agent"]["pane_id"].as_str(),
+        Some(moved.id.as_str()),
+        "the pane herdr lists under the agent's name"
+    );
+    assert_eq!(profile.send(&who, "go on"), Sent::Sent, "the send");
+    server.within("the moved agent did not receive the send", || {
+        server.kept(&pane.id, "got") == vec!["go on".to_string()]
+    });
+}
+
+#[test]
+fn the_environment_is_set_on_the_pane_and_nothing_is_typed() {
+    let server = TestServer::start("herdr-env");
+    let profile = server.profile();
+    let who = identity(1);
+    let value = "a value with spaces, 'quotes' and $dollars";
+    let pane = opened(
+        &server,
+        &profile,
+        &who,
+        &server.command(&[("STAND_IN_VALUE", value)]),
+    );
+    assert_eq!(
+        server.kept(&pane.id, "env"),
+        vec![value.to_string()],
+        "the variable the started program read"
+    );
+    let screen = profile.screen(&who).expect("a screen");
+    assert!(
+        !screen.contains("STAND_IN_VALUE") && !screen.contains("export"),
+        "the environment was typed: {screen}"
+    );
+}
+
+#[test]
+fn a_claude_earlier_on_the_shells_path_is_refused_naming_it() {
+    let server = TestServer::start("herdr-program");
+    let profile = server.profile();
+    let who = identity(1);
+    let rc = server.scratch.path("bin/rc").to_string_lossy().into_owned();
+    let answer = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &server.command(&[("ENV", &rc)]),
+        &who,
+        None,
+    );
+    let other = server
+        .scratch
+        .path("other/claude")
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        matches!(&answer, Opened::Refused { reason } if reason.contains(&other)),
+        "open where the shell found another claude gave {answer:?}"
+    );
+    assert_eq!(profile.pane(&who), None, "the refused start's pane kept");
+    assert!(
+        !server.tabs().contains(&"fix--one".to_string()),
+        "the refused start's pane stands"
+    );
+}
+
+#[test]
+fn a_herdr_name_taken_refuses_the_open() {
+    let server = TestServer::start("herdr-taken");
+    let profile = server.profile();
+    let who = identity(1);
+    opened(&server, &profile, &who, &server.command(&[]));
+    let record = server
+        .scratch
+        .path("records")
+        .join(format!("{}.json", who.to_string().replace('/', "%")));
+    fs::remove_file(record).expect("the agent's record");
+    let answer = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &server.command(&[]),
+        &who,
+        None,
+    );
+    assert!(
+        matches!(&answer, Opened::Refused { reason } if reason.contains("agent_name_taken")),
+        "an open under a name herdr holds gave {answer:?}"
+    );
+    let name = herdr_name(&who);
     assert!(
         name.len() <= 32
             && name.starts_with(|c: char| c.is_ascii_lowercase())
@@ -416,8 +755,186 @@ fn a_place_has_a_tab_in_flumes_workspace_and_a_conversation_opens_beside_a_named
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "_-".contains(c)),
         "a name herdr's rule refuses: {name}"
     );
-    assert_eq!(profile.close(&identity(1)), Closed::Closed, "close");
+    assert_ne!(
+        herdr_name(&who),
+        herdr_name(&Identity {
+            repository: "ba9876543210".into(),
+            ..who.clone()
+        }),
+        "two repositories' agents under one name"
+    );
+}
 
+#[test]
+fn s47_the_last_place_on_a_base_closes_its_tab_and_workspace() {
+    let server = TestServer::start("herdr-last");
+    let profile = server.profile();
+    let (one, two) = (server.place("fix--one"), server.place("fix--two"));
+    let (first, second) = (identity_of("fix--one", 1), identity_of("fix--two", 1));
+    opened_in(&server, &profile, &one, &first, &server.command(&[]));
+    opened_in(&server, &profile, &two, &second, &server.command(&[]));
+    let label = format!("{} main", "repository");
+    assert_eq!(
+        server.workspaces().iter().filter(|w| **w == label).count(),
+        1,
+        "the base's workspaces: {:?}",
+        server.workspaces()
+    );
+    let tabs = server.tabs();
+    assert!(
+        tabs.contains(&"fix--one".to_string()) && tabs.contains(&"fix--two".to_string()),
+        "the places' tabs: {tabs:?}"
+    );
+    let tidy = profile.tidy(&one);
+    assert_eq!(
+        tidy.closed,
+        vec!["the tab fix--one".to_string()],
+        "{tidy:?}"
+    );
+    assert!(
+        server.workspaces().contains(&label),
+        "the workspace went early"
+    );
+    let tidy = profile.tidy(&two);
+    assert!(tidy.kept.is_empty(), "kept: {tidy:?}");
+    assert_eq!(
+        tidy.closed.last().map(String::as_str),
+        Some(format!("the workspace {label}").as_str()),
+        "{tidy:?}"
+    );
+    assert!(
+        !server.workspaces().contains(&label),
+        "the workspace stands"
+    );
+    assert_eq!(profile.kept(), Vec::<String>::new(), "kept");
+}
+
+#[test]
+fn places_on_two_bases_open_in_two_workspaces() {
+    let server = TestServer::start("herdr-bases");
+    let profile = server.profile();
+    let main = server.place_on("fix--one", "main");
+    let bolt = server.place_on("fix--two", "bolt/the-surfaces");
+    opened_in(
+        &server,
+        &profile,
+        &main,
+        &identity_of("fix--one", 1),
+        &server.command(&[]),
+    );
+    opened_in(
+        &server,
+        &profile,
+        &bolt,
+        &identity_of("fix--two", 1),
+        &server.command(&[]),
+    );
+    let workspaces = server.workspaces();
+    for label in ["repository main", "repository bolt/the-surfaces"] {
+        assert!(
+            workspaces.contains(&label.to_string()),
+            "no workspace {label}: {workspaces:?}"
+        );
+    }
+    let (main_workspace, _) = profile.workspace(&main).expect("main's workspace");
+    let (bolt_workspace, _) = profile.workspace(&bolt).expect("the bolt's workspace");
+    assert_ne!(
+        main_workspace, bolt_workspace,
+        "one workspace for both bases"
+    );
+}
+
+#[test]
+fn s48_a_persons_pane_keeps_the_workspace_named() {
+    let server = TestServer::start("herdr-person");
+    let profile = server.profile();
+    let place = server.place("fix--one");
+    let who = identity(1);
+    opened_in(&server, &profile, &place, &who, &server.command(&[]));
+    let (workspace, _) = profile.workspace(&place).expect("the workspace");
+    let mine = server.herdr(&[
+        "tab",
+        "create",
+        "--workspace",
+        &workspace,
+        "--label",
+        "mine",
+        "--no-focus",
+    ]);
+    let mine = mine["root_pane"]["pane_id"].as_str().unwrap().to_string();
+    assert_eq!(profile.close(&who), Closed::Closed, "close");
+    let tidy = profile.tidy(&place);
+    assert!(
+        tidy.kept.iter().any(|kept| kept.contains(&mine)),
+        "the person's pane named: {tidy:?}"
+    );
+    assert!(
+        server.workspaces().contains(&"repository main".to_string()),
+        "the person's workspace was closed"
+    );
+    assert!(
+        server.try_herdr(&["pane", "get", &mine]).is_ok(),
+        "the person's pane was closed"
+    );
+    assert!(
+        profile.kept().iter().any(|kept| kept.contains(&mine)),
+        "kept: {:?}",
+        profile.kept()
+    );
+}
+
+#[test]
+fn s49_titles_follow_the_stage_and_a_clue_that_fails_fails_nothing() {
+    let server = TestServer::start("herdr-clues");
+    let place = server.place("fix--one");
+    let who = identity(1);
+    let pane = opened_in(
+        &server,
+        &server.profile(),
+        &place,
+        &who,
+        &server.command(&[]),
+    );
+    let profile = server.profile().with_bound(Duration::from_secs(2));
+    let clues = |state: &str| Clues {
+        stage: "code".into(),
+        state: state.into(),
+        agent: Some(who.clone()),
+        base: BaseCount {
+            running: 1,
+            ..BaseCount::default()
+        },
+    };
+    for state in ["starting", "waiting", "working", "asking"] {
+        assert_eq!(profile.show(&place, &clues(state)), Shown::Shown, "{state}");
+        let got = server.herdr(&["pane", "get", &pane.id]);
+        assert_eq!(
+            got["pane"]["title"].as_str(),
+            Some(format!("code · {state}").as_str()),
+            "the pane's title"
+        );
+        assert_eq!(got["pane"]["display_agent"].as_str(), Some("fix--one"));
+    }
+    let (workspace, _) = profile.workspace(&place).expect("the workspace");
+    let got = server.herdr(&["workspace", "get", &workspace]);
+    assert_eq!(
+        got["workspace"]["tokens"]["flume"].as_str(),
+        Some("1 running · 0 asking · 0 waiting on caller · 0 stalled"),
+        "the workspace's token"
+    );
+    server.freeze();
+    let failed = profile.show(&place, &clues("working"));
+    server.thaw();
+    assert!(
+        matches!(failed, Shown::Failed { .. }),
+        "a clue to a server that does not answer gave {failed:?}"
+    );
+}
+
+#[test]
+fn a_conversation_opens_beside_a_named_pane() {
+    let server = TestServer::start("herdr-beside");
+    let profile = server.profile();
     let operator = server.herdr(&["workspace", "create", "--label", "operator", "--no-focus"]);
     let operator = operator["root_pane"]["pane_id"]
         .as_str()
@@ -463,6 +980,10 @@ fn a_place_has_a_tab_in_flumes_workspace_and_a_conversation_opens_beside_a_named
     assert!(
         matches!(&refused, Opened::Refused { reason } if reason.contains("nobody")),
         "open beside a pane nobody named gave {refused:?}"
+    );
+    assert!(
+        !server.tabs().contains(&"fix--one".to_string()),
+        "a conversation's open made the place a tab"
     );
 }
 
@@ -545,7 +1066,7 @@ fn herdrs_readings_as_the_profile_reads_them() {
 }
 
 #[test]
-fn a_prompt_left_typed_is_cleared_before_each_sending() {
+fn s43_a_prompt_left_typed_is_cleared_before_each_sending() {
     let server = TestServer::start("herdr-typed");
     let profile = server.profile();
     let who = identity(1);
@@ -557,7 +1078,7 @@ fn a_prompt_left_typed_is_cleared_before_each_sending() {
         "the first sending"
     );
     server.within("the first sending was not received", || {
-        server.kept(&pane, "got").len() == 1
+        server.kept(&pane.id, "got").len() == 1
     });
     server.herdr(&["pane", "send-text", &pane.id, "the prompt, left typed"]);
     assert_eq!(
@@ -566,15 +1087,15 @@ fn a_prompt_left_typed_is_cleared_before_each_sending() {
         "the second sending"
     );
     server.within("the second sending was not received", || {
-        server.kept(&pane, "got").len() == 2
+        server.kept(&pane.id, "got").len() == 2
     });
     assert_eq!(
-        server.kept(&pane, "got"),
+        server.kept(&pane.id, "got"),
         vec!["the prompt".to_string(), "the prompt".to_string()],
         "what the agent received (S43)"
     );
     assert_eq!(
-        server.kept(&pane, "events"),
+        server.kept(&pane.id, "events"),
         vec!["cleared".to_string(), "cleared".to_string()],
         "the input cleared before each sending"
     );
@@ -586,12 +1107,7 @@ fn a_pane_herdr_could_not_bring_back_reads_stopped() {
     let profile = server.profile();
     let who = identity(1);
     let place = server.place("fix--one");
-    let opened = profile.open(&place, &server.folder(), &server.command(&[]), &who, None);
-    assert!(
-        matches!(opened, Opened::Opened { .. }),
-        "open gave {opened:?}"
-    );
-    let pane = profile.pane(&who).expect("the pane recorded");
+    let pane = opened_in(&server, &profile, &place, &who, &server.command(&[]));
     server.stop();
     fs::remove_dir_all(&place.location).expect("the place removed");
     server.run();
@@ -608,70 +1124,35 @@ fn a_pane_herdr_could_not_bring_back_reads_stopped() {
 }
 
 #[test]
-fn instructions_longer_than_the_terminals_line_reach_the_agent_whole() {
+fn instructions_of_twenty_thousand_characters_reach_the_agent_whole() {
     let server = TestServer::start("herdr-long");
     let profile = server.profile();
     let who = identity(1);
-    let instructions: String = "keep the lockfile exactly as it stands; "
-        .chars()
-        .cycle()
-        .take(40_000)
-        .collect();
+    let instructions: String =
+        "keep the lockfile exactly as it stands: 'quotes', $HOME, `ticks` and é; "
+            .chars()
+            .cycle()
+            .take(20_000)
+            .collect();
     let mut command = server.command(&[]);
-    command
-        .args
-        .extend(["--append-system-prompt".into(), instructions.clone()]);
+    command.args = vec!["--append-system-prompt".into(), instructions.clone()];
     let pane = opened(&server, &profile, &who, &command);
-    assert_eq!(
-        server.kept(&pane, "args"),
-        vec!["22".to_string(), "40000".to_string()],
-        "the arguments' lengths the agent started with"
-    );
-    let screen = profile.screen(&who).expect("a screen");
+    let argv = fs::read(server.scratch.path("log").join(&pane.id).join("argv"))
+        .expect("the arguments the agent started with");
+    let mut given = b"--append-system-prompt\0".to_vec();
+    given.extend(instructions.as_bytes());
+    given.push(0);
+    let differ = argv.iter().zip(&given).position(|(a, b)| a != b);
     assert!(
-        !screen.contains("keep the lockfile"),
-        "the instructions were typed into the pane"
+        argv == given,
+        "the arguments the agent started with differ: {} bytes for {}, first at {differ:?}: {:?}",
+        argv.len(),
+        given.len(),
+        differ.map(|at| String::from_utf8_lossy(
+            &argv[at.saturating_sub(20)..(at + 20).min(argv.len())]
+        )
+        .into_owned())
     );
-    assert!(
-        screen
-            .replace('\n', "")
-            .contains(&format!("sh {}/herdr/", server.folder())),
-        "the screen shows no launcher run: {screen}"
-    );
-}
-
-#[test]
-fn the_folder_trust_question_is_answered_with_the_keys_the_command_names() {
-    let server = TestServer::start("herdr-trust");
-    let profile = server.profile();
-    let who = identity(1);
-    let mut command = server.command(&[("STAND_IN_TRUST", "1")]);
-    command.folder_trust = Some(FolderTrust {
-        question: "Do you trust the files in this folder?".into(),
-        answer: "y enter".into(),
-    });
-    let pane = opened(&server, &profile, &who, &command);
-    assert_eq!(
-        server.kept(&pane, "events"),
-        vec!["trust:y".to_string()],
-        "the answer the agent read"
-    );
-}
-
-#[test]
-fn the_screen_of_a_start_held_at_a_dialog() {
-    let server = TestServer::start("herdr-screen");
-    let profile = server.profile();
-    let who = identity(1);
-    let warning = "WARNING: running in Bypass Permissions mode";
-    opened(
-        &server,
-        &profile,
-        &who,
-        &server.command(&[("STAND_IN_WARNING", warning)]),
-    );
-    let screen = profile.screen(&who).expect("a screen");
-    assert!(screen.contains(warning), "the screen: {screen} (S40)");
 }
 
 #[test]
@@ -693,6 +1174,7 @@ fn a_herdr_call_that_never_answers_is_refused_within_its_bound() {
         took < Duration::from_secs(4),
         "the send waited {took:?} on herdr"
     );
+    assert_eq!(START_TIMEOUT, Duration::from_secs(120), "the start's bound");
 }
 
 /// The stand-in as the agent seam reads it: started once it wrote its
@@ -701,7 +1183,6 @@ fn a_herdr_call_that_never_answers_is_refused_within_its_bound() {
 struct StandIn {
     log: PathBuf,
     program: String,
-    script: String,
     terminal: Herdr,
 }
 
@@ -723,13 +1204,17 @@ impl Agent for StandIn {
     ) -> AgentCommand {
         AgentCommand {
             program: self.program.clone(),
-            args: vec![self.script.clone()],
-            env: BTreeMap::from([(
-                "STAND_IN_LOG".to_string(),
-                self.log.to_string_lossy().into_owned(),
-            )]),
+            args: vec![],
+            env: BTreeMap::from([
+                (
+                    "STAND_IN_LOG".to_string(),
+                    self.log.to_string_lossy().into_owned(),
+                ),
+                ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+            ]),
             prompt_args: vec![prompt.into()],
             folder_trust: None,
+            kind: Some("claude".into()),
         }
     }
 
@@ -816,11 +1301,6 @@ fn bound(server: &TestServer, world: &World, stages: Vec<Stage>) -> String {
         Arc::new(StandIn {
             log: server.scratch.path("log"),
             program: server.scratch.path("bin/claude").to_string_lossy().into(),
-            script: server
-                .scratch
-                .path("bin/stand-in.sh")
-                .to_string_lossy()
-                .into(),
             terminal: server.profile(),
         }),
     );
@@ -894,7 +1374,7 @@ fn a_quiet_pane_with_nothing_delivered_is_not_ended() {
     );
     let id = begun(&server, &world, &repository);
     let code = Identity {
-        repository: repository.clone(),
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
         place: "two--one".into(),
         stage: "code".into(),
         start: 1,
@@ -933,7 +1413,7 @@ fn s42_a_finished_turn_nobody_looked_at_delivers_and_the_next_stage_starts() {
     );
     let id = begun(&server, &world, &repository);
     let code = Identity {
-        repository: repository.clone(),
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
         place: "two--one".into(),
         stage: "code".into(),
         start: 1,

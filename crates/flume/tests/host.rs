@@ -66,6 +66,51 @@ fn a_head_reads_none_for_a_branch_that_does_not_exist() {
     assert!(!GitHistory.holds_since(&repository.name(), &Revision::new("0".repeat(40)), &start));
 }
 
+/// The repository's common git directory, from which its agents'
+/// identities take its id: its own `.git`, or the bare repository its
+/// worktrees share, the same from the repository and from a worktree of
+/// it (33, C.4).
+#[test]
+fn the_common_git_directory_names_the_repository() {
+    let repository = Repository::new("common");
+    let own = repository.dir.join(".git").canonicalize().unwrap();
+    assert_eq!(
+        GitHistory.common_dir(&repository.name()),
+        Some(own.to_string_lossy().into_owned()),
+        "the main worktree's"
+    );
+    let holder = repository.scratch.path("holder");
+    std::fs::create_dir_all(&holder).unwrap();
+    let bare = holder.join("holder.git");
+    git(
+        &holder,
+        &[
+            "clone",
+            "--quiet",
+            "--bare",
+            &repository.name(),
+            &bare.to_string_lossy(),
+        ],
+    );
+    let bare = bare.canonicalize().unwrap();
+    let from_holder = GitHistory.common_dir(&holder.to_string_lossy());
+    assert_eq!(
+        from_holder,
+        Some(bare.to_string_lossy().into_owned()),
+        "the bare repository beside its worktrees"
+    );
+    assert_ne!(
+        flume_core::repository_id(&own.to_string_lossy()),
+        flume_core::repository_id(&bare.to_string_lossy()),
+        "two repositories' ids"
+    );
+    assert_eq!(
+        GitHistory.common_dir("/"),
+        None,
+        "a directory in no repository"
+    );
+}
+
 fn host(scratch: &Scratch, config: HostConfig) -> RealHost {
     RealHost::new(scratch.path("state/flume"), config, None)
 }

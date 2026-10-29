@@ -256,6 +256,7 @@ impl Engine {
             submission: SubmissionHeld::default(),
             failures: vec![],
             priority: launch.priority,
+            shown: None,
         };
         for stage in &kind.stages {
             let resolved = self.resolve(&held.place, stage);

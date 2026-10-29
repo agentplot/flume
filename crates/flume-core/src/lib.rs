@@ -74,6 +74,17 @@ pub struct Engine {
     stepped: Mutex<BTreeSet<(String, String)>>,
 }
 
+/// A repository's id from its common git directory's path: the first
+/// twelve hex digits of the path's SHA-256 (33, C.4).
+pub fn repository_id(common_dir: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(common_dir.as_bytes())
+        .iter()
+        .take(6)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 /// The guard of the engine's own state, read through a panic a caller
 /// caught.
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

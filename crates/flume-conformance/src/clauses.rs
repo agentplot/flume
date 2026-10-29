@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "4d1f88b";
+pub const REVISION: &str = "f44ec91";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -13,6 +13,7 @@ pub fn part_a() -> Vec<u32> {
         .chain(118..=120)
         .chain([123, 124])
         .chain(129..=132)
+        .chain([137])
         .collect()
 }
 
@@ -24,6 +25,7 @@ pub fn part_b() -> Vec<u32> {
         .chain([121, 122])
         .chain(125..=128)
         .chain(133..=136)
+        .chain([138, 139])
         .collect()
 }
 
@@ -36,7 +38,7 @@ pub fn all() -> Vec<String> {
         .map(|clause| clause.to_string())
         .collect();
     all.extend((1..=8).map(|invariant| format!("I{invariant}")));
-    all.extend((1..=44).map(|scenario| format!("S{scenario}")));
+    all.extend((1..=49).map(|scenario| format!("S{scenario}")));
     all
 }
 
@@ -61,24 +63,24 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4);
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4);
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2);
         assert!(!a.contains(&100) && !b.contains(&100));
         assert!(a.iter().all(|clause| !b.contains(clause)));
         let mut every: Vec<u32> = a.into_iter().chain(b).collect();
         every.sort();
         assert_eq!(
             every,
-            (1..=136)
+            (1..=139)
                 .filter(|clause| *clause != 100)
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 135 + 8 + 44);
-        assert_eq!(REVISION, "4d1f88b");
-        for clause in [129, 130, 131, 132] {
+        assert_eq!(all().len(), 138 + 8 + 49);
+        assert_eq!(REVISION, "f44ec91");
+        for clause in [129, 130, 131, 132, 137] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
-        for clause in [126, 127, 128, 133, 134, 135, 136] {
+        for clause in [126, 127, 128, 133, 134, 135, 136, 138, 139] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }

@@ -8,9 +8,11 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 /// The one name flume gives an agent: its repository, its place, its
-/// stage and which start of the stage it is (33).
+/// stage and which start of the stage it is (33). The repository is
+/// named by its id, taken from its common git directory (C.4).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Identity {
+    /// The repository's id.
     pub repository: String,
     /// The place as `<kind>--<name>`.
     pub place: String,
@@ -58,6 +60,10 @@ pub struct AgentCommand {
     /// one (34).
     #[serde(default)]
     pub folder_trust: Option<FolderTrust>,
+    /// The program's kind, by which a terminal that starts a known agent
+    /// program names it; none where the profile names none (C.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
 }
 
 /// A yes or no the agent's own record may not give (93).

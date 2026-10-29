@@ -157,7 +157,9 @@ impl Engine {
             Step::Write(())
         });
         match self.start_stage(place, index, words) {
-            Start::Opened(_) | Start::WaitingForRoom => self.acted(Act::Retry, place),
+            Start::Opened(_) | Start::NeverBegun(_) | Start::WaitingForRoom => {
+                self.acted(Act::Retry, place)
+            }
             Start::Refused(part) => Answer::refused(format!(
                 "the stage {}'s prompt asks for {}, which has nothing to fill it",
                 held.stages[index].name,
@@ -395,5 +397,10 @@ fn only(tidy: Tidied, place: &PlaceId) -> Tidied {
             .filter(|kept| &kept.place == place)
             .collect(),
         not_over: vec![],
+        terminal: tidy
+            .terminal
+            .into_iter()
+            .filter(|tidied| &tidied.place == place)
+            .collect(),
     }
 }

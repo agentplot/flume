@@ -4,7 +4,7 @@
 
 There SHALL be exactly one interface for each of the seven seams of
 Part B: the place (78 to 83), the kinds (84, 85), the change (86, 87, 127),
-the agent (88 to 93, 115, 116, 121, 134, 135), the terminal (94 to 98, 122, 136), the
+the agent (88 to 93, 115, 116, 121, 134, 135), the terminal (94 to 98, 122, 136 to 139), the
 merge queue (99, 101, 117, 125, 126, 133) and the store (102 to 104,
 128). Each SHALL offer the operations its section names and no
 operation of the core's, and no interface SHALL name a tool (core.1,
@@ -15,8 +15,12 @@ seam SHALL name the session a command runs in, for a launch's default
 recipient (7), and the agent seam SHALL say whether the agent's record
 shows its session ended (134) and whether the agent has said it started
 under its start's identity (135); the terminal seam SHALL give what it
-shows of an agent (136), and every terminal operation SHALL answer
-within a bound the profile states (98).
+shows of an agent (136), its open SHALL answer, beside opened and
+refused, a start held at a question its program asks before it starts
+and a program that did not come up within its bound, each with the
+screen (94), it SHALL tidy what it made for a place gone (138) and show
+a place's clues (139), and every terminal operation SHALL answer within
+a bound the profile states (98).
 
 #### Scenario: Each seam's operations
 
@@ -33,6 +37,11 @@ within a bound the profile states (98).
 - **WHEN** the fake agent holds no started word for a start, and the fake terminal shows lines for its agent
 - **THEN** `started` reads no and `screen` gives those lines (135, 136)
 
+#### Scenario: Held, tidied and shown
+
+- **WHEN** the fake terminal holds a start at a question, makes a place's tab in its base's workspace, and has a person's pane in that workspace
+- **THEN** open answers held with the screen, tidy closes the place's tab and keeps the workspace naming the person's pane, and show takes the place's clues (94, 138, 139)
+
 #### Scenario: Submit holds no wait
 
 - **WHEN** the fake merge queue holds a submission undecided
@@ -47,7 +56,9 @@ with its stages as read-kinds returns them (18, 23); a deliverable in
 one of the six forms (24); a prompt and its parts (27, 28); an agent's
 identity, its start's secret and a stop-short that needs an answer or
 found work (29, 30, 33, 41, 92); an agent's command with the program's
-folder-trust question and its answer (34, 88); and a submission with its
+folder-trust question and its answer and the program's kind (34, 88,
+C.4); the terminal's clues and what its tidy closed and kept (138,
+139); and a submission with its
 outcomes, landed, failed, in conflict or withdrawn (99, 111 to 113, 117,
 125, 133). Each SHALL serialize to JSON and back unchanged.
 

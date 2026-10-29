@@ -187,6 +187,7 @@ impl Agent for FakeAgent {
                 question: "Do you trust this folder?".into(),
                 answer: "yes".into(),
             }),
+            kind: Some("agent".into()),
         }
     }
 

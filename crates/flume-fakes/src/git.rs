@@ -292,6 +292,12 @@ impl History for FakeHistory {
         self.git.touched_since(head, start, path)
     }
 
+    /// The repository's own `.git`, as for a repository with its main
+    /// worktree; unlogged, since every start reads it.
+    fn common_dir(&self, repository: &str) -> Option<String> {
+        Some(format!("{repository}/.git"))
+    }
+
     fn valid_branch(&self, name: &str) -> bool {
         self.log.push(format!("valid_branch {name}"));
         !name.is_empty()

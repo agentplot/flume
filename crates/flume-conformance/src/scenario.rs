@@ -142,5 +142,6 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         submission: SubmissionHeld::default(),
         failures: vec![],
         priority: 0,
+        shown: None,
     }
 }

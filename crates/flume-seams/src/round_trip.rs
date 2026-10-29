@@ -206,6 +206,7 @@ fn held() -> HeldState {
         },
         failures: vec!["the agent did not end".into()],
         priority: -3,
+        shown: Some("code · working; 1 running".into()),
     }
 }
 
@@ -594,7 +595,14 @@ fn the_agent_seams_answers() {
             question: "Do you trust the files in this folder?".into(),
             answer: "1".into(),
         }),
+        kind: Some("agent".into()),
     });
+    let before: AgentCommand =
+        serde_json::from_str(r#"{"program":"agent","args":[],"env":{},"prompt_args":[]}"#).unwrap();
+    assert_eq!(
+        before.kind, None,
+        "a command written before it named a kind"
+    );
     for reading in [Reading::Yes, Reading::No, Reading::Unknown] {
         round_trips(reading);
     }
@@ -633,6 +641,42 @@ fn the_terminal_seams_answers() {
     );
     round_trips(Opened::Refused {
         reason: "identity live".into(),
+    });
+    round_trips(Opened::Held {
+        screen: "WARNING: Bypass Permissions mode".into(),
+    });
+    round_trips(Opened::NotComeUp {
+        screen: "agent: command not found".into(),
+    });
+    round_trips(TerminalTidy {
+        closed: vec!["the tab fix--one".into()],
+        kept: vec!["the workspace r main, held by the pane w1:p3".into()],
+    });
+    round_trips(Clues {
+        stage: "code".into(),
+        state: "working".into(),
+        agent: Some(identity()),
+        base: BaseCount {
+            running: 3,
+            asking: 1,
+            waiting_on_caller: 1,
+            stalled: 0,
+        },
+    });
+    assert_eq!(
+        BaseCount {
+            running: 3,
+            asking: 1,
+            waiting_on_caller: 1,
+            stalled: 0
+        }
+        .to_string(),
+        "3 running · 1 asking · 1 waiting on caller · 0 stalled"
+    );
+    round_trips(Shown::Shown);
+    round_trips(Shown::ShowsNone);
+    round_trips(Shown::Failed {
+        reason: "the terminal refused".into(),
     });
     round_trips(Sent::Sent);
     round_trips(Sent::Refused {

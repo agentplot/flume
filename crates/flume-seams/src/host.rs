@@ -74,6 +74,10 @@ pub trait Host: Send + Sync {
     /// it (29).
     fn login(&self, name: &str) -> Option<String>;
 
+    /// A line written to the host's log, for what fails nothing, as a
+    /// clue that failed to show (139).
+    fn log(&self, line: &str);
+
     /// The host-wide lock over the room, held until the guard is dropped,
     /// so two starts at once never pass the bound (70, 75).
     fn room(&self) -> RoomGuard;

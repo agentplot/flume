@@ -2,11 +2,12 @@
 //! has stopped is removed through its repository's teardown, kept when
 //! it holds work or its teardown fails; its branch goes only through
 //! remove-branch's judgement, named once when kept; nothing is removed
-//! while the merge queue cannot be read; its held state and folder go
-//! last.
+//! while the merge queue cannot be read; what the terminal made for it
+//! is tidied, kept where what flume did not make holds it (137, 138);
+//! its held state and folder go last.
 
 use crate::start::Starts;
-use crate::{Answer, BranchKept, Engine, KeptPlace, Step, Tidied};
+use crate::{Answer, BranchKept, Engine, KeptPlace, Step, TerminalTidied, Tidied};
 use flume_seams::*;
 
 impl Engine {
@@ -134,8 +135,16 @@ impl Engine {
                 commits,
             });
         }
+        let terminal = self.terminal.tidy(&at);
         if self.remove_held(id) {
             tidied.removed.push(id.clone());
+            if !terminal.closed.is_empty() || !terminal.kept.is_empty() {
+                tidied.terminal.push(TerminalTidied {
+                    place: id.clone(),
+                    closed: terminal.closed,
+                    kept: terminal.kept,
+                });
+            }
         }
         true
     }

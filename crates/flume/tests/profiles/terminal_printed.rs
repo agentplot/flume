@@ -73,6 +73,28 @@ impl TerminalHarness for Harness {
     fn submitted(&self, _identity: &Identity) -> Vec<String> {
         vec![]
     }
+
+    /// A person runs the printed command and sees any question it asks:
+    /// the terminal reads no start held.
+    fn held(&self) -> Option<AgentCommand> {
+        None
+    }
+
+    fn never_up(&self) -> Option<AgentCommand> {
+        None
+    }
+
+    fn makes(&self) -> bool {
+        false
+    }
+
+    fn person_pane(&self, _place: &PlaceRef) {}
+
+    fn move_pane(&self, _identity: &Identity) {}
+
+    fn shows_clues(&self) -> bool {
+        false
+    }
 }
 
 #[test]

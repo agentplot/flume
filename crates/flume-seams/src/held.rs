@@ -26,6 +26,10 @@ pub struct HeldState {
     /// caller after (7, 70).
     #[serde(default)]
     pub priority: i64,
+    /// The clues last shown for the place, so a settle shows them again
+    /// only when they change (139); never read to decide anything.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shown: Option<String>,
 }
 
 /// What a launch fixed of a place (8, 21).

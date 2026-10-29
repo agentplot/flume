@@ -3,8 +3,10 @@
 //! commit since a start, `rev-list <start>..<head>` for the commits
 //! since, `log -1 --format=%H -- <path>` for the newest
 //! commit touching a path, `log <start>..<head> -- <path>` for a path in
-//! a commit since, and `check-ref-format --branch` (24, 25, C.1). A
-//! revision git cannot read holds nothing since and touches nothing.
+//! a commit since, `rev-parse --git-common-dir` for the repository's
+//! common git directory, and `check-ref-format --branch` (24, 25, 33,
+//! C.1). A revision git cannot read holds nothing since and touches
+//! nothing.
 
 use crate::git::Git;
 use flume_seams::{History, Revision, Touch};
@@ -80,6 +82,15 @@ impl History for GitHistory {
                 path,
             ])
             .is_ok_and(|commits| !commits.trim().is_empty())
+    }
+
+    fn common_dir(&self, repository: &str) -> Option<String> {
+        let common = Git::at(repository)
+            .text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])
+            .ok()?;
+        let common = std::path::PathBuf::from(common.trim());
+        let common = common.canonicalize().unwrap_or(common);
+        Some(common.to_string_lossy().into_owned())
     }
 
     fn valid_branch(&self, name: &str) -> bool {
