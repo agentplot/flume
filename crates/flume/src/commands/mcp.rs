@@ -69,7 +69,7 @@ fn answer(
                 .as_str()
                 .unwrap_or(PROTOCOL),
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "flume", "version": env!("CARGO_PKG_VERSION") },
+            "serverInfo": { "name": "flume", "version": crate::VERSION },
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),
