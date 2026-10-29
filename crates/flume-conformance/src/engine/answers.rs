@@ -171,6 +171,7 @@ fn place_status() -> PlaceStatus {
         tasks: Some(vec![Task {
             text: "1.1 do it".into(),
             ticked: true,
+            group: Some(0),
         }]),
         submission: Some(SubmissionStatus {
             read: SubmissionRead::Found {
@@ -655,6 +656,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].submission.verdict.failed.words",
             "status.places[].submission.waiting",
             "status.places[].tasks",
+            "status.places[].tasks[].group",
             "status.places[].tasks[].text",
             "status.places[].tasks[].ticked",
             "status.places[].version",
@@ -791,6 +793,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.submission.verdict.failed.words",
             "launched.place.submission.waiting",
             "launched.place.tasks",
+            "launched.place.tasks[].group",
             "launched.place.tasks[].text",
             "launched.place.tasks[].ticked",
             "launched.place.version",
@@ -933,6 +936,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.submission.verdict.failed.words",
             "acted.status.submission.waiting",
             "acted.status.tasks",
+            "acted.status.tasks[].group",
             "acted.status.tasks[].text",
             "acted.status.tasks[].ticked",
             "acted.status.version",
@@ -1187,6 +1191,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.submission.verdict.failed.words",
             "woken.place.submission.waiting",
             "woken.place.tasks",
+            "woken.place.tasks[].group",
             "woken.place.tasks[].text",
             "woken.place.tasks[].ticked",
             "woken.place.version",

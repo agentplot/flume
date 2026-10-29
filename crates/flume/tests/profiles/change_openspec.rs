@@ -95,8 +95,10 @@ fn reading_writes_nothing() {
             tasks: vec![Task {
                 text: "1.1 one".into(),
                 ticked: false,
+                group: None,
             }],
             archived: false,
+            groups: vec![],
         },
     );
     let revision = Revision::new(repository.commit("the change"));
@@ -144,6 +146,7 @@ fn openspec_reads(dir: &std::path::Path, name: &str) -> (bool, bool, Vec<Task>) 
         .map(|task| Task {
             text: task["description"].as_str().unwrap_or_default().to_string(),
             ticked: task["done"].as_bool().unwrap_or_default(),
+            group: None,
         })
         .collect();
     (exists, planning.unwrap_or(false), tasks)

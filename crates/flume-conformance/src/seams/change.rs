@@ -17,6 +17,21 @@ fn task(text: &str, ticked: bool) -> Task {
     Task {
         text: text.into(),
         ticked,
+        group: Some(0),
+    }
+}
+
+fn in_group(text: &str, ticked: bool, group: usize) -> Task {
+    Task {
+        group: Some(group),
+        ..task(text, ticked)
+    }
+}
+
+fn group(number: &str, title: &str) -> TaskGroup {
+    TaskGroup {
+        number: Some(number.into()),
+        title: Some(title.into()),
     }
 }
 
@@ -44,6 +59,16 @@ pub fn scenarios<H: ChangeHarness>() -> Vec<Scenario<H>> {
             cites: &["127", "24", "27"],
             run: the_path_names_the_change::<H>,
         },
+        Scenario {
+            name: "change: read-change gives each task its group, each group its number and title",
+            cites: &["86", "87"],
+            run: each_task_in_its_group::<H>,
+        },
+        Scenario {
+            name: "change: tasks above every heading are a group with no number or title, ahead of the others",
+            cites: &["86", "87"],
+            run: tasks_above_every_heading::<H>,
+        },
     ]
 }
 
@@ -60,6 +85,7 @@ fn read_change_gives_its_facts<H: ChangeHarness>(harness: &H) -> Outcome {
         planning_complete: true,
         tasks: vec![task("1.1 one", true), task("1.2 two", false)],
         archived: false,
+        groups: vec![group("1", "One")],
     };
     let (repository, revision) = harness.committed("ticking", &written);
     let read = facts(
@@ -73,6 +99,7 @@ fn read_change_gives_its_facts<H: ChangeHarness>(harness: &H) -> Outcome {
         planning_complete: true,
         tasks: vec![task("1.1 one", true)],
         archived: true,
+        groups: vec![group("1", "One")],
     };
     let (repository, revision) = harness.committed("filed", &archived);
     let read = facts(harness.seam().read_change(&repository, &revision, "filed"))?;
@@ -104,6 +131,7 @@ fn the_same_revision_the_same_answer<H: ChangeHarness>(harness: &H) -> Outcome {
             planning_complete: false,
             tasks: vec![task("1.1 one", false)],
             archived: false,
+            groups: vec![group("1", "One")],
         },
     );
     let first = harness.seam().read_change(&repository, &revision, "steady");
@@ -121,6 +149,66 @@ fn the_path_names_the_change<H: ChangeHarness>(harness: &H) -> Outcome {
     ensure!(
         !path.starts_with('/'),
         "the path {path} is not inside the place"
+    );
+    Ok(())
+}
+
+fn each_task_in_its_group<H: ChangeHarness>(harness: &H) -> Outcome {
+    let written = ChangeFacts {
+        exists: true,
+        planning_complete: true,
+        tasks: vec![
+            in_group("1.1 the grammar", true, 0),
+            in_group("1.2 the parser", false, 0),
+            in_group("2.1 its tests", false, 1),
+        ],
+        archived: false,
+        groups: vec![group("1", "Parser"), group("2", "Tests")],
+    };
+    let (repository, revision) = harness.committed("grouped", &written);
+    let read = facts(
+        harness
+            .seam()
+            .read_change(&repository, &revision, "grouped"),
+    )?;
+    ensure_eq!(read, written, "the change read with its groups");
+    ensure_eq!(
+        read.first_unticked_group(),
+        Some(0),
+        "the first unticked group"
+    );
+    ensure_eq!(
+        read.tasks_of(1)
+            .map(|task| task.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["2.1 its tests"],
+        "the second group's tasks"
+    );
+    Ok(())
+}
+
+fn tasks_above_every_heading<H: ChangeHarness>(harness: &H) -> Outcome {
+    let written = ChangeFacts {
+        exists: true,
+        planning_complete: true,
+        tasks: vec![
+            in_group("first, above every heading", true, 0),
+            in_group("1.1 under the heading", false, 1),
+        ],
+        archived: false,
+        groups: vec![TaskGroup::default(), group("1", "Parser")],
+    };
+    let (repository, revision) = harness.committed("headed", &written);
+    let read = facts(harness.seam().read_change(&repository, &revision, "headed"))?;
+    ensure_eq!(
+        read,
+        written,
+        "the change read with a group above its headings"
+    );
+    ensure_eq!(
+        read.first_unticked_group(),
+        Some(1),
+        "the first unticked group"
     );
     Ok(())
 }

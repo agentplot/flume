@@ -128,8 +128,10 @@ pub fn write_change(world: &World, name: &str) {
             tasks: vec![Task {
                 text: "1.1 do it".into(),
                 ticked: false,
+                group: None,
             }],
             archived: false,
+            groups: vec![],
         },
     );
 }

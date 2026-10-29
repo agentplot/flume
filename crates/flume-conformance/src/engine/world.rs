@@ -227,9 +227,11 @@ impl World {
                     .map(|task| Task {
                         text: format!("1.{} task", task + 1),
                         ticked: task < ticked,
+                        group: None,
                     })
                     .collect(),
                 archived: false,
+                groups: vec![],
             },
         );
         revision

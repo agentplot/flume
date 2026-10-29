@@ -69,6 +69,7 @@ fn read(repository: &str, revision: &Revision, name: &str) -> Result<ChangeFacts
         planning_complete,
         tasks,
         archived: archived_as.is_some(),
+        groups: vec![],
     })
 }
 
@@ -147,6 +148,7 @@ pub fn tasks(text: &str) -> Vec<Task> {
             Some(Task {
                 text: text.to_string(),
                 ticked,
+                group: None,
             })
         })
         .collect()
@@ -253,15 +255,18 @@ mod tests {
             vec![
                 Task {
                     text: "1.1 first".into(),
-                    ticked: false
+                    ticked: false,
+                    group: None,
                 },
                 Task {
                     text: "1.2 second".into(),
-                    ticked: true
+                    ticked: true,
+                    group: None,
                 },
                 Task {
                     text: "1.3 nested".into(),
-                    ticked: true
+                    ticked: true,
+                    group: None,
                 },
             ]
         );

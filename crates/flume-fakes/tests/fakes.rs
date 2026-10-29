@@ -381,6 +381,48 @@ fn the_merge_queues_outcomes_are_planned() {
 }
 
 #[test]
+fn the_change_is_scripted_as_groups() {
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let change = FakeChange::new(git.clone());
+    change.set(
+        "/r",
+        &base,
+        "one",
+        FakeChange::groups(&[("1", "Parser", 2), ("2", "Tests", 1)], 2),
+    );
+    let ChangeRead::Read { facts } = change.read_change("/r", &base, "one") else {
+        panic!("the change read");
+    };
+    assert_eq!(
+        facts.groups,
+        vec![
+            TaskGroup {
+                number: Some("1".into()),
+                title: Some("Parser".into()),
+            },
+            TaskGroup {
+                number: Some("2".into()),
+                title: Some("Tests".into()),
+            },
+        ]
+    );
+    assert_eq!(
+        facts
+            .tasks
+            .iter()
+            .map(|task| (task.text.as_str(), task.ticked, task.group))
+            .collect::<Vec<_>>(),
+        vec![
+            ("1.1 task", true, Some(0)),
+            ("1.2 task", true, Some(0)),
+            ("2.1 task", false, Some(1)),
+        ]
+    );
+    assert_eq!(facts.first_unticked_group(), Some(1));
+}
+
+#[test]
 fn the_kinds_and_change_are_set() {
     let git = FakeGit::new();
     let base = git.init("/r", "main");

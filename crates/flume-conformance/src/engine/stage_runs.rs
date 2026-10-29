@@ -436,8 +436,10 @@ fn facts_never_paired_across_heads(_: &()) -> Outcome {
         tasks: vec![Task {
             text: "1.1".into(),
             ticked: true,
+            group: None,
         }],
         archived: false,
+        groups: vec![],
     };
     world.change.set(REPOSITORY, &base, "one", done);
     world.kinds.set_kinds(
@@ -473,8 +475,10 @@ fn facts_never_paired_across_heads(_: &()) -> Outcome {
             tasks: vec![Task {
                 text: "1.1".into(),
                 ticked: true,
+                group: None,
             }],
             archived: false,
+            groups: vec![],
         },
     );
     world
