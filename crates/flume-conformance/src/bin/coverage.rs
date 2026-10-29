@@ -11,18 +11,27 @@ fn main() -> ExitCode {
     let scenarios = suite::every();
     let problems = coverage::check(&clauses::all(), &clauses::unbuilt(), &scenarios);
     if problems.is_empty() {
-        let left: Vec<String> = clauses::unbuilt()
+        // The clauses left, gathered by the change that builds them.
+        let mut by_change: Vec<(&str, Vec<String>)> = Vec::new();
+        for (clause, change) in clauses::unbuilt() {
+            match by_change.iter_mut().find(|(named, _)| *named == change) {
+                Some((_, left)) => left.push(clause),
+                None => by_change.push((change, vec![clause])),
+            }
+        }
+        let left: Vec<String> = by_change
             .iter()
-            .map(|(clause, change)| format!("{clause} to {change}"))
+            .map(|(change, left)| format!("{} to {change}", left.join(", ")))
             .collect();
         println!(
-            "every clause of Parts A and B, I1 to I8 and S1 to S49 at {} is cited by the suite's {} scenarios{}",
+            "every clause of Parts A and B, I1 to I8 and S1 to S{} at {} is cited by the suite's {} scenarios{}",
+            clauses::SCENARIOS,
             clauses::REVISION,
             scenarios.len(),
             if left.is_empty() {
                 String::new()
             } else {
-                format!("; {} left", left.join(", "))
+                format!("; {} left", left.join("; "))
             }
         );
         return ExitCode::SUCCESS;

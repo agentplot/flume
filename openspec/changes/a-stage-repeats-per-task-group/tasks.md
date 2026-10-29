@@ -46,6 +46,6 @@ agentplot/weir (`~/Code/github_agentplot/weir`).
 
 ## 6. Coverage and the gate
 
-- [ ] 6.1 Have the suite's clause list hold Part A, Part B, I1 to I8 and S1 to S52 at the statement's revision d75cf53, as the clause-coverage spec lists them, naming no clause as unbuilt, and cite 140 to 142 and S50 to S52 from this change's scenarios, adding a scenario wherever a clause has none (clause-coverage spec). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
+- [ ] 6.1 Have the suite's clause list hold Part A, Part B, I1 to I8 and S1 to S63 at the statement's revision 57a1ba9, as the clause-coverage spec lists them, naming as unbuilt only records 0020 to 0022's clauses no change has built, each with the record's change, and cite 140 to 142, 154, 157 and S50 to S52 from this change's scenarios, adding a scenario wherever a clause has none (clause-coverage spec). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
 - [ ] 6.2 Remove the `_open.md` item on weir's `repeat`, since 1.2 moved the pin (record 0019). True when `sluice exec main -- moon run root:format` passes.
 - [ ] 6.3 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools root:format root:changes root:specs` passes.
