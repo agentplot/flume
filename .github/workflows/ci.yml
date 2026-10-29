@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
-      - run: ls ~/.rustup/toolchains; cat ~/.rustup/settings.toml; rustup --version; which -a rustup
+      - run: ls ~/.rustup/toolchains
       - uses: cachix/install-nix-action@v31
       - uses: cachix/cachix-action@v16
         with:
