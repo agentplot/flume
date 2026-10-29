@@ -316,6 +316,7 @@ fn fix_round(
     held.submission.due = false;
     for stage in held.stages.iter_mut().skip(target) {
         stage.state = StageState::NotReached;
+        stage.made_from = None;
     }
     Some((target, words.to_string()))
 }

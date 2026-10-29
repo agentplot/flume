@@ -12,6 +12,7 @@
 //! stands pending, and it goes once every end is delivered or its caller
 //! drops it (3, 62).
 
+use crate::prompt::group_name;
 use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -26,23 +27,33 @@ pub fn notice(place: &PlaceRecord, of: &EndOf) -> String {
     )
 }
 
-/// What ended, in the words a notice gives it (43).
+/// What ended, in the words a notice gives it, a repetition's end naming
+/// its task group (43, 142).
 pub fn what_ended(of: &EndOf) -> String {
     match of {
         EndOf::Stage {
             stage, state, end, ..
-        } => match state {
-            StageState::Delivered => format!("{stage} delivered"),
-            StageState::EndedShort if end.needs == Some(StopKind::FoundWork) => {
-                format!("{stage} found work")
+        } => {
+            let stage = match &end.group {
+                Some(group) => format!(
+                    "{stage} on {}",
+                    group_name(group.number.as_deref(), group.title.as_deref())
+                ),
+                None => stage.clone(),
+            };
+            match state {
+                StageState::Delivered => format!("{stage} delivered"),
+                StageState::EndedShort if end.needs == Some(StopKind::FoundWork) => {
+                    format!("{stage} found work")
+                }
+                StageState::EndedShort => format!("{stage} needs an answer"),
+                StageState::Finished => format!("{stage} finished"),
+                StageState::Lost => format!("{stage} lost"),
+                StageState::NeverBegun => format!("{stage} never begun"),
+                StageState::Stuck => format!("{stage} stuck"),
+                other => format!("{stage} {other:?}"),
             }
-            StageState::EndedShort => format!("{stage} needs an answer"),
-            StageState::Finished => format!("{stage} finished"),
-            StageState::Lost => format!("{stage} lost"),
-            StageState::NeverBegun => format!("{stage} never begun"),
-            StageState::Stuck => format!("{stage} stuck"),
-            other => format!("{stage} {other:?}"),
-        },
+        }
         EndOf::Submission { verdict, .. } => match verdict {
             Verdict::Landed { commit, .. } => format!("submission landed {commit}"),
             Verdict::Failed { .. } | Verdict::Conflict { .. } => "submission failed".into(),

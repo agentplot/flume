@@ -4,6 +4,8 @@
 //! work, and the stop check, which keeps at work an agent that
 //! would go quiet with its deliverable missing and nothing said.
 
+use crate::prompt::group_text;
+use crate::reading::find_group;
 use crate::start::Starts;
 use crate::{Act, Answer, Engine, Step};
 use flume_seams::*;
@@ -22,7 +24,8 @@ impl Engine {
 
     /// An agent's stop-short, with its identity, its start's secret, its
     /// words and whether it needs an answer or found work: the stage ends
-    /// short with the words whole and the kind, and no next stage starts,
+    /// short with the words whole, the kind and a repetition's task group
+    /// (142), and no next stage starts,
     /// except that found work from the kind's last stage starts its fix
     /// round once the agent is quiet (41, 42, 131).
     pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
@@ -57,6 +60,7 @@ impl Engine {
                     words: Some(words.to_string()),
                     needs: Some(kind),
                     made: made.clone(),
+                    group: start.group.clone().map(Box::new),
                     ..StageEnd::default()
                 });
                 Step::Write(true)
@@ -141,9 +145,12 @@ impl Engine {
             Deliverable::ChangeWritten => format!(
                 "change written: the change {change}, its planning complete, in a commit made since the stage started"
             ),
-            Deliverable::TasksTicked => format!(
-                "tasks ticked: every task of the change {change} ticked, in a commit made since the stage started"
-            ),
+            Deliverable::TasksTicked => match start.group.as_ref().filter(|_| declared.repeats) {
+                Some(group) => group_words(group, facts.change.as_ref(), change),
+                None => format!(
+                    "tasks ticked: every task of the change {change} ticked, in a commit made since the stage started"
+                ),
+            },
             Deliverable::ChangeArchived => format!(
                 "change archived: the change {change} archived on {}, in a commit made since the stage started",
                 place.branch
@@ -165,4 +172,39 @@ impl Engine {
             declared.name,
         ))
     }
+}
+
+/// What a repetition delivers, in the stop check's words: its group, by
+/// its number and title, every task of it ticked in a commit made since
+/// it started, and the tasks of it left unticked at the head; or, where
+/// the change no longer holds the group, that its heading is to stay as
+/// it was (110, 140).
+fn group_words(group: &GroupHeld, change: Option<&ChangeRead>, path: &str) -> String {
+    let named = group_text(Some(group));
+    let named = named.lines().next().unwrap_or_default();
+    let facts = match change {
+        Some(ChangeRead::Read { facts }) => Some(facts),
+        _ => None,
+    };
+    let left = facts.and_then(|facts| {
+        find_group(facts, group).map(|at| {
+            facts
+                .tasks_of(at)
+                .filter(|task| !task.ticked)
+                .map(|task| task.text.clone())
+                .collect::<Vec<_>>()
+        })
+    });
+    let left = match left {
+        Some(left) if left.is_empty() => String::new(),
+        Some(left) => format!(". Left unticked: {}", left.join("; ")),
+        None if facts.is_some() => format!(
+            ". The change no longer holds {named}: leave its heading as it was, and tick its tasks: {}",
+            group.tasks.join("; ")
+        ),
+        None => String::new(),
+    };
+    format!(
+        "tasks ticked: every task of your task group, {named}, of the change {path} ticked, in a commit made since the stage started{left}"
+    )
 }

@@ -7,7 +7,7 @@
 //! `openspec/changes/<name>` in the place (127).
 
 use crate::git::Git;
-use flume_seams::{Change, ChangeFacts, ChangeRead, Revision, Task};
+use flume_seams::{Change, ChangeFacts, ChangeRead, Revision, Task, TaskGroup};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -48,9 +48,9 @@ fn read(repository: &str, revision: &Revision, name: &str) -> Result<ChangeFacts
         (Some(archived), false) => (archived.clone(), git.files(&revision.0, archived)?),
         _ => (directory, files),
     };
-    let tasks = match git.file(&revision.0, &format!("{read_from}/tasks.md"))? {
+    let (tasks, groups) = match git.file(&revision.0, &format!("{read_from}/tasks.md"))? {
         Some(text) => tasks(&text),
-        None => vec![],
+        None => (vec![], vec![]),
     };
     let planning_complete = if !exists && archived_as.is_none() {
         false
@@ -69,6 +69,7 @@ fn read(repository: &str, revision: &Revision, name: &str) -> Result<ChangeFacts
         planning_complete,
         tasks,
         archived: archived_as.is_some(),
+        groups,
     })
 }
 
@@ -127,29 +128,66 @@ fn spec_driven_planned(files: &[String]) -> bool {
             .any(|path| path.starts_with("specs/") && path.ends_with(".md"))
 }
 
-/// The `- [ ]` and `- [x]` lines of a tasks file, in order.
-pub fn tasks(text: &str) -> Vec<Task> {
-    text.lines()
-        .filter_map(|line| {
-            let line = line.trim_start();
-            let rest = line
-                .strip_prefix("- [")
-                .or_else(|| line.strip_prefix("* ["))?;
-            let mut chars = rest.chars();
-            let mark = chars.next()?;
-            let rest = chars.as_str().strip_prefix(']')?;
-            let ticked = match mark {
-                ' ' => false,
-                'x' | 'X' => true,
-                _ => return None,
-            };
-            let text = rest.strip_prefix(' ').unwrap_or(rest).trim_end();
-            Some(Task {
-                text: text.to_string(),
-                ticked,
-            })
-        })
-        .collect()
+/// The `- [ ]` and `- [x]` lines of a tasks file, in order, each in
+/// its task group: a `## <n>. <title>` heading starts a group holding the
+/// tasks under it, the tasks above every heading are a group with no
+/// number or title, and any other heading starts no group (86, C.3).
+pub fn tasks(text: &str) -> (Vec<Task>, Vec<TaskGroup>) {
+    let mut tasks = vec![];
+    let mut groups = vec![];
+    for line in text.lines() {
+        if let Some(group) = heading(line) {
+            groups.push(group);
+            continue;
+        }
+        let Some((text, ticked)) = checkbox(line) else {
+            continue;
+        };
+        if groups.is_empty() {
+            groups.push(TaskGroup::default());
+        }
+        tasks.push(Task {
+            text,
+            ticked,
+            group: Some(groups.len() - 1),
+        });
+    }
+    (tasks, groups)
+}
+
+/// A `## <n>. <title>` heading's group, its number the digits and its
+/// title what follows the dot.
+fn heading(line: &str) -> Option<TaskGroup> {
+    let rest = line.strip_prefix("## ")?.trim_start();
+    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+    let (number, rest) = rest.split_at(digits);
+    let title = rest.strip_prefix('.')?;
+    if number.is_empty() || !title.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let title = title.trim();
+    (!title.is_empty()).then(|| TaskGroup {
+        number: Some(number.to_string()),
+        title: Some(title.to_string()),
+    })
+}
+
+/// A `- [ ]` or `- [x]` line's text and whether it is ticked.
+fn checkbox(line: &str) -> Option<(String, bool)> {
+    let line = line.trim_start();
+    let rest = line
+        .strip_prefix("- [")
+        .or_else(|| line.strip_prefix("* ["))?;
+    let mut chars = rest.chars();
+    let mark = chars.next()?;
+    let rest = chars.as_str().strip_prefix(']')?;
+    let ticked = match mark {
+        ' ' => false,
+        'x' | 'X' => true,
+        _ => return None,
+    };
+    let text = rest.strip_prefix(' ').unwrap_or(rest).trim_end();
+    Some((text.to_string(), ticked))
 }
 
 static CHECKOUTS: AtomicUsize = AtomicUsize::new(0);
@@ -245,25 +283,84 @@ pub fn status(git: &Git, revision: &Revision, name: &str) -> Result<Option<bool>
 mod tests {
     use super::*;
 
+    fn task(text: &str, ticked: bool, group: usize) -> Task {
+        Task {
+            text: text.into(),
+            ticked,
+            group: Some(group),
+        }
+    }
+
+    fn group(number: &str, title: &str) -> TaskGroup {
+        TaskGroup {
+            number: Some(number.into()),
+            title: Some(title.into()),
+        }
+    }
+
     #[test]
     fn a_tasks_file_gives_its_checkbox_lines_in_order() {
         let text = "# Tasks\n\n## 1. One\n\n- [ ] 1.1 first\n- [x] 1.2 second\n  - [X] 1.3 nested\nnot - [ ] a task\n- [~] 1.4 neither\n";
         assert_eq!(
             tasks(text),
-            vec![
-                Task {
-                    text: "1.1 first".into(),
-                    ticked: false
-                },
-                Task {
-                    text: "1.2 second".into(),
-                    ticked: true
-                },
-                Task {
-                    text: "1.3 nested".into(),
-                    ticked: true
-                },
-            ]
+            (
+                vec![
+                    task("1.1 first", false, 0),
+                    task("1.2 second", true, 0),
+                    task("1.3 nested", true, 0),
+                ],
+                vec![group("1", "One")]
+            )
+        );
+    }
+
+    #[test]
+    fn groups_are_read_from_their_headings() {
+        let text = "# Tasks\n\n## 1. Parser\n\n- [x] 1.1 the grammar\n- [ ] 1.2 the parser\n\n## 2. Tests\n\n- [ ] 2.1 its tests\n";
+        assert_eq!(
+            tasks(text),
+            (
+                vec![
+                    task("1.1 the grammar", true, 0),
+                    task("1.2 the parser", false, 0),
+                    task("2.1 its tests", false, 1),
+                ],
+                vec![group("1", "Parser"), group("2", "Tests")]
+            )
+        );
+    }
+
+    #[test]
+    fn tasks_above_every_heading_are_a_group_of_their_own() {
+        let text = "# Tasks\n\n- [ ] first\n\n## 1. Parser\n\n- [ ] 1.1 the parser\n";
+        assert_eq!(
+            tasks(text),
+            (
+                vec![task("first", false, 0), task("1.1 the parser", false, 1)],
+                vec![TaskGroup::default(), group("1", "Parser")]
+            )
+        );
+        assert_eq!(
+            tasks("- [x] alone\n"),
+            (vec![task("alone", true, 0)], vec![TaskGroup::default()]),
+            "a file with no heading"
+        );
+        assert_eq!(tasks("# Tasks\n"), (vec![], vec![]), "no task, no group");
+    }
+
+    #[test]
+    fn any_other_heading_starts_no_group() {
+        let text = "## 1. Parser\n- [ ] 1.1 a\n### 1.2 detail\n## Notes\n## 2.no space\n## 3.\n# 4. Top\n##5. Tight\n- [ ] 1.2 b\n";
+        assert_eq!(
+            tasks(text),
+            (
+                vec![task("1.1 a", false, 0), task("1.2 b", false, 0)],
+                vec![group("1", "Parser")]
+            )
+        );
+        assert_eq!(
+            heading("## 12.  Many  words "),
+            Some(group("12", "Many  words"))
         );
     }
 

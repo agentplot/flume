@@ -1,5 +1,5 @@
 use crate::{lock, FakeGit, Log};
-use flume_seams::{Change, ChangeFacts, ChangeRead, Revision};
+use flume_seams::{Change, ChangeFacts, ChangeRead, Revision, Task, TaskGroup};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
@@ -31,6 +31,39 @@ impl FakeChange {
         lock(&self.state)
             .facts
             .insert((repository.into(), revision.clone(), name.into()), facts);
+    }
+
+    /// A planned change of task groups, each `(number, title, tasks)`,
+    /// its tasks `<number>.<n> task` in order and the first `ticked` of
+    /// them ticked: the facts a script sets for a change whose
+    /// `tasks.md` is written as groups (86).
+    pub fn groups(groups: &[(&str, &str, usize)], ticked: usize) -> ChangeFacts {
+        let tasks = groups
+            .iter()
+            .enumerate()
+            .flat_map(|(group, (number, _, count))| {
+                (1..=*count).map(move |n| (group, format!("{number}.{n} task")))
+            })
+            .enumerate()
+            .map(|(at, (group, text))| Task {
+                text,
+                ticked: at < ticked,
+                group: Some(group),
+            })
+            .collect();
+        ChangeFacts {
+            exists: true,
+            planning_complete: true,
+            tasks,
+            archived: false,
+            groups: groups
+                .iter()
+                .map(|(number, title, _)| TaskGroup {
+                    number: Some(number.to_string()),
+                    title: Some(title.to_string()),
+                })
+                .collect(),
+        }
     }
 
     pub fn unreadable(&self, repository: &str) {

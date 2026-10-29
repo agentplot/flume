@@ -32,6 +32,7 @@ pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
+pub use prompt::group_name;
 pub use wait::{WaitFor, WAIT_POLL};
 
 use flume_seams::{

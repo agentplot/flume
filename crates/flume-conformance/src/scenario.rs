@@ -102,6 +102,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             send_back_to: Some("code".into()),
             send_back_limit: Some(2),
             makes: vec![],
+            repeats: false,
         }],
     };
     HeldState {
@@ -144,6 +145,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             start: None,
             since: None,
             room: None,
+            made_from: None,
         }],
         current: None,
         submission: SubmissionHeld::default(),

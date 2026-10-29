@@ -63,8 +63,9 @@ group (140 to 142).
   repetition, and names its group.
 - `place-status`: a repeating stage with its group among the change's
   groups.
-- `clause-coverage`: the suite's list at blueprints d75cf53, 140 to 142
-  and S50 to S52 among it.
+- `clause-coverage`: the suite's list at blueprints 57a1ba9, 140 to 142,
+  154, 157 and S50 to S52 cited, records 0020 to 0022's other clauses
+  named as unbuilt.
 
 ## Impact
 
@@ -77,7 +78,7 @@ group (140 to 142).
   group, and the launch resolving a kind's name and version.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake change's
   groups; the engine scenarios for each new requirement, S50 to S52
-  among them; the clause list at d75cf53.
+  among them; the clause list at 57a1ba9.
 - `crates/flume`: the weir revision in `Cargo.toml` and `Cargo.lock`,
   the kinds profile's mapping, the OpenSpec profile's groups, flume's
   own kinds one declaration per version with change@2 and its code

@@ -85,7 +85,8 @@ impl Engine {
     }
 
     /// Shows the place's clues where they changed since last shown: its
-    /// current stage and that stage's state, and the count of the places
+    /// current stage, a repeating one with its group's place, and that
+    /// stage's state, and the count of the places
     /// of its repository on its base. A clue is display only: one that
     /// fails is logged and fails nothing, and nothing reads one back
     /// (139).
@@ -94,7 +95,8 @@ impl Engine {
             return;
         };
         let held = read.state;
-        let Some(mut clues) = self.clues(&held, None) else {
+        let group = self.current_group(&held);
+        let Some(mut clues) = self.clues(&held, None, group.as_ref()) else {
             return;
         };
         clues.base = self.base_count(&held.place);
@@ -138,14 +140,19 @@ impl Engine {
         match held.stages[index].state {
             StageState::Starting | StageState::Started => self.deliver(id),
             StageState::Begun | StageState::Stuck | StageState::Lost => self.read_end(id),
-            StageState::Delivered | StageState::Finished => self.advance(id),
+            StageState::Delivered | StageState::Finished | StageState::Repeating => {
+                self.advance(id)
+            }
             StageState::EndedShort => self.found_work(id),
             _ => false,
         }
     }
 
     /// After a stage delivered and its agent ended, starts the next stage
-    /// unless it waits on its caller's word (40, 47).
+    /// unless it waits on its caller's word (40, 47); after a repetition
+    /// delivered its group with a task still unticked, starts the same
+    /// stage again, waiting for room like any start, unless a hold names
+    /// it (70, 140; core.26).
     fn advance(&self, id: &PlaceId) -> bool {
         let next = self.update(id, |held| {
             let Some(index) = held.current else {
@@ -154,6 +161,13 @@ impl Engine {
             let ended = &held.stages[index];
             if ended.start.as_ref().is_some_and(|start| start.live) {
                 return Step::Keep(None);
+            }
+            if ended.state == StageState::Repeating {
+                if held.hold_on(&ended.name).is_some() {
+                    held.stages[index].state = StageState::OnHold;
+                    return Step::Write(None);
+                }
+                return Step::Keep(Some(index));
             }
             let next = index + 1;
             if next >= held.stages.len() || held.stages[next].state != StageState::NotReached {

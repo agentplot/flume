@@ -5,7 +5,7 @@
 //! terminal, never while another of the place's is live, and only under
 //! the host's bound (70).
 
-use crate::prompt::{asks, render};
+use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
 use crate::{repository_id, Engine, Step};
 use flume_seams::*;
@@ -91,6 +91,10 @@ impl Engine {
     /// short is in every prompt (28), as `agent`, the profile of the
     /// stage's program, gives it; and a first stage started in a place
     /// that could not be made ready carries the step and its words (12).
+    /// A repeating stage fills `{{group}}` with `group`, the start's,
+    /// which none fills where the change could not be read, and
+    /// `{{notes}}` with its notes' path; a stage that does not repeat
+    /// fills neither (27, 141).
     pub(crate) fn fill(
         &self,
         held: &HeldState,
@@ -98,6 +102,7 @@ impl Engine {
         identity: &Identity,
         words: Option<&str>,
         agent: Option<&dyn Agent>,
+        group: Option<Option<&GroupHeld>>,
     ) -> Result<String, PromptPart> {
         let place = &held.place;
         let stage = &place.kind.stages[index];
@@ -122,6 +127,10 @@ impl Engine {
                 PromptPart::Unready => Some(unready(&held.readiness)),
                 PromptPart::Needs => stop_short.clone(),
                 PromptPart::Made => (!stage.makes.is_empty()).then(|| self.made_path(&place.id)),
+                PromptPart::Group => group.filter(|_| stage.repeats).map(group_text),
+                PromptPart::Notes => stage
+                    .repeats
+                    .then(|| notes_path(&self.store.folder(&place.id), &stage.name)),
             }
         };
         let mut text = render(&stage.prompt, fill)?;
@@ -137,6 +146,38 @@ impl Engine {
             text.push_str(&unready(&held.readiness));
         }
         Ok(text)
+    }
+
+    /// The task group a start of the stage at `index` takes at `head`,
+    /// for a repeating stage: the first of the change's groups holding a
+    /// task unticked there, or none where every task is ticked or the
+    /// change holds none (140). None for a stage that does not repeat,
+    /// and for a change that cannot be read at `head`, which gives a
+    /// repetition nothing to work from.
+    pub(crate) fn group_at(
+        &self,
+        held: &HeldState,
+        index: usize,
+        head: &Revision,
+    ) -> Option<Option<GroupHeld>> {
+        let place = &held.place;
+        if !place.kind.stages[index].repeats {
+            return None;
+        }
+        let change = self.bound(place).ok()?.change?;
+        let ChangeRead::Read { facts } = change.read_change(&place.repository, head, &place.name)
+        else {
+            return None;
+        };
+        Some(facts.first_unticked_group().map(|at| {
+            let group = &facts.groups[at];
+            GroupHeld {
+                index: at,
+                number: group.number.clone(),
+                title: group.title.clone(),
+                tasks: facts.tasks_of(at).map(|task| task.text.clone()).collect(),
+            }
+        }))
     }
 
     /// Starts the stage at `index` with one fresh agent and `words` in
@@ -202,9 +243,21 @@ impl Engine {
                     return Step::Write(Err(Start::Unresolved(reason.clone())));
                 }
             };
+            let head = self
+                .history
+                .head(&held.place.repository, &held.place.branch)
+                .unwrap_or_else(|| held.place.base_revision.clone());
+            let group = self.group_at(held, index, &head);
             let identity = self.next_identity(held, index);
             let agent = resolution.agent.as_ref();
-            let text = match self.fill(held, index, &identity, words.as_deref(), Some(agent)) {
+            let text = match self.fill(
+                held,
+                index,
+                &identity,
+                words.as_deref(),
+                Some(agent),
+                group.as_ref().map(Option::as_ref),
+            ) {
                 Err(part) => {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::Refused;
@@ -227,10 +280,6 @@ impl Engine {
                     return Step::Write(Err(Start::WaitingForRoom));
                 }
             }
-            let head = self
-                .history
-                .head(&held.place.repository, &held.place.branch)
-                .unwrap_or_else(|| held.place.base_revision.clone());
             let secret = self.host.secret();
             let stage = &mut held.stages[index];
             stage.state = StageState::Starting;
@@ -253,8 +302,10 @@ impl Engine {
                     .program
                     .clone()
                     .unwrap_or_default(),
-                settings: resolution.resolved.settings.clone(),
-                from: resolution.resolved.from.clone(),
+                // Names only: the values reach the agent's command and
+                // nothing kept (32, 56).
+                settings: resolution.resolved.settings.unvalued(),
+                from: flume_seams::unvalued_from(&resolution.resolved.from),
                 record: None,
                 prompt: Prompt {
                     text: text.clone(),
@@ -267,6 +318,7 @@ impl Engine {
                 last_head_move: now,
                 past_limit: false,
                 printed: None,
+                group: group.clone().flatten(),
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {

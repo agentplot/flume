@@ -663,7 +663,7 @@ fn agent_settings_at_the_launch() {
     let launch = |model: &str| {
         serde_json::json!({
             "model": {"layer": "launch", "value": model},
-            "env.A": {"layer": "launch", "value": "1"},
+            "env.A": {"layer": "launch", "value": "<set>"},
             "program": {"layer": "kind", "value": STAND_IN},
         })
     };
@@ -675,7 +675,7 @@ fn agent_settings_at_the_launch() {
         let agent = current_agent(&host, &repository.dir, &place);
         assert_eq!(agent["stage"], stage, "{agent}");
         assert_eq!(agent["settings"]["model"], model, "{agent}");
-        assert_eq!(agent["settings"]["env"]["A"], "1", "{agent}");
+        assert_eq!(agent["settings"]["env"]["A"], "<set>", "{agent}");
         assert_eq!(agent["settings"]["from"], launch(model), "{agent}");
         if stage != "verify" {
             deliver(&host, &repository.dir, &place, stage);
@@ -686,7 +686,8 @@ fn agent_settings_at_the_launch() {
 #[test]
 fn host_settings_for_a_kind() {
     // 32, C.7: the host's configuration gives change's agents a variable,
-    // read at the start, held as written, handed to the agent read.
+    // read at the start, named in status with no value, handed to the
+    // agent read.
     let host = Host::new("host-settings");
     host.configure("[kinds.change.agents]\nenv = { WORK_HOME = \"~/work\" }\n\n[kinds.change.agents.stages.code]\nmodel = \"haiku\"\n");
     let repository = repository("host-settings", None);
@@ -702,15 +703,16 @@ fn host_settings_for_a_kind() {
     let place = format!("{}/places/change--one", repository.name());
     let agent = current_agent(&host, &repository.dir, &place);
     assert_eq!(agent["stage"], "construct");
-    assert_eq!(agent["settings"]["env"]["WORK_HOME"], "~/work", "{agent}");
+    assert_eq!(agent["settings"]["env"]["WORK_HOME"], "<set>", "{agent}");
     assert_eq!(
         agent["settings"]["from"]["env.WORK_HOME"],
-        serde_json::json!({"layer": "host-kind", "value": "~/work"})
+        serde_json::json!({"layer": "host-kind", "value": "<set>"})
     );
     assert!(agent["settings"]["from"].get("model").is_none(), "{agent}");
     let printed = agent["printed"].as_str().expect("the printed command");
     let expanded = format!("WORK_HOME={}/work", host.home().to_string_lossy());
-    assert!(printed.contains(&expanded), "{printed}");
+    assert!(!printed.contains("WORK_HOME"), "{printed}");
+    assert!(printed_env(&host, &place).contains(&expanded), "{printed}");
     deliver(&host, &repository.dir, &place, "construct");
     let agent = current_agent(&host, &repository.dir, &place);
     assert_eq!(agent["stage"], "code");
@@ -718,6 +720,111 @@ fn host_settings_for_a_kind() {
         agent["settings"]["from"]["model"],
         serde_json::json!({"layer": "host-kind", "value": "haiku"})
     );
+}
+
+/// The environment file the place's printed command names, beside its
+/// mark in the place's folder.
+fn printed_env(host: &Host, place: &str) -> String {
+    let dir = Path::new(&host.folder(place)).join("printed");
+    let file = std::fs::read_dir(&dir)
+        .expect("the printed command's folder")
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "env"))
+        .expect("the printed command's environment");
+    std::fs::read_to_string(file).expect("the environment file")
+}
+
+#[test]
+fn no_environment_value_is_printed_or_kept() {
+    // 32, 56: a token the host's configuration gives an agent, and one a
+    // launch gives, are in no answer, text or JSON, of a launch, a status
+    // or a settle; the host's is in no record but the printed command's
+    // environment file, the launch's in no record but that and the
+    // place's held state, which keeps the launch's layer for later starts;
+    // and each of those the host's user alone may read.
+    use std::os::unix::fs::PermissionsExt;
+    let host_token = "sk-ant-oat01-host-0123456789abcdefghijklmnopqrstuvwxyz";
+    let launch_token = "sk-ant-oat01-launch-0123456789abcdefghijklmnopqrstuvwxyz";
+    let host = Host::new("no-values");
+    host.configure(&format!(
+        "[kinds.change.agents.env]\nCLAUDE_CODE_OAUTH_TOKEN = \"{host_token}\"\n"
+    ));
+    let repository = repository("no-values", None);
+    let kinds = kinds_file(&host, false);
+    let launch_env = format!("env.LAUNCH_TOKEN={launch_token}");
+    let mut answers = vec![];
+    for json in [true, false] {
+        let name = if json { "one" } else { "two" };
+        let mut words = vec![
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            name,
+            "--kinds",
+            &kinds,
+            "--agent",
+            &launch_env,
+        ];
+        if json {
+            words.push("--json");
+        }
+        let launched = host.stand_in(&repository.dir, &words, &[]);
+        assert_eq!(launched.code, 0, "the launch refused");
+        answers.push(launched.text);
+    }
+    let place = format!("{}/places/change--one", repository.name());
+    deliver(&host, &repository.dir, &place, "construct");
+    for words in [
+        vec!["status", "--json"],
+        vec!["status"],
+        vec!["status", place.as_str(), "--json"],
+        vec!["status", place.as_str()],
+    ] {
+        answers.push(host.flume(&repository.dir, &words, &[]).text);
+    }
+    answers.push(
+        host.stand_in(&repository.dir, &["settle", &place, "--json"], &[])
+            .text,
+    );
+    let agent = current_agent(&host, &repository.dir, &place);
+    assert_eq!(
+        agent["settings"]["env"]["CLAUDE_CODE_OAUTH_TOKEN"], "<set>",
+        "status names the variable"
+    );
+    for (n, answer) in answers.iter().enumerate() {
+        for token in [host_token, launch_token] {
+            assert!(!answer.contains(token), "answer {n} holds a token's value");
+        }
+    }
+    for (path, bytes) in files_under(&host.state()) {
+        let text = String::from_utf8_lossy(&bytes);
+        let printed_env = path.extension().is_some_and(|ext| ext == "env");
+        let held = path.extension().is_some_and(|ext| ext == "json")
+            && path.parent().is_some_and(|dir| dir.ends_with("places"));
+        if printed_env || held {
+            let mode = std::fs::metadata(&path)
+                .expect("a record")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o077, 0, "{} is readable by others", path.display());
+        }
+        if !printed_env {
+            assert!(
+                !text.contains(host_token),
+                "{} holds the host's token",
+                path.display()
+            );
+        }
+        if !printed_env && !held {
+            assert!(
+                !text.contains(launch_token),
+                "{} holds the launch's token",
+                path.display()
+            );
+        }
+    }
 }
 
 #[test]

@@ -184,8 +184,10 @@ impl Agent for FakeAgent {
             env,
             prompt_args: vec![prompt.to_string()],
             folder_trust: Some(FolderTrust {
-                question: "Do you trust this folder?".into(),
-                answer: "yes".into(),
+                question: "Yes, I trust this folder".into(),
+                focus: ">".into(),
+                next: "down".into(),
+                confirm: "enter".into(),
             }),
             kind: Some("agent".into()),
         }
@@ -254,10 +256,8 @@ impl Agent for FakeAgent {
             .and_then(|record| record.last_words)
     }
 
-    fn stop_short(&self, agent: &Identity) -> String {
-        format!(
-            "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work the stage cannot deliver past, run `flume needs --found \"<the work you found>\"`; as {agent}"
-        )
+    fn stop_short(&self, _agent: &Identity) -> String {
+        "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work the stage cannot deliver past, run `flume needs --found \"<the work you found>\"`".into()
     }
 
     fn send_back(&self) -> Offered {

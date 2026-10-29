@@ -50,6 +50,7 @@ pub fn bump(agents: usize) -> Kind {
             send_back_to: Some("code".into()),
             send_back_limit: Some(3),
             makes: vec![],
+            repeats: false,
         }],
     }
 }
@@ -84,8 +85,8 @@ pub fn scenarios<H: KindsHarness>() -> Vec<Scenario<H>> {
             run: what_a_stage_makes::<H>,
         },
         Scenario {
-            name: "kinds: flume's own declaration holds fix, chore and change, each landing and sent back to code",
-            cites: &["22", "19", "S35"],
+            name: "kinds: flume's own kinds are fix@1, chore@1, change@1 and change@2, each landing and sent back to code, change@2's code stage alone repeating",
+            cites: &["22", "19", "S35", "140", "157"],
             run: flumes_own::<H>,
         },
         Scenario {
@@ -185,23 +186,35 @@ fn what_a_stage_makes<H: KindsHarness>(harness: &H) -> Outcome {
 
 fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
     let own = harness.seam().flumes_own();
-    let mut names: Vec<&str> = own.iter().map(|kind| kind.name.as_str()).collect();
+    let mut names: Vec<String> = own
+        .iter()
+        .map(|kind| format!("{}@{}", kind.name, kind.version))
+        .collect();
     names.sort_unstable();
-    ensure_eq!(names, vec!["change", "chore", "fix"], "flume's own kinds");
-    let named = |name: &str| own.iter().find(|kind| kind.name == name);
-    ensure!(
-        own.iter().all(|kind| kind.lands && kind.version == 1),
-        "a kind of flume's own does not land at version 1"
+    ensure_eq!(
+        names,
+        vec!["change@1", "change@2", "chore@1", "fix@1"],
+        "flume's own kinds"
     );
-    let stages = |kind: &Kind| -> Vec<(String, Vec<Deliverable>)> {
+    ensure!(
+        own.iter().all(|kind| kind.lands),
+        "a kind of flume's own does not land"
+    );
+    let stages = |kind: &Kind| -> Vec<(String, Vec<Deliverable>, bool)> {
         kind.stages
             .iter()
-            .map(|stage| (stage.name.clone(), stage.deliverables.clone()))
+            .map(|stage| {
+                (
+                    stage.name.clone(),
+                    stage.deliverables.clone(),
+                    stage.repeats,
+                )
+            })
             .collect()
     };
-    for (name, unready) in [("fix", true), ("chore", true), ("change", false)] {
-        let kind = named(name).ok_or(format!("no {name}"))?;
-        ensure_eq!(kind.branch_prefix, name, "the branch prefix");
+    for kind in &own {
+        let unready = kind.name != "change";
+        ensure_eq!(kind.branch_prefix, kind.name, "the branch prefix");
         ensure_eq!(kind.starts_unready, unready, "whether it starts unready");
         ensure_eq!(
             kind.stages
@@ -210,23 +223,36 @@ fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
             Some("code".to_string()),
             "where it goes back, never verify (22, S35)"
         );
-    }
-    for name in ["fix", "chore"] {
+        let due = if kind.name == "change" {
+            vec![
+                (
+                    "construct".to_string(),
+                    vec![Deliverable::ChangeWritten],
+                    false,
+                ),
+                (
+                    "code".to_string(),
+                    vec![Deliverable::TasksTicked],
+                    kind.version == 2,
+                ),
+                (
+                    "verify".to_string(),
+                    vec![Deliverable::ChangeArchived],
+                    false,
+                ),
+            ]
+        } else {
+            vec![("code".to_string(), vec![Deliverable::Commits], false)]
+        };
         ensure_eq!(
-            stages(named(name).ok_or("no kind")?),
-            vec![("code".to_string(), vec![Deliverable::Commits])],
-            "the stages of a fix or a chore"
+            stages(kind),
+            due,
+            format!(
+                "{}@{}'s stages, change@2's code alone repeating",
+                kind.name, kind.version
+            )
         );
     }
-    ensure_eq!(
-        stages(named("change").ok_or("no change")?),
-        vec![
-            ("construct".to_string(), vec![Deliverable::ChangeWritten]),
-            ("code".to_string(), vec![Deliverable::TasksTicked]),
-            ("verify".to_string(), vec![Deliverable::ChangeArchived]),
-        ],
-        "change's stages"
-    );
     Ok(())
 }
 

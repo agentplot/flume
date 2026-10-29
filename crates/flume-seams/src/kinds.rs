@@ -51,6 +51,11 @@ pub struct Stage {
     /// declaration gives it; none where it declares nothing (129, C.2).
     #[serde(default)]
     pub makes: Vec<String>,
+    /// Whether the stage repeats per task group: a fresh agent for each
+    /// group of its change's tasks in turn, in the same place (140); false
+    /// where it declares nothing, and in a held state written before.
+    #[serde(default)]
+    pub repeats: bool,
 }
 
 /// What must exist for a stage to end, in one of the six forms (24), or
@@ -87,7 +92,27 @@ pub struct Settings {
     pub beside: Option<String>,
 }
 
+/// What stands in a record or an answer for an environment variable's
+/// value: a value may be a secret, a token or a password, so no status,
+/// log line, refusal or record of a start holds one, only that the
+/// variable is set (32, 56).
+pub const SET: &str = "<set>";
+
 impl Settings {
+    /// These settings with each environment variable's value given as
+    /// [`SET`], for a record or an answer: the names stand and no value
+    /// does (32, 56).
+    pub fn unvalued(&self) -> Settings {
+        Settings {
+            env: self
+                .env
+                .keys()
+                .map(|name| (name.clone(), SET.to_string()))
+                .collect(),
+            ..self.clone()
+        }
+    }
+
     /// These settings with `over`'s fields set over them, field by field
     /// (32).
     pub fn under(&self, over: &Settings) -> Settings {
@@ -181,6 +206,27 @@ impl std::fmt::Display for Layer {
 pub struct Given {
     pub layer: Layer,
     pub value: String,
+}
+
+/// `from` with the value of every environment variable, `env.<NAME>`,
+/// given as [`SET`], so the layers stand and no value does (32, 56).
+pub fn unvalued_from(from: &BTreeMap<String, Given>) -> BTreeMap<String, Given> {
+    from.iter()
+        .map(|(key, given)| {
+            let value = if key.starts_with("env.") {
+                SET.to_string()
+            } else {
+                given.value.clone()
+            };
+            (
+                key.clone(),
+                Given {
+                    layer: given.layer,
+                    value,
+                },
+            )
+        })
+        .collect()
 }
 
 /// The declaration a kind resolved to (19).

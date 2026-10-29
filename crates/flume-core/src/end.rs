@@ -9,7 +9,7 @@
 //! is taken only when its own record is its start's (77); one whose record
 //! cannot be read is neither taken nor lost, and is not quiet (31, 93).
 
-use crate::reading::AgentReading;
+use crate::reading::{repeats_on, AgentReading, Facts};
 use crate::start::Starts;
 use crate::{Engine, Step, QUIET_LIMIT};
 use flume_seams::*;
@@ -41,13 +41,8 @@ impl Engine {
         if gone && !declared.conversation {
             let facts = self.facts(&held, &bound, Some(index));
             if facts.delivered {
-                return self.ended(
-                    id,
-                    &identity,
-                    StageState::Delivered,
-                    facts.head,
-                    facts.report,
-                );
+                let state = delivered_state(&held, index, &facts);
+                return self.ended(id, &identity, state, facts.head, facts.report);
             }
         }
         if gone {
@@ -76,13 +71,8 @@ impl Engine {
                 self.failed_end(id, &identity, &reason);
                 return false;
             }
-            return self.ended(
-                id,
-                &identity,
-                StageState::Delivered,
-                facts.head,
-                facts.report,
-            );
+            let state = delivered_state(&held, index, &facts);
+            return self.ended(id, &identity, state, facts.head, facts.report);
         }
         let now = self.host.now();
         let limit = declared.quiet_limit.unwrap_or(QUIET_LIMIT);
@@ -163,7 +153,11 @@ impl Engine {
 
     /// The stage under `identity` ended as `state`, with what it
     /// delivered and the lines its run wrote of what it made, its agent
-    /// ended or lost (40, 43, 45, 129); false when it had ended.
+    /// ended or lost (40, 43, 45, 129); a repetition that delivered its
+    /// group with a task still unticked records no end, and its stage
+    /// repeats, keeping where its run's lines began so the stage's end
+    /// carries every repetition's lines in order (129, 140); false when
+    /// it had ended.
     pub(crate) fn ended(
         &self,
         id: &PlaceId,
@@ -186,9 +180,15 @@ impl Engine {
             start.first_quiet = None;
             start.past_limit = false;
             stage.state = state;
+            if state == StageState::Repeating {
+                stage.made_from.get_or_insert(start.made_from);
+                stage.end = None;
+                return Step::Write(true);
+            }
+            let from = stage.made_from.take().unwrap_or(start.made_from);
             let made = lines
                 .iter()
-                .skip(start.made_from)
+                .skip(from)
                 .map(|line| Made::read(line))
                 .collect();
             stage.end = Some(StageEnd {
@@ -215,5 +215,17 @@ impl Engine {
             }
             Step::Write(())
         });
+    }
+}
+
+/// How a delivered start ends its stage: a repetition with a task of the
+/// change still unticked at the head it delivered at repeats, recording
+/// no end; any other start, the last repetition among them, delivers the
+/// stage (40, 43, 140).
+fn delivered_state(held: &HeldState, index: usize, facts: &Facts) -> StageState {
+    if repeats_on(held, index, facts) {
+        StageState::Repeating
+    } else {
+        StageState::Delivered
     }
 }

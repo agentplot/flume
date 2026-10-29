@@ -22,6 +22,19 @@ only the operator holds, so it is the operator's to run by hand, outside
   check takes it, and `flume:live` names the pinned `claude` itself
   (record 0018; C.5).
 
+- **No environment value is printed or kept by a start.** Status, a
+  refusal's words, the record of a start and the printed command name
+  each variable of an agent's environment and give no value, since a
+  value may be a token; the printed command's environment is a file the
+  host's user alone may read, and the launch's settings, which later
+  starts read, are kept in held state the host's user alone may read
+  (32, 56; record 0017).
+- **The folder-trust question is answered from the screen.** The herdr
+  profile reads Claude Code's trust dialog off the pane whatever herdr's
+  `agent start` answered, moves the focus to "Yes, I trust this folder",
+  confirms only there, and reads again until the dialog is gone, within
+  30 seconds (34; record 0018).
+
 ## Capabilities
 
 ### New Capabilities
@@ -34,10 +47,14 @@ None.
   wrapper runs.
 - `the-gate`: the `check-live` layer's walkthroughs pass under the
   pinned Claude Code, run by the operator.
+- `place-status`: an agent's environment is named with no value.
+- `terminal-profiles`: herdr answers the folder-trust question from the
+  screen; the printed command keeps its environment in a file.
 
 ## Impact
 
-- `crates/flume`: none expected; the profile's unwrapping and the herdr
-  test of a wrapper are on main. A failure the live run finds is fixed
-  here.
+- `crates/flume`, `crates/flume-core`, `crates/flume-seams`: the
+  failures the live run found, a token printed in status and a
+  folder-trust question left unanswered, are fixed here; the folder-trust
+  seam names the focus mark and the keys that move and confirm it.
 - The operator: a test account, `claude setup-token`, and one run.

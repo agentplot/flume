@@ -190,6 +190,15 @@ pub trait Terminal: Send + Sync {
     /// never begun; none where it shows nothing (136, 35, 43).
     fn screen(&self, agent: &crate::Identity) -> Option<String>;
 
+    /// For a start whose agent has not said it started: the folder-trust
+    /// question its open was given, answered as open answers it where the
+    /// terminal shows it now, since the program may ask it after open has
+    /// returned; whether it was answered. A terminal that reads no screen
+    /// answers nothing (34, 35).
+    fn answer_trust(&self, _agent: &crate::Identity) -> bool {
+        false
+    }
+
     /// The agent's end (97).
     fn close(&self, agent: &crate::Identity) -> Closed;
 

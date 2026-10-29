@@ -22,10 +22,16 @@ pub enum PromptPart {
     /// The path of `made.jsonl` in the place's own folder, for a stage
     /// that declares what it makes (129).
     Made,
+    /// A repeating stage's repetition's task group, its number, title and
+    /// tasks, or words saying it has none (140, 141).
+    Group,
+    /// The path of a repeating stage's notes, `notes/<stage>.md` in the
+    /// place's own folder, which flume names and never reads (141, C.7).
+    Notes,
 }
 
 impl PromptPart {
-    pub const ALL: [PromptPart; 13] = [
+    pub const ALL: [PromptPart; 15] = [
         PromptPart::Brief,
         PromptPart::Name,
         PromptPart::Kind,
@@ -39,6 +45,8 @@ impl PromptPart {
         PromptPart::Unready,
         PromptPart::Needs,
         PromptPart::Made,
+        PromptPart::Group,
+        PromptPart::Notes,
     ];
 
     pub fn name(self) -> &'static str {
@@ -56,6 +64,8 @@ impl PromptPart {
             PromptPart::Unready => "unready",
             PromptPart::Needs => "needs",
             PromptPart::Made => "made",
+            PromptPart::Group => "group",
+            PromptPart::Notes => "notes",
         }
     }
 

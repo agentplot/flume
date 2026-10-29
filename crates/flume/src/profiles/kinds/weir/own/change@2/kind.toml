@@ -1,0 +1,33 @@
+# flume's own change@2, one version of one kind, built into the binary and read
+# through weir-kinds like any other declaration (22, 157, C.2; design 7).
+# Each prompt is a path beside this file, in this version's own
+# directory. A kind a repository or a launch declares by the same name
+# stands over flume's own (19).
+
+[kinds.change]
+version = 2
+branch = "change"
+starts_unready = false
+lands = true
+
+[[kinds.change.stages]]
+name = "construct"
+prompt = "prompts/change-construct.md"
+deliverables = ["change"]
+agents = [{}]
+
+[[kinds.change.stages]]
+name = "code"
+prompt = "prompts/change-code.md"
+deliverables = ["tasks"]
+agents = [{}]
+# A fresh agent for each task group in turn, the code prompt putting
+# what differs between them last (140, 141; core.31; record 0019).
+repeat = "per-task-group"
+
+[[kinds.change.stages]]
+name = "verify"
+prompt = "prompts/change-verify.md"
+deliverables = ["archived"]
+agents = [{}]
+on_fail = "code"

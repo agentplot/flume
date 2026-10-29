@@ -24,7 +24,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The kind format, read by weir's crate at a revision of weir's main, moved
 # by a chore when weir changes (core.4, core.22).
-weir-kinds = { git = "https://github.com/agentplot/weir", rev = "a214b95f5d19c74dba1b9691ed6c783e2677e23c" }
+weir-kinds = { git = "https://github.com/agentplot/weir", rev = "0b6eb5abb806a51fec128b01f97c4dcff6170219" }
 toml = "1"
 clap = { version = "4", features = ["derive"] }
 # The digest of a prompt an agent acks received, and of the plugin a

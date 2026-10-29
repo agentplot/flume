@@ -128,6 +128,7 @@ pub fn stage(name: &str, deliverable: Option<Deliverable>, prompt: &str) -> Stag
         send_back_to: None,
         send_back_limit: None,
         makes: vec![],
+        repeats: false,
     }
 }
 
@@ -226,10 +227,33 @@ impl World {
                     .map(|task| Task {
                         text: format!("1.{} task", task + 1),
                         ticked: task < ticked,
+                        group: None,
                     })
                     .collect(),
                 archived: false,
+                groups: vec![],
             },
+        );
+        revision
+    }
+
+    /// A commit on `branch` to the change `name`, its planning complete,
+    /// written as task groups, each `(number, title, tasks)`, with the
+    /// first `ticked` of its tasks ticked (86).
+    pub fn tick_groups(
+        &self,
+        branch: &str,
+        name: &str,
+        groups: &[(&str, &str, usize)],
+        ticked: usize,
+    ) -> Revision {
+        let path = format!("plans/{name}/tasks.md");
+        let revision = self.commit(branch, &[&path]);
+        self.change.set(
+            REPOSITORY,
+            &revision,
+            name,
+            FakeChange::groups(groups, ticked),
         );
         revision
     }

@@ -39,14 +39,22 @@ pub const KIND: &str = "claude";
 pub const VERSION: &str = crate::VERSION;
 
 /// A line of the folder-trust dialog Claude Code 2.1.296 shows in a
-/// folder new to it: its confirming choice, short enough that no width of
-/// pane wraps it. The dialog lists "No, exit" first and focused, so the
-/// answer moves down to "Yes, I trust this folder" and confirms, in
-/// herdr's key names (34; record 0018).
+/// folder new to it, with or without its warning that the folder's
+/// `.claude/settings.json` pre-approves tools: its confirming choice,
+/// short enough that no width of pane wraps it. The dialog lists "No,
+/// exit" first and focused, so the terminal moves the focus down until
+/// the line of "Yes, I trust this folder" carries the focus mark, and
+/// only then confirms, in herdr's key names (34; record 0018).
 pub const TRUST_QUESTION: &str = "Yes, I trust this folder";
 
-/// The keys that answer the folder-trust dialog yes (34).
-pub const TRUST_ANSWER: &str = "down enter";
+/// The mark on the line of the dialog's choice in focus.
+pub const TRUST_FOCUS: &str = "\u{276f}";
+
+/// The key that moves the dialog's focus to the next choice.
+pub const TRUST_NEXT: &str = "down";
+
+/// The key that confirms the dialog's choice in focus.
+pub const TRUST_CONFIRM: &str = "enter";
 
 /// The variables the command gives the agent, which the plugin's hooks
 /// read (33, 41, C.4).
@@ -235,7 +243,9 @@ impl Agent for Claude {
             prompt_args: vec![prompt.to_string()],
             folder_trust: Some(FolderTrust {
                 question: TRUST_QUESTION.into(),
-                answer: TRUST_ANSWER.into(),
+                focus: TRUST_FOCUS.into(),
+                next: TRUST_NEXT.into(),
+                confirm: TRUST_CONFIRM.into(),
             }),
             kind: Some(KIND.into()),
         }

@@ -1,12 +1,14 @@
 //! The kinds profile over weir's kind format (C.2; design 7): the kinds
-//! seam's scenarios against it on scratch repositories, S13, S33, an
-//! elaboration section, the binding from the default branch, a place
-//! profile flume does not hold, flume's own kinds and what their prompts
-//! ask.
+//! seam's scenarios against it on scratch repositories, S13, S33, a
+//! stage's repeat (140; weir 53, 57), an elaboration section, the binding
+//! from the default branch, a place profile flume does not hold, flume's
+//! own kinds, one declaration per version with change@1 and change@2
+//! side by side, and what their prompts ask (22, 141, 157).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
 use flume::profiles::kinds::weir::{binding_at, Weir, DECLARATION};
+use flume_conformance::engine::repeating_stages::GROUPS;
 use flume_conformance::engine::settling::{archive, change_at_verify, deliver_fix, fix_begun};
 use flume_conformance::engine::world::{launch, launched, refused, World, REPOSITORY};
 use flume_conformance::scenario::pass_all;
@@ -97,6 +99,9 @@ fn written(kinds: &[Kind]) -> (String, Vec<(String, String)>) {
                     .map(|name| format!("\"{name}\""))
                     .collect();
                 text.push_str(&format!("makes = [{}]\n", names.join(", ")));
+            }
+            if stage.repeats {
+                text.push_str("repeat = \"per-task-group\"\n");
             }
             text.push('\n');
         }
@@ -338,6 +343,7 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
                 send_back_to: None,
                 send_back_limit: None,
                 makes: vec![],
+                repeats: false,
             })
             .collect(),
     }
@@ -398,6 +404,93 @@ fn s33_a_repository_with_no_table_refuses_a_fix_naming_the_merge_queue_it_needs(
     assert!(
         reason.contains("fix") && reason.contains("merge queue"),
         "the refusal names not the kind and the merge queue: {reason}"
+    );
+    assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
+}
+
+/// A declaration of `kind` whose stage `code` delivers `delivers` and
+/// repeats per task group, beside stages that declare no repeat.
+fn repeating(kind: &str, delivers: &str) -> String {
+    format!(
+        r#"[kinds.{kind}]
+
+[[kinds.{kind}.stages]]
+name = "construct"
+prompt = "prompts/construct.md"
+deliverables = ["change"]
+agents = [{{}}]
+
+[[kinds.{kind}.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["{delivers}"]
+agents = [{{}}]
+repeat = "per-task-group"
+
+[[kinds.{kind}.stages]]
+name = "verify"
+prompt = "prompts/verify.md"
+deliverables = ["archived"]
+agents = [{{}}]
+"#
+    )
+}
+
+/// A scratch repository declaring `declaration`, each stage's prompt
+/// beside it, and its head.
+fn declaring_repeat(name: &str, declaration: &str) -> (Repository, String) {
+    let repository = Repository::new(name);
+    repository.write(DECLARATION, declaration);
+    for stage in ["construct", "code", "verify"] {
+        repository.write(
+            &format!(".config/prompts/{stage}.md"),
+            "{{brief}}\n\n{{needs}}",
+        );
+    }
+    let head = repository.commit("a stage that repeats per task group");
+    (repository, head)
+}
+
+#[test]
+fn a_repeating_stage_is_read_through_weirs_crate() {
+    let (repository, head) = declaring_repeat("repeat", &repeating("build", "tasks"));
+    let KindsRead::Read { kinds, .. } = Weir.read_kinds(&repository.name(), &Revision::new(head))
+    else {
+        panic!("the declaration did not read");
+    };
+    let repeats: Vec<(&str, bool)> = kinds[0]
+        .stages
+        .iter()
+        .map(|stage| (stage.name.as_str(), stage.repeats))
+        .collect();
+    assert_eq!(
+        repeats,
+        vec![("construct", false), ("code", true), ("verify", false)],
+        "the stage delivering tasks repeats, and every other stage not"
+    );
+}
+
+#[test]
+fn a_repeat_on_a_stage_of_commits_refuses_the_launch_naming_the_field() {
+    let (repository, head) = declaring_repeat("repeat-commits", &repeating("build", "commits"));
+    let name = repository.name();
+    match Weir.read_kinds(&name, &Revision::new(head.clone())) {
+        KindsRead::CouldNotRead { reason } => assert!(
+            reason.contains("kinds.build.stages[1].repeat"),
+            "the read names not the stage's repeat: {reason}"
+        ),
+        other => panic!("a repeat on a stage of commits read as {other:?}"),
+    }
+    let world = World::new();
+    base_at(&world, &name, &head);
+    let mut build = launch("build", "one", Some("x"));
+    build.repository = name;
+    let reason =
+        refused(&engine(&world, Arc::new(Weir)).launch(&build)).expect("the launch refused");
+    assert!(
+        reason.contains("kinds.build.stages[1].repeat"),
+        "the refusal names not the stage's repeat: {reason}"
     );
     assert_eq!(world.place.log.count("make"), 0, "places made");
     assert!(world.store.places().is_empty(), "held state was left");
@@ -559,18 +652,21 @@ fn flumes_own_repository_binds_git_worktree_openspec_and_sluice() {
 }
 
 /// A kind's name, version, branch prefix, whether it starts unready and
-/// lands, and its stages with their deliverables.
+/// lands, and its stages with their deliverables and whether each
+/// repeats.
 type Summary = (
     String,
     u32,
     String,
     bool,
     bool,
-    Vec<(String, Vec<Deliverable>)>,
+    Vec<(String, Vec<Deliverable>, bool)>,
 );
 
 #[test]
 fn flumes_own_kinds_are_built_in() {
+    // 22, 140, 157, C.2: fix@1, chore@1, change@1 and change@2, change@2's
+    // code stage repeating per task group and change@1's not.
     let own = Weir.flumes_own();
     let summary: Vec<Summary> = own
         .iter()
@@ -583,27 +679,37 @@ fn flumes_own_kinds_are_built_in() {
                 kind.lands,
                 kind.stages
                     .iter()
-                    .map(|stage| (stage.name.clone(), stage.deliverables.clone()))
+                    .map(|stage| {
+                        (
+                            stage.name.clone(),
+                            stage.deliverables.clone(),
+                            stage.repeats,
+                        )
+                    })
                     .collect(),
             )
         })
         .collect();
-    let code = |deliverable| vec![("code".to_string(), vec![deliverable])];
+    let code = |deliverable| vec![("code".to_string(), vec![deliverable], false)];
+    let change = |version: u32, repeats: bool| -> Summary {
+        (
+            "change".into(),
+            version,
+            "change".into(),
+            false,
+            true,
+            vec![
+                ("construct".into(), vec![Deliverable::ChangeWritten], false),
+                ("code".into(), vec![Deliverable::TasksTicked], repeats),
+                ("verify".into(), vec![Deliverable::ChangeArchived], false),
+            ],
+        )
+    };
     assert_eq!(
         summary,
         vec![
-            (
-                "change".into(),
-                1,
-                "change".into(),
-                false,
-                true,
-                vec![
-                    ("construct".into(), vec![Deliverable::ChangeWritten]),
-                    ("code".into(), vec![Deliverable::TasksTicked]),
-                    ("verify".into(), vec![Deliverable::ChangeArchived]),
-                ]
-            ),
+            change(1, false),
+            change(2, true),
             (
                 "chore".into(),
                 1,
@@ -632,10 +738,89 @@ fn flumes_own_kinds_are_built_in() {
     }
 }
 
-/// A world whose own kinds are the profile's built in.
-fn world_with_own_kinds() -> World {
+/// change@1's code prompt as flume held it before change@2 (22, 157).
+const CHANGE_1_CODE: &str = "You are the code stage of the change {{name}}, working in the place {{place}} on the branch {{branch}}, which was cut from {{base}}.\n\n{{#words}}This stage has been sent back to you with these words:\n\n{{words}}\n\nWhere the words name files contested and the base's revision the merge queue tested against, take that revision in before anything else: run `git merge <the revision the words name>` in this place, which merges it into {{branch}}, resolve each of the files contested, and commit the merge. Never rebase, and never rewrite a commit already on {{branch}}.\n\nWhere the change has been archived on {{branch}}, move it back out of the archive to {{change}} first. Then fix what the words name, and record the fix as a task of the change, ticked.\n\n{{/words}}Build the change at {{change}}: work through its tasks in order, tick each task in its tasks file as it is done, and commit as you go on {{branch}}. Your deliverable is the tasks ticked: the stage is done once a commit on {{branch}} holds every task of the change ticked and you are quiet. Leave the branch where your last commit puts it; what happens to it after this stage is not yours to do.\n\nIf you cannot go on without an answer, stop short: {{needs}}\n";
+
+/// flume's own kind `name` at `version`, as built in.
+fn own(name: &str, version: u32) -> Kind {
+    Weir.flumes_own()
+        .into_iter()
+        .find(|kind| kind.name == name && kind.version == version)
+        .unwrap_or_else(|| panic!("flume holds no {name}@{version}"))
+}
+
+#[test]
+fn each_versions_prompts_are_its_own() {
+    // 157, C.2, design 7: each of flume's own versions is a declaration of
+    // its own, under `own/<name>@<version>/`, whose prompts lie beside it;
+    // what the binary holds is what each directory holds, read as a
+    // launch's declaration is read from disk.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/profiles/kinds/weir/own");
+    let mut versions: Vec<String> = std::fs::read_dir(&dir)
+        .expect("flume's own kinds' directory")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    versions.sort();
+    assert_eq!(versions, ["change@1", "change@2", "chore@1", "fix@1"]);
+    let mut read = vec![];
+    for version in &versions {
+        let declaration = dir.join(version).join("kind.toml");
+        match Weir.read_declaration(&declaration.to_string_lossy()) {
+            KindsRead::Read { kinds, .. } => {
+                let named: Vec<String> = kinds
+                    .iter()
+                    .map(|kind| format!("{}@{}", kind.name, kind.version))
+                    .collect();
+                assert_eq!(named, [version.as_str()], "{version}'s one kind");
+                read.extend(kinds);
+            }
+            KindsRead::CouldNotRead { reason } => panic!("{version}: {reason}"),
+        }
+    }
+    assert_eq!(read, Weir.flumes_own(), "the kinds built in, as on disk");
+    let one = own("change", 1);
+    let two = own("change", 2);
+    assert_eq!(
+        one.stages[1].prompt, CHANGE_1_CODE,
+        "change@1's code prompt"
+    );
+    assert_ne!(
+        two.stages[1].prompt, CHANGE_1_CODE,
+        "change@2's code prompt"
+    );
+    for stage in [0, 2] {
+        assert_eq!(
+            one.stages[stage].prompt, two.stages[stage].prompt,
+            "change@2's {} is change@1's",
+            one.stages[stage].name
+        );
+    }
+    assert_eq!(
+        own("fix", 1).stages[0].prompt,
+        own("chore", 1).stages[0].prompt
+    );
+}
+
+/// flume's own kinds with `change` at `version` alone, as a flume that
+/// held that version of it and no other.
+fn own_at(version: u32) -> Vec<Kind> {
+    Weir.flumes_own()
+        .into_iter()
+        .filter(|kind| kind.name != "change" || kind.version == version)
+        .collect()
+}
+
+/// A world whose own kinds are the profile's built in, `change` at
+/// `version`.
+fn world_with_own_kinds(version: u32) -> World {
     let world = World::new();
-    world.kinds.set_own(Weir.flumes_own());
+    world.kinds.set_own(own_at(version));
     world
 }
 
@@ -669,33 +854,40 @@ fn asks_nothing_it_may_not(prompt: &str) {
 
 #[test]
 fn no_prompt_of_flumes_own_asks_to_submit() {
-    let world = world_with_own_kinds();
-    fix_begun(&world, "one").expect("a fix begun");
-    let fix = opened(&world, "fix", "one", "code", 1);
-    launched(
-        &world
-            .engine
-            .launch(&launch("chore", "two", Some("tidy the lock"))),
-    )
-    .expect("a chore launched");
-    world.settle(&World::id("chore", "two"));
-    let chore = opened(&world, "chore", "two", "code", 1);
-    change_at_verify(&world, "plan").expect("a change at verify");
-    let change: Vec<String> = ["construct", "code", "verify"]
-        .iter()
-        .map(|stage| opened(&world, "change", "plan", stage, 1))
-        .collect();
-    for prompt in [&fix, &chore].into_iter().chain(change.iter()) {
+    let mut prompts = vec![];
+    for version in [1, 2] {
+        let world = world_with_own_kinds(version);
+        fix_begun(&world, "one").expect("a fix begun");
+        prompts.push(opened(&world, "fix", "one", "code", 1));
+        launched(
+            &world
+                .engine
+                .launch(&launch("chore", "two", Some("tidy the lock"))),
+        )
+        .expect("a chore launched");
+        world.settle(&World::id("chore", "two"));
+        prompts.push(opened(&world, "chore", "two", "code", 1));
+        change_at_verify(&world, "plan").expect("a change at verify");
+        let change: Vec<String> = ["construct", "code", "verify"]
+            .iter()
+            .map(|stage| opened(&world, "change", "plan", stage, 1))
+            .collect();
+        assert!(change[0].contains("change written"), "change@{version}");
+        assert!(change[1].contains("tasks ticked"), "change@{version}");
+        assert!(
+            change[2].contains("verify.md") && change[2].contains("archive"),
+            "change@{version}"
+        );
+        prompts.extend(change);
+    }
+    for prompt in &prompts {
         asks_nothing_it_may_not(prompt);
         assert!(
             !prompt.to_lowercase().contains("merge"),
             "a merge asked with no conflict's words: {prompt}"
         );
     }
-    assert!(fix.contains("commits") && chore.contains("commits"));
-    assert!(change[0].contains("change written"));
-    assert!(change[1].contains("tasks ticked"));
-    assert!(change[2].contains("verify.md") && change[2].contains("archive"));
+    assert!(prompts[0].contains("commits") && prompts[1].contains("commits"));
 }
 
 /// The code prompt a conflict sends `kind`'s place back with, and the
@@ -714,7 +906,7 @@ fn sent_back_with_a_conflict(world: &World, kind: &str, name: &str) -> (String, 
 
 #[test]
 fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
-    let world = world_with_own_kinds();
+    let world = world_with_own_kinds(2);
     let mut prompts = vec![];
 
     let fix = fix_begun(&world, "one").expect("a fix begun");
@@ -758,4 +950,92 @@ fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
         let fix = prompt.find("Then fix").expect("the fix");
         assert!(merge < fix, "{kind}: the merge comes after the fix");
     }
+}
+
+/// The change place `name` launched at the change flume holds, written as
+/// `GROUPS` none ticked, and code's first start begun.
+fn change_code_begun(world: &World, name: &str) -> PlaceId {
+    launched(
+        &world
+            .engine
+            .launch(&launch("change", name, Some("plan it"))),
+    )
+    .expect("a change launched");
+    let id = World::id("change", name);
+    world.settle(&id);
+    world.tick_groups(&format!("change/{name}"), name, GROUPS, 0);
+    world.settle(&id);
+    assert_eq!(world.stage_state(&id, "code"), Some(StageState::Begun));
+    id
+}
+
+#[test]
+fn two_repetitions_prompts_are_equal_up_to_the_group() {
+    // 141, C.2, core.31: change@2's code prompt rendered for group 1 and,
+    // by a retry with an answer, for group 2: the texts are equal, byte
+    // for byte, up to the first character of the group, and the words
+    // come after it.
+    let world = world_with_own_kinds(2);
+    let id = change_code_begun(&world, "plan");
+    let first = opened(&world, "change", "plan", "code", 1);
+    world.tick_groups("change/plan", "plan", GROUPS, 2);
+    world.settle(&id);
+    let second = world.held(&id).expect("the place").stages[1]
+        .start
+        .clone()
+        .expect("code's second start");
+    let stopped = world.engine.needs(
+        &second.identity.to_string(),
+        &second.secret.0,
+        "Which schema does task 2.1 mean?",
+        StopKind::NeedsAnswer,
+    );
+    assert!(stopped.refusal().is_none(), "the stop-short: {stopped:?}");
+    world.settle(&id);
+    let retried = world.engine.retry(
+        &id,
+        flume_core::Retry::Stage("code".into()),
+        Some("the one in design 3".into()),
+        false,
+    );
+    assert!(retried.refusal().is_none(), "the retry: {retried:?}");
+    let third = opened(&world, "change", "plan", "code", 3);
+
+    let one = first.find("Group 1. One").expect("group 1 in the first");
+    let two = third.find("Group 2. Two").expect("group 2 in the third");
+    assert_eq!(one, two, "where each prompt's group begins");
+    assert_eq!(&first[..one], &third[..two], "the prompts up to the group");
+    assert!(!first[..one].contains("{{"), "a part left unfilled");
+    let answer = third.find("the one in design 3").expect("the answer");
+    assert!(answer > two, "the retry's words come before the group");
+    assert!(
+        first[one..].contains("The notes: ") && first.find("flume needs") < Some(one),
+        "the way to stop short before the group, the notes after: {first}"
+    );
+}
+
+#[test]
+fn a_place_launched_at_change_1_keeps_it() {
+    // 21, 22: a place launched by a flume holding change@1 alone is
+    // settled by one holding change@1 and change@2; it keeps change@1's
+    // stages, its code stage one agent for the whole change, and status
+    // names change@1.
+    let world = world_with_own_kinds(1);
+    let id = change_code_begun(&world, "old");
+    world.kinds.set_own(Weir.flumes_own());
+    world.tick_groups("change/old", "old", GROUPS, 2);
+    world.settle(&id);
+    let held = world.held(&id).expect("the place");
+    assert_eq!(held.place.kind.version, 1, "the place's kind");
+    assert!(!held.place.kind.stages[1].repeats, "code repeats");
+    assert_eq!(held.stages[1].starts, 1, "code's starts");
+    assert_eq!(world.stage_state(&id, "code"), Some(StageState::Begun));
+    let status = world.status(&id).expect("status");
+    assert_eq!((status.kind.as_str(), status.version), ("change", 1));
+    assert_eq!(status.stages[1].group, None, "a group named for change@1");
+    world.tick_groups("change/old", "old", GROUPS, 5);
+    world.settle(&id);
+    world.settle(&id);
+    assert_eq!(world.stage_state(&id, "verify"), Some(StageState::Begun));
+    assert_eq!(world.held(&id).expect("the place").stages[1].starts, 1);
 }

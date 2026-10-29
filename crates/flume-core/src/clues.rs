@@ -6,13 +6,20 @@
 //! clue is display only: nothing flume decides reads one back.
 
 use crate::start::Starts;
-use crate::{BaseClues, Engine, PlaceClues};
+use crate::{label, BaseClues, Engine, GroupStatus, PlaceClues};
 use flume_seams::*;
 
 impl Engine {
     /// The clues of a live place with a current stage, its agent's state
-    /// read where `state` gives none; none for any other place.
-    pub(crate) fn clues(&self, held: &HeldState, state: Option<AgentState>) -> Option<Clues> {
+    /// read where `state` gives none, a repeating stage named with
+    /// `group`'s place among the change's groups, `code 3/7`; none for any
+    /// other place.
+    pub(crate) fn clues(
+        &self,
+        held: &HeldState,
+        state: Option<AgentState>,
+        group: Option<&GroupStatus>,
+    ) -> Option<Clues> {
         if held.phase != Phase::Live {
             return None;
         }
@@ -27,7 +34,7 @@ impl Engine {
             None => word(&stage.state),
         };
         Some(Clues {
-            stage: stage.name.clone(),
+            stage: label(&stage.name, group),
             state,
             agent: agent.map(|start| start.identity.clone()),
             base: BaseCount::default(),
@@ -35,13 +42,15 @@ impl Engine {
     }
 
     /// The place's clues as status gives them, with where the terminal
-    /// shows them; its agent's state as status read it.
+    /// shows them; its agent's state and its current stage's group as
+    /// status read them.
     pub(crate) fn place_clues(
         &self,
         held: &HeldState,
         state: Option<AgentState>,
+        group: Option<&GroupStatus>,
     ) -> Option<PlaceClues> {
-        let clues = self.clues(held, state)?;
+        let clues = self.clues(held, state, group)?;
         let mut shown_at = self
             .terminal
             .shown_at(&held.place.place_ref(), clues.agent.as_ref());

@@ -33,6 +33,7 @@ fn stage() -> Stage {
         send_back_to: Some("code".into()),
         send_back_limit: Some(3),
         makes: vec!["preview".into(), "spike".into()],
+        repeats: true,
     }
 }
 
@@ -163,11 +164,18 @@ fn held() -> HeldState {
                 commits: vec![Revision::new("c3")],
                 screen: Some("Bypass Permissions mode".into()),
                 made: made(),
+                group: Some(Box::new(GroupHeld {
+                    index: 1,
+                    number: Some("2".into()),
+                    title: Some("Two".into()),
+                    tasks: vec!["2.1 do it".into()],
+                })),
             }),
             room: Some(RoomWait {
                 order: 3,
                 words: Some("the merge queue's words".into()),
             }),
+            made_from: Some(1),
             start: Some(StartHeld {
                 n: 2,
                 started_at: 5,
@@ -203,6 +211,12 @@ fn held() -> HeldState {
                 last_head_move: 90,
                 past_limit: true,
                 printed: Some("cd /r/places/bump--one && agent 'bump it'".into()),
+                group: Some(GroupHeld {
+                    index: 1,
+                    number: Some("2".into()),
+                    title: Some("Task groups".into()),
+                    tasks: vec!["2.1 add the groups".into(), "2.2 read them".into()],
+                }),
             }),
             since: Some(120),
         }],
@@ -773,6 +787,70 @@ fn what_a_stage_made() {
 }
 
 #[test]
+fn a_stage_held_before_it_could_repeat() {
+    let mut json = serde_json::to_value(kind()).unwrap();
+    json["stages"][0].as_object_mut().unwrap().remove("repeats");
+    let before: Kind = serde_json::from_value(json).unwrap();
+    assert!(!before.stages[0].repeats, "a stage held before repeats not");
+    assert_eq!(
+        Kind {
+            stages: vec![Stage {
+                repeats: true,
+                ..before.stages[0].clone()
+            }],
+            ..before.clone()
+        },
+        kind(),
+        "every other field as held"
+    );
+    let mut state = serde_json::to_value(held()).unwrap();
+    state["place"]["kind"]["stages"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("repeats");
+    let state: HeldState = serde_json::from_value(state).unwrap();
+    assert!(!state.place.kind.stages[0].repeats, "a place held before");
+}
+
+#[test]
+fn a_start_held_before_it_had_a_group() {
+    let mut json = serde_json::to_value(held().stages[0].start.clone().unwrap()).unwrap();
+    json.as_object_mut().unwrap().remove("group");
+    let before: StartHeld = serde_json::from_value(json).unwrap();
+    assert_eq!(before.group, None, "a start held before groups");
+    let none = serde_json::to_value(&before).unwrap();
+    assert!(
+        none.get("group").is_none(),
+        "a start with no group writes none"
+    );
+    let group: GroupHeld = serde_json::from_str(r#"{"index":0}"#).unwrap();
+    assert_eq!(group, GroupHeld::default(), "the group above every heading");
+    round_trips(group);
+    round_trips(held().stages[0].start.clone().unwrap().group.unwrap());
+}
+
+#[test]
+fn a_stage_and_its_end_held_before_repetitions_carried_theirs() {
+    let mut json = serde_json::to_value(held().stages[0].clone()).unwrap();
+    json.as_object_mut().unwrap().remove("made_from");
+    json["end"].as_object_mut().unwrap().remove("group");
+    let before: StageHeld = serde_json::from_value(json).unwrap();
+    assert_eq!(before.made_from, None, "a stage held before");
+    assert_eq!(
+        before.end.as_ref().and_then(|end| end.group.clone()),
+        None,
+        "an end held before"
+    );
+    let none = serde_json::to_value(StageHeld {
+        end: Some(StageEnd::default()),
+        ..before
+    })
+    .unwrap();
+    assert!(none.get("made_from").is_none(), "no count written");
+    assert!(none["end"].get("group").is_none(), "no group written");
+}
+
+#[test]
 fn a_submission_and_its_outcomes() {
     for state in [
         SubmissionState::Waiting,
@@ -908,6 +986,7 @@ fn agent_and_stage_states() {
         StageState::Lost,
         StageState::Stopped,
         StageState::Delivered,
+        StageState::Repeating,
         StageState::EndedShort,
         StageState::Finished,
     ] {
@@ -950,22 +1029,91 @@ fn the_place_seams_answers() {
     });
 }
 
+fn change_facts() -> ChangeFacts {
+    ChangeFacts {
+        exists: true,
+        planning_complete: true,
+        tasks: vec![
+            Task {
+                text: "0.1 above every heading".into(),
+                ticked: true,
+                group: Some(0),
+            },
+            Task {
+                text: "1.1 do it".into(),
+                ticked: true,
+                group: Some(1),
+            },
+            Task {
+                text: "2.1 then this".into(),
+                ticked: false,
+                group: Some(2),
+            },
+        ],
+        archived: false,
+        groups: vec![
+            TaskGroup::default(),
+            TaskGroup {
+                number: Some("1".into()),
+                title: Some("Parser".into()),
+            },
+            TaskGroup {
+                number: Some("2".into()),
+                title: Some("Tests".into()),
+            },
+        ],
+    }
+}
+
 #[test]
 fn the_change_seams_answers() {
     round_trips(ChangeRead::Read {
-        facts: ChangeFacts {
-            exists: true,
-            planning_complete: true,
-            tasks: vec![Task {
-                text: "1.1 do it".into(),
-                ticked: true,
-            }],
-            archived: false,
-        },
+        facts: change_facts(),
     });
     round_trips(ChangeRead::CouldNotRead {
         reason: "bad schema".into(),
     });
+}
+
+#[test]
+fn a_change_read_before_its_groups() {
+    let mut json = serde_json::to_value(change_facts()).unwrap();
+    json.as_object_mut().unwrap().remove("groups");
+    for task in json["tasks"].as_array_mut().unwrap() {
+        task.as_object_mut().unwrap().remove("group");
+    }
+    let before: ChangeFacts = serde_json::from_value(json).unwrap();
+    assert!(before.groups.is_empty(), "no groups");
+    assert!(
+        before.tasks.iter().all(|task| task.group.is_none()),
+        "every task in no group"
+    );
+    assert_eq!(before.first_unticked_group(), None, "no group to take");
+    assert_eq!(before.ticked(), 2, "the tasks as held");
+}
+
+#[test]
+fn the_first_unticked_group_and_a_groups_tasks() {
+    let mut facts = change_facts();
+    assert_eq!(facts.first_unticked_group(), Some(2));
+    assert_eq!(
+        facts
+            .tasks_of(1)
+            .map(|task| task.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["1.1 do it"]
+    );
+    assert_eq!(facts.tasks_of(3).count(), 0, "a group the change lacks");
+    facts.tasks[0].ticked = false;
+    assert_eq!(facts.first_unticked_group(), Some(0), "the group above");
+    facts.tasks.iter_mut().for_each(|task| task.ticked = true);
+    assert_eq!(facts.first_unticked_group(), None, "every task ticked");
+    facts.tasks.push(Task {
+        text: "9.9 in no group".into(),
+        ticked: false,
+        group: None,
+    });
+    assert_eq!(facts.first_unticked_group(), None, "a task in no group");
 }
 
 #[test]
@@ -976,8 +1124,10 @@ fn the_agent_seams_answers() {
         env: BTreeMap::from([("ID".into(), identity().to_string())]),
         prompt_args: vec!["do it".into()],
         folder_trust: Some(FolderTrust {
-            question: "Do you trust the files in this folder?".into(),
-            answer: "1".into(),
+            question: "Yes, I trust this folder".into(),
+            focus: ">".into(),
+            next: "down".into(),
+            confirm: "enter".into(),
         }),
         kind: Some("agent".into()),
     });

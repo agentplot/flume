@@ -335,6 +335,41 @@ pub struct StageStatus {
     #[serde(default)]
     pub refused_setting: Option<String>,
     pub conversation: bool,
+    /// For a repeating stage, the task group its current repetition works
+    /// on, or the one its next would take, read from the change at the
+    /// head when status is asked (56, 58, 142).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<GroupStatus>,
+}
+
+impl StageStatus {
+    /// The stage as a person reads it: its name, and a repeating stage's
+    /// group's place among the change's groups, `code 3/7` (139, 142).
+    pub fn label(&self) -> String {
+        label(&self.name, self.group.as_ref())
+    }
+}
+
+/// A stage's name, and for a repeating stage its group's place among the
+/// change's groups, `code 3/7` (139, 142).
+pub fn label(stage: &str, group: Option<&GroupStatus>) -> String {
+    match group {
+        Some(group) => format!("{stage} {}/{}", group.place, group.of),
+        None => stage.to_string(),
+    }
+}
+
+/// A repeating stage's task group as status gives it: its place among
+/// the change's groups at the head, counted from one, how many groups
+/// the change holds there, and its number and title (56, 58, 142).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GroupStatus {
+    pub place: usize,
+    pub of: usize,
+    #[serde(default)]
+    pub number: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 /// The current stage's agent (56).
@@ -371,15 +406,16 @@ pub struct AgentStatus {
     pub notes: Vec<String>,
 }
 
-/// The settings an agent started with, each value as its layer wrote it,
-/// and where each came from (32, 56).
+/// The settings an agent started with, each value as its layer wrote it
+/// but an environment variable's, given by its name alone, its value
+/// [`flume_seams::SET`], and where each came from (32, 56).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentSettings {
     #[serde(flatten)]
     pub settings: Settings,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>`; a host's value before its `~` and
-    /// variables are read.
+    /// `instructions` or `env.<NAME>`, an environment variable's value
+    /// [`flume_seams::SET`].
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
 }

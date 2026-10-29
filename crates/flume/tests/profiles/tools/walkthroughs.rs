@@ -7,11 +7,15 @@
 //! submission and a conflicting one each go back to code with sluice's
 //! words and land on the second (112); a change runs construct, code and
 //! verify, its report committed in the archived change (S2, S35); verify
-//! finding work sends the place back to code (131); and a host's bound
-//! queues a launch and starts the waiting ones by priority (S37).
+//! finding work sends the place back to code (131); a host's bound
+//! queues a launch and starts the waiting ones by priority (S37); and
+//! change@2's code stage works a change of three task groups one fresh
+//! agent at a time, and a failed submission sends it back for one
+//! repetition with no group (S50, S52; 112, 140 to 142).
 
 use super::walk::*;
 use serde_json::{json, Value};
+use std::path::Path;
 
 /// The acts of a code stage that writes `file` and commits it.
 fn commits(file: &str, text: &str) -> Value {
@@ -29,13 +33,22 @@ fn until_landed(walk: &Walk, place: &str) {
 /// The stand-in writing the change `name` as OpenSpec's spec-driven
 /// schema has it, two tasks unticked, and committing it.
 fn construct(name: &str) -> Value {
+    construct_tasks(
+        name,
+        "## 1. Parser\n\n- [ ] 1.1 Write the parser\n- [ ] 1.2 Test the parser\n",
+    )
+}
+
+/// The stand-in writing the change `name` with `tasks` as its tasks
+/// file, and committing it.
+fn construct_tasks(name: &str, tasks: &str) -> Value {
     let at = format!("openspec/changes/{name}");
     json!([
         { "bash": format!("openspec new change {name}") },
         { "write": { "path": format!("{at}/proposal.md"), "text": "## Why\n\nThe tool cannot read its input.\n\n## What Changes\n\n- Add a parser.\n" } },
         { "write": { "path": format!("{at}/specs/parser/spec.md"), "text": "## ADDED Requirements\n\n### Requirement: Parsing\nThe tool SHALL parse its input.\n\n#### Scenario: Plain input\n- **WHEN** the input is a word\n- **THEN** the parse yields the word\n" } },
         { "write": { "path": format!("{at}/design.md"), "text": "## Context\n\nA parser of words.\n" } },
-        { "write": { "path": format!("{at}/tasks.md"), "text": "## 1. Parser\n\n- [ ] 1.1 Write the parser\n- [ ] 1.2 Test the parser\n" } },
+        { "write": { "path": format!("{at}/tasks.md"), "text": tasks } },
         { "bash": format!("git add -A && git commit --quiet -m 'the change {name}'") },
     ])
 }
@@ -43,9 +56,14 @@ fn construct(name: &str) -> Value {
 /// The stand-in's verify: the report written, the change archived with
 /// it, and committed.
 fn verify_holds(name: &str) -> Value {
+    verify_archives(name, "")
+}
+
+/// The stand-in's verify, archiving with `archive`'s further words.
+fn verify_archives(name: &str, archive: &str) -> Value {
     json!([
         { "write": { "path": format!("openspec/changes/{name}/verify.md"), "text": "# Verify\n\nEvery requirement met, every task ticked.\n" } },
-        { "bash": format!("openspec archive {name} --yes") },
+        { "bash": format!("openspec archive {name} --yes{archive}") },
         { "bash": format!("git add -A && git commit --quiet -m 'archive {name}'") },
     ])
 }
@@ -343,4 +361,171 @@ fn a_bound_host_queues_launches_and_starts_them_by_priority() {
         !status["agent"].is_null()
     });
     assert_eq!(walk.host()["queue"], json!([]));
+}
+
+/// The three task groups of the repeating walkthrough's change, two
+/// tasks, one and two, none ticked.
+const THREE_GROUPS: &str = "## 1. Parser\n\n- [ ] 1.1 Write the parser\n- [ ] 1.2 Test the parser\n\n## 2. Reader\n\n- [ ] 2.1 Read the input\n\n## 3. Docs\n\n- [ ] 3.1 Document the parser\n- [ ] 3.2 Note the change\n";
+
+/// A code repetition's acts: its prompt kept in `prompt`, a line added to
+/// the notes at the path its prompt names, `count` tasks ticked, and
+/// committed, the notes left out of the place.
+fn repetition(prompt: &Path, tasks: &str, count: usize, line: &str) -> Value {
+    json!([
+        { "bash": format!("printf '%s' \"$STAND_IN_PROMPT\" > '{}'", prompt.display()) },
+        { "bash": format!("notes=$(printf '%s\\n' \"$STAND_IN_PROMPT\" | sed -n 's/^The notes: //p') && mkdir -p \"$(dirname \"$notes\")\" && printf '%s\\n' '{line}' >> \"$notes\"") },
+        { "tick": { "path": tasks, "count": count } },
+        { "bash": format!("git add -A && git commit --quiet -m '{line}'") },
+    ])
+}
+
+/// The code stage's group in status: its place and how many there are.
+fn group(status: &Value) -> (Value, Value) {
+    let group = &stage(status, "code")["group"];
+    (group["place"].clone(), group["of"].clone())
+}
+
+#[test]
+fn a_change_of_three_task_groups_takes_three_agents_in_turn() {
+    // S50, 140 to 142: change@2's code stage on a change of three groups
+    // starts a fresh agent for each in turn; each ticks its group, adds to
+    // the notes its prompt names and commits; status between them gives
+    // code 2/3; the three prompts are byte for byte the same up to the
+    // group; verify archives and the place lands.
+    let walk = Walk::new("walk-groups");
+    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    assert_eq!(walk.status(&place)["version"], 2, "the change's version");
+    walk.agent(&place, construct_tasks("add-parser", THREE_GROUPS));
+    let tasks = "openspec/changes/add-parser/tasks.md";
+    let mut prompts = vec![];
+    for (n, count) in [(1, 2), (2, 1), (3, 2)] {
+        let status = walk.until(&place, &format!("code on group {n}"), |status| {
+            status["current"] == "code"
+                && !status["agent"].is_null()
+                && group(status) == (json!(n), json!(3))
+        });
+        assert_eq!(stage(&status, "code")["starts"], n, "{status}");
+        if n == 2 {
+            let output = walk
+                .command(env!("CARGO_BIN_EXE_flume"), &walk.repository.dir)
+                .args(["status", &place])
+                .output()
+                .expect("flume runs");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(text.contains("stage code 2/3:"), "{text}");
+        }
+        let prompt = walk.signal(&format!("prompt-{n}"));
+        walk.agent(
+            &place,
+            repetition(&prompt, tasks, count, &format!("group {n} built")),
+        );
+        prompts.push(std::fs::read_to_string(&prompt).expect("the prompt the stand-in was sent"));
+    }
+    let status = walk.until(&place, "its verify stage", |status| {
+        status["current"] == "verify" && !status["agent"].is_null()
+    });
+    assert_eq!(stage(&status, "code")["starts"], 3, "{status}");
+
+    let at = |prompt: &str, heading: &str| {
+        prompt
+            .find(heading)
+            .unwrap_or_else(|| panic!("{heading} is not in {prompt}"))
+    };
+    let first = at(&prompts[0], "Group 1. Parser");
+    for (prompt, heading) in [
+        (&prompts[1], "Group 2. Reader"),
+        (&prompts[2], "Group 3. Docs"),
+    ] {
+        let from = at(prompt, heading);
+        assert_eq!(from, first, "where the group begins");
+        assert_eq!(
+            &prompt[..from],
+            &prompts[0][..first],
+            "the prompts up to the group"
+        );
+    }
+    let notes = prompts[0]
+        .lines()
+        .find_map(|line| line.strip_prefix("The notes: "))
+        .expect("the notes' path");
+    assert_eq!(
+        std::fs::read_to_string(notes).expect("the notes"),
+        "group 1 built\ngroup 2 built\ngroup 3 built\n",
+        "the notes as the three repetitions left them"
+    );
+
+    walk.agent(&place, verify_holds("add-parser"));
+    until_landed(&walk, &place);
+    assert!(!walk.has_branch("change/add-parser"));
+    assert!(!Path::new(notes).exists(), "the notes outlive the place");
+    let files = walk.remote_files();
+    assert!(
+        files.iter().all(|file| !file.contains("notes/")),
+        "the notes were committed: {files:?}"
+    );
+}
+
+#[test]
+fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_group() {
+    // S52, 112, 140: the gate fails the change's first submission with
+    // every task ticked; code starts one repetition with no group and
+    // sluice's words, which moves the change out of the archive, fixes
+    // the tree and records the fix as a task ticked; verify archives
+    // again and the second submission lands.
+    let walk = Walk::new("walk-groups-failed");
+    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    walk.agent(&place, construct("add-parser"));
+    walk.until(&place, "its code stage", |status| {
+        status["current"] == "code" && !status["agent"].is_null()
+    });
+    let tasks = "openspec/changes/add-parser/tasks.md";
+    walk.agent(
+        &place,
+        json!([
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "write": { "path": "broken", "text": "not yet\n" } },
+            { "tick": { "path": tasks } },
+            { "bash": "git add -A && git commit --quiet -m 'the parser'" },
+        ]),
+    );
+    walk.until(&place, "its verify stage", |status| {
+        status["current"] == "verify" && !status["agent"].is_null()
+    });
+    walk.agent(&place, verify_holds("add-parser"));
+    let status = walk.until(&place, "its code stage started again", |status| {
+        status["current"] == "code"
+            && stage(status, "code")["starts"] == 2
+            && !status["agent"].is_null()
+    });
+    assert_eq!(status["submission"]["send_backs"], 1, "{status}");
+    assert!(stage(&status, "code")["group"].is_null(), "{status}");
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.contains("There is no task group for you"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("[sluice] #1 failed on main"), "{prompt}");
+    walk.agent(
+        &place,
+        json!([
+            { "bash": "git mv openspec/changes/archive/*-add-parser openspec/changes/add-parser" },
+            { "bash": format!("git rm --quiet broken && printf -- '- [x] 1.3 Pass the gate\\n' >> {tasks}") },
+            { "bash": "git add -A && git commit --quiet -m 'the parser test passes'" },
+        ]),
+    );
+    let status = walk.until(&place, "its verify stage again", |status| {
+        status["current"] == "verify" && !status["agent"].is_null()
+    });
+    assert_eq!(stage(&status, "code")["starts"], 2, "{status}");
+    walk.agent(&place, verify_archives("add-parser", " --skip-specs"));
+    until_landed(&walk, &place);
+    let states: Vec<Value> = walk
+        .submissions()
+        .iter()
+        .map(|entry| entry["state"].clone())
+        .collect();
+    assert_eq!(states.len(), 2, "{states:?}");
+    assert!(states.contains(&json!("landed")), "{states:?}");
+    assert_eq!(walk.on_remote("broken"), None);
+    assert!(walk.on_remote("parser.rs").is_some());
 }

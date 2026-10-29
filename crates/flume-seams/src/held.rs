@@ -342,8 +342,14 @@ pub struct PlaceRecord {
     pub binding: Binding,
     pub brief: Option<String>,
     pub mark: Option<String>,
+    /// The launch's settings by stage. They keep their environment's
+    /// values, since each later start reads the launch's layer as the
+    /// launch gave it and the caller who gave it may be gone (8, 32): the
+    /// one record of flume's that holds an environment value, written
+    /// readable by the host's user alone and printed by no answer (56).
     pub settings: BTreeMap<String, Settings>,
-    /// The launch's settings for every stage's agent (7, 8, 32).
+    /// The launch's settings for every stage's agent, kept as `settings`
+    /// is (7, 8, 32).
     #[serde(default)]
     pub every_stage: Settings,
     /// The repository's settings for the kind, which it does not
@@ -446,6 +452,10 @@ pub enum StageState {
     Lost,
     Stopped,
     Delivered,
+    /// A repetition of a repeating stage delivered its group, its agent
+    /// to be ended, and a task of the change still unticked: the next
+    /// repetition is due, and nothing of the stage has ended (140).
+    Repeating,
     EndedShort,
     Finished,
 }
@@ -491,6 +501,12 @@ pub struct StageHeld {
     /// host's queue (70).
     #[serde(default)]
     pub room: Option<RoomWait>,
+    /// For a repeating stage between its repetitions, how many lines
+    /// `made.jsonl` held when the first repetition whose lines no end yet
+    /// carries started: the stage's end carries every line from there, so
+    /// what an earlier repetition made is not lost (129, 140).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub made_from: Option<usize>,
 }
 
 /// A stage waiting for room on the host (70).
@@ -528,6 +544,11 @@ pub struct StageEnd {
     /// as written (129).
     #[serde(default)]
     pub made: Vec<Made>,
+    /// For a repetition of a repeating stage that ended short, stuck,
+    /// lost or never begun, the task group it was given (142); boxed, so
+    /// an end stays small beside a submission's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<Box<GroupHeld>>,
 }
 
 /// One line a stage's run wrote of what it made (129): a JSON object
@@ -581,10 +602,12 @@ pub struct StartHeld {
     pub secret: Secret,
     pub program: String,
     /// The settings it started with, each value as its layer wrote it
+    /// but the environment's, kept by name alone, each value [`crate::SET`]
     /// (32, 56).
     pub settings: Settings,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>` (32, 56).
+    /// `instructions` or `env.<NAME>`, an environment variable's value
+    /// [`crate::SET`] (32, 56).
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
     /// The agent's own record, once a reading names it (77).
@@ -604,6 +627,26 @@ pub struct StartHeld {
     /// the terminal printed it rather than ran it (C.5).
     #[serde(default)]
     pub printed: Option<String>,
+    /// For a repetition of a repeating stage, the task group it was
+    /// given: the first holding a task unticked at `start_head`, or none
+    /// where every task was ticked there (140).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<GroupHeld>,
+}
+
+/// The task group a repetition was given, as the change gave it at the
+/// start's head: its place among the change's groups, its number, its
+/// title and its tasks' texts (86, 140).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GroupHeld {
+    /// Its index among the change's groups.
+    pub index: usize,
+    #[serde(default)]
+    pub number: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub tasks: Vec<String>,
 }
 
 /// A landing kind's submission as flume keeps it, with no wait held on

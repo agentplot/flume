@@ -49,6 +49,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["139", "56", "60"],
             run: clues_in_status,
         },
+        Scenario {
+            name: "status: a repeating code stage's repetition on the second of three groups gives the group's place 2 of 3 with its number and title, `code 2/3` in the person's form and the clue's title",
+            cites: &["56", "58", "139", "142"],
+            run: status_mid_stage,
+        },
+        Scenario {
+            name: "status: a repetition adding a fourth group to a change of three gives the count as 4, read at the head",
+            cites: &["58", "142"],
+            run: a_group_added_mid_stage,
+        },
     ]
 }
 
@@ -358,6 +368,66 @@ fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
         stall.pending_for,
         vec!["madswan/planner".to_string()],
         "pending for"
+    );
+    Ok(())
+}
+
+fn status_mid_stage(_: &()) -> Outcome {
+    use super::repeating_stages::{branch, code_begun, GROUPS};
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let code = status
+        .stages
+        .iter()
+        .find(|stage| stage.name == "code")
+        .ok_or("no code stage")?;
+    let json = serde_json::to_value(code).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["group"],
+        serde_json::json!({"place": 2, "of": 3, "number": "2", "title": "Two"}),
+        "the group in the JSON form"
+    );
+    ensure_eq!(code.label(), "code 2/3", "the stage in the person's form");
+    ensure!(
+        status
+            .stages
+            .iter()
+            .filter(|stage| stage.name != "code")
+            .all(|stage| stage.group.is_none()),
+        "a stage that does not repeat names a group"
+    );
+    let clues = status.clues.ok_or("no clues")?;
+    ensure!(
+        clues.title.starts_with("code 2/3 · "),
+        "the clue's title: {}",
+        clues.title
+    );
+    let shown = world.terminal.shown();
+    let (_, last) = shown.last().ok_or("nothing shown")?;
+    ensure_eq!(last.stage.as_str(), "code 2/3", "the stage show was given");
+    Ok(())
+}
+
+fn a_group_added_mid_stage(_: &()) -> Outcome {
+    use super::repeating_stages::{branch, code_begun, GROUPS};
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    let mut four = GROUPS.to_vec();
+    four.push(("4", "Four", 1));
+    world.tick_groups(&branch("plan"), "plan", &four, 3);
+    let group = world.status(&id)?.stages[1]
+        .group
+        .clone()
+        .ok_or("code names no group")?;
+    ensure_eq!(
+        (group.place, group.of),
+        (2, 4),
+        "the group's place and the count, read at the head"
     );
     Ok(())
 }
