@@ -1,60 +1,50 @@
 ---
 title: Roadmap
-description: What gets built in what order, and where flume meets millpond and crew.
+description: What is built, and where flume meets millpond and crew next.
 ---
 
 import { Steps } from '@astrojs/starlight/components';
 
-Nothing of flume is built yet. Each step ends with something running on
-real work before the next one depends on it. A step is done when a
-check passes or an observation holds. The step names are the plan's, in
-agentplot/blueprints' `design/capture/plan.md`. flume needs only crew's
-rules to extract from, so its own steps proceed beside millpond's.
+flume's own steps are built: it runs on one host, from a launch to the
+landing and the tidy. Each step ended with something running on real
+work before the next one depended on it, and a step was done when a
+check passed or an observation held. The step names are the plan's, in
+agentplot/blueprints' `design/capture/plan.md`.
 
 ## flume's own steps
 
 <Steps>
 
 1. **L1 · The statement.** flume's statement is written from the capture
-   design and the crew rules it takes over: a launch, places, kinds and
-   stages, prompt delivery, stage ends, status, tidying, and what flume
-   never does. A fresh model reconstructs flume from it, and the
-   questions it asks are ruled and folded back in.
+   design and the rules for teams and plans it takes over. It covers a
+   launch, places, kinds and stages, prompt delivery, stage ends, status,
+   tidying, and what flume never does. It is ruled, and amended as each
+   new question is ruled.
 
-   _Needs_ nothing. _Done when_ the reconstruction's questions are
-   ruled and folded in, Vale is clean, and the statement lands on
-   blueprints' `main`.
-
-2. **L2 · The repository's rules.** This repository, in Rust on
-   kit-standard's code profile, gains its founding decisions: one place,
-   one agent per stage; a stage ends on its deliverable; plugins outside
-   the core. With them come its rules, its sluice gate, `cliff.toml`
-   and its OpenSpec configuration.
-
-   _Needs_ L1. _Done when_ sluice protects `main` and the first change
-   lands through it.
+2. **L2 · The repository's rules.** This repository, in Rust, holds its
+   founding decisions: one place, one agent per stage; a stage ends on
+   its deliverable; plugins outside the core. With them come its rules,
+   its sluice gate, CI on Linux and macOS, releases from `cliff.toml`,
+   and its OpenSpec configuration. sluice protects `main`, and every
+   change lands through it.
 
 3. **L3 · The core and the Claude Code plugin.** `flume launch`,
-   `status --json`, `tell`, `stop`, `retry`, `drop`, `tidy` and
-   `prompt`, with places, the three kinds and a repository's or a
-   launch's own. Prompt delivery is checked
-   against the agent's transcript, and stage ends are read from
-   deliverables, a change's from its OpenSpec files. The plugin brings
-   `/launch` and serves `status` over MCP.
+   `status`, `prompt`, `tell`, `hold`, `retry`, `stop`, `finish`,
+   `drop`, `done`, `priority`, `tidy`, `settle`, `wait`, `inbox` and
+   `wake`, with places, flume's fix, chore and change and a
+   repository's or a launch's own kinds. A kind runs through on its
+   own, a failed submission sends the work back, and the host keeps one
+   queue by its callers' priorities. The agent's own hooks ack its start
+   and its prompts, and stage ends are read from deliverables, a
+   change's from its OpenSpec files. The plugin brings `/launch` and
+   serves `status` over MCP. A fix and a change launched from a session
+   land through sluice and their places are tidied, by the walkthroughs
+   the gate runs.
 
-   _Needs_ L2. _Done when_ a fix launched from a session lands through
-   sluice and its place is tidied, and a change runs construct, code and
-   verify with its status showing its tasks ticked. A stage whose pane
-   goes quiet with no deliverable is not ended, and tidying keeps a
-   branch that holds commits its base lacks.
-
-4. **L4 · The herdr plugin.** The sidebar of places in flight, with
-   kind, stage, agent state and a change's tasks, and keys to open,
-   tell, stop and retry.
-
-   _Needs_ L3. _Done when_ the plugin installs from flume's tag, and a
-   fix and a change launched from herdr show each stage in the sidebar
-   until they land.
+4. **L4 · The herdr plugin.** A watch that settles every place as its
+   agent changes state, the sidebar's rows and the popup of places in
+   flight, with keys to open, tell, stop and retry. It installs from
+   flume's release tag.
 
 </Steps>
 

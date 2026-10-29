@@ -15,15 +15,15 @@ devenv shell -- site-shots <dir>   # screenshots: every page, both widths, both 
 The family's look is `@agentplot/site-theme`: its `starlight.css` carries
 the type, the ink and paper of both themes and the accent, `--ap-accent`,
 which its family bar sets from the family list (flume's teal). Its header
-puts the family bar above Starlight's, its footer adds the family's, its
-banner says flume is designed and not built, and How it fits shows its
-family diagram with flume highlighted.
+puts the family bar above Starlight's, its footer adds the family's, and
+How it fits shows its family diagram with flume highlighted. Its banner,
+which says a tool is designed and not built, is not used: flume runs.
 
 ## Where things live
 
 | path | what |
 |---|---|
-| `src/content/docs/` | one page per file: start, how it works, how it fits, design, roadmap |
+| `src/content/docs/` | one page per file: start, how it works, install and set up, how it fits, design, roadmap |
 | `src/diagrams/` | the SVG diagrams, drawn at build time: `kit.ts` the builder, one file per diagram |
 | `src/components/Diagram.astro` | inlines a diagram's wide and narrow layouts and shows the one its column fits |
 | `src/components/Delivery.astro` | prompt delivery and stage ends, drawn on a canvas from the time in its loop |
