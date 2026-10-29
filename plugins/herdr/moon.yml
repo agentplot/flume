@@ -1,0 +1,34 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# flume's herdr plugin (design 10): POSIX sh scripts with jq, its watch
+# on herdr's server, its sidebar rows and popup. Each check is one task
+# (core.21): the manifest, the lint and the tests in the fast layer; the
+# plugin linked into the pinned herdr in the tools layer.
+language: 'bash'
+layer: 'application'
+
+tasks:
+  # herdr-plugin.toml as herdr reads it, every script it names present and
+  # parsing under sh, its version the cargo workspace's.
+  manifest:
+    command: 'sh tests/manifest.sh'
+    inputs: ['herdr-plugin.toml', 'bin/**/*', 'tests/manifest.sh', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+  # shellcheck over every script, the stand-ins among them, by the pinned
+  # shellcheck.
+  lint:
+    command: 'shellcheck -x bin/watch.sh bin/places.sh bin/open.sh lib/common.sh lib/lease.sh lib/procs.sh tests/run.sh tests/test.sh tests/manifest.sh tests/install.sh tests/fake/herdr tests/fake/flume'
+    inputs: ['bin/**/*', 'lib/**/*', 'tests/**/*', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+  # The scripts against stand-in herdr and flume on PATH, under the
+  # system's sh and under the pinned dash.
+  test:
+    command: 'sh tests/test.sh'
+    inputs: ['herdr-plugin.toml', 'bin/**/*', 'lib/**/*', 'tests/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-fast]
+  # The plugin linked into the pinned herdr under a scratch configuration,
+  # herdr's list of plugins naming it.
+  install:
+    command: 'sh tests/install.sh'
+    inputs: ['herdr-plugin.toml', 'bin/**/*', 'tests/install.sh', '/devenv.nix', '/devenv.lock', '/.prototools']
+    tags: [check-tools]

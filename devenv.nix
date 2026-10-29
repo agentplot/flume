@@ -326,12 +326,15 @@ in
   # The system tools are this file's, pinned by devenv.lock; moon and Rust
   # are .prototools', installed by the flume:proto:install task on entering
   # the shell and activated by enterShell. Claude Code, OpenSpec, herdr and
-  # sluice are the releases pinned above, never the host's (core.22). The
+  # sluice are the releases pinned above, never the host's (core.22).
+  # shellcheck and dash are the herdr plugin's lint and its second shell. The
   # site's tools are bun, and Playwright with the one browser it drives,
   # from Nix, for the site's screenshots (site/scripts/shots.mjs).
   packages = [
     pkgs.git
     pkgs.jq
+    pkgs.shellcheck
+    pkgs.dash
     proto
     vale
     claude

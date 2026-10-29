@@ -1,0 +1,25 @@
+id = "agentplot.flume"
+name = "flume"
+version = "0.0.0"
+min_herdr_version = "0.9.5"
+description = "flume's watch, which settles every place on its bound and at each change of an agent's state, so flume runs unattended; and the places in flight in the sidebar and a popup, with keys that act through flume's commands."
+platforms = ["linux", "macos"]
+
+# One watch per server: it holds a lease, so starting it again does
+# nothing while it runs.
+[[startup]]
+command = ["sh", "bin/watch.sh", "--ensure"]
+
+[[actions]]
+id = "places"
+title = "flume: the places in flight"
+contexts = ["global", "pane"]
+command = ["sh", "bin/open.sh", "places"]
+
+[[panes]]
+id = "places"
+title = "flume"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["sh", "bin/places.sh"]
