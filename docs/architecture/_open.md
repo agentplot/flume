@@ -17,3 +17,8 @@ brought to the rule.
   command sluice records 0068 and 0070 give a submitter; until it is
   built the merge-queue profile has nothing to call and the unit waits
   on sluice's.
+- **Record 0017 waits on weir's crate.** A kind-level `agents` table
+  and a settings-only kind table are fields of the kind format (weir
+  52, 57, C.4, at blueprints 4d1f88b); until weir's crate reads them and
+  flume's pin of it moves, the repository's layer of an agent's settings
+  (clause 32, rule core.30) has nothing to read it with (core.4).
