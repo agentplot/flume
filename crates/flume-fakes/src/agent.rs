@@ -184,8 +184,10 @@ impl Agent for FakeAgent {
             env,
             prompt_args: vec![prompt.to_string()],
             folder_trust: Some(FolderTrust {
-                question: "Do you trust this folder?".into(),
-                answer: "yes".into(),
+                question: "Yes, I trust this folder".into(),
+                focus: ">".into(),
+                next: "down".into(),
+                confirm: "enter".into(),
             }),
             kind: Some("agent".into()),
         }
