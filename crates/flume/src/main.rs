@@ -1,14 +1,14 @@
 //! flume's binary (design 13): it builds the core over the profiles built
 //! in and writes the answer as JSON, the one form every surface gives
-//! (61). It has no command yet; the commands arrive under
-//! `src/commands/`.
+//! (61). It has no command yet, and answers every place's status; the
+//! commands arrive under `src/commands/`.
 
 use flume::profiles;
 use flume_core::Answer;
 use std::process::ExitCode;
 
-/// The core's answer: every place's status once the host's profiles are
-/// built in, or the refusal naming what is missing.
+/// The core's answer: every place's status on this host, or the refusal
+/// naming why the core could not be built.
 fn answer() -> Answer {
     match profiles::core() {
         Ok(core) => core.status(None),
@@ -28,19 +28,19 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use flume::host::config::HostConfig;
+    use flume::profiles::{core_over, BuiltIn};
+    use flume_core::Answer;
 
     #[test]
     fn the_answer_is_written_as_json_and_read_back() {
-        let answer = answer();
+        let state = std::env::temp_dir().join(format!("flume-main-{}", std::process::id()));
+        let core = core_over(&state, HostConfig::default(), None, BuiltIn::new())
+            .expect("the core over an empty state directory");
+        let answer = core.status(None);
+        let _ = std::fs::remove_dir_all(&state);
         let back: Answer = serde_json::from_str(&answer.to_json()).expect("an answer's JSON");
         assert_eq!(back, answer);
-    }
-
-    #[test]
-    fn with_no_profile_built_in_the_answer_names_what_is_missing() {
-        let reason = answer().refusal().map(str::to_string).unwrap_or_default();
-        assert!(reason.contains("terminal"), "{reason}");
     }
 
     #[test]

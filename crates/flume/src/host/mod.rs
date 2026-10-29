@@ -50,9 +50,7 @@ impl RealHost {
         Ok(RealHost::new(
             config::flume_state()?,
             HostConfig::of_host()?,
-            std::env::var(RECIPIENT)
-                .ok()
-                .filter(|recipient| !recipient.is_empty()),
+            recipient(),
         ))
     }
 
@@ -60,6 +58,14 @@ impl RealHost {
     pub fn room_lock(&self) -> PathBuf {
         self.state.join("room.lock")
     }
+}
+
+/// The recipient the command's environment names in `$FLUME_RECIPIENT`,
+/// none where it is unset or empty (7).
+pub fn recipient() -> Option<String> {
+    std::env::var(RECIPIENT)
+        .ok()
+        .filter(|recipient| !recipient.is_empty())
 }
 
 /// A process's start, as the host gives it, which no other process with

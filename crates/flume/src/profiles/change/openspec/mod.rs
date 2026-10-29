@@ -12,6 +12,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// The profile's name in a repository's binding, `change` (105).
+pub const NAME: &str = "openspec";
+
 const CHANGES: &str = "openspec/changes";
 const ARCHIVE: &str = "openspec/changes/archive";
 const PROJECT: &str = "openspec/config.yaml";

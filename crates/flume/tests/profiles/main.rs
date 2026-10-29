@@ -6,6 +6,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod built_in;
 mod change_openspec;
 mod kinds_weir;
 mod place_git_worktree;
