@@ -241,6 +241,7 @@ fn held() -> HeldState {
             submits: 2,
             send_backs: 1,
             id: Some("7".into()),
+            request: Some("56".into()),
             before: Some("3".into()),
             verdict: Some(Verdict::Conflict {
                 files: vec!["src/lib.rs".into()],
@@ -1088,18 +1089,27 @@ fn a_submission_and_its_outcomes() {
         SubmissionState::Failed { words: "x".into() },
         SubmissionState::Conflict {
             files: vec!["src/lib.rs".into()],
+            base: None,
+            words: "conflicts".into(),
+        },
+        SubmissionState::Conflict {
+            files: vec!["src/lib.rs".into()],
+            base: Some(Revision::new("c8")),
             words: "conflicts".into(),
         },
         SubmissionState::Withdrawn,
     ] {
-        round_trips(SubmissionRead::Found {
-            submission: Submission {
-                id: "7".into(),
-                branch: "fix/one".into(),
-                target: "main".into(),
-                state,
-            },
-        });
+        for request in [None, Some("56".to_string())] {
+            round_trips(SubmissionRead::Found {
+                submission: Submission {
+                    id: "7".into(),
+                    branch: "fix/one".into(),
+                    target: "main".into(),
+                    state: state.clone(),
+                    request,
+                },
+            });
+        }
     }
     round_trips(SubmissionRead::None);
     round_trips(SubmissionRead::CouldNotRead {
@@ -1131,6 +1141,7 @@ fn a_submission() -> Submission {
         branch: "fix/one".into(),
         target: "main".into(),
         state: SubmissionState::UnderTest,
+        request: None,
     }
 }
 
@@ -1138,6 +1149,9 @@ fn a_submission() -> Submission {
 fn submit_holds_no_wait() {
     round_trips(Submitted::Submitted {
         submission: a_submission(),
+    });
+    round_trips(Submitted::Requested {
+        request: "56".into(),
     });
     round_trips(Submitted::Decided {
         submission: a_submission(),

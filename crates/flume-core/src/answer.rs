@@ -589,6 +589,12 @@ fn unknown() -> Reading {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubmissionStatus {
     pub read: SubmissionRead,
+    /// The request the merge queue answered flume's last submit with,
+    /// where it takes the base's work as requests: a forge's pull
+    /// request by its number, which an intake takes in as the entry
+    /// read-submission reads (124, C.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<String>,
     pub submits: u32,
     pub send_backs: u32,
     /// The last outcome flume collected, or its refusal at submit, with

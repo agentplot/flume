@@ -47,6 +47,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_conflict_at_submit,
         },
         Scenario {
+            name: "run through: a submission the merge queue holds as a request with no entry is open and undecided, never refused, its base driven each command, and the entry an intake takes it in as is followed to its landing, read from the merge queue's record where no inbox gives it",
+            cites: &["124", "125", "99", "117", "113", "111"],
+            run: a_request_followed_to_its_landing,
+        },
+        Scenario {
+            name: "fix round: a request's entry that failed sends the place back once, whether the record or the inbox gives the failure first, and its next request is never read as the failed entry",
+            cites: &["112", "124", "133", "99", "131"],
+            run: a_requests_failure_acted_on_once,
+        },
+        Scenario {
             name: "fix round: a finding then a failure past the kind's bound sends nothing more back, and status gives the move and the words",
             cites: &["112", "131", "23", "130", "56"],
             run: a_finding_then_a_failure_past_the_bound,
@@ -251,6 +261,142 @@ fn a_conflict_at_submit(_: &()) -> Outcome {
         Some(1),
         "goings-back once the next settle read the queue"
     );
+    Ok(())
+}
+
+/// A request the fake answers submit with, its entry coming to `then`.
+fn request(then: Plan, to_place: bool) -> Plan {
+    Plan::Request {
+        then: Box::new(then),
+        to_place,
+    }
+}
+
+fn a_request_followed_to_its_landing(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    world.queue.plan_submits(vec![request(Plan::Land, false)]);
+    world.queue.moves_on_its_own();
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    let status = world.status(&id)?;
+    let submission = status.submission.clone().ok_or("no submission")?;
+    ensure_eq!(submission.request.as_deref(), Some("1"), "the request");
+    ensure_eq!(submission.read, SubmissionRead::None, "the entry read");
+    ensure_eq!(submission.verdict, None, "the verdict");
+    ensure_eq!(submission.waiting, None, "what the place waits on");
+    ensure!(status.waiting_on.is_none(), "{:?}", status.waiting_on);
+    ensure_eq!(world.queue.log.count("step"), 2, "rounds driven");
+    let entry = world
+        .queue
+        .take_in(REPOSITORY, "fix/one")
+        .ok_or("no request to take in")?;
+    world.settle(&id);
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(held.submission.id, Some(entry.id), "the entry recorded");
+    match world
+        .status(&id)?
+        .submission
+        .map(|submission| submission.read)
+    {
+        Some(SubmissionRead::Found { submission })
+            if submission.state == SubmissionState::Waiting
+                && submission.request.as_deref() == Some("1") => {}
+        other => return Err(format!("the entry status reads: {other:?}")),
+    }
+    world.queue.run_round(REPOSITORY, "main");
+    ensure!(
+        world.queue.pending(&held.place.location).is_empty(),
+        "an outcome left for the place's inbox"
+    );
+    world.settle(&id);
+    ensure!(world.held(&id).is_none(), "the landed place is kept");
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    Ok(())
+}
+
+fn a_requests_failure_acted_on_once(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    world.queue.plan_submits(vec![
+        request(Plan::Fail("check x failed".into()), false),
+        request(Plan::Fail("check y failed".into()), true),
+        request(Plan::Land, false),
+    ]);
+    world.queue.moves_on_its_own();
+    let location = world.held(&id).ok_or("no place")?.place.location;
+    let code_starts = |world: &World| {
+        world
+            .held(&id)
+            .map(|held| (held.stages[0].starts, held.submission.send_backs))
+    };
+
+    // The record gives the failure first; the inbox gives it after.
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    world
+        .queue
+        .take_in(REPOSITORY, "fix/one")
+        .ok_or("no request")?;
+    world.queue.run_round(REPOSITORY, "main");
+    world.settle(&id);
+    ensure_eq!(
+        code_starts(&world),
+        Some((2, 1)),
+        "code's starts, goings-back"
+    );
+    let code = World::identity("fix", "one", "code", 2);
+    let prompt = world.prompt(&id, &code).ok_or("code did not start again")?;
+    ensure!(prompt.contains("check x failed"), "{prompt}");
+    world.queue.leave_pending(
+        &location,
+        SubmissionOutcome::Failed {
+            words: "check x failed".into(),
+        },
+    );
+    world.settle(&id);
+    ensure_eq!(code_starts(&world), Some((2, 1)), "after the inbox gave it");
+
+    // The next request is not the failed entry, which is read as none.
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    let submission = world.status(&id)?.submission.ok_or("no submission")?;
+    ensure_eq!(submission.submits, 2, "submissions");
+    ensure_eq!(submission.request.as_deref(), Some("1"), "the request");
+    ensure_eq!(submission.read, SubmissionRead::None, "the entry read");
+    ensure_eq!(code_starts(&world), Some((2, 1)), "before it is taken in");
+
+    // The inbox gives the failure first; the record gives it after.
+    world
+        .queue
+        .take_in(REPOSITORY, "fix/one")
+        .ok_or("no request")?;
+    world.queue.run_round(REPOSITORY, "main");
+    world.settle(&id);
+    ensure_eq!(
+        code_starts(&world),
+        Some((3, 2)),
+        "code's starts, goings-back"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        code_starts(&world),
+        Some((3, 2)),
+        "after the record gave it"
+    );
+
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    world
+        .queue
+        .take_in(REPOSITORY, "fix/one")
+        .ok_or("no request")?;
+    world.queue.run_round(REPOSITORY, "main");
+    world.settle(&id);
+    ensure!(world.held(&id).is_none(), "the landed place is kept");
+    ensure_eq!(world.queue.log.count("submit"), 3, "submissions");
     Ok(())
 }
 

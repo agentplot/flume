@@ -8,7 +8,8 @@
 //! does and sends nowhere (144, 161); or, for the check-live layer, no stand-in and the
 //! host's terminal and account as its configuration names them. Where a
 //! walkthrough asks, the stand-in for sluice is first on `PATH` too, the
-//! pinned sluice answering its first submit decided. Every process
+//! pinned sluice answering its first submit decided, or each submit a
+//! pull request that waits for the walkthrough to take it in. Every process
 //! the walkthrough starts, flume, sluice, git and the stand-in, runs in the
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
@@ -164,6 +165,30 @@ impl Walk {
     /// first submission is answered decided.
     pub fn sluice_decides_the_first_submit(&self) {
         stand_in_sluice(&self.repository.scratch.path("bin"));
+    }
+
+    /// The stand-in for sluice on a base that takes pull requests first
+    /// on `PATH` as `sluice`, so each submission is a pull request that
+    /// waits to be taken in.
+    pub fn sluice_takes_pull_requests(&self) {
+        stand_in_pull_requests(&self.repository.scratch.path("bin"));
+    }
+
+    /// The place's pull request taken in as an entry, as the host that
+    /// takes the base's requests in does: the entry's record.
+    pub fn take_in_request(&self) -> Value {
+        let output = self
+            .command("sluice", &self.repository.dir)
+            .arg("take-in")
+            .output()
+            .expect("the stand-in for sluice runs");
+        assert!(
+            output.status.success(),
+            "sluice take-in: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        serde_json::from_slice(&output.stdout).expect("the entry's record")
     }
 
     /// The host's configuration, `[host]` and beside it, with the
@@ -499,6 +524,88 @@ pub fn stand_in_sluice(bin: &Path) {
          exec '{}' \"$@\"\n",
         bin.join(".sluice-submitted").display(),
         pinned.display()
+    );
+    std::fs::write(&path, script).expect("the stand-in for sluice");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+        .expect("the stand-in for sluice made executable");
+}
+
+/// The pull request the stand-in for sluice on a base that takes pull
+/// requests answers with.
+pub const PULL_REQUEST: &str = "7";
+
+/// The stand-in for sluice written into `bin` as `sluice`, for a base
+/// that takes pull requests where the walkthrough has no forge: its
+/// submit answers as the pinned sluice answers a no-wait submit whose
+/// pull request intake has not taken in, `{pull_request, branch,
+/// state}` with no entry, and makes none (C.6); `sluice take-in` has
+/// the pinned sluice take the request in from the place that submitted
+/// it, as an intake on the host that takes the base's requests in does;
+/// status gives each entry of that place's branch as sluice records one
+/// intake took in from a pull request, `pull/<n>` its `from.worktree`
+/// and the branch its `from.head`; and inbox gives nothing, sluice having
+/// delivered each outcome to the request (133). Every other command is
+/// the pinned sluice's own.
+pub fn stand_in_pull_requests(bin: &Path) {
+    let on_path = |program: &str| {
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .map(|dir| dir.join(program))
+            .find(|path| path.is_file())
+            .unwrap_or_else(|| panic!("the pinned {program} on PATH"))
+    };
+    let (pinned, jq) = (on_path("sluice"), on_path("jq"));
+    std::fs::create_dir_all(bin).expect("the stand-in's folder");
+    let path = bin.join("sluice");
+    let script = format!(
+        r#"#! /bin/sh -e
+state='{state}'
+pinned='{pinned}'
+mkdir -p "$state"
+case "$1" in
+submit)
+  pwd > "$state/place"
+  git rev-parse --abbrev-ref HEAD > "$state/branch"
+  printf '%s\n' "$2" > "$state/base"
+  rm -f "$state/taken"
+  printf '{{"branch":"%s","pull_request":{number},"state":"waiting"}}\n' "$2"
+  ;;
+take-in)
+  if [ ! -e "$state/place" ] || [ -e "$state/taken" ]; then
+    echo 'sluice take-in: no pull request waits to be taken in' >&2
+    exit 1
+  fi
+  : > "$state/taken"
+  cd "$(cat "$state/place")"
+  exec "$pinned" submit "$(cat "$state/base")" --no-wait --json
+  ;;
+inbox)
+  printf '{{"outcomes":[]}}\n'
+  ;;
+status)
+  code=0
+  out=$("$pinned" "$@") || code=$?
+  if [ -e "$state/branch" ] && printf '%s\n' "$out" |
+    '{jq}' --arg branch "$(cat "$state/branch")" '
+      if type == "object" and has("submissions") then
+        .submissions |= map(
+          if .from.worktree == $branch then
+            (.from.worktree = "pull/{number}") | (.from.head = $branch) | del(.from.path)
+          else . end)
+      else . end' 2>/dev/null; then
+    exit "$code"
+  fi
+  printf '%s\n' "$out"
+  exit "$code"
+  ;;
+*)
+  exec "$pinned" "$@"
+  ;;
+esac
+"#,
+        state = bin.join(".sluice-request").display(),
+        pinned = pinned.display(),
+        jq = jq.display(),
+        number = PULL_REQUEST,
     );
     std::fs::write(&path, script).expect("the stand-in for sluice");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))

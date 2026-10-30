@@ -200,8 +200,10 @@ fn place_status() -> PlaceStatus {
                     state: SubmissionState::Failed {
                         words: "test x failed".into(),
                     },
+                    request: Some("56".into()),
                 },
             },
+            request: Some("56".into()),
             submits: 2,
             send_backs: 1,
             verdict: Some(Verdict::Failed {
@@ -785,10 +787,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].submission.read.found.submission",
             "status.places[].submission.read.found.submission.branch",
             "status.places[].submission.read.found.submission.id",
+            "status.places[].submission.read.found.submission.request",
             "status.places[].submission.read.found.submission.state",
             "status.places[].submission.read.found.submission.state.failed",
             "status.places[].submission.read.found.submission.state.failed.words",
             "status.places[].submission.read.found.submission.target",
+            "status.places[].submission.request",
             "status.places[].submission.send_backs",
             "status.places[].submission.submits",
             "status.places[].submission.verdict",

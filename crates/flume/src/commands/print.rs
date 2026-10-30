@@ -7,7 +7,9 @@ use flume_core::{
     group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, StageStatus,
     Tidied, Woke,
 };
-use flume_seams::{HoldOn, IntentKey, Made, Readiness, UnsettledStart, WaitingOn, Waits, Watch};
+use flume_seams::{
+    HoldOn, IntentKey, Made, Readiness, SubmissionRead, UnsettledStart, WaitingOn, Waits, Watch,
+};
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -201,6 +203,14 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             submission.submits,
             submission.send_backs
         ));
+        if let Some(request) = &submission.request {
+            lines.push(match submission.read {
+                SubmissionRead::None => {
+                    format!("    pull request #{request}, not yet taken in by the merge queue")
+                }
+                _ => format!("    from pull request #{request}"),
+            });
+        }
         if let Some(waiting) = &submission.waiting {
             lines.push(format!("    waiting: {waiting}"));
         }
