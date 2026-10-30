@@ -12,9 +12,15 @@
 //! each made when first needed and recorded by id and server. The pane's
 //! `PATH` is led by a folder of the start's own linking the program's
 //! kind to the program the settings name, since herdr's agent start
-//! types the kind's name into the pane's shell; agent start then runs
-//! it with the command's arguments whole, under the agent's herdr name,
-//! and nothing is typed (94, 107). Whatever agent start answers, the
+//! types the kind's name into the pane's shell; once the pane's screen
+//! shows the shell's first output, its prompt, agent start runs it with
+//! the command's arguments whole, under the agent's herdr name, and
+//! nothing is typed (94, 107). Until the shell's line editor takes the
+//! pane's terminal, herdr refuses a line past the terminal's canonical
+//! limit, `agent_start_input_failed`: that is the shell not yet at its
+//! prompt, and agent start is asked again within the start's bound, a
+//! start still so answered at the bound not come up with the screen,
+//! never refused. Whatever agent start answers, the
 //! folder-trust question is read off the pane's screen and answered yes
 //! with the keys the command names, the focus moved to the yes choice and
 //! confirmed only there, read again until it is gone; a start held at
@@ -97,9 +103,24 @@ pub const WATCH_BOUND: flume_seams::Seconds = 30;
 /// renewed; the watch renews it four times as often.
 pub const LEASE_TERM: Duration = Duration::from_secs(60);
 
-/// How long agent start waits for the program to be ready: room for
-/// SessionStart hooks slow under load (record 0018).
+/// How long a start waits for the pane's shell to come to its prompt and
+/// the program to be ready: room for a shell and SessionStart hooks slow
+/// under load (record 0018).
 pub const START_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// herdr's shortest bound on an agent start: its settle delay, three
+/// seconds, and a millisecond more.
+const SHORTEST_START: Duration = Duration::from_millis(3001);
+
+/// herdr's word that the pane's terminal cannot yet take the start's
+/// line: on macOS, a line past the terminal's canonical limit while it is
+/// canonical, as it is until the shell's line editor takes it at its
+/// prompt; nothing is typed (herdr 0.9.5's `validate_pty_submission`).
+const NOT_YET_TAKEN: &str = "agent_start_input_failed";
+
+/// How long apart agent start is asked again while herdr answers that
+/// the pane's terminal cannot yet take its line.
+const TAKEN_BEAT: Duration = Duration::from_millis(250);
 
 /// How long, once the folder-trust question is answered, herdr is waited
 /// on for the agent to idle: herdr's own default for a start.
@@ -331,8 +352,9 @@ impl Herdr {
         self
     }
 
-    /// How long agent start waits for the program, in place of 120
-    /// seconds; herdr takes 3001 milliseconds to 300 seconds.
+    /// How long a start waits for the pane's shell and the program, in
+    /// place of 120 seconds; herdr's agent start takes 3001 milliseconds
+    /// to 300 seconds.
     pub fn with_start_timeout(mut self, timeout: Duration) -> Herdr {
         self.start_timeout = timeout;
         self
@@ -954,6 +976,31 @@ impl Herdr {
         Ok(None)
     }
 
+    /// Waits until `deadline` for the pane's shell to come to its prompt:
+    /// for its screen to show the shell's first output, which, the shell
+    /// reading no startup file, is its prompt or what the shell says as
+    /// it starts; herdr's answer, `timeout` where the screen shows
+    /// nothing by then (record 0018).
+    fn prompt(&self, pane: &Pane, deadline: Instant) -> Call {
+        let wait = deadline.saturating_duration_since(Instant::now());
+        let timeout = wait.as_millis().to_string();
+        self.call(
+            &pane.socket,
+            &[
+                "pane",
+                "wait-output",
+                &pane.id,
+                "--source",
+                "visible",
+                "--regex",
+                r"\S",
+                "--timeout",
+                &timeout,
+            ],
+            wait + PAST_TIMEOUT,
+        )
+    }
+
     /// The pane's visible lines once they show the folder-trust question,
     /// or once the program has drawn and its screen holds still without
     /// it, so neither a dialog half drawn nor one not yet drawn is taken
@@ -1493,21 +1540,65 @@ impl Terminal for Herdr {
             self.abandon(identity, &pane, &bin);
             return Opened::Refused { reason };
         }
-        let timeout = self.start_timeout.as_millis().to_string();
-        let mut args: Vec<&str> = vec![
-            "agent",
-            "start",
-            &kept.name,
-            "--kind",
-            kind,
-            "--pane",
-            &pane.id,
-            "--timeout",
-            &timeout,
-            "--",
-        ];
-        args.extend(command.args.iter().map(String::as_str));
-        let started = self.call(&pane.socket, &args, self.start_timeout + PAST_TIMEOUT);
+        // herdr types the start into the pane's shell, which must be at
+        // its prompt: until its line editor takes the terminal, a line
+        // past the terminal's canonical limit is refused, and under load a
+        // new pane's shell comes to its prompt after herdr is first asked
+        // (record 0018).
+        let deadline = Instant::now() + self.start_timeout;
+        match self.prompt(&pane, deadline) {
+            Call::Answered(_) => {}
+            Call::Refused { code, words } if code == "timeout" => {
+                return Opened::NotComeUp {
+                    screen: format!(
+                        "{}\nthe pane's shell showed no prompt: herdr refused ({code}): {words}",
+                        self.visible(&pane)
+                    ),
+                }
+            }
+            Call::Refused { code, words } => {
+                self.abandon(identity, &pane, &bin);
+                return Opened::Refused {
+                    reason: format!("herdr refused ({code}): {words}"),
+                };
+            }
+            Call::Unanswered(words) => {
+                self.abandon(identity, &pane, &bin);
+                return Opened::Refused { reason: words };
+            }
+        }
+        // Asked again, with what is left of the start's bound and at least
+        // herdr's shortest, while herdr answers that the terminal cannot
+        // yet take the line, as the shell may draw its prompt, or say
+        // something as it starts, before its line editor takes the
+        // terminal; nothing was typed.
+        let started = loop {
+            let left = deadline
+                .saturating_duration_since(Instant::now())
+                .max(SHORTEST_START);
+            let timeout = left.as_millis().to_string();
+            let mut args: Vec<&str> = vec![
+                "agent",
+                "start",
+                &kept.name,
+                "--kind",
+                kind,
+                "--pane",
+                &pane.id,
+                "--timeout",
+                &timeout,
+                "--",
+            ];
+            args.extend(command.args.iter().map(String::as_str));
+            match self.call(&pane.socket, &args, left + PAST_TIMEOUT) {
+                Call::Refused { code, .. }
+                    if code == NOT_YET_TAKEN && Instant::now() + TAKEN_BEAT < deadline =>
+                {
+                    std::thread::sleep(TAKEN_BEAT)
+                }
+                answer => break answer,
+            }
+        };
         // herdr's answer is one signal and the screen another: the trust
         // question is read off the screen and answered whatever herdr
         // answered, since herdr may read the dialog ready, blocked or
@@ -1571,6 +1662,13 @@ impl Terminal for Herdr {
                             screen: self.visible(&pane),
                         }
                     }
+                }
+            }
+            // The terminal took no line within the start's bound: the
+            // shell never came to its prompt, and nothing was typed (35).
+            Call::Refused { code, words } if code == NOT_YET_TAKEN => {
+                return Opened::NotComeUp {
+                    screen: format!("{}\nherdr refused ({code}): {words}", self.visible(&pane)),
                 }
             }
             Call::Refused { code, words } => {

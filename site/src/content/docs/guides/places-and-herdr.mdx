@@ -117,6 +117,10 @@ flume keeps its agents in a herdr session of its own, named `flume`:
   herdr's `agent start`, with the agent's environment set on the pane,
   so nothing is typed into a shell. The pane's shell reads no startup
   file, so nothing in your shell's files reorders the pane's `PATH`.
+  flume starts the agent once that shell has come to its prompt, which
+  on a loaded host can be some seconds after the pane opens. A start
+  whose shell and agent aren't both up within two minutes ends never
+  begun, with the pane's screen in `flume status`.
   The command that opened the agent, a launch, a retry or a settle,
   sends it its prompt once the agent has said it started and waits. The
   settles that follow read whether it was received. Until that
