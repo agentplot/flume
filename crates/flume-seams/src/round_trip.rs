@@ -1139,6 +1139,14 @@ fn submit_holds_no_wait() {
     round_trips(Submitted::Submitted {
         submission: a_submission(),
     });
+    round_trips(Submitted::Decided {
+        submission: a_submission(),
+        outcome: SubmissionOutcome::Conflict {
+            files: vec!["src/lib.rs".into()],
+            base: Revision::new("c8"),
+            words: "conflict on main: src/lib.rs with #6".into(),
+        },
+    });
     round_trips(Submitted::Refused {
         reason: "no such base".into(),
     });

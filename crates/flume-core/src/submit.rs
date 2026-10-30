@@ -2,8 +2,10 @@
 //! the place's head once its last stage delivered and its agent ended,
 //! unless the launch holds it or the work is over, with no wait held on
 //! it. Its outcomes are collected at the settles that follow through the
-//! merge queue's inbox and acted on once each: a landing makes the work
-//! over, a failure or a conflict starts the kind's fix round, as found
+//! merge queue's inbox, or read from submit's answer where the merge
+//! queue decided the submission as it took it in and delivered the
+//! outcome with that answer, and acted on once each: a landing makes the
+//! work over, a failure or a conflict starts the kind's fix round, as found
 //! work from its last stage does, every going-back counted together up to
 //! the kind's bound. A withdrawal, and a landing before flume
 //! submits, are read from the merge queue's record of the branch, never
@@ -136,15 +138,25 @@ impl Engine {
             .head(&place.repository, &place.branch)
             .unwrap_or_else(|| place.base_revision.clone());
         match queue.submit(&place.place_ref(), &head) {
-            Submitted::Submitted { submission } => {
-                self.update(id, |held| {
-                    held.submission.id = Some(submission.id.clone());
-                    Step::Write(())
-                });
+            Submitted::Submitted { submission } => self.submitted(id, &submission),
+            Submitted::Decided {
+                submission,
+                outcome,
+            } => {
+                self.submitted(id, &submission);
+                self.verdict(id, verdict_of(outcome));
             }
             Submitted::Refused { reason } => self.verdict(id, Verdict::Refused { reason }),
         }
         true
+    }
+
+    /// The submission the merge queue holds recorded as the place's own.
+    fn submitted(&self, id: &PlaceId, submission: &Submission) {
+        self.update(id, |held| {
+            held.submission.id = Some(submission.id.clone());
+            Step::Write(())
+        });
     }
 
     /// Acts on an outcome of the place's submission, or its refusal at

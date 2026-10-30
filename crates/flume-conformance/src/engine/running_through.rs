@@ -42,6 +42,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_conflict,
         },
         Scenario {
+            name: "fix round: a conflict the merge queue answers at submit starts code in that settle with its words, as one its inbox gives does, and is never read as a refusal",
+            cites: &["112", "117", "133", "131"],
+            run: a_conflict_at_submit,
+        },
+        Scenario {
             name: "fix round: a finding then a failure past the kind's bound sends nothing more back, and status gives the move and the words",
             cites: &["112", "131", "23", "130", "56"],
             run: a_finding_then_a_failure_past_the_bound,
@@ -206,6 +211,46 @@ fn a_conflict(_: &()) -> Outcome {
         ),
         other => return Err(format!("the verdict status gives: {other:?}")),
     }
+    Ok(())
+}
+
+fn a_conflict_at_submit(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_begun(&world, "one")?;
+    world.commit("main", &["src/lib.rs"]);
+    let base = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
+    world.queue.plan_submits(vec![Plan::ConflictAtSubmit(
+        vec!["src/lib.rs".into()],
+        "conflict on main: src/lib.rs with #66".into(),
+    )]);
+    deliver_fix(&world, &id);
+    world.queue.log.clear();
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    let code = World::identity("fix", "one", "code", 2);
+    let prompt = world
+        .prompt(&id, &code)
+        .ok_or("code did not start again in the settle that submitted")?;
+    for named in [
+        "conflict on main: src/lib.rs with #66",
+        "The files contested: src/lib.rs.",
+        &base.to_string(),
+    ] {
+        ensure!(prompt.contains(named), "{named} is not in {prompt}");
+    }
+    let submission = world.status(&id)?.submission.ok_or("no submission")?;
+    ensure_eq!(submission.waiting, None, "what the place waits on");
+    ensure!(
+        matches!(submission.verdict, Some(Verdict::Conflict { .. })),
+        "the verdict status gives: {:?}",
+        submission.verdict
+    );
+    world.settle(&id);
+    ensure_eq!(
+        world.held(&id).map(|held| held.submission.send_backs),
+        Some(1),
+        "goings-back once the next settle read the queue"
+    );
     Ok(())
 }
 

@@ -407,6 +407,41 @@ fn the_merge_queues_outcomes_are_planned() {
 }
 
 #[test]
+fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    let at = place_ref();
+    git.set_branch("/r", "fix/one", &base);
+    let head = git.commit("/r", "fix/one", &["a"]);
+    queue.plan_submits(vec![Plan::ConflictAtSubmit(
+        vec!["a".into()],
+        "conflict on main: a with #1".into(),
+    )]);
+    let Submitted::Decided {
+        submission,
+        outcome,
+    } = queue.submit(&at, &head)
+    else {
+        panic!("a conflict at submit was not answered decided");
+    };
+    assert_eq!(
+        outcome,
+        SubmissionOutcome::Conflict {
+            files: vec!["a".into()],
+            base,
+            words: "conflict on main: a with #1".into()
+        }
+    );
+    assert!(matches!(
+        queue.read_submission("/r", "fix/one"),
+        SubmissionRead::Found { submission: found } if found == submission
+    ));
+    queue.step("/r", "main");
+    assert_eq!(outcomes(queue.inbox(&at)), vec![], "an outcome delivered");
+}
+
+#[test]
 fn the_change_is_scripted_as_groups() {
     let git = FakeGit::new();
     let base = git.init("/r", "main");
