@@ -60,6 +60,27 @@ chore starts anyway and its prompt names the failed step, and a change
 waits with the step in `flume status`. A repository with no such steps
 is ready at once, and the prompt says it declares no readiness.
 
+`flume status` gives each step in one line, passed or failed, and under
+a failed step the last ten lines it printed, its terminal escapes
+stripped:
+
+```console
+$ flume status change--tabs-in-quotes
+~/src/acme/places/change--tabs-in-quotes: change@2 (flume), live
+  branch change/tabs-in-quotes from main, head 84130b3cd2adae9a0ac2117884849d513da80181
+  …
+  readiness toolchain: passed
+  readiness moon setup: failed
+    Installing node 22.11.0
+    Error: node 22.11.0 could not be downloaded: the connection timed out
+  stage construct: waiting_on_readiness, started 0 times
+  …
+  waits on its caller to retry construct (unready) since 1793287734
+```
+
+`flume status --json` gives what each step printed, its escapes and
+all, passed or failed.
+
 ## The terminal: printed or herdr
 
 The host's configuration names the terminal:
