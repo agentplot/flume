@@ -72,6 +72,7 @@ pub(crate) fn start_record(
         program: program.to_string(),
         account: account.map(|account| account.name.clone()),
         env,
+        mode: None,
     }
 }
 

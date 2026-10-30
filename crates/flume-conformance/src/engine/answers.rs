@@ -77,6 +77,7 @@ fn settings() -> Settings {
         model: Some("large".into()),
         instructions: Some("brief".into()),
         beside: Some("operator".into()),
+        mode: None,
     }
 }
 
@@ -264,6 +265,7 @@ fn place_status() -> PlaceStatus {
                 missing: vec!["AGENT_HOME".into()],
                 different: vec!["FLUME_STAGE".into()],
                 program: false,
+                mode: None,
             },
         }],
         ends: vec![

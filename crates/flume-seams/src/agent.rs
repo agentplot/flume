@@ -108,8 +108,9 @@ pub enum Spent {
 /// started_without: how the agent began otherwise than its start
 /// recorded, as its own word that it started shows it: each variable the
 /// start's record names that its environment lacks, each it holds with
-/// another value, both by name alone, and whether it runs another program
-/// (135, 161).
+/// another value, both by name alone, whether it runs another program,
+/// and the mode it began in where it is not the one its start asked,
+/// none in a word written before (135, 161, 162).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(default)]
@@ -118,11 +119,22 @@ pub struct Unsettled {
     pub different: Vec<String>,
     #[serde(default)]
     pub program: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ModeBegan>,
+}
+
+/// The mode a start asked, as its profile passed it, and the one the
+/// agent's word says it began in, none where its word names none (161,
+/// 162).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModeBegan {
+    pub asked: String,
+    pub began: Option<String>,
 }
 
 impl Unsettled {
     /// How the agent began otherwise, naming each variable and never a
-    /// value (56, 161).
+    /// value, and both modes where it began in another (56, 161, 162).
     pub fn words(&self) -> String {
         let mut words = vec![];
         if !self.missing.is_empty() {
@@ -133,6 +145,12 @@ impl Unsettled {
         }
         if self.program {
             words.push("under another program".to_string());
+        }
+        if let Some(ModeBegan { asked, began }) = &self.mode {
+            words.push(match began {
+                Some(began) => format!("in the mode `{began}`, where its start asked `{asked}`"),
+                None => format!("in a mode its word did not name, where its start asked `{asked}`"),
+            });
         }
         if words.is_empty() {
             return "otherwise than its start recorded".to_string();

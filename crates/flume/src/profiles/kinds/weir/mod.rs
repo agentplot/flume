@@ -445,5 +445,6 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
         model,
         instructions,
         beside,
+        mode: None,
     }
 }
