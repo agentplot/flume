@@ -122,7 +122,9 @@ With a place, its status; with none, every place on the host. Each
 place gives:
 
 - its kind, version and origin, and its phase, live or tidied;
-- its branch, base and head, and its readiness steps;
+- its branch, base and head, and whether each readiness step passed or
+  failed, with the last ten lines a failed step printed, its terminal
+  escapes stripped;
 - each stage's state and starts;
 - its current agent's identity, program, settings with their layers
   and state, and whether it started, is asking or has its own work
