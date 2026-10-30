@@ -57,8 +57,8 @@ words a test writes, never one a real account met.
 
 ## 7. The site's guides
 
-- [ ] 7.1 Write streams, pools, the two strategies, a spent account, affinity, the start check, the environment from the account and the six layers into `site/src/content/docs/guides/agent-settings.md`, with C.7's example and a host giving `change` opus and `fix` sonnet. Add every key of design 1 to `reference/configuration.md`, the host's own documents to `reference/state.md`, and `--stream` and `--intent` to `reference/commands.md`. Write it all to any host's operator, naming no team, host or word of ours (design 9; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 7.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 7.1 Write streams, pools, the two strategies, a spent account, affinity, the start check, the environment from the account and the six layers into `site/src/content/docs/guides/agent-settings.md`, with C.7's example and a host giving `change` opus and `fix` sonnet. Add every key of design 1 to `reference/configuration.md`, the host's own documents to `reference/state.md`, and `--stream` and `--intent` to `reference/commands.md`. Write it all to any host's operator, naming no team, host or word of ours (design 9; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
+- [x] 7.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 8. Coverage and the gate
 

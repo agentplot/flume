@@ -82,6 +82,8 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
 | `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions` or `beside`. Repeatable. |
+| `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
+| `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
 
 The answer is the place's status. A launch is refused whole, leaving
 nothing it made, when:
@@ -96,8 +98,9 @@ nothing it made, when:
 - the name gives no valid branch;
 - the base's current revision cannot be read, a failed fetch among the
   causes;
-- the repository's file sets `env`, or a setting names a stage the kind
-  lacks, or a program no agent profile runs.
+- a declaration sets `env` in an agents table, or a setting names a
+  stage the kind lacks, or a program no agent profile runs;
+- the stream is one the host's configuration does not declare.
 
 ```console
 $ flume launch --kind deploy --name x --brief x
@@ -128,11 +131,15 @@ place gives:
 - its submission;
 - what it waits on, since when and in whose words, and whether it is
   stalled;
+- its stream and intent, its current agent's account, each move
+  between accounts, and each start that began without its settings;
 - its holds, priority, recipients and ends, and what flume could not
-  read. The host part
-gives the agents running, the bound, the room, the queue, the watch,
-each base's count, the role addresses with ends pending, and what a
-tidy kept in the terminal.
+  read.
+
+The host part gives the agents running, the bound, the room, the
+queue, each stream's and each pool's part, the watch, each base's
+count, the role addresses with ends pending, and what a tidy kept in
+the terminal.
 
 flume reads each fact where it lives when asked, and keeps none
 between asks. The [state reference](/flume/reference/state/) lists the
@@ -219,8 +226,8 @@ flume priority <place> <n>
 ```
 
 Sets the place's priority, a whole number, negative allowed. A settle
-starts waiting stages highest priority first, equals in the order they
-came to wait.
+starts waiting stages by their stream's priority, then their place's,
+highest first, equals in the order they came to wait.
 
 ## `flume tidy`
 
@@ -321,7 +328,7 @@ case do nothing.
 | Command | |
 |---|---|
 | `flume needs <words>` | The stage ends short with the words: it needs an answer. `--found` says it found work it cannot deliver past instead. |
-| `flume ack started --session <id> --transcript <path> --plugin-version <v> [--source <how>]` | The agent started under its identity and secret, in a session with a transcript. `--source` says how the session began, `startup` where none is given. |
+| `flume ack started --session <id> --transcript <path> --plugin-version <v> [--source <how>]` | The agent started under its identity and secret, in a session with a transcript. `--source` says how the session began, `startup` where none is given. flume takes it only where the agent runs the program its start recorded and every variable of the record matches. Otherwise it refuses, naming each variable that differed and whether the program did, and starts a settle of the place. |
 | `flume ack received --digest <hex>` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. |
 | `flume hook <event>` | What the hook for the event does with the input on standard input: `session-start`, `user-prompt-submit`, `pre-tool-use`, `permission-request`, `post-tool-use`, `stop`, `stop-failure` or `session-end`. Any other event does nothing. It always exits `0`. |
 
