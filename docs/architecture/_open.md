@@ -22,6 +22,16 @@ brought to the rule.
   agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
   operator rules (Part C's preamble; core.19). The item leaves when it
   lands.
+- **Clause 117 has submit answered before the merge queue decides.**
+  sluice 0.57.1, on a base that takes pull requests, can answer a
+  no-wait submit with the record of an entry it found decided as it
+  took it in, exiting as the outcome does, and records the outcome
+  delivered to the place, so no inbox gives it (133). The merge-queue
+  seam's submit answers such a submission with its outcome, which the
+  settle that submitted acts on as it acts on the inbox's (112). The
+  code stands ahead of 117, C.6 and core.6, which reads an outcome
+  only at the settles that follow; they say so once the operator rules
+  the change (core.19). The item leaves when it lands.
 - **Record 0021 waits on a plan.** The standing prompt with cache use
   in status (record 0021; core.33), accepted 2026-10-29 and stated at
   blueprints 6e5aae2, is built only once the user approves a plan for

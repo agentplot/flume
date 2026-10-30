@@ -6,8 +6,8 @@ use flume_seams::{
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-/// What the fake merge queue does with a submission: refused at submit,
-/// or held and decided by the round that next reaches it.
+/// What the fake merge queue does with a submission: refused or decided
+/// at submit, or held and decided by the round that next reaches it.
 #[derive(Clone, Debug)]
 pub enum Plan {
     /// It lands, merged into its base.
@@ -15,6 +15,10 @@ pub enum Plan {
     Fail(String),
     /// It conflicts with its base on the files named, with the words.
     Conflict(Vec<String>, String),
+    /// Submit finds it in conflict with its base as it takes it in, on
+    /// the files named, and answers with the outcome, which it delivers
+    /// so no inbox gives it (133).
+    ConflictAtSubmit(Vec<String>, String),
     /// It is withdrawn, which no inbox gives (99).
     Withdraw,
     /// Submit refuses it with the reason.
@@ -215,7 +219,7 @@ impl FakeMergeQueue {
             .cloned()
             .unwrap_or((Plan::Land, None));
         let (state, outcome) = match plan {
-            Plan::Hold | Plan::Refuse(_) => return,
+            Plan::Hold | Plan::Refuse(_) | Plan::ConflictAtSubmit(..) => return,
             Plan::Land => {
                 let head = self
                     .git
@@ -274,6 +278,27 @@ impl MergeQueue for FakeMergeQueue {
         let plan = queue.submits.pop_front().unwrap_or(Plan::Land);
         if let Plan::Refuse(reason) = plan {
             return Submitted::Refused { reason };
+        }
+        if let Plan::ConflictAtSubmit(files, words) = plan {
+            let base = self
+                .git
+                .branch_head(&place.repository, &place.base)
+                .expect("a base");
+            let submission = Self::record(
+                &mut queue,
+                &place.repository,
+                &place.branch,
+                &place.base,
+                SubmissionState::Conflict {
+                    files: files.clone(),
+                    words: words.clone(),
+                },
+                None,
+            );
+            return Submitted::Decided {
+                submission,
+                outcome: SubmissionOutcome::Conflict { files, base, words },
+            };
         }
         let submission = Self::record(
             &mut queue,

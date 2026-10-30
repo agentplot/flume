@@ -5,7 +5,8 @@
 //! settling as a caller would between its commands. A kind runs through
 //! on its own: a fix lands through flume's own submission (S1); a failed
 //! submission and a conflicting one each go back to code with sluice's
-//! words and land on the second (112); a change runs construct, code and
+//! words and land on the second (112), a conflict the stand-in for sluice
+//! answers at the submit itself among them (133); a change runs construct, code and
 //! verify, its report committed in the archived change (S2, S35); verify
 //! finding work sends the place back to code (131); a fix whose prompt
 //! Claude Code submits inside paste tags lands (89); a host's bound
@@ -209,6 +210,64 @@ fn a_conflicting_submission_merges_the_base_and_lands() {
         Some("the place's own and the base's own\n")
     );
     assert!(!walk.has_branch("fix/three"));
+}
+
+#[test]
+fn a_conflict_sluice_answers_at_the_submit_goes_back_to_code_and_lands() {
+    // 112, 133: the stand-in for sluice answers the first submission with
+    // its entry's record, found in conflict as it was taken in, exiting
+    // as a conflict does and delivered, as sluice answers a no-wait submit
+    // on a base that takes pull requests. The place goes back to code with
+    // the files contested and the base's revision in its words, never
+    // waiting on its caller as if refused, and lands on the second.
+    let walk = Walk::new("walk-conflict-at-submit");
+    walk.sluice_decides_the_first_submit();
+    let place = walk.launch("fix", "four", &["--brief", "rework the work"]);
+    let base = walk.landed_elsewhere("work.rs", "the base's own\n");
+    walk.agent(&place, commits("work.rs", "the place's own\n"));
+    let status = walk.until(&place, "its code stage started again", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert!(status["submission"]["waiting"].is_null(), "{status}");
+    assert_eq!(
+        status["submission"]["verdict"]["conflict"]["files"],
+        json!(["work.rs"]),
+        "{status}"
+    );
+    let first = walk.submissions();
+    assert_eq!(first.len(), 1, "{first:?}");
+    assert_eq!(first[0]["state"], "conflict", "{first:?}");
+    assert!(
+        first[0]["delivered"].is_string(),
+        "the outcome sluice's answer delivered: {first:?}"
+    );
+    let prompt = walk.prompt(&place);
+    for named in [
+        "conflict on main: work.rs",
+        "The files contested: work.rs.",
+        &base,
+    ] {
+        assert!(prompt.contains(named), "{named} is not in {prompt}");
+    }
+    walk.agent(
+        &place,
+        json!([{ "merge_named": { "work.rs": "the place's own and the base's own\n" } }]),
+    );
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("work.rs").as_deref(),
+        Some("the place's own and the base's own\n")
+    );
+    // sluice withdraws the conflicting entry once the worktree submits
+    // again.
+    let states: Vec<Value> = walk
+        .submissions()
+        .iter()
+        .map(|entry| entry["state"].clone())
+        .collect();
+    assert_eq!(states.len(), 2, "{states:?}");
+    assert_eq!(states[1], "landed", "{states:?}");
+    assert!(!walk.has_branch("fix/four"));
 }
 
 #[test]

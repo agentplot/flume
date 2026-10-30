@@ -71,8 +71,19 @@ pub struct Submission {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Submitted {
-    Submitted { submission: Submission },
-    Refused { reason: String },
+    Submitted {
+        submission: Submission,
+    },
+    /// The merge queue decided the submission as it took it in, and its
+    /// answer gave the outcome, which it records delivered to the place,
+    /// so no inbox gives it again (112, 133).
+    Decided {
+        submission: Submission,
+        outcome: SubmissionOutcome,
+    },
+    Refused {
+        reason: String,
+    },
 }
 
 /// One outcome of a place's submission, delivered to the place once

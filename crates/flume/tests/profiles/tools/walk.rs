@@ -6,7 +6,9 @@
 //! scratch folder and whose `CLAUDE_CODE_OAUTH_TOKEN` is a word of the
 //! walk's own, which the stand-in keeps from its hooks as the release
 //! does and sends nowhere (144, 161); or, for the check-live layer, no stand-in and the
-//! host's terminal and account as its configuration names them. Every process
+//! host's terminal and account as its configuration names them. Where a
+//! walkthrough asks, the stand-in for sluice is first on `PATH` too, the
+//! pinned sluice answering its first submit decided. Every process
 //! the walkthrough starts, flume, sluice, git and the stand-in, runs in the
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
@@ -14,6 +16,7 @@
 
 use crate::common::*;
 use serde_json::Value;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -155,6 +158,12 @@ impl Walk {
     #[allow(dead_code)]
     pub fn home(&self) -> &Path {
         &self.home
+    }
+
+    /// The stand-in for sluice first on `PATH` as `sluice`, so the
+    /// first submission is answered decided.
+    pub fn sluice_decides_the_first_submit(&self) {
+        stand_in_sluice(&self.repository.scratch.path("bin"));
     }
 
     /// The host's configuration, `[host]` and beside it, with the
@@ -461,6 +470,39 @@ impl Walk {
             .cloned()
             .unwrap_or_default()
     }
+}
+
+/// The stand-in for sluice written into `bin` as `sluice`: the pinned
+/// sluice, as the test's own `PATH` finds it, with its first submit's
+/// `--no-wait` dropped, so it answers as the pinned sluice answers a
+/// no-wait submit on a base that takes pull requests where it finds the
+/// submission decided as it takes it in: with the entry's record,
+/// exiting as the outcome does, the outcome recorded delivered to the
+/// worktree, so no inbox gives it (sluice's `report_delivering`; 112,
+/// 133). Every other command, and every later submit, is the pinned
+/// sluice's own.
+pub fn stand_in_sluice(bin: &Path) {
+    let pinned = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("sluice"))
+        .find(|path| path.is_file())
+        .expect("the pinned sluice on PATH");
+    std::fs::create_dir_all(bin).expect("the stand-in's folder");
+    let path = bin.join("sluice");
+    let script = format!(
+        "#! /bin/sh -e\n\
+         if [ \"$1\" = submit ] && mkdir '{}' 2>/dev/null; then\n  \
+         for word do\n    \
+         shift\n    \
+         [ \"$word\" = --no-wait ] || set -- \"$@\" \"$word\"\n  \
+         done\n\
+         fi\n\
+         exec '{}' \"$@\"\n",
+        bin.join(".sluice-submitted").display(),
+        pinned.display()
+    );
+    std::fs::write(&path, script).expect("the stand-in for sluice");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+        .expect("the stand-in for sluice made executable");
 }
 
 /// The stand-in's run waited on to its end.
