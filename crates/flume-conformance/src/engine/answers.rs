@@ -76,7 +76,6 @@ fn settings() -> Settings {
         program: Some("agent".into()),
         model: Some("large".into()),
         instructions: Some("brief".into()),
-        env: BTreeMap::from([("KEY".into(), "value".into())]),
         beside: Some("operator".into()),
     }
 }
@@ -160,6 +159,7 @@ fn place_status() -> PlaceStatus {
             program: "agent".into(),
             settings: AgentSettings {
                 settings: settings(),
+                env: BTreeMap::from([("KEY".into(), SET.into())]),
                 from: BTreeMap::from([(
                     "model".into(),
                     Given {

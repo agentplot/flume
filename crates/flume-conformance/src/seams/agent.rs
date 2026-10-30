@@ -3,6 +3,7 @@
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 pub trait AgentHarness {
     type Seam: Agent + ?Sized;
@@ -54,6 +55,7 @@ fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
     let who = identity(stage);
     let command = harness.seam().command(
         &Settings::default(),
+        &BTreeMap::new(),
         &harness.place(),
         &who,
         &Secret("secret".into()),
@@ -173,8 +175,13 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
         model: Some("large".into()),
         ..Settings::default()
     };
+    let env = BTreeMap::from([(
+        "AGENT_HOME".to_string(),
+        "/scratch/agent-work-1".to_string(),
+    )]);
     let command = harness.seam().command(
         &settings,
+        &env,
         &harness.place(),
         &who,
         &secret,
@@ -188,6 +195,11 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
     ensure!(carries(&who.to_string()), "the command carries no identity");
     ensure!(carries(&secret.0), "the command carries no secret");
     ensure!(carries("large"), "the command carries no model");
+    ensure_eq!(
+        command.env.get("AGENT_HOME").map(String::as_str),
+        Some("/scratch/agent-work-1"),
+        "the account's variable in the command's environment"
+    );
     ensure!(
         command
             .prompt_args

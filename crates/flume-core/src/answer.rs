@@ -479,16 +479,17 @@ pub struct AgentStatus {
     pub notes: Vec<String>,
 }
 
-/// The settings an agent started with, each value as its layer wrote it
-/// but an environment variable's, given by its name alone, its value
-/// [`flume_seams::SET`], and where each came from (32, 56).
+/// The settings an agent started with, each value as its layer wrote it,
+/// each variable its account gave by its name alone, its value
+/// [`flume_seams::SET`], and where each came from (32, 56, 144).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentSettings {
     #[serde(flatten)]
     pub settings: Settings,
+    pub env: BTreeMap<String, String>,
     /// Each setting's layer and value as written, by `program`, `model`,
     /// `instructions` or `env.<NAME>`, an environment variable's value
-    /// [`flume_seams::SET`].
+    /// [`flume_seams::SET`] and its layer `account`.
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
 }

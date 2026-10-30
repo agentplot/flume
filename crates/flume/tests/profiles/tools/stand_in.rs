@@ -79,6 +79,11 @@ fn the_stand_in_drives_one_stage() {
     }
     let status = walk.status(&place);
     assert_eq!(status["agent"]["started"], "yes", "{status}");
+    assert_eq!(
+        status["agent"]["settings"]["from"]["env.CLAUDE_CONFIG_DIR"],
+        serde_json::json!({"layer": "account", "value": "<set>"}),
+        "{status}"
+    );
     assert_eq!(status["agent"]["asking"], "no", "{status}");
     assert!(
         status["refused_acts"].to_string().contains("git push"),
@@ -92,7 +97,7 @@ fn the_stand_in_drives_one_stage() {
 
     // The transcript holds the prompt queued and as the user's turn, and
     // each tool call with its result.
-    let projects = walk.repository.scratch.path("home/.claude/projects");
+    let projects = walk.account().join("projects");
     let transcript = std::fs::read_dir(&projects)
         .expect("the transcripts' folder")
         .flatten()

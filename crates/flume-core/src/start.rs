@@ -10,6 +10,7 @@ use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
 use crate::{repository_id, Engine, Step};
 use flume_seams::*;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// A start written as live, its agent still to open.
@@ -18,8 +19,11 @@ pub(crate) struct Claim {
     secret: Secret,
     text: String,
     place: PlaceRef,
-    /// The settings the agent starts with, the host's values read (29).
+    /// The settings the agent starts with.
     settings: Settings,
+    /// The environment its account gives, each value read against the
+    /// login environment (29, 144).
+    env: BTreeMap<String, String>,
     agent: Arc<dyn Agent>,
     /// The session name the agent carries: a role's run's address (132).
     session: Option<String>,
@@ -237,10 +241,16 @@ impl Engine {
             ),
             Err(_) => Choice::NoPool,
         };
-        let resolution = match &chosen {
-            Choice::Undeclared(reason) => Err(reason.clone()),
+        let stage_name = &place.kind.stages[index].name;
+        let env = match &chosen {
+            Choice::Chose { account, .. } => self.account_env(account, stage_name),
+            _ => Ok(BTreeMap::new()),
+        };
+        let resolution = match (&chosen, env.as_ref()) {
+            (Choice::Undeclared(reason), _) | (_, Err(reason)) => Err(reason.clone()),
             _ => resolution,
         };
+        let env = env.unwrap_or_default();
         let now = self.host.now();
         let made_from = self.store.made(id).len();
         let claimed = self.update(id, |held| {
@@ -320,6 +330,18 @@ impl Engine {
             if let Some(moved) = self.stage_moved(held, index, account.as_ref(), queue, now) {
                 held.moves.push(moved);
             }
+            let mut from = resolution.resolved.from.clone();
+            if let Choice::Chose { account, .. } = &chosen {
+                for (name, value) in &account.env {
+                    from.insert(
+                        format!("env.{name}"),
+                        Given {
+                            layer: Layer::Account,
+                            value: value.clone(),
+                        },
+                    );
+                }
+            }
             let secret = self.host.secret();
             let stage = &mut held.stages[index];
             stage.state = StageState::Starting;
@@ -342,10 +364,10 @@ impl Engine {
                     .program
                     .clone()
                     .unwrap_or_default(),
+                settings: resolution.resolved.settings.clone(),
                 // Names only: the values reach the agent's command and
                 // nothing kept (32, 56).
-                settings: resolution.resolved.settings.unvalued(),
-                from: flume_seams::unvalued_from(&resolution.resolved.from),
+                from: flume_seams::unvalued_from(&from),
                 account: account.clone(),
                 record: None,
                 prompt: Prompt {
@@ -367,7 +389,8 @@ impl Engine {
                 secret,
                 text,
                 place: held.place.place_ref(),
-                settings: resolution.settings.clone(),
+                settings: resolution.resolved.settings.clone(),
+                env: env.clone(),
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
                 account,
@@ -385,11 +408,12 @@ impl Engine {
             text,
             place,
             settings,
+            env,
             agent,
             session,
             account: _,
         } = claim;
-        let command = agent.command(&settings, &place, &identity, &secret, &text);
+        let command = agent.command(&settings, &env, &place, &identity, &secret, &text);
         let folder = self.store.folder(id);
         match self.terminal.open(
             &place,

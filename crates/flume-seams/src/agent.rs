@@ -134,11 +134,13 @@ pub struct StopShort {
 /// own record shows, and an answer the record does not give is unknown,
 /// never guessed from the terminal (93).
 pub trait Agent: Send + Sync {
-    /// How to start the agent with its settings in the place under its
-    /// identity and secret, the prompt in `prompt_args` (88, 29).
+    /// How to start the agent with its settings and `env`, its account's
+    /// variables read against the login environment, in the place under
+    /// its identity and secret, the prompt in `prompt_args` (88, 29, 144).
     fn command(
         &self,
         settings: &crate::Settings,
+        env: &BTreeMap<String, String>,
         place: &crate::PlaceRef,
         identity: &Identity,
         secret: &Secret,

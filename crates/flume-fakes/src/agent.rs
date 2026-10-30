@@ -160,6 +160,7 @@ impl Agent for FakeAgent {
     fn command(
         &self,
         settings: &Settings,
+        env: &BTreeMap<String, String>,
         place: &PlaceRef,
         identity: &Identity,
         secret: &Secret,
@@ -173,7 +174,7 @@ impl Agent for FakeAgent {
         if let Some(instructions) = &settings.instructions {
             args.extend(["--instructions".to_string(), instructions.clone()]);
         }
-        let mut env = settings.env.clone();
+        let mut env = env.clone();
         env.insert("AGENT_IDENTITY".into(), identity.to_string());
         env.insert("AGENT_SECRET".into(), secret.0.clone());
         env.insert("AGENT_PLACE".into(), place.location.clone());

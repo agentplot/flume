@@ -346,11 +346,9 @@ pub struct PlaceRecord {
     pub binding: Binding,
     pub brief: Option<String>,
     pub mark: Option<String>,
-    /// The launch's settings by stage. They keep their environment's
-    /// values, since each later start reads the launch's layer as the
-    /// launch gave it and the caller who gave it may be gone (8, 32): the
-    /// one record of flume's that holds an environment value, written
-    /// readable by the host's user alone and printed by no answer (56).
+    /// The launch's settings by stage, kept since each later start reads
+    /// the launch's layer as the launch gave it and the caller who gave
+    /// it may be gone (8, 32).
     pub settings: BTreeMap<String, Settings>,
     /// The launch's settings for every stage's agent, kept as `settings`
     /// is (7, 8, 32).
@@ -523,8 +521,8 @@ pub struct StageHeld {
     /// The part a refused stage could not fill (27).
     pub refused_part: Option<String>,
     /// The setting a stage was refused at its start for, with its layer:
-    /// a program no agent profile binds, or a variable the host user's
-    /// login environment lacks (27, 32).
+    /// a program no agent profile binds, or a variable its account names
+    /// that the host user's login environment lacks (27, 32, 144).
     #[serde(default)]
     pub refused_setting: Option<String>,
     pub end: Option<StageEnd>,
@@ -638,12 +636,11 @@ pub struct StartHeld {
     pub secret: Secret,
     pub program: String,
     /// The settings it started with, each value as its layer wrote it
-    /// but the environment's, kept by name alone, each value [`crate::SET`]
     /// (32, 56).
     pub settings: Settings,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>`, an environment variable's value
-    /// [`crate::SET`] (32, 56).
+    /// `instructions` or `env.<NAME>`, a variable's from its account and
+    /// its value [`crate::SET`], so no value is kept (32, 56, 144).
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
     /// The account it runs under, none where its stream and the host

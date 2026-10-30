@@ -19,6 +19,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_streams_pool_before_the_hosts,
         },
         Scenario {
+            name: "account pools: with no pool named anywhere every agent starts under no account, in the login environment alone, no variable named in its settings",
+            cites: &["144", "29", "32"],
+            run: no_pool_anywhere,
+        },
+        Scenario {
             name: "account pools: fill-first takes the first usable account in order, least-busy the one running fewest, equals in order",
             cites: &["S54", "145"],
             run: s54_fill_first_and_least_busy,
@@ -341,5 +346,37 @@ fn nothing_usable(_: &()) -> Outcome {
         on("work", "work-2"),
         "the account once its reset passed"
     );
+    Ok(())
+}
+
+fn no_pool_anywhere(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream("work", Some(Stream::default()));
+    let id = fix_in(&world, Some("work"), "one")?;
+    let other = fix_in(&world, None, "two")?;
+    for (place, name) in [(&id, "one"), (&other, "two")] {
+        ensure_eq!(account_of(&world, place, "code"), None, "{name}'s account");
+        let (command, _) = world
+            .terminal
+            .opened(&World::identity("fix", name, "code", 1))
+            .ok_or("code was not opened")?;
+        let given: Vec<&String> = command
+            .env
+            .keys()
+            .filter(|variable| !variable.starts_with("AGENT_"))
+            .collect();
+        ensure!(given.is_empty(), "{name}'s agent was given {given:?}");
+        let agent = world.status(place)?.agent.ok_or("no agent")?;
+        ensure!(
+            agent.settings.env.is_empty()
+                && agent
+                    .settings
+                    .from
+                    .keys()
+                    .all(|key| !key.starts_with("env.")),
+            "{name}'s settings name a variable: {:?}",
+            agent.settings
+        );
+    }
     Ok(())
 }

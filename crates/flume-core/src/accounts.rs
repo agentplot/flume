@@ -115,7 +115,7 @@ pub(crate) enum Choice {
     /// no account (144).
     NoPool,
     /// The account chosen, and how.
-    Chose { held: AccountHeld },
+    Chose { held: AccountHeld, account: Account },
     /// No account of the pool is usable: the stage waits for room (145).
     Wait,
     /// The pool named is not declared, naming it.
@@ -151,6 +151,7 @@ impl Engine {
                     name: chosen.account.name.clone(),
                     from: AccountFrom::Strategy,
                 },
+                account: chosen.account.clone(),
             },
             None => Choice::Wait,
         }

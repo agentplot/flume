@@ -7,8 +7,8 @@
 //! word left out is no bound and the printed command. Its
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
-//! are the settings the host gives a kind's agents in every repository and
-//! in one, each value kept as written (32, C.7; record 0017); a
+//! give a kind's agents in every repository and in one their `model` and
+//! `instructions`, each kept as written (32, C.7; records 0017, 0020); a
 //! repository's key has a leading `~` read as the home, so it names the
 //! repository by its location as a launch does. Its
 //! `[roles."<partition>/<role>"]` tables are the runs the host wakes for
@@ -499,9 +499,9 @@ fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
     Ok(runs)
 }
 
-/// One agents table's `program`, `model`, `instructions` and `env`, each
-/// as written; any other key, `stages` among them, is not a setting of
-/// the host's (32, C.7).
+/// One agents table's `model` and `instructions`, each as written; any
+/// other key, `stages` among them, is not a setting of the host's (32,
+/// C.7; record 0020).
 fn agent_settings(table: &Table, at: &str) -> Result<Settings, String> {
     let text = |name: &str| match table.get(name) {
         None => Ok(None),
@@ -509,11 +509,9 @@ fn agent_settings(table: &Table, at: &str) -> Result<Settings, String> {
         Some(_) => Err(format!("[{at}] {name} is not a string")),
     };
     Ok(Settings {
-        program: text("program")?,
         model: text("model")?,
         instructions: text("instructions")?,
-        env: env_of(table, at)?,
-        beside: None,
+        ..Settings::default()
     })
 }
 
@@ -567,16 +565,13 @@ mod tests {
     #[test]
     fn settings_for_a_kind_and_for_a_repositorys_kind() {
         let config = HostConfig::parse(
-            "[kinds.change.agents]\nmodel = \"opus\"\nenv = { AGENT_HOME = \"~/.agent-work\" }\n\
+            "[kinds.change.agents]\nmodel = \"opus\"\ninstructions = \"be brief\"\n\
              [repos.\"/r\".kinds.change.agents.stages.verify]\nmodel = \"sonnet\"\n",
         )
         .unwrap();
         let kind = &config.kinds["change"];
         assert_eq!(kind.every_stage.model.as_deref(), Some("opus"));
-        assert_eq!(
-            kind.every_stage.env["AGENT_HOME"], "~/.agent-work",
-            "kept as written"
-        );
+        assert_eq!(kind.every_stage.instructions.as_deref(), Some("be brief"));
         let repository = &config.repos["/r"]["change"];
         assert_eq!(repository.every_stage, Settings::default());
         assert_eq!(repository.stages["verify"].model.as_deref(), Some("sonnet"));
@@ -589,7 +584,6 @@ mod tests {
             refused.contains("kinds.change.agents") && refused.contains("model"),
             "{refused}"
         );
-        assert!(HostConfig::parse("[kinds.change.agents]\nenv = { A = 1 }\n").is_err());
     }
 
     #[test]

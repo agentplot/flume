@@ -497,6 +497,74 @@ fn a_repeat_on_a_stage_of_commits_refuses_the_launch_naming_the_field() {
 }
 
 #[test]
+fn an_environment_in_any_declaration_refuses_the_launch_naming_the_field() {
+    // C.2, 158: an agent's environment is its account's alone (144), so an
+    // `env` in a repository's agents table for a kind it does not
+    // declare, in a kind's own, or in a launch's declaration fails the
+    // read, naming the field, and the launch is refused with nothing
+    // made.
+    let repository = Repository::new("declared-env");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.change.agents]
+env = { A = "b" }
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ env = { B = "c" } }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("environments in the declaration");
+    let name = repository.name();
+    let head = repository.head();
+    match Weir.read_kinds(&name, &Revision::new(head.clone())) {
+        KindsRead::CouldNotRead { reason } => {
+            for field in [
+                "kinds.change.agents.env",
+                "kinds.bump.stages[0].agents[0].env",
+            ] {
+                assert!(
+                    reason.contains(field),
+                    "the read names not {field}: {reason}"
+                );
+            }
+        }
+        other => panic!("a declaration giving an environment read as {other:?}"),
+    }
+    let world = World::new();
+    base_at(&world, &name, &head);
+    let mut change = launch("change", "one", Some("x"));
+    change.repository = name;
+    let reason =
+        refused(&engine(&world, Arc::new(Weir)).launch(&change)).expect("the launch refused");
+    assert!(
+        reason.contains("kinds.change.agents.env"),
+        "the refusal names not the field: {reason}"
+    );
+    assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
+    let dir = repository.scratch.path("launch");
+    std::fs::create_dir_all(dir.join("prompts")).unwrap();
+    std::fs::write(dir.join("prompts/bump-code.md"), "{{brief}}").unwrap();
+    let file = dir.join("kinds.toml");
+    std::fs::write(
+        &file,
+        "[kinds.bump.agents.stages.code]\nenv = { C = \"d\" }\n\n[[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/bump-code.md\"\ndeliverables = [\"commits\"]\n",
+    )
+    .unwrap();
+    match Weir.read_declaration(&file.to_string_lossy()) {
+        KindsRead::CouldNotRead { reason } => assert!(
+            reason.contains("kinds.bump.agents.stages.code.env"),
+            "the launch's declaration's read names not the field: {reason}"
+        ),
+        other => panic!("a launch's declaration giving an environment read as {other:?}"),
+    }
+}
+
+#[test]
 fn a_worktrunk_binding_is_refused_naming_the_place_profiles_there_are() {
     let repository = Repository::new("worktrunk");
     repository.write(

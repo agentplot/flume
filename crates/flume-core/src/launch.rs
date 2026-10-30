@@ -20,7 +20,7 @@
 //! repository and base (147).
 
 use crate::reading::reads_change;
-use crate::settings::{no_repository_env, no_stage_lacking};
+use crate::settings::no_stage_lacking;
 use crate::{Answer, Bound, Engine, Step};
 use flume_seams::*;
 
@@ -201,11 +201,6 @@ impl Engine {
         };
         let (kind, declared, repository_settings) = self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind)?;
-        no_repository_env(
-            &kind,
-            declared == Declared::Repository,
-            &repository_settings,
-        )?;
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
         let stream = self.stream_of(launch, &kind.name)?;
         let intent = self.intent_of(launch);

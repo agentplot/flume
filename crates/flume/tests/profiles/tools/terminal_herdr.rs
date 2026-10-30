@@ -1083,12 +1083,12 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
     );
     let settings = Settings {
         program: Some(wrapper.to_string_lossy().into()),
-        env: server.command(&[]).env,
         ..Settings::default()
     };
+    let env = server.command(&[]).env;
     let place = server.place("fix--one");
     let who = identity(1);
-    let command = claude.command(&settings, &place, &who, &Secret("s".into()), "go");
+    let command = claude.command(&settings, &env, &place, &who, &Secret("s".into()), "go");
     assert_eq!(
         Path::new(&command.program),
         wrapped.as_path(),
@@ -1657,6 +1657,7 @@ impl Agent for StandIn {
     fn command(
         &self,
         _settings: &Settings,
+        _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
         _secret: &Secret,

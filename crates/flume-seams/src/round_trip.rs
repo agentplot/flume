@@ -16,7 +16,6 @@ fn settings() -> Settings {
         program: Some("agent".into()),
         model: Some("large".into()),
         instructions: Some("be brief".into()),
-        env: BTreeMap::from([("A".into(), "1".into())]),
         beside: Some("operator".into()),
     }
 }
@@ -205,7 +204,7 @@ fn held() -> HeldState {
                     (
                         "env.AGENT_HOME".into(),
                         Given {
-                            layer: Layer::HostKind,
+                            layer: Layer::Account,
                             value: "~/.agent-work".into(),
                         },
                     ),
@@ -814,6 +813,7 @@ fn a_kind_with_its_stages() {
         Layer::Repository,
         Layer::Kind,
         Layer::Default,
+        Layer::Account,
     ] {
         round_trips(layer);
         assert_eq!(

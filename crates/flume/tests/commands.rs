@@ -53,6 +53,7 @@ impl Agent for StandInAgent {
     fn command(
         &self,
         settings: &Settings,
+        env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
         _secret: &Secret,
@@ -68,7 +69,7 @@ impl Agent for StandInAgent {
         AgentCommand {
             program: settings.program.clone().unwrap_or_default(),
             args,
-            env: settings.env.clone(),
+            env: env.clone(),
             prompt_args: vec![prompt.to_string()],
             folder_trust: None,
             kind: None,
@@ -631,10 +632,19 @@ fn deliver(host: &Host, dir: &Path, place: &str, stage: &str) {
     assert_eq!(settled.code, 0, "{}", settled.text);
 }
 
+/// The host's configuration giving its own pool `work` one account,
+/// `work-1`, running the stand-in under `env`, a TOML inline table, then
+/// `more`.
+fn one_account(host: &Host, env: &str, more: &str) {
+    host.configure(&format!(
+        "[host]\npool = \"work\"\n\n[pools.work]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"work-1\", program = \"{STAND_IN}\", env = {env} }}]\n{more}"
+    ));
+}
+
 #[test]
 fn agent_settings_at_the_launch() {
-    // 7, 32: every stage's model, one stage's over it, and every stage's
-    // variable, each at the launch layer.
+    // 7, 32: every stage's model and one stage's over it, each at the
+    // launch layer; a variable is no setting the launch gives.
     let host = Host::new("agent-settings");
     let repository = repository("agent-settings", None);
     let kinds = kinds_file(&host, false);
@@ -652,8 +662,6 @@ fn agent_settings_at_the_launch() {
             "model=opus",
             "--agent",
             "verify.model=sonnet",
-            "--agent",
-            "env.A=1",
             "--json",
         ],
         &[],
@@ -663,7 +671,6 @@ fn agent_settings_at_the_launch() {
     let launch = |model: &str| {
         serde_json::json!({
             "model": {"layer": "launch", "value": model},
-            "env.A": {"layer": "launch", "value": "<set>"},
             "program": {"layer": "kind", "value": STAND_IN},
         })
     };
@@ -675,12 +682,27 @@ fn agent_settings_at_the_launch() {
         let agent = current_agent(&host, &repository.dir, &place);
         assert_eq!(agent["stage"], stage, "{agent}");
         assert_eq!(agent["settings"]["model"], model, "{agent}");
-        assert_eq!(agent["settings"]["env"]["A"], "<set>", "{agent}");
+        assert_eq!(agent["settings"]["env"], serde_json::json!({}), "{agent}");
         assert_eq!(agent["settings"]["from"], launch(model), "{agent}");
         if stage != "verify" {
             deliver(&host, &repository.dir, &place, stage);
         }
     }
+    let refused = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "change", "--name", "two", "--kinds", &kinds, "--agent", "env.A=1",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(refused.code, 1, "{}", refused.text);
+    assert!(
+        refused.text.contains("env.A=1") && refused.text.contains("no setting"),
+        "{}",
+        refused.text
+    );
+    assert!(!repository.dir.join("places/change--two").exists());
 }
 
 #[test]
@@ -737,12 +759,16 @@ fn a_stream_and_an_intent_at_the_launch() {
 }
 
 #[test]
-fn host_settings_for_a_kind() {
-    // 32, C.7: the host's configuration gives change's agents a variable,
-    // read at the start, named in status with no value, handed to the
-    // agent read.
+fn host_settings_and_an_account_for_a_kind() {
+    // 32, 144, C.7: the host's one-account pool gives change's agents a
+    // variable, read at the start, named in status from the account with
+    // no value, handed to the agent read; the host gives code a model.
     let host = Host::new("host-settings");
-    host.configure("[kinds.change.agents]\nenv = { WORK_HOME = \"~/work\" }\n\n[kinds.change.agents.stages.code]\nmodel = \"haiku\"\n");
+    one_account(
+        &host,
+        "{ WORK_HOME = \"~/work\" }",
+        "\n[kinds.change.agents.stages.code]\nmodel = \"haiku\"\n",
+    );
     let repository = repository("host-settings", None);
     let kinds = kinds_file(&host, false);
     let launched = host.stand_in(
@@ -759,7 +785,7 @@ fn host_settings_for_a_kind() {
     assert_eq!(agent["settings"]["env"]["WORK_HOME"], "<set>", "{agent}");
     assert_eq!(
         agent["settings"]["from"]["env.WORK_HOME"],
-        serde_json::json!({"layer": "host-kind", "value": "<set>"})
+        serde_json::json!({"layer": "account", "value": "<set>"})
     );
     assert!(agent["settings"]["from"].get("model").is_none(), "{agent}");
     let printed = agent["printed"].as_str().expect("the printed command");
@@ -790,35 +816,25 @@ fn printed_env(host: &Host, place: &str) -> String {
 
 #[test]
 fn no_environment_value_is_printed_or_kept() {
-    // 32, 56: a token the host's configuration gives an agent, and one a
-    // launch gives, are in no answer, text or JSON, of a launch, a status
-    // or a settle; the host's is in no record but the printed command's
-    // environment file, the launch's in no record but that and the
-    // place's held state, which keeps the launch's layer for later starts;
-    // and each of those the host's user alone may read.
+    // 32, 56, 144: a token the stage's account gives its agent is in no
+    // answer, text or JSON, of a launch, a status or a settle, and in no
+    // record but the printed command's environment file, which the host's
+    // user alone may read, as the held state is.
     use std::os::unix::fs::PermissionsExt;
-    let host_token = "sk-ant-oat01-host-0123456789abcdefghijklmnopqrstuvwxyz";
-    let launch_token = "sk-ant-oat01-launch-0123456789abcdefghijklmnopqrstuvwxyz";
+    let token = "sk-ant-oat01-account-0123456789abcdefghijklmnopqrstuvwxyz";
     let host = Host::new("no-values");
-    host.configure(&format!(
-        "[kinds.change.agents.env]\nCLAUDE_CODE_OAUTH_TOKEN = \"{host_token}\"\n"
-    ));
+    one_account(
+        &host,
+        &format!("{{ CLAUDE_CODE_OAUTH_TOKEN = \"{token}\" }}"),
+        "",
+    );
     let repository = repository("no-values", None);
     let kinds = kinds_file(&host, false);
-    let launch_env = format!("env.LAUNCH_TOKEN={launch_token}");
     let mut answers = vec![];
     for json in [true, false] {
         let name = if json { "one" } else { "two" };
         let mut words = vec![
-            "launch",
-            "--kind",
-            "change",
-            "--name",
-            name,
-            "--kinds",
-            &kinds,
-            "--agent",
-            &launch_env,
+            "launch", "--kind", "change", "--name", name, "--kinds", &kinds,
         ];
         if json {
             words.push("--json");
@@ -846,10 +862,15 @@ fn no_environment_value_is_printed_or_kept() {
         agent["settings"]["env"]["CLAUDE_CODE_OAUTH_TOKEN"], "<set>",
         "status names the variable"
     );
+    assert_eq!(
+        agent["settings"]["from"]["env.CLAUDE_CODE_OAUTH_TOKEN"]["layer"], "account",
+        "status names where the variable came from"
+    );
     for (n, answer) in answers.iter().enumerate() {
-        for token in [host_token, launch_token] {
-            assert!(!answer.contains(token), "answer {n} holds a token's value");
-        }
+        assert!(
+            !answer.contains(token),
+            "answer {n} holds the token's value"
+        );
     }
     for (path, bytes) in files_under(&host.state()) {
         let text = String::from_utf8_lossy(&bytes);
@@ -864,18 +885,7 @@ fn no_environment_value_is_printed_or_kept() {
             assert_eq!(mode & 0o077, 0, "{} is readable by others", path.display());
         }
         if !printed_env {
-            assert!(
-                !text.contains(host_token),
-                "{} holds the host's token",
-                path.display()
-            );
-        }
-        if !printed_env && !held {
-            assert!(
-                !text.contains(launch_token),
-                "{} holds the launch's token",
-                path.display()
-            );
+            assert!(!text.contains(token), "{} holds the token", path.display());
         }
     }
 }

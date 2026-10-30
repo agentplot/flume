@@ -3,20 +3,19 @@
 //! the launch's, the host's for the repository and kind, the host's for
 //! the kind, the repository's for a kind it does not declare, the kind's
 //! declaration, and flume's default. Within a layer a stage's own come
-//! before those for every stage; the environment merges variable by
-//! variable and every other setting is taken whole. The host's layers are
-//! read as they stand at the start, every other layer as the launch read
-//! it, and only a host value's `~` and variables are read, against the
-//! host user's login environment (29).
+//! before those for every stage, and every setting is taken whole. The
+//! host's layers are read as they stand at the start, every other layer
+//! as the launch read it. An agent's environment is its account's alone,
+//! each value's `~` and variables read against the host user's login
+//! environment (29, 144).
 
 use crate::Engine;
-use flume_seams::{Agent, Given, Kind, KindSettings, Layer, PlaceRecord, Settings, Stage};
+use flume_seams::{Account, Agent, Given, Kind, KindSettings, Layer, PlaceRecord, Settings, Stage};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// A stage's settings with each value as its layer wrote it, and the
-/// layer of each, by `program`, `model`, `instructions` or `env.<NAME>`
-/// (32, 56).
+/// layer of each, by `program`, `model` or `instructions` (32, 56).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Resolved {
     pub settings: Settings,
@@ -33,11 +32,9 @@ impl Resolved {
 }
 
 /// A stage's agent at its start: its settings as written with their
-/// layers, the same settings with the host's values read, and the agent
-/// profile that runs its program.
+/// layers, and the agent profile that runs its program.
 pub(crate) struct Resolution {
     pub resolved: Resolved,
-    pub settings: Settings,
     pub agent: Arc<dyn Agent>,
 }
 
@@ -144,15 +141,6 @@ impl Engine {
                     );
                 }
             }
-            for (name, value) in &given.env {
-                resolved.from.insert(
-                    format!("env.{name}"),
-                    Given {
-                        layer,
-                        value: value.clone(),
-                    },
-                );
-            }
             resolved.settings = resolved.settings.under(&given);
         }
         resolved
@@ -176,32 +164,33 @@ impl Engine {
         })
     }
 
-    /// `resolved`'s settings with every value the host's configuration
-    /// gave its environment read against the host user's login
-    /// environment, or the variable it lacks, naming the setting and its
-    /// layer (29, 32).
-    pub(crate) fn expand(&self, resolved: &Resolved, stage: &str) -> Result<Settings, String> {
-        let mut settings = resolved.settings.clone();
-        for (name, value) in settings.env.iter_mut() {
-            let Some(given) = resolved.from.get(&format!("env.{name}")) else {
-                continue;
-            };
-            if !given.layer.hosts() {
-                continue;
-            }
-            *value = expand(value, |variable| self.host.login(variable)).map_err(|variable| {
-                format!(
-                    "the stage {stage}'s env.{name} from the layer {} names ${variable}, which the host user's login environment lacks",
-                    given.layer
-                )
-            })?;
-        }
-        Ok(settings)
+    /// `account`'s environment with each value's `~` and variables read
+    /// against the host user's login environment, or the variable it
+    /// lacks, naming it and the account (27, 29, 144).
+    pub(crate) fn account_env(
+        &self,
+        account: &Account,
+        stage: &str,
+    ) -> Result<BTreeMap<String, String>, String> {
+        account
+            .env
+            .iter()
+            .map(|(name, value)| {
+                expand(value, |variable| self.host.login(variable))
+                    .map(|read| (name.clone(), read))
+                    .map_err(|variable| {
+                        format!(
+                            "the stage {stage}'s account {}'s env.{name} names ${variable}, which the host user's login environment lacks",
+                            account.name
+                        )
+                    })
+            })
+            .collect()
     }
 
-    /// The stage's agent at a start: its settings resolved and read, and
-    /// the agent profile that runs its program; or why the stage is
-    /// refused (27, 32).
+    /// The stage's agent at a start: its settings resolved, and the
+    /// agent profile that runs its program; or why the stage is refused
+    /// (27, 32).
     pub(crate) fn resolution(
         &self,
         place: &PlaceRecord,
@@ -209,53 +198,8 @@ impl Engine {
     ) -> Result<Resolution, String> {
         let resolved = self.resolve(place, stage);
         let agent = self.agent_for(&resolved, &stage.name)?;
-        let settings = self.expand(&resolved, &stage.name)?;
-        Ok(Resolution {
-            resolved,
-            settings,
-            agent,
-        })
+        Ok(Resolution { resolved, agent })
     }
-}
-
-/// Refuses a launch whose repository's declaration gives an agent an
-/// environment, naming the field: an environment is the host's
-/// configuration's or the launch's to give (32, C.2).
-pub(crate) fn no_repository_env(
-    kind: &Kind,
-    declared_by_repository: bool,
-    repository: &KindSettings,
-) -> Result<(), String> {
-    let at = format!("kinds.{}", kind.name);
-    let mut fields = vec![];
-    let mut table = |settings: &KindSettings| {
-        if !settings.every_stage.env.is_empty() {
-            fields.push(format!("{at}.agents.env"));
-        }
-        for (stage, own) in &settings.stages {
-            if !own.env.is_empty() {
-                fields.push(format!("{at}.agents.stages.{stage}.env"));
-            }
-        }
-    };
-    table(repository);
-    if declared_by_repository {
-        table(&kind.agents);
-        for (n, stage) in kind.stages.iter().enumerate() {
-            for (m, agent) in stage.agents.iter().enumerate() {
-                if !agent.env.is_empty() {
-                    fields.push(format!("{at}.stages[{n}].agents[{m}].env"));
-                }
-            }
-        }
-    }
-    if fields.is_empty() {
-        return Ok(());
-    }
-    Err(format!(
-        "the repository's declaration gives an agent an environment at {}, and an environment is the host's configuration's or the launch's to give",
-        fields.join(", ")
-    ))
 }
 
 /// Refuses settings for a stage the kind does not hold, naming the stage

@@ -98,8 +98,13 @@ impl Engine {
                 stage: place.kind.stages[index].name.clone(),
                 program: start.program.clone(),
                 settings: AgentSettings {
-                    // A start held by an earlier flume may keep values.
-                    settings: start.settings.unvalued(),
+                    settings: start.settings.clone(),
+                    env: start
+                        .from
+                        .keys()
+                        .filter_map(|key| key.strip_prefix("env."))
+                        .map(|name| (name.to_string(), flume_seams::SET.to_string()))
+                        .collect(),
                     from: flume_seams::unvalued_from(&start.from),
                 },
                 state: reading.state,
