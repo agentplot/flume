@@ -18,8 +18,8 @@ tidies the place.
 - **The design book:** https://agentplot.github.io/blueprints/flume/
 - **The statement**, flume's invariants as numbered clauses, is
   `design/flume/requirements.md` in agentplot/blueprints.
-- **The Claude Code plugin:** `/plugin marketplace add agentplot/flume`, then
-  `/plugin install flume@flume`.
+- **The Claude Code plugin:** `/plugin marketplace add agentplot/flume#release`,
+  then `/plugin install flume@flume`.
 
 ## What it does
 

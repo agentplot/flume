@@ -88,15 +88,11 @@ pub const PLUGIN: [(&str, &str); 4] = [
 
 /// A file of the plugin as the binary writes it for the agents it
 /// starts: each command naming `flume` names the binary by its absolute
-/// path instead (C.4), and the manifest carries the binary's version, a
-/// release's where the repository's says the workspace's (135).
+/// path instead (C.4). The manifest carries the binary's version as
+/// `plugins/claude` holds it, the workspace's (135).
 pub fn written(text: &str, binary: &Path) -> String {
     let path = serde_json::to_string(&binary.to_string_lossy()).expect("a path as JSON");
     text.replace("\"command\": \"flume\"", &format!("\"command\": {path}"))
-        .replace(
-            concat!("\"version\": \"", env!("CARGO_PKG_VERSION"), "\""),
-            &format!("\"version\": \"{VERSION}\""),
-        )
 }
 
 /// The hex digest of `text`'s SHA-256.
