@@ -236,6 +236,7 @@ impl MergeQueueHarness for Harness {
             branch: place.branch.clone(),
             target: "main".into(),
             state: SubmissionState::Waiting,
+            request: None,
         }
     }
 

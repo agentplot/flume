@@ -138,7 +138,7 @@ impl Sluice {
         match state(record)? {
             SubmissionState::Landed { commit } => Ok(SubmissionOutcome::Landed { commit }),
             SubmissionState::Failed { words } => Ok(SubmissionOutcome::Failed { words }),
-            SubmissionState::Conflict { files, words } => {
+            SubmissionState::Conflict { files, words, .. } => {
                 let tested = record
                     .get("tested")
                     .and_then(|tested| text(tested, "on"))
@@ -294,6 +294,7 @@ fn state(record: &Value) -> Result<SubmissionState, String> {
         },
         "conflict" => SubmissionState::Conflict {
             files: contested(record),
+            base: None,
             words: said(record),
         },
         "withdrawn" => SubmissionState::Withdrawn,
@@ -448,6 +449,7 @@ impl MergeQueue for Sluice {
             branch: place.branch.clone(),
             target: place.base.clone(),
             state,
+            request: None,
         };
         if !matches!(
             submission.state,
@@ -531,6 +533,7 @@ impl MergeQueue for Sluice {
                     branch: branch.into(),
                     target: text(&record, "branch").unwrap_or_default(),
                     state,
+                    request: None,
                 },
             },
             (None, _) => SubmissionRead::CouldNotRead {

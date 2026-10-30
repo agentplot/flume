@@ -442,6 +442,68 @@ fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
 }
 
 #[test]
+fn a_request_is_an_entry_only_once_taken_in_and_its_outcome_goes_to_the_request() {
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    let at = place_ref();
+    git.set_branch("/r", "fix/one", &base);
+    let head = git.commit("/r", "fix/one", &["a"]);
+    let request = |then, to_place| Plan::Request {
+        then: Box::new(then),
+        to_place,
+    };
+    queue.plan_submits(vec![
+        request(Plan::Fail("check x failed".into()), true),
+        request(Plan::Land, false),
+    ]);
+    assert_eq!(
+        queue.submit(&at, &head),
+        Submitted::Requested {
+            request: "1".into()
+        }
+    );
+    assert_eq!(queue.read_submission("/r", "fix/one"), SubmissionRead::None);
+    queue.step("/r", "main");
+    assert_eq!(
+        queue.read_submission("/r", "fix/one"),
+        SubmissionRead::None,
+        "a round takes no request in"
+    );
+    let entry = queue.take_in("/r", "fix/one").expect("the request");
+    assert_eq!(entry.request.as_deref(), Some("1"));
+    assert_eq!(queue.take_in("/r", "fix/one"), None, "taken in once");
+    queue.step("/r", "main");
+    assert_eq!(
+        outcomes(queue.inbox(&at)),
+        vec![SubmissionOutcome::Failed {
+            words: "check x failed".into()
+        }],
+        "an outcome left for the place as well"
+    );
+    assert_eq!(
+        queue.submit(&at, &head),
+        Submitted::Requested {
+            request: "1".into()
+        },
+        "the open request, updated"
+    );
+    queue.take_in("/r", "fix/one").expect("the request again");
+    queue.step("/r", "main");
+    assert!(matches!(
+        queue.read_submission("/r", "fix/one"),
+        SubmissionRead::Found { submission }
+            if matches!(submission.state, SubmissionState::Landed { .. })
+                && submission.request.as_deref() == Some("1")
+    ));
+    assert_eq!(
+        outcomes(queue.inbox(&at)),
+        vec![],
+        "delivered to the request"
+    );
+}
+
+#[test]
 fn the_change_is_scripted_as_groups() {
     let git = FakeGit::new();
     let base = git.init("/r", "main");
