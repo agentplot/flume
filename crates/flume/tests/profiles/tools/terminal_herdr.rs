@@ -17,8 +17,9 @@
 //! (S48), titles that follow the stage (S49), a conversation beside a
 //! named pane, a launch from a herdr pane, herdr's readings, a prompt
 //! left typed (S43), a pane herdr could not bring back, long
-//! instructions, a herdr call that never answers, a quiet pane not ended
-//! and a finished turn nobody looked at (S42); a nix-wrapped Claude Code
+//! instructions, a herdr call that never answers, a quiet pane not ended,
+//! a finished turn nobody looked at (S42), and a launch and a retry each
+//! sending its agent's prompt with no settle; a nix-wrapped Claude Code
 //! started from the agent profile, a role run's pane reached by its
 //! address after a move, and a recipient on another server reached
 //! through its own socket.
@@ -31,7 +32,7 @@ use flume::profiles::terminal::herdr::{herdr_name, Herdr, Pane, Server, START_TI
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
-use flume_core::{Answer, Engine};
+use flume_core::{Answer, Engine, Retry};
 use flume_seams::*;
 use serde_json::Value;
 use std::cell::RefCell;
@@ -1902,5 +1903,66 @@ fn s42_a_finished_turn_nobody_looked_at_delivers_and_the_next_stage_starts() {
             StageState::Starting | StageState::Started | StageState::Begun
         ),
         "the review stage did not start"
+    );
+}
+
+#[test]
+fn a_launch_and_a_retry_each_send_their_agents_prompt_with_no_settle() {
+    // On deneb a retry's agent came up ready in herdr and sat with no
+    // prompt until a settle by hand: the watch's settle had sent it while
+    // the retry still opened the agent, into a program not yet reading
+    // its input. The command that opens an agent now sends its prompt
+    // once its open answers, and nothing else sends while it opens, so
+    // each agent here takes its prompt with no settle run (6, 37, 38, 46).
+    let server = TestServer::start("herdr-sent");
+    let world = World::new();
+    let repository = bound(
+        &server,
+        &world,
+        vec![stage(
+            "code",
+            Some(Deliverable::Commits),
+            "{{brief}} {{needs}}",
+        )],
+    );
+    let answer = engine(&server, &world).launch(&Launch {
+        repository: repository.clone(),
+        kind: "two".into(),
+        name: "one".into(),
+        base: "main".into(),
+        brief: Some("fix the bug".into()),
+        ..Launch::default()
+    });
+    assert!(answer.refusal().is_none(), "the launch: {answer:?}");
+    let id = PlaceId::new(format!("{repository}/places/two--one"));
+    let code = |start| Identity {
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
+        place: "two--one".into(),
+        stage: "code".into(),
+        start,
+    };
+    let took = |pane: &Pane| {
+        server
+            .kept(&pane.id, "got")
+            .iter()
+            .any(|line| line.contains("fix the bug"))
+    };
+    let first = server.profile().pane(&code(1)).expect("the pane recorded");
+    server.within("the launch's agent took no prompt", || took(&first));
+
+    let retried = engine(&server, &world).retry(&id, Retry::Stage("code".into()), None, false);
+    assert!(retried.refusal().is_none(), "the retry: {retried:?}");
+    let second = server.profile().pane(&code(2)).expect("the pane recorded");
+    server.within("the retry's agent took no prompt", || took(&second));
+    assert_eq!(
+        server.kept(&second.id, "got").len(),
+        1,
+        "the retry's sendings"
+    );
+    engine(&server, &world).settle(Some(&id));
+    assert_eq!(
+        stage_state(&server, &world, &id, "code"),
+        StageState::Begun,
+        "the code stage at the first settle"
     );
 }
