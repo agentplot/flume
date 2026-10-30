@@ -164,9 +164,10 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
   of flume's agents changes state, an agent comes up or goes in one of
   the server's panes, or thirty seconds pass, it runs `flume settle`,
   then writes `flume status --json` for the sidebar and the popup. An
-  agent that crashed, hung or was killed is read within that bound. While the watch's lease is fresh, flume's commands leave
-  the settling to it; once it stops, each command settles every place
-  first, as with no watch.
+  agent that crashed, hung or was killed is read within that bound.
+  While the watch's lease is fresh, flume's commands leave the settling
+  to it; once it stops, each command settles every place first, as with
+  no watch.
 - **Display hints.** After each settle the watch titles each agent's
   pane `<stage> · <state>` and names it `<kind>--<name>`, and gives
   each base's workspace the token `flume`, a count of its places:
