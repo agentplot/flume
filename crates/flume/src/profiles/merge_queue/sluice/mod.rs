@@ -9,7 +9,17 @@
 //! as on a base that takes pull requests, it answers with the entry's
 //! record, exiting as the outcome does, and records the outcome delivered
 //! to the place, so the outcome is read from that answer as the inbox
-//! reads one, never as a refusal (112, 133). inbox is `sluice inbox
+//! reads one, never as a refusal (112, 133). On such a base sluice pushes
+//! the place's branch and opens or updates its pull request, and where
+//! intake has not taken it in answers `{pull_request, branch, state}`
+//! with no entry: the request is held, open and undecided, and an intake
+//! on whichever host takes the base's requests in takes it in later; a
+//! request answered `closed` was closed without landing (124, C.6). An
+//! entry intake took in names its place `pull/<n>` as its `from.worktree`
+//! and the branch the request was opened from as its `from.head`, and
+//! sluice delivers its outcome to the request, so read-submission reads
+//! it, and the inbox only where it is still pending for the place (133).
+//! inbox is `sluice inbox
 //! --json` in the place: each record landed with its commit, failed or in
 //! conflict with sluice's `notice` as its words, a conflict's files from
 //! the record's `conflict.paths` and its base revision from its
@@ -18,10 +28,12 @@
 //! `conflict.with` names; one found in conflict before any test names the
 //! base's current revision (112, 133). read-submission reads `sluice
 //! status <base> --all --json` for each branch `sluice overview --json`
-//! names, the newest entry submitted from the branch (99, 101). step is
-//! `sluice step <base>`, which beside a live `sluice run` finds the
-//! branch's lock held and does nothing, so no liveness is read (124,
-//! 125). The base lives at `<remote>/<base>` after one fetch where
+//! names, the newest entry submitted from the branch, by a worktree on
+//! it or from a pull request opened from it, a conflict's base revision
+//! its `tested.on` where it holds one (99, 101). step is
+//! `sluice step <base>`, which takes in the base's pull requests before
+//! its round, and beside a live `sluice run` finds the branch's lock held
+//! and does nothing, so no liveness is read (124, 125). The base lives at `<remote>/<base>` after one fetch where
 //! `.config/sluice.toml` lands it on a remote, and at the local base
 //! otherwise (9, 126, C.1). What the same policy at the base's revision
 //! says of a place, its toolchain, its runner's setup, its teardown and
@@ -138,11 +150,11 @@ impl Sluice {
         match state(record)? {
             SubmissionState::Landed { commit } => Ok(SubmissionOutcome::Landed { commit }),
             SubmissionState::Failed { words } => Ok(SubmissionOutcome::Failed { words }),
-            SubmissionState::Conflict { files, words, .. } => {
-                let tested = record
-                    .get("tested")
-                    .and_then(|tested| text(tested, "on"))
-                    .map(Revision::new);
+            SubmissionState::Conflict {
+                files,
+                base: tested,
+                words,
+            } => {
                 let base = match tested {
                     Some(base) => base,
                     None => match self.base_revision(&place.repository, &place.base) {
@@ -210,6 +222,27 @@ fn id(record: &Value) -> Option<String> {
         Value::String(id) => Some(id.clone()),
         _ => None,
     }
+}
+
+/// The pull request an answer or a record names: a submit's
+/// `pull_request`, or an entry's submitter `pull/<n>`, as sluice names
+/// the place of an entry intake took in from a request.
+fn request(record: &Value) -> Option<String> {
+    if let Some(number) = record.get("pull_request").and_then(Value::as_u64) {
+        return Some(number.to_string());
+    }
+    let from = record.get("from").and_then(|from| text(from, "worktree"))?;
+    let number = from.strip_prefix("pull/")?;
+    number.parse::<u64>().is_ok().then(|| number.to_string())
+}
+
+/// Whether a record was submitted from `branch`: by a worktree on it, or
+/// by intake from a pull request opened from it, which sluice records as
+/// `from.head` (99).
+fn submitted_from(record: &Value, branch: &str) -> bool {
+    let from = record.get("from");
+    let by = |key| from.and_then(|from| text(from, key));
+    by("worktree").as_deref() == Some(branch) || by("head").as_deref() == Some(branch)
 }
 
 /// The files a conflict record contests.
@@ -294,7 +327,10 @@ fn state(record: &Value) -> Result<SubmissionState, String> {
         },
         "conflict" => SubmissionState::Conflict {
             files: contested(record),
-            base: None,
+            base: record
+                .get("tested")
+                .and_then(|tested| text(tested, "on"))
+                .map(Revision::new),
             words: said(record),
         },
         "withdrawn" => SubmissionState::Withdrawn,
@@ -432,9 +468,22 @@ impl MergeQueue for Sluice {
                 reason: words(&args, &stdout, &stderr),
             };
         };
+        // On a base that takes pull requests, sluice answers the request
+        // it opened or updated and no entry where intake has not taken it
+        // in, which a later intake does; and a request closed without
+        // landing, exiting as a failure does (124, C.6).
         let Some(id) = id(&entry) else {
-            return Submitted::Refused {
-                reason: format!("sluice submit answered no entry: {entry}"),
+            return match (request(&entry), success) {
+                (Some(request), true) => Submitted::Requested { request },
+                (Some(request), false) => Submitted::Refused {
+                    reason: format!(
+                        "sluice submit: pull request #{request} is {}",
+                        text(&entry, "state").unwrap_or_default()
+                    ),
+                },
+                (None, _) => Submitted::Refused {
+                    reason: format!("sluice submit answered no entry: {entry}"),
+                },
             };
         };
         let state = match entry.get("state") {
@@ -449,7 +498,7 @@ impl MergeQueue for Sluice {
             branch: place.branch.clone(),
             target: place.base.clone(),
             state,
-            request: None,
+            request: request(&entry),
         };
         if !matches!(
             submission.state,
@@ -514,9 +563,8 @@ impl MergeQueue for Sluice {
                 .into_iter()
                 .flatten()
             {
-                let from = record.get("from").and_then(|from| text(from, "worktree"));
                 let number = record.get("id").and_then(Value::as_u64).unwrap_or_default();
-                if from.as_deref() == Some(branch)
+                if submitted_from(record, branch)
                     && newest.as_ref().is_none_or(|(id, _)| number > *id)
                 {
                     newest = Some((number, record.clone()));
@@ -533,7 +581,7 @@ impl MergeQueue for Sluice {
                     branch: branch.into(),
                     target: text(&record, "branch").unwrap_or_default(),
                     state,
-                    request: None,
+                    request: request(&record),
                 },
             },
             (None, _) => SubmissionRead::CouldNotRead {
