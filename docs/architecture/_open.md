@@ -42,6 +42,15 @@ brought to the rule.
   from outside, and a launch names a kind by its name, or by its name
   and version, never by its source. The item leaves
   when the code is brought to core.34.
+- **Records 0024 and 0025 wait on the user's yes.** An agent's mode as
+  a layered setting and a plan stage accepted by its caller's finish
+  (record 0024; core.10, core.12 and core.30 as amended, core.37), and
+  a place's points with a stream's points bound and pace (record 0025;
+  core.26 as amended, core.38), are stated at blueprints 9c7490c (161
+  to 168; weir 54, 57) and proposed on flume-sluice-build's card. Once
+  accepted, the mode is built first, before the crew refactor, and the
+  plan stage and points after it. The item leaves when both are
+  accepted or rejected.
 - **The command line still says `<partition>/<role>`.** `flume wake
   --help` and the refusals of a name that is no address, in
   `commands/mod.rs`, `host/config.rs` and `flume-core`'s `wake.rs`,
