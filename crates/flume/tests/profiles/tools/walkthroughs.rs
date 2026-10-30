@@ -557,10 +557,6 @@ fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_g
     assert!(walk.on_remote("parser.rs").is_some());
 }
 
-/// The usage limit the spent walkthrough's first code agent stops at, in
-/// the words the pinned Claude Code writes it (151, C.4).
-const SESSION_LIMIT: &str = "You've hit your session limit · resets 3pm (UTC)";
-
 /// The seconds since the epoch now.
 fn now() -> u64 {
     std::time::SystemTime::now()
@@ -569,15 +565,22 @@ fn now() -> u64 {
         .as_secs()
 }
 
-/// The reset `SESSION_LIMIT` names for a hook run at `at`: the first
-/// 15:00 UTC no more than a minute before it (151).
-fn three_pm_after(at: u64) -> u64 {
-    let today = at - at % 86_400 + 15 * 3600;
-    if today + 60 >= at {
-        today
-    } else {
-        today + 86_400
-    }
+/// The top of the UTC hour two hours on from `at`, well clear of any
+/// walk's length, and the session limit naming it in the words the pinned
+/// Claude Code writes, a time of day in en-US's 12-hour form (151, C.4).
+fn session_limit_after(at: u64) -> (u64, String) {
+    let reset = at - at % 3600 + 2 * 3600;
+    let hour = reset % 86_400 / 3600;
+    let clock = match hour {
+        0 => "12am".to_owned(),
+        1..=11 => format!("{hour}am"),
+        12 => "12pm".to_owned(),
+        _ => format!("{}pm", hour - 12),
+    };
+    (
+        reset,
+        format!("You've hit your session limit · resets {clock} (UTC)"),
+    )
 }
 
 #[test]
@@ -585,7 +588,7 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
     // S55, 146, 151: on a fill-first pool of two accounts, each a scratch
     // `CLAUDE_CONFIG_DIR`, the fix's code agent starts under the first and
     // its turn fails at the session limit through StopFailure. The first
-    // account reads spent until 15:00 UTC, code starts afresh under the
+    // account reads spent until the hour the words name, code starts afresh under the
     // second with flume's words, the move recorded with its cache lost;
     // the second's agent commits what the first left, and the place lands.
     let walk = Walk::new("walk-spent");
@@ -596,27 +599,20 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
         first.display().to_string(),
         second.display().to_string(),
     ));
-    // The walkthrough runs clear of the minutes around the reset, where a
-    // limit read just before 15:00 has already passed when code starts
-    // afresh.
-    while (14 * 3600 + 55 * 60..15 * 3600 + 2 * 60).contains(&(now() % 86_400)) {
-        std::thread::sleep(std::time::Duration::from_secs(5));
-    }
 
     let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
     let status = walk.status(&place);
     assert_eq!(status["agent"]["account"]["name"], "stand-in-1", "{status}");
-    let before = now();
+    let (reset, limit) = session_limit_after(now());
     let out = walk.agent(
         &place,
         json!([
             { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
-            { "fail": { "error": "rate_limit", "words": SESSION_LIMIT } },
+            { "fail": { "error": "rate_limit", "words": limit } },
         ]),
     );
     assert!(out.contains("the turn failed"), "{out}");
     assert!(!out.contains("stop blocked"), "{out}");
-    let after = now();
 
     let status = walk.until(&place, "code started afresh", |status| {
         stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
@@ -657,8 +653,6 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
     );
     let host = walk.host();
     let accounts = &host["pools"][0]["accounts"];
-    let reset = three_pm_after(before);
-    assert_eq!(reset, three_pm_after(after), "a reset read on either side");
     assert_eq!(accounts[0]["name"], "stand-in-1", "{host}");
     assert_eq!(accounts[0]["spent_until"], reset, "{host}");
     assert_eq!(accounts[0]["running"], 0, "{host}");
