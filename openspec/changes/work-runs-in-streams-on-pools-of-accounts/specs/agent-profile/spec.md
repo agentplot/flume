@@ -24,7 +24,8 @@ The Claude Code profile's `spent` SHALL read yes only where the
 StopFailure hook recorded `rate_limit` with words that open as the
 pinned release's usage-limit messages do, with the reset its words'
 ` · resets <when> (<zone>)` part names, read in that zone from when
-the hook ran, or none; a `rate_limit` with other words SHALL read no
+the hook ran, a time of day being the first such time no more than a
+minute before the hook ran, or none; a `rate_limit` with other words SHALL read no
 (146, 151, C.4).
 
 #### Scenario: A session limit with a time of day

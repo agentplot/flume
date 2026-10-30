@@ -86,9 +86,8 @@ pub fn reset(words: &str, at: u64) -> Option<u64> {
     let reset = match when.rsplit_once(", ") {
         None => {
             // A time of day, within a day of when the words were written:
-            // the first such time in the zone after the hook ran. The words
-            // name no seconds, so a time in the minute the hook ran is that
-            // minute's.
+            // the first such time in the zone no more than a minute before
+            // the hook ran, since the words name no seconds.
             let time = time_of_day(when)?;
             let today = local(zone, ran.date_naive(), time)?;
             if today + 59 >= ran.timestamp() {

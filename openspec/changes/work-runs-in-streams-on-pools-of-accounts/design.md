@@ -217,7 +217,8 @@ en-US time of day, `3pm` or `3:30pm`, where the reset is within a day,
 else `Nov 2, 3pm`, with `, 2027` after the day in another year. `zone`
 is the IANA name Claude Code's `Intl` resolved, such as
 `America/New_York` or `UTC`. A time of day is the first such time in the
-zone after the hook ran. A date and time is read in the zone, the year
+zone no more than a minute before the hook ran, since the words name no
+seconds. A date and time is read in the zone, the year
 the hook's own where none is given. The `chrono-tz` crate reads the
 zone, pinned in `Cargo.lock`. Words with no such part, or a zone the
 crate does not know, give `until: None`, and flume pauses the account
