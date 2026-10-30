@@ -219,14 +219,14 @@ fn s32_words_missing_then_given(_: &()) -> Outcome {
         answer.refusal().is_none(),
         "the retry was refused: {answer:?}"
     );
+    let review = World::identity("review", "one", "review", 1);
     ensure_eq!(
         world.stage_state(&id, "review"),
-        Some(StageState::Starting),
-        "the review stage"
+        Some(StageState::Begun),
+        "the review stage, its agent sent its prompt by the retry"
     );
-    let prompt = world
-        .prompt(&id, &World::identity("review", "one", "review", 1))
-        .ok_or("no prompt")?;
+    ensure_eq!(world.terminal.sent_to(&review).len(), 1, "sendings");
+    let prompt = world.prompt(&id, &review).ok_or("no prompt")?;
     ensure!(
         prompt.contains("check the error paths"),
         "the words are not in {prompt}"
@@ -358,8 +358,13 @@ fn never_into_a_question(_: &()) -> Outcome {
     let world = World::new();
     let id = World::id("fix", "one");
     let code = World::identity("fix", "one", "code", 1);
-    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
     world.agent.set_asking(&code, Reading::Yes);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure_eq!(
+        world.terminal.log.count("send"),
+        0,
+        "sends into a question at the launch"
+    );
     world.engine.settle(Some(&id));
     ensure_eq!(world.terminal.log.count("send"), 0, "sends into a question");
     world.agent.set_asking(&code, Reading::No);

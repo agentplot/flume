@@ -20,9 +20,10 @@ herdr.
 
 - **The watch.** herdr starts it when its server starts; one runs per
   server. Every two seconds it reads every pane's agent state in one
-  listing. When the agent of one of flume's places changes state, or
-  the bound passes, it runs `flume settle`, then writes `flume status
-  --json` for the sidebar and the popup. The bound is the one flume's
+  listing. When the agent of one of flume's places changes state, an
+  agent comes up or goes in one of the server's panes, as a stage's new
+  agent does, or the bound passes, it runs `flume settle`, then writes
+  `flume status --json` for the sidebar and the popup. The bound is the one flume's
   status gives, thirty seconds. A place moves on without you: a stage's
   next start, its submission, the landing and the tidy, and an agent
   that crashed, hung or was killed is read within the bound. While the

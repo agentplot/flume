@@ -430,6 +430,7 @@ impl Engine {
                 past_limit: false,
                 printed: None,
                 group: group.clone().flatten(),
+                opening: Some(self.host.command()),
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
@@ -454,7 +455,12 @@ impl Engine {
     }
 
     /// Opens the agent of a claimed start, out of the room lock; an open
-    /// the terminal refuses ends the start, freeing its room (70).
+    /// the terminal refuses ends the start, freeing its room (70). Once
+    /// the open answers, the start is no longer opening, and an agent that
+    /// came up is sent its prompt at once where it said it started and
+    /// waits, its receipt read by the settles that follow, so the command
+    /// that opened it, a launch, a retry or a settle, moves it on with no
+    /// wait on the agent (6, 37, 38, 46).
     pub(crate) fn open(&self, id: &PlaceId, claim: Claim) -> Start {
         let Claim {
             identity,
@@ -469,21 +475,24 @@ impl Engine {
         } = claim;
         let command = agent.command(&settings, &env, &place, &identity, &secret, &text);
         let folder = self.store.folder(id);
-        match self.terminal.open(
+        let opened = self.terminal.open(
             &place,
             &folder,
             &command,
             &identity,
             settings.beside.as_deref(),
             session.as_deref(),
-        ) {
-            Opened::Opened { carried, printed } => {
-                if carried || printed.is_some() {
-                    self.with_start(id, &identity, |start, _| {
-                        start.prompt.carried = carried;
-                        start.printed = printed.clone();
-                    });
-                }
+        );
+        self.with_start(id, &identity, |start, _| {
+            start.opening = None;
+            if let Opened::Opened { carried, printed } = &opened {
+                start.prompt.carried = *carried;
+                start.printed.clone_from(printed);
+            }
+        });
+        match opened {
+            Opened::Opened { .. } => {
+                self.send_prompt(id);
                 Start::Opened(identity)
             }
             Opened::Held { screen } | Opened::NotComeUp { screen } => {

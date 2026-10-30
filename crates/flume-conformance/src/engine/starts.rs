@@ -73,6 +73,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: blocked_without_a_mark,
         },
         Scenario {
+            name: "start: no prompt is sent while another command still opens the agent, and a start whose opener is gone reads opened",
+            cites: &["34", "35", "37", "75"],
+            run: opened_by_another_command,
+        },
+        Scenario {
             name: "state: an agent the terminal cannot read reads stopped once its record says its session ended",
             cites: &["134", "96", "45"],
             run: ended_where_the_terminal_reads_nothing,
@@ -324,7 +329,9 @@ fn s43_a_prompt_left_typed(_: &()) -> Outcome {
     let id = World::id("fix", "one");
     let code = World::identity("fix", "one", "code", 1);
     world.agent.receives_at(&code, Some(2));
+    world.terminal.comes_up(AgentState::Unknown);
     launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world.terminal.set_state(&code, AgentState::Waiting);
     world.terminal.leaves_next_typed(&code);
     world.settle(&id);
     let prompt = world.prompt(&id, &code).ok_or("no prompt")?;
@@ -350,8 +357,8 @@ fn blocked_without_a_mark(_: &()) -> Outcome {
     let world = World::new();
     let id = World::id("fix", "one");
     let code = World::identity("fix", "one", "code", 1);
+    world.terminal.comes_up(AgentState::Asking);
     launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
-    world.terminal.set_state(&code, AgentState::Asking);
     world.settle(&id);
     ensure_eq!(world.terminal.log.count("send"), 0, "prompts sent");
     let agent = agent_status(&world, &id)?;
@@ -368,6 +375,47 @@ fn blocked_without_a_mark(_: &()) -> Outcome {
         agent_status(&world, &id)?.state,
         AgentState::Asking,
         "the agent's state, with the mark"
+    );
+    Ok(())
+}
+
+fn opened_by_another_command(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    world.terminal.comes_up(AgentState::Unknown);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let mut held = world.held(&id).ok_or("no place")?;
+    let start = held.stages[0].start.as_mut().ok_or("no start")?;
+    ensure_eq!(
+        start.opening,
+        None,
+        "the opener, once the launch's open answered"
+    );
+    // As a retry's start stands while its command's open still brings
+    // the program up: the agent said it started and the terminal reads
+    // it waiting before it has drawn.
+    let opener = world.host.another_command();
+    start.opening = Some(opener.clone());
+    world.store.put(&id, held);
+    world.terminal.set_state(&code, AgentState::Waiting);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.count("send"),
+        0,
+        "prompts sent while another command opens the agent"
+    );
+    world.host.end_command(&opener);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.count("send"),
+        1,
+        "prompts sent once its opener is gone"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the code stage"
     );
     Ok(())
 }
