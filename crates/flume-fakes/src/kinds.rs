@@ -55,6 +55,16 @@ impl FakeKinds {
             .insert(declaration.into(), read(kinds));
     }
 
+    /// The declaration at `declaration` cannot be read, for `reason`.
+    pub fn unreadable_declaration(&self, declaration: &str, reason: &str) {
+        lock(&self.state).declarations.insert(
+            declaration.into(),
+            KindsRead::CouldNotRead {
+                reason: reason.into(),
+            },
+        );
+    }
+
     /// The settings `repository` gives `kind`, which it does not declare,
     /// at every revision not set apart.
     pub fn set_settings(&self, repository: &str, kind: &str, settings: KindSettings) {

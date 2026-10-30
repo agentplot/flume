@@ -1,6 +1,7 @@
 //! A start checked against its settings (161; core.10, core.30): each
-//! start records what its agent is to run under, its program, its account
-//! and each variable's digest keyed by its secret, never a value, leaving
+//! start records what its agent is to run under, its program, its mode as
+//! its profile passes it, its account and each variable's digest keyed by
+//! its secret, never a value, leaving
 //! out what a terminal sets for itself and what the agent program keeps
 //! from the processes it starts; an agent whose word shows it began
 //! otherwise is not taken as its stage's, is sent no prompt, and once
@@ -10,6 +11,8 @@
 //! names each variable alone (31, 35, 37, 43, 56, 112, 135).
 
 use super::account_pools::pool;
+use super::agent_modes::{in_mode, the_fakes_map};
+use super::agent_settings::for_every_stage;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::variable_digest;
@@ -21,6 +24,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "start integrity: a start's record names each variable of its account and flume's own with a digest keyed by its secret, and its token's value is in no held state, answer or log",
             cites: &["161", "32", "56"],
             run: the_record_holds_no_value,
+        },
+        Scenario {
+            name: "start integrity: a start's record names its mode as its profile passes it, and a start whose settings give no mode names none",
+            cites: &["161", "162", "S66"],
+            run: the_mode_as_passed,
         },
         Scenario {
             name: "start integrity: PATH and SHELL, which a terminal sets for its own sake, are in no start's record, even where an account gives them",
@@ -191,6 +199,31 @@ fn the_record_holds_no_value(_: &()) -> Outcome {
             .iter()
             .any(|line| line.contains(TOKEN)),
         "the token's value is in the host's log"
+    );
+    Ok(())
+}
+
+fn the_mode_as_passed(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    work_pool(&world, &ENV);
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(in_mode(Mode::Edits)));
+    let one = fix(&world, "one")?;
+    ensure_eq!(
+        code_start(&world, &one)?.start_record.mode,
+        Some("edit-files".to_string()),
+        "the record's mode where the settings give edits"
+    );
+    world
+        .host
+        .set_settings(None, "fix", KindSettings::default());
+    let two = fix(&world, "two")?;
+    ensure_eq!(
+        code_start(&world, &two)?.start_record.mode,
+        None,
+        "the record's mode where the settings give none"
     );
     Ok(())
 }

@@ -30,6 +30,9 @@ pub(crate) struct Claim {
     session: Option<String>,
     /// The account the start runs under (144, 145).
     account: Option<AccountHeld>,
+    /// The value its agent profile passes for its mode, none where no
+    /// layer gives one (162, 169).
+    mode: Option<String>,
 }
 
 impl Claim {
@@ -386,15 +389,18 @@ impl Engine {
                 .agent(&program)
                 .map(|agent| agent.withheld())
                 .unwrap_or_default();
-            let start_record = start_record(
-                &program,
-                account.as_ref(),
-                &env,
-                &withheld,
-                &identity,
-                &held.place.location,
-                &secret,
-            );
+            let start_record = StartRecord {
+                mode: resolution.mode.clone(),
+                ..start_record(
+                    &program,
+                    account.as_ref(),
+                    &env,
+                    &withheld,
+                    &identity,
+                    &held.place.location,
+                    &secret,
+                )
+            };
             let stage = &mut held.stages[index];
             stage.state = StageState::Starting;
             stage.starts = identity.start;
@@ -442,6 +448,7 @@ impl Engine {
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
                 account,
+                mode: resolution.mode.clone(),
             }))
         });
         let claimed = claimed.unwrap_or(Err(Start::NoPlace));
@@ -466,8 +473,17 @@ impl Engine {
             agent,
             session,
             account: _,
+            mode,
         } = claim;
-        let command = agent.command(&settings, None, &env, &place, &identity, &secret, &text);
+        let command = agent.command(
+            &settings,
+            mode.as_deref(),
+            &env,
+            &place,
+            &identity,
+            &secret,
+            &text,
+        );
         let folder = self.store.folder(id);
         match self.terminal.open(
             &place,
