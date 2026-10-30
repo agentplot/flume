@@ -33,14 +33,21 @@ fn a_fix_lands_under_herdr_with_claude_code() {
             "Create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
         ],
     );
-    live.until(&place, "its code stage begun", 5, |status| {
-        status["agent"]["started"] == "yes"
+    // The agent's Stop hook settles the place the moment it is quiet, so
+    // a trivial fix can be submitted, landed and tidied between two of
+    // these reads: begun or already tidied both answer.
+    let begun = live.until(&place, "its code stage begun or tidied", 5, |status| {
+        status.is_null() || status["agent"]["started"] == "yes"
     });
-    assert!(
-        live.workspaces().contains(&workspace(&live)),
-        "{:?}",
-        live.workspaces()
-    );
+    if !begun.is_null() {
+        // The workspace stands while the place does; read the place again
+        // after the workspaces, so a tidy between the two is no failure.
+        let workspaces = live.workspaces();
+        assert!(
+            workspaces.contains(&workspace(&live)) || live.walk.status(&place).is_null(),
+            "the base's workspace is missing while the place lives: {workspaces:?}"
+        );
+    }
     live.until_landed(&place, 20);
 
     let submissions = live.walk.submissions();
