@@ -5,7 +5,9 @@
 //! passing over a stage whose stream is full and ending no agent for one
 //! (31, 46; core.26); priority is the caller's (7); status gives the
 //! host's agents running, bound, room and queue, and each stream's (56,
-//! 130); a host with no bound has no queue.
+//! 130); a host with no bound of its own and no stream's bound has no
+//! queue, and a stream's bound holds on a host that states none of its
+//! own.
 
 use super::settling::{construct_begun, deliver_fix, fix_begun, write_change};
 use super::world::*;
@@ -54,6 +56,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "host queue: a host with no bound starts every first stage and judges no room",
             cites: &["70", "56"],
             run: a_host_with_no_bound,
+        },
+        Scenario {
+            name: "host queue: a stream's bound holds its stages on a host that states no bound of its own",
+            cites: &["70", "143", "46"],
+            run: a_streams_bound_on_a_host_with_no_bound,
         },
         Scenario {
             name: "host queue: two streams under a host of six start four work and two personal agents, and the waiting work place starts first when a work agent ends",
@@ -636,5 +643,48 @@ fn waiting_on_a_streams_room(_: &()) -> Outcome {
         status.waiting_on
     );
     ensure!(!status.stalled, "the place waiting for room is stalled");
+    Ok(())
+}
+
+fn a_streams_bound_on_a_host_with_no_bound(_: &()) -> Outcome {
+    let world = World::new();
+    declare(&world, "work", Some(1), 0);
+    let w1 = fixes_in(&world, "work", &["w1"], 0)?.remove(0);
+    let w2 = fixes_in(&world, "work", &["w2"], 0)?.remove(0);
+    let d1 = fixes(&world, &["d1"], 0)?.remove(0);
+    ensure!(runs(&world, &w1, "code"), "w1's code does not run");
+    ensure!(
+        runs(&world, &d1, "code"),
+        "the default place's code does not run"
+    );
+    ensure!(
+        waits(&world, &w2, "code"),
+        "w2 started past its stream's bound on a host with none of its own"
+    );
+    let host = host(&world)?;
+    ensure_eq!(
+        (host.bound, host.room),
+        (None, None),
+        "the host's bound and room"
+    );
+    ensure_eq!(
+        host.queue
+            .iter()
+            .map(|queued| (queued.place.clone(), queued.wants.clone()))
+            .collect::<Vec<_>>(),
+        vec![(
+            w2.clone(),
+            RoomWanted::Stream {
+                stream: "work".into(),
+                bound: 1
+            }
+        )],
+        "the queue"
+    );
+    end_code(&world, "w1");
+    ensure!(
+        runs(&world, &w2, "code"),
+        "w2 did not start at its stream's next room"
+    );
     Ok(())
 }

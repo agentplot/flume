@@ -7,8 +7,9 @@ round's or a retry's, SHALL start only while the agents running on the
 host, every caller's counted together, are under the host's bound, its
 stream's are under the stream's, and an account of its pool is usable;
 otherwise it SHALL wait for room. The count and the start SHALL be
-taken under one host-wide lock. A host that states no bound SHALL have
-no queue (70, 75, 143, 145).
+taken under one host-wide lock. A host that states no bound of its own
+and no stream's bound SHALL have no queue, and a stream's bound SHALL
+hold on a host that states none of its own (70, 75, 143, 145).
 
 #### Scenario: A third launch on a host of two
 
@@ -24,6 +25,11 @@ no queue (70, 75, 143, 145).
 
 - **WHEN** the host states six agents, `work` four at priority 10 and `personal` three, and five work and three personal places are launched
 - **THEN** four work agents and two personal agents start, one work place waits for its stream's room and one personal place for the host's, and when a work agent ends the waiting work place starts first (S53)
+
+#### Scenario: A stream's bound on a host with no bound
+
+- **WHEN** the host states no bound of its own, `work` states one agent, and two work places and a place in `default` are launched
+- **THEN** one work agent and the default place's agent start, the second work place waits for its stream's room, and when the work agent ends it starts (70, 143)
 
 ### Requirement: What waits starts by priority
 
