@@ -28,7 +28,15 @@
 //! - `{"unset": "<name>"}`: the variable is gone from the session's
 //!   environment before the session starts, wherever the act stands, as a
 //!   pane brought back without it starts the program, so neither the
-//!   session's hooks nor its transcript's folder see it.
+//!   session's hooks nor its transcript's folder see it;
+//! - `{"begin_in": "<value>"}`: the session begins in the mode `value`,
+//!   wherever the act stands, as a session whose account's configuration
+//!   refuses the mode asked begins in another, so every hook's input
+//!   names it as its `permission_mode`.
+//!
+//! Every hook's input names the mode the session runs in as that release
+//! names it: the `--permission-mode` passed, `manual` read as its own
+//! `default`, `default` where none was passed, or the `begin_in` act's.
 //!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
@@ -56,11 +64,13 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut plugin = None;
     let mut prompt = None;
+    let mut mode = None;
     let mut words = args.iter();
     while let Some(word) = words.next() {
         match word.as_str() {
             "--plugin-dir" => plugin = words.next().map(PathBuf::from),
-            "--model" | "--append-system-prompt" | "--settings" | "--permission-mode" => {
+            "--permission-mode" => mode = words.next().cloned(),
+            "--model" | "--append-system-prompt" | "--settings" => {
                 words.next();
             }
             flag if flag.starts_with("--") => {}
@@ -72,13 +82,20 @@ fn main() {
         .and_then(|file| std::fs::read_to_string(file).ok())
         .and_then(|text| serde_json::from_str::<Value>(&text).ok())
         .unwrap_or(json!([]));
+    let mut mode = match mode.as_deref() {
+        None | Some("manual") => "default".to_string(),
+        Some(passed) => passed.to_string(),
+    };
     for act in script.as_array().into_iter().flatten() {
         if let Some(name) = act["unset"].as_str() {
             std::env::remove_var(name);
         }
+        if let Some(began) = act["begin_in"].as_str() {
+            mode = began.to_string();
+        }
     }
     let cwd = std::env::current_dir().expect("the place");
-    let mut session = Session::new(cwd, plugin);
+    let mut session = Session::new(cwd, plugin, mode);
     let failed = session.run(prompt.as_deref(), &script);
     std::process::exit(i32::from(failed));
 }
@@ -106,10 +123,12 @@ struct Session {
     prompt: String,
     parent: Option<String>,
     calls: u32,
+    /// The mode the session runs in, as every hook's input names it.
+    mode: String,
 }
 
 impl Session {
-    fn new(cwd: PathBuf, plugin: Option<PathBuf>) -> Session {
+    fn new(cwd: PathBuf, plugin: Option<PathBuf>, mode: String) -> Session {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |since| since.as_nanos());
@@ -149,6 +168,7 @@ impl Session {
             prompt: String::new(),
             parent: None,
             calls: 0,
+            mode,
         }
     }
 
@@ -266,7 +286,7 @@ impl Session {
         if let Some(files) = act.get("merge_named") {
             return self.merge_named(files);
         }
-        if act.get("unset").is_some() {
+        if act.get("unset").is_some() || act.get("begin_in").is_some() {
             // Made before the session started.
             return true;
         }
@@ -396,7 +416,7 @@ impl Session {
             "session_id": self.id,
             "transcript_path": self.transcript,
             "cwd": self.cwd,
-            "permission_mode": "default",
+            "permission_mode": self.mode,
             "hook_event_name": event,
         });
         for (key, value) in common.as_object().into_iter().flatten() {

@@ -16,7 +16,12 @@
 //! code agent stops at its account's usage limit moves to the pool's
 //! second account and lands (S55; 146, 151); and a fix whose first code
 //! agent comes up without its account's variable is ended and its stage
-//! started afresh under the account, and lands (S65; 161).
+//! started afresh under the account, and lands (S65; 161); a fix whose
+//! host's table gives `edits` over its repository's `full` starts its
+//! agent in the mode the host gave and lands, as does a fix no layer gives
+//! a mode, passing none (S66; 162); and a fix whose agent begins in
+//! another mode than its start asked at both its starts is never begun,
+//! naming both modes (S67; 161, 162).
 
 use super::walk::*;
 use serde_json::{json, Value};
@@ -742,5 +747,158 @@ fn a_start_without_its_account_is_ended_and_its_stage_started_afresh() {
     assert!(
         account.join("projects").exists(),
         "the fresh agent ran under the account's CLAUDE_CONFIG_DIR"
+    );
+}
+
+/// The repository's binding with `more` beside it, committed and pushed
+/// to the remote, where the base lives.
+fn the_repository_gives(walk: &Walk, more: &str) {
+    let file = walk.repository.dir.join(".config/flume.toml");
+    let binding = std::fs::read_to_string(&file).expect("the binding");
+    walk.repository
+        .write(".config/flume.toml", &format!("{binding}\n{more}"));
+    walk.repository.commit("the repository's settings");
+    walk.repository.git(&["push", "--quiet", "origin", "main"]);
+}
+
+#[test]
+fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
+    // S66, 162: the host's `[kinds.fix.agents]` gives `edits`, while the
+    // repository's `.config/flume.toml` gives `full`; the host's table
+    // comes first, so the printed command passes `--permission-mode
+    // acceptEdits`, the stand-in's SessionStart reads `acceptEdits` and
+    // the started ack is taken, status names `edits` from `host-kind`
+    // passed as `acceptEdits`, and the fix lands.
+    let walk = Walk::new("walk-mode");
+    walk.configure("[kinds.fix.agents]\nmode = \"edits\"\n");
+    the_repository_gives(&walk, "[kinds.fix.agents]\nmode = \"full\"\n");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let printed = walk.printed(&place);
+    assert!(
+        printed.contains("--permission-mode acceptEdits"),
+        "the printed command: {printed}"
+    );
+    let status = walk.status(&place);
+    assert_eq!(
+        (
+            &status["agent"]["settings"]["from"]["mode"],
+            &status["agent"]["mode"]
+        ),
+        (
+            &json!({ "layer": "host-kind", "value": "edits" }),
+            &json!({ "passed": "acceptEdits", "entry": null, "read_back": true })
+        ),
+        "{status}"
+    );
+    let signal = walk.signal("mode-acked");
+    let mut acts = vec![json!({ "wait_for": signal })];
+    acts.extend(
+        commits("parser.rs", "fn parse() {}\n")
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    let agent = walk.start_agent(&place, Value::Array(acts));
+    let status = walk.until(&place, "its agent started", |status| {
+        status["agent"]["started"] == "yes"
+    });
+    assert!(
+        status["unsettled"].as_array().is_none_or(Vec::is_empty),
+        "{status}"
+    );
+    std::fs::write(&signal, "").expect("the signal");
+    let ran = finish(agent);
+    assert_eq!(ran.code, 0, "the stand-in in {place}: {}", ran.out);
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+
+    // 162: no layer gives a mode, so none is passed, the start records
+    // none, the account's own configuration decides, and the fix lands.
+    let walk = Walk::new("walk-no-mode");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let printed = walk.printed(&place);
+    assert!(
+        !printed.contains("--permission-mode"),
+        "the printed command: {printed}"
+    );
+    let status = walk.status(&place);
+    assert!(status["agent"]["mode"].is_null(), "{status}");
+    assert!(
+        status["agent"]["settings"]["from"]["mode"].is_null(),
+        "{status}"
+    );
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+}
+
+#[test]
+fn a_fix_begun_in_another_mode_twice_is_never_begun() {
+    // S67, 161, 162: a fix launched with `--agent mode=full`, which the
+    // start passes as `bypassPermissions`, whose session begins in
+    // `default`, as Claude Code begins where the account's configuration
+    // disables the mode asked. Its SessionStart acks nothing; flume ends
+    // that agent once its session ended and starts code afresh, whose
+    // session begins in `default` again: code is never begun, status and
+    // its end naming `bypassPermissions` asked and `manual` begun.
+    let walk = Walk::new("walk-other-mode");
+    let place = walk.launch(
+        "fix",
+        "one",
+        &["--brief", "fix the parser", "--agent", "mode=full"],
+    );
+    let printed = walk.printed(&place);
+    assert!(
+        printed.contains("--permission-mode bypassPermissions"),
+        "the printed command: {printed}"
+    );
+    let out = walk.agent(&place, json!([{ "begin_in": "default" }]));
+    assert!(!out.contains("stop blocked"), "{out}");
+    let both = json!({ "asked": "bypassPermissions", "began": "manual" });
+
+    let status = walk.until(&place, "code started afresh", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    let unsettled = status["unsettled"].as_array().cloned().unwrap_or_default();
+    assert_eq!(
+        unsettled
+            .iter()
+            .map(|read| (&read["start"], &read["mode"], &read["missing"]))
+            .collect::<Vec<_>>(),
+        vec![(&json!(1), &both, &json!([]))],
+        "{status}"
+    );
+    assert!(stage(&status, "code")["end"].is_null(), "{status}");
+    assert!(
+        walk.printed(&place)
+            .contains("--permission-mode bypassPermissions"),
+        "the fresh start's command"
+    );
+
+    walk.agent(&place, json!([{ "begin_in": "default" }]));
+    let status = walk.until(&place, "code never begun", |status| {
+        stage(status, "code")["state"] == "never_begun"
+    });
+    let code = stage(&status, "code");
+    assert_eq!(code["starts"], 2, "{status}");
+    assert_eq!(code["end"]["unsettled"]["mode"], both, "{status}");
+    let unsettled = status["unsettled"].as_array().cloned().unwrap_or_default();
+    assert_eq!(
+        unsettled
+            .iter()
+            .map(|read| (&read["start"], &read["mode"]))
+            .collect::<Vec<_>>(),
+        vec![(&json!(1), &both), (&json!(2), &both)],
+        "{status}"
+    );
+    assert!(
+        walk.on_remote("parser.rs").is_none(),
+        "a fix never begun landed"
     );
 }
