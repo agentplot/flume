@@ -19,6 +19,7 @@ pub mod running_through;
 pub mod settling;
 pub mod stage_runs;
 pub mod starts;
+pub mod streams;
 pub mod tidying;
 pub mod world;
 
@@ -46,5 +47,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(made_things::scenarios());
     every.extend(role_waking::scenarios());
     every.extend(repeating_stages::scenarios());
+    every.extend(streams::scenarios());
     every
 }

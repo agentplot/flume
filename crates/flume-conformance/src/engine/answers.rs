@@ -232,6 +232,15 @@ fn place_status() -> PlaceStatus {
             },
         ],
         priority: 2,
+        stream: StreamHeld {
+            name: "work".into(),
+            from: StreamFrom::HostRepository,
+        },
+        intent: IntentKey::Base {
+            repository: "/r".into(),
+            base: "main".into(),
+            digest: "d1".into(),
+        },
         ends: vec![
             EndStatus {
                 end: EndHeld {

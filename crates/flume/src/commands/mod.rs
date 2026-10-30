@@ -52,7 +52,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Make one place and start, hold or queue its first stage (2 to 8).
-    Launch(LaunchArgs),
+    Launch(Box<LaunchArgs>),
     /// Every fact of a place, or of every place, and of the host (56 to 58).
     Status {
         /// A location, or `<kind>--<name>` in the repository.
@@ -264,6 +264,15 @@ struct LaunchArgs {
     /// field one of program, model, instructions, env.<NAME> and beside.
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
     agent: Vec<String>,
+    /// The stream the place runs in, one the host's configuration
+    /// declares; the one it names for the repository or the kind, else
+    /// `default`, where none is named (143).
+    #[arg(long)]
+    stream: Option<String>,
+    /// The intent the place serves, by its name; the repository and base
+    /// where none is named (147).
+    #[arg(long)]
+    intent: Option<String>,
 }
 
 /// What a command prints, where, and its exit status.
@@ -581,6 +590,8 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         priority: args.priority.unwrap_or(0),
         recipients: args.recipient.clone(),
         stall_after: args.stall_after.as_deref().map(seconds).transpose()?,
+        stream: args.stream.clone(),
+        intent: args.intent.clone(),
     })
 }
 

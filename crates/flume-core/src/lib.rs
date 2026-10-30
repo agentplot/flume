@@ -217,6 +217,14 @@ mod tests {
             hold_submission: false,
             hold_words: BTreeMap::new(),
             recipients: vec![],
+            stream: flume_seams::StreamHeld {
+                name: flume_seams::DEFAULT_STREAM.into(),
+                from: flume_seams::StreamFrom::Default,
+            },
+            intent: flume_seams::IntentKey::Launch {
+                name: "one".into(),
+                digest: "d1".into(),
+            },
         }
     }
 

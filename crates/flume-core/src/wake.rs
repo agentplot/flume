@@ -70,6 +70,7 @@ impl Engine {
             base,
             brief: run.brief.clone(),
             priority: run.priority,
+            stream: run.stream.clone(),
             ..Launch::default()
         };
         match self.make_place(&launch, Some(address)) {

@@ -141,6 +141,14 @@ fn held() -> HeldState {
             hold_submission: true,
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
             recipients: vec!["operator".into(), "role:planner".into()],
+            stream: StreamHeld {
+                name: "work".into(),
+                from: StreamFrom::HostRepository,
+            },
+            intent: IntentKey::Launch {
+                name: "the-surfaces".into(),
+                digest: "d1".into(),
+            },
         },
         phase: Phase::Over {
             over: Over::Landed {
@@ -364,7 +372,33 @@ fn a_launch() {
         priority: 5,
         recipients: vec!["operator".into()],
         stall_after: Some(30 * 60),
+        stream: Some("work".into()),
+        intent: Some("the-surfaces".into()),
     });
+}
+
+#[test]
+fn an_intent_by_its_name_or_its_repository_and_base() {
+    let named = IntentKey::Launch {
+        name: "the-surfaces".into(),
+        digest: "d1".into(),
+    };
+    let based = IntentKey::Base {
+        repository: "/r".into(),
+        base: "main".into(),
+        digest: "d2".into(),
+    };
+    round_trips(named.clone());
+    round_trips(based.clone());
+    assert_eq!((named.digest(), based.digest()), ("d1", "d2"));
+    assert_eq!(
+        serde_json::to_value(&named).unwrap()["from"],
+        serde_json::json!("launch")
+    );
+    assert_eq!(
+        serde_json::to_value(&based).unwrap()["from"],
+        serde_json::json!("base")
+    );
 }
 
 #[test]

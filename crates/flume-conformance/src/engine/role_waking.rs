@@ -65,6 +65,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["3", "99", "132"],
             run: launched_again_after_a_landing,
         },
+        Scenario {
+            name: "role waking: a role's run whose table names a stream runs in it, from the launch, and one naming a stream the host does not declare is not woken",
+            cites: &["132", "143"],
+            run: a_role_in_its_stream,
+        },
     ]
 }
 
@@ -523,5 +528,45 @@ fn launched_again_after_a_landing(_: &()) -> Outcome {
             .is_some_and(|submission| submission.read == SubmissionRead::None),
         "status reads the earlier place's submission as its own"
     );
+    Ok(())
+}
+
+fn a_role_in_its_stream(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream("work", Some(Stream::default()));
+    configure(
+        &world,
+        "Read what is pending for you.",
+        RoleRun {
+            stream: Some("work".into()),
+            ..planner_run(None, None)
+        },
+    );
+    let (woke, place) = woken(&world.engine.wake(PLANNER))?;
+    ensure_eq!(woke, Woke::Launched, "the wake");
+    ensure_eq!(
+        place.stream,
+        StreamHeld {
+            name: "work".into(),
+            from: StreamFrom::Launch,
+        },
+        "the run's stream"
+    );
+    world.host.set_role(
+        "madswan/ops",
+        Some(RoleRun {
+            kind: "planner".into(),
+            stream: Some("nightly".into()),
+            ..planner_run(None, None)
+        }),
+    );
+    let refused = world.engine.wake("madswan/ops");
+    ensure!(
+        refused
+            .refusal()
+            .is_some_and(|reason| reason.contains("nightly")),
+        "a wake into an undeclared stream: {refused:?}"
+    );
+    ensure_eq!(runs(&world), vec![planner_id()], "the runs on the host");
     Ok(())
 }

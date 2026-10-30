@@ -69,17 +69,21 @@ impl Engine {
         }
     }
 
-    /// The identity of the stage's next start, its repository named by
-    /// the id of its common git directory, or of its location where git
-    /// cannot say (33, C.4).
-    pub(crate) fn next_identity(&self, held: &HeldState, index: usize) -> Identity {
-        let repository = &held.place.repository;
+    /// A repository's id: of its common git directory, or of its
+    /// location where git cannot say (33, 147, C.4).
+    pub(crate) fn repository_id_of(&self, repository: &str) -> String {
         let common = self
             .history
             .common_dir(repository)
-            .unwrap_or_else(|| repository.clone());
+            .unwrap_or_else(|| repository.to_string());
+        repository_id(&common)
+    }
+
+    /// The identity of the stage's next start, its repository named by
+    /// its id (33, C.4).
+    pub(crate) fn next_identity(&self, held: &HeldState, index: usize) -> Identity {
         Identity {
-            repository: repository_id(&common),
+            repository: self.repository_id_of(&held.place.repository),
             place: held.place.short(),
             stage: held.place.kind.stages[index].name.clone(),
             start: held.stages[index].starts + 1,

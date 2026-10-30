@@ -66,7 +66,7 @@ pub const PACKAGES: &str = "record 0022's change, locks and packages, once its p
 /// kinds go, one package per version and a launch naming a version, and
 /// their scenarios cite them.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
-    let streams = [143, 144, 145, 146, 147, 151, 153]
+    let streams = [144, 145, 146, 147, 151, 153]
         .map(|clause| clause.to_string())
         .into_iter()
         .chain((53..=56).map(|scenario| format!("S{scenario}")))
@@ -119,9 +119,11 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_records_0020_to_0022s() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 7 + 4 + 3 + 2 + 5 + 5);
+        assert_eq!(unbuilt.len(), 6 + 4 + 3 + 2 + 5 + 5);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
-        for built in ["140", "141", "142", "154", "157", "S50", "S51", "S52"] {
+        for built in [
+            "140", "141", "142", "143", "154", "157", "S50", "S51", "S52",
+        ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
                 "{built} is named unbuilt"

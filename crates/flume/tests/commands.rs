@@ -684,6 +684,59 @@ fn agent_settings_at_the_launch() {
 }
 
 #[test]
+fn a_stream_and_an_intent_at_the_launch() {
+    // 7, 143: the launch's stream and intent, kept and given by status;
+    // a stream the host does not declare refused, nothing made.
+    let host = Host::new("stream-and-intent");
+    host.configure("[streams.personal]\nagents = 2\n");
+    let repository = repository("stream-and-intent", None);
+    let kinds = kinds_file(&host, false);
+    let launch = |name: &str, stream: &str| {
+        host.stand_in(
+            &repository.dir,
+            &[
+                "launch",
+                "--kind",
+                "change",
+                "--name",
+                name,
+                "--kinds",
+                &kinds,
+                "--stream",
+                stream,
+                "--intent",
+                "the-surfaces",
+                "--json",
+            ],
+            &[],
+        )
+    };
+    let launched = launch("one", "personal");
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = format!("{}/places/change--one", repository.name());
+    let status = host
+        .flume(&repository.dir, &["status", &place, "--json"], &[])
+        .answer();
+    let one = the_place(&status);
+    assert_eq!(
+        one.stream,
+        StreamHeld {
+            name: "personal".into(),
+            from: StreamFrom::Launch,
+        }
+    );
+    assert!(
+        matches!(&one.intent, IntentKey::Launch { name, .. } if name == "the-surfaces"),
+        "{:?}",
+        one.intent
+    );
+    let refused = launch("two", "nightly");
+    assert_ne!(refused.code, 0, "{}", refused.text);
+    assert!(refused.text.contains("nightly"), "{}", refused.text);
+    assert!(!repository.dir.join("places/change--two").exists());
+}
+
+#[test]
 fn host_settings_for_a_kind() {
     // 32, C.7: the host's configuration gives change's agents a variable,
     // read at the start, named in status with no value, handed to the

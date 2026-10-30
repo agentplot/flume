@@ -182,6 +182,11 @@ pub struct PlaceStatus {
     /// The place's priority, its caller's (7, 70).
     #[serde(default)]
     pub priority: i64,
+    /// The stream the place runs in, fixed at its launch, and where it
+    /// came from (56, 143).
+    pub stream: StreamHeld,
+    /// The intent the place serves, and where it came from (56, 147).
+    pub intent: IntentKey,
     /// Every end of the place, with whom it was delivered to and when,
     /// and for whom it stands pending (43).
     #[serde(default)]

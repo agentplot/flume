@@ -5,7 +5,7 @@
 
 use crate::{
     Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PlaceId, PlaceRef, Prompt,
-    Readiness, Revision, Seconds, Secret, Settings, StopKind, Verdict,
+    Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -366,6 +366,38 @@ pub struct PlaceRecord {
     /// 8, 43).
     #[serde(default)]
     pub recipients: Vec<String>,
+    /// The stream the place runs in, fixed at its launch, and where it
+    /// came from (8, 143).
+    pub stream: StreamHeld,
+    /// The intent the place serves, as its launch named it or its
+    /// repository and base give it (147).
+    pub intent: IntentKey,
+}
+
+/// An intent's key: the name a launch gave it, else the repository and
+/// base the place is cut from, each with the digest that names the
+/// intent's document on the host, the SHA-256 in hex of `name:<name>` or
+/// `base:<repository id>:<base>` (147, 153).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "from", rename_all = "kebab-case")]
+pub enum IntentKey {
+    /// The launch named it.
+    Launch { name: String, digest: String },
+    /// The launch named none: the repository and base give it.
+    Base {
+        repository: String,
+        base: String,
+        digest: String,
+    },
+}
+
+impl IntentKey {
+    /// The digest that names the intent's document (153).
+    pub fn digest(&self) -> &str {
+        match self {
+            IntentKey::Launch { digest, .. } | IntentKey::Base { digest, .. } => digest,
+        }
+    }
 }
 
 impl PlaceRecord {

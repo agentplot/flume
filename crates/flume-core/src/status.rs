@@ -188,6 +188,8 @@ impl Engine {
             stalled: held.waiting.as_ref().is_some_and(|waiting| waiting.stalled),
             holds: held.holds.clone(),
             priority: held.priority,
+            stream: place.stream.clone(),
+            intent: place.intent.clone(),
             ends: held
                 .ends
                 .iter()
