@@ -12,7 +12,9 @@
 //! queues a launch and starts the waiting ones by priority (S37); and
 //! change@2's code stage works a change of three task groups one fresh
 //! agent at a time, and a failed submission sends it back for one
-//! repetition with no group (S50, S52; 112, 140 to 142).
+//! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
+//! code agent stops at its account's usage limit moves to the pool's
+//! second account and lands (S55; 146, 151).
 
 use super::walk::*;
 use serde_json::{json, Value};
@@ -553,4 +555,133 @@ fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_g
     assert!(states.contains(&json!("landed")), "{states:?}");
     assert_eq!(walk.on_remote("broken"), None);
     assert!(walk.on_remote("parser.rs").is_some());
+}
+
+/// The usage limit the spent walkthrough's first code agent stops at, in
+/// the words the pinned Claude Code writes it (151, C.4).
+const SESSION_LIMIT: &str = "You've hit your session limit · resets 3pm (UTC)";
+
+/// The seconds since the epoch now.
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock past the epoch")
+        .as_secs()
+}
+
+/// The reset `SESSION_LIMIT` names for a hook run at `at`: the first
+/// 15:00 UTC no more than a minute before it (151).
+fn three_pm_after(at: u64) -> u64 {
+    let today = at - at % 86_400 + 15 * 3600;
+    if today + 60 >= at {
+        today
+    } else {
+        today + 86_400
+    }
+}
+
+#[test]
+fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
+    // S55, 146, 151: on a fill-first pool of two accounts, each a scratch
+    // `CLAUDE_CONFIG_DIR`, the fix's code agent starts under the first and
+    // its turn fails at the session limit through StopFailure. The first
+    // account reads spent until 15:00 UTC, code starts afresh under the
+    // second with flume's words, the move recorded with its cache lost;
+    // the second's agent commits what the first left, and the place lands.
+    let walk = Walk::new("walk-spent");
+    let first = walk.account().to_path_buf();
+    let second = walk.account_folder("account-2");
+    walk.configure_whole(&format!(
+        "[host]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [\n  {{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }},\n  {{ name = \"stand-in-2\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }},\n]\n",
+        first.display().to_string(),
+        second.display().to_string(),
+    ));
+    // The walkthrough runs clear of the minutes around the reset, where a
+    // limit read just before 15:00 has already passed when code starts
+    // afresh.
+    while (14 * 3600 + 55 * 60..15 * 3600 + 2 * 60).contains(&(now() % 86_400)) {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let status = walk.status(&place);
+    assert_eq!(status["agent"]["account"]["name"], "stand-in-1", "{status}");
+    let before = now();
+    let out = walk.agent(
+        &place,
+        json!([
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "fail": { "error": "rate_limit", "words": SESSION_LIMIT } },
+        ]),
+    );
+    assert!(out.contains("the turn failed"), "{out}");
+    assert!(!out.contains("stop blocked"), "{out}");
+    let after = now();
+
+    let status = walk.until(&place, "code started afresh", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert_eq!(
+        status["agent"]["account"],
+        json!({ "pool": "stand-in", "name": "stand-in-2", "from": "strategy" }),
+        "{status}"
+    );
+    let moved = status["moves"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|moved| moved["on"] == "stage")
+        .unwrap_or_else(|| panic!("no move of code: {status}"));
+    assert_eq!(
+        (
+            &moved["stage"],
+            &moved["from"],
+            &moved["to"],
+            &moved["why"],
+            &moved["cache"]
+        ),
+        (
+            &json!("code"),
+            &json!("stand-in-1"),
+            &json!("stand-in-2"),
+            &json!("spent"),
+            &json!("lost")
+        ),
+        "{status}"
+    );
+    assert!(stage(&status, "code")["end"].is_null(), "{status}");
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.contains("stopped at its account's usage limit"),
+        "flume's words: {prompt}"
+    );
+    let host = walk.host();
+    let accounts = &host["pools"][0]["accounts"];
+    let reset = three_pm_after(before);
+    assert_eq!(reset, three_pm_after(after), "a reset read on either side");
+    assert_eq!(accounts[0]["name"], "stand-in-1", "{host}");
+    assert_eq!(accounts[0]["spent_until"], reset, "{host}");
+    assert_eq!(accounts[0]["running"], 0, "{host}");
+    assert_eq!(accounts[1]["name"], "stand-in-2", "{host}");
+    assert!(accounts[1]["spent_until"].is_null(), "{host}");
+    assert_eq!(accounts[1]["running"], 1, "{host}");
+
+    walk.agent(
+        &place,
+        json!([{ "bash": "git add -A && git commit --quiet -m 'fix the parser'" }]),
+    );
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n"),
+        "what the first agent left, committed by the second"
+    );
+    assert!(!walk.has_branch("fix/one"));
+    for account in [&first, &second] {
+        assert!(
+            account.join("projects").exists(),
+            "an agent under {}",
+            account.display()
+        );
+    }
 }

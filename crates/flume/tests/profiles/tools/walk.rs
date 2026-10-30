@@ -155,8 +155,6 @@ impl Walk {
     /// stand-in's pool of one account, which the `default` stream takes
     /// its accounts from (144, C.7).
     pub fn configure(&self, text: &str) {
-        let dir = self.home.join("config/flume");
-        std::fs::create_dir_all(&dir).expect("the configuration's folder");
         let mut text = text.to_string();
         if let Some(account) = &self.account {
             text.push_str(&format!(
@@ -164,7 +162,22 @@ impl Walk {
                 account.display().to_string()
             ));
         }
+        self.configure_whole(&text);
+    }
+
+    /// The host's configuration as `text` gives it whole, its pools and
+    /// accounts among it.
+    pub fn configure_whole(&self, text: &str) {
+        let dir = self.home.join("config/flume");
+        std::fs::create_dir_all(&dir).expect("the configuration's folder");
         std::fs::write(dir.join("config.toml"), text).expect("the configuration");
+    }
+
+    /// A scratch folder for an account's `CLAUDE_CONFIG_DIR`, made.
+    pub fn account_folder(&self, name: &str) -> PathBuf {
+        let dir = self.repository.scratch.path(name);
+        std::fs::create_dir_all(&dir).expect("the account's folder");
+        dir
     }
 
     /// `program` with the walkthrough's environment, in `dir`.

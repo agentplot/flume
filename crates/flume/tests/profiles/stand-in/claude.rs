@@ -19,14 +19,19 @@
 //!   prompt's words name merged by Bash, each file contested written as
 //!   given and the merge committed;
 //! - `{"wait_for": "<file>"}`: nothing until the file exists, for up to
-//!   two minutes, so a test reads status in the middle of a stage.
+//!   two minutes, so a test reads status in the middle of a stage;
+//! - `{"fail": {"error": "<error>", "words": "<words>"}}`: the turn ends
+//!   there as that release ends a turn the API failed, the words written
+//!   as its error message and StopFailure run with the error and the
+//!   words in place of Stop, no later act made.
 //!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
 //!
 //! Then the turn ends: Stop, once more with `stop_hook_active` where the
-//! hook blocked it, and the session ends, as a person leaves the printed
+//! hook blocked it, or StopFailure where a `fail` act ended it, and the
+//! session ends, as a person leaves the printed
 //! command's session, with SessionEnd. Each act is printed on standard
 //! output as one line; the exit status is 1 where an act failed that no
 //! hook refused. It never reaches a model, an account or the network.
@@ -152,6 +157,10 @@ impl Session {
                 .and_then(|text| serde_json::from_str::<Value>(&text).ok())
                 .unwrap_or(json!([]));
             for act in script.as_array().into_iter().flatten() {
+                if let Some(failure) = act.get("fail") {
+                    self.fail(failure);
+                    return failed;
+                }
                 if !self.act(act) {
                     failed = true;
                 }
@@ -181,6 +190,36 @@ impl Session {
         self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
         say("session ended");
         failed
+    }
+
+    /// The turn ended by the API's failure, as 2.1.296 ends one: its words
+    /// written as the synthetic error message, StopFailure run with the
+    /// error and the words in place of Stop, and the session ended.
+    fn fail(&mut self, failure: &Value) {
+        let error = failure["error"].as_str().unwrap_or_default();
+        let words = failure["words"].as_str().unwrap_or_default();
+        let mut record = self.record(
+            "assistant",
+            json!({
+                "id": format!("msg_stand_in_{}", self.calls),
+                "model": "<synthetic>",
+                "role": "assistant",
+                "type": "message",
+                "stop_reason": "stop_sequence",
+                "content": [{ "type": "text", "text": words }],
+            }),
+        );
+        record["isApiErrorMessage"] = json!(true);
+        record["error"] = json!(error);
+        self.line(record);
+        say(&format!("the turn failed: {words} ({error})"));
+        self.hook(
+            "StopFailure",
+            json!({ "error": error, "last_assistant_message": words }),
+            None,
+        );
+        self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
+        say("session ended");
     }
 
     /// One act of the script, as a tool call. Whether it did not fail.
