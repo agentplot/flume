@@ -58,19 +58,40 @@ name, left where its caller put it (94, 107, C.5; record 0018).
 The herdr profile SHALL make the pane with `--cwd <place>` and an
 `--env` for each variable of the agent's environment and flume's own,
 and start the agent by `herdr agent start <name> --kind <kind> --pane
-<id> --timeout 120000 -- <arguments>`, bounded ten seconds past its
-timeout, typing nothing into the pane's shell; herdr's ready SHALL
-never count as the start (35, 94, C.5; record 0018; core.29).
+<id> --timeout <ms> -- <arguments>`, the timeout what is left of the
+start's 120 seconds, bounded ten seconds past it, typing nothing into
+the pane's shell; herdr's ready SHALL never count as the start (35, 94,
+C.5; record 0018; core.29).
 
 #### Scenario: The environment from the pane
 
 - **WHEN** the host's configuration gives the agent a variable
 - **THEN** the started program sees it, set on the pane by `--env`, and nothing of it is typed
 
+### Requirement: herdr starts the agent once the pane's shell is at its prompt
+
+Before agent start, the herdr profile SHALL wait within the start's 120
+seconds for the pane's shell's first output, `pane wait-output <id>
+--source visible --regex '\S'`; SHALL read `agent_start_input_failed`
+as the shell not yet taking the line and ask agent start again within
+those seconds; and SHALL read a shell that shows nothing within them,
+or a start still so answered at their end, as not come up with the
+screen and herdr's words, never refused (35, C.5; record 0018).
+
 #### Scenario: Instructions of 20,000 characters
 
-- **WHEN** a stage's instructions run to 20,000 characters with quotes, `$`, backticks and non-ASCII
-- **THEN** `agent start` hands them over whole, and nothing is typed into the shell
+- **WHEN** a stage's instructions run to 20,000 characters with quotes, `$`, backticks and non-ASCII, and the pane's shell is slow to come to its prompt, its terminal taking no line past its canonical limit
+- **THEN** the profile waits for the prompt, `agent start` hands them over whole, and nothing is typed into the shell
+
+#### Scenario: A shell that speaks before it takes the line
+
+- **WHEN** the pane's shell says something as it starts, and herdr answers `agent_start_input_failed` until its line editor takes the terminal
+- **THEN** the profile asks agent start again, and the agent starts once the shell takes the line
+
+#### Scenario: A shell never at its prompt
+
+- **WHEN** the pane's shell does not take the line within the start's bound
+- **THEN** the core reads the start never begun with the pane's visible lines and herdr's words, and the open is not refused
 
 ### Requirement: herdr reads a start held or never come up
 
