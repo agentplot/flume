@@ -7,7 +7,7 @@ use flume_core::{
     group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, StageStatus,
     Tidied, Woke,
 };
-use flume_seams::{HoldOn, IntentKey, Made, UnsettledStart};
+use flume_seams::{HoldOn, IntentKey, Made, Readiness, UnsettledStart, WaitingOn, Waits};
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -155,14 +155,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         word(json!(place.stream.from)),
         intent_words(&place.intent)
     ));
-    for step in &place.readiness.steps {
-        let outcome = if step.passed { "passed" } else { "failed" };
-        lines.push(
-            format!("  readiness {}: {outcome} {}", step.step, step.words)
-                .trim_end()
-                .to_string(),
-        );
-    }
+    lines.extend(readiness_lines(&place.readiness));
     for stage in &place.stages {
         lines.extend(stage_lines(stage));
     }
@@ -213,26 +206,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         }
     }
     if let Some(waiting) = &place.waiting_on {
-        let mut line = format!(
-            "  waits on its caller to {}{} ({})",
-            word(json!(waiting.act)),
-            waiting
-                .stage
-                .as_ref()
-                .map(|stage| format!(" {stage}"))
-                .unwrap_or_default(),
-            word(json!(waiting.why))
-        );
-        if let Some(since) = waiting.since {
-            line.push_str(&format!(" since {since}"));
-        }
-        if place.stalled {
-            line.push_str(", stalled");
-        }
-        if let Some(words) = &waiting.words {
-            line.push_str(&format!(": {words}"));
-        }
-        lines.push(line);
+        lines.push(waiting_line(waiting, place.stalled));
     }
     for hold in &place.holds {
         let what = match &hold.on {
@@ -277,6 +251,113 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         }
     }
     lines
+}
+
+/// What a place waits on its caller for, since when, and its words; a
+/// place waiting on its readiness without them, since its readiness
+/// lines give the failed step and the last of its words (12, 56).
+fn waiting_line(waiting: &WaitingOn, stalled: bool) -> String {
+    let mut line = format!(
+        "  waits on its caller to {}{} ({})",
+        word(json!(waiting.act)),
+        waiting
+            .stage
+            .as_ref()
+            .map(|stage| format!(" {stage}"))
+            .unwrap_or_default(),
+        word(json!(waiting.why))
+    );
+    if let Some(since) = waiting.since {
+        line.push_str(&format!(" since {since}"));
+    }
+    if stalled {
+        line.push_str(", stalled");
+    }
+    if let Some(words) = waiting
+        .words
+        .as_ref()
+        .filter(|_| waiting.why != Waits::Unready)
+    {
+        line.push_str(&format!(": {words}"));
+    }
+    line
+}
+
+/// The last lines of a failed readiness step's words a person is shown.
+const FAILED_LINES: usize = 10;
+
+/// Each readiness step's outcome in one line, and under a failed step
+/// the last lines of its words as a terminal leaves them to read; the
+/// JSON keeps every word (12, 79).
+fn readiness_lines(readiness: &Readiness) -> Vec<String> {
+    let mut lines = vec![];
+    for step in &readiness.steps {
+        if step.passed {
+            lines.push(format!("  readiness {}: passed", step.step));
+            continue;
+        }
+        lines.push(format!("  readiness {}: failed", step.step));
+        let words = plain(&step.words);
+        let printed: Vec<&str> = words
+            .lines()
+            .filter_map(|line| {
+                line.split('\r')
+                    .map(str::trim_end)
+                    .rfind(|part| !part.is_empty())
+            })
+            .collect();
+        for line in &printed[printed.len().saturating_sub(FAILED_LINES)..] {
+            lines.push(format!("    {line}"));
+        }
+    }
+    lines
+}
+
+/// Words with every escape sequence and every control character but a
+/// line's end, a carriage return and a tab taken out, as a terminal
+/// would draw them.
+fn plain(words: &str) -> String {
+    let mut plain = String::with_capacity(words.len());
+    let mut chars = words.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\u{1b}' => match chars.next() {
+                // A control sequence, up to its final byte.
+                Some('[') => {
+                    for c in chars.by_ref() {
+                        if ('\u{40}'..='\u{7e}').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // A string, up to its bell or its string terminator.
+                Some(']' | 'P' | 'X' | '^' | '_') => {
+                    while let Some(c) = chars.next() {
+                        if c == '\u{7}' {
+                            break;
+                        }
+                        if c == '\u{1b}' {
+                            chars.next_if_eq(&'\\');
+                            break;
+                        }
+                    }
+                }
+                // Intermediate bytes, then a final one.
+                Some(c) if ('\u{20}'..='\u{2f}').contains(&c) => {
+                    for c in chars.by_ref() {
+                        if !('\u{20}'..='\u{2f}').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            },
+            '\n' | '\r' | '\t' => plain.push(c),
+            c if c.is_control() => {}
+            c => plain.push(c),
+        }
+    }
+    plain
 }
 
 /// The intent a place serves, as a person reads it (147).
@@ -486,8 +567,8 @@ mod tests {
     use super::*;
     use flume_core::{AccountStatus, AgentSettings, MoveStatus, RoomWanted, StreamStatus};
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, MoveOn, MoveWhy, Reading, Strategy,
-        Unsettled,
+        AccountFrom, AccountHeld, AccountMove, AgentState, MoveOn, MoveWhy, Reading, ReadyStep,
+        Strategy, Unsettled,
     };
 
     #[test]
@@ -713,6 +794,80 @@ mod tests {
                 format!("    {p3}"),
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn readiness_gives_each_steps_outcome_and_a_failed_steps_last_lines() {
+        let step = |step: &str, passed, words: &str| ReadyStep {
+            step: step.into(),
+            passed,
+            words: words.into(),
+        };
+        let built: String = (1..=30)
+            .map(|line| format!("\u{1b}[1;32mbuilding {line}\u{1b}[0m\n"))
+            .collect();
+        let failed = format!(
+            "{built}\u{1b}]8;;https://example.org\u{7}a link\u{1b}]8;;\u{7}\n\
+             fetching 50%\rfetching 100%\r\n\n\
+             \u{1b}[31merror:\u{1b}[0m the lockfile is stale  \n"
+        );
+        let readiness = Readiness {
+            steps: vec![
+                step("toolchain", true, &built),
+                step("moon setup", false, &failed),
+            ],
+        };
+        let mut expected = vec![
+            "  readiness toolchain: passed".to_string(),
+            "  readiness moon setup: failed".to_string(),
+        ];
+        expected.extend((24..=30).map(|line| format!("    building {line}")));
+        expected.extend([
+            "    a link".to_string(),
+            "    fetching 100%".to_string(),
+            "    error: the lockfile is stale".to_string(),
+        ]);
+        assert_eq!(readiness_lines(&readiness), expected);
+        let silent = Readiness {
+            steps: vec![step("toolchain", false, "\u{1b}[0m\n\n")],
+        };
+        assert_eq!(
+            readiness_lines(&silent),
+            vec!["  readiness toolchain: failed".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_wait_on_readiness_leaves_its_words_to_the_readiness_lines() {
+        let held = WaitingOn {
+            act: flume_seams::Act::Retry,
+            stage: Some("code".into()),
+            why: Waits::OnHold,
+            since: Some(54_000),
+            words: Some("Wait until the release is cut.".into()),
+        };
+        assert_eq!(
+            waiting_line(&held, false),
+            "  waits on its caller to retry code (on_hold) since 54000: Wait until the release is cut."
+        );
+        let unready = WaitingOn {
+            stage: Some("construct".into()),
+            why: Waits::Unready,
+            words: Some("moon setup: \u{1b}[1mbuilding 1\u{1b}[0m\nerror: stale".into()),
+            ..held
+        };
+        assert_eq!(
+            waiting_line(&unready, true),
+            "  waits on its caller to retry construct (unready) since 54000, stalled"
+        );
+    }
+
+    #[test]
+    fn words_as_a_terminal_draws_them() {
+        assert_eq!(
+            plain("\u{1b}(B\u{1b}7a\u{8}\u{1b}]0;title\u{1b}\\b\u{1b}[?25l\tc\r\n"),
+            "ab\tc\r\n"
         );
     }
 
