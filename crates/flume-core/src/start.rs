@@ -467,7 +467,7 @@ impl Engine {
             session,
             account: _,
         } = claim;
-        let command = agent.command(&settings, &env, &place, &identity, &secret, &text);
+        let command = agent.command(&settings, None, &env, &place, &identity, &secret, &text);
         let folder = self.store.folder(id);
         match self.terminal.open(
             &place,

@@ -15,7 +15,7 @@ use flume::profiles::agent::claude::{
 };
 use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::agent::{self, AgentHarness};
+use flume_conformance::seams::agent::{self, AgentHarness, Modes};
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -198,6 +198,29 @@ impl AgentHarness for Harness {
             })
             .expect("the word");
     }
+
+    /// The profile maps no mode yet: it keeps the seam's defaults.
+    fn modes(&self) -> Modes {
+        Modes::default()
+    }
+
+    /// The SessionStart hook found the session begun in another mode and
+    /// wrote its word in place of the started ack, both modes named.
+    fn begin_in(&self, identity: &Identity, asked: &str, began: &str) {
+        self.record(identity)
+            .set_unsettled(&record::Unsettled {
+                unsettled: Unsettled {
+                    mode: Some(ModeBegan {
+                        asked: asked.to_string(),
+                        began: Some(began.to_string()),
+                    }),
+                    ..Unsettled::default()
+                },
+                session_id: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+                transcript_path: self.transcript(identity).to_string_lossy().into(),
+            })
+            .expect("the word");
+    }
 }
 
 #[test]
@@ -235,6 +258,7 @@ fn the_command_for_a_code_stage() {
     let who = identity("code");
     let command = harness.seam.command(
         &settings,
+        None,
         &env,
         &harness.place(),
         &who,
@@ -278,6 +302,7 @@ fn the_command_for_a_code_stage() {
     };
     let command = harness.seam.command(
         &by_path,
+        None,
         &env,
         &harness.place(),
         &who,
@@ -285,6 +310,40 @@ fn the_command_for_a_code_stage() {
         "x",
     );
     assert_eq!(command.program, "/opt/claude/bin/claude");
+}
+
+#[test]
+fn the_command_passes_the_mode_it_is_given() {
+    // The value the claim's resolution mapped goes to
+    // `--permission-mode`, after the model; none is passed where no mode
+    // is given (162, 169).
+    let harness = Harness::new();
+    let settings = Settings {
+        model: Some("opus".into()),
+        ..Settings::default()
+    };
+    let command = |mode: Option<&str>| {
+        harness.seam.command(
+            &settings,
+            mode,
+            &BTreeMap::new(),
+            &harness.place(),
+            &identity("code"),
+            &Secret("s".into()),
+            "x",
+        )
+    };
+    assert_eq!(
+        command(Some("acceptEdits")).args[2..],
+        ["--model", "opus", "--permission-mode", "acceptEdits"]
+    );
+    assert!(
+        !command(None)
+            .args
+            .iter()
+            .any(|arg| arg == "--permission-mode"),
+        "a mode passed where none was given"
+    );
 }
 
 #[test]
@@ -305,6 +364,7 @@ fn the_plugin_an_agent_loads() {
     let who = identity("code");
     let first = harness.seam.command(
         &Settings::default(),
+        None,
         &BTreeMap::new(),
         &place,
         &who,
@@ -319,6 +379,7 @@ fn the_plugin_an_agent_loads() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     let second = harness.seam.command(
         &Settings::default(),
+        None,
         &BTreeMap::new(),
         &place,
         &identity("verify"),
@@ -531,6 +592,7 @@ fn the_trust_screen() {
     let harness = Harness::new();
     let command = harness.seam.command(
         &Settings::default(),
+        None,
         &BTreeMap::new(),
         &harness.place(),
         &identity("code"),

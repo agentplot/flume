@@ -53,6 +53,7 @@ impl Agent for StandInAgent {
     fn command(
         &self,
         settings: &Settings,
+        _mode: Option<&str>,
         env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,

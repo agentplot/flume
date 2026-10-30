@@ -241,10 +241,12 @@ impl Claude {
 }
 
 impl Agent for Claude {
-    /// `claude --plugin-dir <plugin> [--model <m>] [--append-system-prompt
-    /// <instructions>]` in the place, the program the settings name by
-    /// name or path, or the program it runs where it is a nix wrapper,
-    /// with the variables the wrapper sets ([`wrapper`]), its account's
+    /// `claude --plugin-dir <plugin> [--model <m>] [--permission-mode
+    /// <mode>] [--append-system-prompt <instructions>]` in the place, the
+    /// mode passed where one is given and none where it is none (162),
+    /// the program the settings name by name or path, or the program it
+    /// runs where it is a nix wrapper, with the variables the wrapper
+    /// sets ([`wrapper`]), its account's
     /// environment and the four `FLUME_*` words, the prompt as its argument where the terminal cannot send
     /// it; nothing of the caller's session (29, 32, 33, 88, C.4). The
     /// host user's login environment is the terminal's to give, set on
@@ -253,6 +255,7 @@ impl Agent for Claude {
     fn command(
         &self,
         settings: &Settings,
+        mode: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
         identity: &Identity,
@@ -266,6 +269,9 @@ impl Agent for Claude {
         ];
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
+        }
+        if let Some(mode) = mode {
+            args.extend(["--permission-mode".to_string(), mode.to_string()]);
         }
         if let Some(instructions) = &settings.instructions {
             args.extend(["--append-system-prompt".to_string(), instructions.clone()]);

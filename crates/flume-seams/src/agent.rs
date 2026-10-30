@@ -205,10 +205,14 @@ pub struct StopShort {
 pub trait Agent: Send + Sync {
     /// How to start the agent with its settings and `env`, its account's
     /// variables read against the login environment, in the place under
-    /// its identity and secret, the prompt in `prompt_args` (88, 29, 144).
+    /// its identity and secret, the prompt in `prompt_args` (88, 29, 144);
+    /// `mode` is the value [`Agent::mode`] mapped, passed as its program's
+    /// setting, and nothing is passed where it is none (162, 169).
+    #[allow(clippy::too_many_arguments)]
     fn command(
         &self,
         settings: &crate::Settings,
+        mode: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &crate::PlaceRef,
         identity: &Identity,
@@ -254,6 +258,24 @@ pub trait Agent: Send + Sync {
     /// the program checks nothing at its start (135, 161, 128).
     fn started_without(&self, _folder: &str, _agent: &Identity) -> Option<Unsettled> {
         None
+    }
+
+    /// The value of its program's own that `entry` maps to, which its
+    /// command passes, or words naming the mode where its program has no
+    /// setting that means it, never read wider or narrower (88, 169); every
+    /// entry refused by default, since a profile that maps no mode refuses
+    /// one (170).
+    fn mode(&self, entry: &crate::ModeEntry) -> Result<String, String> {
+        Err(format!(
+            "its agent profile maps no mode, `{entry}` among them"
+        ))
+    }
+
+    /// Whether the program's word that it started names the mode it began
+    /// in, so its start is compared with the mode it asked (161, 169); not
+    /// by default.
+    fn mode_read_back(&self) -> Offered {
+        Offered::NotOffered
     }
 
     /// The variables the agent program keeps from every process it

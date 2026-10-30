@@ -831,6 +831,80 @@ fn a_start_begun_in_another_mode_in_words() {
     );
 }
 
+/// An agent profile that keeps every default of the agent seam.
+struct Bare;
+
+impl Agent for Bare {
+    fn command(
+        &self,
+        _settings: &Settings,
+        _mode: Option<&str>,
+        _env: &BTreeMap<String, String>,
+        _place: &PlaceRef,
+        _identity: &Identity,
+        _secret: &Secret,
+        _prompt: &str,
+    ) -> AgentCommand {
+        AgentCommand::default()
+    }
+
+    fn started(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn received(&self, _folder: &str, _agent: &Identity, _text: &str) -> Received {
+        Received::Unknown
+    }
+
+    fn asking(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn own_work(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn ended(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn last_words(&self, _folder: &str, _agent: &Identity) -> Option<String> {
+        None
+    }
+
+    fn stop_short(&self, _agent: &Identity) -> String {
+        String::new()
+    }
+
+    fn send_back(&self) -> Offered {
+        Offered::NotOffered
+    }
+
+    fn guard(&self, _folder: &str, _agent: &Identity) -> Guarded {
+        Guarded::NotOffered
+    }
+
+    fn on_quiet(&self) -> Offered {
+        Offered::NotOffered
+    }
+}
+
+#[test]
+fn a_profile_that_maps_no_mode() {
+    // A profile that keeps the seam's defaults refuses every entry, one
+    // of the four or its program's own, naming it, and reads no mode back
+    // (169, 170).
+    let words = Bare
+        .mode(&ModeEntry::Flume(Mode::Edits))
+        .expect_err("a profile that maps no mode mapped edits");
+    assert!(words.contains("`edits`"), "{words}");
+    let words = Bare
+        .mode(&ModeEntry::Own("careful".into()))
+        .expect_err("a profile that maps no mode mapped an own value");
+    assert!(words.contains("`careful`"), "{words}");
+    assert_eq!(Bare.mode_read_back(), Offered::NotOffered);
+}
+
 #[test]
 fn settings_under_others_take_the_mode_whole() {
     // A table over a table is taken whole, never merged; a mode under
