@@ -76,3 +76,16 @@ and CI SHALL run `:#check-fast` on Linux and macOS in the devenv shell
 
 - **WHEN** `root:layers` reads every project's tasks
 - **THEN** every task carries exactly one of the three layer tags, or none with a comment saying why the gate cannot run it
+
+### Requirement: The live walkthroughs pass under the pinned Claude Code
+
+The `check-live` layer's walkthroughs SHALL carry a fix and a change
+from their launch to their landing with the pinned Claude Code under
+herdr, signed in by a test account's token, and SHALL leave a stage
+whose pane goes quiet with no deliverable not ended (39, S3); the
+operator runs them by hand, outside `sluice exec`.
+
+#### Scenario: The operator's run
+
+- **WHEN** the operator runs `moon run flume:live` from the devenv shell with a test account's token
+- **THEN** both walkthroughs land, and the quiet stage with no deliverable is not ended
