@@ -342,6 +342,7 @@ impl Engine {
             ends: vec![],
             role: role.map(str::to_string),
             unwoken: Default::default(),
+            moves: vec![],
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),

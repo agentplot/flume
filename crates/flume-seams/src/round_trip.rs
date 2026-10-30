@@ -210,6 +210,11 @@ fn held() -> HeldState {
                         },
                     ),
                 ]),
+                account: Some(AccountHeld {
+                    pool: "work".into(),
+                    name: "work-2".into(),
+                    from: AccountFrom::Strategy,
+                }),
                 record: Some("record-1".into()),
                 prompt: prompt(),
                 live: true,
@@ -253,6 +258,24 @@ fn held() -> HeldState {
             "the host's configuration names no role for madswan/ops".to_string(),
         )]),
         holds: holds_put(),
+        moves: vec![
+            AccountMove {
+                on: MoveOn::Stage {
+                    stage: "code".into(),
+                },
+                from: "work-1".into(),
+                to: "work-2".into(),
+                why: MoveWhy::Spent,
+                at: 110,
+            },
+            AccountMove {
+                on: MoveOn::Intent,
+                from: "work-1".into(),
+                to: "work-2".into(),
+                why: MoveWhy::Full,
+                at: 110,
+            },
+        ],
         waiting: Some(Waiting {
             on: WaitingOn {
                 act: Act::Retry,
@@ -711,6 +734,55 @@ fn an_ends_key_and_its_pending_recipients() {
     assert_eq!(
         held().pending_for(),
         vec!["operator".to_string(), "role:planner".to_string()]
+    );
+}
+
+#[test]
+fn the_hosts_own_documents_and_their_keys() {
+    for key in [
+        HostKey::Account {
+            pool: "work".into(),
+            account: "work-1".into(),
+        },
+        HostKey::Intent {
+            digest: "d1".into(),
+        },
+    ] {
+        round_trips(key);
+    }
+    round_trips(HostVersioned {
+        version: 3,
+        document: HostDocument::Account(AccountSpent {
+            until: 54_000,
+            words: Some("You've hit your session limit".into()),
+            recorded_at: 47_400,
+        }),
+    });
+    let affinity = Affinity {
+        stream: "work".into(),
+        pool: "work".into(),
+        account: "work-2".into(),
+        moves: vec![AccountMove {
+            on: MoveOn::Intent,
+            from: "work-1".into(),
+            to: "work-2".into(),
+            why: MoveWhy::Spent,
+            at: 47_400,
+        }],
+        gone: Some(50_000),
+    };
+    assert!(affinity.left("work-1") && !affinity.left("work-2"));
+    round_trips(HostVersioned {
+        version: 4,
+        document: HostDocument::Intent(affinity),
+    });
+    assert_eq!(
+        HostKey::Account {
+            pool: "work".into(),
+            account: "work-1".into()
+        }
+        .to_string(),
+        "account work/work-1"
     );
 }
 

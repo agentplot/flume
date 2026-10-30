@@ -7,10 +7,17 @@
 //! refuses where the version moved; a new place's first write creates
 //! the document by a link that fails where one exists (75, 103); a write
 //! of none removes the document and the folder (62), and with it the
-//! lines of `made.jsonl` a stage's run wrote there (129). Nothing is written
+//! lines of `made.jsonl` a stage's run wrote there (129). The host's own
+//! documents lie beside the places, an account's spent time at
+//! `accounts/<pool>/<account>.json` and an intent's affinity at
+//! `intents/<digest>.json`, each written whole the same way under its own
+//! lock, readable by the host's user alone (153, C.7). Nothing is written
 //! into a repository (104, core.16).
 
-use flume_seams::{HeldState, PlaceId, Store, Versioned, Written, MADE};
+use flume_seams::{
+    HeldState, HostDocument, HostKey, HostVersioned, PlaceId, Store, Versioned, Written, MADE,
+};
+use serde::Serialize;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
@@ -63,54 +70,73 @@ impl StateDir {
     /// The document at `path`, none where there is none or it cannot be
     /// read as held state.
     fn read_document(path: &Path) -> Option<Versioned> {
-        let text = fs::read_to_string(path).ok()?;
-        serde_json::from_str(&text).ok()
+        read_json(path)
     }
 
-    /// The place's lock, held while the file lives. A lock taken on a
-    /// file that a removal unlinked meanwhile is let go and taken again on
-    /// the file that now stands, so two writers never hold two locks.
+    /// The place's lock, held while the file lives.
     fn lock(&self, place: &PlaceId) -> std::io::Result<File> {
-        let path = self.lock_file(place);
-        loop {
-            fs::create_dir_all(self.places())?;
-            let file = OpenOptions::new()
-                .create(true)
-                .truncate(false)
-                .write(true)
-                .open(&path)?;
-            file.lock()?;
-            let held = file.metadata()?;
-            match fs::metadata(&path) {
-                Ok(standing) if standing.ino() == held.ino() && standing.dev() == held.dev() => {
-                    return Ok(file)
-                }
-                Ok(_) => continue,
-                Err(error) if error.kind() == ErrorKind::NotFound => continue,
-                Err(error) => return Err(error),
-            }
-        }
+        lock_at(&self.lock_file(place))
     }
 
-    /// A temporary file beside the documents holding `versioned`,
-    /// readable and writable by the host's user alone, since a launch's
-    /// settings hold their environment's values (32).
+    /// A temporary file beside the documents holding `versioned`.
     fn temporary(&self, place: &PlaceId, versioned: &Versioned) -> std::io::Result<PathBuf> {
-        let path = self.places().join(format!(
-            ".{}.{}-{}.tmp",
-            Self::flat(place),
-            std::process::id(),
-            TEMPORARY.fetch_add(1, Ordering::Relaxed)
-        ));
-        let text = serde_json::to_string_pretty(versioned).map_err(std::io::Error::other)?;
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)?;
-        file.write_all(text.as_bytes())?;
-        file.sync_all()?;
-        Ok(path)
+        temporary_at(&self.places(), &Self::flat(place), versioned)
+    }
+
+    /// Where the host's document under `key` lies, and its lock.
+    fn host_path(&self, key: &HostKey) -> (PathBuf, PathBuf) {
+        let (directory, name) = match key {
+            HostKey::Account { pool, account } => (
+                self.root.join("accounts").join(flat_name(pool)),
+                flat_name(account),
+            ),
+            HostKey::Intent { digest } => (self.root.join("intents"), flat_name(digest)),
+        };
+        (
+            directory.join(format!("{name}.json")),
+            directory.join(format!("{name}.lock")),
+        )
+    }
+
+    fn host_written(&self, key: &HostKey, at: Option<u64>, next: Option<&HostDocument>) -> Written {
+        let (document, lock_path) = self.host_path(key);
+        let Ok(lock) = lock_at(&lock_path) else {
+            return Written::Moved;
+        };
+        let current = read_json::<HostVersioned>(&document).map(|versioned| versioned.version);
+        if current != at {
+            return Written::Moved;
+        }
+        let Some(next) = next else {
+            if fs::remove_file(&document).is_err() && document.exists() {
+                return Written::Moved;
+            }
+            drop(lock);
+            return Written::Written {
+                version: at.map_or(0, |version| version + 1),
+            };
+        };
+        let version = next_version(current);
+        let versioned = HostVersioned {
+            version,
+            document: next.clone(),
+        };
+        let Some(directory) = document.parent() else {
+            return Written::Moved;
+        };
+        let name = document
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let Ok(temporary) = temporary_at(directory, &name, &versioned) else {
+            return Written::Moved;
+        };
+        if fs::rename(&temporary, &document).is_err() {
+            let _ = fs::remove_file(&temporary);
+            return Written::Moved;
+        }
+        drop(lock);
+        Written::Written { version }
     }
 
     fn written(&self, place: &PlaceId, at: Option<u64>, next: Option<&HeldState>) -> Written {
@@ -160,6 +186,73 @@ impl StateDir {
         drop(lock);
         Written::Written { version }
     }
+}
+
+/// The document at `path`, none where there is none or it cannot be read.
+fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
+    let text = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// A name of the host's configuration as one file name: `%` and `/`
+/// escaped, and a leading `.` too, so no name reaches outside its
+/// directory or hides.
+fn flat_name(name: &str) -> String {
+    let escaped = name.replace('%', "%25").replace('/', "%2F");
+    match escaped.strip_prefix('.') {
+        Some(rest) => format!("%2E{rest}"),
+        None => escaped,
+    }
+}
+
+/// The lock at `path`, held while the file lives. A lock taken on a file
+/// that a removal unlinked meanwhile is let go and taken again on the
+/// file that now stands, so two writers never hold two locks.
+fn lock_at(path: &Path) -> std::io::Result<File> {
+    loop {
+        if let Some(directory) = path.parent() {
+            fs::create_dir_all(directory)?;
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)?;
+        file.lock()?;
+        let held = file.metadata()?;
+        match fs::metadata(path) {
+            Ok(standing) if standing.ino() == held.ino() && standing.dev() == held.dev() => {
+                return Ok(file)
+            }
+            Ok(_) => continue,
+            Err(error) if error.kind() == ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// A temporary file in `directory` holding `document`, readable and
+/// writable by the host's user alone, since a launch's settings hold
+/// their environment's values (32).
+fn temporary_at(
+    directory: &Path,
+    name: &str,
+    document: &impl Serialize,
+) -> std::io::Result<PathBuf> {
+    let path = directory.join(format!(
+        ".{name}.{}-{}.tmp",
+        std::process::id(),
+        TEMPORARY.fetch_add(1, Ordering::Relaxed)
+    ));
+    let text = serde_json::to_string_pretty(document).map_err(std::io::Error::other)?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()?;
+    Ok(path)
 }
 
 /// A version past `current` that no earlier document of the place held,
@@ -219,5 +312,13 @@ impl Store for StateDir {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    fn read_host(&self, key: &HostKey) -> Option<HostVersioned> {
+        read_json(&self.host_path(key).0)
+    }
+
+    fn write_host(&self, key: &HostKey, at: Option<u64>, next: Option<&HostDocument>) -> Written {
+        self.host_written(key, at, next)
     }
 }

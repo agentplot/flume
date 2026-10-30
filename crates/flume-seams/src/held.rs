@@ -61,6 +61,10 @@ pub struct HeldState {
     /// woken (132; core.28).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub unwoken: BTreeMap<String, String>,
+    /// Each move of a stage of the place, or of its intent at a start of
+    /// the place's, from one account to another, in order (56, 145 to
+    /// 147).
+    pub moves: Vec<AccountMove>,
 }
 
 /// How long a place waits on its caller under no hold's words before it
@@ -642,6 +646,9 @@ pub struct StartHeld {
     /// [`crate::SET`] (32, 56).
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
+    /// The account it runs under, none where its stream and the host
+    /// name no pool (144, 145).
+    pub account: Option<AccountHeld>,
     /// The agent's own record, once a reading names it (77).
     pub record: Option<String>,
     pub prompt: Prompt,
@@ -664,6 +671,63 @@ pub struct StartHeld {
     /// where every task was ticked there (140).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupHeld>,
+}
+
+/// The account a start runs under: its pool, its name, and whether the
+/// intent's affinity or the pool's strategy chose it (144, 145, 147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountHeld {
+    pub pool: String,
+    pub name: String,
+    pub from: AccountFrom,
+}
+
+/// What chose a start's account (145, 147).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountFrom {
+    Affinity,
+    Strategy,
+}
+
+/// A move from one account to another: of a stage, whose start went to
+/// another account than its last, or of an intent, whose affinity moved;
+/// why, and when. The agents after it start without the earlier
+/// account's cache (56, 145 to 147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountMove {
+    #[serde(flatten)]
+    pub on: MoveOn,
+    pub from: String,
+    pub to: String,
+    pub why: MoveWhy,
+    pub at: Seconds,
+}
+
+/// What moved between accounts: a stage, or the intent (147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "on", rename_all = "snake_case")]
+pub enum MoveOn {
+    Stage { stage: String },
+    Intent,
+}
+
+/// Why a start went to another account: the one before was spent, or at
+/// its own bound (145, 146).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MoveWhy {
+    Spent,
+    Full,
+}
+
+impl MoveWhy {
+    pub fn name(self) -> &'static str {
+        match self {
+            MoveWhy::Spent => "spent",
+            MoveWhy::Full => "full",
+        }
+    }
 }
 
 /// The task group a repetition was given, as the change gave it at the

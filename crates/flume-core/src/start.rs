@@ -310,6 +310,7 @@ impl Engine {
                 // nothing kept (32, 56).
                 settings: resolution.resolved.settings.unvalued(),
                 from: flume_seams::unvalued_from(&resolution.resolved.from),
+                account: None,
                 record: None,
                 prompt: Prompt {
                     text: text.clone(),
