@@ -51,6 +51,16 @@ brought to the rule.
   accepted, the mode is built first, before the crew refactor, and the
   plan stage and points after it. The item leaves when both are
   accepted or rejected.
+- **Record 0026 waits on the user's yes.** Every program herdr starts
+  runs under an agent profile, its own or the common one, each part of
+  the agent seam built or plainly degraded (record 0026; core.1's
+  details, core.10 and core.30 as amended, core.39), and record 0024's
+  modes are flume's own four, each profile mapping them or refusing,
+  stated at blueprints a11f6d5 (169 to 174). Until then `profiles.rs`
+  binds Claude Code's profile alone and refuses every other program.
+  Once accepted, the common profile is built with entries for Codex,
+  Gemini CLI, GitHub Copilot CLI and OpenCode, then Codex's own
+  profile. The item leaves when it is accepted or rejected.
 - **The command line still says `<partition>/<role>`.** `flume wake
   --help` and the refusals of a name that is no address, in
   `commands/mod.rs`, `host/config.rs` and `flume-core`'s `wake.rs`,
