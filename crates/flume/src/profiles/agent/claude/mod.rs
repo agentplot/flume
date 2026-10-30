@@ -8,19 +8,21 @@
 //! started ack recorded (128). Every fact of Claude Code read here is
 //! checked against the release `devenv.nix` pins, 2.1.296: its hook
 //! events and their inputs, its transcript's records, its folder-trust
-//! dialog and the keys that answer it, and the words of its usage limits.
+//! dialog and the keys that answer it, the words of its usage limits, and
+//! its permission modes ([`mode`]).
 
 pub mod guard;
 pub mod hook;
 pub mod limit;
+pub mod mode;
 pub mod record;
 pub mod transcript;
 pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
-    Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
-    Secret, Settings, Spent, Unsettled,
+    Agent, AgentCommand, FolderTrust, Guarded, Identity, ModeEntry, Offered, PlaceRef, Reading,
+    Received, Secret, Settings, Spent, Unsettled,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -271,7 +273,7 @@ impl Agent for Claude {
             args.extend(["--model".to_string(), model.clone()]);
         }
         if let Some(mode) = mode {
-            args.extend(["--permission-mode".to_string(), mode.to_string()]);
+            args.extend([mode::FLAG.to_string(), mode.to_string()]);
         }
         if let Some(instructions) = &settings.instructions {
             args.extend(["--append-system-prompt".to_string(), instructions.clone()]);
@@ -471,6 +473,17 @@ impl Agent for Claude {
             .iter()
             .map(|name| name.to_string())
             .collect()
+    }
+
+    /// The choice of 2.1.296's own that the entry means, or its own value
+    /// as written where it is one of that release's ([`mode`]; 169, C.4).
+    fn mode(&self, entry: &ModeEntry) -> Result<String, String> {
+        mode::map(entry).map(str::to_string)
+    }
+
+    /// Every hook input names the mode the session began in (161).
+    fn mode_read_back(&self) -> Offered {
+        Offered::Offered
     }
 
     /// The SessionStart hook's word that the agent began otherwise than
