@@ -10,14 +10,12 @@ and the queue.
 
 ### Requirement: A stage starts only under the host's bound
 
-A stage that may start, a launch's first, a delivery's next, a fix
-round's or a retry's, SHALL start only while the agents running on the
-host, every caller's counted together, are under the host's bound, its
-stream's are under the stream's, and an account of its pool is usable;
-otherwise it SHALL wait for room. The count and the start SHALL be
-taken under one host-wide lock. A host that states no bound of its own
-and no stream's bound SHALL have no queue, and a stream's bound SHALL
-hold on a host that states none of its own (70, 75, 143, 145).
+A stage that may start SHALL start only while the agents running on
+the host, every caller's counted together, are under the host's bound,
+its stream's are under the stream's, and an account of its pool is
+usable; otherwise it SHALL wait for room. The count and the start SHALL
+be taken under one host-wide lock. A host that states no bound of its
+own and no stream's bound SHALL have no queue (70, 75, 143, 145).
 
 #### Scenario: A third launch on a host of two
 

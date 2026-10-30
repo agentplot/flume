@@ -1,7 +1,10 @@
 # start-integrity Specification
 
 ## Purpose
-TBD - created by archiving change work-runs-in-streams-on-pools-of-accounts. Update Purpose after archive.
+A start checked against the settings it was given: the start's record
+of its program and its variables' digests, compared by the agent's own
+SessionStart hook before it acks, and a start that began without them
+ended and started afresh, never sent a prompt.
 
 ## Requirements
 

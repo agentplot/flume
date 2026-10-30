@@ -1,7 +1,10 @@
 # streams Specification
 
 ## Purpose
-TBD - created by archiving change work-runs-in-streams-on-pools-of-accounts. Update Purpose after archive.
+The host's named streams of work: each with its own bound, priority and
+pool, a place's stream resolved once at its launch from the launch, its
+intent or the host's configuration, and the queue taking stages by the
+stream's priority before the place's.
 
 ## Requirements
 

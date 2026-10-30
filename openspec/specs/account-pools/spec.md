@@ -1,7 +1,10 @@
 # account-pools Specification
 
 ## Purpose
-TBD - created by archiving change work-runs-in-streams-on-pools-of-accounts. Update Purpose after archive.
+The pools of accounts a host's work runs under: a stage's pool from its
+stream or the host, the account chosen by the pool's strategy among those
+usable for the stage's program, an intent kept to its account while it is
+usable, and a spent account set aside until its reset.
 
 ## Requirements
 
