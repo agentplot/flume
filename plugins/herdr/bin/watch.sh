@@ -4,7 +4,9 @@
 # herdr's startup hook, starts it unless a watch holds a fresh lease.
 # Running, on each short tick it reads every pane's agent state in one
 # herdr listing, and when a flume agent's state changed since the last
-# tick, or the bound passed since its last settle, it runs `flume settle`,
+# tick, an agent came up or went in one of the server's panes, as a new
+# stage's does before any status names it, or the bound passed since its
+# last settle, it runs `flume settle`,
 # writes `flume status --json` for the sidebar and the popup, and reports
 # the display clues and the sidebar rows status gives (46, 119, 120, 139;
 # core.13, core.14). It runs nothing else of flume's. What it holds
@@ -116,16 +118,20 @@ trap stop EXIT
 
 # Each flume pane on this server status names, with the agent state
 # herdr's listing $1 reads in it, or gone where it lists none: one line
-# per pane, in order.
+# per pane, in order. Then every pane the listing holds an agent in, so
+# an agent come up since status was written, which it cannot name yet,
+# changes what is seen too (122).
 states() {
-  [ -f "$status" ] || return 0
-  panes=$(jq -r '.status.places[]?.clues.shown_at.agent // empty' "$status" 2>/dev/null |
-    while IFS= read -r name; do on_this_server "$name"; done | sort -u)
-  for p in $panes; do
-    s=$(printf '%s' "$1" | jq -r --arg p "$p" \
-      '[.result.panes[]? | select(.pane_id == $p) | (.agent_status // "none")][0] // "gone"' 2>/dev/null)
-    echo "$p $s"
-  done
+  if [ -f "$status" ]; then
+    panes=$(jq -r '.status.places[]?.clues.shown_at.agent // empty' "$status" 2>/dev/null |
+      while IFS= read -r name; do on_this_server "$name"; done | sort -u)
+    for p in $panes; do
+      s=$(printf '%s' "$1" | jq -r --arg p "$p" \
+        '[.result.panes[]? | select(.pane_id == $p) | (.agent_status // "none")][0] // "gone"' 2>/dev/null)
+      echo "$p $s"
+    done
+  fi
+  printf '%s' "$1" | jq -r '"agents:" + ([.result.panes[]? | select(.agent != null) | " " + .pane_id] | sort | add // "")' 2>/dev/null
 }
 
 # Each clue and row status gives, reported where status says the terminal

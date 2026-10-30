@@ -3,17 +3,24 @@
 # A stand-in flume: logs each call; status answers the test's status.json,
 # or, while the test drives a place ($FAKE/drive), the place at the step
 # its settles have moved it to: each settle moves it one step on, from its
-# launch to its landing and its tidy.
+# launch to its landing and its tidy. Launched while the host has no room
+# ($FAKE/no-room), it waits for room, with no agent, until a settle finds
+# room.
 printf '%s\n' "$*" >>"$FAKE/flume-calls"
 case $1 in
 launch)
-  echo launched >"$FAKE/drive"
+  if [ -f "$FAKE/no-room" ]; then echo waiting >"$FAKE/drive"; else echo launched >"$FAKE/drive"; fi
   echo '{"launched":{}}'
   ;;
 settle)
   if [ -f "$FAKE/drive" ]; then
     at=$(cat "$FAKE/drive")
-    next=$(printf '%s\n' launched code-working code-delivered submitted landed tidied | awk -v at="$at" 'found { print; exit } $0 == at { found = 1 }')
+    if [ "$at" = waiting ]; then
+      next=
+      [ -f "$FAKE/no-room" ] || next=code-working
+    else
+      next=$(printf '%s\n' launched code-working code-delivered submitted landed tidied | awk -v at="$at" 'found { print; exit } $0 == at { found = 1 }')
+    fi
     [ -n "$next" ] && echo "$next" >"$FAKE/drive"
   fi
   echo '{"settled":{"places":[],"tidy":{}}}'
@@ -26,7 +33,11 @@ status)
           place: "/r/places/fix--one", kind: "fix", name: "one",
           phase: (if $at == "landed" then {over: {over: "landed"}} else "live" end),
           current: "code",
-          clues: (if $at == "landed" then null else
+          clues: (if $at == "landed" then null
+            elif $at == "waiting" then
+            {stage: "code", state: "waiting for room", title: "code · waiting for room",
+             display_agent: "fix--one", shown_at: {agent: null}}
+            else
             {stage: "code", state: ($at | sub("^code-"; "")), title: "code · x",
              display_agent: "fix--one", shown_at: {agent: "herdr:p1@\($sock)"}} end),
           submission: (if $at == "submitted" then {read: {found: {}}}

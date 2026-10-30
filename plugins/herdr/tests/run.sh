@@ -110,10 +110,13 @@ status_of() {
                 shown_at: {place: "herdr:t1@\($sock)", agent: "herdr:\($pane)@\($sock)", base: null}}}]}}'
 }
 
-# herdr's listing of panes, each `<id>:<agent state>`.
+# herdr's listing of panes, each `<id>:<agent state>`, or `<id>:` for a
+# pane with no agent in it.
 panes() {
   for p in "$@"; do echo "$p"; done | jq -R -s -c '
-    {result: {panes: [split("\n")[] | select(. != "") | split(":") | {pane_id: .[0], agent: "claude", agent_status: .[1]}]}}' >"$FAKE/panes.json"
+    {result: {panes: [split("\n")[] | select(. != "") | split(":")
+      | {pane_id: .[0], agent: (if .[1] == "" then null else "claude" end),
+         agent_status: (if .[1] == "" then null else .[1] end)}]}}' >"$FAKE/panes.json"
 }
 
 no_send() {
@@ -177,6 +180,21 @@ tick_at 1005
 panes p1:idle
 tick_at 1010
 [ "$(settles)" -eq 2 ] || fail "the agent's change from working to idle was not settled at once"
+pass
+
+fresh 'watch: an agent come up since status was written settles before the bound (122)'
+status_of p1 2 working >"$FAKE/status.json"
+panes p1:working
+tick_at 1000
+tick_at 1004
+[ "$(settles)" -eq 1 ] || fail "settled with nothing changed: $(settles)"
+# A retry's agent, started by a command of its own: no status names it.
+panes p1:working p2:idle
+tick_at 1006
+[ "$(settles)" -eq 2 ] || fail "the new agent was not settled until the bound"
+panes p1:working p2:idle p3:
+tick_at 1008
+[ "$(settles)" -eq 2 ] || fail "a pane with no agent in it was settled"
 pass
 
 fresh 'watch: one listing a tick, no call per pane'
@@ -337,6 +355,22 @@ while [ "$at" -le 1300 ] && [ "$(cat "$FAKE/drive")" != tidied ]; do
   at=$((at + 30))
 done
 [ "$(cat "$FAKE/drive")" = tidied ] || fail "the place stands at $(cat "$FAKE/drive")"
+after=$(sed 1d "$FAKE/flume-calls" | grep -v -e '^settle$' -e '^status --json$')
+[ -z "$after" ] || fail "something but the watch's settles ran after the launch: $after"
+no_send
+pass
+
+fresh 'unattended: a stage waiting for room starts within the bound once the host has room (70, 122)'
+touch "$FAKE/no-room"
+flume launch --kind fix --name one >/dev/null
+tick_at 1000
+tick_at 1010
+[ "$(cat "$FAKE/drive")" = waiting ] || fail "the place stands at $(cat "$FAKE/drive") with no room"
+# The host's configuration changed: there is room now.
+rm "$FAKE/no-room"
+tick_at 1020
+tick_at 1030
+[ "$(cat "$FAKE/drive")" = code-working ] || fail "the place stands at $(cat "$FAKE/drive") a bound after the host had room"
 after=$(sed 1d "$FAKE/flume-calls" | grep -v -e '^settle$' -e '^status --json$')
 [ -z "$after" ] || fail "something but the watch's settles ran after the launch: $after"
 no_send
