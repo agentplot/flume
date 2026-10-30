@@ -138,6 +138,18 @@ hook stop-failure stop-failure.json "${agent[@]}" >/dev/null
 status | jq -e '.agent.last_words | startswith("Not logged in")' >/dev/null ||
   fail "the failed turn's reason is not the last words"
 
+# A usage limit's failure, its words the test's: the last words, and the
+# agent's record holding its error, its words and when the hook ran.
+ran=$(date +%s)
+hook stop-failure stop-failure-limit.json "${agent[@]}" >/dev/null
+status | jq -e '.agent.last_words | startswith("You'"'"'ve hit your session limit")' >/dev/null ||
+  fail "the usage limit's words are not the last words"
+failure=$(find "$XDG_STATE_HOME" -name failure.json | head -n 1)
+[ -n "$failure" ] || fail "the failed turn is not in the agent's record"
+jq -e --argjson ran "$ran" '.error == "rate_limit"
+  and (.words | startswith("You'"'"'ve hit your session limit")) and .at >= $ran' "${failure:-/dev/null}" >/dev/null ||
+  fail "the agent's record does not hold the failure's error, words and time: $(cat "${failure:-/dev/null}")"
+
 # On quiet: the prompt received, a commit made, the stop let through, and
 # once the session ended the place settles itself on to the next stage.
 prompt=$(cd "$repo" && "$flume" prompt "$place" code --json | jq -r .prompt.text)

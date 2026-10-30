@@ -32,3 +32,7 @@ clap = { version = "4", features = ["derive"] }
 sha2 = "0.10"
 # The host's process table, read for a command's start (design 11).
 libc = "0.2"
+# The zone a usage limit's reset is named in, and the dates read in it
+# (design 6 of record 0020's change).
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz = { version = "0.10", default-features = false }

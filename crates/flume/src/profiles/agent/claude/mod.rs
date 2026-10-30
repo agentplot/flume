@@ -8,17 +8,18 @@
 //! started ack recorded (128). Every fact of Claude Code read here is
 //! checked against the release `devenv.nix` pins, 2.1.296: its hook
 //! events and their inputs, its transcript's records, its folder-trust
-//! dialog and the keys that answer it.
+//! dialog and the keys that answer it, and the words of its usage limits.
 
 pub mod guard;
 pub mod hook;
+pub mod limit;
 pub mod record;
 pub mod transcript;
 pub mod wrapper;
 
 use flume_seams::{
     Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
-    Secret, Settings,
+    Secret, Settings, Spent,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -426,6 +427,24 @@ impl Agent for Claude {
         match transcript::Transcript::read(Path::new(&started.transcript_path)) {
             transcript::Read::Read(transcript) => transcript.last_message(),
             _ => None,
+        }
+    }
+
+    /// A usage limit, where the StopFailure hook recorded `rate_limit` with
+    /// words that open as 2.1.296's usage-limit messages do, with the
+    /// reset they name read from when the hook ran ([`limit`]); a failure
+    /// of other words, or none, is no usage limit (146, 151, C.4).
+    fn spent(&self, folder: &str, agent: &Identity) -> Spent {
+        let record = Record::at(folder, agent);
+        if !record.readable() {
+            return Spent::Unknown;
+        }
+        match record.failure() {
+            Some(failure) if limit::usage_limit(&failure.error, &failure.words) => Spent::Yes {
+                until: limit::reset(&failure.words, failure.at),
+                words: failure.words,
+            },
+            _ => Spent::No,
         }
     }
 

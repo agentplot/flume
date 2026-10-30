@@ -178,6 +178,13 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
             acts: vec!["submit".into()]
         }
     );
+    assert_eq!(agent.spent(folder, &who), Spent::No);
+    let limit = Spent::Yes {
+        until: Some(host.now() + 3600),
+        words: "a usage limit this test writes".into(),
+    };
+    agent.set_spent(&who, limit.clone());
+    assert_eq!(agent.spent(folder, &who), limit);
     assert_eq!(agent.ended(folder, &who), Reading::No);
     agent.set_ended(&who, Reading::Yes);
     assert_eq!(agent.ended(folder, &who), Reading::Yes);

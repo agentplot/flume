@@ -9,7 +9,7 @@
 //! stop's.
 
 use super::guard;
-use super::record::{Asking, Record, Started};
+use super::record::{Asking, Failure, Record, Started};
 use super::{as_received, collapsed, digest, AGENT, PLACE, SECRET, STAGE};
 use flume_core::{Answer, Engine};
 use serde_json::{json, Value};
@@ -215,6 +215,11 @@ pub fn hook(
                 let said = [text("last_assistant_message"), text("error_details")]
                     .into_iter()
                     .find(|words| !words.trim().is_empty());
+                let _ = record.set_failure(&Failure {
+                    error: error.clone(),
+                    words: said.clone().unwrap_or_default(),
+                    at: now(),
+                });
                 let words = match (said, error.is_empty()) {
                     (Some(said), false) => format!("{said} ({error})"),
                     (Some(said), true) => said,
@@ -233,6 +238,13 @@ pub fn hook(
         }
         _ => String::new(),
     }
+}
+
+/// The host's clock, in seconds.
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
 }
 
 /// Leaves the asking mark on the call `input` names: by its id where

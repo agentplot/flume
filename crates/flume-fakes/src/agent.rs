@@ -1,7 +1,7 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
     Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
-    Secret, Settings,
+    Secret, Settings, Spent,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -38,6 +38,7 @@ struct Record {
     folder: Option<String>,
     started: Option<Reading>,
     last_words: Option<String>,
+    spent: Spent,
 }
 
 impl Default for Record {
@@ -53,6 +54,7 @@ impl Default for Record {
             folder: None,
             started: None,
             last_words: None,
+            spent: Spent::No,
         }
     }
 }
@@ -115,6 +117,13 @@ impl FakeAgent {
     pub fn set_last_words(&self, agent: &Identity, words: &str) {
         let words = words.to_string();
         self.with(agent, |record| record.last_words = Some(words));
+    }
+
+    /// Whether the agent's record shows its account reached a usage
+    /// limit, and the reset it names (151): a usage limit scripted with
+    /// words a test writes.
+    pub fn set_spent(&self, agent: &Identity, spent: Spent) {
+        self.with(agent, |record| record.spent = spent);
     }
 
     /// The agent's record is kept in `folder`, as the agent's program
@@ -255,6 +264,11 @@ impl Agent for FakeAgent {
     fn last_words(&self, folder: &str, agent: &Identity) -> Option<String> {
         self.read_in("last_words", folder, agent)
             .and_then(|record| record.last_words)
+    }
+
+    fn spent(&self, folder: &str, agent: &Identity) -> Spent {
+        self.read_in("spent", folder, agent)
+            .map_or(Spent::Unknown, |record| record.spent)
     }
 
     fn stop_short(&self, _agent: &Identity) -> String {

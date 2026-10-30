@@ -1,4 +1,4 @@
-//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135), an agent's
+//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151), an agent's
 //! identity and its start's secret (33, 41). Every reading of an agent's
 //! own record is handed the place's own folder with the identity, where
 //! the agent profile keeps its marks (128).
@@ -90,6 +90,21 @@ pub enum Received {
     Unknown,
 }
 
+/// spent: whether the agent's own record shows its account reached a
+/// usage limit, with the reset the record names by the host's clock, none
+/// where it names none, and the words it gave; unknown where the record
+/// cannot say (146, 151).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Spent {
+    Yes {
+        until: Option<crate::Seconds>,
+        words: String,
+    },
+    No,
+    Unknown,
+}
+
 /// Whether the agent program offers an operation (115, 121).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -169,6 +184,15 @@ pub trait Agent: Send + Sync {
     /// lost or never-begun end carries; none where the record holds none
     /// or cannot be read (43, 128).
     fn last_words(&self, folder: &str, agent: &Identity) -> Option<String>;
+
+    /// Whether the agent's own record shows its account reached a usage
+    /// limit, and the reset it names, read in the place's own `folder`
+    /// (151, 146, 128); unknown by default, for a program whose record
+    /// says nothing of one. flume asks no program or its maker whether a
+    /// limit has reset.
+    fn spent(&self, _folder: &str, _agent: &Identity) -> Spent {
+        Spent::Unknown
+    }
 
     /// What the agent's own record says of its start that no reading
     /// answers and status reports with the agent, such as the agent

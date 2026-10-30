@@ -1320,6 +1320,16 @@ fn the_agent_seams_answers() {
         record: "r1".into(),
     });
     round_trips(Received::Unknown);
+    round_trips(Spent::Yes {
+        until: Some(1_800_000_000),
+        words: "You've hit your session limit · resets 3pm (UTC)".into(),
+    });
+    round_trips(Spent::Yes {
+        until: None,
+        words: "You've hit your limit".into(),
+    });
+    round_trips(Spent::No);
+    round_trips(Spent::Unknown);
     round_trips(Offered::Offered);
     round_trips(Offered::NotOffered);
     round_trips(Guarded::Refused {

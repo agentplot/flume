@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135).
+//! 135, 151).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -40,6 +40,10 @@ pub trait AgentHarness {
 
     /// The agent's last message is `words`.
     fn say_last(&self, identity: &Identity, words: &str);
+
+    /// The agent's turn fails at its account's usage limit, with words the
+    /// harness writes naming a reset; the reset by the host's clock (151).
+    fn hit_usage_limit(&self, identity: &Identity) -> Seconds;
 }
 
 fn identity(stage: &str) -> Identity {
@@ -124,7 +128,37 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["43", "93", "128"],
             run: last_words_from_the_record::<H>,
         },
+        Scenario {
+            name: "agent: spent reads a usage limit and its reset from the agent's own record, and nothing from another folder",
+            cites: &["151", "146", "93", "128"],
+            run: spent_reads_the_usage_limit::<H>,
+        },
     ]
+}
+
+fn spent_reads_the_usage_limit<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    let folder = harness.folder();
+    ensure!(
+        !matches!(harness.seam().spent(&folder, &who), Spent::Yes { .. }),
+        "an agent at work read spent"
+    );
+    let reset = harness.hit_usage_limit(&who);
+    match harness.seam().spent(&folder, &who) {
+        Spent::Yes { until, words } => {
+            ensure_eq!(until, Some(reset), "the reset");
+            ensure!(!words.trim().is_empty(), "a usage limit with no words");
+        }
+        other => return Err(format!("spent read {other:?} at a usage limit")),
+    }
+    ensure_eq!(
+        harness
+            .seam()
+            .spent(&format!("{folder}-of-another-place"), &who),
+        Spent::Unknown,
+        "spent, read in another folder"
+    );
+    Ok(())
 }
 
 fn started_reads_the_agents_word<H: AgentHarness>(harness: &H) -> Outcome {

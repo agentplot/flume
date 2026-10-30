@@ -8,7 +8,7 @@
 //! binary in `hooks_claude.rs`.
 
 use crate::common::*;
-use flume::profiles::agent::claude::record::{Asking, Record, Started};
+use flume::profiles::agent::claude::record::{Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
     TRUST_QUESTION, VERSION,
@@ -168,6 +168,20 @@ impl AgentHarness for Harness {
             "version": "2.1.296",
         });
         append(&self.transcript(identity), &format!("{line}\n"));
+    }
+
+    /// The StopFailure hook recorded `rate_limit` and a session limit's
+    /// words, written as 2.1.296 builds them, at 13:10 UTC on 29 October
+    /// 2026; the reset they name is 15:00 that day.
+    fn hit_usage_limit(&self, identity: &Identity) -> Seconds {
+        self.record(identity)
+            .set_failure(&Failure {
+                error: "rate_limit".into(),
+                words: "You've hit your session limit \u{b7} resets 3pm (UTC)".into(),
+                at: 1_793_279_400,
+            })
+            .expect("the failure");
+        1_793_286_000
     }
 }
 

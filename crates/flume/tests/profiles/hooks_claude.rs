@@ -611,23 +611,54 @@ fn a_permission_prompt_is_asking() {
 #[test]
 fn a_stop_failure_as_last_words() {
     // A usage limit ends the turn: StopFailure's reason is the agent's
-    // last words, which status gives with the agent (43).
+    // last words, which status gives with the agent, and the agent's
+    // record holds the failure's error, its words and when the hook ran,
+    // from which the profile reads the usage limit and its reset (43,
+    // 151, C.4).
     let host = Host::new("stop-failure");
     let agent = host.launch("fix");
     host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let before = now();
     host.hook(
         &agent,
         "stop-failure",
         json!({
             "error": "rate_limit",
-            "last_assistant_message": "You've hit your usage limit · resets 5pm",
+            "last_assistant_message": "You've hit your session limit · resets 5pm (UTC)",
         }),
     );
+    let after = now();
     let status = host.agent_status(&agent.place);
     assert_eq!(
-        status["last_words"], "You've hit your usage limit · resets 5pm (rate_limit)",
+        status["last_words"], "You've hit your session limit · resets 5pm (UTC) (rate_limit)",
         "{status}"
     );
+    let folder = host
+        .path("state/flume/places")
+        .join(agent.place.trim_start_matches('/').replace('/', "%"));
+    let record = flume::profiles::agent::claude::record::Record::named(
+        &folder.to_string_lossy(),
+        &agent.identity,
+    );
+    let failure = record.failure().expect("the failure recorded");
+    assert_eq!(failure.error, "rate_limit");
+    assert_eq!(
+        failure.words,
+        "You've hit your session limit · resets 5pm (UTC)"
+    );
+    assert!(
+        (before..=after).contains(&failure.at),
+        "the hook ran at {}, between {before} and {after}",
+        failure.at
+    );
+}
+
+/// The host's clock, in seconds.
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("after 1970")
+        .as_secs()
 }
 
 #[test]
