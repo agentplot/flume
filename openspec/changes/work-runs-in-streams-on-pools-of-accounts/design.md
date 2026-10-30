@@ -224,9 +224,10 @@ A `check-tools` test reads the pinned Claude Code, the file its
 `claude` wrapper from devenv.nix execs, and requires the source
 fragments above to be there byte for byte: the openings' list, the
 `You've hit your ${e}${r}${h}` template, `` ` \xB7 resets ${y}` `` and
-`$R`'s zone suffix. A Claude Code bump that changes the words then fails
-the gate until the reading is made again (core.22, core.29's rule for
-herdr held for Claude Code).
+`$R`'s zone suffix. A Claude Code bump that changes the words, or only
+renames what its minifier names in those fragments, then fails the gate
+until the reading is made again and the fragments are taken afresh
+(core.22, core.29's rule for herdr held for Claude Code).
 
 When a settle reads a live start `spent` (`Engine::read_end` beside the
 last words), it writes the account's document spent until `until`, or
