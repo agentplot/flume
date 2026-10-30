@@ -259,20 +259,70 @@ echo q | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
 grep -q 'change · code · waiting · stalled' "$t/out" || fail "the row reads: $(cat "$t/out")"
 pass
 
-fresh 'keys: retry from the sidebar'
+fresh 'keys: retry from the sidebar, one key and the words as lines'
 status_of p1 2 'ended short' | jq '.status.places[0] |= (.current = "construct" | .clues.stage = "construct")' >"$S/status.json"
-printf '1r\n\n\nq\n' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+printf 'r\n\nq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
 [ "$(cat "$FAKE/flume-calls")" = "retry /r/places/change--plan --stage construct" ] ||
   fail "the retry ran: $(cat "$FAKE/flume-calls")"
 no_send
 pass
 
-fresh 'keys: tell, stop with the force asked, and open'
+fresh 'keys: tell, stop with the force asked, and open, each one key'
 status_of p1 2 working >"$S/status.json"
-printf '1t\nthe tests are in tests/\n1s\ny\n1o\nq\n' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+printf 'tthe tests are in tests/\nsy\noq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
 printf 'tell /r/places/change--plan the tests are in tests/\nstop /r/places/change--plan --force\n' >"$t/want"
 cmp -s "$t/want" "$FAKE/flume-calls" || fail "the keys ran: $(cat "$FAKE/flume-calls")"
 grep -qx 'tab focus t1' "$FAKE/herdr-calls" || fail "open did not focus the place's tab: $(cat "$FAKE/herdr-calls")"
+no_send
+pass
+
+fresh 'keys: q and Escape close at once, with no Enter'
+status_of p1 2 working >"$S/status.json"
+printf 'qr' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1 || fail "q did not close it cleanly"
+printf 'Q' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1 || fail "Q did not close it cleanly"
+printf '\033' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1 || fail "Escape did not close it cleanly"
+[ -s "$FAKE/flume-calls" ] && fail "a key after q ran: $(cat "$FAKE/flume-calls")"
+pass
+
+# Three places, the second and third named p1 and p2.
+three() {
+  status_of p1 2 working | jq '.status.places = [range(3) as $i | .status.places[0]
+    | .place = "/r/places/change--p\($i)" | .name = "p\($i)"]' >"$S/status.json"
+}
+
+fresh 'keys: a number chooses the place a key acts on'
+three
+printf '3sn\n2sn\n' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+printf 'stop /r/places/change--p2\nstop /r/places/change--p1\n' >"$t/want"
+cmp -s "$t/want" "$FAKE/flume-calls" || fail "the keys ran: $(cat "$FAKE/flume-calls")"
+grep -q '^▶ 2  p1' "$t/out" || fail "the chosen place not marked: $(cat "$t/out")"
+pass
+
+fresh 'keys: j and k, and the arrows, move the choice'
+three
+printf 'jjsn\nksn\n\033[A\033[Asn\n\033[Bsn\n' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+printf 'stop /r/places/change--p2\nstop /r/places/change--p1\nstop /r/places/change--p0\nstop /r/places/change--p1\n' >"$t/want"
+cmp -s "$t/want" "$FAKE/flume-calls" || fail "the keys ran: $(cat "$FAKE/flume-calls")"
+pass
+
+fresh 'keys: the choice stays among the places'
+three
+printf 'jjjjsn\nkkkkksn\n' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+printf 'stop /r/places/change--p2\nstop /r/places/change--p0\n' >"$t/want"
+cmp -s "$t/want" "$FAKE/flume-calls" || fail "the keys ran: $(cat "$FAKE/flume-calls")"
+pass
+
+fresh 'keys: a number with no place is said, and acts on nothing'
+status_of p1 2 working >"$S/status.json"
+printf '7' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+grep -q 'no place 7' "$t/out" || fail "the missing place not said: $(cat "$t/out")"
+[ -s "$FAKE/flume-calls" ] && fail "flume was asked: $(cat "$FAKE/flume-calls")"
+pass
+
+fresh 'keys: tell with no words runs nothing'
+status_of p1 2 working >"$S/status.json"
+printf 't\nq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+[ -s "$FAKE/flume-calls" ] && fail "flume was asked: $(cat "$FAKE/flume-calls")"
 no_send
 pass
 

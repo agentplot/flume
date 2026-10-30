@@ -151,11 +151,14 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
   `change · code · working · 2/5`: the kind, the stage, its state, the
   change's tasks ticked, the submission, and whether the place waits on
   you or is stalled.
-- **A popup** of every place in flight, `agentplot.flume.places`. Type a
-  place's number and a key, then Enter: `o` opens its tab, `t` tells
-  its agent the words you give, `s` stops its agent, `r` retries its
-  stage, and `q` closes the popup. Each key runs one flume command or
-  focuses the tab, and none types into an agent's pane.
+- **A popup** of every place in flight, `agentplot.flume.places`, the
+  chosen place marked `▶`. Each key acts at once, with no Enter: the
+  arrow keys or `j` and `k` move the choice, and `1` to `9` choose the
+  place so numbered. `o` opens its tab, `t` tells its agent the words
+  you give, `s` stops its agent and `r` retries its stage; the words,
+  and whether to force, are asked for as a line, ended by Enter. `q` or
+  Escape closes the popup. Each key runs one flume command or focuses
+  the tab, and none types into an agent's pane.
 
 The plugin changes none of herdr's configuration. Add the key and the
 rows to herdr's `config.toml` yourself:
