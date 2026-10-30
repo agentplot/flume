@@ -71,6 +71,14 @@ Each settle after the submission:
 2. runs one round of the base's queue, `sluice step <base>`, which does
    nothing where a `sluice run` on the host drives the queue.
 
+sluice can decide a submission as it takes it in, as it can on a base
+that takes pull requests when the work conflicts with the base. Its
+answer to the submit is then the entry's record, and sluice counts the
+outcome delivered, so no inbox gives it. flume reads that outcome from
+the answer in the same settle, as it reads one from the inbox. A
+conflict there starts the fix round as any other does, never a wait as
+if sluice refused the submission.
+
 flume reads landed, failed and conflicting outcomes from sluice's
 record, never from an agent and never from the base's history. A
 submission sluice already held for the branch from before the launch
@@ -89,10 +97,12 @@ reads that place's outcome.
   after it run again in order, and the place is submitted again once
   the last delivers.
 - **Conflict.** The same fix round, with words naming the contested
-  files and the base revision sluice tested against. The built-in
-  prompts tell the agent to merge that revision into the place's
-  branch, resolve each file and commit, never to rebase or rewrite a
-  commit already on the branch.
+  files, the entries ahead it conflicts with where sluice names them,
+  and the base revision sluice tested against. Where sluice found the
+  conflict before any test, that revision is the base's current one.
+  The built-in prompts tell the agent to merge that revision into the
+  place's branch, resolve each file and commit, never to rebase or
+  rewrite a commit already on the branch.
 - **Withdrawn** or **refused.** flume records the outcome and delivers
   it, and the place waits for you: `flume retry <place> --submission`
   submits it again, and `flume drop <place>` gives it up.
