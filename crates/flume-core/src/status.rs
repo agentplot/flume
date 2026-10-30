@@ -5,8 +5,8 @@
 use crate::reading::{find_group, reads_change};
 use crate::start::Starts;
 use crate::{
-    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, GroupStatus, PlaceStatus,
-    StageStatus, SubmissionStatus, WaitingOn, Waits,
+    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, GroupStatus, MoveStatus,
+    PlaceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -107,6 +107,7 @@ impl Engine {
                         .collect(),
                     from: flume_seams::unvalued_from(&start.from),
                 },
+                account: start.account.clone(),
                 state: reading.state,
                 started: reading.started,
                 asking: reading.asking,
@@ -195,6 +196,7 @@ impl Engine {
             priority: held.priority,
             stream: place.stream.clone(),
             intent: place.intent.clone(),
+            moves: held.moves.iter().map(MoveStatus::of).collect(),
             ends: held
                 .ends
                 .iter()

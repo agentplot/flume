@@ -14,7 +14,10 @@
 //! states none, has no queue.
 
 use crate::accounts::{AccountRoom, PoolRoom, Usable};
-use crate::{Act, Answer, Engine, HostStatus, Queued, RoomWanted, Step, StreamStatus};
+use crate::{
+    AccountStatus, Act, Answer, Engine, HostStatus, PoolStatus, Queued, RoomWanted, Step,
+    StreamStatus,
+};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
@@ -421,12 +424,32 @@ impl Engine {
             })
             .collect();
         streams.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.name.cmp(&b.name)));
+        let pools = queue
+            .pools
+            .iter()
+            .map(|(name, pool)| PoolStatus {
+                name: name.clone(),
+                strategy: pool.strategy,
+                accounts: pool
+                    .accounts
+                    .iter()
+                    .map(|room| AccountStatus {
+                        name: room.account.name.clone(),
+                        program: room.account.program.clone(),
+                        running: room.running,
+                        bound: room.account.agents,
+                        spent_until: room.spent_until,
+                    })
+                    .collect(),
+            })
+            .collect();
         HostStatus {
             running: queue.running,
             bound: queue.bound,
             room: queue.room(),
             queue: queued,
             streams,
+            pools,
             terminal_kept: self.terminal.kept(),
             addresses: self.addresses(),
             watch: self.terminal.watch(),

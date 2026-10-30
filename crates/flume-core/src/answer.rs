@@ -187,6 +187,10 @@ pub struct PlaceStatus {
     pub stream: StreamHeld,
     /// The intent the place serves, and where it came from (56, 147).
     pub intent: IntentKey,
+    /// Each move of a stage of the place, or of its intent at a start of
+    /// the place's, between accounts, in order, the agents after it
+    /// starting without the earlier account's cache (56, 145 to 147).
+    pub moves: Vec<MoveStatus>,
     /// Every end of the place, with whom it was delivered to and when,
     /// and for whom it stands pending (43).
     #[serde(default)]
@@ -199,6 +203,54 @@ pub struct PlaceStatus {
     /// terminal shows them (139).
     #[serde(default)]
     pub clues: Option<PlaceClues>,
+}
+
+/// A move between accounts as status gives it: what moved, from, to,
+/// why and when, and that the agents after it start without the earlier
+/// account's cache (56, 147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MoveStatus {
+    #[serde(flatten)]
+    pub moved: AccountMove,
+    pub cache: Cache,
+}
+
+impl MoveStatus {
+    pub fn of(moved: &AccountMove) -> MoveStatus {
+        MoveStatus {
+            moved: moved.clone(),
+            cache: Cache::Lost,
+        }
+    }
+
+    /// The move as a person reads it.
+    pub fn words(&self) -> String {
+        let moved = &self.moved;
+        let what = match &moved.on {
+            MoveOn::Stage { stage } => stage.clone(),
+            MoveOn::Intent => "the intent".to_string(),
+        };
+        format!(
+            "{what} moved from {} to {} at {}, {} {}, its agents after starting without {}'s cache",
+            moved.from,
+            moved.to,
+            moved.at,
+            moved.from,
+            match moved.why {
+                MoveWhy::Spent => "spent",
+                MoveWhy::Full => "at its bound",
+            },
+            moved.from
+        )
+    }
+}
+
+/// What a move between accounts did to the prompt cache its agents read
+/// (147).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Cache {
+    Lost,
 }
 
 /// An end of a place as status gives it: what ended and what was read of
@@ -235,6 +287,9 @@ pub struct HostStatus {
     /// streams the configuration declares and any a live place still runs
     /// in (56, 143).
     pub streams: Vec<StreamStatus>,
+    /// Each pool a stream of the host takes its accounts from, by name
+    /// (56, 144 to 146).
+    pub pools: Vec<PoolStatus>,
     /// What the terminal made and keeps for what it did not make, each
     /// named with what holds it (56, 137, 138).
     #[serde(default)]
@@ -265,6 +320,7 @@ impl Default for HostStatus {
             room: None,
             queue: vec![],
             streams: vec![],
+            pools: vec![],
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
@@ -393,6 +449,28 @@ pub struct StreamStatus {
     pub queue: Vec<Queued>,
 }
 
+/// A pool of the host (144, 145): its strategy and its accounts in
+/// order.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PoolStatus {
+    pub name: String,
+    pub strategy: Strategy,
+    pub accounts: Vec<AccountStatus>,
+}
+
+/// An account of a pool (144 to 146): the program it runs, flume's
+/// agents running on it, its own bound, none where it states none, and
+/// the time it is spent until, none where it is not spent; never a value
+/// of its environment.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountStatus {
+    pub name: String,
+    pub program: String,
+    pub running: u32,
+    pub bound: Option<u32>,
+    pub spent_until: Option<Seconds>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StageStatus {
     pub name: String,
@@ -452,6 +530,10 @@ pub struct AgentStatus {
     pub stage: String,
     pub program: String,
     pub settings: AgentSettings,
+    /// The account it runs under, and whether the affinity or the
+    /// strategy chose it; none where it runs under no account (56, 144,
+    /// 145).
+    pub account: Option<AccountHeld>,
     pub state: AgentState,
     /// Whether the agent said it started under its start's identity
     /// (135).
