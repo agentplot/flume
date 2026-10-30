@@ -5,10 +5,11 @@
 //! remote, its agents real Claude Code sessions in panes of flume's own
 //! herdr session, which flume starts on a server of the walkthrough's
 //! scratch home, never the host's, and a test settling as a caller would.
-//! A fix lands (S1); a change runs construct, code and verify (S2); and a
+//! A fix lands (S1); a change runs construct, code and verify (S2); a
 //! code stage whose agent ends its turn to wait on a suite it started, its
 //! pane quiet with no deliverable, is not ended until it delivers (39,
-//! S3).
+//! S3); and a fix whose host gives the mode `ask` begins in it over the
+//! repository's own default, its started ack taken (162, S66).
 //!
 //! Run by hand, outside the gate, required by no branch, in the devenv
 //! shell, so the pinned Claude Code and herdr lead `PATH`:
@@ -48,8 +49,12 @@ pub const TOKEN: &str = "FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN";
 pub const MODEL: &str = "FLUME_LIVE_MODEL";
 
 /// The repository's Claude Code settings: edits and shell commands taken
-/// without a question, since no person answers one here; flume's own
-/// plugin still refuses a push or a submit (108).
+/// without a question, since no person answers one here, by the default
+/// mode and by allowing every tool a fix or a change uses, so an agent in
+/// `ask` asks nothing either; flume's own plugin still refuses a push or a
+/// submit (108). A session begins in `default`, the pinned release's word
+/// for `manual`, only where its start passed `--permission-mode manual`
+/// over this default (162).
 const SETTINGS: &str = r#"{
   "permissions": {
     "defaultMode": "acceptEdits",
@@ -74,6 +79,12 @@ impl Live {
     /// A walkthrough under herdr with the pinned Claude Code signed in by
     /// the operator's test token; refused, naming the token, without one.
     pub fn new(label: &str) -> Live {
+        Live::with_fix_agents(label, "")
+    }
+
+    /// A walkthrough as `new` makes it, the host's `[kinds.fix.agents]`
+    /// holding `lines` beside the operator's model, if any (32).
+    pub fn with_fix_agents(label: &str, lines: &str) -> Live {
         let token = std::env::var(TOKEN)
             .ok()
             .filter(|token| !token.trim().is_empty())
@@ -107,9 +118,16 @@ impl Live {
              accounts = [{{ name = \"test-account\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = {token:?} }} }}]\n",
             config.display().to_string()
         );
-        if let Some(model) = &model {
-            for kind in ["fix", "change"] {
-                text.push_str(&format!("\n[kinds.{kind}.agents]\nmodel = {model:?}\n"));
+        for kind in ["fix", "change"] {
+            let mut table = model
+                .as_ref()
+                .map(|model| format!("model = {model:?}\n"))
+                .unwrap_or_default();
+            if kind == "fix" {
+                table.push_str(lines);
+            }
+            if !table.is_empty() {
+                text.push_str(&format!("\n[kinds.{kind}.agents]\n{table}"));
             }
         }
         walk.configure(&text);

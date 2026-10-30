@@ -1,11 +1,12 @@
 //! The fix and change walkthroughs of the check-tools layer with the
-//! pinned Claude Code under herdr in place of the stand-in, and a code
-//! stage waiting on its suite with its pane quiet (39, S3). Each brief
-//! asks for what the stand-in's script acted; the kinds' own prompts say
-//! the rest.
+//! pinned Claude Code under herdr in place of the stand-in, a code stage
+//! waiting on its suite with its pane quiet (39, S3), and a fix begun in
+//! the mode its host gives (162, S66). Each brief asks for what the
+//! stand-in's script acted; the kinds' own prompts say the rest.
 
 use super::walk::stage;
 use super::Live;
+use serde_json::json;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -157,6 +158,59 @@ fn s3_a_code_stage_waiting_on_its_suite_is_not_ended_while_its_pane_is_quiet() {
         std::thread::sleep(Duration::from_secs(5));
     }
     live.until_landed(&place, 15);
+    let parser = live.walk.on_remote("parser.rs").unwrap_or_default();
+    assert!(parser.contains("fn parse()"), "parser.rs: {parser:?}");
+}
+
+#[test]
+fn s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own() {
+    // S66, 161, 162, 169, C.4: the host's `[kinds.fix.agents]` gives
+    // `ask`, which the start passes as `--permission-mode manual` over the
+    // repository's own `defaultMode` of `acceptEdits`. The session begins
+    // in `default`, the pinned release's word for `manual`, only where the
+    // flag reached it, and the SessionStart hook takes the started ack
+    // only once the `permission_mode` it reads back is the mode recorded:
+    // code starts once, nothing unsettled. Every tool the fix uses is
+    // allowed, so the agent asks nothing in `ask`, and the place lands.
+    let live = Live::with_fix_agents("live-mode", "mode = \"ask\"\n");
+    let launched = live.walk.flume(&[
+        "launch",
+        "--kind",
+        "fix",
+        "--name",
+        "one",
+        "--brief",
+        "Create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
+    ]);
+    let place = format!("{}/places/fix--one", live.walk.repository.name());
+    // Read from the launch's own answer, which no landing can outrun.
+    let mode = json!({ "passed": "manual", "entry": null, "read_back": true });
+    let agent = &launched["launched"]["place"]["agent"];
+    assert_eq!(
+        (&agent["settings"]["from"]["mode"], &agent["mode"]),
+        (&json!({ "layer": "host-kind", "value": "ask" }), &mode),
+        "{launched}"
+    );
+    // As in the fix's walkthrough, the place may be tidied between two
+    // reads. A start begun in another mode would be ended and code started
+    // afresh in the same mode, never begun, which `until` refuses at once,
+    // so a landing too says the first start's ack was taken.
+    let begun = live.until(&place, "its code stage begun or tidied", 5, |status| {
+        status.is_null() || status["agent"]["started"] == "yes"
+    });
+    if !begun.is_null() {
+        assert_eq!(begun["agent"]["mode"], mode, "{begun}");
+        assert_eq!(stage(&begun, "code")["starts"], 1, "{begun}");
+        assert!(
+            begun["unsettled"].as_array().is_none_or(Vec::is_empty),
+            "{begun}"
+        );
+    }
+    live.until_landed(&place, 20);
+
+    let submissions = live.walk.submissions();
+    assert_eq!(submissions.len(), 1, "{submissions:?}");
+    assert_eq!(submissions[0]["state"], "landed", "{}", submissions[0]);
     let parser = live.walk.on_remote("parser.rs").unwrap_or_default();
     assert!(parser.contains("fn parse()"), "parser.rs: {parser:?}");
 }
