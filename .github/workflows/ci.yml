@@ -1,8 +1,11 @@
 # flume on GitHub: the fast layer runs in the devenv shell a session uses,
 # on Linux and macOS, so CI and `sluice exec` hold a tree to the same rules
 # (core.22), and each push to main that git-cliff finds a new version in is
-# released (cliff.toml). flume's own gate is sluice (.config/sluice.toml);
-# this is the public check.
+# released (cliff.toml): its tag names a release commit cut from the pushed
+# one with the release's version written into the workspace and each
+# plugin's manifest (set-version.sh), and the release branch the
+# marketplace is read at is moved to it. flume's own gate is sluice
+# (.config/sluice.toml); this is the public check.
 name: ci
 
 on:
@@ -45,6 +48,8 @@ jobs:
 
   # The commits since the last release are conventional (.versionrc): a
   # session can skip the commit-msg hook, and git-cliff releases from them.
+  # The newest tag names a release commit off main, so the range runs from
+  # the newest tag by version, not from the newest main's history holds.
   # Merge commits are not checked.
   conventional:
     runs-on: ubuntu-latest
@@ -54,11 +59,12 @@ jobs:
           fetch-depth: 0
       - uses: cachix/install-nix-action@v31
       - run: |
-          last="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          last="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
           nix shell nixpkgs#convco -c convco check ${last:+"$last..HEAD"}
 
-  # The next version from the commits since the last v* tag; empty when
-  # it is already tagged.
+  # The next version from the commits since the newest v* tag; empty when
+  # it is already tagged. `--unreleased` starts the range at the newest tag,
+  # which is off main's history.
   version:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -71,7 +77,7 @@ jobs:
       - uses: cachix/install-nix-action@v31
       - id: next
         run: |
-          tag="$(nix shell nixpkgs#git-cliff -c git-cliff --bumped-version)"
+          tag="$(nix shell nixpkgs#git-cliff -c git-cliff --unreleased --bumped-version)"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             echo "$tag is already released"
           else
@@ -79,8 +85,11 @@ jobs:
           fi
 
   # The binary for each platform, built by the Rust rust-toolchain.toml
-  # names. Linux's is static, against musl, and macOS's links only the
-  # system's libraries, so each runs on a host with no Nix and no Rust.
+  # names from the tree the release commit holds: the pushed commit with
+  # the release's version written (set-version.sh), so it carries the
+  # version its plugins do. Linux's is static, against musl, and macOS's
+  # links only the system's libraries, so each runs on a host with no Nix
+  # and no Rust.
   binaries:
     if: needs.version.outputs.tag != ''
     needs: [version, fast, conventional]
@@ -113,16 +122,21 @@ jobs:
           rustup toolchain install
           rustup target add "$TARGET"
       - run: |
-          FLUME_VERSION="${TAG#v}" cargo build --release --locked -p flume --bin flume --target "$TARGET"
-          "target/$TARGET/release/flume" --version
+          sh set-version.sh "${TAG#v}"
+          cargo build --release --locked -p flume --bin flume --target "$TARGET"
+          test "$("target/$TARGET/release/flume" --version)" = "flume ${TAG#v}"
           tar -czf "flume-${{ matrix.system }}.tar.gz" -C "target/$TARGET/release" flume
       - uses: actions/upload-artifact@v4
         with:
           name: flume-${{ matrix.system }}
           path: flume-${{ matrix.system }}.tar.gz
 
-  # Tags the pushed commit and publishes the binaries with git-cliff's
-  # notes for the range. Nothing is committed back to main.
+  # git-cliff's notes for the range, then the release commit: the pushed
+  # commit with the release's version written into the files that carry it
+  # (set-version.sh), which the tag names, herdr installs the plugin at,
+  # and the release branch, which the marketplace is read at, is moved to.
+  # It publishes the binaries under the tag. Nothing is committed to main,
+  # which only sluice lands.
   release:
     needs: [version, binaries]
     runs-on: ubuntu-latest
@@ -140,7 +154,14 @@ jobs:
       - run: |
           nix shell nixpkgs#git-cliff -c \
             git-cliff --unreleased --tag "$TAG" --strip all > notes.md
-          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
+          sh set-version.sh "${TAG#v}"
+          # The files set-version.sh wrote are the only tracked ones changed.
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -a -m "chore(release): $TAG"
+          git tag "$TAG"
+          git push --atomic origin "refs/tags/$TAG" "+HEAD:refs/heads/release"
+          gh release create "$TAG" --verify-tag --title "$TAG" \
             --notes-file notes.md flume-*.tar.gz
         env:
           TAG: ${{ needs.version.outputs.tag }}
