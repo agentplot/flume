@@ -139,7 +139,8 @@ place gives:
 The host part gives the agents running, the bound, the room, the
 queue, each stream's and each pool's part, the watch, each base's
 count, the role addresses with ends pending, and what a tidy kept in
-the terminal.
+the terminal. Where the terminal keeps no watch, it says so: places
+then move on only at flume's commands and when their agents go quiet.
 
 flume reads each fact where it lives when asked, and keeps none
 between asks. The [state reference](/flume/reference/state/) lists the
@@ -264,7 +265,8 @@ starts the next stage or the waiting ones there is room for, and
 submits. It collects the merge queue's outcomes, delivers pending
 ends, wakes roles and tidies. Safe to repeat. `--on-quiet` first reads the place's
 agent until it is quiet, for up to sixty seconds; the Stop hook runs it.
-herdr's watch runs `flume settle` whenever an agent changes state.
+herdr's watch runs `flume settle` whenever an agent changes state,
+comes up or goes.
 
 ## `flume wait`
 

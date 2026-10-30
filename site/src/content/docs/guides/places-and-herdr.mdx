@@ -96,6 +96,10 @@ flume keeps its agents in a herdr session of its own, named `flume`:
   herdr's `agent start`, with the agent's environment set on the pane,
   so nothing is typed into a shell. The pane's shell reads no startup
   file, so nothing in your shell's files reorders the pane's `PATH`.
+  The command that opened the agent, a launch, a retry or a settle,
+  sends it its prompt once the agent has said it started and waits. The
+  settles that follow read whether it was received. Until that
+  command's open is done, nothing else is sent to the agent.
 
 Each agent carries a herdr name made from its identity, at most 32
 characters and ending in a digest of it. flume holds a pane by its id
@@ -136,10 +140,10 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
 
 - **The watch.** herdr starts it with its server, one per server. Every
   two seconds it reads every pane's agent state in one listing. When one
-  of flume's agents changes state, or thirty seconds pass, it runs
-  `flume settle`, then writes `flume status --json` for the sidebar and
-  the popup. An agent that crashed, hung or was killed is read within
-  that bound. While the watch's lease is fresh, flume's commands leave
+  of flume's agents changes state, an agent comes up or goes in one of
+  the server's panes, or thirty seconds pass, it runs `flume settle`,
+  then writes `flume status --json` for the sidebar and the popup. An
+  agent that crashed, hung or was killed is read within that bound. While the watch's lease is fresh, flume's commands leave
   the settling to it; once it stops, each command settles every place
   first, as with no watch.
 - **Display hints.** After each settle the watch titles each agent's

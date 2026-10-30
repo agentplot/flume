@@ -77,7 +77,8 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
 `terminal = "herdr"` under `[host]`. It brings:
 
 - **the watch**, one per herdr server, which runs `flume settle` when
-  one of flume's agents changes state and every thirty seconds. A place
+  one of flume's agents changes state, when an agent comes up or goes
+  in one of the server's panes, and every thirty seconds. A place
   moves on with no command of yours, and the watch reads an agent that
   crashed, hung or was killed within that bound;
 - **a row on each agent's sidebar entry**, such as
