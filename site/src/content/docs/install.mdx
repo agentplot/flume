@@ -103,8 +103,18 @@ For `/launch` and status in your own sessions, add flume's marketplace
 and install the plugin from it:
 
 ```text
-/plugin marketplace add agentplot/flume
+/plugin marketplace add agentplot/flume#release
 /plugin install flume@flume
+```
+
+The marketplace is read at the `release` branch, which each release
+moves to the commit its tag names, so the plugin there carries the
+release's version, as the herdr plugin does at the tag. To take a new
+release, update the marketplace, then the plugin:
+
+```text
+/plugin marketplace update flume
+/plugin update flume@flume
 ```
 
 `/launch <brief>` then chooses a kind and a name with you and runs

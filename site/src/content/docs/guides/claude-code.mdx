@@ -143,9 +143,13 @@ For `/launch` and status in your own Claude Code sessions, add flume's
 marketplace and install the plugin from it:
 
 ```text
-/plugin marketplace add agentplot/flume
+/plugin marketplace add agentplot/flume#release
 /plugin install flume@flume
 ```
+
+The `release` branch holds each release's commit, so the plugin carries
+the release's version: `/plugin marketplace update flume`, then
+`/plugin update flume@flume`, takes a new one.
 
 - **`/launch <brief>`** chooses a kind and a name with you, runs
   `flume launch --kind <kind> --name <name> --brief "<brief>" --json`
