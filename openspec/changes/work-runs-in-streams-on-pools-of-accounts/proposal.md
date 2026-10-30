@@ -131,9 +131,9 @@ settings, never left running a stage under the wrong account (35, 135,
   the claim, the spent and unsettled fresh starts in the settle, status.
 - `crates/flume`: `host/config.rs`, the state directory's host
   documents, the kinds profile's agents tables, the Claude Code
-  profile's `spent` and its hook's comparison, the command line and MCP
-  launch, the person's status form, and the walkthroughs with the
-  stand-in and the live harness, on pools.
+  profile's `spent` and its hook's comparison, the command line, the
+  person's status form, and the walkthroughs with the stand-in and the
+  live harness, on pools.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fakes' new
   answers, the engine scenarios citing 143 to 147, 151, 153, 161 and
   S53 to S56 and S65, and the clause list.

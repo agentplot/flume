@@ -100,9 +100,9 @@ account is chosen and agents run under the login environment alone
 ### 2. A place's stream and intent
 
 `Launch` gains `stream: Option<String>` and `intent: Option<String>`,
-in its JSON form, on `flume launch --stream <stream> --intent <name>`
-and on the MCP launch tool. `PlaceRecord` gains `stream: StreamHeld {
-name, from }` and `intent: IntentKey`, both kept in held state.
+in its JSON form and on `flume launch --stream <stream> --intent
+<name>`. `PlaceRecord` gains `stream: StreamHeld { name, from }` and
+`intent: IntentKey`, both kept in held state.
 
 `IntentKey` is the launch's name, else the repository and base. Its
 digest, sha256 over `name:<name>` or `base:<repository id>:<base>`,
@@ -299,7 +299,7 @@ when, and `cache: lost`. Unsettled starts are listed with their names.
 its live starts, bound and spent time. The person's form prints a
 place's stream and account on its agent's line, a move on a line of its
 own, and the host's streams and pools under the queue. `flume launch`
-gains `--stream` and `--intent`, and the MCP launch tool the same two
+gains `--stream` and `--intent`, and the launch's JSON form the same two
 fields.
 
 ### 9. The site
