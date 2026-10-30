@@ -79,6 +79,30 @@ the answer in the same settle, as it reads one from the inbox. A
 conflict there starts the fix round as any other does, never a wait as
 if sluice refused the submission.
 
+## A base that takes pull requests
+
+Where the base takes its work as pull requests, sluice pushes the
+place's branch and opens its pull request, or updates the one open.
+Until sluice takes the request in as an entry, its answer names the
+pull request and no entry. The request may wait for a review the base
+asks for, or for the host that takes the base's requests in. The
+submission is then open and waiting, never refused, and the place
+waits on nobody. Status names the pull request and says it is not yet
+taken in, and each settle runs one round of the base's queue, which
+takes the request in where this host takes them in.
+
+Once sluice takes the request in, flume follows the entry it made,
+which sluice records as submitted from `pull/<n>` and from the place's
+branch. sluice delivers that entry's outcome to the pull request
+rather than to the place, so flume reads the landing, the failure or
+the conflict from sluice's record of the entry. An outcome the inbox
+still holds for the place counts too, and flume acts on whichever
+comes first, once. After a fix round flume submits again, sluice
+updates the same pull request, and the entry that failed counts for
+nothing while the update waits to be taken in.
+
+## Whose outcome counts
+
 flume reads landed, failed and conflicting outcomes from sluice's
 record, never from an agent and never from the base's history. A
 submission sluice already held for the branch from before the launch
@@ -103,7 +127,8 @@ reads that place's outcome.
   The built-in prompts tell the agent to merge that revision into the
   place's branch, resolve each file and commit, never to rebase or
   rewrite a commit already on the branch.
-- **Withdrawn** or **refused.** flume records the outcome and delivers
+- **Withdrawn** or **refused.** A pull request closed without landing
+  counts as refused. flume records the outcome and delivers
   it, and the place waits for you: `flume retry <place> --submission`
   submits it again, and `flume drop <place>` gives it up.
 
