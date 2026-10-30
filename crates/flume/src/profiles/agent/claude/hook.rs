@@ -3,17 +3,18 @@
 //! input Claude Code 2.1.296 hands it on standard input, in an agent flume
 //! started, whose environment names its start (`FLUME_AGENT`), the start's
 //! secret, its place and its stage. SessionStart compares the agent's
-//! program and environment with its start's record before it acks (161).
+//! program and environment with its start's record before it acks, and,
+//! at the start's first word, the mode its session began in (161, 162).
 //! Outside such an agent every hook does nothing. A hook never fails and never holds up a start or a turn: what
 //! it cannot do it leaves undone, and it always exits 0; it answers only
 //! through the JSON Claude Code reads, a refused command's reason or a
 //! stop's.
 
 use super::record::{self, Asking, Failure, Record, Started};
-use super::{as_received, collapsed, digest, guard, wrapper, AGENT, PLACE, SECRET, STAGE};
+use super::{as_received, collapsed, digest, guard, mode, wrapper, AGENT, PLACE, SECRET, STAGE};
 use crate::host::process::{parent_executable, program_path};
 use flume_core::{variable_digest, Answer, Engine};
-use flume_seams::{Secret, StartRecord, Unsettled};
+use flume_seams::{ModeBegan, Secret, StartRecord, Unsettled};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -91,13 +92,18 @@ impl Start {
 /// whether the program the record names, found on `path` as the command
 /// finds it and run in a nix wrapper's place, is another than `ran`, the
 /// program this process's parent runs. The program is compared only
-/// where both are read (161; core.10, core.30).
+/// where both are read. Where `began` is given, the mode the session
+/// began in as the start's record names it, none where its word named
+/// none, it is compared with the record's mode, and one that differs is
+/// named with the mode asked and the mode begun (161, 162; core.10,
+/// core.30).
 pub fn compare(
     recorded: &StartRecord,
     secret: &Secret,
     variable: impl Fn(&str) -> Option<String>,
     ran: Option<&Path>,
     path: &str,
+    began: Option<Option<&str>>,
 ) -> Unsettled {
     let mut unsettled = Unsettled::default();
     for (name, digest) in &recorded.env {
@@ -115,20 +121,34 @@ pub fn compare(
     if let (Some(named), Some(ran)) = (named, ran) {
         unsettled.program = canonical(&named) != canonical(ran);
     }
+    if let (Some(asked), Some(began)) = (&recorded.mode, began) {
+        if began != Some(asked.as_str()) {
+            unsettled.mode = Some(ModeBegan {
+                asked: asked.clone(),
+                began: began.map(str::to_string),
+            });
+        }
+    }
     unsettled
 }
 
 /// The started ack: the start's session, its transcript, how it began and
 /// the plugin's version, taken only with the start's secret and only where
 /// this process's parent runs the program the start's record names and
-/// every variable the record names matches it; it clears the asking mark.
-/// Where anything differs it is not taken: the agent's record says what
-/// differed, by name alone, and a settle of the place is started detached,
+/// every variable the record names matches it, and, where the record
+/// names a mode and the start holds no started ack yet, `began`, the mode
+/// the session began in as the program names it, read through
+/// [`mode::began`], is the record's; it clears the asking mark. A start
+/// already acked compares no mode, since a started session's mode is its
+/// own. Where anything differs it is not taken: the agent's record says
+/// what differed, a variable by name alone and a mode by the mode asked
+/// and the mode begun, and a settle of the place is started detached,
 /// which ends the agent once quiet and starts its stage afresh (35, 90,
-/// 121, 135, 161).
+/// 121, 135, 161, 162).
 pub fn ack_started(
     start: &Start,
     started: &Started,
+    began: Option<&str>,
     build: &dyn Fn() -> Result<Engine, String>,
     binary: &Path,
 ) -> Result<String, String> {
@@ -139,12 +159,14 @@ pub fn ack_started(
     };
     let (folder, recorded) = build()?.start_record(agent, secret)?;
     let record = Record::named(&folder, agent);
+    let first = recorded.mode.is_some() && record.started().is_none();
     let unsettled = compare(
         &recorded,
         &Secret(secret.clone()),
         |name| std::env::var_os(name).map(|value| value.to_string_lossy().into_owned()),
         parent_executable().as_deref(),
         &std::env::var("PATH").unwrap_or_default(),
+        first.then(|| began.map(mode::began)),
     );
     if unsettled != Unsettled::default() {
         record
@@ -221,7 +243,8 @@ pub fn hook(
                 source: text("source"),
                 plugin_version: start.plugin_version(),
             };
-            let _ = ack_started(start, &started, build, binary);
+            let began = input[mode::FIELD].as_str();
+            let _ = ack_started(start, &started, began, build, binary);
             String::new()
         }
         "user-prompt-submit" if !subagent => {

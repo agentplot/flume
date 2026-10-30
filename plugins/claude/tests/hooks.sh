@@ -224,6 +224,27 @@ hook session-start session-start.json "${two[@]}" PATH="$scratch/elsewhere:$PATH
 [ "$(status | jq -r .agent.started)" = no ] || fail "the ack was taken under another program"
 jq -e '.program == true' "$(unsettled)" >/dev/null || fail "the record does not say the program differed"
 
+# Another mode: a place launched with flume's full, which the start passes
+# as bypassPermissions, its session begun in `default`, as Claude Code
+# begins where the account's configuration disables the mode asked: no
+# started ack, the agent's record naming the mode asked and the mode
+# begun, `default` read as `manual` (161, 162, S67).
+(cd "$repo" && "$flume" launch --kind fix --name three --brief "fix the reader" \
+  --kinds "$fixtures/kinds.toml" --agent mode=full --json >/dev/null) || fail "the launch in full"
+place=$repo/places/fix--three
+[ "$(status | jq -r .agent.mode.passed)" = bypassPermissions ] ||
+  fail "the start does not record bypassPermissions: $(status | jq -c .agent.mode)"
+printed=$(status | jq -r '.agent.printed')
+envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
+three=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"
+FLUME_PLACE="$(word FLUME_PLACE)" FLUME_STAGE="$(word FLUME_STAGE)"
+CLAUDE_PLUGIN_ROOT="$plugin" PATH="$hookpath" CLAUDE_CONFIG_DIR="$scratch/account-1")
+hook session-start session-start-default.json "${three[@]}" >/dev/null || fail "session-start exited non-zero"
+[ "$(status | jq -r .agent.started)" = no ] || fail "the ack was taken in another mode"
+word_file=$(find "$XDG_STATE_HOME" -path "*fix--three*" -name unsettled.json | head -n 1)
+jq -e '.mode == {"asked": "bypassPermissions", "began": "manual"} and .different == [] and .missing == [] and .program == false' \
+  "${word_file:-/dev/null}" >/dev/null || fail "the record does not name both modes: $(cat "${word_file:-/dev/null}")"
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures of the plugin's hook checks failed" >&2
   exit 1

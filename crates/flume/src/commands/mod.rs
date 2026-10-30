@@ -208,6 +208,10 @@ enum Ack {
         /// The version of flume's plugin the agent loaded.
         #[arg(long)]
         plugin_version: String,
+        /// The mode the session began in, as its program names it,
+        /// compared where its start recorded a mode (161, 162).
+        #[arg(long)]
+        mode: Option<String>,
     },
     /// The agent received a prompt, by the digest of its text, paste tags
     /// taken off and whitespace collapsed (89).
@@ -333,9 +337,15 @@ where
                     transcript,
                     source,
                     plugin_version,
-                } => {
-                    crate::profiles::ack_started(session, transcript, source, plugin_version, build)
-                }
+                    mode,
+                } => crate::profiles::ack_started(
+                    session,
+                    transcript,
+                    source,
+                    plugin_version,
+                    mode.as_deref(),
+                    build,
+                ),
                 Ack::Received { digest } => crate::profiles::ack_received(digest, build),
             };
             return match acked {

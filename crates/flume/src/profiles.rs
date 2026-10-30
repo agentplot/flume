@@ -398,12 +398,14 @@ pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>
 
 /// The started ack of the agent this process's environment names: its
 /// session, transcript, source and plugin version, taken only where the
-/// start's record matches it (135, 161).
+/// start's record matches it, the mode the session began in, as its
+/// program names it, among it (135, 161, 162).
 pub fn ack_started(
     session: &str,
     transcript: &str,
     source: &str,
     plugin_version: &str,
+    mode: Option<&str>,
     build: &dyn Fn() -> Result<Engine, String>,
 ) -> Result<String, String> {
     let binary = std::env::current_exe()
@@ -417,6 +419,7 @@ pub fn ack_started(
             source: source.into(),
             plugin_version: plugin_version.into(),
         },
+        mode,
         build,
         &binary,
     )
