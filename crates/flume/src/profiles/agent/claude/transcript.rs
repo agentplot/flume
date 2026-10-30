@@ -8,8 +8,8 @@
 //! `<command-name>` and `<command-args>`, and the end of work started in
 //! the background a `<task-notification>` naming its `<task-id>`.
 
-use super::collapsed;
 use super::record::Asking;
+use super::{as_received, collapsed};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::io::ErrorKind;
@@ -103,16 +103,16 @@ impl Transcript {
     }
 
     /// Whether the transcript holds `prompt` as a user turn or a queued
-    /// prompt, a slash command as its name and arguments, whitespace
-    /// collapsed (89).
+    /// prompt, a slash command as its name and arguments, paste tags taken
+    /// off and whitespace collapsed (89).
     pub fn holds_prompt(&self, prompt: &str) -> bool {
-        let wanted = collapsed(prompt);
+        let wanted = as_received(prompt);
         let command = wanted.strip_prefix('/').map(|rest| {
             let (name, args) = rest.split_once(' ').unwrap_or((rest, ""));
             (format!("/{name}"), args.to_string())
         });
         self.prompts().iter().any(|text| {
-            if collapsed(text) == wanted {
+            if as_received(text) == wanted {
                 return true;
             }
             let Some((name, args)) = &command else {

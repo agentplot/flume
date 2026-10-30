@@ -7,7 +7,8 @@
 //! submission and a conflicting one each go back to code with sluice's
 //! words and land on the second (112); a change runs construct, code and
 //! verify, its report committed in the archived change (S2, S35); verify
-//! finding work sends the place back to code (131); a host's bound
+//! finding work sends the place back to code (131); a fix whose prompt
+//! Claude Code submits inside paste tags lands (89); a host's bound
 //! queues a launch and starts the waiting ones by priority (S37); and
 //! change@2's code stage works a change of three task groups one fresh
 //! agent at a time, and a failed submission sends it back for one
@@ -105,6 +106,30 @@ fn a_fix_lands_through_flumes_own_submission() {
     );
     assert!(!std::path::Path::new(&place).exists(), "the place is left");
     assert!(!walk.has_branch("fix/one"), "the place's branch is left");
+}
+
+#[test]
+fn a_fix_lands_when_its_prompt_is_submitted_inside_paste_tags() {
+    // A terminal sends the prompt as a paste, and the pinned Claude Code,
+    // where the account's features turn paste tags on, submits it inside
+    // `<pasted_content id="....">` tags: the stage still reads its prompt
+    // received and begun, and the fix lands, where a signed-in agent's
+    // stage read never begun while it did the work (38, 89; record 0016).
+    let walk = Walk::new("walk-paste");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    walk.agent_with(
+        &place,
+        commits("parser.rs", "fn parse() {}\n"),
+        &[("STAND_IN_PASTE_TAG", "fad0")],
+    );
+    walk.until(&place, "landed and tidied", |status| {
+        assert_ne!(stage(status, "code")["state"], "never_begun", "{status}");
+        status.is_null()
+    });
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
 }
 
 #[test]

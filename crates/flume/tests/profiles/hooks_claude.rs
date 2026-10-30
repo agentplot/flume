@@ -389,6 +389,32 @@ fn the_started_and_received_acks() {
 }
 
 #[test]
+fn a_prompt_submitted_as_a_paste_is_acked_as_sent() {
+    // A terminal sends the prompt as a paste, and Claude Code 2.1.296,
+    // where the account's features turn paste tags on, submits it inside
+    // `<pasted_content id="....">` tags, newlines around them: the ack is
+    // the digest of the prompt as sent, so the stage begins (38, 89;
+    // record 0016).
+    let host = Host::new("paste-acks");
+    let agent = host.launch("fix");
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    host.hook(
+        &agent,
+        "user-prompt-submit",
+        json!({ "prompt": "\n\n<pasted_content id=\"fad0\">\nfix the  parser\nand commit it\n</pasted_content id=\"fad0\">\n" }),
+    );
+    let record = flume::profiles::agent::claude::record::Record::named(
+        &host
+            .path("state/flume/places")
+            .join(agent.place.trim_start_matches('/').replace('/', "%"))
+            .to_string_lossy(),
+        &agent.identity,
+    );
+    let wanted = flume::profiles::agent::claude::digest("fix the parser and commit it");
+    assert_eq!(record.received(&wanted), Some(true), "the prompt's digest");
+}
+
+#[test]
 fn a_subagents_input_acks_nothing() {
     let host = Host::new("subagent-acks");
     let agent = host.launch("fix");

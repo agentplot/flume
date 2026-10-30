@@ -21,6 +21,10 @@
 //! - `{"wait_for": "<file>"}`: nothing until the file exists, for up to
 //!   two minutes, so a test reads status in the middle of a stage.
 //!
+//! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
+//! a four-hex-digit id, inside the paste tags that release wraps a pasted
+//! prompt in where the account's features turn them on.
+//!
 //! Then the turn ends: Stop, once more with `stop_hook_active` where the
 //! hook blocked it, and the session ends, as a person leaves the printed
 //! command's session, with SessionEnd. Each act is printed on standard
@@ -56,6 +60,19 @@ fn main() {
     let mut session = Session::new(cwd, plugin);
     let failed = session.run(prompt.as_deref());
     std::process::exit(i32::from(failed));
+}
+
+/// The prompt as the session submits it: as given, or where
+/// `STAND_IN_PASTE_TAG` names a tag's id, inside the tags Claude Code
+/// 2.1.296 wraps a pasted prompt in where the account's features turn them
+/// on, newlines around them.
+fn submitted(prompt: &str) -> String {
+    match std::env::var("STAND_IN_PASTE_TAG") {
+        Ok(id) if !id.is_empty() => {
+            format!("\n\n<pasted_content id=\"{id}\">\n{prompt}\n</pasted_content id=\"{id}\">\n")
+        }
+        _ => prompt.to_string(),
+    }
 }
 
 /// One session of the stand-in.
@@ -125,9 +142,10 @@ impl Session {
         let mut failed = false;
         if let Some(prompt) = prompt {
             self.prompt = prompt.to_string();
-            self.queued(prompt);
-            self.hook("UserPromptSubmit", json!({ "prompt": prompt }), None);
-            self.user(json!(prompt));
+            let submitted = submitted(prompt);
+            self.queued(&submitted);
+            self.hook("UserPromptSubmit", json!({ "prompt": submitted }), None);
+            self.user(json!(submitted));
             let script = std::env::var("STAND_IN_SCRIPT")
                 .ok()
                 .and_then(|file| std::fs::read_to_string(file).ok())

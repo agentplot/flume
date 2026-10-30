@@ -286,6 +286,12 @@ impl Walk {
     /// The printed command run as a person runs it, the stand-in acting
     /// `acts`; started, not waited on.
     pub fn start_agent(&self, place: &str, acts: Value) -> Child {
+        self.start_agent_with(place, acts, &[])
+    }
+
+    /// The printed command run as a person runs it, the stand-in acting
+    /// `acts` with the variables `env` adds; started, not waited on.
+    pub fn start_agent_with(&self, place: &str, acts: Value, env: &[(&str, &str)]) -> Child {
         let printed = self.printed(place);
         self.runs.set(self.runs.get() + 1);
         let script = self
@@ -296,6 +302,7 @@ impl Walk {
         self.command("sh", &self.repository.dir)
             .args(["-c", &printed])
             .env("STAND_IN_SCRIPT", &script)
+            .envs(env.iter().copied())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -305,7 +312,13 @@ impl Walk {
     /// The printed command run to its end, the stand-in acting `acts`;
     /// it must end well.
     pub fn agent(&self, place: &str, acts: Value) -> String {
-        let ran = finish(self.start_agent(place, acts));
+        self.agent_with(place, acts, &[])
+    }
+
+    /// The printed command run to its end, the stand-in acting `acts` with
+    /// the variables `env` adds; it must end well.
+    pub fn agent_with(&self, place: &str, acts: Value, env: &[(&str, &str)]) -> String {
+        let ran = finish(self.start_agent_with(place, acts, env));
         assert_eq!(ran.code, 0, "the stand-in in {place}: {}", ran.out);
         ran.out
     }
