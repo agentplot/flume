@@ -149,10 +149,10 @@ fn no_branch_moved_but_its_own(_: &()) -> Outcome {
 fn no_question_answered(_: &()) -> Outcome {
     let world = World::new();
     let id = World::id("fix", "one");
-    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
     let code = World::identity("fix", "one", "code", 1);
-    world.terminal.set_state(&code, AgentState::Asking);
+    world.terminal.comes_up(AgentState::Asking);
     world.agent.set_asking(&code, Reading::Yes);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
     for _ in 0..5 {
         world.host.advance(60);
         world.engine().settle(None);

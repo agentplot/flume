@@ -8,16 +8,33 @@
 //! never begun when no sending is received. A start that carried its
 //! prompt counts its one sending from the agent's word that it started.
 //! A sending is written to held state before it is made, so two settles
-//! at once send it once (75).
+//! at once send it once (75). While the command opening a start's agent
+//! lives, the terminal may still be bringing its program up, so nothing
+//! else is sent to it or answered in it; a start whose opener is gone
+//! is read as opened (34, 35).
 
 use crate::start::Starts;
 use crate::{Engine, Step, POLL, QUIET_LIMIT, RECEIVED_WITHIN};
 use flume_seams::*;
 
 impl Engine {
-    /// Moves the current start's prompt on as far as its agent allows;
-    /// true when the stage's state changed.
+    /// Moves the current start's prompt on as far as its agent allows,
+    /// reading each sending back within 60 seconds; true when the stage's
+    /// state changed.
     pub(crate) fn deliver(&self, id: &PlaceId) -> bool {
+        self.deliver_reading(id, true)
+    }
+
+    /// Sends the current start's prompt where its agent allows it now,
+    /// and leaves its receipt to the settles that follow; true when the
+    /// stage's state changed (6, 38).
+    pub(crate) fn send_prompt(&self, id: &PlaceId) -> bool {
+        self.deliver_reading(id, false)
+    }
+
+    /// Moves the current start's prompt on, waiting on a sending's
+    /// receipt only where `read_back`.
+    fn deliver_reading(&self, id: &PlaceId, read_back: bool) -> bool {
         let mut sent = false;
         loop {
             let Some(read) = self.store.read(id) else {
@@ -32,6 +49,9 @@ impl Engine {
                 return sent;
             };
             if !matches!(stage.state, StageState::Starting | StageState::Started) {
+                return sent;
+            }
+            if start.opening.as_ref().is_some_and(|by| self.host.alive(by)) {
                 return sent;
             }
             let Some(agent) = self.agent(&start.program) else {
@@ -97,6 +117,9 @@ impl Engine {
             if let Some(last) = prompt.sendings.last() {
                 let waited = now.saturating_sub(*last);
                 if waited < RECEIVED_WITHIN {
+                    if !read_back {
+                        return sent;
+                    }
                     self.host.sleep(POLL.min(RECEIVED_WITHIN - waited));
                     continue;
                 }

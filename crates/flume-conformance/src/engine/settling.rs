@@ -33,6 +33,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s28_crashed_under_a_watch,
         },
         Scenario {
+            name: "settle: under a watch, a launch and a retry each send the agent they opened its prompt, waiting on no receipt, which the watch's settles read",
+            cites: &["6", "37", "38", "46", "49", "122"],
+            run: opened_and_sent_under_a_watch,
+        },
+        Scenario {
             name: "settle: a settle repeated changes nothing",
             cites: &["74", "46"],
             run: a_settle_repeated,
@@ -327,6 +332,62 @@ fn s28_crashed_under_a_watch(_: &()) -> Outcome {
         "the stage the watch read"
     );
     ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
+    Ok(())
+}
+
+fn opened_and_sent_under_a_watch(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    let id = World::id("fix", "one");
+    let first = World::identity("fix", "one", "code", 1);
+    let at = world.host.now();
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure_eq!(
+        world.terminal.sent_to(&first).len(),
+        1,
+        "the launch's sendings"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the code stage after the launch"
+    );
+    let second = World::identity("fix", "one", "code", 2);
+    world.agent.receives_at(&second, Some(2));
+    let retried = world
+        .engine()
+        .retry(&id, Retry::Stage("code".into()), None, false);
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    ensure_eq!(
+        world.terminal.sent_to(&second).len(),
+        1,
+        "the retry's sendings"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Started),
+        "the code stage after the retry, its sending not yet received"
+    );
+    ensure_eq!(
+        world.host.now(),
+        at,
+        "the time the launch and the retry waited"
+    );
+    world.host.advance(30);
+    world.engine().settle(None);
+    ensure_eq!(
+        world.terminal.sent_to(&second).len(),
+        2,
+        "sendings once the watch read the first not received within 60 seconds"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the code stage"
+    );
     Ok(())
 }
 

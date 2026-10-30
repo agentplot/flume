@@ -231,6 +231,7 @@ fn held() -> HeldState {
                     title: Some("Task groups".into()),
                     tasks: vec!["2.1 add the groups".into(), "2.2 read them".into()],
                 }),
+                opening: Some("4242@Thu Oct 30 15:45:50 2026".into()),
             }),
             since: Some(120),
         }],

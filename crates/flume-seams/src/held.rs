@@ -693,6 +693,12 @@ pub struct StartHeld {
     /// where every task was ticked there (140).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupHeld>,
+    /// The command of flume's opening the agent, as the host names it,
+    /// until the terminal's open answers: while it lives, the terminal may
+    /// still be bringing the program up, and no other command sends the
+    /// prompt or answers the program's questions (34, 35, 37).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opening: Option<String>,
 }
 
 /// What a start's agent is to run under (161): the program its settings
