@@ -14,7 +14,9 @@
 //! agent at a time, and a failed submission sends it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
 //! code agent stops at its account's usage limit moves to the pool's
-//! second account and lands (S55; 146, 151).
+//! second account and lands (S55; 146, 151); and a fix whose first code
+//! agent comes up without its account's variable is ended and its stage
+//! started afresh under the account, and lands (S65; 161).
 
 use super::walk::*;
 use serde_json::{json, Value};
@@ -678,4 +680,67 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
             account.display()
         );
     }
+}
+
+#[test]
+fn a_start_without_its_account_is_ended_and_its_stage_started_afresh() {
+    // S65, 161: the fix's code stage starts under the pool's account, its
+    // `CLAUDE_CONFIG_DIR` a scratch folder, and its program comes up
+    // without the variable, as a pane brought back without its
+    // environment does. Its SessionStart hook acks nothing and records the
+    // variable missing; flume ends that agent, under the printed command
+    // once its session ended, and starts code afresh under the account,
+    // whose agent runs with the variable, delivers, and the place lands.
+    // Status names `CLAUDE_CONFIG_DIR` and no value.
+    let walk = Walk::new("walk-unsettled");
+    let account = walk.account().to_path_buf();
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let out = walk.agent(&place, json!([{ "unset": "CLAUDE_CONFIG_DIR" }]));
+    assert!(!out.contains("stop blocked"), "{out}");
+
+    let status = walk.until(&place, "code started afresh", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    let unsettled = status["unsettled"].as_array().cloned().unwrap_or_default();
+    assert_eq!(unsettled.len(), 1, "{status}");
+    assert_eq!(
+        (
+            &unsettled[0]["stage"],
+            &unsettled[0]["start"],
+            &unsettled[0]["missing"],
+            &unsettled[0]["different"],
+            &unsettled[0]["program"]
+        ),
+        (
+            &json!("code"),
+            &json!(1),
+            &json!(["CLAUDE_CONFIG_DIR"]),
+            &json!([]),
+            &json!(false)
+        ),
+        "{status}"
+    );
+    assert!(
+        !status.to_string().contains(&*account.to_string_lossy()),
+        "status holds the variable's value: {status}"
+    );
+    assert_eq!(status["agent"]["account"]["name"], "stand-in-1", "{status}");
+    assert!(stage(&status, "code")["end"].is_null(), "{status}");
+    assert!(status["waiting_on"].is_null(), "{status}");
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.contains("began without the settings its start recorded"),
+        "flume's words: {prompt}"
+    );
+
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+    assert!(
+        account.join("projects").exists(),
+        "the fresh agent ran under the account's CLAUDE_CONFIG_DIR"
+    );
 }

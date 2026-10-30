@@ -23,7 +23,11 @@
 //! - `{"fail": {"error": "<error>", "words": "<words>"}}`: the turn ends
 //!   there as that release ends a turn the API failed, the words written
 //!   as its error message and StopFailure run with the error and the
-//!   words in place of Stop, no later act made.
+//!   words in place of Stop, no later act made;
+//! - `{"unset": "<name>"}`: the variable is gone from the session's
+//!   environment before the session starts, wherever the act stands, as a
+//!   pane brought back without it starts the program, so neither the
+//!   session's hooks nor its transcript's folder see it.
 //!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
@@ -61,9 +65,19 @@ fn main() {
             given => prompt = Some(given.to_string()),
         }
     }
+    let script = std::env::var("STAND_IN_SCRIPT")
+        .ok()
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or(json!([]));
+    for act in script.as_array().into_iter().flatten() {
+        if let Some(name) = act["unset"].as_str() {
+            std::env::remove_var(name);
+        }
+    }
     let cwd = std::env::current_dir().expect("the place");
     let mut session = Session::new(cwd, plugin);
-    let failed = session.run(prompt.as_deref());
+    let failed = session.run(prompt.as_deref(), &script);
     std::process::exit(i32::from(failed));
 }
 
@@ -138,7 +152,7 @@ impl Session {
 
     /// The session: its start, the prompt, the script's acts, the stop
     /// and the end. Whether an act failed.
-    fn run(&mut self, prompt: Option<&str>) -> bool {
+    fn run(&mut self, prompt: Option<&str>, script: &Value) -> bool {
         if let Some(dir) = self.transcript.parent() {
             std::fs::create_dir_all(dir).expect("the transcript's folder");
         }
@@ -151,11 +165,6 @@ impl Session {
             self.queued(&submitted);
             self.hook("UserPromptSubmit", json!({ "prompt": submitted }), None);
             self.user(json!(submitted));
-            let script = std::env::var("STAND_IN_SCRIPT")
-                .ok()
-                .and_then(|file| std::fs::read_to_string(file).ok())
-                .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-                .unwrap_or(json!([]));
             for act in script.as_array().into_iter().flatten() {
                 if let Some(failure) = act.get("fail") {
                     self.fail(failure);
@@ -254,6 +263,10 @@ impl Session {
         }
         if let Some(files) = act.get("merge_named") {
             return self.merge_named(files);
+        }
+        if act.get("unset").is_some() {
+            // Made before the session started.
+            return true;
         }
         if let Some(file) = act["wait_for"].as_str() {
             let began = Instant::now();
