@@ -7,7 +7,7 @@ use flume_core::{
     group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, StageStatus,
     Tidied, Woke,
 };
-use flume_seams::{HoldOn, IntentKey, Made, UnsettledStart};
+use flume_seams::{HoldOn, IntentKey, Made, UnsettledStart, Watch};
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -423,6 +423,12 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             lines.push(format!("    not woken: {unwoken}"));
         }
     }
+    lines.push(match host.watch {
+        Watch::Bound { seconds } => format!(
+            "  the terminal keeps watch: every place settles every {seconds} seconds and when an agent's state changes"
+        ),
+        Watch::None => "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".into(),
+    });
     lines
 }
 
@@ -597,6 +603,7 @@ mod tests {
                 "    work-1 (agent): 2 agents running of 4".to_string(),
                 "    work-2 (agent): 0 agents running, no bound of its own, spent until 54000"
                     .to_string(),
+                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
             ]
         );
     }
@@ -610,7 +617,19 @@ mod tests {
         };
         assert_eq!(
             person(&status),
-            "no place stands on this host\nhost: 0 agents running, no bound"
+            "no place stands on this host\nhost: 0 agents running, no bound\n  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+        );
+    }
+
+    #[test]
+    fn a_host_under_a_watch() {
+        let host = HostStatus {
+            watch: Watch::Bound { seconds: 30 },
+            ..HostStatus::default()
+        };
+        assert_eq!(
+            host_lines(&host)[1],
+            "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes"
         );
     }
 
@@ -712,6 +731,7 @@ mod tests {
                 "  stream personal, priority 0: 2 agents running of 3, room for 1".to_string(),
                 format!("    {p3}"),
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
+                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
             ]
         );
     }
