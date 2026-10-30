@@ -9,6 +9,7 @@
 //! queue, and a stream's bound holds on a host that states none of its
 //! own.
 
+use super::account_pools::{account, account_of, pool, spent, stream_on};
 use super::settling::{construct_begun, deliver_fix, fix_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -71,6 +72,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "host queue: a stream at its bound holds no other stream's room, and its waiting place keeps its turn for its stream's next room",
             cites: &["70", "143", "46", "31"],
             run: a_full_stream_holds_no_others_room,
+        },
+        Scenario {
+            name: "host queue: a stage whose pool has every account spent is passed over for a stage of another pool behind it, and keeps its turn until an account of its pool is usable",
+            cites: &["70", "145", "46"],
+            run: a_pool_with_nothing_usable,
         },
         Scenario {
             name: "host queue: a stream's priority orders what waits before a place's",
@@ -685,6 +691,52 @@ fn a_streams_bound_on_a_host_with_no_bound(_: &()) -> Outcome {
     ensure!(
         runs(&world, &w2, "code"),
         "w2 did not start at its stream's next room"
+    );
+    Ok(())
+}
+
+fn a_pool_with_nothing_usable(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(2));
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("work-1", None)],
+    );
+    pool(
+        &world,
+        "personal",
+        Strategy::FillFirst,
+        vec![account("personal-1", None)],
+    );
+    stream_on(&world, "work", Some("work"), 10);
+    stream_on(&world, "personal", Some("personal"), 0);
+    let until = world.host.now() + 600;
+    spent(&world, "work", "work-1", until);
+    let w1 = fixes_in(&world, "work", &["w1"], 0)?.remove(0);
+    let p1 = fixes_in(&world, "personal", &["p1"], 0)?.remove(0);
+    ensure!(
+        waits(&world, &w1, "code"),
+        "w1 does not wait for an account"
+    );
+    ensure!(
+        runs(&world, &p1, "code"),
+        "the stage behind was held behind the pool with nothing usable"
+    );
+    let p2 = fixes_in(&world, "personal", &["p2"], 0)?.remove(0);
+    ensure!(runs(&world, &p2, "code"), "p2 was held for w1");
+    ensure_eq!(queue_order(&world)?, vec![w1.clone()], "the queue");
+    world.host.advance(601);
+    end_code(&world, "p2");
+    ensure!(
+        runs(&world, &w1, "code"),
+        "w1 did not take its turn once its pool's account was usable"
+    );
+    ensure_eq!(
+        account_of(&world, &w1, "code"),
+        Some(("work".to_string(), "work-1".to_string())),
+        "w1's account"
     );
     Ok(())
 }

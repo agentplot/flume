@@ -7,6 +7,7 @@
 //! The engine reaches every tool through the seams alone (core.1, core.2)
 //! and keeps its state in the store (core.16).
 
+mod accounts;
 mod acts;
 mod agent_acts;
 mod answer;

@@ -5,6 +5,7 @@
 //! terminal, never while another of the place's is live, and only under
 //! the host's bound (70).
 
+use crate::accounts::Choice;
 use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
 use crate::{repository_id, Engine, Step};
@@ -22,6 +23,15 @@ pub(crate) struct Claim {
     agent: Arc<dyn Agent>,
     /// The session name the agent carries: a role's run's address (132).
     session: Option<String>,
+    /// The account the start runs under (144, 145).
+    account: Option<AccountHeld>,
+}
+
+impl Claim {
+    /// The account the start runs under, none where it has no pool.
+    pub(crate) fn account(&self) -> Option<&AccountHeld> {
+        self.account.as_ref()
+    }
 }
 
 /// What a start came to.
@@ -218,10 +228,23 @@ impl Engine {
         };
         let place = &read.state.place;
         let resolution = self.resolution(place, &place.kind.stages[index]);
+        let queue = admit.queue();
+        let chosen = match &resolution {
+            Ok(resolution) => self.choose_account(
+                place,
+                resolution.resolved.settings.program.as_deref(),
+                queue,
+            ),
+            Err(_) => Choice::NoPool,
+        };
+        let resolution = match &chosen {
+            Choice::Undeclared(reason) => Err(reason.clone()),
+            _ => resolution,
+        };
         let now = self.host.now();
         let made_from = self.store.made(id).len();
         let claimed = self.update(id, |held| {
-            if let Admit::Waiting = admit {
+            if let Admit::Waiting(_) = admit {
                 if held.phase != Phase::Live
                     || held.stages[index].state != StageState::WaitingForRoom
                 {
@@ -272,8 +295,14 @@ impl Engine {
                 }
                 Ok(text) => text,
             };
+            if let (Admit::Waiting(_), Choice::Wait) = (admit, &chosen) {
+                return Step::Keep(Err(Start::WaitingForRoom));
+            }
             if let Admit::Queue(queue) = admit {
-                if queue.must_wait(id, &held.place.stream.name, held.priority) {
+                let program = resolution.resolved.settings.program.as_deref();
+                if matches!(chosen, Choice::Wait)
+                    || queue.must_wait(id, &held.place.stream.name, program, held.priority)
+                {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::WaitingForRoom;
                     stage.room = Some(RoomWait {
@@ -283,6 +312,13 @@ impl Engine {
                     held.current = Some(index);
                     return Step::Write(Err(Start::WaitingForRoom));
                 }
+            }
+            let account = match &chosen {
+                Choice::Chose { held, .. } => Some(held.clone()),
+                _ => None,
+            };
+            if let Some(moved) = self.stage_moved(held, index, account.as_ref(), queue, now) {
+                held.moves.push(moved);
             }
             let secret = self.host.secret();
             let stage = &mut held.stages[index];
@@ -310,7 +346,7 @@ impl Engine {
                 // nothing kept (32, 56).
                 settings: resolution.resolved.settings.unvalued(),
                 from: flume_seams::unvalued_from(&resolution.resolved.from),
-                account: None,
+                account: account.clone(),
                 record: None,
                 prompt: Prompt {
                     text: text.clone(),
@@ -334,6 +370,7 @@ impl Engine {
                 settings: resolution.settings.clone(),
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
+                account,
             }))
         });
         claimed.unwrap_or(Err(Start::NoPlace))
@@ -350,6 +387,7 @@ impl Engine {
             settings,
             agent,
             session,
+            account: _,
         } = claim;
         let command = agent.command(&settings, &place, &identity, &secret, &text);
         let folder = self.store.folder(id);

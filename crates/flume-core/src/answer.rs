@@ -333,14 +333,28 @@ pub struct Queued {
     pub wants: RoomWanted,
 }
 
-/// The room a stage waiting for room is short of (70, 143): the host's,
-/// its own full or taken by stages that rank ahead, or its stream's,
-/// whose bound its agents running have reached.
+/// The room a stage waiting for room is short of (70, 143, 145): the
+/// host's, its own full or taken by stages that rank ahead; its stream's,
+/// whose bound its agents running have reached; its pool's, every account
+/// that runs its program spent or at its own bound, with the soonest time
+/// one stops being spent, none where none is spent; or its pool's
+/// accounts, none of which runs its program.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "room", rename_all = "kebab-case")]
 pub enum RoomWanted {
     Host,
-    Stream { stream: String, bound: u32 },
+    Stream {
+        stream: String,
+        bound: u32,
+    },
+    Pool {
+        pool: String,
+        until: Option<Seconds>,
+    },
+    Program {
+        pool: String,
+        program: String,
+    },
 }
 
 impl RoomWanted {
@@ -350,6 +364,16 @@ impl RoomWanted {
             RoomWanted::Host => "the host's room".into(),
             RoomWanted::Stream { stream, bound } => {
                 format!("the stream {stream}'s room, at its bound of {bound}")
+            }
+            RoomWanted::Pool {
+                pool,
+                until: Some(until),
+            } => format!("a usable account of the pool {pool}, the soonest spent until {until}"),
+            RoomWanted::Pool { pool, until: None } => {
+                format!("a usable account of the pool {pool}, each at its own bound")
+            }
+            RoomWanted::Program { pool, program } => {
+                format!("an account of the pool {pool} that runs {program}, which none does")
             }
         }
     }

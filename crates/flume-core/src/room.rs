@@ -1,37 +1,55 @@
 //! The host's queue (70, 75): a stage starts only while the agents
 //! running on the host, every caller's and every stream's counted
-//! together, are under the bound its configuration states, and its
-//! stream's are under the stream's (143), and otherwise waits for room.
+//! together, are under the bound its configuration states, its stream's
+//! are under the stream's (143), and an account of its pool is usable
+//! (144, 145), and otherwise waits for room.
 //! Every settle starts the stages waiting, the streams of higher priority
 //! first, within them the places of higher priority, and equals in the
 //! order they came to wait, as many as there is room for, passing over a
-//! stage whose stream has no room without holding the host's room for it,
+//! stage whose stream has no room, or whose pool has no usable account,
+//! without holding the host's room for it,
 //! and ending no agent for one (31, 46; core.26). A place's priority is
 //! its caller's, given at the launch and changed after (7), and a
 //! stream's the host's; a host that states no bound, in a stream that
 //! states none, has no queue.
 
+use crate::accounts::{AccountRoom, PoolRoom, Usable};
 use crate::{Act, Answer, Engine, HostStatus, Queued, RoomWanted, Step, StreamStatus};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
-/// How a claim admits a start.
+/// How a claim admits a start, with the queue as the room lock found it.
 #[derive(Clone, Copy)]
 pub(crate) enum Admit<'a> {
-    /// A stage due to start: it waits unless the host and its stream have
-    /// room and no stage waiting that ranks ahead of it could start now.
+    /// A stage due to start: it waits unless the host, its stream and its
+    /// pool have room and no stage waiting that ranks ahead of it could
+    /// start now.
     Queue(&'a Queue),
     /// A stage the queue admits from waiting for room.
-    Waiting,
+    Waiting(&'a Queue),
 }
 
-/// The host's agents running, its bound, each stream's, and the stages
-/// waiting for room, in the order they would start, read under the room
-/// lock.
+impl<'a> Admit<'a> {
+    pub fn queue(self) -> &'a Queue {
+        match self {
+            Admit::Queue(queue) | Admit::Waiting(queue) => queue,
+        }
+    }
+}
+
+/// The host's agents running, its bound, each stream's, each stream's
+/// pool and each pool's accounts, and the stages waiting for room, in the
+/// order they would start, read under the room lock.
 pub(crate) struct Queue {
     pub running: u32,
     pub bound: Option<u32>,
     pub streams: BTreeMap<String, StreamRoom>,
+    /// Each stream's pool, the stream's own or the host's, none where
+    /// neither names one (144).
+    pub stream_pools: BTreeMap<String, Option<String>>,
+    /// Each pool a stream takes its accounts from, by name, where the
+    /// host's configuration declares it (144).
+    pub pools: BTreeMap<String, PoolRoom>,
     pub waiting: Vec<Waiting>,
 }
 
@@ -60,6 +78,9 @@ pub(crate) struct Waiting {
     pub stage: String,
     pub stream: String,
     pub stream_priority: i64,
+    /// The program its agent resolves to, by which its pool's accounts
+    /// are usable (144).
+    pub program: Option<String>,
     pub priority: i64,
     pub order: u64,
     pub since: Option<Seconds>,
@@ -85,9 +106,34 @@ impl Queue {
         self.streams.get(name).copied().unwrap_or_default()
     }
 
-    /// The room a stage of `stream` is short of now, none where the host
-    /// and the stream both have room (70, 143).
-    pub fn wants(&self, stream: &str) -> Option<RoomWanted> {
+    /// The pool a stage of `stream` takes its account from, none where
+    /// neither the stream nor the host names one (144).
+    pub fn pool_of(&self, stream: &str) -> Option<&str> {
+        self.stream_pools.get(stream)?.as_deref()
+    }
+
+    /// The account `name` of the pool `pool`, as the queue reads it.
+    pub fn account(&self, pool: &str, name: &str) -> Option<&AccountRoom> {
+        self.pools.get(pool)?.account(name)
+    }
+
+    /// One more of flume's agents running on the account `name` of
+    /// `pool`, as a start the queue admits takes it.
+    pub fn take_account(&mut self, pool: &str, name: &str) {
+        if let Some(room) = self
+            .pools
+            .get_mut(pool)
+            .and_then(|room| room.account_mut(name))
+        {
+            room.running = room.running.saturating_add(1);
+        }
+    }
+
+    /// The room a stage of `stream` whose agent runs `program` is short
+    /// of now, none where the host and the stream have room and an
+    /// account of its pool is usable: its stream's bound first, then its
+    /// pool's accounts, then the host's (70, 143, 145).
+    pub fn wants(&self, stream: &str, program: Option<&str>) -> Option<RoomWanted> {
         let of = self.stream(stream);
         if let (Some(0), Some(bound)) = (of.room(), of.bound) {
             return Some(RoomWanted::Stream {
@@ -95,22 +141,48 @@ impl Queue {
                 bound,
             });
         }
+        if let (Some(pool), Some(program)) = (self.pool_of(stream), program) {
+            match self.pools.get(pool).map(|room| room.usable(program)) {
+                Some(Usable::NoProgram) => {
+                    return Some(RoomWanted::Program {
+                        pool: pool.to_string(),
+                        program: program.to_string(),
+                    })
+                }
+                Some(Usable::None(until)) => {
+                    return Some(RoomWanted::Pool {
+                        pool: pool.to_string(),
+                        until,
+                    })
+                }
+                Some(Usable::Some) | None => {}
+            }
+        }
         (self.room() == Some(0)).then_some(RoomWanted::Host)
     }
 
-    /// Whether a stage of `place` in `stream` at `priority` due to start
-    /// waits: the host or its stream is full, or a stage of another place
-    /// waits that ranks as high, its stream's priority then its place's,
-    /// and could start now (70, 143; core.26).
-    pub fn must_wait(&self, place: &PlaceId, stream: &str, priority: i64) -> bool {
-        if self.wants(stream).is_some() {
+    /// Whether a stage of `place` in `stream` whose agent runs `program`
+    /// at `priority` due to start waits: the host or its stream is full,
+    /// its pool has no usable account, or a stage of another place waits
+    /// that ranks as high, its stream's priority then its place's, and
+    /// could start now (70, 143, 145; core.26).
+    pub fn must_wait(
+        &self,
+        place: &PlaceId,
+        stream: &str,
+        program: Option<&str>,
+        priority: i64,
+    ) -> bool {
+        if self.wants(stream, program).is_some() {
             return true;
         }
         let rank = (self.stream(stream).priority, priority);
         self.waiting.iter().any(|waiting| {
             &waiting.place != place
                 && waiting.rank() >= rank
-                && self.wants(&waiting.stream).is_none()
+                && self
+                    .wants(&waiting.stream, waiting.program.as_deref())
+                    .is_none()
         })
     }
 
@@ -144,16 +216,72 @@ impl Engine {
             })
             .collect();
         let mut running = 0u32;
+        let mut on_accounts: BTreeMap<(String, String), u32> = BTreeMap::new();
         for held in every.iter().map(|read| &read.state) {
-            let live = held
+            let live: Vec<&StartHeld> = held
                 .stages
                 .iter()
-                .filter(|stage| stage.start.as_ref().is_some_and(|start| start.live))
-                .count();
-            let live = u32::try_from(live).unwrap_or(u32::MAX);
-            running = running.saturating_add(live);
+                .filter_map(|stage| stage.start.as_ref().filter(|start| start.live))
+                .collect();
+            let count = u32::try_from(live.len()).unwrap_or(u32::MAX);
+            running = running.saturating_add(count);
             let stream = streams.entry(held.place.stream.name.clone()).or_default();
-            stream.running = stream.running.saturating_add(live);
+            stream.running = stream.running.saturating_add(count);
+            for account in live.iter().filter_map(|start| start.account.as_ref()) {
+                let on = on_accounts
+                    .entry((account.pool.clone(), account.name.clone()))
+                    .or_default();
+                *on = on.saturating_add(1);
+            }
+        }
+        let stream_pools: BTreeMap<String, Option<String>> = streams
+            .keys()
+            .map(|stream| {
+                let pool = self.host.pool_for(stream).map(|named| named.name);
+                (stream.clone(), pool)
+            })
+            .collect();
+        let now = self.host.now();
+        let mut pools = BTreeMap::new();
+        for name in stream_pools.values().flatten() {
+            if pools.contains_key(name) {
+                continue;
+            }
+            let Some(pool) = self.host.pool(name) else {
+                continue;
+            };
+            let accounts = pool
+                .accounts
+                .into_iter()
+                .map(|account| {
+                    let key = HostKey::Account {
+                        pool: name.clone(),
+                        account: account.name.clone(),
+                    };
+                    let spent_until = match self.store.read_host(&key) {
+                        Some(HostVersioned {
+                            document: HostDocument::Account(spent),
+                            ..
+                        }) if spent.until > now => Some(spent.until),
+                        _ => None,
+                    };
+                    AccountRoom {
+                        running: on_accounts
+                            .get(&(name.clone(), account.name.clone()))
+                            .copied()
+                            .unwrap_or(0),
+                        account,
+                        spent_until,
+                    }
+                })
+                .collect();
+            pools.insert(
+                name.clone(),
+                PoolRoom {
+                    strategy: pool.strategy,
+                    accounts,
+                },
+            );
         }
         let mut waiting: Vec<Waiting> = every
             .iter()
@@ -168,12 +296,17 @@ impl Engine {
                     .filter(|(_, stage)| stage.state == StageState::WaitingForRoom)
                     .map(move |(index, stage)| {
                         let room = stage.room.clone().unwrap_or_default();
+                        let program = self
+                            .resolve(&held.place, &held.place.kind.stages[index])
+                            .settings
+                            .program;
                         Waiting {
                             place: held.place.id.clone(),
                             index,
                             stage: stage.name.clone(),
                             stream: stream.clone(),
                             stream_priority,
+                            program,
                             priority: held.priority,
                             order: room.order,
                             since: stage.since,
@@ -192,13 +325,16 @@ impl Engine {
             running,
             bound: self.host.bound(),
             streams,
+            stream_pools,
+            pools,
             waiting,
         }
     }
 
     /// Starts the stages waiting for room on the host, in the queue's
     /// order, as many as there is room for, passing over a stage whose
-    /// stream has no room and holding none of the host's for it, each
+    /// stream has no room or whose pool has no usable account and holding
+    /// none of the host's for it, each
     /// written live under the room lock and opened after it is released;
     /// ends no agent (31, 46, 70, 143; core.26).
     pub(crate) fn start_waiting(&self) {
@@ -220,15 +356,24 @@ impl Engine {
                 if queue.room() == Some(0) {
                     break;
                 }
-                if queue.wants(&waiting.stream).is_some() {
+                if queue
+                    .wants(&waiting.stream, waiting.program.as_deref())
+                    .is_some()
+                {
                     continue;
                 }
-                if let Ok(claim) =
-                    self.claim(&waiting.place, waiting.index, waiting.words, Admit::Waiting)
-                {
+                if let Ok(claim) = self.claim(
+                    &waiting.place,
+                    waiting.index,
+                    waiting.words,
+                    Admit::Waiting(&queue),
+                ) {
                     queue.running = queue.running.saturating_add(1);
                     let stream = queue.streams.entry(waiting.stream).or_default();
                     stream.running = stream.running.saturating_add(1);
+                    if let Some(account) = claim.account() {
+                        queue.take_account(&account.pool, &account.name);
+                    }
                     claims.push((waiting.place, claim));
                 }
             }
@@ -254,7 +399,9 @@ impl Engine {
                 stream: waiting.stream.clone(),
                 priority: waiting.priority,
                 since: waiting.since,
-                wants: queue.wants(&waiting.stream).unwrap_or(RoomWanted::Host),
+                wants: queue
+                    .wants(&waiting.stream, waiting.program.as_deref())
+                    .unwrap_or(RoomWanted::Host),
             })
             .collect();
         let mut streams: Vec<StreamStatus> = queue
