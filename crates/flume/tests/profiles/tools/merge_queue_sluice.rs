@@ -5,7 +5,8 @@
 //! session reaches sluice. The merge-queue seam's scenarios run against
 //! it; then a submission from a herdr pane's hook, a failed entry
 //! collected once, a queue nothing drives, a step beside a live driver, a
-//! conflict's base revision and a fetch that fails.
+//! conflict's base revision, a conflict sluice answers at the submit
+//! itself, through the stand-in for sluice, and a fetch that fails.
 
 use crate::common::*;
 use flume::profiles::merge_queue::sluice::{for_place, Sluice};
@@ -441,6 +442,64 @@ fn a_conflicts_base_revision_and_words_are_sluices() {
         }
         other => panic!("a conflicting entry came to {other:?}"),
     }
+}
+
+#[test]
+fn a_conflict_sluice_answers_at_the_submit_is_its_outcome_never_a_refusal() {
+    // sluice answers the submit with the entry's record, in conflict with
+    // the one queued ahead of it, exiting as a conflict does, and records
+    // it delivered: submit answers the outcome, and no inbox gives it.
+    let harness = Harness::new();
+    let (place, head) = harness.place();
+    let other = Harness::worktree(&harness.repository, "other", "other", "work.rs");
+    harness.sluice(
+        Path::new(&other.location),
+        &["submit", "main", "--no-wait", "--json"],
+    );
+    let bin = harness.repository.scratch.path("stand-in");
+    super::walk::stand_in_sluice(&bin);
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    )))
+    .expect("a PATH");
+    let seam = harness
+        .seam
+        .clone()
+        .with_env("PATH", Some(&path.to_string_lossy()));
+    let answer = seam.submit(&place, &head);
+    let record = harness.record("fix/one").expect("sluice's entry");
+    assert_eq!(record["state"], "conflict", "{record}");
+    let Submitted::Decided {
+        submission,
+        outcome: SubmissionOutcome::Conflict { files, base, words },
+    } = answer
+    else {
+        panic!("a conflict at the submit was answered {answer:?}");
+    };
+    assert_eq!(submission.id, record["id"].to_string(), "the entry");
+    assert!(
+        matches!(submission.state, SubmissionState::Conflict { .. }),
+        "{submission:?}"
+    );
+    assert_eq!(files, vec!["work.rs".to_string()], "the files contested");
+    let ahead = harness.record("other").expect("the entry ahead")["id"].to_string();
+    for named in [
+        "conflict on main: work.rs with ",
+        &format!("#{ahead} ("),
+        "other)",
+    ] {
+        assert!(words.contains(named), "{named} is not in {words}");
+    }
+    let expected = record["tested"]["on"].as_str().map_or_else(
+        || Revision::new(harness.repository.git(&["rev-parse", "main"])),
+        Revision::new,
+    );
+    assert_eq!(base, expected, "the base revision");
+    assert_eq!(
+        harness.seam.inbox(&place),
+        Inbox::Outcomes { outcomes: vec![] },
+        "the inbox, once the answer delivered the outcome"
+    );
 }
 
 #[test]
