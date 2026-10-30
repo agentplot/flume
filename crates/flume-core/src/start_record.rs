@@ -41,11 +41,14 @@ pub fn variable_digest(secret: &Secret, name: &str, value: &str) -> String {
 
 /// The record of a start of `program` under `account`, whose environment
 /// is `env`, each value read against the login environment, for
-/// `identity` in the place at `location`, keyed by `secret` (161).
+/// `identity` in the place at `location`, keyed by `secret`; the
+/// variables the program keeps from the processes it starts, `withheld`,
+/// left out with the terminal's own (161).
 pub(crate) fn start_record(
     program: &str,
     account: Option<&AccountHeld>,
     env: &BTreeMap<String, String>,
+    withheld: &[String],
     identity: &Identity,
     location: &str,
     secret: &Secret,
@@ -59,7 +62,9 @@ pub(crate) fn start_record(
     let env = env
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
-        .filter(|(name, _)| !TERMINALS_OWN.contains(name))
+        .filter(|(name, _)| {
+            !TERMINALS_OWN.contains(name) && !withheld.iter().any(|kept| kept == name)
+        })
         .chain(flumes)
         .map(|(name, value)| (name.to_string(), variable_digest(secret, name, value)))
         .collect();
@@ -102,17 +107,19 @@ mod tests {
     }
 
     #[test]
-    fn the_record_covers_the_environment_and_flumes_variables_and_no_terminals() {
+    fn the_record_covers_the_environment_and_flumes_variables_and_no_terminals_or_withheld() {
         let secret = Secret("s".into());
         let env = BTreeMap::from([
             ("HOME_DIR".to_string(), "/s/work-1".to_string()),
             ("PATH".to_string(), "/bin".to_string()),
             ("SHELL".to_string(), "/bin/sh".to_string()),
+            ("AGENT_TOKEN".to_string(), "t".to_string()),
         ]);
         let record = start_record(
             "agent",
             None,
             &env,
+            &["AGENT_TOKEN".to_string()],
             &identity(),
             "/r/places/fix--one",
             &secret,

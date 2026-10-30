@@ -70,7 +70,8 @@ launch named, else of `base:<repository id>:<base>`.
 
 Each start in a place's held state carries `start_record`: the
 agent's `program`, its `account`, and `env`, a digest of each variable
-by its name. Each digest is HMAC-SHA256, keyed by the start's secret,
+by its name, leaving out those the agent program keeps from its hooks,
+such as Claude Code's `CLAUDE_CODE_OAUTH_TOKEN`. Each digest is HMAC-SHA256, keyed by the start's secret,
 over the variable's name, a zero byte and its value, in hex; no value
 is kept. The place's `unsettled` lists each start whose agent began
 otherwise than its record says ([the start

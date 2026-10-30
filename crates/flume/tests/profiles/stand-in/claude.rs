@@ -5,7 +5,8 @@
 //! the hooks the plugin's `hooks/hooks.json` names under `--plugin-dir`, as
 //! that release runs them (the exec form with no shell, the hook's input on
 //! standard input, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR` and
-//! `CLAUDE_CODE_SESSION_ID` over the command's own environment, a refusal
+//! `CLAUDE_CODE_SESSION_ID` over the command's own environment less the
+//! credentials that release keeps from every process it starts, a refusal
 //! read from `permissionDecision` or exit 2, a stop blocked by `decision`
 //! or exit 2), and in place of a model acts the script `STAND_IN_SCRIPT`
 //! names, one run's acts as a JSON array, each a tool call:
@@ -40,6 +41,7 @@
 //! output as one line; the exit status is 1 where an act failed that no
 //! hook refused. It never reaches a model, an account or the network.
 
+use flume::profiles::agent::claude::withheld::WITHHELD;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -460,6 +462,9 @@ impl Session {
                 command
             }
         };
+        for name in WITHHELD {
+            command.env_remove(name);
+        }
         if let Some(root) = &self.plugin {
             command.env("CLAUDE_PLUGIN_ROOT", root);
         }

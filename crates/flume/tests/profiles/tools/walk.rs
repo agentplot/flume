@@ -3,7 +3,9 @@
 //! `openspec` and `sluice`, its base landing on a local bare remote, and
 //! the stand-in for Claude Code first on `PATH` as `claude`, its agents
 //! signed in by a pool of one account whose `CLAUDE_CONFIG_DIR` is a
-//! scratch folder (144); or, for the check-live layer, no stand-in and the
+//! scratch folder and whose `CLAUDE_CODE_OAUTH_TOKEN` is a word of the
+//! walk's own, which the stand-in keeps from its hooks as the release
+//! does and sends nowhere (144, 161); or, for the check-live layer, no stand-in and the
 //! host's terminal and account as its configuration names them. Every process
 //! the walkthrough starts, flume, sluice, git and the stand-in, runs in the
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
@@ -15,6 +17,10 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+
+/// The stand-in's account's `CLAUDE_CODE_OAUTH_TOKEN`: no token of any
+/// account's, only a word for the stand-in to keep from its hooks.
+pub const STAND_IN_TOKEN: &str = "stand-in-token";
 
 /// The gate: the check fails, with its words, while the tree holds
 /// `broken`.
@@ -158,7 +164,7 @@ impl Walk {
         let mut text = text.to_string();
         if let Some(account) = &self.account {
             text.push_str(&format!(
-                "\n[streams.default]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }}]\n",
+                "\n[streams.default]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n",
                 account.display().to_string()
             ));
         }

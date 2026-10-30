@@ -25,6 +25,7 @@ struct AgentModel {
     no_send_back: bool,
     no_on_quiet: bool,
     no_guard: bool,
+    withheld: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -152,6 +153,11 @@ impl FakeAgent {
 
     pub fn no_guard(&self) {
         lock(&self.state).no_guard = true;
+    }
+
+    /// The program keeps `names` from every process it starts (161).
+    pub fn withhold(&self, names: &[&str]) {
+        lock(&self.state).withheld = names.iter().map(|name| name.to_string()).collect();
     }
 
     fn record(&self, agent: &Identity) -> Record {
@@ -286,6 +292,10 @@ impl Agent for FakeAgent {
     fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
         self.read_in("started_without", folder, agent)
             .and_then(|record| record.started_without)
+    }
+
+    fn withheld(&self) -> Vec<String> {
+        lock(&self.state).withheld.clone()
     }
 
     fn stop_short(&self, _agent: &Identity) -> String {

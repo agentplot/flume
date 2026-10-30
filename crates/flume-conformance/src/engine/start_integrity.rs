@@ -1,12 +1,13 @@
 //! A start checked against its settings (161; core.10, core.30): each
 //! start records what its agent is to run under, its program, its account
 //! and each variable's digest keyed by its secret, never a value, leaving
-//! out what a terminal sets for itself; an agent whose word shows it began
+//! out what a terminal sets for itself and what the agent program keeps
+//! from the processes it starts; an agent whose word shows it began
 //! otherwise is not taken as its stage's, is sent no prompt, and once
 //! quiet is ended and its stage started afresh under its settings,
-//! counted toward no bound; a fresh start that begins so again is never
-//! begun, its end naming the same; status names each variable alone (31,
-//! 35, 37, 43, 56, 112, 135).
+//! counted toward no bound; a fresh start that begins so again, or one
+//! that never goes quiet, is never begun, its end naming the same; status
+//! names each variable alone (31, 35, 37, 43, 56, 112, 135).
 
 use super::account_pools::pool;
 use super::world::*;
@@ -27,6 +28,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: what_the_terminal_sets_is_left_out,
         },
         Scenario {
+            name: "start integrity: a variable the agent program keeps from every process it starts is in no start's record, and the account's others are",
+            cites: &["161"],
+            run: what_the_program_withholds_is_left_out,
+        },
+        Scenario {
             name: "start integrity: an agent whose word shows a variable its record names missing is not taken: started reads no and the start reads begun without its settings, naming the variable",
             cites: &["135", "161", "35"],
             run: a_variable_missing,
@@ -45,6 +51,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "start integrity: a fresh start whose agent also comes up without the variable ends never begun, its end naming the variable, delivered to the place's recipient once",
             cites: &["161", "35", "43"],
             run: twice_in_a_row,
+        },
+        Scenario {
+            name: "start integrity: a start whose agent began without its settings and never goes quiet ends never begun at the stage's limit, its end naming the variable",
+            cites: &["161", "35", "43"],
+            run: never_quiet_until_the_limit,
         },
         Scenario {
             name: "start integrity: no prompt is sent to an agent begun without its settings, before or after it is ended",
@@ -204,6 +215,35 @@ fn what_the_terminal_sets_is_left_out(_: &()) -> Outcome {
     ensure!(
         record.env.contains_key("AGENT_HOME"),
         "the record leaves out the account's own variable"
+    );
+    Ok(())
+}
+
+fn what_the_program_withholds_is_left_out(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.withhold(&["AGENT_TOKEN"]);
+    work_pool(&world, &ENV);
+    let id = fix(&world, "one")?;
+    let record = code_start(&world, &id)?.start_record;
+    ensure_eq!(
+        record.env.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["AGENT_HOME", "FLUME_AGENT", "FLUME_PLACE", "FLUME_STAGE"],
+        "the variables the record names"
+    );
+    let who = World::identity("fix", "one", "code", 1);
+    let (command, _) = world
+        .terminal
+        .opened(&who)
+        .ok_or("the start opened no agent")?;
+    ensure_eq!(
+        command.env.get("AGENT_TOKEN").map(String::as_str),
+        Some(TOKEN),
+        "the agent's AGENT_TOKEN"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code, its agent begun as recorded"
     );
     Ok(())
 }
@@ -400,6 +440,42 @@ fn twice_in_a_row(_: &()) -> Outcome {
     );
     let notices = world.terminal.log.of("send_to");
     ensure_eq!(notices.len(), 1, "the notices sent");
+    Ok(())
+}
+
+fn never_quiet_until_the_limit(_: &()) -> Outcome {
+    let world = World::new();
+    work_pool(&world, &ENV);
+    let who = begins_without_home(&world, "one", 1);
+    world.agent.set_own_work(&who, Reading::Yes);
+    let id = fix(&world, "one")?;
+    world.host.advance(flume_core::QUIET_LIMIT);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "code, its agent at work past the stage's limit"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let end = held
+        .ends
+        .iter()
+        .find_map(|end| match &end.of {
+            EndOf::Stage { start: 1, end, .. } => Some(end.clone()),
+            _ => None,
+        })
+        .ok_or("no end of code's start")?;
+    ensure_eq!(
+        end.unsettled
+            .as_ref()
+            .map(|unsettled| unsettled.missing.clone()),
+        Some(vec!["AGENT_HOME".to_string()]),
+        "the end names the variable"
+    );
+    ensure!(
+        world.terminal.sent_to(&who).is_empty(),
+        "a prompt sent to the agent begun without its settings"
+    );
     Ok(())
 }
 

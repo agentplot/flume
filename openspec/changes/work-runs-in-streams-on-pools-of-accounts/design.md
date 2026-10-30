@@ -263,9 +263,37 @@ name, a zero byte and its value, in hex (`flume_core::variable_digest`,
 `hmac` over the tree's `sha2`). A record read off the host then tests
 no guessed value without the secret, and no value is kept (161;
 core.30). `PATH` and `SHELL`, even where an account gives them, the
+variables the agent program keeps from the processes it starts, the
 login environment beneath the settings and `FLUME_SECRET` are not in
-it: the terminal sets the first two for its own sake (record 0018), and
-the secret is checked by the ack itself.
+it: the terminal sets the first two for its own sake (record 0018), the
+program's hooks cannot see the ones it keeps, and the secret is checked
+by the ack itself.
+
+The agent seam gains `withheld() -> Vec<String>`, none by default,
+which `Engine::claim` reads for the start's program. The Claude Code
+profile names the credentials 2.1.296 keeps from every process it
+starts (`claude::withheld::WITHHELD`). That release builds each child's
+environment, its hooks' among them, by dropping its own list of
+credentials wherever one of them is set: `CLAUDE_CODE_OAUTH_TOKEN`, the
+file-descriptor ones it spreads into the list
+(`CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`,
+`CLAUDE_CODE_GATEWAY_TOKEN_FILE_DESCRIPTOR`,
+`CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`,
+`CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR`,
+`CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR`), `CLAUDE_CODE_ARTIFACTS_API_TOKEN`,
+`CLAUDE_CODE_SLACK_TAG_TOKEN`, `CLAUDE_CODE_HFI_BEARER_TOKEN`,
+`CLAUDE_BRIDGE_OAUTH_TOKEN`, `CLAUDE_TRUSTED_DEVICE_TOKEN`,
+`AGENT_PROXY_AUTH_TOKEN`, `CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN`,
+`CLAUDE_BG_AUTH_SNAPSHOT_PATH`, `CLAUDE_BG_SOCKET_TOKENS_PATH`,
+`CLAUDE_BG_RV_AUTH`, `CLAUDE_BG_PTY_AUTH` and `CLAUDE_BG_CLAIM_AUTH`. It
+always drops the memory service's `CLAUDE_CODE_MEMORY_API_TOKEN` too.
+`ANTHROPIC_API_KEY` and `CLAUDE_CONFIG_DIR` reach the hooks as given,
+and stay in the record. A `check-tools` test, beside design 6's, requires
+the fragments this rests on byte for byte in the pinned program: the two
+lists, the memory service's pair, the set the environment is tested
+against, the names the child environment drops, the drop itself, and
+the hook runner's environment built on it. A release that changes what
+it keeps from its hooks then fails the gate at the bump.
 
 The started ack, whether the SessionStart hook takes it or `flume ack
 started` is run, first asks the core for the place's folder and the
@@ -281,9 +309,13 @@ which both profiles call, so no profile calls another (core.2). Where
 all match it acks as before. Where any differs it writes the agent's
 record `unsettled.json`, naming each variable missing or different by
 name and whether the program differed, with the session's id and
-transcript, so the profile reads the agent's own work from it. It acks
-nothing and starts `flume settle <place>` detached (121). The hook
-still exits 0 within its bound (C.4).
+transcript, so the profile reads the agent's own work from it. 2.1.296
+writes a session's transcript at its first message, so an agent that
+sits at its prompt has none yet; the profile reads its own work as not
+running, since own work starts only in a turn, and a transcript that
+cannot be read stays unknown (91, 93). It acks nothing and starts
+`flume settle <place>` detached (121). The hook still exits 0 within
+its bound (C.4).
 
 The agent seam gains `started_without(folder, agent) ->
 Option<Unsettled>`, `Unsettled { missing, different, program }`, with
@@ -297,7 +329,9 @@ quiet the settle ends it and starts the stage afresh, with a
 bound and waiting on no caller. Where the stage's start before it in a
 row was also unsettled, the start is never begun instead, its end's
 `unsettled` naming the variables and the program, recorded and
-delivered as any never-begun end is (35, 43). Status gives the place's
+delivered as any never-begun end is (35, 43). A start read so whose
+agent is not quiet by the stage's limit is never begun as any start
+still starting then is, its end's `unsettled` naming the same. Status gives the place's
 `unsettled`, each variable by its name and never a value, and the
 person's form prints each on a line of its own (S65).
 

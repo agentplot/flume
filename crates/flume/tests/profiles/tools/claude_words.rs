@@ -1,14 +1,14 @@
-//! The usage-limit words the Claude Code profile reads, against the
-//! release the tree pins (design 6 of record 0020's change; C.4;
-//! core.22): the program the `claude` wrapper from `devenv.nix` runs is
-//! read as a file, and each source fragment of its usage-limit words the
-//! profile's reading rests on must stand in it byte for byte. A release
-//! that changes the words, or only renames what its minifier names in
-//! those fragments, fails here until the reading is made again. No agent
-//! runs.
+//! What the Claude Code profile reads of the release the tree pins
+//! (design 6 and 7 of record 0020's change; C.4; core.22): the program
+//! the `claude` wrapper from `devenv.nix` runs is read as a file, and each
+//! source fragment the profile rests on must stand in it byte for byte:
+//! the usage-limit words it reads, and the credentials the release keeps
+//! from its hooks, which no start's record names. A release that changes
+//! either, or only renames what its minifier names in those fragments,
+//! fails here until the reading is made again. No agent runs.
 
-use flume::profiles::agent::claude::{limit, wrapper};
-use std::path::Path;
+use flume::profiles::agent::claude::{limit, withheld, wrapper};
+use std::path::{Path, PathBuf};
 
 /// The Claude Code version `devenv.nix` pins.
 fn pinned_version() -> String {
@@ -26,8 +26,8 @@ fn pinned_version() -> String {
         .expect("devenv.nix pins Claude Code's version")
 }
 
-#[test]
-fn the_pinned_release_holds_the_usage_limit_words() {
+/// The program the pinned release's `claude` wrapper runs, its version.
+fn pinned_program() -> (PathBuf, String) {
     let version = pinned_version();
     let path = std::env::var("PATH").unwrap_or_default();
     let found =
@@ -48,9 +48,15 @@ fn the_pinned_release_holds_the_usage_limit_words() {
             )
         })
         .program;
+    (program, version)
+}
+
+/// Each of `fragments` the pinned release's program does not hold, as
+/// its name and the fragment.
+fn missing(fragments: &[(&'static str, String)]) -> (Vec<String>, PathBuf, String) {
+    let (program, version) = pinned_program();
     let bytes =
         std::fs::read(&program).unwrap_or_else(|error| panic!("{}: {error}", program.display()));
-    let fragments = limit::fragments();
     let mut found = vec![false; fragments.len()];
     for at in 0..bytes.len() {
         for (index, (_, fragment)) in fragments.iter().enumerate() {
@@ -60,15 +66,32 @@ fn the_pinned_release_holds_the_usage_limit_words() {
             }
         }
     }
-    let missing: Vec<String> = fragments
+    let missing = fragments
         .iter()
         .zip(&found)
         .filter(|(_, found)| !**found)
         .map(|((name, fragment), _)| format!("{name}: {fragment}"))
         .collect();
+    (missing, program, version)
+}
+
+#[test]
+fn the_pinned_release_holds_the_usage_limit_words() {
+    let (missing, program, version) = missing(&limit::fragments());
     assert!(
         missing.is_empty(),
         "Claude Code {version}, at {}, does not hold the fragments the usage-limit reading rests on:\n{}",
+        program.display(),
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn the_pinned_release_keeps_its_credentials_from_its_hooks() {
+    let (missing, program, version) = missing(&withheld::fragments());
+    assert!(
+        missing.is_empty(),
+        "Claude Code {version}, at {}, does not hold the fragments the credentials it keeps from its hooks rest on:\n{}",
         program.display(),
         missing.join("\n")
     );

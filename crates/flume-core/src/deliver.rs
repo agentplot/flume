@@ -132,8 +132,10 @@ impl Engine {
     }
 
     /// The start's prompt reported never begun, with what the terminal
-    /// shows of the agent, its last words and the commits since the start;
-    /// its agent read ended where it `stopped` (35, 38, 43).
+    /// shows of the agent, its last words and the commits since the start,
+    /// and how its agent began without its settings where the place
+    /// recorded so; its agent read ended where it `stopped` (35, 38, 43,
+    /// 161).
     pub(crate) fn never_begun(
         &self,
         id: &PlaceId,
@@ -141,7 +143,12 @@ impl Engine {
         start: &StartHeld,
         stopped: bool,
     ) {
-        let end = self.read_out(held, start, true);
+        let mut end = self.read_out(held, start, true);
+        end.unsettled = held
+            .unsettled
+            .iter()
+            .find(|read| read.stage == start.identity.stage && read.start == start.n)
+            .map(|read| Box::new(read.unsettled.clone()));
         self.end_start(
             id,
             &start.identity,

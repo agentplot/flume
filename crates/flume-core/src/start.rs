@@ -382,10 +382,15 @@ impl Engine {
                 .program
                 .clone()
                 .unwrap_or_default();
+            let withheld = self
+                .agent(&program)
+                .map(|agent| agent.withheld())
+                .unwrap_or_default();
             let start_record = start_record(
                 &program,
                 account.as_ref(),
                 &env,
+                &withheld,
                 &identity,
                 &held.place.location,
                 &secret,

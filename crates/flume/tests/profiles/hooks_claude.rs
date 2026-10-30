@@ -504,6 +504,75 @@ fn a_variable_with_another_value() {
 }
 
 #[test]
+fn a_credential_the_program_keeps_from_its_hooks() {
+    // The account gives CLAUDE_CONFIG_DIR and CLAUDE_CODE_OAUTH_TOKEN;
+    // Claude Code keeps the token from its hooks, so the hook's
+    // environment holds CLAUDE_CONFIG_DIR alone. The start's record names
+    // no token and the ack is taken (161).
+    let host = Host::new("withheld");
+    let account = host.path("account-1");
+    std::fs::create_dir_all(&account).expect("the account's folder");
+    std::fs::write(
+        host.path("config/flume/config.toml"),
+        format!(
+            "[host]\npool = \"work\"\n\n[pools.work]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"work-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"not-a-token\" }} }}]\n",
+            account.display().to_string()
+        ),
+    )
+    .expect("the host's configuration");
+    let agent = host.launch("fix");
+    let mut env = agent.env();
+    env.push((
+        "CLAUDE_CONFIG_DIR".into(),
+        account.to_string_lossy().into_owned(),
+    ));
+    host.hook_in(
+        &agent,
+        "session-start",
+        json!({ "source": "startup" }),
+        &env,
+    );
+    assert_eq!(host.agent_status(&agent.place)["started"], "yes");
+    fn records(value: &Value, found: &mut Vec<Value>) {
+        match value {
+            Value::Object(fields) => {
+                for (key, field) in fields {
+                    if key == "start_record" {
+                        found.push(field.clone());
+                    } else {
+                        records(field, found);
+                    }
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|item| records(item, found)),
+            _ => {}
+        }
+    }
+    let mut found = vec![];
+    for (_, text) in host.state() {
+        if let Ok(document) = serde_json::from_slice::<Value>(&text) {
+            records(&document, &mut found);
+        }
+    }
+    let records = found;
+    assert_eq!(records.len(), 1, "the start's record");
+    let names: Vec<&String> = records[0]["env"]
+        .as_object()
+        .expect("the record's variables")
+        .keys()
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "CLAUDE_CONFIG_DIR",
+            "FLUME_AGENT",
+            "FLUME_PLACE",
+            "FLUME_STAGE"
+        ]
+    );
+}
+
+#[test]
 fn another_program() {
     // The hook's parent runs another program than the `claude` its PATH
     // finds: no started ack, and the agent's record says the program

@@ -142,7 +142,35 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["135", "161", "93", "128"],
             run: started_without_names_the_variable::<H>,
         },
+        Scenario {
+            name: "agent: an agent begun without its settings that has had no turn is read waiting on nothing, its own work not running",
+            cites: &["91", "90", "31", "161"],
+            run: begun_without_and_no_turn::<H>,
+        },
     ]
+}
+
+fn begun_without_and_no_turn<H: AgentHarness>(harness: &H) -> Outcome {
+    // No start was made for this identity: the program's word at its start
+    // is all it has said, and it sits at its prompt with no turn taken.
+    let who = identity("verify");
+    let folder = harness.folder();
+    harness.begin_without(&who, "AGENT_HOME");
+    ensure!(
+        harness.seam().started_without(&folder, &who).is_some(),
+        "the agent read begun with its settings"
+    );
+    ensure_eq!(
+        harness.seam().own_work(&folder, &who),
+        Reading::No,
+        "own work of an agent that has had no turn"
+    );
+    ensure_eq!(
+        harness.seam().asking(&folder, &who),
+        Reading::No,
+        "asking, of an agent that has had no turn"
+    );
+    Ok(())
 }
 
 fn started_without_names_the_variable<H: AgentHarness>(harness: &H) -> Outcome {

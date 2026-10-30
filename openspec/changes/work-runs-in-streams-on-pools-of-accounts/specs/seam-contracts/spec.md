@@ -4,14 +4,20 @@
 
 The agent seam SHALL say whether the agent's own record shows its
 account reached a usage limit, with the reset it names, or unknown
-(151), and whether its agent began without the settings its start
+(151), whether its agent began without the settings its start
 recorded, naming each variable that differs and whether its program
-did (135, 161).
+did (135, 161), and which variables its program keeps from every
+process it starts, none by default (161).
 
 #### Scenario: Spent and without its settings over the fake
 
 - **WHEN** the fake agent scripts a usage limit with a reset for one start and a missing variable for another
 - **THEN** `spent` reads yes with that reset for the first and `started_without` names the variable for the second (135, 151, 161)
+
+#### Scenario: Begun without its settings and no turn taken
+
+- **WHEN** an agent's word at its start shows a variable missing and it has taken no turn
+- **THEN** `started_without` names the variable, and `own_work` and `asking` read no (31, 91, 161)
 
 ### Requirement: The store keeps the host's own documents
 

@@ -15,6 +15,7 @@ pub mod hook;
 pub mod limit;
 pub mod record;
 pub mod transcript;
+pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
@@ -384,7 +385,9 @@ impl Agent for Claude {
 
     /// Background shells and tasks the transcript shows started and not
     /// finished, the transcript the started ack named or, for an agent
-    /// begun otherwise than its start recorded, the one its word named
+    /// begun otherwise than its start recorded, the one its word named; a
+    /// transcript not yet written shows none, since 2.1.296 writes it at
+    /// the session's first message and own work starts only in a turn
     /// (91, 161).
     fn own_work(&self, folder: &str, agent: &Identity) -> Reading {
         let record = Record::at(folder, agent);
@@ -403,7 +406,8 @@ impl Agent for Claude {
                     Reading::Yes
                 }
             }
-            transcript::Read::NotWritten | transcript::Read::Unreadable => Reading::Unknown,
+            transcript::Read::NotWritten => Reading::No,
+            transcript::Read::Unreadable => Reading::Unknown,
         }
     }
 
@@ -452,6 +456,15 @@ impl Agent for Claude {
             },
             _ => Spent::No,
         }
+    }
+
+    /// The credentials 2.1.296 keeps from every process it starts, its
+    /// hooks among them ([`withheld::WITHHELD`]; 161).
+    fn withheld(&self) -> Vec<String> {
+        withheld::WITHHELD
+            .iter()
+            .map(|name| name.to_string())
+            .collect()
     }
 
     /// The SessionStart hook's word that the agent began otherwise than

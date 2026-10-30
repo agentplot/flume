@@ -238,6 +238,14 @@ pub trait Agent: Send + Sync {
         None
     }
 
+    /// The variables the agent program keeps from every process it
+    /// starts, its hooks among them, whatever gives them: its word that it
+    /// started cannot show them, so no start's record names them (161);
+    /// none by default.
+    fn withheld(&self) -> Vec<String> {
+        vec![]
+    }
+
     /// What the agent's own record says of its start that no reading
     /// answers and status reports with the agent, such as the agent
     /// program's part of flume being of another version than the one

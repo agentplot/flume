@@ -271,7 +271,10 @@ program, its account, and a digest of each variable of its account's
 environment and of `FLUME_AGENT`, `FLUME_PLACE` and `FLUME_STAGE`. The
 start's secret keys each digest, so the record holds no value and
 tests no guess. `PATH`, `SHELL` and the rest of the login environment
-are not in it.
+are not in it. Nor is a credential the agent program keeps from the
+programs it starts, its hooks among them: Claude Code keeps
+`CLAUDE_CODE_OAUTH_TOKEN` and its other tokens to itself, so an
+account's token reaches the agent and is never compared.
 
 The agent's SessionStart hook compares its own program and environment
 with the record before it says the agent started. A pane brought back
@@ -280,8 +283,8 @@ without its environment, a program started again by hand, or another
 records what differed by name, and starts a settle. flume takes that
 agent as no stage's agent: it sends it no prompt, ends it once it is
 quiet, and starts the stage afresh under its settings. A second
-difference in a row ends the stage **never begun**, naming the
-variables. Status lists each such start with each variable's name and
+difference in a row, or an agent still not quiet at the stage's limit,
+ends the stage **never begun**, naming the variables. Status lists each such start with each variable's name and
 whether the program differed, never a value.
 
 ## What status shows
