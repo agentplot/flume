@@ -1,7 +1,7 @@
 ---
 number: 23
 title: A fix of a base whose own checks failed after a landing is a fix launched on that base with the failure's words, held for the word the base asks
-status: proposed
+status: accepted
 date: 2026-10-29
 decision-makers:
 - Chuck Swanberg
@@ -9,9 +9,9 @@ decision-makers:
 
 # A fix of a base whose own checks failed after a landing is a fix launched on that base with the failure's words, held for the word the base asks
 
-Status: proposed to the user on 2026-10-29, as `briefs.15` has it; accepted only on their yes.
+Status: accepted by the user on 2026-10-30, on their card (req_4e228f0e220a4c92beef, "Approved").
 
-Deciders: swancloud-design, on 2026-10-29 through madswan-operator, asking a fifth requirement for Flume's first build beside afterthought/crew record 0047 move 5's four: "when a gated branch's own checks go red after a landing, Flume launches the kind's fix stage in a place cut from that branch, with sluice's blame in its prompt, and its submission goes to that branch under the branch's policy, the user's word asked as the branch's policy asks it, with no bolt to ride and no unit moved. Crew adds nothing for it (roles.5)." The shape is madswan-design's; the user's yes is asked on this record's card.
+Deciders: swancloud-design, on 2026-10-29 through madswan-operator, asking a fifth requirement for Flume's first build beside afterthought/crew record 0047 move 5's four: "when a gated branch's own checks go red after a landing, Flume launches the kind's fix stage in a place cut from that branch, with sluice's blame in its prompt, and its submission goes to that branch under the branch's policy, the user's word asked as the branch's policy asks it, with no bolt to ride and no unit moved. Crew adds nothing for it (roles.5)." The shape is madswan-design's; the user's yes was given on this record's card.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 1, 5, 7, 22, 47, 49, 69, 70, 72, 111, 112, 124, 130, 131, 132, I6, the callers table's crew row, S1, S7 and S64, C.2's fix@1 row and C.6's submit row (blueprints 22bb880); records 0005, 0010, 0011, 0013; afterthought/crew records 0047 (move 5) and 0049, rules `state.3` and `roles.5`; `agentplot/blueprints:design/sluice/requirements.md` clauses 17, 19, 20, 70, 127 and the C.5 pull request row; the kits' `.config/sluice.toml` on their mains on 2026-10-29 (sluice, flume, tailrace, weir, agentplot: `[branches.main.pull_requests] reviews = 0`); wldn signal 2026-10-29-swb-4-conductor-ad4cb5f9/01, wldn-design's answer to it, and swancloud-design's reading of 2026-10-30 (WilldanGroup/switchboard-kit main 29f5db4; workflow runs 40974243331 and 40974243310).
 
 ## Context and problem statement
@@ -54,7 +54,7 @@ Option 5.
 
 ### Consequences
 
-- The statement's callers table, S64 and C.6 are amended at blueprints 22bb880; rule core.36 is added, marked proposed; `_open.md` names this record until it is accepted.
+- The statement's callers table, S64 and C.6 are amended at blueprints 22bb880; rule core.36 is added; `_open.md`'s item for this record left at its acceptance.
 - No unit of flume's own from this record: fix@1, the hold and the retry are record 0011's build. The sluice profile's reading of a request waiting on its conditions is checked at that build.
 - crew's side, a fix of a red main as a fix place and not a bolt of one chore, and who launches it, is afterthought/crew `state.3`'s to amend, swancloud-design's record; crew adds no mechanism for it (`roles.5`).
 - sluice's side: wldn's reading of 2026-10-30 shows a failure sluice never saw, so nothing of sluice's follows from this record.
