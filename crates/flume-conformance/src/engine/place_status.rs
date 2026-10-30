@@ -2,9 +2,12 @@
 //! at one head per place, from one core, and nothing written, sent or
 //! started.
 
+use super::account_pools::{account, fix_in, host, pool, spent};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Answer, PlaceStatus, WaitingOn, Waits};
+use flume_core::{
+    AccountStatus, Act, Answer, Cache, MoveStatus, PlaceStatus, PoolStatus, Retry, WaitingOn, Waits,
+};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -58,6 +61,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: a repetition adding a fourth group to a change of three gives the count as 4, read at the head",
             cites: &["58", "142"],
             run: a_group_added_mid_stage,
+        },
+        Scenario {
+            name: "status: a stage that moved from a spent account gives its agent's account from the strategy, and the move with why, when and the cache lost",
+            cites: &["56", "145", "147"],
+            run: a_stage_that_moved,
+        },
+        Scenario {
+            name: "status: the host's pools give each pool's strategy and each account's agents running, bound and spent time, and no value of an account's environment",
+            cites: &["56", "144", "145"],
+            run: a_pool_with_a_spent_account,
         },
     ]
 }
@@ -428,6 +441,115 @@ fn a_group_added_mid_stage(_: &()) -> Outcome {
         (group.place, group.of),
         (2, 4),
         "the group's place and the count, read at the head"
+    );
+    Ok(())
+}
+
+fn a_stage_that_moved(_: &()) -> Outcome {
+    let world = World::new();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("work-1", None), account("work-2", None)],
+    );
+    world.host.set_host_pool(Some("work"));
+    let id = fix_in(&world, None, "one")?;
+    spent(&world, "work", "work-1", world.host.now() + 3600);
+    world
+        .terminal
+        .kill(&World::identity("fix", "one", "code", 1));
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Lost),
+        "code once its agent ended"
+    );
+    world.host.advance(30);
+    let answer = world
+        .engine()
+        .retry(&id, Retry::Stage("code".into()), None, false);
+    ensure!(answer.refusal().is_none(), "the retry: {answer:?}");
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.agent.and_then(|agent| agent.account),
+        Some(AccountHeld {
+            pool: "work".into(),
+            name: "work-2".into(),
+            from: AccountFrom::Strategy
+        }),
+        "the agent's account"
+    );
+    let at = world.host.now();
+    let moved = |on| MoveStatus {
+        moved: AccountMove {
+            on,
+            from: "work-1".into(),
+            to: "work-2".into(),
+            why: MoveWhy::Spent,
+            at,
+        },
+        cache: Cache::Lost,
+    };
+    ensure_eq!(
+        status.moves,
+        vec![
+            moved(MoveOn::Stage {
+                stage: "code".into()
+            }),
+            moved(MoveOn::Intent)
+        ],
+        "the place's moves"
+    );
+    Ok(())
+}
+
+fn a_pool_with_a_spent_account(_: &()) -> Outcome {
+    let world = World::new();
+    let mut work_1 = account("work-1", Some(4));
+    work_1
+        .env
+        .insert("AGENT_TOKEN".into(), "a-token-of-the-account".into());
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![work_1, account("work-2", None)],
+    );
+    world.host.set_host_pool(Some("work"));
+    let until = world.host.now() + 2 * 3600;
+    spent(&world, "work", "work-2", until);
+    fix_in(&world, None, "one")?;
+    fix_in(&world, None, "two")?;
+    let host = host(&world)?;
+    ensure_eq!(
+        host.pools,
+        vec![PoolStatus {
+            name: "work".into(),
+            strategy: Strategy::FillFirst,
+            accounts: vec![
+                AccountStatus {
+                    name: "work-1".into(),
+                    program: "agent".into(),
+                    running: 2,
+                    bound: Some(4),
+                    spent_until: None,
+                },
+                AccountStatus {
+                    name: "work-2".into(),
+                    program: "agent".into(),
+                    running: 0,
+                    bound: None,
+                    spent_until: Some(until),
+                },
+            ],
+        }],
+        "the host's pools"
+    );
+    let answer = world.engine().status(None).to_json();
+    ensure!(
+        !answer.contains("a-token-of-the-account"),
+        "status gives a value of an account's environment"
     );
     Ok(())
 }

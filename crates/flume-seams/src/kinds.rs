@@ -81,13 +81,13 @@ pub enum Deliverable {
     },
 }
 
-/// What an agent starts with beyond its prompt (32, 107).
+/// What an agent starts with beyond its prompt and the environment its
+/// account gives (32, 107, 144).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub program: Option<String>,
     pub model: Option<String>,
     pub instructions: Option<String>,
-    pub env: BTreeMap<String, String>,
     /// The pane the agent opens beside, named by the launch's settings.
     pub beside: Option<String>,
 }
@@ -99,25 +99,9 @@ pub struct Settings {
 pub const SET: &str = "<set>";
 
 impl Settings {
-    /// These settings with each environment variable's value given as
-    /// [`SET`], for a record or an answer: the names stand and no value
-    /// does (32, 56).
-    pub fn unvalued(&self) -> Settings {
-        Settings {
-            env: self
-                .env
-                .keys()
-                .map(|name| (name.clone(), SET.to_string()))
-                .collect(),
-            ..self.clone()
-        }
-    }
-
     /// These settings with `over`'s fields set over them, field by field
     /// (32).
     pub fn under(&self, over: &Settings) -> Settings {
-        let mut env = self.env.clone();
-        env.extend(over.env.clone());
         Settings {
             program: over.program.clone().or_else(|| self.program.clone()),
             model: over.model.clone().or_else(|| self.model.clone()),
@@ -125,7 +109,6 @@ impl Settings {
                 .instructions
                 .clone()
                 .or_else(|| self.instructions.clone()),
-            env,
             beside: over.beside.clone().or_else(|| self.beside.clone()),
         }
     }
@@ -156,7 +139,8 @@ impl KindSettings {
 }
 
 /// Where a setting an agent started with came from, the first of the
-/// six that gave it (32, 56).
+/// six that gave it, or for an environment variable its account (32, 56,
+/// 144).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Layer {
@@ -172,6 +156,9 @@ pub enum Layer {
     Kind,
     /// flume's own default.
     Default,
+    /// The account the agent runs under, which alone gives its
+    /// environment (144).
+    Account,
 }
 
 impl Layer {
@@ -184,13 +171,8 @@ impl Layer {
             Layer::Repository => "repository",
             Layer::Kind => "kind",
             Layer::Default => "default",
+            Layer::Account => "account",
         }
-    }
-
-    /// Whether the layer is the host's configuration, whose environment
-    /// values are read against the host user's login environment (29).
-    pub fn hosts(self) -> bool {
-        matches!(self, Layer::HostRepository | Layer::HostKind)
     }
 }
 
@@ -200,8 +182,8 @@ impl std::fmt::Display for Layer {
     }
 }
 
-/// One setting's layer and its value as that layer wrote it, before a
-/// host value's `~` and variables are read (32, 56).
+/// One setting's layer and its value as that layer wrote it, before an
+/// account value's `~` and variables are read (32, 56).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Given {
     pub layer: Layer,

@@ -22,13 +22,11 @@ brought to the rule.
   agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
   operator rules (Part C's preamble; core.19). The item leaves when it
   lands.
-- **Records 0020 and 0021 wait on a plan.** Streams, pools, spent
-  accounts and affinity (record 0020; core.26, core.30, core.32), and
-  the standing prompt with cache use in status (record 0021; core.33),
-  both accepted 2026-10-29 and stated at blueprints 6e5aae2, record
-  0020 as amended at 87a7458, are built only once the user approves a
-  plan for them. Until then the code stands against core.26's streams,
-  core.30's environment from the account alone, core.32 and core.33. The item leaves when the code is brought to them.
+- **Record 0021 waits on a plan.** The standing prompt with cache use
+  in status (record 0021; core.33), accepted 2026-10-29 and stated at
+  blueprints 6e5aae2, is built only once the user approves a plan for
+  it. Until then the code stands against core.33. The item leaves when
+  the code is brought to it.
 - **weir's crate does not yet read a stage's `standing`.** Record 0021
   makes it a field of the kind format (weir 53, C.4, at blueprints
   6e5aae2), and flume reads it only through weir-kinds (core.4). The

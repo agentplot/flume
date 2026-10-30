@@ -2,16 +2,18 @@
 //! 14, 17; record 0016): what each of the plugin's hooks does with the
 //! input Claude Code 2.1.296 hands it on standard input, in an agent flume
 //! started, whose environment names its start (`FLUME_AGENT`), the start's
-//! secret, its place and its stage. Outside such an agent every hook does
-//! nothing. A hook never fails and never holds up a start or a turn: what
+//! secret, its place and its stage. SessionStart compares the agent's
+//! program and environment with its start's record before it acks (161).
+//! Outside such an agent every hook does nothing. A hook never fails and never holds up a start or a turn: what
 //! it cannot do it leaves undone, and it always exits 0; it answers only
 //! through the JSON Claude Code reads, a refused command's reason or a
 //! stop's.
 
-use super::guard;
-use super::record::{Asking, Record, Started};
-use super::{as_received, collapsed, digest, AGENT, PLACE, SECRET, STAGE};
-use flume_core::{Answer, Engine};
+use super::record::{self, Asking, Failure, Record, Started};
+use super::{as_received, collapsed, digest, guard, wrapper, AGENT, PLACE, SECRET, STAGE};
+use crate::host::process::{parent_executable, program_path};
+use flume_core::{variable_digest, Answer, Engine};
+use flume_seams::{Secret, StartRecord, Unsettled};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -83,24 +85,88 @@ impl Start {
     }
 }
 
+/// How this process began otherwise than the start's record says its
+/// agent runs: each variable the record names that `variable` finds
+/// unset, each whose digest keyed by `secret` differs, by name alone, and
+/// whether the program the record names, found on `path` as the command
+/// finds it and run in a nix wrapper's place, is another than `ran`, the
+/// program this process's parent runs. The program is compared only
+/// where both are read (161; core.10, core.30).
+pub fn compare(
+    recorded: &StartRecord,
+    secret: &Secret,
+    variable: impl Fn(&str) -> Option<String>,
+    ran: Option<&Path>,
+    path: &str,
+) -> Unsettled {
+    let mut unsettled = Unsettled::default();
+    for (name, digest) in &recorded.env {
+        match variable(name) {
+            None => unsettled.missing.push(name.clone()),
+            Some(value) if &variable_digest(secret, name, &value) != digest => {
+                unsettled.different.push(name.clone());
+            }
+            Some(_) => {}
+        }
+    }
+    let named = program_path(&recorded.program, path)
+        .map(|file| wrapper::unwrapped(&file).map_or(file, |wrapped| wrapped.program));
+    let canonical = |file: &Path| file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+    if let (Some(named), Some(ran)) = (named, ran) {
+        unsettled.program = canonical(&named) != canonical(ran);
+    }
+    unsettled
+}
+
 /// The started ack: the start's session, its transcript, how it began and
-/// the plugin's version, taken only with the start's secret; it clears the
-/// asking mark (35, 90, 135).
+/// the plugin's version, taken only with the start's secret and only where
+/// this process's parent runs the program the start's record names and
+/// every variable the record names matches it; it clears the asking mark.
+/// Where anything differs it is not taken: the agent's record says what
+/// differed, by name alone, and a settle of the place is started detached,
+/// which ends the agent once quiet and starts its stage afresh (35, 90,
+/// 121, 135, 161).
 pub fn ack_started(
     start: &Start,
     started: &Started,
     build: &dyn Fn() -> Result<Engine, String>,
+    binary: &Path,
 ) -> Result<String, String> {
-    let record = start.record(build)?;
+    let (Some(agent), Some(secret)) = (&start.agent, &start.secret) else {
+        return Err(format!(
+            "this agent was not started by flume: {AGENT} or {SECRET} is not set"
+        ));
+    };
+    let (folder, recorded) = build()?.start_record(agent, secret)?;
+    let record = Record::named(&folder, agent);
+    let unsettled = compare(
+        &recorded,
+        &Secret(secret.clone()),
+        |name| std::env::var_os(name).map(|value| value.to_string_lossy().into_owned()),
+        parent_executable().as_deref(),
+        &std::env::var("PATH").unwrap_or_default(),
+    );
+    if unsettled != Unsettled::default() {
+        record
+            .set_unsettled(&record::Unsettled {
+                unsettled: unsettled.clone(),
+                session_id: started.session_id.clone(),
+                transcript_path: started.transcript_path.clone(),
+            })
+            .map_err(|error| format!("{}: {error}", record.dir().display()))?;
+        if let Some(place) = &start.place {
+            settle_detached(binary, place, false);
+        }
+        return Err(format!(
+            "{agent} began {}, not as its start recorded, so it is not its stage's agent",
+            unsettled.words()
+        ));
+    }
     record
         .ack_started(started)
         .and_then(|()| record.clear_asking())
         .map_err(|error| format!("{}: {error}", record.dir().display()))?;
-    Ok(format!(
-        "{} started in session {}",
-        start.agent.as_deref().unwrap_or_default(),
-        started.session_id
-    ))
+    Ok(format!("{agent} started in session {}", started.session_id))
 }
 
 /// The received ack: the submitted prompt's digest, its paste tags taken
@@ -155,7 +221,7 @@ pub fn hook(
                 source: text("source"),
                 plugin_version: start.plugin_version(),
             };
-            let _ = ack_started(start, &started, build);
+            let _ = ack_started(start, &started, build, binary);
             String::new()
         }
         "user-prompt-submit" if !subagent => {
@@ -215,6 +281,11 @@ pub fn hook(
                 let said = [text("last_assistant_message"), text("error_details")]
                     .into_iter()
                     .find(|words| !words.trim().is_empty());
+                let _ = record.set_failure(&Failure {
+                    error: error.clone(),
+                    words: said.clone().unwrap_or_default(),
+                    at: now(),
+                });
                 let words = match (said, error.is_empty()) {
                     (Some(said), false) => format!("{said} ({error})"),
                     (Some(said), true) => said,
@@ -233,6 +304,13 @@ pub fn hook(
         }
         _ => String::new(),
     }
+}
+
+/// The host's clock, in seconds.
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
 }
 
 /// Leaves the asking mark on the call `input` names: by its id where
@@ -269,18 +347,22 @@ fn stop(start: &Start, build: &dyn Fn() -> Result<Engine, String>, binary: &Path
         return json!({ "decision": "block", "reason": words }).to_string();
     }
     if let Some(place) = &start.place {
-        settle_detached(binary, place);
+        settle_detached(binary, place, true);
     }
     String::new()
 }
 
-/// `flume settle <place> --on-quiet`, in a process group of its own that
-/// outlives the hook, its output nowhere.
-fn settle_detached(binary: &Path, place: &str) {
+/// `flume settle <place>`, with `--on-quiet` where `on_quiet`, in a
+/// process group of its own that outlives the hook, its output nowhere.
+fn settle_detached(binary: &Path, place: &str, on_quiet: bool) {
     use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
+    let mut args = vec!["settle", place];
+    if on_quiet {
+        args.push("--on-quiet");
+    }
     let _ = Command::new(binary)
-        .args(["settle", place, "--on-quiet"])
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

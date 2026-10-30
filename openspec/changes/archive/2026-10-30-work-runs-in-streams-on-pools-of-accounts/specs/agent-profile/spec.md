@@ -24,7 +24,8 @@ The Claude Code profile's `spent` SHALL read yes only where the
 StopFailure hook recorded `rate_limit` with words that open as the
 pinned release's usage-limit messages do, with the reset its words'
 ` · resets <when> (<zone>)` part names, read in that zone from when
-the hook ran, or none; a `rate_limit` with other words SHALL read no
+the hook ran, a time of day being the first such time no more than a
+minute before the hook ran, or none; a `rate_limit` with other words SHALL read no
 (146, 151, C.4).
 
 #### Scenario: A session limit with a time of day
@@ -52,6 +53,30 @@ the hook ran, or none; a `rate_limit` with other words SHALL read no
 - **WHEN** the hook recorded `rate_limit` with "Opus is experiencing high load, please use /model to switch to Sonnet"
 - **THEN** `spent` reads no, and the words stay the agent's last words (43, 151)
 
+### Requirement: The credentials Claude Code keeps from its hooks
+
+The Claude Code profile's `withheld` SHALL name the credential
+variables the pinned release keeps from every process it starts, its
+hooks among them: its own list of credentials, the file-descriptor ones
+it spreads into that list, and the memory service's token (161, C.4).
+
+#### Scenario: The account's token
+
+- **WHEN** a start's account gives `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_OAUTH_TOKEN`
+- **THEN** `withheld` names `CLAUDE_CODE_OAUTH_TOKEN` and not `CLAUDE_CONFIG_DIR`, the start's record names `CLAUDE_CONFIG_DIR` alone of the two, and the SessionStart hook, whose environment holds no token, acks (161)
+
+### Requirement: Own work read before the first turn
+
+The Claude Code profile's `own_work` SHALL read no for a session whose
+transcript the release has not yet written, since it writes the
+transcript at the session's first message and own work starts only in a
+turn; a transcript that cannot be read SHALL read unknown (91, 93).
+
+#### Scenario: Idle at its prompt
+
+- **WHEN** an agent's SessionStart hook recorded its session and transcript, and the agent sits at its prompt with no turn taken and no transcript written
+- **THEN** `own_work` reads no and `asking` reads no (31, 90, 91)
+
 ### Requirement: The words pinned to the release the tree holds
 
 A `check-tools` test SHALL read the pinned Claude Code and require the
@@ -63,3 +88,17 @@ template, the ` · resets ` part and the zone's suffix (core.22, C.4).
 
 - **WHEN** the test reads the program devenv.nix pins, the file its `claude` wrapper runs
 - **THEN** each fragment the profile's reading rests on is found in it, and the test names any that is not (C.4)
+
+### Requirement: The credentials pinned to the release the tree holds
+
+A `check-tools` test SHALL require the source the profile's `withheld`
+rests on to stand byte for byte in the pinned Claude Code: its lists of
+credentials, the memory service's pair, the test of the environment
+against the list, the names its child environment drops and the drop,
+and the hook runner's environment built on that child environment
+(core.22, C.4).
+
+#### Scenario: What the pinned release keeps from its hooks
+
+- **WHEN** the test reads the program devenv.nix pins
+- **THEN** each fragment `withheld` rests on is found in it, and the test names any that is not (161, C.4)

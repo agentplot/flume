@@ -419,8 +419,9 @@ fn map_agents(
 }
 
 /// An agent's settings, its table as written: `program`, `model`,
-/// `instructions`, `env` and `beside` (32, 107); every other key is the
-/// runner's, and ignored.
+/// `instructions` and `beside` (32, 107); an `env` fails it, naming the
+/// field, since an agent's environment is its account's alone (144, C.2);
+/// every other key is the runner's, and ignored.
 fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
     let mut text = |name: &str| match agent.get(name) {
         None => None,
@@ -434,28 +435,15 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
     let model = text("model");
     let instructions = text("instructions");
     let beside = text("beside");
-    let env = match agent.get("env") {
-        None => Default::default(),
-        Some(Value::Table(env)) => env
-            .iter()
-            .filter_map(|(name, value)| match value {
-                Value::String(value) => Some((name.clone(), value.clone())),
-                _ => {
-                    problems.push(format!("{at}.env.{name}: must be a string"));
-                    None
-                }
-            })
-            .collect(),
-        Some(_) => {
-            problems.push(format!("{at}.env: must be a table of strings"));
-            Default::default()
-        }
-    };
+    if agent.contains_key("env") {
+        problems.push(format!(
+            "{at}.env: an agent's environment is its account's to give, and no declaration gives one"
+        ));
+    }
     Settings {
         program,
         model,
         instructions,
-        env,
         beside,
     }
 }

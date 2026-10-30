@@ -3,7 +3,9 @@
 //! command, its agent the command prints for Claude Code, and each hook
 //! run as Claude Code 2.1.296 runs it, `flume hook <event>` with the
 //! hook's input on standard input and the agent's environment, over a
-//! fixture transcript on a scratch state directory. No Claude Code runs.
+//! fixture transcript on a scratch state directory. No Claude Code runs:
+//! the test's own process stands in for the program the hook runs under,
+//! a scratch `claude` on the hook's `PATH` naming it (161).
 
 use super::agent_claude::fixture;
 use crate::common::*;
@@ -28,6 +30,9 @@ struct Agent {
     transcript: PathBuf,
     /// The prompt the command carries, its last word.
     prompt: String,
+    /// The `PATH` Claude Code hands its hooks: a scratch folder first whose
+    /// `claude` is the program the hook runs under, this test's own.
+    path: String,
 }
 
 /// What a command printed and its exit status.
@@ -85,9 +90,23 @@ impl Host {
         repository.write(".gitignore", "places/\n");
         repository.commit("the binding");
         let host = Host { repository };
-        for dir in ["state", "config/flume", "data", "home", "kinds/prompts"] {
+        for dir in [
+            "state",
+            "config/flume",
+            "data",
+            "home",
+            "kinds/prompts",
+            "bin",
+        ] {
             std::fs::create_dir_all(host.path(dir)).expect("the host's directory");
         }
+        // The hook's parent is this test's process, so the program the
+        // start's record names, `claude`, is found as this test's own.
+        std::os::unix::fs::symlink(
+            std::env::current_exe().expect("this test's program"),
+            host.path("bin/claude"),
+        )
+        .expect("the stand-in program");
         std::fs::write(
             host.path("kinds/prompts/work.md"),
             "Do the work of {{name}}. To stop short: {{needs}}\n",
@@ -207,6 +226,11 @@ impl Host {
             plugin: PathBuf::from(plugin),
             transcript,
             prompt,
+            path: format!(
+                "{}:{}",
+                self.path("bin").display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
         }
     }
 
@@ -278,7 +302,7 @@ impl Host {
 
 impl Agent {
     /// The environment Claude Code gives the agent's hooks: the four
-    /// FLUME_* words and the plugin's root.
+    /// FLUME_* words, the plugin's root and its `PATH`.
     fn env(&self) -> Vec<(String, String)> {
         vec![
             ("FLUME_AGENT".into(), self.identity.clone()),
@@ -289,6 +313,7 @@ impl Agent {
                 "CLAUDE_PLUGIN_ROOT".into(),
                 self.plugin.to_string_lossy().into_owned(),
             ),
+            ("PATH".into(), self.path.clone()),
         ]
     }
 }
@@ -386,6 +411,195 @@ fn the_started_and_received_acks() {
     assert_eq!(host.state(), before, "an ack without the secret wrote");
     let refused = host.flume(&["ack", "received", "--digest", "abc"], &[], "");
     assert_eq!(refused.code, 1, "{}", refused.out);
+}
+
+/// The agent's record in the place's own folder.
+fn record_of(host: &Host, agent: &Agent) -> flume::profiles::agent::claude::record::Record {
+    flume::profiles::agent::claude::record::Record::named(
+        &host
+            .path("state/flume/places")
+            .join(agent.place.trim_start_matches('/').replace('/', "%"))
+            .to_string_lossy(),
+        &agent.identity,
+    )
+}
+
+/// The host's configuration: a pool of one account whose environment
+/// gives `CLAUDE_CONFIG_DIR` a scratch folder of the test's own.
+fn with_an_account(host: &Host) -> PathBuf {
+    let account = host.path("account-1");
+    std::fs::create_dir_all(&account).expect("the account's folder");
+    std::fs::write(
+        host.path("config/flume/config.toml"),
+        format!(
+            "[host]\npool = \"work\"\n\n[pools.work]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"work-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }}]\n",
+            account.display().to_string()
+        ),
+    )
+    .expect("the host's configuration");
+    account
+}
+
+#[test]
+fn a_variable_with_another_value() {
+    // The start's record names CLAUDE_CONFIG_DIR; the hook's environment
+    // holds another value: no started ack, the agent's record names the
+    // variable as different and holds no value, a settle of the place is
+    // started, which reads the start begun without its settings, and the
+    // hook exits 0 (161).
+    let host = Host::new("another-value");
+    let account = with_an_account(&host);
+    let agent = host.launch("fix");
+    let mut env = agent.env();
+    let other = host.path("account-elsewhere");
+    env.push((
+        "CLAUDE_CONFIG_DIR".into(),
+        other.to_string_lossy().into_owned(),
+    ));
+    let ran = host.hook_in(
+        &agent,
+        "session-start",
+        json!({ "source": "startup" }),
+        &env,
+    );
+    assert_eq!(decision(&ran), None);
+    assert_eq!(host.agent_status(&agent.place)["started"], "no");
+    let record = record_of(&host, &agent);
+    assert!(record.started().is_none(), "a started ack was written");
+    let unsettled = record
+        .unsettled()
+        .expect("the word that it began otherwise");
+    assert_eq!(unsettled.unsettled.different, vec!["CLAUDE_CONFIG_DIR"]);
+    assert!(unsettled.unsettled.missing.is_empty() && !unsettled.unsettled.program);
+    let written =
+        std::fs::read_to_string(record.dir().join("unsettled.json")).expect("the word as written");
+    for value in [account.to_string_lossy(), other.to_string_lossy()] {
+        assert!(!written.contains(value.as_ref()), "a value in {written}");
+    }
+    let status = until(&host, &agent.place, Duration::from_secs(20), |status| {
+        status["places"][0]["unsettled"]
+            .as_array()
+            .is_some_and(|read| !read.is_empty())
+    });
+    let read = &status["places"][0]["unsettled"][0];
+    assert_eq!(read["different"], json!(["CLAUDE_CONFIG_DIR"]), "{status}");
+    assert_eq!(read["start"], 1, "{status}");
+
+    // The same variable as the start gave it: the ack is taken.
+    let host = Host::new("same-value");
+    let account = with_an_account(&host);
+    let agent = host.launch("fix");
+    let mut env = agent.env();
+    env.push((
+        "CLAUDE_CONFIG_DIR".into(),
+        account.to_string_lossy().into_owned(),
+    ));
+    host.hook_in(
+        &agent,
+        "session-start",
+        json!({ "source": "startup" }),
+        &env,
+    );
+    assert_eq!(host.agent_status(&agent.place)["started"], "yes");
+}
+
+#[test]
+fn a_credential_the_program_keeps_from_its_hooks() {
+    // The account gives CLAUDE_CONFIG_DIR and CLAUDE_CODE_OAUTH_TOKEN;
+    // Claude Code keeps the token from its hooks, so the hook's
+    // environment holds CLAUDE_CONFIG_DIR alone. The start's record names
+    // no token and the ack is taken (161).
+    let host = Host::new("withheld");
+    let account = host.path("account-1");
+    std::fs::create_dir_all(&account).expect("the account's folder");
+    std::fs::write(
+        host.path("config/flume/config.toml"),
+        format!(
+            "[host]\npool = \"work\"\n\n[pools.work]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"work-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"not-a-token\" }} }}]\n",
+            account.display().to_string()
+        ),
+    )
+    .expect("the host's configuration");
+    let agent = host.launch("fix");
+    let mut env = agent.env();
+    env.push((
+        "CLAUDE_CONFIG_DIR".into(),
+        account.to_string_lossy().into_owned(),
+    ));
+    host.hook_in(
+        &agent,
+        "session-start",
+        json!({ "source": "startup" }),
+        &env,
+    );
+    assert_eq!(host.agent_status(&agent.place)["started"], "yes");
+    fn records(value: &Value, found: &mut Vec<Value>) {
+        match value {
+            Value::Object(fields) => {
+                for (key, field) in fields {
+                    if key == "start_record" {
+                        found.push(field.clone());
+                    } else {
+                        records(field, found);
+                    }
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|item| records(item, found)),
+            _ => {}
+        }
+    }
+    let mut found = vec![];
+    for (_, text) in host.state() {
+        if let Ok(document) = serde_json::from_slice::<Value>(&text) {
+            records(&document, &mut found);
+        }
+    }
+    let records = found;
+    assert_eq!(records.len(), 1, "the start's record");
+    let names: Vec<&String> = records[0]["env"]
+        .as_object()
+        .expect("the record's variables")
+        .keys()
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "CLAUDE_CONFIG_DIR",
+            "FLUME_AGENT",
+            "FLUME_PLACE",
+            "FLUME_STAGE"
+        ]
+    );
+}
+
+#[test]
+fn another_program() {
+    // The hook's parent runs another program than the `claude` its PATH
+    // finds: no started ack, and the agent's record says the program
+    // differed (161).
+    let host = Host::new("another-program");
+    let agent = host.launch("fix");
+    let elsewhere = host.path("elsewhere");
+    std::fs::create_dir_all(&elsewhere).expect("a folder");
+    std::os::unix::fs::symlink("/bin/sh", elsewhere.join("claude")).expect("another program");
+    let mut env = agent.env();
+    env[5].1 = format!(
+        "{}:{}",
+        elsewhere.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    host.hook_in(
+        &agent,
+        "session-start",
+        json!({ "source": "startup" }),
+        &env,
+    );
+    assert_eq!(host.agent_status(&agent.place)["started"], "no");
+    let unsettled = record_of(&host, &agent)
+        .unsettled()
+        .expect("the word that it began otherwise");
+    assert!(unsettled.unsettled.program, "{unsettled:?}");
+    assert!(unsettled.unsettled.missing.is_empty() && unsettled.unsettled.different.is_empty());
 }
 
 #[test]
@@ -611,23 +825,54 @@ fn a_permission_prompt_is_asking() {
 #[test]
 fn a_stop_failure_as_last_words() {
     // A usage limit ends the turn: StopFailure's reason is the agent's
-    // last words, which status gives with the agent (43).
+    // last words, which status gives with the agent, and the agent's
+    // record holds the failure's error, its words and when the hook ran,
+    // from which the profile reads the usage limit and its reset (43,
+    // 151, C.4).
     let host = Host::new("stop-failure");
     let agent = host.launch("fix");
     host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let before = now();
     host.hook(
         &agent,
         "stop-failure",
         json!({
             "error": "rate_limit",
-            "last_assistant_message": "You've hit your usage limit · resets 5pm",
+            "last_assistant_message": "You've hit your session limit · resets 5pm (UTC)",
         }),
     );
+    let after = now();
     let status = host.agent_status(&agent.place);
     assert_eq!(
-        status["last_words"], "You've hit your usage limit · resets 5pm (rate_limit)",
+        status["last_words"], "You've hit your session limit · resets 5pm (UTC) (rate_limit)",
         "{status}"
     );
+    let folder = host
+        .path("state/flume/places")
+        .join(agent.place.trim_start_matches('/').replace('/', "%"));
+    let record = flume::profiles::agent::claude::record::Record::named(
+        &folder.to_string_lossy(),
+        &agent.identity,
+    );
+    let failure = record.failure().expect("the failure recorded");
+    assert_eq!(failure.error, "rate_limit");
+    assert_eq!(
+        failure.words,
+        "You've hit your session limit · resets 5pm (UTC)"
+    );
+    assert!(
+        (before..=after).contains(&failure.at),
+        "the hook ran at {}, between {before} and {after}",
+        failure.at
+    );
+}
+
+/// The host's clock, in seconds.
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("after 1970")
+        .as_secs()
 }
 
 #[test]

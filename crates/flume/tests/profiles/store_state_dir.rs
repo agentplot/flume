@@ -233,3 +233,110 @@ fn s12_a_restart_over_the_state_directory_loses_nothing() {
         "the code stage after a restart"
     );
 }
+
+/// The account `work-1` of the pool `work` spent until `until`.
+fn spent_until(until: Seconds) -> HostDocument {
+    HostDocument::Account(AccountSpent {
+        until,
+        words: Some("You've hit your session limit · resets 3pm (UTC)".into()),
+        recorded_at: until - 3600,
+    })
+}
+
+fn work_1() -> HostKey {
+    HostKey::Account {
+        pool: "work".into(),
+        account: "work-1".into(),
+    }
+}
+
+#[test]
+fn two_processes_record_one_account_spent() {
+    let harness = Harness::new();
+    let one = StateDir::at(harness.scratch.path("state/flume"));
+    let two = StateDir::at(harness.scratch.path("state/flume"));
+    let Written::Written { version } = one.write_host(&work_1(), None, Some(&spent_until(54_000)))
+    else {
+        panic!("the first write was refused");
+    };
+    let read = two.read_host(&work_1()).expect("the account's document");
+    assert_eq!(read.version, version);
+    assert!(matches!(
+        one.write_host(&work_1(), Some(version), Some(&spent_until(55_000))),
+        Written::Written { .. }
+    ));
+    assert_eq!(
+        two.write_host(&work_1(), Some(read.version), Some(&spent_until(56_000))),
+        Written::Moved,
+        "the second process's write at the version both read"
+    );
+    let again = two.read_host(&work_1()).expect("the account's document");
+    assert_eq!(again.document, spent_until(55_000));
+    assert!(matches!(
+        two.write_host(&work_1(), Some(again.version), Some(&spent_until(56_000))),
+        Written::Written { .. }
+    ));
+    assert_eq!(
+        one.read_host(&work_1()).map(|read| read.document),
+        Some(spent_until(56_000))
+    );
+}
+
+#[test]
+fn a_spent_time_is_seen_by_another_process_and_kept_from_other_users() {
+    use std::os::unix::fs::PermissionsExt;
+    let harness = Harness::new();
+    let root = harness.scratch.path("state/flume");
+    assert!(matches!(
+        StateDir::at(&root).write_host(&work_1(), None, Some(&spent_until(54_000))),
+        Written::Written { .. }
+    ));
+    assert_eq!(
+        StateDir::at(&root)
+            .read_host(&work_1())
+            .map(|read| read.document),
+        Some(spent_until(54_000))
+    );
+    let file = root.join("accounts/work/work-1.json");
+    let mode = std::fs::metadata(&file)
+        .unwrap_or_else(|error| panic!("{}: {error}", file.display()))
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600, "the document's mode");
+    let intent = HostKey::Intent {
+        digest: "0f1e2d".into(),
+    };
+    let affinity = HostDocument::Intent(Affinity {
+        stream: "work".into(),
+        pool: "work".into(),
+        account: "work-1".into(),
+        moves: vec![],
+        gone: None,
+    });
+    assert!(matches!(
+        StateDir::at(&root).write_host(&intent, None, Some(&affinity)),
+        Written::Written { .. }
+    ));
+    assert!(root.join("intents/0f1e2d.json").is_file());
+}
+
+#[test]
+fn a_name_reaches_nothing_outside_its_directory() {
+    let harness = Harness::new();
+    let root = harness.scratch.path("state/flume");
+    let key = HostKey::Account {
+        pool: "../out".into(),
+        account: ".hidden".into(),
+    };
+    assert!(matches!(
+        StateDir::at(&root).write_host(&key, None, Some(&spent_until(54_000))),
+        Written::Written { .. }
+    ));
+    assert!(root.join("accounts/%2E.%2Fout/%2Ehidden.json").is_file());
+    assert_eq!(
+        StateDir::at(&root)
+            .read_host(&key)
+            .map(|read| read.document),
+        Some(spent_until(54_000))
+    );
+}

@@ -7,6 +7,7 @@
 //! The engine reaches every tool through the seams alone (core.1, core.2)
 //! and keeps its state in the store (core.16).
 
+mod accounts;
 mod acts;
 mod agent_acts;
 mod answer;
@@ -21,10 +22,13 @@ mod reading;
 mod room;
 mod settings;
 mod settle;
+mod spent;
 mod start;
+mod start_record;
 mod status;
 mod submit;
 mod tidy;
+mod unsettled;
 mod wait;
 mod wake;
 
@@ -33,6 +37,9 @@ pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
 pub use prompt::group_name;
+pub use start_record::{
+    variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
+};
 pub use wait::{WaitFor, WAIT_POLL};
 
 use flume_seams::{
@@ -217,6 +224,14 @@ mod tests {
             hold_submission: false,
             hold_words: BTreeMap::new(),
             recipients: vec![],
+            stream: flume_seams::StreamHeld {
+                name: flume_seams::DEFAULT_STREAM.into(),
+                from: flume_seams::StreamFrom::Default,
+            },
+            intent: flume_seams::IntentKey::Launch {
+                name: "one".into(),
+                digest: "d1".into(),
+            },
         }
     }
 

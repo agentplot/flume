@@ -19,8 +19,9 @@
 //!
 //! The token is a test account's, made by `claude setup-token` signed in
 //! to that account; the host's own sign-in, configuration and accounts are
-//! never read: each agent runs with a scratch `CLAUDE_CONFIG_DIR` and that
-//! token, given by the walkthrough's host configuration. With no token the
+//! never read: each agent runs under the walkthrough's host's one-account
+//! pool, whose account gives a scratch `CLAUDE_CONFIG_DIR` and that token
+//! (144). With no token the
 //! walkthroughs fail at once, naming it. `FLUME_LIVE_MODEL` names a model
 //! for the agents where the account's default is not wanted.
 
@@ -90,7 +91,7 @@ impl Live {
         std::os::unix::fs::symlink(walk.home(), &link).expect("a short link to the home");
         let walk = walk.with_home(link.clone());
 
-        let program = pinned_claude();
+        pinned_claude();
         let config = walk.repository.scratch.path("claude-config");
         std::fs::create_dir_all(&config).expect("the agents' Claude Code folder");
         std::fs::write(
@@ -101,19 +102,15 @@ impl Live {
         let model = std::env::var(MODEL)
             .ok()
             .filter(|model| !model.trim().is_empty());
-        let mut text = String::from("[host]\nterminal = \"herdr\"\n");
-        for kind in ["fix", "change"] {
-            text.push_str(&format!(
-                "\n[kinds.{kind}.agents]\nprogram = {:?}\n",
-                program.display().to_string()
-            ));
-            if let Some(model) = &model {
-                text.push_str(&format!("model = {model:?}\n"));
+        let mut text = format!(
+            "[host]\nterminal = \"herdr\"\npool = \"live\"\n\n[pools.live]\nstrategy = \"fill-first\"\n\
+             accounts = [{{ name = \"test-account\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = {token:?} }} }}]\n",
+            config.display().to_string()
+        );
+        if let Some(model) = &model {
+            for kind in ["fix", "change"] {
+                text.push_str(&format!("\n[kinds.{kind}.agents]\nmodel = {model:?}\n"));
             }
-            text.push_str(&format!(
-                "\n[kinds.{kind}.agents.env]\nCLAUDE_CONFIG_DIR = {:?}\nCLAUDE_CODE_OAUTH_TOKEN = {token:?}\n",
-                config.display().to_string()
-            ));
         }
         walk.configure(&text);
 
@@ -262,10 +259,10 @@ fn failing(place: &str, status: &Value) {
     }
 }
 
-/// The pinned Claude Code, as `devenv.nix` states its version, the first
-/// `claude` on `PATH`, named as it stands: nix's wrapper, whose wrapped
-/// program and variables the agent profile runs.
-fn pinned_claude() -> PathBuf {
+/// The pinned Claude Code, as `devenv.nix` states its version, is the
+/// first `claude` on `PATH`, nix's wrapper, whose wrapped program and
+/// variables the agent profile runs for the account's program `claude`.
+fn pinned_claude() {
     let nix =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../devenv.nix"))
             .expect("devenv.nix");
@@ -293,5 +290,4 @@ fn pinned_claude() -> PathBuf {
         "the first claude on PATH, {}, is {version:?}, not the pinned {pinned}: run in the devenv shell",
         found.display()
     );
-    found
 }

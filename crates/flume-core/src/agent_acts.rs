@@ -89,6 +89,30 @@ impl Engine {
         Ok(self.store.folder(&held.place.id))
     }
 
+    /// The place's own folder and the start's record of what the agent of
+    /// the live current start `identity` names is to run under, given only
+    /// with that start's secret, so the agent program compares its own
+    /// start with it before it says it started (128, 135, 161).
+    pub fn start_record(
+        &self,
+        identity: &str,
+        secret: &str,
+    ) -> Result<(String, StartRecord), String> {
+        let Some((held, index)) = self.current_start(identity) else {
+            return Err(format!(
+                "no live agent of a place's current stage is {identity}"
+            ));
+        };
+        let start = held.stages[index].start.as_ref().expect("a live start");
+        if start.secret.0 != secret {
+            return Err(format!("the secret is not {identity}'s start's"));
+        }
+        Ok((
+            self.store.folder(&held.place.id),
+            start.start_record.clone(),
+        ))
+    }
+
     /// The stop check: words naming the deliverable, each thing the stage
     /// declares it makes with no line, and the way to stop short, for an
     /// agent of a stage that is not a conversation, about to go quiet
@@ -109,6 +133,9 @@ impl Engine {
         let start = held.stages[index].start.as_ref()?;
         let agent = self.agent(&start.program)?;
         let folder = self.store.folder(&place.id);
+        if agent.started_without(&folder, &start.identity).is_some() {
+            return None;
+        }
         if agent.own_work(&folder, &start.identity) != Reading::No
             || agent.asking(&folder, &start.identity) != Reading::No
         {

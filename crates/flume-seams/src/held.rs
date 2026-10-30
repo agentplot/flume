@@ -5,7 +5,7 @@
 
 use crate::{
     Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PlaceId, PlaceRef, Prompt,
-    Readiness, Revision, Seconds, Secret, Settings, StopKind, Verdict,
+    Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -61,6 +61,26 @@ pub struct HeldState {
     /// woken (132; core.28).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub unwoken: BTreeMap<String, String>,
+    /// Each move of a stage of the place, or of its intent at a start of
+    /// the place's, from one account to another, in order (56, 145 to
+    /// 147).
+    pub moves: Vec<AccountMove>,
+    /// Each start of the place's whose agent began without the settings
+    /// its start recorded, in order, by its variables' names alone (56,
+    /// 161).
+    pub unsettled: Vec<UnsettledStart>,
+}
+
+/// A start whose agent began without the settings its start recorded:
+/// its stage and number, when a settle read it so, and each variable that
+/// differed by its name and whether the program did (56, 135, 161).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnsettledStart {
+    pub stage: String,
+    pub start: u32,
+    pub at: Seconds,
+    #[serde(flatten)]
+    pub unsettled: Unsettled,
 }
 
 /// How long a place waits on its caller under no hold's words before it
@@ -342,11 +362,9 @@ pub struct PlaceRecord {
     pub binding: Binding,
     pub brief: Option<String>,
     pub mark: Option<String>,
-    /// The launch's settings by stage. They keep their environment's
-    /// values, since each later start reads the launch's layer as the
-    /// launch gave it and the caller who gave it may be gone (8, 32): the
-    /// one record of flume's that holds an environment value, written
-    /// readable by the host's user alone and printed by no answer (56).
+    /// The launch's settings by stage, kept since each later start reads
+    /// the launch's layer as the launch gave it and the caller who gave
+    /// it may be gone (8, 32).
     pub settings: BTreeMap<String, Settings>,
     /// The launch's settings for every stage's agent, kept as `settings`
     /// is (7, 8, 32).
@@ -366,6 +384,38 @@ pub struct PlaceRecord {
     /// 8, 43).
     #[serde(default)]
     pub recipients: Vec<String>,
+    /// The stream the place runs in, fixed at its launch, and where it
+    /// came from (8, 143).
+    pub stream: StreamHeld,
+    /// The intent the place serves, as its launch named it or its
+    /// repository and base give it (147).
+    pub intent: IntentKey,
+}
+
+/// An intent's key: the name a launch gave it, else the repository and
+/// base the place is cut from, each with the digest that names the
+/// intent's document on the host, the SHA-256 in hex of `name:<name>` or
+/// `base:<repository id>:<base>` (147, 153).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "from", rename_all = "kebab-case")]
+pub enum IntentKey {
+    /// The launch named it.
+    Launch { name: String, digest: String },
+    /// The launch named none: the repository and base give it.
+    Base {
+        repository: String,
+        base: String,
+        digest: String,
+    },
+}
+
+impl IntentKey {
+    /// The digest that names the intent's document (153).
+    pub fn digest(&self) -> &str {
+        match self {
+            IntentKey::Launch { digest, .. } | IntentKey::Base { digest, .. } => digest,
+        }
+    }
 }
 
 impl PlaceRecord {
@@ -487,8 +537,8 @@ pub struct StageHeld {
     /// The part a refused stage could not fill (27).
     pub refused_part: Option<String>,
     /// The setting a stage was refused at its start for, with its layer:
-    /// a program no agent profile binds, or a variable the host user's
-    /// login environment lacks (27, 32).
+    /// a program no agent profile binds, or a variable its account names
+    /// that the host user's login environment lacks (27, 32, 144).
     #[serde(default)]
     pub refused_setting: Option<String>,
     pub end: Option<StageEnd>,
@@ -549,6 +599,11 @@ pub struct StageEnd {
     /// an end stays small beside a submission's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Box<GroupHeld>>,
+    /// For a start never begun because its agent began without its
+    /// settings a second time in a row, how it began otherwise, by its
+    /// variables' names alone (35, 161); boxed, so an end stays small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unsettled: Option<Box<Unsettled>>,
 }
 
 /// One line a stage's run wrote of what it made (129): a JSON object
@@ -602,14 +657,20 @@ pub struct StartHeld {
     pub secret: Secret,
     pub program: String,
     /// The settings it started with, each value as its layer wrote it
-    /// but the environment's, kept by name alone, each value [`crate::SET`]
     /// (32, 56).
     pub settings: Settings,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>`, an environment variable's value
-    /// [`crate::SET`] (32, 56).
+    /// `instructions` or `env.<NAME>`, a variable's from its account and
+    /// its value [`crate::SET`], so no value is kept (32, 56, 144).
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
+    /// The account it runs under, none where its stream and the host
+    /// name no pool (144, 145).
+    pub account: Option<AccountHeld>,
+    /// What its agent is to run under, which the agent's word that it
+    /// started is compared with: its program, its account and each
+    /// variable's digest keyed by its secret, never a value (161).
+    pub start_record: StartRecord,
     /// The agent's own record, once a reading names it (77).
     pub record: Option<String>,
     pub prompt: Prompt,
@@ -632,6 +693,80 @@ pub struct StartHeld {
     /// where every task was ticked there (140).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupHeld>,
+}
+
+/// What a start's agent is to run under (161): the program its settings
+/// resolved, the account it runs under, none where it has none, and, by
+/// each variable's name, the variable's digest, HMAC-SHA256 keyed by the
+/// start's secret over its name, a zero byte and its value, in hex. It
+/// covers each variable of the start's resolved environment and
+/// `FLUME_AGENT`, `FLUME_PLACE` and `FLUME_STAGE`; never `PATH` or `SHELL`,
+/// which a terminal sets for its own sake, the login environment beneath
+/// the settings, or `FLUME_SECRET`, which the started ack checks itself.
+/// No value is kept, and no guessed value is tested against a digest
+/// without the secret (core.30).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartRecord {
+    pub program: String,
+    pub account: Option<String>,
+    pub env: BTreeMap<String, String>,
+}
+
+/// The account a start runs under: its pool, its name, and whether the
+/// intent's affinity or the pool's strategy chose it (144, 145, 147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountHeld {
+    pub pool: String,
+    pub name: String,
+    pub from: AccountFrom,
+}
+
+/// What chose a start's account (145, 147).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountFrom {
+    Affinity,
+    Strategy,
+}
+
+/// A move from one account to another: of a stage, whose start went to
+/// another account than its last, or of an intent, whose affinity moved;
+/// why, and when. The agents after it start without the earlier
+/// account's cache (56, 145 to 147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountMove {
+    #[serde(flatten)]
+    pub on: MoveOn,
+    pub from: String,
+    pub to: String,
+    pub why: MoveWhy,
+    pub at: Seconds,
+}
+
+/// What moved between accounts: a stage, or the intent (147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "on", rename_all = "snake_case")]
+pub enum MoveOn {
+    Stage { stage: String },
+    Intent,
+}
+
+/// Why a start went to another account: the one before was spent, or at
+/// its own bound (145, 146).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MoveWhy {
+    Spent,
+    Full,
+}
+
+impl MoveWhy {
+    pub fn name(self) -> &'static str {
+        match self {
+            MoveWhy::Spent => "spent",
+            MoveWhy::Full => "full",
+        }
+    }
 }
 
 /// The task group a repetition was given, as the change gave it at the

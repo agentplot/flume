@@ -46,6 +46,7 @@ brief = "Read the records and plan the next unit."
 | `priority` | the run's priority in the host's queue | `0` |
 | `base` | the base the run's place is cut from | the repository's default branch |
 | `brief` | the run's brief, for a kind whose prompt asks for one | none |
+| `stream` | the [stream](/flume/guides/agent-settings/#streams) the run's place runs in, one the host declares | as for any launch |
 
 A key the table does not know, or a key that is no address, makes the
 host's configuration unreadable, and every command of flume's says so.

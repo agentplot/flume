@@ -1,7 +1,7 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
     Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
-    Secret, Settings,
+    Secret, Settings, Spent, Unsettled,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 /// The agent seam: each agent's own record by identity. An agent says
 /// it started once the fake terminal has opened it, unless set otherwise,
 /// and receives a prompt once the fake terminal has sent it, or opened it
-/// carried, as many times as it is set to need; every other answer is
+/// carried, as many times as it is set to need, and says nothing of its
+/// start where it is set to have begun without its settings; every other answer is
 /// set, unknowns among them. A record kept in a place's folder is read
 /// there alone: a reading handed another folder is unknown (128).
 pub struct FakeAgent {
@@ -24,6 +25,7 @@ struct AgentModel {
     no_send_back: bool,
     no_on_quiet: bool,
     no_guard: bool,
+    withheld: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -38,6 +40,8 @@ struct Record {
     folder: Option<String>,
     started: Option<Reading>,
     last_words: Option<String>,
+    spent: Spent,
+    started_without: Option<Unsettled>,
 }
 
 impl Default for Record {
@@ -53,6 +57,8 @@ impl Default for Record {
             folder: None,
             started: None,
             last_words: None,
+            spent: Spent::No,
+            started_without: None,
         }
     }
 }
@@ -117,6 +123,19 @@ impl FakeAgent {
         self.with(agent, |record| record.last_words = Some(words));
     }
 
+    /// Whether the agent's record shows its account reached a usage
+    /// limit, and the reset it names (151): a usage limit scripted with
+    /// words a test writes.
+    pub fn set_spent(&self, agent: &Identity, spent: Spent) {
+        self.with(agent, |record| record.spent = spent);
+    }
+
+    /// The agent began without the settings its start recorded, as its
+    /// own word shows, which then says it started nothing (135, 161).
+    pub fn set_started_without(&self, agent: &Identity, unsettled: Unsettled) {
+        self.with(agent, |record| record.started_without = Some(unsettled));
+    }
+
     /// The agent's record is kept in `folder`, as the agent's program
     /// records its session in the place's own folder (128).
     pub fn keep_record_in(&self, agent: &Identity, folder: &str) {
@@ -134,6 +153,11 @@ impl FakeAgent {
 
     pub fn no_guard(&self) {
         lock(&self.state).no_guard = true;
+    }
+
+    /// The program keeps `names` from every process it starts (161).
+    pub fn withhold(&self, names: &[&str]) {
+        lock(&self.state).withheld = names.iter().map(|name| name.to_string()).collect();
     }
 
     fn record(&self, agent: &Identity) -> Record {
@@ -160,6 +184,7 @@ impl Agent for FakeAgent {
     fn command(
         &self,
         settings: &Settings,
+        env: &BTreeMap<String, String>,
         place: &PlaceRef,
         identity: &Identity,
         secret: &Secret,
@@ -173,7 +198,7 @@ impl Agent for FakeAgent {
         if let Some(instructions) = &settings.instructions {
             args.extend(["--instructions".to_string(), instructions.clone()]);
         }
-        let mut env = settings.env.clone();
+        let mut env = env.clone();
         env.insert("AGENT_IDENTITY".into(), identity.to_string());
         env.insert("AGENT_SECRET".into(), secret.0.clone());
         env.insert("AGENT_PLACE".into(), place.location.clone());
@@ -197,6 +222,9 @@ impl Agent for FakeAgent {
         let Some(model) = self.read_in("started", folder, agent) else {
             return Reading::Unknown;
         };
+        if model.started.is_none() && model.started_without.is_some() {
+            return Reading::No;
+        }
         model
             .started
             .unwrap_or(if self.terminal.opened(agent).is_some() {
@@ -254,6 +282,20 @@ impl Agent for FakeAgent {
     fn last_words(&self, folder: &str, agent: &Identity) -> Option<String> {
         self.read_in("last_words", folder, agent)
             .and_then(|record| record.last_words)
+    }
+
+    fn spent(&self, folder: &str, agent: &Identity) -> Spent {
+        self.read_in("spent", folder, agent)
+            .map_or(Spent::Unknown, |record| record.spent)
+    }
+
+    fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
+        self.read_in("started_without", folder, agent)
+            .and_then(|record| record.started_without)
+    }
+
+    fn withheld(&self) -> Vec<String> {
+        lock(&self.state).withheld.clone()
     }
 
     fn stop_short(&self, _agent: &Identity) -> String {

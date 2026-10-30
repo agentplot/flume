@@ -5,10 +5,13 @@
 //! terminal, never while another of the place's is live, and only under
 //! the host's bound (70).
 
+use crate::accounts::Choice;
 use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
+use crate::start_record::start_record;
 use crate::{repository_id, Engine, Step};
 use flume_seams::*;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// A start written as live, its agent still to open.
@@ -17,11 +20,23 @@ pub(crate) struct Claim {
     secret: Secret,
     text: String,
     place: PlaceRef,
-    /// The settings the agent starts with, the host's values read (29).
+    /// The settings the agent starts with.
     settings: Settings,
+    /// The environment its account gives, each value read against the
+    /// login environment (29, 144).
+    env: BTreeMap<String, String>,
     agent: Arc<dyn Agent>,
     /// The session name the agent carries: a role's run's address (132).
     session: Option<String>,
+    /// The account the start runs under (144, 145).
+    account: Option<AccountHeld>,
+}
+
+impl Claim {
+    /// The account the start runs under, none where it has no pool.
+    pub(crate) fn account(&self) -> Option<&AccountHeld> {
+        self.account.as_ref()
+    }
 }
 
 /// What a start came to.
@@ -47,6 +62,29 @@ pub(crate) enum Start {
     NoPlace,
 }
 
+/// Why flume starts a stage afresh on its own, with words of its own in
+/// its prompt where it asks for `{{words}}`, counted toward no bound of
+/// the kind's and waiting on no caller (112).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StartReason {
+    /// The stage's earlier agent stopped at its account's usage limit
+    /// (146).
+    Spent,
+    /// The stage's earlier agent began without the settings its start
+    /// recorded (161).
+    Unsettled,
+}
+
+impl StartReason {
+    /// flume's words for the fresh start.
+    pub(crate) fn words(self) -> String {
+        match self {
+            StartReason::Spent => "The stage's earlier agent stopped at its account's usage limit, and this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.".into(),
+            StartReason::Unsettled => "The stage's earlier agent began without the settings its start recorded and was ended, and this agent starts the stage afresh. Anything it committed is on the place's branch and anything it left is in the place: read them and carry the stage on from there.".into(),
+        }
+    }
+}
+
 /// What readiness came to, as a prompt's `{{unready}}` gives it (12).
 fn unready(readiness: &Readiness) -> String {
     match readiness.failed() {
@@ -69,17 +107,21 @@ impl Engine {
         }
     }
 
-    /// The identity of the stage's next start, its repository named by
-    /// the id of its common git directory, or of its location where git
-    /// cannot say (33, C.4).
-    pub(crate) fn next_identity(&self, held: &HeldState, index: usize) -> Identity {
-        let repository = &held.place.repository;
+    /// A repository's id: of its common git directory, or of its
+    /// location where git cannot say (33, 147, C.4).
+    pub(crate) fn repository_id_of(&self, repository: &str) -> String {
         let common = self
             .history
             .common_dir(repository)
-            .unwrap_or_else(|| repository.clone());
+            .unwrap_or_else(|| repository.to_string());
+        repository_id(&common)
+    }
+
+    /// The identity of the stage's next start, its repository named by
+    /// its id (33, C.4).
+    pub(crate) fn next_identity(&self, held: &HeldState, index: usize) -> Identity {
         Identity {
-            repository: repository_id(&common),
+            repository: self.repository_id_of(&held.place.repository),
             place: held.place.short(),
             stage: held.place.kind.stages[index].name.clone(),
             start: held.stages[index].starts + 1,
@@ -214,10 +256,35 @@ impl Engine {
         };
         let place = &read.state.place;
         let resolution = self.resolution(place, &place.kind.stages[index]);
+        let queue = admit.queue();
         let now = self.host.now();
+        let affinity = queue
+            .pool_of(&place.stream.name)
+            .and_then(|_| self.affinity(&place.intent))
+            .map(|(_, affinity)| affinity);
+        let (chosen, intent_moved) = match &resolution {
+            Ok(resolution) => self.choose_account(
+                place,
+                resolution.resolved.settings.program.as_deref(),
+                affinity.as_ref(),
+                queue,
+                now,
+            ),
+            Err(_) => (Choice::NoPool, None),
+        };
+        let stage_name = &place.kind.stages[index].name;
+        let env = match &chosen {
+            Choice::Chose { account, .. } => self.account_env(account, stage_name),
+            _ => Ok(BTreeMap::new()),
+        };
+        let resolution = match (&chosen, env.as_ref()) {
+            (Choice::Undeclared(reason), _) | (_, Err(reason)) => Err(reason.clone()),
+            _ => resolution,
+        };
+        let env = env.unwrap_or_default();
         let made_from = self.store.made(id).len();
         let claimed = self.update(id, |held| {
-            if let Admit::Waiting = admit {
+            if let Admit::Waiting(_) = admit {
                 if held.phase != Phase::Live
                     || held.stages[index].state != StageState::WaitingForRoom
                 {
@@ -268,8 +335,14 @@ impl Engine {
                 }
                 Ok(text) => text,
             };
+            if let (Admit::Waiting(_), Choice::Wait) = (admit, &chosen) {
+                return Step::Keep(Err(Start::WaitingForRoom));
+            }
             if let Admit::Queue(queue) = admit {
-                if queue.must_wait(id, held.priority) {
+                let program = resolution.resolved.settings.program.as_deref();
+                if matches!(chosen, Choice::Wait)
+                    || queue.must_wait(id, &held.place.stream.name, program, held.priority)
+                {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::WaitingForRoom;
                     stage.room = Some(RoomWait {
@@ -280,7 +353,48 @@ impl Engine {
                     return Step::Write(Err(Start::WaitingForRoom));
                 }
             }
+            let account = match &chosen {
+                Choice::Chose { held, .. } => Some(held.clone()),
+                _ => None,
+            };
+            if let Some(moved) = self.stage_moved(held, index, account.as_ref(), queue, now) {
+                held.moves.push(moved);
+            }
+            if let Some(moved) = &intent_moved {
+                held.moves.push(moved.clone());
+            }
+            let mut from = resolution.resolved.from.clone();
+            if let Choice::Chose { account, .. } = &chosen {
+                for (name, value) in &account.env {
+                    from.insert(
+                        format!("env.{name}"),
+                        Given {
+                            layer: Layer::Account,
+                            value: value.clone(),
+                        },
+                    );
+                }
+            }
             let secret = self.host.secret();
+            let program = resolution
+                .resolved
+                .settings
+                .program
+                .clone()
+                .unwrap_or_default();
+            let withheld = self
+                .agent(&program)
+                .map(|agent| agent.withheld())
+                .unwrap_or_default();
+            let start_record = start_record(
+                &program,
+                account.as_ref(),
+                &env,
+                &withheld,
+                &identity,
+                &held.place.location,
+                &secret,
+            );
             let stage = &mut held.stages[index];
             stage.state = StageState::Starting;
             stage.starts = identity.start;
@@ -296,16 +410,13 @@ impl Engine {
                 words: words.clone(),
                 identity: identity.clone(),
                 secret: secret.clone(),
-                program: resolution
-                    .resolved
-                    .settings
-                    .program
-                    .clone()
-                    .unwrap_or_default(),
+                program,
+                settings: resolution.resolved.settings.clone(),
                 // Names only: the values reach the agent's command and
                 // nothing kept (32, 56).
-                settings: resolution.resolved.settings.unvalued(),
-                from: flume_seams::unvalued_from(&resolution.resolved.from),
+                from: flume_seams::unvalued_from(&from),
+                account: account.clone(),
+                start_record,
                 record: None,
                 prompt: Prompt {
                     text: text.clone(),
@@ -326,12 +437,20 @@ impl Engine {
                 secret,
                 text,
                 place: held.place.place_ref(),
-                settings: resolution.settings.clone(),
+                settings: resolution.resolved.settings.clone(),
+                env: env.clone(),
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
+                account,
             }))
         });
-        claimed.unwrap_or(Err(Start::NoPlace))
+        let claimed = claimed.unwrap_or(Err(Start::NoPlace));
+        if let (Ok(claim), Some(place)) = (&claimed, self.store.read(id)) {
+            if let Some(account) = &claim.account {
+                self.affinity_after(&place.state.place, account, intent_moved.as_ref());
+            }
+        }
+        claimed
     }
 
     /// Opens the agent of a claimed start, out of the room lock; an open
@@ -343,10 +462,12 @@ impl Engine {
             text,
             place,
             settings,
+            env,
             agent,
             session,
+            account: _,
         } = claim;
-        let command = agent.command(&settings, &place, &identity, &secret, &text);
+        let command = agent.command(&settings, &env, &place, &identity, &secret, &text);
         let folder = self.store.folder(id);
         match self.terminal.open(
             &place,

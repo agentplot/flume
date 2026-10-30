@@ -8,7 +8,7 @@
 //! binary in `hooks_claude.rs`.
 
 use crate::common::*;
-use flume::profiles::agent::claude::record::{Asking, Record, Started};
+use flume::profiles::agent::claude::record::{self, Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
     TRUST_QUESTION, VERSION,
@@ -169,6 +169,35 @@ impl AgentHarness for Harness {
         });
         append(&self.transcript(identity), &format!("{line}\n"));
     }
+
+    /// The StopFailure hook recorded `rate_limit` and a session limit's
+    /// words, written as 2.1.296 builds them, at 13:10 UTC on 29 October
+    /// 2026; the reset they name is 15:00 that day.
+    fn hit_usage_limit(&self, identity: &Identity) -> Seconds {
+        self.record(identity)
+            .set_failure(&Failure {
+                error: "rate_limit".into(),
+                words: "You've hit your session limit \u{b7} resets 3pm (UTC)".into(),
+                at: 1_793_279_400,
+            })
+            .expect("the failure");
+        1_793_286_000
+    }
+
+    /// The SessionStart hook found the variable missing and wrote its
+    /// word in place of the started ack, as the plugin's hook records it.
+    fn begin_without(&self, identity: &Identity, variable: &str) {
+        self.record(identity)
+            .set_unsettled(&record::Unsettled {
+                unsettled: Unsettled {
+                    missing: vec![variable.to_string()],
+                    ..Unsettled::default()
+                },
+                session_id: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+                transcript_path: self.transcript(identity).to_string_lossy().into(),
+            })
+            .expect("the word");
+    }
 }
 
 #[test]
@@ -188,23 +217,25 @@ fn identity(stage: &str) -> Identity {
 #[test]
 fn the_command_for_a_code_stage() {
     // The command for a code stage: `claude` with the plugin, the model
-    // and the instructions, the four FLUME_* words over the settings'
-    // environment, and nothing of the caller's session (29, 32, 88, C.4).
+    // and the instructions, the four FLUME_* words over its account's
+    // environment, and nothing of the caller's session (29, 32, 88, 144,
+    // C.4).
     let harness = Harness::new();
     let settings = Settings {
         model: Some("opus".into()),
         instructions: Some("Keep each commit small.".into()),
-        // A `PATH` holding no `claude`, so no wrapper of the host's is
-        // read for the program named by its name.
-        env: BTreeMap::from([
-            ("CLAUDE_CONFIG_DIR".into(), "/home/me/.claude-work".into()),
-            ("PATH".into(), "/nowhere".into()),
-        ]),
         ..Settings::default()
     };
+    // A `PATH` holding no `claude`, so no wrapper of the host's is read
+    // for the program named by its name.
+    let env = BTreeMap::from([
+        ("CLAUDE_CONFIG_DIR".into(), "/home/me/.claude-work".into()),
+        ("PATH".into(), "/nowhere".into()),
+    ]);
     let who = identity("code");
     let command = harness.seam.command(
         &settings,
+        &env,
         &harness.place(),
         &who,
         &Secret("s3cret".into()),
@@ -236,7 +267,7 @@ fn the_command_for_a_code_stage() {
             ("FLUME_PLACE".into(), harness.place().location),
             ("FLUME_STAGE".into(), "code".into()),
         ]),
-        "the environment holds the settings' and flume's words alone"
+        "the environment holds the account's and flume's words alone"
     );
     assert_eq!(command.prompt_args, vec!["fix the parser".to_string()]);
 
@@ -245,9 +276,14 @@ fn the_command_for_a_code_stage() {
         program: Some("/opt/claude/bin/claude".into()),
         ..Settings::default()
     };
-    let command = harness
-        .seam
-        .command(&by_path, &harness.place(), &who, &Secret("s".into()), "x");
+    let command = harness.seam.command(
+        &by_path,
+        &env,
+        &harness.place(),
+        &who,
+        &Secret("s".into()),
+        "x",
+    );
     assert_eq!(command.program, "/opt/claude/bin/claude");
 }
 
@@ -267,9 +303,14 @@ fn the_plugin_an_agent_loads() {
     let harness = Harness::new();
     let place = harness.place();
     let who = identity("code");
-    let first = harness
-        .seam
-        .command(&Settings::default(), &place, &who, &Secret("a".into()), "x");
+    let first = harness.seam.command(
+        &Settings::default(),
+        &BTreeMap::new(),
+        &place,
+        &who,
+        &Secret("a".into()),
+        "x",
+    );
     let dir = PathBuf::from(&first.args[1]);
     let manifest = dir.join(".claude-plugin/plugin.json");
     let written_at = std::fs::metadata(&manifest)
@@ -278,6 +319,7 @@ fn the_plugin_an_agent_loads() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     let second = harness.seam.command(
         &Settings::default(),
+        &BTreeMap::new(),
         &place,
         &identity("verify"),
         &Secret("b".into()),
@@ -489,6 +531,7 @@ fn the_trust_screen() {
     let harness = Harness::new();
     let command = harness.seam.command(
         &Settings::default(),
+        &BTreeMap::new(),
         &harness.place(),
         &identity("code"),
         &Secret("s".into()),

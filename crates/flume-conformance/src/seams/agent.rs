@@ -1,8 +1,9 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135).
+//! 135, 151).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 pub trait AgentHarness {
     type Seam: Agent + ?Sized;
@@ -39,6 +40,14 @@ pub trait AgentHarness {
 
     /// The agent's last message is `words`.
     fn say_last(&self, identity: &Identity, words: &str);
+
+    /// The agent's turn fails at its account's usage limit, with words the
+    /// harness writes naming a reset; the reset by the host's clock (151).
+    fn hit_usage_limit(&self, identity: &Identity) -> Seconds;
+
+    /// The agent begins without the variable `variable` its start
+    /// recorded, as the program's own word at its start shows it (161).
+    fn begin_without(&self, identity: &Identity, variable: &str);
 }
 
 fn identity(stage: &str) -> Identity {
@@ -54,6 +63,7 @@ fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
     let who = identity(stage);
     let command = harness.seam().command(
         &Settings::default(),
+        &BTreeMap::new(),
         &harness.place(),
         &who,
         &Secret("secret".into()),
@@ -122,7 +132,101 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["43", "93", "128"],
             run: last_words_from_the_record::<H>,
         },
+        Scenario {
+            name: "agent: spent reads a usage limit and its reset from the agent's own record, and nothing from another folder",
+            cites: &["151", "146", "93", "128"],
+            run: spent_reads_the_usage_limit::<H>,
+        },
+        Scenario {
+            name: "agent: started without names each variable the agent began without, read from its own record, and nothing from another folder",
+            cites: &["135", "161", "93", "128"],
+            run: started_without_names_the_variable::<H>,
+        },
+        Scenario {
+            name: "agent: an agent begun without its settings that has had no turn is read waiting on nothing, its own work not running",
+            cites: &["91", "90", "31", "161"],
+            run: begun_without_and_no_turn::<H>,
+        },
     ]
+}
+
+fn begun_without_and_no_turn<H: AgentHarness>(harness: &H) -> Outcome {
+    // No start was made for this identity: the program's word at its start
+    // is all it has said, and it sits at its prompt with no turn taken.
+    let who = identity("verify");
+    let folder = harness.folder();
+    harness.begin_without(&who, "AGENT_HOME");
+    ensure!(
+        harness.seam().started_without(&folder, &who).is_some(),
+        "the agent read begun with its settings"
+    );
+    ensure_eq!(
+        harness.seam().own_work(&folder, &who),
+        Reading::No,
+        "own work of an agent that has had no turn"
+    );
+    ensure_eq!(
+        harness.seam().asking(&folder, &who),
+        Reading::No,
+        "asking, of an agent that has had no turn"
+    );
+    Ok(())
+}
+
+fn started_without_names_the_variable<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    let folder = harness.folder();
+    ensure_eq!(
+        harness.seam().started_without(&folder, &who),
+        None,
+        "an agent begun as its start recorded"
+    );
+    harness.begin_without(&who, "AGENT_HOME");
+    let Some(unsettled) = harness.seam().started_without(&folder, &who) else {
+        return Err("an agent begun without AGENT_HOME read as begun with it".into());
+    };
+    ensure_eq!(
+        unsettled.missing,
+        vec!["AGENT_HOME".to_string()],
+        "the variable missing"
+    );
+    ensure!(
+        unsettled.different.is_empty() && !unsettled.program,
+        "nothing else differed: {unsettled:?}"
+    );
+    ensure_eq!(
+        harness
+            .seam()
+            .started_without(&format!("{folder}-of-another-place"), &who),
+        None,
+        "started without, read in another folder"
+    );
+    Ok(())
+}
+
+fn spent_reads_the_usage_limit<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    let folder = harness.folder();
+    ensure!(
+        !matches!(harness.seam().spent(&folder, &who), Spent::Yes { .. }),
+        "an agent at work read spent"
+    );
+    let reset = harness.hit_usage_limit(&who);
+    match harness.seam().spent(&folder, &who) {
+        Spent::Yes { until, words } => {
+            ensure_eq!(until, Some(reset), "the reset");
+            ensure!(!words.trim().is_empty(), "a usage limit with no words");
+        }
+        other => return Err(format!("spent read {other:?} at a usage limit")),
+    }
+    ensure_eq!(
+        harness
+            .seam()
+            .spent(&format!("{folder}-of-another-place"), &who),
+        Spent::Unknown,
+        "spent, read in another folder"
+    );
+    Ok(())
 }
 
 fn started_reads_the_agents_word<H: AgentHarness>(harness: &H) -> Outcome {
@@ -173,8 +277,13 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
         model: Some("large".into()),
         ..Settings::default()
     };
+    let env = BTreeMap::from([(
+        "AGENT_HOME".to_string(),
+        "/scratch/agent-work-1".to_string(),
+    )]);
     let command = harness.seam().command(
         &settings,
+        &env,
         &harness.place(),
         &who,
         &secret,
@@ -188,6 +297,11 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
     ensure!(carries(&who.to_string()), "the command carries no identity");
     ensure!(carries(&secret.0), "the command carries no secret");
     ensure!(carries("large"), "the command carries no model");
+    ensure_eq!(
+        command.env.get("AGENT_HOME").map(String::as_str),
+        Some("/scratch/agent-work-1"),
+        "the account's variable in the command's environment"
+    );
     ensure!(
         command
             .prompt_args

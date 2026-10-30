@@ -1,12 +1,15 @@
 use crate::{lock, Log};
-use flume_seams::{HeldState, PlaceId, Store, Versioned, Written};
+use flume_seams::{
+    HeldState, HostDocument, HostKey, HostVersioned, PlaceId, Store, Versioned, Written,
+};
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 type Interleaved = Box<dyn FnOnce() + Send>;
 
 /// The store seam: each place's held state with its version, written by
-/// compare-and-set, and a hook that runs another act just before the next
+/// compare-and-set, the host's own documents in memory beside them, and a
+/// hook that runs another act just before the next
 /// write, as two commands acting at once do.
 pub struct FakeStore {
     state: Mutex<StoreState>,
@@ -20,6 +23,8 @@ struct StoreState {
     documents: BTreeMap<PlaceId, Versioned>,
     /// The lines of each place's `made.jsonl`, which go with its folder.
     made: BTreeMap<PlaceId, Vec<String>>,
+    /// The host's own documents, by key (153).
+    host: BTreeMap<HostKey, HostVersioned>,
     next: u64,
 }
 
@@ -87,6 +92,27 @@ impl FakeStore {
     }
 }
 
+impl FakeStore {
+    /// The host's document under `key` as it stands, past the log.
+    pub fn host_document(&self, key: &HostKey) -> Option<HostDocument> {
+        lock(&self.state)
+            .host
+            .get(key)
+            .map(|versioned| versioned.document.clone())
+    }
+
+    /// The host's document under `key` set as it stands, past every
+    /// check, for a scenario that needs it so.
+    pub fn put_host(&self, key: &HostKey, document: HostDocument) {
+        let mut state = lock(&self.state);
+        state.next += 1;
+        let version = state.next;
+        state
+            .host
+            .insert(key.clone(), HostVersioned { version, document });
+    }
+}
+
 impl Store for FakeStore {
     fn read(&self, place: &PlaceId) -> Option<Versioned> {
         self.log.push(format!("read {place}"));
@@ -150,5 +176,43 @@ impl Store for FakeStore {
             .get(place)
             .cloned()
             .unwrap_or_default()
+    }
+
+    fn read_host(&self, key: &HostKey) -> Option<HostVersioned> {
+        self.log.push(format!("read_host {key}"));
+        lock(&self.state).host.get(key).cloned()
+    }
+
+    fn write_host(&self, key: &HostKey, at: Option<u64>, next: Option<&HostDocument>) -> Written {
+        let mut state = lock(&self.state);
+        let current = state.host.get(key).map(|versioned| versioned.version);
+        let what = if next.is_some() {
+            "write_host"
+        } else {
+            "remove_host"
+        };
+        let at_text = at.map_or("new".to_string(), |version| version.to_string());
+        if current != at {
+            self.log.push(format!("{what} {key} at {at_text} moved"));
+            return Written::Moved;
+        }
+        self.log.push(format!("{what} {key} at {at_text}"));
+        state.next += 1;
+        let version = state.next;
+        match next {
+            Some(document) => {
+                state.host.insert(
+                    key.clone(),
+                    HostVersioned {
+                        version,
+                        document: document.clone(),
+                    },
+                );
+            }
+            None => {
+                state.host.remove(key);
+            }
+        }
+        Written::Written { version }
     }
 }

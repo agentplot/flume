@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 
 /// One ask to start a piece of work: a repository, a kind, a name, a
 /// base, and the caller's brief, settings, stages on hold with their
-/// words, submission's hold, mark, priority, recipients and stall
-/// bound (2, 7, 8, 70, 130).
+/// words, submission's hold, mark, priority, recipients, stall bound,
+/// stream and intent (2, 7, 8, 70, 130, 143, 147).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Launch {
     pub repository: String,
@@ -42,4 +42,12 @@ pub struct Launch {
     /// before it is stalled; five minutes where none is given (130).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stall_after: Option<Seconds>,
+    /// The stream the place runs in, which the host must declare; none
+    /// where the caller names none (7, 143).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+    /// The intent the place serves, by its name; none where the caller
+    /// names none, and its repository and base give it (7, 147).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent: Option<String>,
 }

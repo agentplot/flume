@@ -3,8 +3,11 @@
 //! A word of the answer's own, a state or a layer, is printed as the JSON
 //! spells it.
 
-use flume_core::{group_name, Answer, HostStatus, PlaceStatus, StageStatus, Tidied, Woke};
-use flume_seams::{HoldOn, Made};
+use flume_core::{
+    group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, StageStatus,
+    Tidied, Woke,
+};
+use flume_seams::{HoldOn, IntentKey, Made, UnsettledStart};
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -146,6 +149,12 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         facts.push(format!("head {head}"));
     }
     lines.push(format!("  {}", facts.join(", ")));
+    lines.push(format!(
+        "  stream {} (from {}), {}",
+        place.stream.name,
+        word(json!(place.stream.from)),
+        intent_words(&place.intent)
+    ));
     for step in &place.readiness.steps {
         let outcome = if step.passed { "passed" } else { "failed" };
         lines.push(
@@ -158,16 +167,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         lines.extend(stage_lines(stage));
     }
     if let Some(agent) = &place.agent {
-        let mut line = format!(
-            "  agent {} ({}): {}",
-            agent.identity,
-            agent.program,
-            word(json!(agent.state))
-        );
-        if agent.past_limit {
-            line.push_str(", past its limit");
-        }
-        lines.push(line);
+        lines.push(agent_line(agent));
         for (setting, given) in &agent.settings.from {
             lines.push(format!(
                 "    {setting} = {} (from {})",
@@ -184,6 +184,12 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         for note in &agent.notes {
             lines.push(format!("    note: {note}"));
         }
+    }
+    for moved in &place.moves {
+        lines.push(format!("  moved: {}", moved.words()));
+    }
+    for unsettled in &place.unsettled {
+        lines.push(unsettled_line(unsettled));
     }
     if let Some(delivered) = place.delivered {
         lines.push(format!(
@@ -273,6 +279,58 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     lines
 }
 
+/// The intent a place serves, as a person reads it (147).
+fn intent_words(intent: &IntentKey) -> String {
+    match intent {
+        IntentKey::Launch { name, .. } => format!("intent {name} (from the launch)"),
+        IntentKey::Base {
+            repository, base, ..
+        } => format!("intent of {repository} on {base}"),
+    }
+}
+
+/// The current agent's line: its identity, program, account and state
+/// (56, 145).
+fn agent_line(agent: &AgentStatus) -> String {
+    let mut line = format!("  agent {} ({})", agent.identity, agent.program);
+    if let Some(account) = &agent.account {
+        line.push_str(&format!(
+            " on the account {} of {} (from the {})",
+            account.name,
+            account.pool,
+            word(json!(account.from))
+        ));
+    }
+    line.push_str(&format!(": {}", word(json!(agent.state))));
+    if agent.past_limit {
+        line.push_str(", past its limit");
+    }
+    line
+}
+
+/// A pool's lines: its strategy, then each account's program, agents
+/// running, bound and spent time (56, 144 to 146).
+fn pool_lines(pool: &PoolStatus) -> Vec<String> {
+    let mut lines = vec![format!("  pool {}, {}:", pool.name, pool.strategy.name())];
+    for account in &pool.accounts {
+        let mut line = match account.bound {
+            Some(bound) => format!(
+                "    {} ({}): {} agents running of {bound}",
+                account.name, account.program, account.running
+            ),
+            None => format!(
+                "    {} ({}): {} agents running, no bound of its own",
+                account.name, account.program, account.running
+            ),
+        };
+        if let Some(until) = account.spent_until {
+            line.push_str(&format!(", spent until {until}"));
+        }
+        lines.push(line);
+    }
+    lines
+}
+
 /// A stage's line, a repeating one named with its group's place among
 /// the change's groups, `code 2/3`, and the group it names; then each
 /// line its end carries of what it made (61, 129, 142).
@@ -323,10 +381,26 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         _ => format!("host: {} agents running, no bound", host.running),
     }];
     for queued in &host.queue {
+        lines.push(format!("  {}", queued_line(queued)));
+    }
+    for stream in &host.streams {
+        let room = match (stream.bound, stream.room) {
+            (Some(bound), Some(room)) => format!(
+                "{} agents running of {bound}, room for {room}",
+                stream.running
+            ),
+            _ => format!("{} agents running, no bound of its own", stream.running),
+        };
         lines.push(format!(
-            "  waiting for room: {}'s {}, priority {}",
-            queued.place, queued.stage, queued.priority
+            "  stream {}, priority {}: {room}",
+            stream.name, stream.priority
         ));
+        for queued in &stream.queue {
+            lines.push(format!("    {}", queued_line(queued)));
+        }
+    }
+    for pool in &host.pools {
+        lines.extend(pool_lines(pool));
     }
     for kept in &host.terminal_kept {
         lines.push(format!("  the terminal keeps {kept}"));
@@ -350,6 +424,31 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         }
     }
     lines
+}
+
+/// A start whose agent began without its settings, each variable by its
+/// name alone (56, 161).
+fn unsettled_line(unsettled: &UnsettledStart) -> String {
+    format!(
+        "  without its settings: {}'s start {} began {} at {}, and was not taken as its stage's agent",
+        unsettled.stage,
+        unsettled.start,
+        unsettled.unsettled.words(),
+        unsettled.at
+    )
+}
+
+/// A stage waiting for room, with its stream, its priority and the room
+/// it is short of (56, 70, 143).
+fn queued_line(queued: &Queued) -> String {
+    format!(
+        "waiting for room: {}'s {} in {}, priority {}, short of {}",
+        queued.place,
+        queued.stage,
+        queued.stream,
+        queued.priority,
+        queued.wants.words()
+    )
 }
 
 fn tidy_lines(tidy: &Tidied) -> Vec<String> {
@@ -385,6 +484,122 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flume_core::{AccountStatus, AgentSettings, MoveStatus, RoomWanted, StreamStatus};
+    use flume_seams::{
+        AccountFrom, AccountHeld, AccountMove, AgentState, MoveOn, MoveWhy, Reading, Strategy,
+        Unsettled,
+    };
+
+    #[test]
+    fn an_agents_account() {
+        let agent = AgentStatus {
+            identity: "flume:r:fix--one:code:2".into(),
+            stage: "code".into(),
+            program: "agent".into(),
+            settings: AgentSettings::default(),
+            account: Some(AccountHeld {
+                pool: "work".into(),
+                name: "work-2".into(),
+                from: AccountFrom::Strategy,
+            }),
+            state: AgentState::Working,
+            started: Reading::Yes,
+            asking: Reading::No,
+            own_work: Reading::No,
+            past_limit: false,
+            screen: None,
+            printed: None,
+            last_words: None,
+            notes: vec![],
+        };
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:2 (agent) on the account work-2 of work (from the strategy): working"
+        );
+        let none = AgentStatus {
+            account: None,
+            ..agent
+        };
+        assert_eq!(
+            agent_line(&none),
+            "  agent flume:r:fix--one:code:2 (agent): working"
+        );
+    }
+
+    #[test]
+    fn a_start_without_its_settings() {
+        let unsettled = UnsettledStart {
+            stage: "code".into(),
+            start: 1,
+            at: 54_000,
+            unsettled: Unsettled {
+                missing: vec!["AGENT_HOME".into()],
+                ..Unsettled::default()
+            },
+        };
+        assert_eq!(
+            unsettled_line(&unsettled),
+            "  without its settings: code's start 1 began without AGENT_HOME at 54000, and was not taken as its stage's agent"
+        );
+    }
+
+    #[test]
+    fn a_move() {
+        let moved = MoveStatus::of(&AccountMove {
+            on: MoveOn::Stage {
+                stage: "code".into(),
+            },
+            from: "work-1".into(),
+            to: "work-2".into(),
+            why: MoveWhy::Spent,
+            at: 54_000,
+        });
+        assert_eq!(
+            moved.words(),
+            "code moved from work-1 to work-2 at 54000, work-1 spent, its agents after starting without work-1's cache"
+        );
+        assert_eq!(
+            serde_json::to_value(&moved).unwrap(),
+            json!({"on": "stage", "stage": "code", "from": "work-1", "to": "work-2", "why": "spent", "at": 54000, "cache": "lost"})
+        );
+    }
+
+    #[test]
+    fn the_hosts_pools() {
+        let host = HostStatus {
+            pools: vec![PoolStatus {
+                name: "work".into(),
+                strategy: Strategy::FillFirst,
+                accounts: vec![
+                    AccountStatus {
+                        name: "work-1".into(),
+                        program: "agent".into(),
+                        running: 2,
+                        bound: Some(4),
+                        spent_until: None,
+                    },
+                    AccountStatus {
+                        name: "work-2".into(),
+                        program: "agent".into(),
+                        running: 0,
+                        bound: None,
+                        spent_until: Some(54_000),
+                    },
+                ],
+            }],
+            ..HostStatus::default()
+        };
+        assert_eq!(
+            host_lines(&host),
+            vec![
+                "host: 0 agents running, no bound".to_string(),
+                "  pool work, fill-first:".to_string(),
+                "    work-1 (agent): 2 agents running of 4".to_string(),
+                "    work-2 (agent): 0 agents running, no bound of its own, spent until 54000"
+                    .to_string(),
+            ]
+        );
+    }
 
     #[test]
     fn a_refusal_and_an_empty_host() {
@@ -427,6 +642,77 @@ mod tests {
         assert_eq!(
             stage_lines(&once),
             vec!["  stage code: begun, started 2 times".to_string()]
+        );
+    }
+
+    #[test]
+    fn the_hosts_streams() {
+        let queued = |place: &str, stream: &str, wants| Queued {
+            place: flume_seams::PlaceId::new(place),
+            stage: "code".into(),
+            stream: stream.into(),
+            priority: 0,
+            since: Some(5),
+            wants,
+        };
+        let work = queued(
+            "/r/places/fix--w5",
+            "work",
+            RoomWanted::Stream {
+                stream: "work".into(),
+                bound: 4,
+            },
+        );
+        let personal = queued("/r/places/fix--p3", "personal", RoomWanted::Host);
+        let host = HostStatus {
+            running: 6,
+            bound: Some(6),
+            room: Some(0),
+            queue: vec![work.clone(), personal.clone()],
+            streams: vec![
+                StreamStatus {
+                    name: "work".into(),
+                    priority: 10,
+                    running: 4,
+                    bound: Some(4),
+                    room: Some(0),
+                    queue: vec![work],
+                },
+                StreamStatus {
+                    name: "personal".into(),
+                    priority: 0,
+                    running: 2,
+                    bound: Some(3),
+                    room: Some(1),
+                    queue: vec![personal],
+                },
+                StreamStatus {
+                    name: "default".into(),
+                    priority: 0,
+                    running: 0,
+                    bound: None,
+                    room: None,
+                    queue: vec![],
+                },
+            ],
+            ..HostStatus::default()
+        };
+        let w5 = "waiting for room: /r/places/fix--w5's code in work, priority 0, \
+                  short of the stream work's room, at its bound of 4";
+        let p3 = "waiting for room: /r/places/fix--p3's code in personal, priority 0, \
+                  short of the host's room";
+        assert_eq!(
+            host_lines(&host),
+            vec![
+                "host: 6 agents running of 6, room for 0".to_string(),
+                format!("  {w5}"),
+                format!("  {p3}"),
+                "  stream work, priority 10: 4 agents running of 4, room for 0".to_string(),
+                format!("    {w5}"),
+                "  stream personal, priority 0: 2 agents running of 3, room for 1".to_string(),
+                format!("    {p3}"),
+                "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
+            ]
         );
     }
 

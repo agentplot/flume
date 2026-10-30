@@ -1,10 +1,113 @@
 //! The host's own facts the core reads: its clock, a new secret, a
 //! file's write time, whether a command of flume's still lives, the bound
-//! on agents its configuration states, and a lock over the room (design
-//! 3, 6). No seam of Part B.
+//! on agents its configuration states, its streams and pools of
+//! accounts, and a lock over the room (design 3, 6). No seam of Part B.
 
 use crate::{KindSettings, Seconds, Secret};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+/// The stream every place runs in that nothing names a stream for, which
+/// the host always declares (143).
+pub const DEFAULT_STREAM: &str = "default";
+
+/// A stream the host's configuration declares: its bound on agents
+/// running, none where it states none and the host's bound alone holds
+/// it; its priority among streams, zero where it gives none; and the pool
+/// its agents' accounts come from, none where the host's own pool stands
+/// (143, 144, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Stream {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agents: Option<u32>,
+    #[serde(default)]
+    pub priority: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pool: Option<String>,
+}
+
+/// How a pool chooses among its usable accounts: the first in order, or
+/// the one running the fewest of flume's agents, equals in order (145).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Strategy {
+    FillFirst,
+    LeastBusy,
+}
+
+impl Strategy {
+    /// The strategy as the host's configuration and status spell it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Strategy::FillFirst => "fill-first",
+            Strategy::LeastBusy => "least-busy",
+        }
+    }
+}
+
+/// An account of a pool: its name, the agent program it runs, the
+/// environment that signs that program in, each value as the
+/// configuration wrote it, and how many agents run on it at once, none
+/// where it states none (144, C.7). It is an agent's whole environment
+/// beyond the login environment (32).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Account {
+    pub name: String,
+    pub program: String,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agents: Option<u32>,
+}
+
+/// A pool of accounts, in order, and the strategy by which one is chosen
+/// at each start (144, 145).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pool {
+    pub strategy: Strategy,
+    pub accounts: Vec<Account>,
+}
+
+/// Where a place's stream came from (143).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StreamFrom {
+    /// The launch named it.
+    Launch,
+    /// The intent's affinity stands in it (147).
+    Intent,
+    /// The host's configuration for the repository and kind.
+    HostRepositoryKind,
+    /// The host's configuration for the repository.
+    HostRepository,
+    /// The host's configuration for the kind.
+    HostKind,
+    /// Nothing named one.
+    Default,
+}
+
+/// A stream by its name and where it came from (143, 56).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamHeld {
+    pub name: String,
+    pub from: StreamFrom,
+}
+
+/// Where a stage's pool came from: its stream's `pool`, or the host's
+/// own (144).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PoolFrom {
+    Stream,
+    Host,
+}
+
+/// A pool by its name and where it came from (144, 56).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PoolNamed {
+    pub name: String,
+    pub from: PoolFrom,
+}
 
 /// The host's room lock, held while this guard lives and released when
 /// it is dropped (70, 75).
@@ -37,7 +140,7 @@ pub struct HostSettings {
 /// `[roles."<partition>/<role>"]` table gives it: the repository and kind
 /// it is launched as, at the priority given, on the base named or the
 /// repository's default branch where it names none, with the brief where
-/// one is given (132, C.7).
+/// one is given, in the stream named where one is (132, 143, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoleRun {
     pub repository: String,
@@ -48,6 +151,8 @@ pub struct RoleRun {
     pub base: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brief: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
 }
 
 /// Whether a recipient's name is a role's address, `<partition>/<role>`,
@@ -109,6 +214,28 @@ pub trait Host: Send + Sync {
     /// The run the host's configuration names for a role's address, as
     /// it stands now; none where it names nothing for it (132, C.7).
     fn role(&self, address: &str) -> Option<RoleRun>;
+
+    /// The streams the host's configuration declares, by name, as it
+    /// stands now: `default` among them always, held by the host's bound
+    /// alone where no `[streams.default]` table states its own (143,
+    /// C.7).
+    fn streams(&self) -> BTreeMap<String, Stream>;
+
+    /// The stream the host's configuration names for `kind` in
+    /// `repository`, as it stands now: its word for the repository and
+    /// kind, else for the repository, else for the kind, with where it
+    /// came from; none where it names none (143, C.7).
+    fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld>;
+
+    /// The pool of a place in `stream`, as the host's configuration
+    /// stands now: the stream's own, else the host's, with where it came
+    /// from; none where neither names one, and the place's agents run
+    /// under no account (144, C.7).
+    fn pool_for(&self, stream: &str) -> Option<PoolNamed>;
+
+    /// The pool the host's configuration declares under `name`, as it
+    /// stands now (144, C.7).
+    fn pool(&self, name: &str) -> Option<Pool>;
 
     /// A variable of the host user's login environment, `HOME` among
     /// them, never of the calling command's session; none where it lacks

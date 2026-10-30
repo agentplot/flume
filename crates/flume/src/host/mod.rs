@@ -2,17 +2,20 @@
 //! history-and-host spec): the system clock, a sleep, a secret of 32
 //! random bytes, a file's write time, a command of flume's named by its
 //! process and that process's start, the bound and the agents' settings
-//! the host's configuration states, the role runs it names, the
-//! recipient the calling command's
+//! the host's configuration states, the role runs, streams and pools it
+//! names, the recipient the calling command's
 //! environment names, the host user's login environment, and the room
 //! lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75; design
 //! 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
+pub mod process;
 
 use config::HostConfig;
-use flume_seams::{Host, HostSettings, RoleRun, RoomGuard, Seconds, Secret};
+use flume_seams::{
+    Host, HostSettings, Pool, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Stream, StreamHeld,
+};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
@@ -250,6 +253,22 @@ impl Host for RealHost {
 
     fn role(&self, address: &str) -> Option<RoleRun> {
         self.config.roles.get(address).cloned()
+    }
+
+    fn streams(&self) -> BTreeMap<String, Stream> {
+        self.config.streams.clone()
+    }
+
+    fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld> {
+        self.config.stream_for(repository, kind)
+    }
+
+    fn pool_for(&self, stream: &str) -> Option<PoolNamed> {
+        self.config.pool_for(stream)
+    }
+
+    fn pool(&self, name: &str) -> Option<Pool> {
+        self.config.pools.get(name).cloned()
     }
 
     fn login(&self, name: &str) -> Option<String> {

@@ -5,7 +5,8 @@
 //! the hooks the plugin's `hooks/hooks.json` names under `--plugin-dir`, as
 //! that release runs them (the exec form with no shell, the hook's input on
 //! standard input, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR` and
-//! `CLAUDE_CODE_SESSION_ID` over the command's own environment, a refusal
+//! `CLAUDE_CODE_SESSION_ID` over the command's own environment less the
+//! credentials that release keeps from every process it starts, a refusal
 //! read from `permissionDecision` or exit 2, a stop blocked by `decision`
 //! or exit 2), and in place of a model acts the script `STAND_IN_SCRIPT`
 //! names, one run's acts as a JSON array, each a tool call:
@@ -19,18 +20,28 @@
 //!   prompt's words name merged by Bash, each file contested written as
 //!   given and the merge committed;
 //! - `{"wait_for": "<file>"}`: nothing until the file exists, for up to
-//!   two minutes, so a test reads status in the middle of a stage.
+//!   two minutes, so a test reads status in the middle of a stage;
+//! - `{"fail": {"error": "<error>", "words": "<words>"}}`: the turn ends
+//!   there as that release ends a turn the API failed, the words written
+//!   as its error message and StopFailure run with the error and the
+//!   words in place of Stop, no later act made;
+//! - `{"unset": "<name>"}`: the variable is gone from the session's
+//!   environment before the session starts, wherever the act stands, as a
+//!   pane brought back without it starts the program, so neither the
+//!   session's hooks nor its transcript's folder see it.
 //!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
 //!
 //! Then the turn ends: Stop, once more with `stop_hook_active` where the
-//! hook blocked it, and the session ends, as a person leaves the printed
+//! hook blocked it, or StopFailure where a `fail` act ended it, and the
+//! session ends, as a person leaves the printed
 //! command's session, with SessionEnd. Each act is printed on standard
 //! output as one line; the exit status is 1 where an act failed that no
 //! hook refused. It never reaches a model, an account or the network.
 
+use flume::profiles::agent::claude::withheld::WITHHELD;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -56,9 +67,19 @@ fn main() {
             given => prompt = Some(given.to_string()),
         }
     }
+    let script = std::env::var("STAND_IN_SCRIPT")
+        .ok()
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or(json!([]));
+    for act in script.as_array().into_iter().flatten() {
+        if let Some(name) = act["unset"].as_str() {
+            std::env::remove_var(name);
+        }
+    }
     let cwd = std::env::current_dir().expect("the place");
     let mut session = Session::new(cwd, plugin);
-    let failed = session.run(prompt.as_deref());
+    let failed = session.run(prompt.as_deref(), &script);
     std::process::exit(i32::from(failed));
 }
 
@@ -133,7 +154,7 @@ impl Session {
 
     /// The session: its start, the prompt, the script's acts, the stop
     /// and the end. Whether an act failed.
-    fn run(&mut self, prompt: Option<&str>) -> bool {
+    fn run(&mut self, prompt: Option<&str>, script: &Value) -> bool {
         if let Some(dir) = self.transcript.parent() {
             std::fs::create_dir_all(dir).expect("the transcript's folder");
         }
@@ -146,12 +167,11 @@ impl Session {
             self.queued(&submitted);
             self.hook("UserPromptSubmit", json!({ "prompt": submitted }), None);
             self.user(json!(submitted));
-            let script = std::env::var("STAND_IN_SCRIPT")
-                .ok()
-                .and_then(|file| std::fs::read_to_string(file).ok())
-                .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-                .unwrap_or(json!([]));
             for act in script.as_array().into_iter().flatten() {
+                if let Some(failure) = act.get("fail") {
+                    self.fail(failure);
+                    return failed;
+                }
                 if !self.act(act) {
                     failed = true;
                 }
@@ -181,6 +201,36 @@ impl Session {
         self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
         say("session ended");
         failed
+    }
+
+    /// The turn ended by the API's failure, as 2.1.296 ends one: its words
+    /// written as the synthetic error message, StopFailure run with the
+    /// error and the words in place of Stop, and the session ended.
+    fn fail(&mut self, failure: &Value) {
+        let error = failure["error"].as_str().unwrap_or_default();
+        let words = failure["words"].as_str().unwrap_or_default();
+        let mut record = self.record(
+            "assistant",
+            json!({
+                "id": format!("msg_stand_in_{}", self.calls),
+                "model": "<synthetic>",
+                "role": "assistant",
+                "type": "message",
+                "stop_reason": "stop_sequence",
+                "content": [{ "type": "text", "text": words }],
+            }),
+        );
+        record["isApiErrorMessage"] = json!(true);
+        record["error"] = json!(error);
+        self.line(record);
+        say(&format!("the turn failed: {words} ({error})"));
+        self.hook(
+            "StopFailure",
+            json!({ "error": error, "last_assistant_message": words }),
+            None,
+        );
+        self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
+        say("session ended");
     }
 
     /// One act of the script, as a tool call. Whether it did not fail.
@@ -215,6 +265,10 @@ impl Session {
         }
         if let Some(files) = act.get("merge_named") {
             return self.merge_named(files);
+        }
+        if act.get("unset").is_some() {
+            // Made before the session started.
+            return true;
         }
         if let Some(file) = act["wait_for"].as_str() {
             let began = Instant::now();
@@ -408,6 +462,9 @@ impl Session {
                 command
             }
         };
+        for name in WITHHELD {
+            command.env_remove(name);
+        }
         if let Some(root) = &self.plugin {
             command.env("CLAUDE_PLUGIN_ROOT", root);
         }

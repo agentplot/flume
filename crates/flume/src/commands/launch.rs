@@ -8,7 +8,7 @@ use flume_seams::Settings;
 use std::collections::BTreeMap;
 
 /// The fields `--agent` sets (32).
-const FIELDS: [&str; 5] = ["program", "model", "instructions", "env", "beside"];
+const FIELDS: [&str; 4] = ["program", "model", "instructions", "beside"];
 
 /// Sets the one setting `given` names, `[<stage>.]<field>=<value>`, in
 /// `every_stage` or in its stage's entry of `stages` (7, 32).
@@ -31,19 +31,15 @@ pub fn agent(
         Some(stage) => stages.entry(stage.to_string()).or_default(),
         None => every_stage,
     };
-    let text = value.to_string();
-    let value = Some(text.clone());
-    match field.split_once('.') {
-        None if field == "program" => settings.program = value,
-        None if field == "model" => settings.model = value,
-        None if field == "instructions" => settings.instructions = value,
-        None if field == "beside" => settings.beside = value,
-        Some(("env", name)) if !name.is_empty() => {
-            settings.env.insert(name.to_string(), text);
-        }
+    let value = Some(value.to_string());
+    match field {
+        "program" => settings.program = value,
+        "model" => settings.model = value,
+        "instructions" => settings.instructions = value,
+        "beside" => settings.beside = value,
         _ => {
             return Err(format!(
-                "--agent {given}: no setting is named {field}; the settings are program, model, instructions, env.<NAME> and beside"
+                "--agent {given}: no setting is named {field}; the settings are program, model, instructions and beside"
             ))
         }
     }
@@ -83,21 +79,25 @@ mod tests {
         let (every, stages) = given(&[
             "model=opus",
             "verify.model=sonnet",
-            "env.A=1",
-            "code.env.B=x=y",
+            "code.instructions=a=b",
             "instructions=be brief",
         ])
         .unwrap();
         assert_eq!(every.model.as_deref(), Some("opus"));
         assert_eq!(every.instructions.as_deref(), Some("be brief"));
-        assert_eq!(every.env.get("A").map(String::as_str), Some("1"));
         assert_eq!(stages["verify"].model.as_deref(), Some("sonnet"));
-        assert_eq!(stages["code"].env.get("B").map(String::as_str), Some("x=y"));
+        assert_eq!(stages["code"].instructions.as_deref(), Some("a=b"));
     }
 
     #[test]
     fn words_naming_no_setting_are_refused() {
-        for words in ["colour=red", "verify.colour=red", "env.=1", "model"] {
+        for words in [
+            "colour=red",
+            "verify.colour=red",
+            "env.A=1",
+            "code.env.B=1",
+            "model",
+        ] {
             let refused = given(&[words]).unwrap_err();
             assert!(refused.contains(words), "{refused}");
         }

@@ -397,7 +397,8 @@ pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>
 }
 
 /// The started ack of the agent this process's environment names: its
-/// session, transcript, source and plugin version (135).
+/// session, transcript, source and plugin version, taken only where the
+/// start's record matches it (135, 161).
 pub fn ack_started(
     session: &str,
     transcript: &str,
@@ -405,6 +406,9 @@ pub fn ack_started(
     plugin_version: &str,
     build: &dyn Fn() -> Result<Engine, String>,
 ) -> Result<String, String> {
+    let binary = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .unwrap_or_else(|_| "flume".into());
     agent::claude::hook::ack_started(
         &agent::claude::hook::Start::of_process(),
         &agent::claude::record::Started {
@@ -414,6 +418,7 @@ pub fn ack_started(
             plugin_version: plugin_version.into(),
         },
         build,
+        &binary,
     )
 }
 

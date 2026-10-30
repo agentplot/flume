@@ -16,7 +16,6 @@ fn settings() -> Settings {
         program: Some("agent".into()),
         model: Some("large".into()),
         instructions: Some("be brief".into()),
-        env: BTreeMap::from([("A".into(), "1".into())]),
         beside: Some("operator".into()),
     }
 }
@@ -141,6 +140,14 @@ fn held() -> HeldState {
             hold_submission: true,
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
             recipients: vec!["operator".into(), "role:planner".into()],
+            stream: StreamHeld {
+                name: "work".into(),
+                from: StreamFrom::HostRepository,
+            },
+            intent: IntentKey::Launch {
+                name: "the-surfaces".into(),
+                digest: "d1".into(),
+            },
         },
         phase: Phase::Over {
             over: Over::Landed {
@@ -170,6 +177,7 @@ fn held() -> HeldState {
                     title: Some("Two".into()),
                     tasks: vec!["2.1 do it".into()],
                 })),
+                unsettled: Some(Box::new(unsettled())),
             }),
             room: Some(RoomWait {
                 order: 3,
@@ -197,11 +205,17 @@ fn held() -> HeldState {
                     (
                         "env.AGENT_HOME".into(),
                         Given {
-                            layer: Layer::HostKind,
+                            layer: Layer::Account,
                             value: "~/.agent-work".into(),
                         },
                     ),
                 ]),
+                account: Some(AccountHeld {
+                    pool: "work".into(),
+                    name: "work-2".into(),
+                    from: AccountFrom::Strategy,
+                }),
+                start_record: start_record(),
                 record: Some("record-1".into()),
                 prompt: prompt(),
                 live: true,
@@ -245,6 +259,30 @@ fn held() -> HeldState {
             "the host's configuration names no role for madswan/ops".to_string(),
         )]),
         holds: holds_put(),
+        moves: vec![
+            AccountMove {
+                on: MoveOn::Stage {
+                    stage: "code".into(),
+                },
+                from: "work-1".into(),
+                to: "work-2".into(),
+                why: MoveWhy::Spent,
+                at: 110,
+            },
+            AccountMove {
+                on: MoveOn::Intent,
+                from: "work-1".into(),
+                to: "work-2".into(),
+                why: MoveWhy::Full,
+                at: 110,
+            },
+        ],
+        unsettled: vec![UnsettledStart {
+            stage: "code".into(),
+            start: 1,
+            at: 4,
+            unsettled: unsettled(),
+        }],
         waiting: Some(Waiting {
             on: WaitingOn {
                 act: Act::Retry,
@@ -256,6 +294,29 @@ fn held() -> HeldState {
             stalled: true,
         }),
         stall_after: 30 * 60,
+    }
+}
+
+/// A start's record: the program, the account and two digests, no value
+/// (161).
+fn start_record() -> StartRecord {
+    StartRecord {
+        program: "agent".into(),
+        account: Some("work-2".into()),
+        env: BTreeMap::from([
+            ("AGENT_HOME".into(), "9f2c".into()),
+            ("FLUME_AGENT".into(), "41ab".into()),
+        ]),
+    }
+}
+
+/// An agent begun without one variable, with another value of a second
+/// and under another program (161).
+fn unsettled() -> Unsettled {
+    Unsettled {
+        missing: vec!["AGENT_HOME".into()],
+        different: vec!["FLUME_STAGE".into()],
+        program: true,
     }
 }
 
@@ -364,7 +425,33 @@ fn a_launch() {
         priority: 5,
         recipients: vec!["operator".into()],
         stall_after: Some(30 * 60),
+        stream: Some("work".into()),
+        intent: Some("the-surfaces".into()),
     });
+}
+
+#[test]
+fn an_intent_by_its_name_or_its_repository_and_base() {
+    let named = IntentKey::Launch {
+        name: "the-surfaces".into(),
+        digest: "d1".into(),
+    };
+    let based = IntentKey::Base {
+        repository: "/r".into(),
+        base: "main".into(),
+        digest: "d2".into(),
+    };
+    round_trips(named.clone());
+    round_trips(based.clone());
+    assert_eq!((named.digest(), based.digest()), ("d1", "d2"));
+    assert_eq!(
+        serde_json::to_value(&named).unwrap()["from"],
+        serde_json::json!("launch")
+    );
+    assert_eq!(
+        serde_json::to_value(&based).unwrap()["from"],
+        serde_json::json!("base")
+    );
 }
 
 #[test]
@@ -462,6 +549,11 @@ fn a_moves_words() {
 #[test]
 fn a_held_state() {
     round_trips(held());
+    round_trips(start_record());
+    round_trips(StartRecord {
+        account: None,
+        ..start_record()
+    });
     for phase in [
         Phase::Making { by: "c1".into() },
         Phase::Live,
@@ -502,6 +594,23 @@ fn a_held_state() {
     ] {
         round_trips(phase);
     }
+}
+
+#[test]
+fn a_held_state_with_a_stream_an_account_and_a_record() {
+    // A place in a stream with where it came from, an intent, and a start
+    // under an account with its start's record, which holds each
+    // variable's digest by its name and no value (143 to 147, 161).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["stream"]["name"], "work");
+    assert_eq!(json["place"]["intent"]["name"], "the-surfaces");
+    let start = &json["stages"][0]["start"];
+    assert_eq!(start["account"]["name"], "work-2");
+    assert_eq!(start["start_record"]["account"], "work-2");
+    assert_eq!(start["start_record"]["env"]["AGENT_HOME"], "9f2c");
+    assert_eq!(start["from"]["env.AGENT_HOME"]["layer"], "account");
 }
 
 #[test]
@@ -566,13 +675,80 @@ fn a_role_run_as_the_configuration_names_it() {
         priority: 5,
         base: Some("next".into()),
         brief: Some("read the records".into()),
+        stream: Some("work".into()),
     };
     round_trips(run.clone());
     round_trips(RoleRun {
         base: None,
         brief: None,
+        stream: None,
         ..run
     });
+}
+
+#[test]
+fn streams_and_pools_as_the_configuration_names_them() {
+    round_trips(Stream {
+        agents: Some(5),
+        priority: 10,
+        pool: Some("work".into()),
+    });
+    round_trips(Stream::default());
+    let pool = Pool {
+        strategy: Strategy::FillFirst,
+        accounts: vec![
+            Account {
+                name: "work-1".into(),
+                program: "agent".into(),
+                env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-1".into())]),
+                agents: Some(4),
+            },
+            Account {
+                name: "work-2".into(),
+                program: "agent".into(),
+                env: BTreeMap::new(),
+                agents: None,
+            },
+        ],
+    };
+    round_trips(pool.clone());
+    round_trips(Pool {
+        strategy: Strategy::LeastBusy,
+        ..pool
+    });
+    for (strategy, spelled) in [
+        (Strategy::FillFirst, "fill-first"),
+        (Strategy::LeastBusy, "least-busy"),
+    ] {
+        assert_eq!(strategy.name(), spelled);
+        assert_eq!(
+            serde_json::to_string(&strategy).unwrap(),
+            format!("{spelled:?}")
+        );
+    }
+    for from in [
+        StreamFrom::Launch,
+        StreamFrom::Intent,
+        StreamFrom::HostRepositoryKind,
+        StreamFrom::HostRepository,
+        StreamFrom::HostKind,
+        StreamFrom::Default,
+    ] {
+        round_trips(StreamHeld {
+            name: DEFAULT_STREAM.into(),
+            from,
+        });
+    }
+    assert_eq!(
+        serde_json::to_string(&StreamFrom::HostRepositoryKind).unwrap(),
+        "\"host-repository-kind\""
+    );
+    for from in [PoolFrom::Stream, PoolFrom::Host] {
+        round_trips(PoolNamed {
+            name: "work".into(),
+            from,
+        });
+    }
 }
 
 #[test]
@@ -614,6 +790,55 @@ fn an_ends_key_and_its_pending_recipients() {
 }
 
 #[test]
+fn the_hosts_own_documents_and_their_keys() {
+    for key in [
+        HostKey::Account {
+            pool: "work".into(),
+            account: "work-1".into(),
+        },
+        HostKey::Intent {
+            digest: "d1".into(),
+        },
+    ] {
+        round_trips(key);
+    }
+    round_trips(HostVersioned {
+        version: 3,
+        document: HostDocument::Account(AccountSpent {
+            until: 54_000,
+            words: Some("You've hit your session limit".into()),
+            recorded_at: 47_400,
+        }),
+    });
+    let affinity = Affinity {
+        stream: "work".into(),
+        pool: "work".into(),
+        account: "work-2".into(),
+        moves: vec![AccountMove {
+            on: MoveOn::Intent,
+            from: "work-1".into(),
+            to: "work-2".into(),
+            why: MoveWhy::Spent,
+            at: 47_400,
+        }],
+        gone: Some(50_000),
+    };
+    assert!(affinity.left("work-1") && !affinity.left("work-2"));
+    round_trips(HostVersioned {
+        version: 4,
+        document: HostDocument::Intent(affinity),
+    });
+    assert_eq!(
+        HostKey::Account {
+            pool: "work".into(),
+            account: "work-1".into()
+        }
+        .to_string(),
+        "account work/work-1"
+    );
+}
+
+#[test]
 fn a_versioned_held_state() {
     round_trips(Versioned {
         version: 4,
@@ -641,6 +866,7 @@ fn a_kind_with_its_stages() {
         Layer::Repository,
         Layer::Kind,
         Layer::Default,
+        Layer::Account,
     ] {
         round_trips(layer);
         assert_eq!(
@@ -1147,6 +1373,22 @@ fn the_agent_seams_answers() {
         record: "r1".into(),
     });
     round_trips(Received::Unknown);
+    round_trips(Spent::Yes {
+        until: Some(1_800_000_000),
+        words: "You've hit your session limit · resets 3pm (UTC)".into(),
+    });
+    round_trips(Spent::Yes {
+        until: None,
+        words: "You've hit your limit".into(),
+    });
+    round_trips(Spent::No);
+    round_trips(Spent::Unknown);
+    round_trips(unsettled());
+    round_trips(Unsettled::default());
+    assert_eq!(
+        unsettled().words(),
+        "without AGENT_HOME, with another FLUME_STAGE, under another program"
+    );
     round_trips(Offered::Offered);
     round_trips(Offered::NotOffered);
     round_trips(Guarded::Refused {

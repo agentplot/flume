@@ -23,6 +23,10 @@ the same answers you do.
 | Role addresses, woken by a pending end or `flume wake` | ✓ | ✓ |
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
 | Agent settings in six layers | ✓ | ✓ |
+| Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
+| Pools of accounts, a spent account paused and its stage started afresh on another | ✓ | ✓ |
+| An intent's agents kept to one account while it is usable | ✓ | ✓ |
+| Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
 | The herdr plugin's watch, sidebar rows and popup | ✓ | ✓ |
 | The Claude Code plugin's `/launch` and status over MCP | ✓ | ✓ |
@@ -46,22 +50,6 @@ the rest of this site says.
   flume's own `change` moves to version 2 with its code stage
   repeating; a repository that wants version 1 declares it. It waits on
   the kind format reading `repeat`.
-
-- **Streams and account pools**
-  ([record 0020](https://github.com/agentplot/flume/blob/main/docs/adr/0020-a-hosts-work-runs-in-named-streams-each-with-its-own-bound-priority-and-pool-of-accounts-and-an-intent-keeps-to-its-account.md)).
-  The host's configuration declares named streams, `[streams.<stream>]`,
-  each with its own bound on agents running, its priority and its pool
-  of accounts, under the host's bound for them all. A launch, an
-  intent, or the host's configuration for its repository and kind puts
-  a place in a stream, and a full stream never holds another's room. A
-  pool, `[pools.<pool>]`, lists accounts, each a program and its
-  environment, chosen first-filled or least-busy. An account that hits
-  its usage limit is paused until the reset its words name, for every
-  flume process on the host, and its stage starts afresh on another
-  account with no caller's word. An intent's agents keep to one account
-  while it is usable, so they share its prompt cache. An agent's
-  environment is its account's alone, and the host's settings for a
-  kind give a model and instructions.
 
 - **Prompts in layers**
   ([record 0021](https://github.com/agentplot/flume/blob/main/docs/adr/0021-an-agents-prompt-is-assembled-in-layers-from-the-most-stable-to-the-least-the-stable-ones-in-its-standing-prompt.md)).

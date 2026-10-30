@@ -198,8 +198,8 @@ none of the lines once the place is tidied.
 ### Settings
 
 A kind's `agents` table, and a stage's one agent table, give the
-agent's `program`, `model`, `instructions` and `env`, and `beside` for
-where its pane opens. A repository may also give settings to a kind it
+agent's `program`, `model` and `instructions`, and `beside` for where
+its pane opens. A repository may also give settings to a kind it
 does not declare, flume's own among them, with a table that holds only
 `agents`:
 
@@ -208,9 +208,9 @@ does not declare, flume's own among them, with a table that holds only
 model = "opus"
 ```
 
-A repository's file gives no `env`: a launch whose repository sets one
-is refused, since what a machine's environment needs is that machine's
-to say. [Agent settings](/flume/guides/agent-settings/) gives the
+A declaration gives no environment: an `env` in any agents table
+refuses the launch, naming the field, since an agent's environment is
+its account's on the host. [Agent settings](/flume/guides/agent-settings/) gives the
 layers in order.
 
 ### Prompts

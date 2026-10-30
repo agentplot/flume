@@ -55,14 +55,14 @@ every hook does nothing.
 
 | Hook | What flume does with it |
 |---|---|
-| SessionStart | the **started ack**: the session, its transcript and the plugin's version, taken only with the start's secret |
+| SessionStart | the **started ack**: the session, its transcript and the plugin's version, taken only with the start's secret. flume takes it only where the agent's program and environment match its start's record ([the start check](/flume/guides/agent-settings/#the-start-check)) |
 | UserPromptSubmit | the **received ack**: a digest of the prompt the agent took, the tags Claude Code may wrap a pasted prompt in taken off and its whitespace collapsed |
 | PreToolUse, for Bash | the **guard**: refuses `git push`, `sluice submit`, and worktrunk's `wt submit` and `wt merge`, wherever the line runs them, and records each refusal |
 | PreToolUse, for AskUserQuestion and ExitPlanMode | the **asking mark**: the agent is asking a person, until its transcript holds the answer |
 | PermissionRequest | the asking mark, for a permission prompt |
 | PostToolUse | clears the asking mark once the question it marks is answered |
 | Stop | the **stop check**, then a settle once the agent is quiet |
-| StopFailure | the agent's **last words**: why its turn failed |
+| StopFailure | the agent's **last words**: why its turn failed, with the failure's error and when the hook ran. A turn that failed at its account's usage limit marks the account spent ([a spent account](/flume/guides/agent-settings/#a-spent-account)) |
 | SessionEnd | marks the agent's session ended |
 
 A subagent's hooks take no ack, and the guard refuses its commands as

@@ -3,8 +3,9 @@
 # runs it: `flume hook <event>` with the hook's input on standard input
 # (fixtures/, as that release handed them to a hook) and the agent's
 # environment, over a fixture transcript and a scratch state directory.
-# No Claude Code runs, and nothing of the user's state, configuration or
-# git is read or written.
+# No Claude Code runs: this script's own shell stands in for the program
+# a hook runs under, a scratch `claude` on the hooks' PATH naming it. Nothing
+# of the user's state, configuration or git is read or written.
 
 set -u
 
@@ -54,6 +55,12 @@ state() {
 
 cp "$fixtures/transcript.jsonl" "$scratch/transcript.jsonl"
 
+# The hook's parent is this script's shell, so the program a start's record
+# names, `claude`, is found on the hooks' PATH as that shell (161).
+mkdir -p "$scratch/bin"
+ln -s "$BASH" "$scratch/bin/claude"
+hookpath=$scratch/bin:$PATH
+
 # A repository bound to git-worktree alone, and a place launched in it
 # under the printed command, its agent Claude Code.
 repo=$scratch/repository
@@ -81,7 +88,7 @@ word() {
 plugin=$(printf '%s\n' "$printed" | tr ' ' '\n' | sed -n '/^--plugin-dir$/{n;p;}')
 agent=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"
 FLUME_PLACE="$(word FLUME_PLACE)" FLUME_STAGE="$(word FLUME_STAGE)"
-CLAUDE_PLUGIN_ROOT="$plugin")
+CLAUDE_PLUGIN_ROOT="$plugin" PATH="$hookpath")
 [ -n "$(word FLUME_SECRET)" ] || fail "the printed command's environment holds no secret"
 case $printed in *"$(word FLUME_SECRET)"*) fail "the printed command holds its secret" ;; esac
 [ -f "$plugin/hooks/hooks.json" ] || fail "no plugin at $plugin"
@@ -138,6 +145,18 @@ hook stop-failure stop-failure.json "${agent[@]}" >/dev/null
 status | jq -e '.agent.last_words | startswith("Not logged in")' >/dev/null ||
   fail "the failed turn's reason is not the last words"
 
+# A usage limit's failure, its words the test's: the last words, and the
+# agent's record holding its error, its words and when the hook ran.
+ran=$(date +%s)
+hook stop-failure stop-failure-limit.json "${agent[@]}" >/dev/null
+status | jq -e '.agent.last_words | startswith("You'"'"'ve hit your session limit")' >/dev/null ||
+  fail "the usage limit's words are not the last words"
+failure=$(find "$XDG_STATE_HOME" -name failure.json | head -n 1)
+[ -n "$failure" ] || fail "the failed turn is not in the agent's record"
+jq -e --argjson ran "$ran" '.error == "rate_limit"
+  and (.words | startswith("You'"'"'ve hit your session limit")) and .at >= $ran' "${failure:-/dev/null}" >/dev/null ||
+  fail "the agent's record does not hold the failure's error, words and time: $(cat "${failure:-/dev/null}")"
+
 # On quiet: the prompt received, a commit made, the stop let through, and
 # once the session ended the place settles itself on to the next stage.
 prompt=$(cd "$repo" && "$flume" prompt "$place" code --json | jq -r .prompt.text)
@@ -155,6 +174,55 @@ for _ in $(seq 1 40); do
   sleep 0.25
 done
 [ "$(status | jq -r .current)" = review ] || fail "the stop did not settle the place: $(status)"
+
+# The start checked against its settings: a place whose start runs under
+# an account giving CLAUDE_CONFIG_DIR a scratch folder.
+mkdir -p "$XDG_CONFIG_HOME/flume" "$scratch/account-1"
+cat >"$XDG_CONFIG_HOME/flume/config.toml" <<TOML
+[host]
+pool = "work"
+
+[pools.work]
+strategy = "fill-first"
+accounts = [{ name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "$scratch/account-1" } }]
+TOML
+(cd "$repo" && "$flume" launch --kind fix --name two --brief "fix the lexer" \
+  --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch under an account"
+place=$repo/places/fix--two
+printed=$(status | jq -r '.agent.printed')
+envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
+two=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"
+FLUME_PLACE="$(word FLUME_PLACE)" FLUME_STAGE="$(word FLUME_STAGE)"
+CLAUDE_PLUGIN_ROOT="$plugin")
+unsettled() {
+  find "$XDG_STATE_HOME" -path "*fix--two*" -name unsettled.json | head -n 1
+}
+
+# A variable with another value: no started ack, the agent's record naming
+# the variable as different and holding no value, a settle of the place
+# started, which reads the start begun without its settings.
+hook session-start session-start.json "${two[@]}" PATH="$hookpath" \
+  CLAUDE_CONFIG_DIR="$scratch/account-elsewhere" >/dev/null || fail "session-start exited non-zero"
+[ "$(status | jq -r .agent.started)" = no ] || fail "the ack was taken with another CLAUDE_CONFIG_DIR"
+word_file=$(unsettled)
+jq -e '.different == ["CLAUDE_CONFIG_DIR"] and .missing == [] and .program == false' \
+  "${word_file:-/dev/null}" >/dev/null || fail "the record does not name CLAUDE_CONFIG_DIR as different: $(cat "${word_file:-/dev/null}")"
+grep -q "account-" "${word_file:-/dev/null}" && fail "the record holds a value"
+for _ in $(seq 1 40); do
+  [ "$(status | jq '.unsettled | length')" = 1 ] && break
+  sleep 0.25
+done
+[ "$(status | jq -r '.unsettled[0].different[0]')" = CLAUDE_CONFIG_DIR ] ||
+  fail "the settle did not read the start begun without its settings: $(status | jq -c .unsettled)"
+
+# Another program: the hook's parent runs other than the `claude` its PATH
+# finds.
+mkdir -p "$scratch/elsewhere"
+ln -s /bin/sh "$scratch/elsewhere/claude"
+hook session-start session-start.json "${two[@]}" PATH="$scratch/elsewhere:$PATH" \
+  CLAUDE_CONFIG_DIR="$scratch/account-1" >/dev/null || fail "session-start exited non-zero"
+[ "$(status | jq -r .agent.started)" = no ] || fail "the ack was taken under another program"
+jq -e '.program == true' "$(unsettled)" >/dev/null || fail "the record does not say the program differed"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures of the plugin's hook checks failed" >&2

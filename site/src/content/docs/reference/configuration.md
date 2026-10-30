@@ -18,15 +18,33 @@ flume cannot read makes every command refuse, naming its fault.
 
 ```toml
 [host]
-agents = 4
+agents = 8
 terminal = "herdr"
+pool = "work"
+
+[streams.personal]
+agents = 3
+pool = "personal"
+
+[pools.work]
+strategy = "fill-first"
+accounts = [
+  { name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-1" }, agents = 4 },
+  { name = "work-2", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-work-2" } },
+]
+
+[pools.personal]
+strategy = "least-busy"
+accounts = [{ name = "personal", program = "claude", env = { CLAUDE_CONFIG_DIR = "~/.claude-personal" } }]
 
 [kinds.change.agents]
-model = "sonnet"
-env = { CLAUDE_CONFIG_DIR = "~/.claude-work" }
+model = "opus"
 
 [kinds.change.agents.stages.verify]
-model = "opus"
+instructions = "Check every scenario of the change's specs."
+
+[repos."~/src/notes"]
+stream = "personal"
 
 [repos."~/src/acme".kinds.fix.agents]
 instructions = "Run the tests with `just test`."
@@ -41,24 +59,82 @@ priority = 5
 
 | Key | Values | Meaning |
 |---|---|---|
-| `agents` | a whole number from 0 | The bound on agents running at once on the host, every caller's counted together. A stage starts only while the host is under it and otherwise waits for room. With none, every stage starts at once and the host has no queue. |
+| `agents` | a whole number from 0 | The bound on agents running at once on the host, every caller's and every stream's counted together. A stage starts only while the host is under it and otherwise waits for room. With none, and no stream's bound, every stage starts at once and the host has no queue. |
 | `terminal` | `"herdr"`, `"printed"` | Where agents run: in herdr panes, or as a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminals there are. |
+| `pool` | a pool's name | The pool of a place whose stream names none. With none, such a place's agents run under no account. |
+
+### `[streams.<stream>]`
+
+A stream the host runs places in
+([streams](/flume/guides/agent-settings/#streams)). The stream
+`default` always stands, holding every place nothing names a stream
+for; a `[streams.default]` table gives it keys of its own.
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `agents` | a whole number above 0 | the bound on the stream's agents running at once, within the host's | the host's bound alone |
+| `priority` | a whole number, negative allowed | the stream's priority: waiting stages start by it first, then by their place's | `0` |
+| `pool` | a pool's name | the pool its places' agents take accounts from | `[host] pool` |
+
+### `[pools.<pool>]`
+
+A pool of accounts
+([pools of accounts](/flume/guides/agent-settings/#pools-of-accounts)).
+
+| Key | Values | Meaning |
+|---|---|---|
+| `strategy` | `"fill-first"`, `"least-busy"` | how an account is chosen: the first usable one in order, or the usable one running the fewest of flume's agents, equals in order. Required. |
+| `accounts` | a list of tables | the pool's accounts, in order, at least one |
+
+Each account:
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `name` | a string | the account's name, unique in its pool | refused |
+| `program` | a string | the program it runs, such as `claude`; it takes only stages of that program | refused |
+| `env` | a table of strings | its agents' environment, over the login environment | no variable |
+| `agents` | a whole number above 0 | the bound on agents running under it at once | no bound of its own |
+
+In `env`, a leading `~` is your home and `$VAR` or `${VAR}` a variable
+of your login environment, read at each start. A variable the login
+environment lacks refuses that start, naming it and the account.
+
+### `stream`
+
+`stream` in `[repos."<repository>".kinds.<kind>]`, in
+`[repos."<repository>"]` and in `[kinds.<kind>]` names the stream of a
+place of that repository and kind, of that repository, or of that kind,
+in that order, where the launch and the intent name none.
 
 ### `[kinds.<kind>.agents]`
 
-Settings for a kind's agents in every repository: `program`, `model`,
-`instructions` and `env`, with `[kinds.<kind>.agents.stages.<stage>]`
-for one stage's. A stage's own setting comes before one for every
-stage. Each value is a string, and `env` a table of strings. In `env`,
-a leading `~` is your home and `$VAR` or `${VAR}` a variable of your
-login environment. [Agent settings](/flume/guides/agent-settings/)
-gives the layers.
+Settings for a kind's agents in every repository: `model` and
+`instructions`, with `[kinds.<kind>.agents.stages.<stage>]` for one
+stage's. A stage's own setting comes before one for every stage. Each
+value is a string, and any other key is not read.
+[Agent settings](/flume/guides/agent-settings/) gives the layers.
 
 ### `[repos."<repository>".kinds.<kind>.agents]`
 
 The same, for a kind in one repository, named by its location; a
 leading `~` in the key is your home. It comes before the host's
 settings for the kind in every repository.
+
+### What refuses
+
+flume refuses the file, naming the key, for:
+
+- a `strategy` other than `fill-first` and `least-busy`;
+- a stream's `pool` or `[host] pool` naming a pool no `[pools]` table
+  declares;
+- a pool with no accounts, or two accounts of one name;
+- an account with no `name` or no `program`;
+- an `agents` of a stream or an account that is not a whole number
+  above zero;
+- a key a stream, a pool or an account does not know.
+
+A file that refuses leaves every launch and every start refused,
+naming its fault, until it is mended.
 
 ### `[roles."<group>/<role>"]`
 
@@ -72,6 +148,7 @@ The run the host launches for a role's address
 | `priority` | a whole number, the run's priority in the host's queue | `0` |
 | `base` | the base the run's place is cut from | the repository's default branch |
 | `brief` | the run's brief | none |
+| `stream` | the stream the run's place runs in | as for any launch |
 
 A key that is no `<group>/<role>` address, or a key the table does not
 know, makes the file unreadable.
@@ -125,8 +202,8 @@ The repository's own kinds, in the kind format below. A kind named
 as one of flume's own stands over it in this repository. A
 `[kinds.<kind>]` table that holds only `agents` gives settings to a
 kind declared elsewhere, flume's own among them, and declares no kind.
-A repository's file gives no `env`: a launch whose repository sets one
-for its kind is refused.
+An `env` in any agents table refuses the launch, naming the field,
+since an agent's environment is its account's alone.
 
 ## A launch's declaration
 
@@ -161,7 +238,7 @@ known fields fail, naming every field that does.
 | `prompt` | a path | its prompt, relative to the declaring file's folder; for a repository, read from git at the same revision | refused |
 | `deliverables` | a list of one spelling | what ends it: `commits`, `change`, `tasks`, `archived`, `report:<path>` or `committed:<path>` | refused, unless a conversation |
 | `conversation` | `true`, `false` | a stage with no deliverable, ended by `flume finish` | `false` |
-| `agents` | a list of one table | its agent's settings: `program`, `model`, `instructions`, `env`, `beside` | refused by flume, which runs one agent per stage |
+| `agents` | a list of one table | its agent's settings: `program`, `model`, `instructions`, `beside`; an `env` refuses the launch | refused by flume, which runs one agent per stage |
 | `makes` | a list of names | what it makes besides its deliverable, each recorded as a line of `made.jsonl` | none |
 | `wait` | `true`, `false` | the stage is held before it starts until a retry names it | `false` |
 | `quiet` | a whole number then `s`, `m` or `h`, as `"45m"` | how long its agent may be quiet with nothing delivered before it is stuck | 30 minutes |

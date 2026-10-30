@@ -322,6 +322,28 @@ impl AgentHarness for FakeAgentHarness {
     fn say_last(&self, identity: &Identity, words: &str) {
         self.agent.set_last_words(identity, words);
     }
+
+    fn hit_usage_limit(&self, identity: &Identity) -> Seconds {
+        let reset = self.host.now() + 2 * 3600;
+        self.agent.set_spent(
+            identity,
+            Spent::Yes {
+                until: Some(reset),
+                words: "a usage limit this harness writes".into(),
+            },
+        );
+        reset
+    }
+
+    fn begin_without(&self, identity: &Identity, variable: &str) {
+        self.agent.set_started_without(
+            identity,
+            Unsettled {
+                missing: vec![variable.to_string()],
+                ..Unsettled::default()
+            },
+        );
+    }
 }
 
 pub struct FakeTerminalHarness {

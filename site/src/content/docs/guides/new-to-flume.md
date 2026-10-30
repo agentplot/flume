@@ -80,9 +80,11 @@ is a role rather than a session.
 
 The host's configuration may set a bound on the agents running at once,
 every caller's counted together. A stage starts only while the host is
-under it, and otherwise waits for room in priority order. Every launch
-is taken, and none is refused for want of room. A host with no bound
-has no queue. The [configuration reference](/flume/reference/configuration/)
+under it, and otherwise waits for room in priority order. The host may
+also run its places in streams, each with its own bound, priority and
+pool of accounts ([agent settings](/flume/guides/agent-settings/#streams)).
+Every launch is taken, and none is refused for want of room. A host
+with no bound has no queue. The [configuration reference](/flume/reference/configuration/)
 lists the setting.
 
 flume runs no process of its own between commands. A **settle** moves

@@ -12,10 +12,15 @@
 //! holds of the branch at the launch is an earlier place's of the same
 //! name, kept so it is never read as this place's (3, 99). A refusal
 //! after the place's held state
-//! is created undoes what was made, so nothing is left (2, 76).
+//! is created undoes what was made, so nothing is left (2, 76). The
+//! place's stream is chosen once, the launch's, else the one the host's
+//! configuration names for its repository and kind, its repository or
+//! its kind, else `default`, and one the host does not declare refuses
+//! the launch (4, 8, 143); its intent is the launch's name, else its
+//! repository and base (147).
 
 use crate::reading::reads_change;
-use crate::settings::{no_repository_env, no_stage_lacking};
+use crate::settings::no_stage_lacking;
 use crate::{Answer, Bound, Engine, Step};
 use flume_seams::*;
 
@@ -196,12 +201,9 @@ impl Engine {
         };
         let (kind, declared, repository_settings) = self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind)?;
-        no_repository_env(
-            &kind,
-            declared == Declared::Repository,
-            &repository_settings,
-        )?;
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
+        let intent = self.intent_of(launch);
+        let stream = self.stream_of(launch, &kind.name, &intent)?;
         let named = format!("the kind {}@{}", kind.name, kind.version);
         if kind.lands && merge_queue.is_none() {
             return Err(format!(
@@ -301,6 +303,8 @@ impl Engine {
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),
                 recipients,
+                stream,
+                intent,
             },
             phase: Phase::Making {
                 by: self.host.command(),
@@ -333,6 +337,8 @@ impl Engine {
             ends: vec![],
             role: role.map(str::to_string),
             unwoken: Default::default(),
+            moves: vec![],
+            unsettled: vec![],
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
@@ -382,6 +388,90 @@ impl Engine {
             .map(|read| read.state)
             .ok_or_else(|| format!("the place {id} was removed while it was launched"))
     }
+}
+
+impl Engine {
+    /// The stream a launch's place runs in, chosen once (8, 143): the
+    /// launch's, else the stream of its intent's affinity where one
+    /// stands (147), else the one the host's configuration names for the
+    /// repository and `kind`, for the repository or for `kind`, else
+    /// `default`; a stream the host does not declare refuses the launch
+    /// naming it (4).
+    fn stream_of(
+        &self,
+        launch: &Launch,
+        kind: &str,
+        intent: &IntentKey,
+    ) -> Result<StreamHeld, String> {
+        let stream = match &launch.stream {
+            Some(name) => StreamHeld {
+                name: name.clone(),
+                from: StreamFrom::Launch,
+            },
+            None => match self.affinity(intent) {
+                Some((_, affinity)) => StreamHeld {
+                    name: affinity.stream,
+                    from: StreamFrom::Intent,
+                },
+                None => self
+                    .host
+                    .stream_for(&launch.repository, kind)
+                    .unwrap_or_else(|| StreamHeld {
+                        name: DEFAULT_STREAM.into(),
+                        from: StreamFrom::Default,
+                    }),
+            },
+        };
+        if self.host.streams().contains_key(&stream.name) {
+            return Ok(stream);
+        }
+        let repository = &launch.repository;
+        let named = match stream.from {
+            StreamFrom::Launch => "the launch names".to_string(),
+            StreamFrom::HostRepositoryKind => {
+                format!("the host's configuration names for {kind} in {repository}")
+            }
+            StreamFrom::HostRepository => {
+                format!("the host's configuration names for {repository}")
+            }
+            StreamFrom::HostKind => format!("the host's configuration names for {kind}"),
+            StreamFrom::Intent => "the intent's affinity stands in".to_string(),
+            StreamFrom::Default => "the place takes".to_string(),
+        };
+        Err(format!(
+            "the stream {} {named} is not declared by the host's configuration (143)",
+            stream.name
+        ))
+    }
+
+    /// The intent a launch's place serves: the launch's name, else the
+    /// repository and base, each with its document's digest (147).
+    fn intent_of(&self, launch: &Launch) -> IntentKey {
+        match &launch.intent {
+            Some(name) => IntentKey::Launch {
+                name: name.clone(),
+                digest: sha256(&format!("name:{name}")),
+            },
+            None => IntentKey::Base {
+                repository: launch.repository.clone(),
+                base: launch.base.clone(),
+                digest: sha256(&format!(
+                    "base:{}:{}",
+                    self.repository_id_of(&launch.repository),
+                    launch.base
+                )),
+            },
+        }
+    }
+}
+
+/// The SHA-256 of `text`, in hex.
+fn sha256(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(text.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// The holds a launch puts, each stage's with its words, and the

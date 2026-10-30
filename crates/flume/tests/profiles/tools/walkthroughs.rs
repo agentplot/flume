@@ -12,7 +12,11 @@
 //! queues a launch and starts the waiting ones by priority (S37); and
 //! change@2's code stage works a change of three task groups one fresh
 //! agent at a time, and a failed submission sends it back for one
-//! repetition with no group (S50, S52; 112, 140 to 142).
+//! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
+//! code agent stops at its account's usage limit moves to the pool's
+//! second account and lands (S55; 146, 151); and a fix whose first code
+//! agent comes up without its account's variable is ended and its stage
+//! started afresh under the account, and lands (S65; 161).
 
 use super::walk::*;
 use serde_json::{json, Value};
@@ -553,4 +557,190 @@ fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_g
     assert!(states.contains(&json!("landed")), "{states:?}");
     assert_eq!(walk.on_remote("broken"), None);
     assert!(walk.on_remote("parser.rs").is_some());
+}
+
+/// The seconds since the epoch now.
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock past the epoch")
+        .as_secs()
+}
+
+/// The top of the UTC hour two hours on from `at`, well clear of any
+/// walk's length, and the session limit naming it in the words the pinned
+/// Claude Code writes, a time of day in en-US's 12-hour form (151, C.4).
+fn session_limit_after(at: u64) -> (u64, String) {
+    let reset = at - at % 3600 + 2 * 3600;
+    let hour = reset % 86_400 / 3600;
+    let clock = match hour {
+        0 => "12am".to_owned(),
+        1..=11 => format!("{hour}am"),
+        12 => "12pm".to_owned(),
+        _ => format!("{}pm", hour - 12),
+    };
+    (
+        reset,
+        format!("You've hit your session limit · resets {clock} (UTC)"),
+    )
+}
+
+#[test]
+fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
+    // S55, 146, 151: on a fill-first pool of two accounts, each a scratch
+    // `CLAUDE_CONFIG_DIR`, the fix's code agent starts under the first and
+    // its turn fails at the session limit through StopFailure. The first
+    // account reads spent until the hour the words name, code starts afresh under the
+    // second with flume's words, the move recorded with its cache lost;
+    // the second's agent commits what the first left, and the place lands.
+    let walk = Walk::new("walk-spent");
+    let first = walk.account().to_path_buf();
+    let second = walk.account_folder("account-2");
+    walk.configure_whole(&format!(
+        "[host]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [\n  {{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }},\n  {{ name = \"stand-in-2\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }},\n]\n",
+        first.display().to_string(),
+        second.display().to_string(),
+    ));
+
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let status = walk.status(&place);
+    assert_eq!(status["agent"]["account"]["name"], "stand-in-1", "{status}");
+    let (reset, limit) = session_limit_after(now());
+    let out = walk.agent(
+        &place,
+        json!([
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "fail": { "error": "rate_limit", "words": limit } },
+        ]),
+    );
+    assert!(out.contains("the turn failed"), "{out}");
+    assert!(!out.contains("stop blocked"), "{out}");
+
+    let status = walk.until(&place, "code started afresh", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert_eq!(
+        status["agent"]["account"],
+        json!({ "pool": "stand-in", "name": "stand-in-2", "from": "strategy" }),
+        "{status}"
+    );
+    let moved = status["moves"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|moved| moved["on"] == "stage")
+        .unwrap_or_else(|| panic!("no move of code: {status}"));
+    assert_eq!(
+        (
+            &moved["stage"],
+            &moved["from"],
+            &moved["to"],
+            &moved["why"],
+            &moved["cache"]
+        ),
+        (
+            &json!("code"),
+            &json!("stand-in-1"),
+            &json!("stand-in-2"),
+            &json!("spent"),
+            &json!("lost")
+        ),
+        "{status}"
+    );
+    assert!(stage(&status, "code")["end"].is_null(), "{status}");
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.contains("stopped at its account's usage limit"),
+        "flume's words: {prompt}"
+    );
+    let host = walk.host();
+    let accounts = &host["pools"][0]["accounts"];
+    assert_eq!(accounts[0]["name"], "stand-in-1", "{host}");
+    assert_eq!(accounts[0]["spent_until"], reset, "{host}");
+    assert_eq!(accounts[0]["running"], 0, "{host}");
+    assert_eq!(accounts[1]["name"], "stand-in-2", "{host}");
+    assert!(accounts[1]["spent_until"].is_null(), "{host}");
+    assert_eq!(accounts[1]["running"], 1, "{host}");
+
+    walk.agent(
+        &place,
+        json!([{ "bash": "git add -A && git commit --quiet -m 'fix the parser'" }]),
+    );
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n"),
+        "what the first agent left, committed by the second"
+    );
+    assert!(!walk.has_branch("fix/one"));
+    for account in [&first, &second] {
+        assert!(
+            account.join("projects").exists(),
+            "an agent under {}",
+            account.display()
+        );
+    }
+}
+
+#[test]
+fn a_start_without_its_account_is_ended_and_its_stage_started_afresh() {
+    // S65, 161: the fix's code stage starts under the pool's account, its
+    // `CLAUDE_CONFIG_DIR` a scratch folder, and its program comes up
+    // without the variable, as a pane brought back without its
+    // environment does. Its SessionStart hook acks nothing and records the
+    // variable missing; flume ends that agent, under the printed command
+    // once its session ended, and starts code afresh under the account,
+    // whose agent runs with the variable, delivers, and the place lands.
+    // Status names `CLAUDE_CONFIG_DIR` and no value.
+    let walk = Walk::new("walk-unsettled");
+    let account = walk.account().to_path_buf();
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let out = walk.agent(&place, json!([{ "unset": "CLAUDE_CONFIG_DIR" }]));
+    assert!(!out.contains("stop blocked"), "{out}");
+
+    let status = walk.until(&place, "code started afresh", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    let unsettled = status["unsettled"].as_array().cloned().unwrap_or_default();
+    assert_eq!(unsettled.len(), 1, "{status}");
+    assert_eq!(
+        (
+            &unsettled[0]["stage"],
+            &unsettled[0]["start"],
+            &unsettled[0]["missing"],
+            &unsettled[0]["different"],
+            &unsettled[0]["program"]
+        ),
+        (
+            &json!("code"),
+            &json!(1),
+            &json!(["CLAUDE_CONFIG_DIR"]),
+            &json!([]),
+            &json!(false)
+        ),
+        "{status}"
+    );
+    assert!(
+        !status.to_string().contains(&*account.to_string_lossy()),
+        "status holds the variable's value: {status}"
+    );
+    assert_eq!(status["agent"]["account"]["name"], "stand-in-1", "{status}");
+    assert!(stage(&status, "code")["end"].is_null(), "{status}");
+    assert!(status["waiting_on"].is_null(), "{status}");
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.contains("began without the settings its start recorded"),
+        "flume's words: {prompt}"
+    );
+
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+    assert!(
+        account.join("projects").exists(),
+        "the fresh agent ran under the account's CLAUDE_CONFIG_DIR"
+    );
 }

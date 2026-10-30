@@ -1,9 +1,12 @@
 //! A walkthrough's host (design 18): flume's built binary under the
 //! printed command, on a scratch repository bound to `git-worktree`,
 //! `openspec` and `sluice`, its base landing on a local bare remote, and
-//! the stand-in for Claude Code first on `PATH` as `claude`; or, for the
-//! check-live layer, no stand-in and the host's terminal and agent
-//! program as its configuration names them. Every process
+//! the stand-in for Claude Code first on `PATH` as `claude`, its agents
+//! signed in by a pool of one account whose `CLAUDE_CONFIG_DIR` is a
+//! scratch folder and whose `CLAUDE_CODE_OAUTH_TOKEN` is a word of the
+//! walk's own, which the stand-in keeps from its hooks as the release
+//! does and sends nowhere (144, 161); or, for the check-live layer, no stand-in and the
+//! host's terminal and account as its configuration names them. Every process
 //! the walkthrough starts, flume, sluice, git and the stand-in, runs in the
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
@@ -14,6 +17,10 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+
+/// The stand-in's account's `CLAUDE_CODE_OAUTH_TOKEN`: no token of any
+/// account's, only a word for the stand-in to keep from its hooks.
+pub const STAND_IN_TOKEN: &str = "stand-in-token";
 
 /// The gate: the check fails, with its words, while the tree holds
 /// `broken`.
@@ -56,6 +63,9 @@ pub struct Walk {
     home: PathBuf,
     path: String,
     runs: std::cell::Cell<u32>,
+    /// The stand-in's account's `CLAUDE_CONFIG_DIR`, none for the
+    /// check-live layer, whose configuration names its own account.
+    account: Option<PathBuf>,
 }
 
 impl Walk {
@@ -107,13 +117,28 @@ impl Walk {
         .expect("a PATH")
         .to_string_lossy()
         .into_owned();
-        Walk {
+        let account = stand_in.then(|| repository.scratch.path("account-1"));
+        if let Some(dir) = &account {
+            std::fs::create_dir_all(dir).expect("the account's folder");
+        }
+        let walk = Walk {
             repository,
             remote,
             home,
             path,
             runs: std::cell::Cell::new(0),
-        }
+            account,
+        };
+        walk.configure("");
+        walk
+    }
+
+    /// The stand-in's account's `CLAUDE_CONFIG_DIR`, where its agents
+    /// keep their transcripts.
+    pub fn account(&self) -> &Path {
+        self.account
+            .as_deref()
+            .expect("a walkthrough with the stand-in")
     }
 
     /// The walkthrough's home at `home`, a path to the same folder, as a
@@ -132,11 +157,33 @@ impl Walk {
         &self.home
     }
 
-    /// The host's configuration, `[host]` and beside it (C.7).
+    /// The host's configuration, `[host]` and beside it, with the
+    /// stand-in's pool of one account, which the `default` stream takes
+    /// its accounts from (144, C.7).
     pub fn configure(&self, text: &str) {
+        let mut text = text.to_string();
+        if let Some(account) = &self.account {
+            text.push_str(&format!(
+                "\n[streams.default]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n",
+                account.display().to_string()
+            ));
+        }
+        self.configure_whole(&text);
+    }
+
+    /// The host's configuration as `text` gives it whole, its pools and
+    /// accounts among it.
+    pub fn configure_whole(&self, text: &str) {
         let dir = self.home.join("config/flume");
         std::fs::create_dir_all(&dir).expect("the configuration's folder");
         std::fs::write(dir.join("config.toml"), text).expect("the configuration");
+    }
+
+    /// A scratch folder for an account's `CLAUDE_CONFIG_DIR`, made.
+    pub fn account_folder(&self, name: &str) -> PathBuf {
+        let dir = self.repository.scratch.path(name);
+        std::fs::create_dir_all(&dir).expect("the account's folder");
+        dir
     }
 
     /// `program` with the walkthrough's environment, in `dir`.

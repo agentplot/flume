@@ -25,6 +25,8 @@ weir-kinds.workspace = true
 toml.workspace = true
 clap.workspace = true
 libc.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
 
 [features]
 # The profiles' tests against the tools the tree pins, the check-tools

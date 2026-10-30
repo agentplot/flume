@@ -66,6 +66,7 @@
 //! naming the bound; each runs with the caller's `HERDR_*` stripped and
 //! the recorded server's socket passed (98, core.29).
 
+use crate::host::process::{executable, program_path};
 use flume_seams::{
     AgentCommand, AgentState, Closed, Clues, FolderTrust, Identity, Opened, PlaceRef, Sent, Shown,
     ShownAt, Terminal, TerminalTidy, ToSession, Watch,
@@ -1340,45 +1341,6 @@ fn write_json(path: &Path, value: &Value) -> Result<(), String> {
         .map_or(Ok(()), fs::create_dir_all)
         .and_then(|()| fs::write(path, value.to_string()))
         .map_err(|error| format!("{}: {error}", path.display()))
-}
-
-/// The program the settings name, by its path: as named where it holds a
-/// `/`, else the first on `path` (32).
-fn program_path(program: &str, path: &str) -> Option<PathBuf> {
-    if program.contains('/') {
-        return Some(PathBuf::from(program));
-    }
-    path.split(':')
-        .filter(|dir| !dir.is_empty())
-        .map(|dir| Path::new(dir).join(program))
-        .find(|candidate| candidate.is_file())
-}
-
-/// The file a process runs, from the host's process table; none where it
-/// cannot be read.
-#[cfg(target_os = "macos")]
-fn executable(pid: u32) -> Option<PathBuf> {
-    let mut buffer = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
-    // SAFETY: the buffer is as long as `PROC_PIDPATHINFO_MAXSIZE`, as
-    // `proc_pidpath` asks.
-    let length = unsafe {
-        libc::proc_pidpath(
-            pid as libc::c_int,
-            buffer.as_mut_ptr().cast(),
-            buffer.len() as u32,
-        )
-    };
-    (length > 0).then(|| {
-        buffer.truncate(length as usize);
-        PathBuf::from(String::from_utf8_lossy(&buffer).into_owned())
-    })
-}
-
-/// The file a process runs, from the host's process table; none where it
-/// cannot be read.
-#[cfg(not(target_os = "macos"))]
-fn executable(pid: u32) -> Option<PathBuf> {
-    fs::read_link(format!("/proc/{pid}/exe")).ok()
 }
 
 fn field(value: &Value, name: &str) -> String {

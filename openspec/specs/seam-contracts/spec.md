@@ -168,3 +168,47 @@ state read by that name SHALL reach that agent (94, 107, 132).
 
 - **WHEN** an agent is opened under the session name `madswan/planner`
 - **THEN** a send to the recipient `madswan/planner` reaches that agent, and a second open under that name while it is live is refused (98)
+
+### Requirement: The agent seam reads a spent account and a start without its settings
+
+The agent seam SHALL say whether the agent's own record shows its
+account reached a usage limit, with the reset it names, or unknown
+(151), whether its agent began without the settings its start
+recorded, naming each variable that differs and whether its program
+did (135, 161), and which variables its program keeps from every
+process it starts, none by default (161).
+
+#### Scenario: Spent and without its settings over the fake
+
+- **WHEN** the fake agent scripts a usage limit with a reset for one start and a missing variable for another
+- **THEN** `spent` reads yes with that reset for the first and `started_without` names the variable for the second (135, 151, 161)
+
+#### Scenario: Begun without its settings and no turn taken
+
+- **WHEN** an agent's word at its start shows a variable missing and it has taken no turn
+- **THEN** `started_without` names the variable, and `own_work` and `asking` read no (31, 91, 161)
+
+### Requirement: The store keeps the host's own documents
+
+The store seam SHALL read and write the host's own documents, each
+account's spent time and each intent's affinity, by key, compare-and-set
+on a version as a place's held state is, and reached by every flume
+process on the host (102 to 104, 153).
+
+#### Scenario: A host document written at a moved version
+
+- **WHEN** two writers write one key at the version both read
+- **THEN** one write lands and the other is refused as moved (103, 153)
+
+### Requirement: The types of streams, pools and a start's record
+
+The seams SHALL pass one type each for a stream, a pool, its strategy
+and its accounts, an account chosen and where from, a move between
+accounts, and a start's record of what its agent runs under, held as
+the start's `start_record` and holding digests and no value; each SHALL
+serialize to JSON and back unchanged (143 to 147, 161).
+
+#### Scenario: A held state with a stream, an account and a record
+
+- **WHEN** a held state whose place has a stream with `from`, an intent, and a start with an account and a start's record is written and read
+- **THEN** it reads back unchanged, and the record holds each variable's digest and no value (143 to 147, 161)
