@@ -2,12 +2,14 @@
 //! (design 6 and 7 of record 0020's change; C.4; core.22): the program
 //! the `claude` wrapper from `devenv.nix` runs is read as a file, and each
 //! source fragment the profile rests on must stand in it byte for byte:
-//! the usage-limit words it reads, and the credentials the release keeps
-//! from its hooks, which no start's record names. A release that changes
-//! either, or only renames what its minifier names in those fragments,
-//! fails here until the reading is made again. No agent runs.
+//! the usage-limit words it reads, the credentials the release keeps
+//! from its hooks, which no start's record names, and its permission
+//! modes, which its map of flume's modes rests on (design 10 of record
+//! 0024's change). A release that changes any of them, or only renames
+//! what its minifier names in those fragments, fails here until the
+//! reading is made again. No agent runs.
 
-use flume::profiles::agent::claude::{limit, withheld, wrapper};
+use flume::profiles::agent::claude::{limit, mode, withheld, wrapper};
 use std::path::{Path, PathBuf};
 
 /// The Claude Code version `devenv.nix` pins.
@@ -92,6 +94,17 @@ fn the_pinned_release_keeps_its_credentials_from_its_hooks() {
     assert!(
         missing.is_empty(),
         "Claude Code {version}, at {}, does not hold the fragments the credentials it keeps from its hooks rest on:\n{}",
+        program.display(),
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn the_pinned_release_holds_the_modes_the_map_rests_on() {
+    let (missing, program, version) = missing(&mode::fragments());
+    assert!(
+        missing.is_empty(),
+        "Claude Code {version}, at {}, does not hold the fragments the map of modes rests on:\n{}",
         program.display(),
         missing.join("\n")
     );
