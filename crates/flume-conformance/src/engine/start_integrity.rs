@@ -8,10 +8,12 @@
 //! quiet is ended and its stage started afresh under its settings,
 //! counted toward no bound; a fresh start that begins so again, or one
 //! that never goes quiet, is never begun, its end naming the same; status
-//! names each variable alone (31, 35, 37, 43, 56, 112, 135).
+//! names each variable alone, and a mode that differed by the mode asked
+//! and the mode begun; a profile that reads no mode back compares none
+//! (31, 35, 37, 43, 56, 112, 135, 161, 162, 169).
 
 use super::account_pools::pool;
-use super::agent_modes::{in_mode, the_fakes_map};
+use super::agent_modes::{in_mode, passed, the_fakes_map};
 use super::agent_settings::for_every_stage;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -74,6 +76,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "place status: a start whose agent began without its settings is named with each variable by its name and no value",
             cites: &["56", "161"],
             run: status_of_a_start_without_its_settings,
+        },
+        Scenario {
+            name: "start integrity: an agent whose word shows every variable as recorded but another mode than its record's all is not taken: started reads no and the start reads begun without its settings, naming the mode asked all and the mode begun ask-each",
+            cites: &["135", "161", "162"],
+            run: another_mode,
+        },
+        Scenario {
+            name: "start integrity: a code stage given full whose agent begins in another mode, as its account's configuration disabling the mode leaves it, is ended once quiet and started afresh counting no bound, and the fresh start begun so again is never begun, its end and status naming the mode asked and the mode begun",
+            cites: &["S67", "35", "161", "162", "31", "112", "56"],
+            run: s67_a_mode_the_accounts_configuration_disables,
+        },
+        Scenario {
+            name: "start integrity: where the agent's profile reads no mode back, a start given edits records the value passed, its word that it started is taken with no mode in it, and status gives the mode as not read back",
+            cites: &["161", "169"],
+            run: the_fake_reading_no_mode_back,
+        },
+        Scenario {
+            name: "seam fakes: the fake agent scripted to map full to all and its code start to begin in ask-each: the core records the start's mode all, reads it begun without its settings naming both modes, and the command passed all",
+            cites: &["161", "169", "106"],
+            run: a_scripted_start_in_another_mode,
         },
     ]
 }
@@ -564,6 +586,228 @@ fn status_of_a_start_without_its_settings(_: &()) -> Outcome {
     ensure!(
         !text.contains("/s/work-1") && !text.contains(TOKEN),
         "status holds a value"
+    );
+    Ok(())
+}
+
+/// The fake maps the four and reads the mode back, and the host's table
+/// gives every stage of fix the mode `mode`.
+fn in_a_mode_read_back(world: &World, mode: Mode) {
+    the_fakes_map(world);
+    world.agent.read_mode_back();
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(in_mode(mode)));
+}
+
+/// What an agent begun in `ask-each` where its start passed `all` read.
+fn all_begun_in_ask_each() -> Unsettled {
+    Unsettled {
+        mode: Some(ModeBegan {
+            asked: "all".into(),
+            began: Some("ask-each".into()),
+        }),
+        ..Unsettled::default()
+    }
+}
+
+fn another_mode(_: &()) -> Outcome {
+    let world = World::new();
+    in_a_mode_read_back(&world, Mode::Full);
+    work_pool(&world, &ENV);
+    let who = World::identity("fix", "one", "code", 1);
+    world.agent.set_began_in(&who, "ask-each");
+    world.agent.set_own_work(&who, Reading::Yes);
+    let id = fix(&world, "one")?;
+    ensure_eq!(
+        code_start(&world, &id)?.start_record.mode,
+        Some("all".to_string()),
+        "the record's mode"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Starting),
+        "code, its agent begun in another mode"
+    );
+    let status = world.status(&id)?;
+    let agent = status.agent.ok_or("status gives no agent")?;
+    ensure_eq!(agent.started, Reading::No, "started");
+    ensure_eq!(
+        status
+            .unsettled
+            .iter()
+            .map(|read| (read.stage.as_str(), read.start, read.unsettled.clone()))
+            .collect::<Vec<_>>(),
+        vec![("code", 1, all_begun_in_ask_each())],
+        "the start read begun without its settings"
+    );
+    ensure!(
+        world.terminal.sent_to(&who).is_empty(),
+        "a prompt sent to the agent begun in another mode"
+    );
+    Ok(())
+}
+
+fn s67_a_mode_the_accounts_configuration_disables(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    in_a_mode_read_back(&world, Mode::Full);
+    let first = World::identity("fix", "one", "code", 1);
+    let second = World::identity("fix", "one", "code", 2);
+    world.agent.set_began_in(&first, "ask-each");
+    world.agent.set_began_in(&second, "ask-each");
+    world.agent.set_own_work(&first, Reading::Yes);
+    let id = fix(&world, "one")?;
+    ensure_eq!(
+        world.terminal.log.count("close"),
+        0,
+        "an agent at work ended"
+    );
+    world.agent.set_own_work(&first, Reading::No);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.of("close").first().cloned(),
+        Some(format!("close {first}")),
+        "the first agent ended once quiet"
+    );
+    let start = code_start(&world, &id)?;
+    ensure_eq!(start.n, 2, "code's fresh start");
+    let words = start.words.ok_or("the fresh start carries no words")?;
+    ensure!(
+        words.contains("without the settings"),
+        "flume's words do not say why the stage started afresh: {words}"
+    );
+    ensure_eq!(
+        (passed(&world, &first)?, passed(&world, &second)?),
+        (Some("all".to_string()), Some("all".to_string())),
+        "the mode each start passed"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "code, its agent begun in another mode twice"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    ensure_eq!(held.stages[0].starts, 2, "code's starts, no third begun");
+    ensure_eq!(
+        held.submission.send_backs,
+        0,
+        "the kind's bound, counted by the place's send-backs"
+    );
+    let end = held
+        .ends
+        .iter()
+        .find_map(|end| match &end.of {
+            EndOf::Stage {
+                start: 2,
+                state: StageState::NeverBegun,
+                end,
+                ..
+            } => Some(end.clone()),
+            _ => None,
+        })
+        .ok_or("no never-begun end of code's fresh start")?;
+    ensure_eq!(
+        end.unsettled.map(|unsettled| *unsettled),
+        Some(all_begun_in_ask_each()),
+        "the end names both modes"
+    );
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status
+            .unsettled
+            .iter()
+            .map(|read| (read.start, read.unsettled.mode.clone()))
+            .collect::<Vec<_>>(),
+        vec![
+            (1, all_begun_in_ask_each().mode),
+            (2, all_begun_in_ask_each().mode)
+        ],
+        "status names both modes of each start"
+    );
+    ensure!(
+        world.terminal.sent_to(&first).is_empty() && world.terminal.sent_to(&second).is_empty(),
+        "a prompt sent to an agent begun in another mode"
+    );
+    Ok(())
+}
+
+fn the_fake_reading_no_mode_back(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(in_mode(Mode::Edits)));
+    let who = World::identity("fix", "one", "code", 1);
+    world.agent.set_began_in(&who, "ask-each");
+    let id = fix(&world, "one")?;
+    ensure_eq!(
+        code_start(&world, &id)?.start_record.mode,
+        Some("edit-files".to_string()),
+        "the record's mode"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code, its word taken with no mode in it"
+    );
+    let status = world.status(&id)?;
+    ensure!(
+        status.unsettled.is_empty(),
+        "a start read begun without its settings: {:?}",
+        status.unsettled
+    );
+    let agent = status.agent.ok_or("status gives no agent")?;
+    ensure_eq!(agent.started, Reading::Yes, "started");
+    ensure_eq!(
+        agent.mode.map(|mode| (mode.passed, mode.read_back)),
+        Some(("edit-files".to_string(), false)),
+        "the agent's mode, not read back"
+    );
+    Ok(())
+}
+
+fn a_scripted_start_in_another_mode(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.map_mode(Mode::Full, "all");
+    world.agent.read_mode_back();
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(in_mode(Mode::Full)));
+    let who = World::identity("fix", "one", "code", 1);
+    world.agent.set_began_in(&who, "ask-each");
+    world.agent.set_own_work(&who, Reading::Yes);
+    let id = fix(&world, "one")?;
+    ensure_eq!(
+        code_start(&world, &id)?.start_record.mode,
+        Some("all".to_string()),
+        "the record's mode"
+    );
+    ensure_eq!(
+        world.held(&id).map(|held| held
+            .unsettled
+            .iter()
+            .map(|read| read.unsettled.clone())
+            .collect()),
+        Some(vec![all_begun_in_ask_each()]),
+        "the start read begun without its settings"
+    );
+    ensure!(
+        world
+            .agent
+            .log
+            .of("mode")
+            .iter()
+            .all(|line| line == "mode full")
+            && !world.agent.log.of("mode").is_empty(),
+        "the modes the fake mapped: {:?}",
+        world.agent.log.of("mode")
+    );
+    ensure_eq!(
+        passed(&world, &who)?,
+        Some("all".to_string()),
+        "the mode the command passed"
     );
     Ok(())
 }

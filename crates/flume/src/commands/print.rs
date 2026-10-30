@@ -442,14 +442,15 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
 }
 
 /// A start whose agent began without its settings, each variable by its
-/// name alone (56, 161).
+/// name alone, and a mode that differed by the mode asked and the mode
+/// begun (56, 161, 162).
 fn unsettled_line(unsettled: &UnsettledStart) -> String {
     format!(
-        "  without its settings: {}'s start {} began {} at {}, and was not taken as its stage's agent",
+        "  without its settings: {}'s start {} began at {} {}, and was not taken as its stage's agent",
         unsettled.stage,
         unsettled.start,
-        unsettled.unsettled.words(),
-        unsettled.at
+        unsettled.at,
+        unsettled.unsettled.words()
     )
 }
 
@@ -503,8 +504,8 @@ mod tests {
         AccountStatus, AgentSettings, ModeStatus, MoveStatus, RoomWanted, StreamStatus,
     };
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, Given, Layer, MoveOn, MoveWhy, Reading,
-        Strategy, Unsettled,
+        AccountFrom, AccountHeld, AccountMove, AgentState, Given, Layer, ModeBegan, MoveOn,
+        MoveWhy, Reading, Strategy, Unsettled,
     };
     use std::collections::BTreeMap;
 
@@ -640,7 +641,29 @@ mod tests {
         };
         assert_eq!(
             unsettled_line(&unsettled),
-            "  without its settings: code's start 1 began without AGENT_HOME at 54000, and was not taken as its stage's agent"
+            "  without its settings: code's start 1 began at 54000 without AGENT_HOME, and was not taken as its stage's agent"
+        );
+    }
+
+    #[test]
+    fn a_start_in_another_mode() {
+        // S67: a start that asked `all` and began in `ask-each`, named on
+        // its own line with both modes and no variable (56, 161, 162).
+        let unsettled = UnsettledStart {
+            stage: "code".into(),
+            start: 2,
+            at: 54_000,
+            unsettled: Unsettled {
+                mode: Some(ModeBegan {
+                    asked: "all".into(),
+                    began: Some("ask-each".into()),
+                }),
+                ..Unsettled::default()
+            },
+        };
+        assert_eq!(
+            unsettled_line(&unsettled),
+            "  without its settings: code's start 2 began at 54000 in the mode `ask-each`, where its start asked `all`, and was not taken as its stage's agent"
         );
     }
 

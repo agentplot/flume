@@ -90,6 +90,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["169", "161"],
             run: a_mode_not_read_back,
         },
+        Scenario {
+            name: "status: a code start begun in ask-each where its record named all is named with the mode asked and the mode begun, and no variable, in the JSON form",
+            cites: &["56", "161", "162", "S67"],
+            run: a_start_in_another_mode,
+        },
     ]
 }
 
@@ -193,6 +198,56 @@ fn a_mode_not_read_back(_: &()) -> Outcome {
         json["mode"]["read_back"].clone(),
         serde_json::json!(false),
         "read_back in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_start_in_another_mode(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    world.agent.read_mode_back();
+    let who = World::identity("fix", "one", "code", 1);
+    world.agent.set_began_in(&who, "ask-each");
+    world.agent.set_own_work(&who, Reading::Yes);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.every_stage = in_mode(Mode::Full);
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status
+            .unsettled
+            .iter()
+            .map(|read| (read.stage.as_str(), read.start, read.unsettled.clone()))
+            .collect::<Vec<_>>(),
+        vec![(
+            "code",
+            1,
+            Unsettled {
+                mode: Some(ModeBegan {
+                    asked: "all".into(),
+                    began: Some("ask-each".into()),
+                }),
+                ..Unsettled::default()
+            }
+        )],
+        "the start named with both modes and no variable"
+    );
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    let read = &json["unsettled"][0];
+    ensure_eq!(
+        (
+            read["mode"].clone(),
+            read["missing"].clone(),
+            read["different"].clone()
+        ),
+        (
+            serde_json::json!({"asked": "all", "began": "ask-each"}),
+            serde_json::json!([]),
+            serde_json::json!([])
+        ),
+        "the start in the JSON form"
     );
     Ok(())
 }
