@@ -32,6 +32,21 @@ brought to the rule.
   code stands ahead of 117, C.6 and core.6, which reads an outcome
   only at the settles that follow; they say so once the operator rules
   the change (core.19). The item leaves when it lands.
+- **A pull request's entry and outcome are read where C.6 does not
+  say.** sluice 0.57.1, on a base that takes pull requests, answers a
+  submit whose request intake has not taken in with `{pull_request,
+  branch, state}` and no entry, records the entry intake takes in
+  later from `pull/<n>` with the place's branch as its `from.head`, and
+  delivers its outcome to the request rather than the place. The
+  merge-queue seam's submit answers such a submission as the request
+  held; read-submission takes an entry submitted from the branch by a
+  worktree or from a pull request opened from it; and the place's
+  entry taken in from its request has its landing, failure or conflict
+  read from read-submission as well as the inbox, acted on once. The
+  code stands ahead of 111 and 133, which settle a place by the
+  inbox's outcome alone, and of C.6's table of what the profile reads,
+  which names `from.worktree` alone; they say so once the operator
+  rules the change (core.19). The item leaves when it lands.
 - **Record 0021 waits on a plan.** The standing prompt with cache use
   in status (record 0021; core.33), accepted 2026-10-29 and stated at
   blueprints 6e5aae2, is built only once the user approves a plan for
