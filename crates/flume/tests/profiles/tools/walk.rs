@@ -232,6 +232,24 @@ impl Walk {
         answer
     }
 
+    /// flume's answer to `words` as a person reads it, which it must not
+    /// refuse.
+    pub fn person(&self, words: &[&str]) -> String {
+        let output = self
+            .command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir)
+            .args(words)
+            .output()
+            .expect("flume runs");
+        let answer = String::from_utf8_lossy(&output.stdout).into_owned();
+        assert!(
+            output.status.success(),
+            "flume {} refused: {answer}{}",
+            words.join(" "),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        answer
+    }
+
     /// Launches `<kind>--<name>` with `words` beside, and gives the
     /// place's location.
     pub fn launch(&self, kind: &str, name: &str, words: &[&str]) -> String {

@@ -9,7 +9,10 @@
 //! verify, its report committed in the archived change (S2, S35); verify
 //! finding work sends the place back to code (131); a fix whose prompt
 //! Claude Code submits inside paste tags lands (89); a host's bound
-//! queues a launch and starts the waiting ones by priority (S37); and
+//! queues a launch and starts the waiting ones by priority (S37), and a
+//! stage waiting for room starts at the next command of flume's once the
+//! host's configuration gives it room, status saying no watch is kept
+//! (70, 119); and
 //! change@2's code stage works a change of three task groups one fresh
 //! agent at a time, and a failed submission sends it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
@@ -390,6 +393,65 @@ fn a_bound_host_queues_launches_and_starts_them_by_priority() {
         !status["agent"].is_null()
     });
     assert_eq!(walk.host()["queue"], json!([]));
+}
+
+#[test]
+fn a_stage_waiting_for_room_starts_at_the_next_command_once_the_host_gives_room() {
+    // On deneb a stage waiting for room still waited once the host's
+    // configuration gave it room, until a settle by hand: the printed
+    // command keeps no watch, so a place moves on only when a command of
+    // flume's acts or an agent goes quiet (119). Status says so and
+    // settles nothing; the next command that acts, a launch here, reads
+    // the configuration as it stands and starts the waiting stage before
+    // its own (46, 57, 70).
+    let walk = Walk::new("walk-room-given");
+    walk.configure("[host]\nagents = 1\n");
+    let first = walk.launch("fix", "first", &["--brief", "one"]);
+    let waiting = walk.launch("fix", "waiting", &["--brief", "two"]);
+    assert!(
+        !walk.status(&first)["agent"].is_null(),
+        "the first did not start"
+    );
+    assert!(
+        walk.status(&waiting)["agent"].is_null(),
+        "the second launch started past the bound"
+    );
+    assert_eq!(walk.host()["watch"], json!("none"));
+    let said = walk.person(&["status"]);
+    assert!(
+        said.contains(
+            "the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+        ),
+        "{said}"
+    );
+
+    walk.configure("[host]\nagents = 2\n");
+    let host = walk.host();
+    assert_eq!(
+        (host["running"].clone(), host["room"].clone()),
+        (json!(1), json!(1)),
+        "{host}"
+    );
+    assert!(
+        walk.status(&waiting)["agent"].is_null(),
+        "status started the waiting stage"
+    );
+
+    let third = walk.launch("fix", "third", &["--brief", "three"]);
+    let started = walk.status(&waiting);
+    assert!(!started["agent"]["printed"].is_null(), "{started}");
+    assert!(
+        walk.status(&third)["agent"].is_null(),
+        "the launch's own stage took the room"
+    );
+    let host = walk.host();
+    let queue: Vec<Value> = host["queue"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|queued| queued["place"].clone())
+        .collect();
+    assert_eq!(queue, vec![json!(third)], "{host}");
 }
 
 /// The three task groups of the repeating walkthrough's change, two
