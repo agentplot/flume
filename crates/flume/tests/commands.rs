@@ -707,6 +707,91 @@ fn agent_settings_at_the_launch() {
 }
 
 #[test]
+fn a_mode_and_a_table_at_the_launch() {
+    // 7, 32, 162, 169: one of the four for every stage and a table of
+    // programs for one, kept as the launch gave them in the place's held
+    // settings; a word and a table for one stage refused naming both,
+    // and a program's own value given bare refused naming it, nothing
+    // made.
+    let host = Host::new("agent-mode");
+    let repository = repository("agent-mode", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "mode=edits",
+            "--agent",
+            &format!("code.mode.{STAND_IN}=careful"),
+            "--agent",
+            "code.mode.other=ask",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = format!("{}/places/change--one", repository.name());
+    let file = host.state().join("places").join(format!(
+        "{}.json",
+        place.trim_start_matches('/').replace('/', "%")
+    ));
+    let written: Value =
+        serde_json::from_slice(&std::fs::read(&file).expect("the held state")).unwrap();
+    assert_eq!(
+        written["state"]["place"]["every_stage"]["mode"], "edits",
+        "a word as Settings writes it"
+    );
+    assert_eq!(
+        written["state"]["place"]["settings"]["code"]["mode"],
+        serde_json::json!({STAND_IN: "careful", "other": "ask"}),
+        "a table as Settings writes it"
+    );
+    let held = held_of(&host, &place).state.place;
+    assert_eq!(held.every_stage.mode, Some(ModeSetting::Flume(Mode::Edits)));
+    assert_eq!(
+        held.settings["code"].mode,
+        Some(ModeSetting::Programs(BTreeMap::from([
+            (STAND_IN.to_string(), "careful".to_string()),
+            ("other".to_string(), "ask".to_string()),
+        ])))
+    );
+    for (name, words, named) in [
+        (
+            "two",
+            ["code.mode=edits", "code.mode.other=ask"],
+            "code.mode.other=ask",
+        ),
+        (
+            "three",
+            ["mode=careful", "model=opus"],
+            "mode.<program>=careful",
+        ),
+    ] {
+        let refused = host.stand_in(
+            &repository.dir,
+            &[
+                "launch", "--kind", "change", "--name", name, "--kinds", &kinds, "--agent",
+                words[0], "--agent", words[1], "--json",
+            ],
+            &[],
+        );
+        assert_eq!(refused.code, 1, "{}", refused.text);
+        assert!(refused.text.contains(named), "{}", refused.text);
+        assert!(!repository
+            .dir
+            .join(format!("places/change--{name}"))
+            .exists());
+    }
+}
+
+#[test]
 fn a_stream_and_an_intent_at_the_launch() {
     // 7, 143: the launch's stream and intent, kept and given by status;
     // a stream the host does not declare refused, nothing made.

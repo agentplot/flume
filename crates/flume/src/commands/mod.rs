@@ -261,7 +261,9 @@ struct LaunchArgs {
     #[arg(long, value_name = "TIME")]
     stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
-    /// field one of program, model, instructions and beside.
+    /// field one of program, model, instructions, beside and mode, the
+    /// mode one of plan, ask, edits and full, or `mode.<program>` for one
+    /// program's entry of a mode (162, 169).
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
     agent: Vec<String>,
     /// The stream the place runs in, one the host's configuration
