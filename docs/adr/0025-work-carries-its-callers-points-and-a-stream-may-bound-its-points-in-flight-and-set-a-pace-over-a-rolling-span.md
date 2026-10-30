@@ -1,7 +1,7 @@
 ---
 number: 25
 title: Work carries its caller's points, and a stream may bound its points in flight and set a pace over a rolling span
-status: proposed
+status: accepted
 date: 2026-10-30
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Work carries its caller's points, and a stream may bound its points in flight and set a pace over a rolling span
 
-Status: proposed to the user on 2026-10-30, on flume-sluice-build's card req_8f361bf504424a5b975b; accepted only on their yes.
+Status: accepted by the user on 2026-10-30, on flume-sluice-build's card (req_bb65e1d78dd14c8d859f, "Approved", no note).
 
 Deciders: the user, on flume-sluice-build's card req_8f361bf504424a5b975b, 2026-10-30, who set an optional `--points` on `flume launch`, a Fibonacci number the caller sets and flume never estimates, "I think of it like story points, and it should be on a Fibonacci scale... This would help serve the long-term goals of Flywheel in terms of understanding how much work is in the queue and would also let us load balance according to that complexity score"; that points measure the agent's work only, test and merge time being machine time sluice measures and flume reports beside them; points queued and in flight per stream and per host in status; a stream's bound on points in flight beside its agents bound, which stays because accounts and usage limits count sessions running at once; and a stream's pace, a rate over time that is no priority, for "a side project... I want it to be moving along but I don't necessarily want to saturate available capacity. I want it to move at a defined rate because I'm okay with it taking 3 weeks instead of 1 week"; with tokens reported per stream and never limited; and, on the card, 2026-10-30, of the pace and its spans: "yes. pace is good. per hour, day and week as options". Whether points belong to a place or to each stage, when points are in flight, how a bound and a pace hold a place larger than either, a rolling span over a calendar's, and what work with no points counts for, are the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at 9c7490c, clauses 4, 7, 8, 56, 70, 99, 143, 152, 153, 165 to 168, C.4, C.6, C.7, S69 and S70, and section 3's points, pace, room, in flight and waiting for room, as amended with this record; records 0010, 0020, 0023, 0024; rules core.26, core.32; `crates/flume-core/src/room.rs` (`Queue`, `must_wait`); `sluice status <id> --json` (sluice 0.55.0), its `submitted`, and sluice's run records' `started` and `ended`.
@@ -52,7 +52,7 @@ Option 2.
 
 ### Consequences
 
-- Clauses 4, 7, 8, 56, 70, 99, 143, 152, 153, C.4, C.6 and C.7 of flume's statement are amended, and 165 to 168, S69 and S70 added, with section 3's points, pace, room, in flight and waiting for room, at blueprints 9c7490c. Rule core.26 is amended and core.38 drawn from this record, each marked proposed.
+- Clauses 4, 7, 8, 56, 70, 99, 143, 152, 153, C.4, C.6 and C.7 of flume's statement are amended, and 165 to 168, S69 and S70 added, with section 3's points, pace, room, in flight and waiting for room, at blueprints 9c7490c. Rule core.26 is amended and core.38 drawn from this record.
 - Built after the mode (record 0024), with the rest of flume's first build: `--points`, the streams' `points` and `pace`, the stream documents, the two bounds in `Queue`'s settle, and status.
 - What the sluice profile reads for a submission's times, its `submitted` and the times of its decision and its runs, is checked against the pinned sluice at the build; any it does not give is reported unknown.
 - A caller that balances across hosts, Flywheel's later, reads points queued and in flight from each host's status; flume balances nothing across hosts (1, 70).
