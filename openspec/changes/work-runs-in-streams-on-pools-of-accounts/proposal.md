@@ -7,12 +7,12 @@ and the host's configuration picks an account per kind by an `env`
 (record 0017). That leaves work and personal places sharing one queue,
 and an account that reaches its usage limit stops its stage until
 someone edits the host's file and retries. Record 0020 (accepted
-2026-10-29) gives a host named streams, each with its own bound,
-priority and pool of accounts. A spent account is paused for every
-flume process on the host, and an intent keeps to the account its
-prompt cache is on (143 to 147, 151, 153, S53 to S56). The user wants
-streams and pools built before flume goes live, so no host ships
-configuration with one account per kind.
+2026-10-29, amended the same day) gives a host named streams, each with
+its own bound, priority and pool of accounts. Accounts exist only in
+pools, and an account gives an agent its whole environment. A spent
+account is paused for every flume process on the host, and an intent
+keeps to the account its prompt cache is on (143 to 147, 151, 153, S53
+to S56). The user wants streams and pools built before flume goes live.
 
 Record 0016, amended 2026-10-29 on the user's idea, adds a check at each
 start. flume records what the agent is to run under, and the agent's
@@ -37,8 +37,9 @@ settings, never left running a stage under the wrong account (35, 135,
   core.26).
 - **Account pools.** `[pools.<pool>]` with `strategy`, `fill-first` or
   `least-busy`, and `accounts`, each a name, a program, an `env` and an
-  optional `agents`. An account is chosen under the room lock at each
-  start of an agent that has a pool (144, 145; core.32).
+  optional `agents`. A stage's pool is its stream's, else `[host] pool`.
+  An account is chosen under the room lock at each start of an agent
+  that has a pool (144, 145; core.32).
 - **A spent account.** The Claude Code profile reads a usage limit from
   the StopFailure hook's `rate_limit` and its words, in the form the
   pinned 2.1.296 writes them, with the reset time they name. flume
@@ -52,13 +53,16 @@ settings, never left running a stage under the wrong account (35, 135,
   usable. It moves when the account is spent or full and never moves
   back. It is dropped an hour after its last place is gone. Status says
   when work moved and that it lost its cache (147).
-- **Eight layers.** An agent's settings come from the account, the
-  launch, the host's for the repository and kind, the host's for the
-  stream and kind, the host's for the kind, the repository's, the kind's
-  and flume's default (32; core.30).
-- **Kinds stay host-neutral.** A kind's declaration, a repository's file
-  and a launch's declaration name no account, pool or stream, and are
-  refused naming the field. weir's format gains nothing (record 0022;
+- **The environment from the account alone.** An agent's environment
+  is the login environment with its account's variables over it, and
+  nothing else gives one: `env` leaves the launch's settings and the
+  host's `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
+  tables, which give a model and instructions alone. The program is the
+  launch's, the repository's, the kind's or flume's default, and an
+  account runs only a stage of its program. The six layers keep their
+  order (29, 32, 144; core.30).
+- **Kinds stay host-neutral.** No account, pool or stream is a field of
+  the kind format, and weir's format gains nothing (record 0022;
   core.4).
 - **The start checked against its settings.** At each start flume
   records the agent's program, its account and a digest of each variable
@@ -69,10 +73,6 @@ settings, never left running a stage under the wrong account (35, 135,
   core.10).
 - **Docs.** The site's agent-settings guide and its configuration,
   state and commands references, in the site's neutral voice (core.35).
-- **Nothing breaks.** A host's configuration written for record 0017,
-  with an `env` per kind and no stream or pool, keeps working as before:
-  its places run in `default`, bounded by `[host] agents` alone, under
-  the environment their kinds' tables give.
 
 ## Capabilities
 
@@ -91,18 +91,19 @@ settings, never left running a stage under the wrong account (35, 135,
 
 - `host-queue`: two more bounds, the stream's and the pool's, and the
   order by stream priority before place priority.
-- `launching`: eight layers in place of six; a launch's stream and
-  intent; a kind or repository naming an account, pool or stream
-  refused.
+- `launching`: the environment from the account alone, the host's
+  tables giving a model and instructions; a launch's stream and intent.
 - `store-profile`: the host's configuration gains streams, pools and
   their keys; the host's own documents, accounts and intents.
-- `agent-profile`: the usage limit read from Claude Code's words, and
-  the started ack taken only where the start's record matches.
+- `agent-profile`: the environment its account gives; the usage limit
+  read from Claude Code's words, and the started ack taken only where
+  the start's record matches.
 - `claude-code-plugin`: SessionStart compares before it acks;
   StopFailure records the time it ran.
 - `place-status`: a place's stream, intent, account and moves; each
-  stream and pool of the host.
-- `command-line`: `flume launch --stream` and `--intent`.
+  stream and pool of the host; each variable from its account.
+- `command-line`: `flume launch --stream` and `--intent`; `--agent`
+  gives no environment.
 - `role-waking`: a role's run names its stream.
 - `seam-contracts`: the agent seam's `spent` and the start's record; the
   store's host documents.
@@ -116,20 +117,23 @@ settings, never left running a stage under the wrong account (35, 135,
 
 - agentplot/blueprints: the statement amended at 8a11fbb for the start's
   record (35, 135, 161, C.4, S65) and C.4's reading of the usage-limit
-  words. Nothing in weir changes: weir-kinds returns a kind's `agents`
+  words, and at 87a7458 for accounts only in pools (29, 32, 143, 144,
+  C.2, C.7, S44). Nothing in weir changes: weir-kinds returns a kind's `agents`
   table unread, and flume reads and refuses its keys (core.4).
 - `crates/flume-seams`: `Stream`, `Pool`, `Account`, `Strategy`;
-  `Layer::Account` and `Layer::HostStream`; `Launch` and `PlaceRecord`
+  `Settings` without `env`, and `Layer::Account` naming a variable's
+  source; `Launch` and `PlaceRecord`
   gain stream and intent; `StartHeld` gains account and record; the
   agent seam's `spent` and `started_without`; the store's host
   documents; status fields, only added.
 - `crates/flume-core`: `room.rs` across streams and accounts,
-  `settings.rs` in eight layers, the account's choice and affinity in
+  `settings.rs` with the environment from the account, the account's choice and affinity in
   the claim, the spent and unsettled fresh starts in the settle, status.
 - `crates/flume`: `host/config.rs`, the state directory's host
-  documents, the Claude Code profile's `spent` and its hook's comparison,
-  the command line and MCP launch, the person's status form, and the
-  walkthroughs with the stand-in.
+  documents, the kinds profile's agents tables, the Claude Code
+  profile's `spent` and its hook's comparison, the command line and MCP
+  launch, the person's status form, and the walkthroughs with the
+  stand-in and the live harness, on pools.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fakes' new
   answers, the engine scenarios citing 143 to 147, 151, 153, 161 and
   S53 to S56 and S65, and the clause list.

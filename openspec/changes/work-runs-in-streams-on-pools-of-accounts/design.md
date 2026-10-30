@@ -19,13 +19,18 @@ Record 0020 (accepted 2026-10-29) is stated at blueprints 6e5aae2: 143
 to 147, 151, 153 and S53 to S56 added, 2, 4, 7, 8, 32, 56, 70, C.4, C.7
 and I6 amended. Record 0016, amended 2026-10-29 on the user's idea, is
 stated at blueprints 8a11fbb: 35 and 135 amended, 161 and S65 added,
-and C.4's started and spent rows say how Claude Code meets them. The
+and C.4's started and spent rows say how Claude Code meets them.
+Record 0020, amended 2026-10-29 as the user approved this plan, is
+stated at blueprints 87a7458: accounts exist only in pools, an account
+gives an agent its whole environment, and the host's tables give a
+model and instructions (29, 32, 143, 144, C.2, C.7, S44). The
 rules this design relies on are core.1 and core.2 (the core names no
 tool, and no profile calls another), core.4 (the format is weir's),
 core.10 (one fresh agent per start, taken on its word under its
 identity and settings), core.13 (no daemon), core.16 (one document per
 place, written by compare-and-set), core.26 (the queue across streams),
-core.30 (eight layers, no value printed), core.32 (accounts, spent
+core.30 (six layers, the environment from the account alone, no
+value printed), core.32 (accounts, spent
 pauses, affinity) and core.35 (the site's neutral voice). The one rules
 page is `docs/architecture/core.md`; this change touches no area
 another page would own. Where flume has no rule, the kit standard's
@@ -44,7 +49,7 @@ code profile binds (kit:specs.3, kit:testing.5).
 - An intent's agents keep to one account while it is usable, so they
   read what they share from the prompt cache (147).
 - No agent runs a stage under settings other than its start's (161).
-- A host's configuration written for record 0017 runs as before.
+- An agent's environment is its account's and nothing else's (32, 144).
 
 **Non-Goals:**
 
@@ -57,10 +62,9 @@ code profile binds (kit:specs.3, kit:testing.5).
 - Asking Claude Code or its maker whether a limit has reset, or a
   process of flume's that wakes at a reset: the next settle after it
   finds the account usable (core.13).
-- A field of the kind format. weir-kinds returns a kind's `agents`
-  table as written (`KindAgents`), and flume reads and refuses its keys
-  as it refuses `env` in a repository's file today, so nothing in weir
-  changes (core.4).
+- A field of the kind format. No account, pool or stream is one: flume
+  reads none from a kind's `agents` table, which weir-kinds returns as
+  written (`KindAgents`), so nothing in weir changes (core.4).
 
 ## Decisions
 
@@ -72,38 +76,33 @@ Option<String> }`, `Pool { strategy: Strategy, accounts: Vec<Account>
 `least-busy`, and `Account { name, program, env, agents: Option<u32>
 }`, each serde and round-tripping. The `Host` trait gains `streams()`,
 the declared streams by name, `stream_for(repository, kind)`, the
-stream the configuration names with the key it came from, `pool_for(
-stream, kind)`, the pool with its key, and `pool(name)`. `HostSettings`
-gains `stream`, the `[streams.<stream>.kinds.<kind>.agents]` settings,
-and `RoleRun` gains `stream`. All are read at each call as the
-configuration stands, as `settings` is (32, C.7).
+stream the configuration names with the key it came from,
+`pool_for(stream)`, the stream's pool, else `[host] pool`, with the key
+it came from, and `pool(name)`. `RoleRun` gains `stream`. All are read
+at each call as the configuration stands, as `settings` is (32, 144,
+C.7).
 
 `HostConfig` reads `[streams.<stream>]`, `[pools.<pool>]`, `[host]
 pool`, `stream` in `[repos."<repository>"]`,
-`[repos."<repository>".kinds.<kind>]` and `[kinds.<kind>]`, `pool` in
-`[streams.<stream>.kinds.<kind>]` and `[kinds.<kind>]`, and `stream` in
-`[roles."<address>"]`. An account's `env` is read as an agents table's
-is: `~` and `$VAR` against the login environment (29). The read refuses,
-naming the key: a strategy other than the two; a stream naming an
-undeclared pool; a pool with no accounts, or two accounts of one name;
-an account with no `name` or `program`; an `agents` that is not a
-positive integer. A configuration that refuses leaves every launch and
-start refused naming it, as an unreadable one does today.
-
-**Nothing breaks.** With no `[streams]` table the only stream is
-`default`, held by `[host] agents` alone; with no pool named anywhere
-no account is chosen, and record 0017's `[kinds.<kind>.agents] env`
-stands as it is (144). A fixture of record 0017's configuration reads
-and starts the same before and after this change.
+`[repos."<repository>".kinds.<kind>]` and `[kinds.<kind>]`, and `stream`
+in `[roles."<address>"]`. An account's `env` is kept as written, its
+`~` and `$VAR` read at each start against the login environment (29).
+The read refuses, naming the key: a strategy other than the two; a
+stream or `[host] pool` naming an undeclared pool; a pool with no
+accounts, or two accounts of one name; an account with no `name` or
+`program`; an `agents` that is not a positive integer. A configuration
+that refuses leaves every launch and start refused naming it, as an
+unreadable one does today. With no `[streams]` table the only stream is
+`default`, held by `[host] agents` alone; with no pool named, no
+account is chosen and agents run under the login environment alone
+(144).
 
 ### 2. A place's stream and intent
 
 `Launch` gains `stream: Option<String>` and `intent: Option<String>`,
 in its JSON form, on `flume launch --stream <stream> --intent <name>`
 and on the MCP launch tool. `PlaceRecord` gains `stream: StreamHeld {
-name, from }` and `intent: IntentKey`, both serde default so a place
-launched before reads as `default` from `default` and its repository's
-and base's intent.
+name, from }` and `intent: IntentKey`, both kept in held state.
 
 `IntentKey` is the launch's name, else the repository and base. Its
 digest, sha256 over `name:<name>` or `base:<repository id>:<base>`,
@@ -117,22 +116,26 @@ it, leaving nothing made (4; core.8). `default` is always declared. A
 role's woken run takes its `[roles]` table's `stream` as its launch's
 (132).
 
-### 3. Eight layers
+### 3. The environment from the account, and six layers
 
-`Layer` gains `Account` and `HostStream`, and `Engine::layers` returns
-eight (32; core.30). The account is chosen after layers 2 to 8 resolve
-the program, since an account whose program is not that program is not
-usable (144). `layers` then takes the chosen account, if any, as the
-first layer: its `program` and its `env`, nothing else. `from` names an
-account's setting `account:<pool>/<account>`. A launch's variable the
-account also names stays in `from` as `launch`, passed over by the
-account, so status shows it was passed over, never silently.
+`Settings` loses `env`, so no launch, host, repository or kind layer
+gives a variable (32, 144; core.30). The host's agents tables are read
+for `model` and `instructions` alone, and any other key there is not
+read, as keys that are no setting are not read today. `--agent` and
+the launch's JSON form give `program`, `model`, `instructions` and
+`beside`. The kinds profile reads no `env` into a kind's settings, and
+an `env` in any declaration's agents table refuses the launch naming
+the field (C.2, 158), in place of `no_repository_env`.
 
-A repository's `.config/flume.toml` and a launch's declaration that give
-`stream`, `pool` or `account` in a kind's `agents` table, or `stream` or
-`pool` in a `[kinds.<kind>]` table, refuse the launch naming the field.
-This is the same check as `env` in a repository's file (32, 144; record
-0022 for a package's, which its own change builds).
+`Engine::layers` keeps its six layers for the program, the model and
+the instructions. The resolved program picks which of the pool's
+accounts are usable (144). The agent's environment is the chosen
+account's `env`, each value read against the login environment by
+`expand`, and a variable the login environment lacks refuses the start
+naming it and the account (27, 29). With no account the environment is
+empty, and the terminal gives the login environment beneath it.
+`Layer` gains `Account`, the source `from` names for each `env.<NAME>`,
+with the value as the account wrote it.
 
 ### 4. The queue across streams
 
@@ -162,7 +165,7 @@ account, each move, and when its last place went. Both live under
 in memory.
 
 `Engine::claim` chooses the account under the room lock, after the room
-check, for a start whose stream and kind have a pool (145). It takes the
+check, for a start whose stream or host has a pool (145). It takes the
 intent's affinity account while that account is usable: not spent at
 the host's clock, under its own `agents`, and running the stage's
 program. Otherwise it applies the strategy over the pool's usable
@@ -288,7 +291,8 @@ bare resume (record 0016), unchanged.
 ### 8. Status, the JSON form and the command line
 
 The JSON form only gains fields (core.14). A place gains `stream` with
-`from`, and `intent`. Its current agent gains `account` with `from`.
+`from`, and `intent`. Its current agent gains `account` with `from`,
+and each of its variables reads from `account`.
 The place gains `moves`, each with its stage or intent, from, to, why,
 when, and `cache: lost`. Unsettled starts are listed with their names.
 `HostStatus` gains `streams` (decision 4) and `pools`, each account with
@@ -301,9 +305,9 @@ fields.
 ### 9. The site
 
 The agent-settings guide gains streams, pools, the two strategies, a
-spent account, affinity, the start check and the eight layers, with the
-example of C.7 and a section saying a configuration with an `env` per
-kind keeps working. The configuration reference gains every key of
+spent account, affinity, the start check, the environment from the
+account and the six layers, with the example of C.7 and a host giving
+`change` opus and `fix` sonnet. The configuration reference gains every key of
 decision 1. The state reference gains the host's documents, and the
 commands reference `--stream` and `--intent`. They are written to any
 host's operator, naming no team or host of ours (core.35).

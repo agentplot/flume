@@ -16,7 +16,7 @@ host's bound SHALL cap every stream's agents together (70, 143, C.7).
 #### Scenario: No streams
 
 - **WHEN** the host's configuration declares no stream
-- **THEN** every place runs in `default`, bounded by `[host] agents` alone, as before this change (70)
+- **THEN** every place runs in `default`, bounded by `[host] agents` alone (70)
 
 ### Requirement: A place's stream is chosen once, at its launch
 

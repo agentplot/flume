@@ -30,11 +30,10 @@ process on the host (102 to 104, 153).
 The seams SHALL pass one type each for a stream, a pool, its strategy
 and its accounts, an account chosen and where from, a move between
 accounts, and a start's record of what its agent runs under, holding
-digests and no value; each SHALL serialize to JSON and back unchanged,
-and a held state written before them SHALL read as before (143 to 147,
-161).
+digests and no value; each SHALL serialize to JSON and back unchanged
+(143 to 147, 161).
 
-#### Scenario: A held state from before streams
+#### Scenario: A held state with a stream, an account and a record
 
-- **WHEN** a held state written before this change is read
-- **THEN** its place reads the stream `default` from `default`, its repository's and base's intent, and starts with no account and no record (143, 147)
+- **WHEN** a held state whose place has a stream with `from`, an intent, and a start with an account and a start's record is written and read
+- **THEN** it reads back unchanged, and the record holds each variable's digest and no value (143 to 147, 161)

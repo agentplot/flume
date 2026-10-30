@@ -2,22 +2,21 @@
 
 ### Requirement: A stage's pool
 
-A stage's pool SHALL be the host's for its stream and kind, else its
-stream's, else its kind's for every stream, else the host's own; a
-stage with none SHALL run under no account, as the other layers give
-it. A pool SHALL name its accounts in order and a strategy,
-`fill-first` or `least-busy`, and an account a name, a program, an
-`env` and an optional bound (144, C.7).
+Accounts SHALL exist only in pools. A stage's pool SHALL be its
+stream's, else the host's own; a stage with neither SHALL run under no
+account, in the login environment alone. A pool SHALL name its accounts
+in order and a strategy, `fill-first` or `least-busy`, and an account a
+name, a program, an `env` and an optional bound (29, 144, C.7).
 
-#### Scenario: The stream's kind before the stream
+#### Scenario: The stream's pool before the host's
 
-- **WHEN** `[streams.work] pool = "work"` and `[streams.work.kinds.chore] pool = "cheap"`, and chore@1 and fix@1 places run in `work`
-- **THEN** chore's agents take accounts of `cheap` and fix's of `work` (144)
+- **WHEN** `[streams.work] pool = "work"` and `[host] pool = "personal"`, and fix@1 places run in `work` and in `default`
+- **THEN** the place in `work` takes accounts of `work` and the place in `default` accounts of `personal` (144)
 
 #### Scenario: No pool anywhere
 
-- **WHEN** the host names no pool and gives `[kinds.change.agents] env = { CLAUDE_CONFIG_DIR = "~/.claude-work" }`
-- **THEN** change's agents start under that variable from `host-kind` and no account, as under record 0017 (144)
+- **WHEN** the host names no pool
+- **THEN** every agent starts under no account, its environment the login environment alone and no variable named in its settings (29, 144)
 
 ### Requirement: An account is chosen under the room lock
 
