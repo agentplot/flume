@@ -49,7 +49,12 @@ pub fn what_ended(of: &EndOf) -> String {
                 StageState::EndedShort => format!("{stage} needs an answer"),
                 StageState::Finished => format!("{stage} finished"),
                 StageState::Lost => format!("{stage} lost"),
-                StageState::NeverBegun => format!("{stage} never begun"),
+                StageState::NeverBegun => match &end.unsettled {
+                    Some(unsettled) => {
+                        format!("{stage} never begun, its agent began {}", unsettled.words())
+                    }
+                    None => format!("{stage} never begun"),
+                },
                 StageState::Stuck => format!("{stage} stuck"),
                 other => format!("{stage} {other:?}"),
             }

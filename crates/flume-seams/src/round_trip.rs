@@ -177,6 +177,7 @@ fn held() -> HeldState {
                     title: Some("Two".into()),
                     tasks: vec!["2.1 do it".into()],
                 })),
+                unsettled: Some(Box::new(unsettled())),
             }),
             room: Some(RoomWait {
                 order: 3,
@@ -214,6 +215,7 @@ fn held() -> HeldState {
                     name: "work-2".into(),
                     from: AccountFrom::Strategy,
                 }),
+                start_record: start_record(),
                 record: Some("record-1".into()),
                 prompt: prompt(),
                 live: true,
@@ -275,6 +277,12 @@ fn held() -> HeldState {
                 at: 110,
             },
         ],
+        unsettled: vec![UnsettledStart {
+            stage: "code".into(),
+            start: 1,
+            at: 4,
+            unsettled: unsettled(),
+        }],
         waiting: Some(Waiting {
             on: WaitingOn {
                 act: Act::Retry,
@@ -286,6 +294,29 @@ fn held() -> HeldState {
             stalled: true,
         }),
         stall_after: 30 * 60,
+    }
+}
+
+/// A start's record: the program, the account and two digests, no value
+/// (161).
+fn start_record() -> StartRecord {
+    StartRecord {
+        program: "agent".into(),
+        account: Some("work-2".into()),
+        env: BTreeMap::from([
+            ("AGENT_HOME".into(), "9f2c".into()),
+            ("FLUME_AGENT".into(), "41ab".into()),
+        ]),
+    }
+}
+
+/// An agent begun without one variable, with another value of a second
+/// and under another program (161).
+fn unsettled() -> Unsettled {
+    Unsettled {
+        missing: vec!["AGENT_HOME".into()],
+        different: vec!["FLUME_STAGE".into()],
+        program: true,
     }
 }
 
@@ -518,6 +549,11 @@ fn a_moves_words() {
 #[test]
 fn a_held_state() {
     round_trips(held());
+    round_trips(start_record());
+    round_trips(StartRecord {
+        account: None,
+        ..start_record()
+    });
     for phase in [
         Phase::Making { by: "c1".into() },
         Phase::Live,
@@ -558,6 +594,23 @@ fn a_held_state() {
     ] {
         round_trips(phase);
     }
+}
+
+#[test]
+fn a_held_state_with_a_stream_an_account_and_a_record() {
+    // A place in a stream with where it came from, an intent, and a start
+    // under an account with its start's record, which holds each
+    // variable's digest by its name and no value (143 to 147, 161).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["stream"]["name"], "work");
+    assert_eq!(json["place"]["intent"]["name"], "the-surfaces");
+    let start = &json["stages"][0]["start"];
+    assert_eq!(start["account"]["name"], "work-2");
+    assert_eq!(start["start_record"]["account"], "work-2");
+    assert_eq!(start["start_record"]["env"]["AGENT_HOME"], "9f2c");
+    assert_eq!(start["from"]["env.AGENT_HOME"]["layer"], "account");
 }
 
 #[test]
@@ -1330,6 +1383,12 @@ fn the_agent_seams_answers() {
     });
     round_trips(Spent::No);
     round_trips(Spent::Unknown);
+    round_trips(unsettled());
+    round_trips(Unsettled::default());
+    assert_eq!(
+        unsettled().words(),
+        "without AGENT_HOME, with another FLUME_STAGE, under another program"
+    );
     round_trips(Offered::Offered);
     round_trips(Offered::NotOffered);
     round_trips(Guarded::Refused {

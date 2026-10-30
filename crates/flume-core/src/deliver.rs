@@ -1,5 +1,6 @@
 //! Delivering a stage's prompt (35, 37, 38): a start is starting until
-//! its agent says it started, and never begun at once when its agent
+//! its agent says it started, read begun without its settings where its
+//! agent's word shows so (161), and never begun at once when its agent
 //! stops first, or at the stage's limit while it stays starting; the
 //! prompt is sent only once the agent said it started and waits and is
 //! not asking, read within 60 seconds of each sending whether it was
@@ -40,7 +41,14 @@ impl Engine {
             let prompt = &start.prompt;
             let folder = self.store.folder(id);
             if stage.state == StageState::Starting {
-                if agent.started(&folder, identity) == Reading::Yes {
+                // An agent begun without its settings is sent no prompt:
+                // it is ended once quiet and its stage started afresh
+                // (161).
+                if let Some(unsettled) = agent.started_without(&folder, identity) {
+                    if self.read_unsettled(id, index, &start, unsettled) {
+                        return true;
+                    }
+                } else if agent.started(&folder, identity) == Reading::Yes {
                     self.with_start(id, identity, |_, state| *state = StageState::Started);
                     sent = true;
                     continue;

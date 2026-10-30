@@ -5,7 +5,7 @@
 
 use crate::{
     Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PlaceId, PlaceRef, Prompt,
-    Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld, Verdict,
+    Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -65,6 +65,22 @@ pub struct HeldState {
     /// the place's, from one account to another, in order (56, 145 to
     /// 147).
     pub moves: Vec<AccountMove>,
+    /// Each start of the place's whose agent began without the settings
+    /// its start recorded, in order, by its variables' names alone (56,
+    /// 161).
+    pub unsettled: Vec<UnsettledStart>,
+}
+
+/// A start whose agent began without the settings its start recorded:
+/// its stage and number, when a settle read it so, and each variable that
+/// differed by its name and whether the program did (56, 135, 161).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnsettledStart {
+    pub stage: String,
+    pub start: u32,
+    pub at: Seconds,
+    #[serde(flatten)]
+    pub unsettled: Unsettled,
 }
 
 /// How long a place waits on its caller under no hold's words before it
@@ -583,6 +599,11 @@ pub struct StageEnd {
     /// an end stays small beside a submission's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Box<GroupHeld>>,
+    /// For a start never begun because its agent began without its
+    /// settings a second time in a row, how it began otherwise, by its
+    /// variables' names alone (35, 161); boxed, so an end stays small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unsettled: Option<Box<Unsettled>>,
 }
 
 /// One line a stage's run wrote of what it made (129): a JSON object
@@ -646,6 +667,10 @@ pub struct StartHeld {
     /// The account it runs under, none where its stream and the host
     /// name no pool (144, 145).
     pub account: Option<AccountHeld>,
+    /// What its agent is to run under, which the agent's word that it
+    /// started is compared with: its program, its account and each
+    /// variable's digest keyed by its secret, never a value (161).
+    pub start_record: StartRecord,
     /// The agent's own record, once a reading names it (77).
     pub record: Option<String>,
     pub prompt: Prompt,
@@ -668,6 +693,23 @@ pub struct StartHeld {
     /// where every task was ticked there (140).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupHeld>,
+}
+
+/// What a start's agent is to run under (161): the program its settings
+/// resolved, the account it runs under, none where it has none, and, by
+/// each variable's name, the variable's digest, HMAC-SHA256 keyed by the
+/// start's secret over its name, a zero byte and its value, in hex. It
+/// covers each variable of the start's resolved environment and
+/// `FLUME_AGENT`, `FLUME_PLACE` and `FLUME_STAGE`; never `PATH` or `SHELL`,
+/// which a terminal sets for its own sake, the login environment beneath
+/// the settings, or `FLUME_SECRET`, which the started ack checks itself.
+/// No value is kept, and no guessed value is tested against a digest
+/// without the secret (core.30).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartRecord {
+    pub program: String,
+    pub account: Option<String>,
+    pub env: BTreeMap<String, String>,
 }
 
 /// The account a start runs under: its pool, its name, and whether the

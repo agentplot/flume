@@ -29,9 +29,9 @@ process on the host (102 to 104, 153).
 
 The seams SHALL pass one type each for a stream, a pool, its strategy
 and its accounts, an account chosen and where from, a move between
-accounts, and a start's record of what its agent runs under, holding
-digests and no value; each SHALL serialize to JSON and back unchanged
-(143 to 147, 161).
+accounts, and a start's record of what its agent runs under, held as
+the start's `start_record` and holding digests and no value; each SHALL
+serialize to JSON and back unchanged (143 to 147, 161).
 
 #### Scenario: A held state with a stream, an account and a record
 

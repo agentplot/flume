@@ -10,6 +10,7 @@
 
 pub mod config;
 pub mod history;
+pub mod process;
 
 use config::HostConfig;
 use flume_seams::{

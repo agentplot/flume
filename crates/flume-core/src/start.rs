@@ -8,6 +8,7 @@
 use crate::accounts::Choice;
 use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
+use crate::start_record::start_record;
 use crate::{repository_id, Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -69,6 +70,9 @@ pub(crate) enum StartReason {
     /// The stage's earlier agent stopped at its account's usage limit
     /// (146).
     Spent,
+    /// The stage's earlier agent began without the settings its start
+    /// recorded (161).
+    Unsettled,
 }
 
 impl StartReason {
@@ -76,6 +80,7 @@ impl StartReason {
     pub(crate) fn words(self) -> String {
         match self {
             StartReason::Spent => "The stage's earlier agent stopped at its account's usage limit, and this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.".into(),
+            StartReason::Unsettled => "The stage's earlier agent began without the settings its start recorded and was ended, and this agent starts the stage afresh. Anything it committed is on the place's branch and anything it left is in the place: read them and carry the stage on from there.".into(),
         }
     }
 }
@@ -371,6 +376,20 @@ impl Engine {
                 }
             }
             let secret = self.host.secret();
+            let program = resolution
+                .resolved
+                .settings
+                .program
+                .clone()
+                .unwrap_or_default();
+            let start_record = start_record(
+                &program,
+                account.as_ref(),
+                &env,
+                &identity,
+                &held.place.location,
+                &secret,
+            );
             let stage = &mut held.stages[index];
             stage.state = StageState::Starting;
             stage.starts = identity.start;
@@ -386,17 +405,13 @@ impl Engine {
                 words: words.clone(),
                 identity: identity.clone(),
                 secret: secret.clone(),
-                program: resolution
-                    .resolved
-                    .settings
-                    .program
-                    .clone()
-                    .unwrap_or_default(),
+                program,
                 settings: resolution.resolved.settings.clone(),
                 // Names only: the values reach the agent's command and
                 // nothing kept (32, 56).
                 from: flume_seams::unvalued_from(&from),
                 account: account.clone(),
+                start_record,
                 record: None,
                 prompt: Prompt {
                     text: text.clone(),

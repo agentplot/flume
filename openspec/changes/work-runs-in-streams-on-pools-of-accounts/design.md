@@ -252,39 +252,54 @@ since each moves when its own turn fails (31).
 
 `flume-seams` gains `StartRecord { program, account: Option<String>,
 env: BTreeMap<String, String> }`, the `env` values digests, and
-`StartHeld` gains `record`. `Engine::claim` writes it from the resolved
-settings, account included. It covers each variable of the resolved
-environment, and `FLUME_AGENT`, `FLUME_PLACE` and `FLUME_STAGE`. Each
+`StartHeld` gains `start_record: StartRecord` (its `record` already
+names the agent's own record, 77). `Engine::claim` writes it from the
+resolved settings: the program, the chosen account's name, and a digest
+of each variable of the account's environment as read against the login
+environment, and of `FLUME_AGENT`, `FLUME_PLACE` and `FLUME_STAGE`, the
+start's identity, the place's location and the stage's name. Each
 digest is HMAC-SHA256 keyed by the start's secret over the variable's
-name, a zero byte and its value, in hex (`hmac` over the tree's `sha2`).
-A record read off the host then tests no guessed value without the
-secret, and no value is kept (161; core.30). `PATH`, `SHELL`, the login
-environment beneath the settings and `FLUME_SECRET` are not in it: the
-terminal sets the first three for its own sake (record 0018), and the
-secret is checked by the ack itself.
+name, a zero byte and its value, in hex (`flume_core::variable_digest`,
+`hmac` over the tree's `sha2`). A record read off the host then tests
+no guessed value without the secret, and no value is kept (161;
+core.30). `PATH` and `SHELL`, even where an account gives them, the
+login environment beneath the settings and `FLUME_SECRET` are not in
+it: the terminal sets the first two for its own sake (record 0018), and
+the secret is checked by the ack itself.
 
-The SessionStart hook, before `ack_started`, asks the core for the
-start's record by `FLUME_AGENT` and `FLUME_SECRET`, as `agent_folder`
-does. It digests each named variable in its own environment, and reads
-the program from its parent process. The process-table reading the herdr
-profile does today (`executable`, `program_path`) moves to
-`crates/flume/src/host/`, which both profiles call, so no profile calls
-another (core.2). Where all match it acks as today. Where any differs it
-writes the agent's record `unsettled.json`, naming each variable missing
-or different by name and whether the program differed. It acks nothing,
-and starts `flume settle <place>` detached, as the Stop hook's on-quiet
-does (121). The hook still exits 0 within its bound (C.4).
+The started ack, whether the SessionStart hook takes it or `flume ack
+started` is run, first asks the core for the place's folder and the
+start's record by `FLUME_AGENT` and `FLUME_SECRET`
+(`Engine::start_record`, refused as `agent_folder` refuses). It digests
+each named variable in its own environment, and reads the program its
+parent process runs from the process table. The record's program is
+found on the hook's `PATH` as the command finds it, and a nix wrapper is
+read as the program it runs (C.5); the program is compared only where
+both are read. The process-table reading the herdr profile did
+(`executable`, `program_path`) is in `crates/flume/src/host/process.rs`,
+which both profiles call, so no profile calls another (core.2). Where
+all match it acks as before. Where any differs it writes the agent's
+record `unsettled.json`, naming each variable missing or different by
+name and whether the program differed, with the session's id and
+transcript, so the profile reads the agent's own work from it. It acks
+nothing and starts `flume settle <place>` detached (121). The hook
+still exits 0 within its bound (C.4).
 
 The agent seam gains `started_without(folder, agent) ->
-Option<Unsettled>`, with `None` as its default (135). A settle reading
-it on a starting start marks the start unsettled with the names. Once
-the agent is quiet the settle ends it and starts the stage afresh, with
-a `StartReason::Unsettled` that counts toward no bound and sends no
-prompt to the agent ended. Where the stage's previous start was also
-unsettled, the fresh start is never begun instead, its end naming the
-variables and the program, delivered as any never-begun end is (35, 43).
-Status names the unsettled start and its variables, never a value
-(S65).
+Option<Unsettled>`, `Unsettled { missing, different, program }`, with
+`None` as its default (135). The deliver step reads it on a starting
+start before the started ack, and `read_unsettled` records the start on
+the place, `HeldState::unsettled`, as an `UnsettledStart { stage,
+start, at, missing, different, program }`, once. No prompt is sent to
+its agent, and the stop check answers it nothing. Once the agent is
+quiet the settle ends it and starts the stage afresh, with a
+`StartReason::Unsettled` whose words are flume's, counting toward no
+bound and waiting on no caller. Where the stage's start before it in a
+row was also unsettled, the start is never begun instead, its end's
+`unsettled` naming the variables and the program, recorded and
+delivered as any never-begun end is (35, 43). Status gives the place's
+`unsettled`, each variable by its name and never a value, and the
+person's form prints each on a line of its own (S65).
 
 A start that carries no `FLUME_*` acks nothing and is read as 77 reads a
 bare resume (record 0016), unchanged.

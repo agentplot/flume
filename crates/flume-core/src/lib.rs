@@ -24,9 +24,11 @@ mod settings;
 mod settle;
 mod spent;
 mod start;
+mod start_record;
 mod status;
 mod submit;
 mod tidy;
+mod unsettled;
 mod wait;
 mod wake;
 
@@ -35,6 +37,9 @@ pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
 pub use prompt::group_name;
+pub use start_record::{
+    variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
+};
 pub use wait::{WaitFor, WAIT_POLL};
 
 use flume_seams::{

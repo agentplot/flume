@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "57a1ba9";
+pub const REVISION: &str = "87a7458";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -16,6 +16,7 @@ pub fn part_a() -> Vec<u32> {
         .chain([137])
         .chain(140..=149)
         .chain(154..=159)
+        .chain([161])
         .collect()
 }
 
@@ -42,12 +43,19 @@ pub fn all() -> Vec<String> {
         .map(|clause| clause.to_string())
         .collect();
     all.extend((1..=8).map(|invariant| format!("I{invariant}")));
-    all.extend((1..=SCENARIOS).map(|scenario| format!("S{scenario}")));
+    all.extend(
+        (1..=SCENARIOS)
+            .filter(|scenario| !SCENARIO_GAPS.contains(scenario))
+            .map(|scenario| format!("S{scenario}")),
+    );
     all
 }
 
 /// The last scenario of section 11.
-pub const SCENARIOS: u32 = 63;
+pub const SCENARIOS: u32 = 65;
+
+/// The numbers among section 11's scenarios the statement gives none.
+pub const SCENARIO_GAPS: [u32; 1] = [64];
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -83,7 +91,7 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6);
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 1);
         assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 1);
         for gap in [100, 150] {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
@@ -93,13 +101,14 @@ mod tests {
         every.sort();
         assert_eq!(
             every,
-            (1..=160)
+            (1..=161)
                 .filter(|clause| ![100, 150].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 158 + 8 + 63);
-        assert_eq!(REVISION, "57a1ba9");
-        for clause in [129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157] {
+        assert_eq!(all().len(), 159 + 8 + 64);
+        assert!(!all().contains(&"S64".to_string()), "S64 is listed");
+        assert_eq!(REVISION, "87a7458");
+        for clause in [129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160] {
@@ -113,8 +122,8 @@ mod tests {
         assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
-            "140", "141", "142", "143", "144", "145", "147", "151", "153", "154", "157", "S50",
-            "S51", "S52", "S53", "S54", "S56",
+            "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
+            "161", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S65",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

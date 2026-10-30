@@ -191,6 +191,10 @@ pub struct PlaceStatus {
     /// the place's, between accounts, in order, the agents after it
     /// starting without the earlier account's cache (56, 145 to 147).
     pub moves: Vec<MoveStatus>,
+    /// Each start of the place's whose agent began without the settings
+    /// its start recorded, each variable by its name alone and whether
+    /// the program differed, never a value (56, 161).
+    pub unsettled: Vec<UnsettledStart>,
     /// Every end of the place, with whom it was delivered to and when,
     /// and for whom it stands pending (43).
     #[serde(default)]

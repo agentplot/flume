@@ -185,6 +185,24 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
     };
     agent.set_spent(&who, limit.clone());
     assert_eq!(agent.spent(folder, &who), limit);
+    assert_eq!(agent.started(folder, &who), Reading::Yes);
+    assert_eq!(agent.started_without(folder, &who), None);
+    let unsettled = Unsettled {
+        missing: vec!["AGENT_HOME".into()],
+        ..Unsettled::default()
+    };
+    agent.set_started_without(&who, unsettled.clone());
+    assert_eq!(agent.started_without(folder, &who), Some(unsettled));
+    assert_eq!(
+        agent.started(folder, &who),
+        Reading::No,
+        "an agent begun without its settings says it started nothing"
+    );
+    assert_eq!(
+        agent.log.of("started_without").len(),
+        2,
+        "each reading logged"
+    );
     assert_eq!(agent.ended(folder, &who), Reading::No);
     agent.set_ended(&who, Reading::Yes);
     assert_eq!(agent.ended(folder, &who), Reading::Yes);

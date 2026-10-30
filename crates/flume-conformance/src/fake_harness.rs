@@ -334,6 +334,16 @@ impl AgentHarness for FakeAgentHarness {
         );
         reset
     }
+
+    fn begin_without(&self, identity: &Identity, variable: &str) {
+        self.agent.set_started_without(
+            identity,
+            Unsettled {
+                missing: vec![variable.to_string()],
+                ..Unsettled::default()
+            },
+        );
+    }
 }
 
 pub struct FakeTerminalHarness {

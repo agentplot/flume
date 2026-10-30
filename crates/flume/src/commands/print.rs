@@ -7,7 +7,7 @@ use flume_core::{
     group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, StageStatus,
     Tidied, Woke,
 };
-use flume_seams::{HoldOn, IntentKey, Made};
+use flume_seams::{HoldOn, IntentKey, Made, UnsettledStart};
 use serde_json::{json, Value};
 
 /// The answer as a person reads it.
@@ -187,6 +187,9 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     }
     for moved in &place.moves {
         lines.push(format!("  moved: {}", moved.words()));
+    }
+    for unsettled in &place.unsettled {
+        lines.push(unsettled_line(unsettled));
     }
     if let Some(delivered) = place.delivered {
         lines.push(format!(
@@ -423,6 +426,18 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     lines
 }
 
+/// A start whose agent began without its settings, each variable by its
+/// name alone (56, 161).
+fn unsettled_line(unsettled: &UnsettledStart) -> String {
+    format!(
+        "  without its settings: {}'s start {} began {} at {}, and was not taken as its stage's agent",
+        unsettled.stage,
+        unsettled.start,
+        unsettled.unsettled.words(),
+        unsettled.at
+    )
+}
+
 /// A stage waiting for room, with its stream, its priority and the room
 /// it is short of (56, 70, 143).
 fn queued_line(queued: &Queued) -> String {
@@ -472,6 +487,7 @@ mod tests {
     use flume_core::{AccountStatus, AgentSettings, MoveStatus, RoomWanted, StreamStatus};
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, MoveOn, MoveWhy, Reading, Strategy,
+        Unsettled,
     };
 
     #[test]
@@ -507,6 +523,23 @@ mod tests {
         assert_eq!(
             agent_line(&none),
             "  agent flume:r:fix--one:code:2 (agent): working"
+        );
+    }
+
+    #[test]
+    fn a_start_without_its_settings() {
+        let unsettled = UnsettledStart {
+            stage: "code".into(),
+            start: 1,
+            at: 54_000,
+            unsettled: Unsettled {
+                missing: vec!["AGENT_HOME".into()],
+                ..Unsettled::default()
+            },
+        };
+        assert_eq!(
+            unsettled_line(&unsettled),
+            "  without its settings: code's start 1 began without AGENT_HOME at 54000, and was not taken as its stage's agent"
         );
     }
 

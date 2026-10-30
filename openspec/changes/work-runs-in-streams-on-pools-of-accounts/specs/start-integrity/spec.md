@@ -2,7 +2,8 @@
 
 ### Requirement: A start records what its agent runs under
 
-At each start flume SHALL record the agent's program, its account and,
+At each start flume SHALL record, as the start's `start_record`, the
+agent's program, its account and,
 for each variable of its resolved environment and `FLUME_AGENT`,
 `FLUME_PLACE` and `FLUME_STAGE`, a digest keyed by the start's secret
 over the variable's name and value, and never a value; the variables a

@@ -123,7 +123,7 @@ settings, never left running a stage under the wrong account (35, 135,
 - `crates/flume-seams`: `Stream`, `Pool`, `Account`, `Strategy`;
   `Settings` without `env`, and `Layer::Account` naming a variable's
   source; `Launch` and `PlaceRecord`
-  gain stream and intent; `StartHeld` gains account and record; the
+  gain stream and intent; `StartHeld` gains `account` and `start_record`; the
   agent seam's `spent` and `started_without`; the store's host
   documents; status fields, only added.
 - `crates/flume-core`: `room.rs` across streams and accounts,

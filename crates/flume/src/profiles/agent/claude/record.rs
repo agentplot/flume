@@ -2,7 +2,8 @@
 //! write and the profile's readings read (128): under
 //! `<folder>/claude/<identity>/`, the started ack, the digests of the
 //! prompts received, the asking mark, the acts the guard refused, the
-//! session's end and a failed turn's reason, its error and when it ran.
+//! session's end, a failed turn's reason, its error and when it ran, and
+//! the word that the agent began otherwise than its start recorded.
 
 use flume_seams::Identity;
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,18 @@ pub struct Failure {
     pub error: String,
     pub words: String,
     pub at: u64,
+}
+
+/// The SessionStart hook's word that the agent began otherwise than its
+/// start recorded, in place of the started ack: each variable by its
+/// name alone and whether the program differed, with the session it runs
+/// and its transcript (161).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Unsettled {
+    #[serde(flatten)]
+    pub unsettled: flume_seams::Unsettled,
+    pub session_id: String,
+    pub transcript_path: String,
 }
 
 /// One start's record in one folder.
@@ -112,6 +125,26 @@ impl Record {
     pub fn ack_started(&self, started: &Started) -> std::io::Result<()> {
         let text = serde_json::to_string_pretty(started).expect("the ack as JSON");
         self.write("started.json", &text)
+    }
+
+    /// How the agent began otherwise than its start recorded; none where
+    /// it began as recorded, or the word cannot be read.
+    pub fn unsettled(&self) -> Option<Unsettled> {
+        let text = fs::read_to_string(self.file("unsettled.json")).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    pub fn set_unsettled(&self, unsettled: &Unsettled) -> std::io::Result<()> {
+        let text = serde_json::to_string_pretty(unsettled).expect("the word as JSON");
+        self.write("unsettled.json", &text)
+    }
+
+    /// The session's transcript, as the started ack named it, else the
+    /// word that the agent began otherwise.
+    pub fn transcript_path(&self) -> Option<String> {
+        self.started()
+            .map(|started| started.transcript_path)
+            .or_else(|| self.unsettled().map(|unsettled| unsettled.transcript_path))
     }
 
     pub fn received_path(&self) -> PathBuf {

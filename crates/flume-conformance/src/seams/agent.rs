@@ -44,6 +44,10 @@ pub trait AgentHarness {
     /// The agent's turn fails at its account's usage limit, with words the
     /// harness writes naming a reset; the reset by the host's clock (151).
     fn hit_usage_limit(&self, identity: &Identity) -> Seconds;
+
+    /// The agent begins without the variable `variable` its start
+    /// recorded, as the program's own word at its start shows it (161).
+    fn begin_without(&self, identity: &Identity, variable: &str);
 }
 
 fn identity(stage: &str) -> Identity {
@@ -133,7 +137,43 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["151", "146", "93", "128"],
             run: spent_reads_the_usage_limit::<H>,
         },
+        Scenario {
+            name: "agent: started without names each variable the agent began without, read from its own record, and nothing from another folder",
+            cites: &["135", "161", "93", "128"],
+            run: started_without_names_the_variable::<H>,
+        },
     ]
+}
+
+fn started_without_names_the_variable<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    let folder = harness.folder();
+    ensure_eq!(
+        harness.seam().started_without(&folder, &who),
+        None,
+        "an agent begun as its start recorded"
+    );
+    harness.begin_without(&who, "AGENT_HOME");
+    let Some(unsettled) = harness.seam().started_without(&folder, &who) else {
+        return Err("an agent begun without AGENT_HOME read as begun with it".into());
+    };
+    ensure_eq!(
+        unsettled.missing,
+        vec!["AGENT_HOME".to_string()],
+        "the variable missing"
+    );
+    ensure!(
+        unsettled.different.is_empty() && !unsettled.program,
+        "nothing else differed: {unsettled:?}"
+    );
+    ensure_eq!(
+        harness
+            .seam()
+            .started_without(&format!("{folder}-of-another-place"), &who),
+        None,
+        "started without, read in another folder"
+    );
+    Ok(())
 }
 
 fn spent_reads_the_usage_limit<H: AgentHarness>(harness: &H) -> Outcome {

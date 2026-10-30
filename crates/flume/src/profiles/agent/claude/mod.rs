@@ -19,7 +19,7 @@ pub mod wrapper;
 
 use flume_seams::{
     Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
-    Secret, Settings, Spent,
+    Secret, Settings, Spent, Unsettled,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -383,13 +383,19 @@ impl Agent for Claude {
     }
 
     /// Background shells and tasks the transcript shows started and not
-    /// finished (91).
+    /// finished, the transcript the started ack named or, for an agent
+    /// begun otherwise than its start recorded, the one its word named
+    /// (91, 161).
     fn own_work(&self, folder: &str, agent: &Identity) -> Reading {
         let record = Record::at(folder, agent);
-        let Some(started) = record.readable().then(|| record.started()).flatten() else {
+        let Some(transcript) = record
+            .readable()
+            .then(|| record.transcript_path())
+            .flatten()
+        else {
             return Reading::Unknown;
         };
-        match transcript::Transcript::read(Path::new(&started.transcript_path)) {
+        match transcript::Transcript::read(Path::new(&transcript)) {
             transcript::Read::Read(transcript) => {
                 if transcript.background_running().is_empty() {
                     Reading::No
@@ -446,6 +452,16 @@ impl Agent for Claude {
             },
             _ => Spent::No,
         }
+    }
+
+    /// The SessionStart hook's word that the agent began otherwise than
+    /// its start recorded, written in place of the started ack (161).
+    fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
+        let record = Record::at(folder, agent);
+        if !record.readable() {
+            return None;
+        }
+        record.unsettled().map(|unsettled| unsettled.unsettled)
     }
 
     /// A plugin of another version than this flume's, as the started ack

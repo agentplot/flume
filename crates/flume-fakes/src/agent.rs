@@ -1,7 +1,7 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
     Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
-    Secret, Settings, Spent,
+    Secret, Settings, Spent, Unsettled,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex};
 /// The agent seam: each agent's own record by identity. An agent says
 /// it started once the fake terminal has opened it, unless set otherwise,
 /// and receives a prompt once the fake terminal has sent it, or opened it
-/// carried, as many times as it is set to need; every other answer is
+/// carried, as many times as it is set to need, and says nothing of its
+/// start where it is set to have begun without its settings; every other answer is
 /// set, unknowns among them. A record kept in a place's folder is read
 /// there alone: a reading handed another folder is unknown (128).
 pub struct FakeAgent {
@@ -39,6 +40,7 @@ struct Record {
     started: Option<Reading>,
     last_words: Option<String>,
     spent: Spent,
+    started_without: Option<Unsettled>,
 }
 
 impl Default for Record {
@@ -55,6 +57,7 @@ impl Default for Record {
             started: None,
             last_words: None,
             spent: Spent::No,
+            started_without: None,
         }
     }
 }
@@ -124,6 +127,12 @@ impl FakeAgent {
     /// words a test writes.
     pub fn set_spent(&self, agent: &Identity, spent: Spent) {
         self.with(agent, |record| record.spent = spent);
+    }
+
+    /// The agent began without the settings its start recorded, as its
+    /// own word shows, which then says it started nothing (135, 161).
+    pub fn set_started_without(&self, agent: &Identity, unsettled: Unsettled) {
+        self.with(agent, |record| record.started_without = Some(unsettled));
     }
 
     /// The agent's record is kept in `folder`, as the agent's program
@@ -207,6 +216,9 @@ impl Agent for FakeAgent {
         let Some(model) = self.read_in("started", folder, agent) else {
             return Reading::Unknown;
         };
+        if model.started.is_none() && model.started_without.is_some() {
+            return Reading::No;
+        }
         model
             .started
             .unwrap_or(if self.terminal.opened(agent).is_some() {
@@ -269,6 +281,11 @@ impl Agent for FakeAgent {
     fn spent(&self, folder: &str, agent: &Identity) -> Spent {
         self.read_in("spent", folder, agent)
             .map_or(Spent::Unknown, |record| record.spent)
+    }
+
+    fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
+        self.read_in("started_without", folder, agent)
+            .and_then(|record| record.started_without)
     }
 
     fn stop_short(&self, _agent: &Identity) -> String {

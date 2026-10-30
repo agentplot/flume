@@ -8,7 +8,7 @@
 //! binary in `hooks_claude.rs`.
 
 use crate::common::*;
-use flume::profiles::agent::claude::record::{Asking, Failure, Record, Started};
+use flume::profiles::agent::claude::record::{self, Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
     TRUST_QUESTION, VERSION,
@@ -182,6 +182,21 @@ impl AgentHarness for Harness {
             })
             .expect("the failure");
         1_793_286_000
+    }
+
+    /// The SessionStart hook found the variable missing and wrote its
+    /// word in place of the started ack, as the plugin's hook records it.
+    fn begin_without(&self, identity: &Identity, variable: &str) {
+        self.record(identity)
+            .set_unsettled(&record::Unsettled {
+                unsettled: Unsettled {
+                    missing: vec![variable.to_string()],
+                    ..Unsettled::default()
+                },
+                session_id: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+                transcript_path: self.transcript(identity).to_string_lossy().into(),
+            })
+            .expect("the word");
     }
 }
 

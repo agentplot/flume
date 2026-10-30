@@ -197,6 +197,7 @@ impl Engine {
             stream: place.stream.clone(),
             intent: place.intent.clone(),
             moves: held.moves.iter().map(MoveStatus::of).collect(),
+            unsettled: held.unsettled.clone(),
             ends: held
                 .ends
                 .iter()

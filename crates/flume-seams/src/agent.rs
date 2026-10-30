@@ -1,4 +1,4 @@
-//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151), an agent's
+//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161), an agent's
 //! identity and its start's secret (33, 41). Every reading of an agent's
 //! own record is handed the place's own folder with the identity, where
 //! the agent profile keeps its marks (128).
@@ -105,6 +105,42 @@ pub enum Spent {
     Unknown,
 }
 
+/// started_without: how the agent began otherwise than its start
+/// recorded, as its own word that it started shows it: each variable the
+/// start's record names that its environment lacks, each it holds with
+/// another value, both by name alone, and whether it runs another program
+/// (135, 161).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Unsettled {
+    #[serde(default)]
+    pub missing: Vec<String>,
+    #[serde(default)]
+    pub different: Vec<String>,
+    #[serde(default)]
+    pub program: bool,
+}
+
+impl Unsettled {
+    /// How the agent began otherwise, naming each variable and never a
+    /// value (56, 161).
+    pub fn words(&self) -> String {
+        let mut words = vec![];
+        if !self.missing.is_empty() {
+            words.push(format!("without {}", self.missing.join(", ")));
+        }
+        if !self.different.is_empty() {
+            words.push(format!("with another {}", self.different.join(", ")));
+        }
+        if self.program {
+            words.push("under another program".to_string());
+        }
+        if words.is_empty() {
+            return "otherwise than its start recorded".to_string();
+        }
+        words.join(", ")
+    }
+}
+
 /// Whether the agent program offers an operation (115, 121).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -192,6 +228,14 @@ pub trait Agent: Send + Sync {
     /// limit has reset.
     fn spent(&self, _folder: &str, _agent: &Identity) -> Spent {
         Spent::Unknown
+    }
+
+    /// How the agent under `agent` began otherwise than its start
+    /// recorded, as its own record in the place's own `folder` holds its
+    /// word: none where it began as recorded, has said nothing yet, or
+    /// the program checks nothing at its start (135, 161, 128).
+    fn started_without(&self, _folder: &str, _agent: &Identity) -> Option<Unsettled> {
+        None
     }
 
     /// What the agent's own record says of its start that no reading
