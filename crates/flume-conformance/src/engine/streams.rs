@@ -50,6 +50,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "143", "70"],
             run: a_streams_part_of_status,
         },
+        Scenario {
+            name: "streams: a later place of an intent naming no stream runs in its affinity's stream, from the intent, over the host's word for its repository",
+            cites: &["143", "147"],
+            run: a_later_place_of_an_intent,
+        },
     ]
 }
 
@@ -314,6 +319,39 @@ fn a_streams_part_of_status(_: &()) -> Outcome {
         world.status(&places[3])?.stream,
         stream("work", StreamFrom::Launch),
         "the waiting place's own stream"
+    );
+    Ok(())
+}
+
+fn a_later_place_of_an_intent(_: &()) -> Outcome {
+    let world = World::new();
+    two_streams(&world);
+    super::account_pools::pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![super::account_pools::account("work-1", None)],
+    );
+    world.host.set_host_pool(Some("work"));
+    world.host.name_stream(Some(REPOSITORY), None, Some("work"));
+    super::account_pools::fix_of(&world, Some("personal"), "one", Some("the-surfaces"))?;
+    let later = launched(&world.engine.launch(&Launch {
+        intent: Some("the-surfaces".into()),
+        ..launch("fix", "two", Some("x"))
+    }))?;
+    ensure_eq!(
+        later.stream,
+        stream("personal", StreamFrom::Intent),
+        "the later place's stream"
+    );
+    let other = launched(&world.engine.launch(&Launch {
+        intent: Some("another".into()),
+        ..launch("fix", "three", Some("x"))
+    }))?;
+    ensure_eq!(
+        other.stream,
+        stream("work", StreamFrom::HostRepository),
+        "another intent's place's stream"
     );
     Ok(())
 }

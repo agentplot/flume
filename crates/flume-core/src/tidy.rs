@@ -143,6 +143,7 @@ impl Engine {
             });
         }
         let terminal = self.terminal.tidy(&at);
+        self.intent_left(&place.intent, id);
         self.deliver_ends(id);
         if let Some(read) = self.store.read(id) {
             self.keep_for_ends(&read.state, &over);

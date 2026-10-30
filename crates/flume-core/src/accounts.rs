@@ -124,37 +124,93 @@ pub(crate) enum Choice {
 
 impl Engine {
     /// The account a start of `place`'s stage whose agent runs `program`
-    /// takes: the strategy's choice over its pool's usable accounts, in
-    /// order (144, 145; core.32).
+    /// takes: the intent's affinity's while it is usable, else the
+    /// strategy's choice over its pool's usable accounts, in order; and,
+    /// where the strategy chose because the affinity's account was spent
+    /// or full, the intent's move to it, unless it is an account the
+    /// affinity once left (144, 145, 147; core.32).
     pub(crate) fn choose_account(
         &self,
         place: &PlaceRecord,
         program: Option<&str>,
+        affinity: Option<&Affinity>,
         queue: &Queue,
-    ) -> Choice {
+        now: Seconds,
+    ) -> (Choice, Option<AccountMove>) {
         let stream = &place.stream.name;
         let Some(pool) = queue.pool_of(stream) else {
-            return Choice::NoPool;
+            return (Choice::NoPool, None);
         };
         let Some(room) = queue.pools.get(pool) else {
-            return Choice::Undeclared(format!(
-                "the pool {pool} the stream {stream} takes its accounts from is not declared by the host's configuration"
-            ));
+            return (
+                Choice::Undeclared(format!(
+                    "the pool {pool} the stream {stream} takes its accounts from is not declared by the host's configuration"
+                )),
+                None,
+            );
         };
         let Some(program) = program else {
-            return Choice::Wait;
+            return (Choice::Wait, None);
         };
-        match room.strategy(program) {
-            Some(chosen) => Choice::Chose {
-                held: AccountHeld {
-                    pool: pool.to_string(),
-                    name: chosen.account.name.clone(),
-                    from: AccountFrom::Strategy,
-                },
-                account: chosen.account.clone(),
+        let kept = affinity
+            .filter(|affinity| affinity.pool == pool)
+            .and_then(|affinity| room.account(&affinity.account));
+        let chose = |chosen: &AccountRoom, from| Choice::Chose {
+            held: AccountHeld {
+                pool: pool.to_string(),
+                name: chosen.account.name.clone(),
+                from,
             },
-            None => Choice::Wait,
+            account: chosen.account.clone(),
+        };
+        if let Some(kept) = kept.filter(|kept| kept.usable(program)) {
+            return (chose(kept, AccountFrom::Affinity), None);
         }
+        let Some(chosen) = room.strategy(program) else {
+            return (Choice::Wait, None);
+        };
+        let moved = kept.zip(affinity).and_then(|(kept, affinity)| {
+            let why = kept.short()?;
+            (!affinity.left(&chosen.account.name)).then(|| AccountMove {
+                on: MoveOn::Intent,
+                from: kept.account.name.clone(),
+                to: chosen.account.name.clone(),
+                why,
+                at: now,
+            })
+        });
+        (chose(chosen, AccountFrom::Strategy), moved)
+    }
+
+    /// The intent's affinity after a start of `place` under `account`:
+    /// written at the intent's first start with a pool, moved by `moved`,
+    /// and no longer gone (147).
+    pub(crate) fn affinity_after(
+        &self,
+        place: &PlaceRecord,
+        account: &AccountHeld,
+        moved: Option<&AccountMove>,
+    ) {
+        self.write_affinity(&place.intent, |standing| {
+            Some(match standing {
+                None => Affinity {
+                    stream: place.stream.name.clone(),
+                    pool: account.pool.clone(),
+                    account: account.name.clone(),
+                    moves: vec![],
+                    gone: None,
+                },
+                Some(mut affinity) => {
+                    if let Some(moved) = moved {
+                        affinity.stream = place.stream.name.clone();
+                        affinity.account = moved.to.clone();
+                        affinity.moves.push(moved.clone());
+                    }
+                    affinity.gone = None;
+                    affinity
+                }
+            })
+        });
     }
 }
 
@@ -186,5 +242,90 @@ impl Engine {
             why,
             at: now,
         })
+    }
+}
+
+/// How long an intent's affinity outlives its last place (147).
+pub const AFFINITY_KEPT: Seconds = 60 * 60;
+
+/// How often a write of an intent's affinity reads it again when its
+/// version moved under it (103).
+const TRIES: usize = 8;
+
+impl Engine {
+    fn intent_key(intent: &IntentKey) -> HostKey {
+        HostKey::Intent {
+            digest: intent.digest().to_string(),
+        }
+    }
+
+    /// The intent's affinity and the version it was read at, none where
+    /// it has none; one whose last place went an hour ago or more is
+    /// removed by compare-and-set and read as none (147).
+    pub(crate) fn affinity(&self, intent: &IntentKey) -> Option<(u64, Affinity)> {
+        let key = Self::intent_key(intent);
+        let read = self.store.read_host(&key)?;
+        let HostDocument::Intent(affinity) = read.document else {
+            return None;
+        };
+        if let Some(gone) = affinity.gone {
+            if self.host.now() >= gone.saturating_add(AFFINITY_KEPT) {
+                self.store.write_host(&key, Some(read.version), None);
+                return None;
+            }
+        }
+        Some((read.version, affinity))
+    }
+
+    /// Writes the intent's affinity as `change` makes it of what stands,
+    /// none where none stands, by compare-and-set, reading it again
+    /// where its version moved; `change` keeping it as it is writes
+    /// nothing (103, 147).
+    pub(crate) fn write_affinity(
+        &self,
+        intent: &IntentKey,
+        change: impl Fn(Option<Affinity>) -> Option<Affinity>,
+    ) {
+        let key = Self::intent_key(intent);
+        for _ in 0..TRIES {
+            let (at, standing) = match self.affinity(intent) {
+                Some((version, affinity)) => (Some(version), Some(affinity)),
+                None => (None, None),
+            };
+            let Some(next) = change(standing.clone()) else {
+                return;
+            };
+            if standing.as_ref() == Some(&next) {
+                return;
+            }
+            let at = at.or_else(|| self.store.read_host(&key).map(|read| read.version));
+            if let Written::Written { .. } =
+                self.store
+                    .write_host(&key, at, Some(&HostDocument::Intent(next)))
+            {
+                return;
+            }
+        }
+    }
+
+    /// Marks the intent's affinity gone at the host's clock where no
+    /// place of the intent but `leaving` still stands (147).
+    pub(crate) fn intent_left(&self, intent: &IntentKey, leaving: &PlaceId) {
+        let stands = self.store.read_every().iter().any(|read| {
+            let held = &read.state;
+            &held.place.id != leaving
+                && held.place.intent.digest() == intent.digest()
+                && !matches!(held.phase, Phase::Gone { .. } | Phase::Tidied { .. })
+        });
+        if stands {
+            return;
+        }
+        let now = self.host.now();
+        self.write_affinity(intent, |standing| {
+            standing.map(|affinity| Affinity {
+                gone: affinity.gone.or(Some(now)),
+                ..affinity
+            })
+        });
     }
 }

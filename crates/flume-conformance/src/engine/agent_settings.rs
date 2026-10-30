@@ -7,7 +7,7 @@
 //! host's configuration read at every start; and the launch refused for
 //! settings flume cannot run.
 
-use super::account_pools::{account, pool};
+use super::account_pools::{account, fix_in, pool};
 use super::settling::write_change;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -38,7 +38,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_hosts_configuration_changes_while_a_stage_works,
         },
         Scenario {
-            name: "settings: an account added to a stage's pool while its agent works leaves the agent and may be taken by the next start",
+            name: "settings: an account added to a stage's pool while its agent works leaves the agent and may be taken by the next start, the place's own keeping to its intent's account",
             cites: &["32", "144", "145"],
             run: an_account_added_to_a_pool,
         },
@@ -411,8 +411,14 @@ fn an_account_added_to_a_pool(_: &()) -> Outcome {
     to_verify(&world, &id, "plan")?;
     ensure_eq!(
         account_of(2)?,
-        Some("work-0".to_string()),
-        "verify's account, the one added first in order"
+        Some("work-1".to_string()),
+        "verify's account, its intent's"
+    );
+    let other = fix_in(&world, None, "other")?;
+    ensure_eq!(
+        super::account_pools::account_of(&world, &other, "code"),
+        Some(("work".to_string(), "work-0".to_string())),
+        "another intent's start, on the account added first in order"
     );
     Ok(())
 }

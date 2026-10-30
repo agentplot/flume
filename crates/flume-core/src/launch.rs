@@ -202,8 +202,8 @@ impl Engine {
         let (kind, declared, repository_settings) = self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind)?;
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
-        let stream = self.stream_of(launch, &kind.name)?;
         let intent = self.intent_of(launch);
+        let stream = self.stream_of(launch, &kind.name, &intent)?;
         let named = format!("the kind {}@{}", kind.name, kind.version);
         if kind.lands && merge_queue.is_none() {
             return Err(format!(
@@ -391,23 +391,35 @@ impl Engine {
 
 impl Engine {
     /// The stream a launch's place runs in, chosen once (8, 143): the
-    /// launch's, else the one the host's configuration names for the
+    /// launch's, else the stream of its intent's affinity where one
+    /// stands (147), else the one the host's configuration names for the
     /// repository and `kind`, for the repository or for `kind`, else
     /// `default`; a stream the host does not declare refuses the launch
     /// naming it (4).
-    fn stream_of(&self, launch: &Launch, kind: &str) -> Result<StreamHeld, String> {
+    fn stream_of(
+        &self,
+        launch: &Launch,
+        kind: &str,
+        intent: &IntentKey,
+    ) -> Result<StreamHeld, String> {
         let stream = match &launch.stream {
             Some(name) => StreamHeld {
                 name: name.clone(),
                 from: StreamFrom::Launch,
             },
-            None => self
-                .host
-                .stream_for(&launch.repository, kind)
-                .unwrap_or_else(|| StreamHeld {
-                    name: DEFAULT_STREAM.into(),
-                    from: StreamFrom::Default,
-                }),
+            None => match self.affinity(intent) {
+                Some((_, affinity)) => StreamHeld {
+                    name: affinity.stream,
+                    from: StreamFrom::Intent,
+                },
+                None => self
+                    .host
+                    .stream_for(&launch.repository, kind)
+                    .unwrap_or_else(|| StreamHeld {
+                        name: DEFAULT_STREAM.into(),
+                        from: StreamFrom::Default,
+                    }),
+            },
         };
         if self.host.streams().contains_key(&stream.name) {
             return Ok(stream);
@@ -422,7 +434,8 @@ impl Engine {
                 format!("the host's configuration names for {repository}")
             }
             StreamFrom::HostKind => format!("the host's configuration names for {kind}"),
-            StreamFrom::Intent | StreamFrom::Default => "the place takes".to_string(),
+            StreamFrom::Intent => "the intent's affinity stands in".to_string(),
+            StreamFrom::Default => "the place takes".to_string(),
         };
         Err(format!(
             "the stream {} {named} is not declared by the host's configuration (143)",

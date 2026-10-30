@@ -233,13 +233,20 @@ impl Engine {
         let place = &read.state.place;
         let resolution = self.resolution(place, &place.kind.stages[index]);
         let queue = admit.queue();
-        let chosen = match &resolution {
+        let now = self.host.now();
+        let affinity = queue
+            .pool_of(&place.stream.name)
+            .and_then(|_| self.affinity(&place.intent))
+            .map(|(_, affinity)| affinity);
+        let (chosen, intent_moved) = match &resolution {
             Ok(resolution) => self.choose_account(
                 place,
                 resolution.resolved.settings.program.as_deref(),
+                affinity.as_ref(),
                 queue,
+                now,
             ),
-            Err(_) => Choice::NoPool,
+            Err(_) => (Choice::NoPool, None),
         };
         let stage_name = &place.kind.stages[index].name;
         let env = match &chosen {
@@ -251,7 +258,6 @@ impl Engine {
             _ => resolution,
         };
         let env = env.unwrap_or_default();
-        let now = self.host.now();
         let made_from = self.store.made(id).len();
         let claimed = self.update(id, |held| {
             if let Admit::Waiting(_) = admit {
@@ -330,6 +336,9 @@ impl Engine {
             if let Some(moved) = self.stage_moved(held, index, account.as_ref(), queue, now) {
                 held.moves.push(moved);
             }
+            if let Some(moved) = &intent_moved {
+                held.moves.push(moved.clone());
+            }
             let mut from = resolution.resolved.from.clone();
             if let Choice::Chose { account, .. } = &chosen {
                 for (name, value) in &account.env {
@@ -396,7 +405,13 @@ impl Engine {
                 account,
             }))
         });
-        claimed.unwrap_or(Err(Start::NoPlace))
+        let claimed = claimed.unwrap_or(Err(Start::NoPlace));
+        if let (Ok(claim), Some(place)) = (&claimed, self.store.read(id)) {
+            if let Some(account) = &claim.account {
+                self.affinity_after(&place.state.place, account, intent_moved.as_ref());
+            }
+        }
+        claimed
     }
 
     /// Opens the agent of a claimed start, out of the room lock; an open

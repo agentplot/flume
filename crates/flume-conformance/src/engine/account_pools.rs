@@ -3,8 +3,12 @@
 //! is chosen under the room lock, the strategy's over the pool's usable
 //! accounts in order, usable meaning not spent, under its own bound and
 //! running the stage's program; with none usable the stage waits for
-//! room, its want naming the pool.
+//! room, its want naming the pool. An intent keeps to its account while
+//! it is usable, its affinity moving where the strategy goes when that
+//! account is spent or full and never back, and gone an hour after the
+//! intent's last place (147).
 
+use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Answer, HostStatus, RoomWanted};
@@ -42,6 +46,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "account pools: a stage whose pool's accounts are all spent waits for room, status giving the pool's soonest reset",
             cites: &["145", "56", "70"],
             run: nothing_usable,
+        },
+        Scenario {
+            name: "account pools: three places of one intent on a least-busy pool start on the first one's account, and once it is spent the next start goes to another, the affinity moving",
+            cites: &["S56", "147", "145"],
+            run: s56_three_units_of_one_intent,
+        },
+        Scenario {
+            name: "account pools: an affinity that moved stays on its new account once the old one's reset passes, and a start the strategy sends back to the old one leaves the affinity where it is",
+            cites: &["147", "145"],
+            run: never_back,
+        },
+        Scenario {
+            name: "account pools: an intent's affinity is gone an hour after its last place is tidied, and a place of the intent launched after is placed by the strategy, its stream chosen without the intent",
+            cites: &["147", "143"],
+            run: dropped_an_hour_after_the_last_place,
+        },
+        Scenario {
+            name: "account pools: two places on one repository and base naming no intent share that intent and its affinity",
+            cites: &["147", "145"],
+            run: no_intent_named,
         },
     ]
 }
@@ -88,10 +112,23 @@ pub fn spent(world: &World, pool: &str, account: &str, until: Seconds) {
     );
 }
 
-/// A fix named `name` launched in `stream`, settled once.
+/// A fix named `name` launched in `stream` serving an intent of its own
+/// name, settled once.
 pub fn fix_in(world: &World, stream: Option<&str>, name: &str) -> Result<PlaceId, String> {
+    fix_of(world, stream, name, Some(name))
+}
+
+/// A fix named `name` launched in `stream` serving `intent`, or its
+/// repository and base's where none is named, settled once.
+pub fn fix_of(
+    world: &World,
+    stream: Option<&str>,
+    name: &str,
+    intent: Option<&str>,
+) -> Result<PlaceId, String> {
     launched(&world.engine.launch(&Launch {
         stream: stream.map(str::to_string),
+        intent: intent.map(str::to_string),
         ..launch("fix", name, Some("x"))
     }))?;
     let id = World::id("fix", name);
@@ -376,6 +413,188 @@ fn no_pool_anywhere(_: &()) -> Outcome {
                     .all(|key| !key.starts_with("env.")),
             "{name}'s settings name a variable: {:?}",
             agent.settings
+        );
+    }
+    Ok(())
+}
+
+/// The intent `name`'s affinity as the host's document holds it.
+pub fn affinity(world: &World, intent: &IntentKey) -> Option<Affinity> {
+    match world.store.host_document(&HostKey::Intent {
+        digest: intent.digest().to_string(),
+    })? {
+        HostDocument::Intent(affinity) => Some(affinity),
+        HostDocument::Account(_) => None,
+    }
+}
+
+/// The intent the place `id` serves.
+fn intent_of(world: &World, id: &PlaceId) -> Result<IntentKey, String> {
+    Ok(world.held(id).ok_or("no held state")?.place.intent)
+}
+
+/// A least-busy pool `work` of `work-1` and `work-2`, the host's own.
+fn least_busy(world: &World) {
+    pool(
+        world,
+        "work",
+        Strategy::LeastBusy,
+        vec![account("work-1", None), account("work-2", None)],
+    );
+    world.host.set_host_pool(Some("work"));
+}
+
+fn s56_three_units_of_one_intent(_: &()) -> Outcome {
+    let world = World::new();
+    least_busy(&world);
+    let units: Vec<PlaceId> = ["a", "b", "c"]
+        .iter()
+        .map(|name| fix_of(&world, None, name, Some("the-surfaces")))
+        .collect::<Result<_, _>>()?;
+    for id in &units {
+        ensure_eq!(
+            account_of(&world, id, "code"),
+            on("work", "work-1"),
+            "{id}'s account, though work-2 runs fewer"
+        );
+    }
+    let start = world
+        .held(&units[1])
+        .and_then(|held| held.stages[0].start.clone());
+    ensure_eq!(
+        start
+            .and_then(|start| start.account)
+            .map(|account| account.from),
+        Some(AccountFrom::Affinity),
+        "what chose the second unit's account"
+    );
+    let intent = intent_of(&world, &units[0])?;
+    spent(&world, "work", "work-1", world.host.now() + 3600);
+    let next = fix_of(&world, None, "d", Some("the-surfaces"))?;
+    ensure_eq!(
+        account_of(&world, &next, "code"),
+        on("work", "work-2"),
+        "the next start's account once work-1 is spent"
+    );
+    let moved = AccountMove {
+        on: MoveOn::Intent,
+        from: "work-1".into(),
+        to: "work-2".into(),
+        why: MoveWhy::Spent,
+        at: world.host.now(),
+    };
+    let held = affinity(&world, &intent).ok_or("no affinity")?;
+    ensure_eq!(
+        (held.account.as_str(), held.moves.clone()),
+        ("work-2", vec![moved.clone()]),
+        "the affinity's account and its moves"
+    );
+    ensure_eq!(
+        world.held(&next).map(|held| held.moves),
+        Some(vec![moved]),
+        "the moves the place records"
+    );
+    Ok(())
+}
+
+fn never_back(_: &()) -> Outcome {
+    let world = World::new();
+    least_busy(&world);
+    let first = fix_of(&world, None, "a", Some("the-surfaces"))?;
+    let intent = intent_of(&world, &first)?;
+    let reset = world.host.now() + 600;
+    spent(&world, "work", "work-1", reset);
+    fix_of(&world, None, "b", Some("the-surfaces"))?;
+    world.host.advance(601);
+    let after = fix_of(&world, None, "c", Some("the-surfaces"))?;
+    ensure_eq!(
+        account_of(&world, &after, "code"),
+        on("work", "work-2"),
+        "the start after work-1's reset"
+    );
+    spent(&world, "work", "work-2", world.host.now() + 600);
+    let back = fix_of(&world, None, "d", Some("the-surfaces"))?;
+    ensure_eq!(
+        account_of(&world, &back, "code"),
+        on("work", "work-1"),
+        "the start the strategy places once work-2 is spent"
+    );
+    let held = affinity(&world, &intent).ok_or("no affinity")?;
+    ensure_eq!(
+        (held.account.as_str(), held.moves.len()),
+        ("work-2", 1),
+        "the affinity, which never moves back"
+    );
+    ensure_eq!(
+        world.held(&back).map(|held| held.moves.len()),
+        Some(0),
+        "moves recorded for a start that moved no affinity"
+    );
+    Ok(())
+}
+
+fn dropped_an_hour_after_the_last_place(_: &()) -> Outcome {
+    let world = World::new();
+    least_busy(&world);
+    world.host.set_stream("personal", Some(Stream::default()));
+    let first = fix_of(&world, Some("personal"), "a", Some("the-surfaces"))?;
+    let intent = intent_of(&world, &first)?;
+    ensure_eq!(
+        affinity(&world, &intent).map(|held| held.stream),
+        Some("personal".to_string()),
+        "the affinity's stream"
+    );
+    deliver_fix(&world, &first);
+    world.settle(&first);
+    ensure!(world.held(&first).is_none(), "the landed place is kept");
+    let tidied_at = world.host.now();
+    ensure_eq!(
+        affinity(&world, &intent).and_then(|held| held.gone),
+        Some(tidied_at),
+        "when the affinity's last place went"
+    );
+    world.host.advance(61 * 60);
+    let later = fix_of(&world, None, "b", Some("the-surfaces"))?;
+    let place = world.held(&later).ok_or("no held state")?;
+    ensure_eq!(
+        place.place.stream,
+        StreamHeld {
+            name: DEFAULT_STREAM.into(),
+            from: StreamFrom::Default
+        },
+        "the later place's stream"
+    );
+    let start = place.stages[0].start.clone().ok_or("no start")?;
+    ensure_eq!(
+        start.account.map(|account| account.from),
+        Some(AccountFrom::Strategy),
+        "what chose the later place's account"
+    );
+    let held = affinity(&world, &intent).ok_or("no affinity written again")?;
+    ensure_eq!(
+        (held.stream.as_str(), held.gone, held.moves.len()),
+        (DEFAULT_STREAM, None, 0),
+        "the affinity the later place wrote"
+    );
+    Ok(())
+}
+
+fn no_intent_named(_: &()) -> Outcome {
+    let world = World::new();
+    least_busy(&world);
+    let one = fix_of(&world, None, "one", None)?;
+    let two = fix_of(&world, None, "two", None)?;
+    let (first, second) = (intent_of(&world, &one)?, intent_of(&world, &two)?);
+    ensure!(
+        matches!(&first, IntentKey::Base { repository, base, .. } if repository == REPOSITORY && base == "main"),
+        "the intent: {first:?}"
+    );
+    ensure_eq!(first, second, "the two places' intents");
+    for id in [&one, &two] {
+        ensure_eq!(
+            account_of(&world, id, "code"),
+            on("work", "work-1"),
+            "{id}'s account"
         );
     }
     Ok(())
