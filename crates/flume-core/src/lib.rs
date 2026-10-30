@@ -22,6 +22,7 @@ mod reading;
 mod room;
 mod settings;
 mod settle;
+mod spent;
 mod start;
 mod status;
 mod submit;

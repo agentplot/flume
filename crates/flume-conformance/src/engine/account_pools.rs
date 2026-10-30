@@ -6,12 +6,16 @@
 //! room, its want naming the pool. An intent keeps to its account while
 //! it is usable, its affinity moving where the strategy goes when that
 //! account is spent or full and never back, and gone an hour after the
-//! intent's last place (147).
+//! intent's last place (147). An agent stopped at its account's usage
+//! limit pauses the account for every flume process until the reset its
+//! record names, or for an hour, and once quiet is ended and its stage
+//! started afresh with flume's words, counted toward no bound (146, 151,
+//! 153).
 
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, HostStatus, RoomWanted};
+use flume_core::{Answer, Cache, HostStatus, RoomWanted};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
@@ -66,6 +70,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "account pools: two places on one repository and base naming no intent share that intent and its affinity",
             cites: &["147", "145"],
             run: no_intent_named,
+        },
+        Scenario {
+            name: "account pools: an agent's usage limit resetting at 15:00 pauses its account for another flume process's start until then, and a start after may take it again",
+            cites: &["146", "151", "153", "S55"],
+            run: a_reset_at_fifteen,
+        },
+        Scenario {
+            name: "account pools: a usage limit naming no reset pauses its account for an hour from the reading, and a later time already recorded is kept",
+            cites: &["146", "151", "153"],
+            run: no_reset_named,
+        },
+        Scenario {
+            name: "account pools: once quiet, an agent stopped at its usage limit is ended and its stage starts afresh on the pool's next usable account with flume's words, the move in status and the kind's bound unchanged",
+            cites: &["S55", "146", "31", "43", "112"],
+            run: the_stage_moves,
+        },
+        Scenario {
+            name: "account pools: another agent working on an account read spent works on, and moves only once its own turn fails at the limit",
+            cites: &["146", "31"],
+            run: another_agent_on_the_spent_account,
+        },
+        Scenario {
+            name: "account pools: an agent under no account stopped at a usage limit is read as before, stuck with its last words, and no account is recorded spent",
+            cites: &["43", "146", "151"],
+            run: a_stage_under_no_account,
         },
     ]
 }
@@ -597,5 +626,274 @@ fn no_intent_named(_: &()) -> Outcome {
             "{id}'s account"
         );
     }
+    Ok(())
+}
+
+/// The code agent of the fix `name`'s start `start` stops at its
+/// account's usage limit, its record naming `until`, in words this test
+/// writes.
+fn stops_at_limit(world: &World, name: &str, start: u32, until: Option<Seconds>) -> Identity {
+    let who = World::identity("fix", name, "code", start);
+    world.agent.set_spent(
+        &who,
+        Spent::Yes {
+            until,
+            words: "a usage limit this test writes".into(),
+        },
+    );
+    world
+        .agent
+        .set_last_words(&who, "a usage limit this test writes");
+    who
+}
+
+/// The account `account` of `pool`'s spent time as the host's document
+/// records it.
+fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent> {
+    match world.store.host_document(&HostKey::Account {
+        pool: pool.into(),
+        account: account.into(),
+    })? {
+        HostDocument::Account(spent) => Some(spent),
+        HostDocument::Intent(_) => None,
+    }
+}
+
+/// A fill-first pool `work` of `work-1` and `work-2`, the host's own.
+fn fill_first(world: &World) {
+    pool(
+        world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("work-1", None), account("work-2", None)],
+    );
+    world.host.set_host_pool(Some("work"));
+}
+
+/// The fix `name` launched with an intent of its own, its code begun.
+fn begun_fix(world: &World, name: &str) -> Result<PlaceId, String> {
+    let id = fix_in(world, None, name)?;
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "{name}'s code"
+    );
+    Ok(id)
+}
+
+fn a_reset_at_fifteen(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first(&world);
+    let fifteen = world.host.now() + 2 * 3600;
+    let first = begun_fix(&world, "one")?;
+    stops_at_limit(&world, "one", 1, Some(fifteen));
+    world.engine().settle(Some(&first));
+    ensure!(
+        !world.agent.log.of("spent").is_empty(),
+        "the fake's log shows no spent reading"
+    );
+    ensure_eq!(
+        spent_until(&world, "work", "work-1").map(|spent| spent.until),
+        Some(fifteen),
+        "work-1's spent time"
+    );
+    // Another flume process, an engine of its own over the same store,
+    // starts a stage of another place on the same pool before 15:00.
+    let other = world.engine();
+    launched(&other.launch(&Launch {
+        intent: Some("two".into()),
+        ..launch("fix", "two", Some("x"))
+    }))?;
+    let second = World::id("fix", "two");
+    other.settle(Some(&second));
+    ensure_eq!(
+        account_of(&world, &second, "code"),
+        on("work", "work-2"),
+        "the other process's start before 15:00"
+    );
+    world.host.advance(2 * 3600);
+    let third = fix_in(&world, None, "three")?;
+    ensure_eq!(
+        account_of(&world, &third, "code"),
+        on("work", "work-1"),
+        "a start once 15:00 passed"
+    );
+    Ok(())
+}
+
+fn no_reset_named(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first(&world);
+    let first = begun_fix(&world, "one")?;
+    stops_at_limit(&world, "one", 1, None);
+    let read_at = world.host.now();
+    world.settle(&first);
+    ensure_eq!(
+        spent_until(&world, "work", "work-1").map(|spent| (spent.until, spent.recorded_at)),
+        Some((read_at + 3600, read_at)),
+        "work-1's spent time and when it was recorded"
+    );
+    let later = world.host.now() + 5 * 3600;
+    let second = World::id("fix", "one");
+    let moved_to = account_of(&world, &second, "code");
+    ensure_eq!(moved_to, on("work", "work-2"), "the fresh start's account");
+    spent(&world, "work", "work-2", later);
+    stops_at_limit(&world, "one", 2, Some(read_at + 1800));
+    world.settle(&second);
+    ensure_eq!(
+        spent_until(&world, "work", "work-2").map(|spent| spent.until),
+        Some(later),
+        "work-2's later spent time, already recorded"
+    );
+    Ok(())
+}
+
+fn the_stage_moves(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first(&world);
+    let id = begun_fix(&world, "one")?;
+    let spent_agent = stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.agent.set_own_work(&spent_agent, Reading::Yes);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.count("close"),
+        0,
+        "agents ended while the spent one was not quiet"
+    );
+    ensure!(
+        spent_until(&world, "work", "work-1").is_some(),
+        "work-1 is not recorded spent while its agent works on"
+    );
+    world.agent.set_own_work(&spent_agent, Reading::No);
+    let at = world.host.now();
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.of("close"),
+        vec![format!("close {spent_agent}")],
+        "the agents ended"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let start = held.stages[0].start.clone().ok_or("no start")?;
+    ensure_eq!(start.n, 2, "the code stage's start");
+    ensure_eq!(
+        start.account.map(|account| (account.pool, account.name)),
+        on("work", "work-2"),
+        "the fresh start's account"
+    );
+    let words = start.words.ok_or("the fresh start carries no words")?;
+    ensure!(
+        words.contains("usage limit") && words.contains("place"),
+        "flume's words do not say why the stage started afresh: {words}"
+    );
+    ensure_eq!(
+        held.submission.send_backs,
+        0,
+        "the kind's bound, counted by the place's send-backs"
+    );
+    let status = world.status(&id)?;
+    ensure!(
+        status.waiting_on.is_none(),
+        "the place waits on its caller: {:?}",
+        status.waiting_on
+    );
+    let stage_move = status
+        .moves
+        .iter()
+        .find(|moved| {
+            moved.moved.on
+                == MoveOn::Stage {
+                    stage: "code".into(),
+                }
+        })
+        .ok_or("status gives no move of code")?;
+    ensure_eq!(
+        (
+            stage_move.moved.from.as_str(),
+            stage_move.moved.to.as_str(),
+            stage_move.moved.why,
+            stage_move.moved.at,
+            stage_move.cache
+        ),
+        ("work-1", "work-2", MoveWhy::Spent, at, Cache::Lost),
+        "code's move"
+    );
+    ensure!(
+        world.held(&id).is_some_and(|held| held.ends.is_empty()),
+        "an end recorded for the spent start, to be delivered"
+    );
+    Ok(())
+}
+
+fn another_agent_on_the_spent_account(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first(&world);
+    let first = begun_fix(&world, "one")?;
+    let second = begun_fix(&world, "two")?;
+    ensure_eq!(
+        account_of(&world, &second, "code"),
+        on("work", "work-1"),
+        "the second agent's account"
+    );
+    stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&first);
+    world.settle(&second);
+    let working = World::identity("fix", "two", "code", 1);
+    ensure!(
+        !world
+            .terminal
+            .log
+            .of("close")
+            .contains(&format!("close {working}")),
+        "the second agent was ended for its account"
+    );
+    ensure_eq!(
+        world.stage_state(&second, "code"),
+        Some(StageState::Begun),
+        "the second agent's stage"
+    );
+    stops_at_limit(&world, "two", 1, Some(world.host.now() + 3600));
+    world.settle(&second);
+    ensure_eq!(
+        account_of(&world, &second, "code"),
+        on("work", "work-2"),
+        "the second agent's stage once its own turn failed at the limit"
+    );
+    Ok(())
+}
+
+fn a_stage_under_no_account(_: &()) -> Outcome {
+    let world = World::new();
+    let id = begun_fix(&world, "one")?;
+    let who = stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    world.host.advance(flume_core::QUIET_LIMIT);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Stuck),
+        "the stage under no account"
+    );
+    let end = world
+        .held(&id)
+        .and_then(|held| held.stages[0].end.clone())
+        .ok_or("no end")?;
+    ensure_eq!(
+        end.last_words.as_deref(),
+        Some("a usage limit this test writes"),
+        "the stuck end's last words"
+    );
+    ensure!(
+        !world
+            .terminal
+            .log
+            .of("close")
+            .contains(&format!("close {who}")),
+        "the agent under no account was ended"
+    );
+    ensure!(
+        world.store.log.of("write_host").is_empty(),
+        "an account recorded spent: {:?}",
+        world.store.log.of("write_host")
+    );
     Ok(())
 }

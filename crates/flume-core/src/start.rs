@@ -61,6 +61,25 @@ pub(crate) enum Start {
     NoPlace,
 }
 
+/// Why flume starts a stage afresh on its own, with words of its own in
+/// its prompt where it asks for `{{words}}`, counted toward no bound of
+/// the kind's and waiting on no caller (112).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StartReason {
+    /// The stage's earlier agent stopped at its account's usage limit
+    /// (146).
+    Spent,
+}
+
+impl StartReason {
+    /// flume's words for the fresh start.
+    pub(crate) fn words(self) -> String {
+        match self {
+            StartReason::Spent => "The stage's earlier agent stopped at its account's usage limit, and this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.".into(),
+        }
+    }
+}
+
 /// What readiness came to, as a prompt's `{{unready}}` gives it (12).
 fn unready(readiness: &Readiness) -> String {
     match readiness.failed() {

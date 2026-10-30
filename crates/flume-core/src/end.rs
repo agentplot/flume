@@ -8,6 +8,9 @@
 //! an agent that did not survive reads lost, and one the terminal resumed
 //! is taken only when its own record is its start's (77); one whose record
 //! cannot be read is neither taken nor lost, and is not quiet (31, 93).
+//! An agent its own record shows stopped at its account's usage limit is
+//! ended once quiet and its stage started afresh, unless it delivered
+//! (146).
 
 use crate::reading::{repeats_on, AgentReading, Facts};
 use crate::start::Starts;
@@ -44,6 +47,13 @@ impl Engine {
                 let state = delivered_state(&held, index, &facts);
                 return self.ended(id, &identity, state, facts.head, facts.report);
             }
+        }
+        if !foreign
+            && self.read_spent(id, index, &start, &reading, || {
+                !declared.conversation && self.facts(&held, &bound, Some(index)).delivered
+            })
+        {
+            return true;
         }
         if gone {
             let end = self.read_out(&held, &start, false);

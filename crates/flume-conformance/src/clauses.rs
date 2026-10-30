@@ -49,10 +49,6 @@ pub fn all() -> Vec<String> {
 /// The last scenario of section 11.
 pub const SCENARIOS: u32 = 63;
 
-/// The change that builds record 0020: streams, pools, spent accounts
-/// and an intent's affinity.
-pub const STREAMS: &str = "record 0020's change, streams and pools, once its plan is approved";
-
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
 pub const STANDING: &str = "record 0021's change, the standing prompt, once its plan is approved";
@@ -66,11 +62,6 @@ pub const PACKAGES: &str = "record 0022's change, locks and packages, once its p
 /// kinds go, one package per version and a launch naming a version, and
 /// their scenarios cite them.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
-    let streams = [146]
-        .map(|clause| clause.to_string())
-        .into_iter()
-        .chain(["S55".to_string()])
-        .map(|clause| (clause, STREAMS));
     let standing = [148, 149, 152]
         .map(|clause| clause.to_string())
         .into_iter()
@@ -81,7 +72,7 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .into_iter()
         .chain((59..=63).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, PACKAGES));
-    streams.chain(standing).chain(packages).collect()
+    standing.chain(packages).collect()
 }
 
 #[cfg(test)]
@@ -117,9 +108,9 @@ mod tests {
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0020_to_0022s() {
+    fn the_clauses_unbuilt_are_records_0021_and_0022s() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 1 + 1 + 3 + 2 + 5 + 5);
+        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "147", "151", "153", "154", "157", "S50",
