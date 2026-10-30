@@ -289,8 +289,9 @@ fn intent_words(intent: &IntentKey) -> String {
     }
 }
 
-/// The current agent's line: its identity, program, account and state
-/// (56, 145).
+/// The current agent's line: its identity, program, account and state,
+/// and its mode as written with its layer, the entry it took of a table
+/// and the value passed, where a layer gave one (56, 145, 169).
 fn agent_line(agent: &AgentStatus) -> String {
     let mut line = format!("  agent {} ({})", agent.identity, agent.program);
     if let Some(account) = &agent.account {
@@ -304,6 +305,20 @@ fn agent_line(agent: &AgentStatus) -> String {
     line.push_str(&format!(": {}", word(json!(agent.state))));
     if agent.past_limit {
         line.push_str(", past its limit");
+    }
+    if let (Some(mode), Some(given)) = (&agent.mode, agent.settings.from.get("mode")) {
+        line.push_str(&format!(
+            ", in the mode {} (from {})",
+            given.value,
+            word(json!(given.layer))
+        ));
+        if let Some(entry) = &mode.entry {
+            line.push_str(&format!(", its entry for {entry}"));
+        }
+        line.push_str(&format!(" passed as {}", mode.passed));
+        if !mode.read_back {
+            line.push_str(", not read back");
+        }
     }
     line
 }
@@ -484,11 +499,14 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use flume_core::{AccountStatus, AgentSettings, MoveStatus, RoomWanted, StreamStatus};
-    use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, MoveOn, MoveWhy, Reading, Strategy,
-        Unsettled,
+    use flume_core::{
+        AccountStatus, AgentSettings, ModeStatus, MoveStatus, RoomWanted, StreamStatus,
     };
+    use flume_seams::{
+        AccountFrom, AccountHeld, AccountMove, AgentState, Given, Layer, MoveOn, MoveWhy, Reading,
+        Strategy, Unsettled,
+    };
+    use std::collections::BTreeMap;
 
     #[test]
     fn an_agents_account() {
@@ -511,6 +529,7 @@ mod tests {
             printed: None,
             last_words: None,
             notes: vec![],
+            mode: None,
         };
         assert_eq!(
             agent_line(&agent),
@@ -523,6 +542,88 @@ mod tests {
         assert_eq!(
             agent_line(&none),
             "  agent flume:r:fix--one:code:2 (agent): working"
+        );
+    }
+
+    /// An agent at work under `mode`, as `layer` wrote it, its start's
+    /// mode as `status` gives it.
+    fn in_mode(written: &str, layer: Layer, status: ModeStatus) -> AgentStatus {
+        AgentStatus {
+            identity: "flume:r:fix--one:code:1".into(),
+            stage: "code".into(),
+            program: "agent".into(),
+            settings: AgentSettings {
+                from: BTreeMap::from([(
+                    "mode".to_string(),
+                    Given {
+                        layer,
+                        value: written.into(),
+                    },
+                )]),
+                ..AgentSettings::default()
+            },
+            account: None,
+            state: AgentState::Working,
+            started: Reading::Yes,
+            asking: Reading::No,
+            own_work: Reading::No,
+            past_limit: false,
+            screen: None,
+            printed: None,
+            last_words: None,
+            notes: vec![],
+            mode: Some(status),
+        }
+    }
+
+    #[test]
+    fn a_mode_from_the_hosts_table() {
+        let agent = in_mode(
+            "edits",
+            Layer::HostKind,
+            ModeStatus {
+                passed: "edit-files".into(),
+                entry: None,
+                read_back: true,
+            },
+        );
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working, in the mode edits (from host-kind) passed as edit-files"
+        );
+    }
+
+    #[test]
+    fn a_tables_entry() {
+        let agent = in_mode(
+            r#"{ agent = "careful", other = "edits" }"#,
+            Layer::Launch,
+            ModeStatus {
+                passed: "careful".into(),
+                entry: Some("agent".into()),
+                read_back: true,
+            },
+        );
+        assert_eq!(
+            agent_line(&agent),
+            r#"  agent flume:r:fix--one:code:1 (agent): working, in the mode { agent = "careful", other = "edits" } (from launch), its entry for agent passed as careful"#
+        );
+    }
+
+    #[test]
+    fn a_mode_not_read_back() {
+        let agent = in_mode(
+            "edits",
+            Layer::Kind,
+            ModeStatus {
+                passed: "edit-files".into(),
+                entry: None,
+                read_back: false,
+            },
+        );
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working, in the mode edits (from kind) passed as edit-files, not read back"
         );
     }
 

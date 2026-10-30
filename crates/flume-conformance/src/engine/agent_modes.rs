@@ -239,6 +239,11 @@ fn a_table_of_programs(_: &()) -> Outcome {
         given(Layer::Kind, r#"{ agent = "careful", other = "edits" }"#),
         "the mode as the table was written"
     );
+    ensure_eq!(
+        agent.mode.and_then(|mode| mode.entry),
+        Some("agent".to_string()),
+        "the entry the agent took"
+    );
     Ok(())
 }
 
@@ -399,7 +404,11 @@ fn no_mode_in_any_layer(_: &()) -> Outcome {
     );
     ensure!(held.unsettled.is_empty(), "a start read begun otherwise");
     let agent = world.status(&id)?.agent.ok_or("no agent")?;
-    ensure_eq!(agent.settings.settings.mode, None, "the agent's mode");
+    ensure_eq!(
+        (agent.settings.settings.mode, agent.mode),
+        (None, None),
+        "the agent's mode"
+    );
     ensure!(
         !agent.settings.from.contains_key("mode"),
         "status names a layer of the mode"

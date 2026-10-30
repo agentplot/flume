@@ -563,6 +563,22 @@ pub struct AgentStatus {
     /// answers, a plugin of another version than flume's among it (135).
     #[serde(default)]
     pub notes: Vec<String>,
+    /// Its mode as its start passed it, none where no layer gave one; the
+    /// mode as written and its layer are its settings' (56, 162, 169).
+    #[serde(default)]
+    pub mode: Option<ModeStatus>,
+}
+
+/// An agent's mode at its start: `passed`, the value its profile passed,
+/// as the start's record holds it; `entry`, the program whose entry of a
+/// table of programs it took, none for one of flume's four given whole;
+/// and `read_back`, whether its profile reads back the mode its program
+/// began in, so its start was compared with it (56, 161, 169).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModeStatus {
+    pub passed: String,
+    pub entry: Option<String>,
+    pub read_back: bool,
 }
 
 /// The settings an agent started with, each value as its layer wrote it,
