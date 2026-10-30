@@ -59,9 +59,9 @@ the rest of this site says.
   its usage limit is paused until the reset its words name, for every
   flume process on the host, and its stage starts afresh on another
   account with no caller's word. An intent's agents keep to one account
-  while it is usable, so they share its prompt cache. The account's
-  variables and the stream's settings become two more layers of an
-  agent's settings, eight in all.
+  while it is usable, so they share its prompt cache. An agent's
+  environment is its account's alone, and the host's settings for a
+  kind give a model and instructions.
 
 - **Prompts in layers**
   ([record 0021](https://github.com/agentplot/flume/blob/main/docs/adr/0021-an-agents-prompt-is-assembled-in-layers-from-the-most-stable-to-the-least-the-stable-ones-in-its-standing-prompt.md)).
