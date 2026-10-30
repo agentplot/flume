@@ -78,6 +78,7 @@ fn planner_run(base: Option<&str>, brief: Option<&str>) -> RoleRun {
         priority: 5,
         base: base.map(str::to_string),
         brief: brief.map(str::to_string),
+        stream: None,
     }
 }
 

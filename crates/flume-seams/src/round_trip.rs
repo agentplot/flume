@@ -566,13 +566,80 @@ fn a_role_run_as_the_configuration_names_it() {
         priority: 5,
         base: Some("next".into()),
         brief: Some("read the records".into()),
+        stream: Some("work".into()),
     };
     round_trips(run.clone());
     round_trips(RoleRun {
         base: None,
         brief: None,
+        stream: None,
         ..run
     });
+}
+
+#[test]
+fn streams_and_pools_as_the_configuration_names_them() {
+    round_trips(Stream {
+        agents: Some(5),
+        priority: 10,
+        pool: Some("work".into()),
+    });
+    round_trips(Stream::default());
+    let pool = Pool {
+        strategy: Strategy::FillFirst,
+        accounts: vec![
+            Account {
+                name: "work-1".into(),
+                program: "agent".into(),
+                env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-1".into())]),
+                agents: Some(4),
+            },
+            Account {
+                name: "work-2".into(),
+                program: "agent".into(),
+                env: BTreeMap::new(),
+                agents: None,
+            },
+        ],
+    };
+    round_trips(pool.clone());
+    round_trips(Pool {
+        strategy: Strategy::LeastBusy,
+        ..pool
+    });
+    for (strategy, spelled) in [
+        (Strategy::FillFirst, "fill-first"),
+        (Strategy::LeastBusy, "least-busy"),
+    ] {
+        assert_eq!(strategy.name(), spelled);
+        assert_eq!(
+            serde_json::to_string(&strategy).unwrap(),
+            format!("{spelled:?}")
+        );
+    }
+    for from in [
+        StreamFrom::Launch,
+        StreamFrom::Intent,
+        StreamFrom::HostRepositoryKind,
+        StreamFrom::HostRepository,
+        StreamFrom::HostKind,
+        StreamFrom::Default,
+    ] {
+        round_trips(StreamHeld {
+            name: DEFAULT_STREAM.into(),
+            from,
+        });
+    }
+    assert_eq!(
+        serde_json::to_string(&StreamFrom::HostRepositoryKind).unwrap(),
+        "\"host-repository-kind\""
+    );
+    for from in [PoolFrom::Stream, PoolFrom::Host] {
+        round_trips(PoolNamed {
+            name: "work".into(),
+            from,
+        });
+    }
 }
 
 #[test]

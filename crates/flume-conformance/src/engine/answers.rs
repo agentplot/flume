@@ -318,6 +318,7 @@ fn host_status() -> HostStatus {
                 priority: 5,
                 base: Some("next".into()),
                 brief: Some("read the records".into()),
+                stream: Some("work".into()),
             }),
             run: Some(PlaceId::new("/r/places/planner--planner")),
             pending: vec![PendingEnd {

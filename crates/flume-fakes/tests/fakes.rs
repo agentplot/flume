@@ -4,6 +4,7 @@
 
 use flume_fakes::*;
 use flume_seams::*;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 fn identity(stage: &str, start: u32) -> Identity {
@@ -598,4 +599,94 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         ToSession::Refused { .. }
     ));
     assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
+}
+
+/// The history-and-host spec's host's streams and pools: a stream's pool
+/// and the host's, each with where it came from, and the streams
+/// declared, `default` among them, as the configuration stands when
+/// asked (143, 144, C.7).
+#[test]
+fn a_streams_pool_and_the_hosts() {
+    let host = FakeHost::default();
+    assert_eq!(
+        host.streams().keys().collect::<Vec<_>>(),
+        vec!["default"],
+        "default stands with nothing declared"
+    );
+    let pool = Pool {
+        strategy: Strategy::FillFirst,
+        accounts: vec![Account {
+            name: "work-1".into(),
+            program: "agent".into(),
+            env: BTreeMap::from([("AGENT_HOME".into(), "/scratch/work-1".into())]),
+            agents: Some(4),
+        }],
+    };
+    host.set_pool("work", Some(pool.clone()));
+    host.set_stream(
+        "work",
+        Some(Stream {
+            agents: Some(5),
+            priority: 10,
+            pool: Some("work".into()),
+        }),
+    );
+    host.set_stream("personal", Some(Stream::default()));
+    host.set_host_pool(Some("personal"));
+    assert_eq!(
+        host.streams().keys().collect::<Vec<_>>(),
+        vec!["default", "personal", "work"]
+    );
+    assert_eq!(
+        host.pool_for("work"),
+        Some(PoolNamed {
+            name: "work".into(),
+            from: PoolFrom::Stream,
+        })
+    );
+    for stream in ["personal", "default"] {
+        assert_eq!(
+            host.pool_for(stream),
+            Some(PoolNamed {
+                name: "personal".into(),
+                from: PoolFrom::Host,
+            })
+        );
+    }
+    assert_eq!(host.pool("work"), Some(pool));
+    host.set_host_pool(None);
+    assert_eq!(host.pool_for("default"), None, "read as it stands now");
+}
+
+/// The stream the host names for a repository and kind, else the
+/// repository, else the kind, with where it came from (143).
+#[test]
+fn a_stream_named_for_a_place() {
+    let host = FakeHost::default();
+    host.name_stream(None, Some("chore"), Some("personal"));
+    host.name_stream(Some("/r"), None, Some("work"));
+    host.name_stream(Some("/r"), Some("fix"), Some("nightly"));
+    let named = |repository, kind| host.stream_for(repository, kind);
+    assert_eq!(
+        named("/r", "fix"),
+        Some(StreamHeld {
+            name: "nightly".into(),
+            from: StreamFrom::HostRepositoryKind,
+        })
+    );
+    assert_eq!(
+        named("/r", "chore"),
+        Some(StreamHeld {
+            name: "work".into(),
+            from: StreamFrom::HostRepository,
+        })
+    );
+    assert_eq!(
+        named("/s", "chore"),
+        Some(StreamHeld {
+            name: "personal".into(),
+            from: StreamFrom::HostKind,
+        })
+    );
+    assert_eq!(named("/s", "fix"), None);
 }
