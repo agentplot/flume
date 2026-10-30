@@ -74,27 +74,63 @@ never count as the start (35, 94, C.5; record 0018; core.29).
 
 ### Requirement: herdr reads a start held or never come up
 
-The herdr profile SHALL answer `agent_not_ready` as the start held at a
-question, answering only the folder-trust question, by `agent
-send-keys` with the keys the agent profile names and a bounded `agent
-wait --until idle`, and any other as held with the screen; and SHALL
-answer `timeout` as not come up with the screen (34, 35, 94, C.5;
-record 0018).
+The herdr profile SHALL read the folder-trust question off the pane's
+screen whatever `agent start` answered, and SHALL read
+`agent_name_not_found` from it as `timeout`. After `agent_not_ready` it
+SHALL wait within its bound until herdr reads the agent idle, a screen
+with no folder-trust question by ten seconds held with the screen; a
+`timeout` with no folder-trust question SHALL be not come up with the
+screen (34, 35, 94, C.5; record 0018).
 
 #### Scenario: The folder-trust question at the start
 
 - **WHEN** `agent start` answers `agent_not_ready` and the pane shows the folder-trust question
-- **THEN** the profile answers it, waits within its bound until herdr reads the agent idle, and the prompt is sent only after the started ack (S39)
+- **THEN** the profile moves the focus to the yes choice, confirms it, waits within its bound until herdr reads the agent idle, and the prompt is sent only after the started ack (S39)
+
+#### Scenario: The folder-trust question drawn late
+
+- **WHEN** `agent start` answers `agent_not_ready` while the pane shows only the dialog's first line, and the choices are drawn a second later
+- **THEN** the profile waits for the choices, answers yes from the screen, and the agent comes up (S39)
+
+#### Scenario: herdr reads the dialog ready
+
+- **WHEN** `agent start` answers `agent_started` while the pane still shows the shell's line, and the folder-trust question is drawn after it
+- **THEN** the profile waits for the program's screen, answers yes from it, and the start is opened, its started ack deciding it (S39)
+
+#### Scenario: The dialog drawn after the open returned
+
+- **WHEN** the folder-trust question is drawn only after open has returned, and a settle reads the start, whose agent has not said it started
+- **THEN** the settle answers it yes from the screen through the terminal's `answer_trust`, as open would have (S39)
+
+#### Scenario: A folder-trust dialog herdr does not see
+
+- **WHEN** the program shows the folder-trust question and herdr reads it neither ready nor held, so `agent start` answers `timeout`, or `agent_name_not_found` where its server dropped the pending name first
+- **THEN** the profile answers yes from the screen and the start is opened, its started ack deciding it (S39)
 
 #### Scenario: The bypass warning at the start
 
 - **WHEN** `agent start` answers `agent_not_ready` and the pane shows the warning about bypassing permissions
-- **THEN** nothing is answered, and the core reads the start never begun at once with the warning's lines (S40)
+- **THEN** nothing is answered, and the core reads the start never begun with the warning's lines (S40)
 
 #### Scenario: A program that never comes up
 
 - **WHEN** the program the stage names is not on the pane's `PATH` and `agent start` answers `timeout`
 - **THEN** the core reads the start never begun with the pane's visible lines, and sends no prompt (S45)
+
+### Requirement: herdr answers the folder-trust question from the screen
+
+Where the screen shows the folder-trust question, the herdr profile
+SHALL send the next key by `pane send-keys` while another choice holds
+the focus and the confirming key only while the yes choice holds it,
+each once the screen shows the last, until the question is gone, within
+30 seconds, and the same at a settle of a start not yet said started. After `agent_started` it SHALL read the screen until
+it shows the question or holds still a second, up to ten seconds (34,
+35, C.5; record 0018).
+
+#### Scenario: The question answered key by key
+
+- **WHEN** the pane shows the folder-trust question with "No, exit" holding the focus
+- **THEN** the profile sends the next key, reads the screen until the yes choice holds the focus, and only then sends the confirming key (S39)
 
 ### Requirement: herdr runs the program the settings name
 
@@ -223,9 +259,10 @@ under the printed command none (7).
 
 The printed-command profile SHALL answer open with the command, its
 prompt carried in it, for a person to run in the place; refuse send and
-close; tidy nothing and show nothing; read the agent stopped only once the agent's own record says its
-session ended (134); give no screen (136); and keep no watch, so flume runs attended (38,
-119, C.5).
+close; tidy nothing and show nothing; read
+the agent stopped only once the agent's own record says its session
+ended (134); give no screen (136); and keep no watch, so flume runs
+attended (32, 38, 119, C.5).
 
 #### Scenario: A tell under the printed command
 
@@ -236,6 +273,18 @@ session ended (134); give no screen (136); and keep no watch, so flume runs atte
 
 - **WHEN** the terminal seam's scenarios run against the profile
 - **THEN** each passes, its refusals among them
+
+### Requirement: The printed command's environment
+
+The printed-command profile SHALL keep the command's environment in a
+file beside its mark in the place's folder that the host's user alone
+may read and that the command names, so the command holds no value of
+it (32, C.5; record 0017).
+
+#### Scenario: The environment beside the command
+
+- **WHEN** the host's configuration gives the agent a variable and the command is printed
+- **THEN** the command names its environment file and not the variable, and the file, readable by the host's user alone, holds the variable read
 
 ### Requirement: herdr reaches a recipient by pane and socket
 
