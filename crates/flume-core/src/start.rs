@@ -273,7 +273,7 @@ impl Engine {
                 Ok(text) => text,
             };
             if let Admit::Queue(queue) = admit {
-                if queue.must_wait(id, held.priority) {
+                if queue.must_wait(id, &held.place.stream.name, held.priority) {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::WaitingForRoom;
                     stage.room = Some(RoomWait {

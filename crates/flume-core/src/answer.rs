@@ -223,13 +223,18 @@ pub struct Collected {
 
 /// The host's agents running, its bound, the room left and the stages
 /// waiting for room in the order they would start (56, 70); a host that
-/// states no bound has no room to judge and no queue.
+/// states no bound has no room to judge and no queue. Each of its
+/// streams gives the same of its own (143).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostStatus {
     pub running: u32,
     pub bound: Option<u32>,
     pub room: Option<u32>,
     pub queue: Vec<Queued>,
+    /// Each stream of the host, in the order its stages would start: the
+    /// streams the configuration declares and any a live place still runs
+    /// in (56, 143).
+    pub streams: Vec<StreamStatus>,
     /// What the terminal made and keeps for what it did not make, each
     /// named with what holds it (56, 137, 138).
     #[serde(default)]
@@ -259,6 +264,7 @@ impl Default for HostStatus {
             bound: None,
             room: None,
             queue: vec![],
+            streams: vec![],
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
@@ -316,13 +322,51 @@ pub struct PendingEnd {
 }
 
 /// A stage waiting for room on the host: it waits on the host, never on
-/// its caller (70, 130).
+/// its caller, in its stream, short of the room it names (70, 130, 143).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Queued {
     pub place: PlaceId,
     pub stage: String,
+    pub stream: String,
     pub priority: i64,
     pub since: Option<Seconds>,
+    pub wants: RoomWanted,
+}
+
+/// The room a stage waiting for room is short of (70, 143): the host's,
+/// its own full or taken by stages that rank ahead, or its stream's,
+/// whose bound its agents running have reached.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "room", rename_all = "kebab-case")]
+pub enum RoomWanted {
+    Host,
+    Stream { stream: String, bound: u32 },
+}
+
+impl RoomWanted {
+    /// The want as a person reads it.
+    pub fn words(&self) -> String {
+        match self {
+            RoomWanted::Host => "the host's room".into(),
+            RoomWanted::Stream { stream, bound } => {
+                format!("the stream {stream}'s room, at its bound of {bound}")
+            }
+        }
+    }
+}
+
+/// A stream of the host (143): its priority among streams, its agents
+/// running, the bound it states, none where the host's alone holds it,
+/// its room, none where it states no bound, and its stages waiting for
+/// room in the order they would start (56, 70).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamStatus {
+    pub name: String,
+    pub priority: i64,
+    pub running: u32,
+    pub bound: Option<u32>,
+    pub room: Option<u32>,
+    pub queue: Vec<Queued>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

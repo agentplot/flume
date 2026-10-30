@@ -1,14 +1,16 @@
 //! The host's queue (70, 75): a stage starts only under the host's bound,
-//! every caller's agents counted together, and otherwise waits for room;
-//! every settle starts what waits by priority, then the order it came to
-//! wait, ending no agent for one (31, 46); priority is the caller's (7);
-//! status gives the host's agents running, bound, room and queue (56,
+//! every caller's agents counted together, and under its stream's (143),
+//! and otherwise waits for room; every settle starts what waits by its
+//! stream's priority, then its place's, then the order it came to wait,
+//! passing over a stage whose stream is full and ending no agent for one
+//! (31, 46; core.26); priority is the caller's (7); status gives the
+//! host's agents running, bound, room and queue, and each stream's (56,
 //! 130); a host with no bound has no queue.
 
 use super::settling::{construct_begun, deliver_fix, fix_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, HostStatus};
+use flume_core::{Answer, HostStatus, RoomWanted};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -52,6 +54,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "host queue: a host with no bound starts every first stage and judges no room",
             cites: &["70", "56"],
             run: a_host_with_no_bound,
+        },
+        Scenario {
+            name: "host queue: two streams under a host of six start four work and two personal agents, and the waiting work place starts first when a work agent ends",
+            cites: &["S53", "70", "143", "46"],
+            run: s53_two_streams_under_the_hosts_bound,
+        },
+        Scenario {
+            name: "host queue: a stream at its bound holds no other stream's room, and its waiting place keeps its turn for its stream's next room",
+            cites: &["70", "143", "46", "31"],
+            run: a_full_stream_holds_no_others_room,
+        },
+        Scenario {
+            name: "host queue: a stream's priority orders what waits before a place's",
+            cites: &["70", "143", "46"],
+            run: the_streams_priority_before_the_places,
+        },
+        Scenario {
+            name: "host queue: status of a full host gives each place waiting with its stream, its priority and since when, and each stream's part",
+            cites: &["56", "70", "130", "143"],
+            run: status_of_a_full_host_with_streams,
+        },
+        Scenario {
+            name: "host queue: a place waiting on its stream's bound while the host has room waits on the host, naming the stream's bound, never on its caller and never stalled",
+            cites: &["70", "130", "143", "56"],
+            run: waiting_on_a_streams_room,
         },
     ]
 }
@@ -354,5 +381,260 @@ fn a_host_with_no_bound(_: &()) -> Outcome {
     ensure_eq!(host.bound, None, "the bound");
     ensure_eq!(host.room, None, "the room");
     ensure!(host.queue.is_empty(), "a host with no bound has a queue");
+    Ok(())
+}
+
+/// The host declares `name` with `agents` as its bound and `priority`.
+fn declare(world: &World, name: &str, agents: Option<u32>, priority: i64) {
+    world.host.set_stream(
+        name,
+        Some(Stream {
+            agents,
+            priority,
+            pool: None,
+        }),
+    );
+}
+
+/// Fixes launched as `names` in `stream` at `priority`, each settled
+/// once.
+fn fixes_in(
+    world: &World,
+    stream: &str,
+    names: &[&str],
+    priority: i64,
+) -> Result<Vec<PlaceId>, String> {
+    names
+        .iter()
+        .map(|name| {
+            launched(&world.engine.launch(&Launch {
+                priority,
+                stream: Some(stream.into()),
+                ..launch("fix", name, Some("x"))
+            }))?;
+            let id = World::id("fix", name);
+            world.settle(&id);
+            Ok(id)
+        })
+        .collect()
+}
+
+/// Ends the fix `name`'s code agent and settles the host once.
+fn end_code(world: &World, name: &str) {
+    world
+        .terminal
+        .kill(&World::identity("fix", name, "code", 1));
+    world.engine().settle(None);
+}
+
+/// The places of the host's queue, in the order they would start.
+fn queue_order(world: &World) -> Result<Vec<PlaceId>, String> {
+    Ok(host(world)?
+        .queue
+        .into_iter()
+        .map(|queued| queued.place)
+        .collect())
+}
+
+fn s53_two_streams_under_the_hosts_bound(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(6));
+    declare(&world, "work", Some(4), 10);
+    declare(&world, "personal", Some(3), 0);
+    let work = fixes_in(&world, "work", &["w1", "w2", "w3", "w4", "w5"], 0)?;
+    let personal = fixes_in(&world, "personal", &["p1", "p2", "p3"], 0)?;
+    for id in work[..4].iter().chain(&personal[..2]) {
+        ensure!(runs(&world, id, "code"), "{id}'s code does not run");
+    }
+    ensure!(waits(&world, &work[4], "code"), "w5 does not wait");
+    ensure!(waits(&world, &personal[2], "code"), "p3 does not wait");
+    let wants: Vec<(PlaceId, RoomWanted)> = host(&world)?
+        .queue
+        .into_iter()
+        .map(|queued| (queued.place, queued.wants))
+        .collect();
+    ensure_eq!(
+        wants,
+        vec![
+            (
+                work[4].clone(),
+                RoomWanted::Stream {
+                    stream: "work".into(),
+                    bound: 4
+                }
+            ),
+            (personal[2].clone(), RoomWanted::Host),
+        ],
+        "what each waiting place is short of, in the order they would start"
+    );
+    end_code(&world, "w1");
+    ensure!(
+        runs(&world, &work[4], "code"),
+        "the waiting work place did not start first"
+    );
+    ensure!(
+        waits(&world, &personal[2], "code"),
+        "the personal place does not wait"
+    );
+    ensure_eq!(host(&world)?.running, 6, "agents running");
+    Ok(())
+}
+
+fn a_full_stream_holds_no_others_room(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(2));
+    declare(&world, "work", Some(1), 10);
+    declare(&world, "personal", None, 0);
+    fixes_in(&world, "work", &["w1"], 0)?;
+    let w2 = fixes_in(&world, "work", &["w2"], 0)?.remove(0);
+    let p1 = fixes_in(&world, "personal", &["p1"], 0)?.remove(0);
+    ensure!(
+        waits(&world, &w2, "code"),
+        "w2 does not wait for its stream"
+    );
+    ensure!(
+        runs(&world, &p1, "code"),
+        "the personal place was held behind the full stream"
+    );
+    let p2 = fixes_in(&world, "personal", &["p2"], 0)?.remove(0);
+    ensure!(waits(&world, &p2, "code"), "p2 does not wait for the host");
+    end_code(&world, "p1");
+    ensure!(
+        runs(&world, &p2, "code"),
+        "the room p1 left was held for the full stream"
+    );
+    ensure!(waits(&world, &w2, "code"), "w2 does not wait");
+    ensure_eq!(
+        queue_order(&world)?,
+        vec![w2.clone()],
+        "the work place keeps its turn"
+    );
+    end_code(&world, "w1");
+    ensure!(
+        runs(&world, &w2, "code"),
+        "the work place did not start at its stream's next room"
+    );
+    ensure_eq!(
+        world.terminal.log.count("close"),
+        0,
+        "agents ended for room"
+    );
+    ensure!(runs(&world, &p2, "code"), "p2's agent was ended");
+    Ok(())
+}
+
+fn the_streams_priority_before_the_places(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(1));
+    declare(&world, "work", None, 10);
+    declare(&world, "personal", None, 0);
+    fixes_in(&world, "personal", &["p0"], 0)?;
+    let p1 = fixes_in(&world, "personal", &["p1"], 50)?.remove(0);
+    let w1 = fixes_in(&world, "work", &["w1"], 0)?.remove(0);
+    ensure_eq!(
+        queue_order(&world)?,
+        vec![w1.clone(), p1.clone()],
+        "the queue's order"
+    );
+    end_code(&world, "p0");
+    ensure!(
+        runs(&world, &w1, "code"),
+        "the work place did not start ahead of the personal place"
+    );
+    ensure!(
+        waits(&world, &p1, "code"),
+        "the personal place does not wait"
+    );
+    Ok(())
+}
+
+fn status_of_a_full_host_with_streams(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(2));
+    declare(&world, "work", None, 10);
+    fixes(&world, &["one", "two"], 0)?;
+    let since = world.host.now();
+    let waiting = fixes_in(&world, "work", &["three"], 3)?.remove(0);
+    world.host.advance(30);
+    let host = host(&world)?;
+    ensure_eq!(
+        (host.running, host.bound, host.room),
+        (2, Some(2), Some(0)),
+        "the host's agents running, bound and room"
+    );
+    ensure_eq!(host.queue.len(), 1, "places waiting");
+    let queued = &host.queue[0];
+    ensure_eq!(
+        (
+            &queued.place,
+            queued.stage.as_str(),
+            queued.stream.as_str(),
+            queued.priority,
+            queued.since,
+            &queued.wants
+        ),
+        (&waiting, "code", "work", 3, Some(since), &RoomWanted::Host),
+        "the place waiting"
+    );
+    /// A stream's name, agents running, bound, room and stages waiting.
+    type Part = (String, u32, Option<u32>, Option<u32>, usize);
+    let streams: Vec<Part> = host
+        .streams
+        .iter()
+        .map(|stream| {
+            (
+                stream.name.clone(),
+                stream.running,
+                stream.bound,
+                stream.room,
+                stream.queue.len(),
+            )
+        })
+        .collect();
+    ensure_eq!(
+        streams,
+        vec![
+            ("work".to_string(), 0, None, None, 1),
+            (DEFAULT_STREAM.to_string(), 2, None, None, 0),
+        ],
+        "each stream's part, the higher priority first"
+    );
+    ensure!(
+        world.status(&waiting)?.waiting_on.is_none(),
+        "the place waiting for room waits on its caller"
+    );
+    Ok(())
+}
+
+fn waiting_on_a_streams_room(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(4));
+    declare(&world, "work", Some(1), 0);
+    fixes_in(&world, "work", &["w1"], 0)?;
+    let w2 = fixes_in(&world, "work", &["w2"], 0)?.remove(0);
+    ensure!(waits(&world, &w2, "code"), "w2 does not wait");
+    world.host.advance(600);
+    world.engine().settle(None);
+    ensure!(
+        waits(&world, &w2, "code"),
+        "w2 started past its stream's bound"
+    );
+    let host = host(&world)?;
+    ensure_eq!(host.room, Some(3), "the host's room");
+    ensure_eq!(
+        host.queue.first().map(|queued| queued.wants.clone()),
+        Some(RoomWanted::Stream {
+            stream: "work".into(),
+            bound: 1
+        }),
+        "what the place waits on"
+    );
+    let status = world.status(&w2)?;
+    ensure!(
+        status.waiting_on.is_none(),
+        "the place waits on its caller: {:?}",
+        status.waiting_on
+    );
+    ensure!(!status.stalled, "the place waiting for room is stalled");
     Ok(())
 }

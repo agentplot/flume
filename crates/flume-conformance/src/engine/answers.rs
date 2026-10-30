@@ -307,16 +307,33 @@ fn place_status() -> PlaceStatus {
     }
 }
 
+fn queued() -> Queued {
+    Queued {
+        place: PlaceId::new("/r/places/fix--two"),
+        stage: "code".into(),
+        stream: "work".into(),
+        priority: 1,
+        since: Some(60),
+        wants: RoomWanted::Stream {
+            stream: "work".into(),
+            bound: 2,
+        },
+    }
+}
+
 fn host_status() -> HostStatus {
     HostStatus {
         running: 2,
         bound: Some(2),
         room: Some(0),
-        queue: vec![Queued {
-            place: PlaceId::new("/r/places/fix--two"),
-            stage: "code".into(),
-            priority: 1,
-            since: Some(60),
+        queue: vec![queued()],
+        streams: vec![StreamStatus {
+            name: "work".into(),
+            priority: 10,
+            running: 2,
+            bound: Some(2),
+            room: Some(0),
+            queue: vec![queued()],
         }],
         terminal_kept: vec!["the workspace r main, held by the pane w1:p3".into()],
         addresses: vec![AddressStatus {
@@ -552,8 +569,29 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.queue[].priority",
             "status.host.queue[].since",
             "status.host.queue[].stage",
+            "status.host.queue[].stream",
+            "status.host.queue[].wants",
+            "status.host.queue[].wants.bound",
+            "status.host.queue[].wants.room",
+            "status.host.queue[].wants.stream",
             "status.host.room",
             "status.host.running",
+            "status.host.streams",
+            "status.host.streams[].bound",
+            "status.host.streams[].name",
+            "status.host.streams[].priority",
+            "status.host.streams[].queue",
+            "status.host.streams[].queue[].place",
+            "status.host.streams[].queue[].priority",
+            "status.host.streams[].queue[].since",
+            "status.host.streams[].queue[].stage",
+            "status.host.streams[].queue[].stream",
+            "status.host.streams[].queue[].wants",
+            "status.host.streams[].queue[].wants.bound",
+            "status.host.streams[].queue[].wants.room",
+            "status.host.streams[].queue[].wants.stream",
+            "status.host.streams[].room",
+            "status.host.streams[].running",
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",

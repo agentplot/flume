@@ -5,7 +5,8 @@
 //! launch naming a stream the host does not declare is refused whole (4),
 //! and a place keeps its stream when the host's configuration moves its
 //! repository to another (8). A place's intent is its launch's name, else
-//! its repository and base.
+//! its repository and base. Status gives each stream's agents running,
+//! bound, room and queue.
 
 use super::settling::{construct_begun, write_change};
 use super::world::*;
@@ -43,6 +44,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "streams: a place's status gives its stream with where it came from, and its intent, the launch's name or its repository and base",
             cites: &["56", "143", "7"],
             run: status_gives_the_stream_and_the_intent,
+        },
+        Scenario {
+            name: "streams: the host's part of status gives each stream's agents running, bound, room and stages waiting, and the place's own status its stream",
+            cites: &["56", "143", "70"],
+            run: a_streams_part_of_status,
         },
     ]
 }
@@ -258,6 +264,56 @@ fn status_gives_the_stream_and_the_intent(_: &()) -> Outcome {
         three.intent.digest(),
         base_digest.as_str(),
         "a third place on the same repository and base"
+    );
+    Ok(())
+}
+
+fn a_streams_part_of_status(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_bound(Some(3));
+    world.host.set_stream(
+        "work",
+        Some(Stream {
+            agents: Some(4),
+            priority: 10,
+            pool: None,
+        }),
+    );
+    let mut places = vec![];
+    for name in ["one", "two", "three", "four"] {
+        launched(&world.engine.launch(&Launch {
+            stream: Some("work".into()),
+            ..launch("fix", name, Some("x"))
+        }))?;
+        let id = World::id("fix", name);
+        world.settle(&id);
+        places.push(id);
+    }
+    let flume_core::Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let work = host
+        .streams
+        .iter()
+        .find(|stream| stream.name == "work")
+        .ok_or("the host's streams give no work")?;
+    ensure_eq!(
+        (work.running, work.bound, work.room),
+        (3, Some(4), Some(1)),
+        "work's agents running, bound and room"
+    );
+    ensure_eq!(
+        work.queue
+            .iter()
+            .map(|queued| queued.place.clone())
+            .collect::<Vec<_>>(),
+        vec![places[3].clone()],
+        "the stage waiting in work"
+    );
+    ensure_eq!(
+        world.status(&places[3])?.stream,
+        stream("work", StreamFrom::Launch),
+        "the waiting place's own stream"
     );
     Ok(())
 }

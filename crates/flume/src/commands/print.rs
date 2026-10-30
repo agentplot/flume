@@ -3,7 +3,7 @@
 //! A word of the answer's own, a state or a layer, is printed as the JSON
 //! spells it.
 
-use flume_core::{group_name, Answer, HostStatus, PlaceStatus, StageStatus, Tidied, Woke};
+use flume_core::{group_name, Answer, HostStatus, PlaceStatus, Queued, StageStatus, Tidied, Woke};
 use flume_seams::{HoldOn, Made};
 use serde_json::{json, Value};
 
@@ -323,10 +323,23 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         _ => format!("host: {} agents running, no bound", host.running),
     }];
     for queued in &host.queue {
+        lines.push(format!("  {}", queued_line(queued)));
+    }
+    for stream in &host.streams {
+        let room = match (stream.bound, stream.room) {
+            (Some(bound), Some(room)) => format!(
+                "{} agents running of {bound}, room for {room}",
+                stream.running
+            ),
+            _ => format!("{} agents running, no bound of its own", stream.running),
+        };
         lines.push(format!(
-            "  waiting for room: {}'s {}, priority {}",
-            queued.place, queued.stage, queued.priority
+            "  stream {}, priority {}: {room}",
+            stream.name, stream.priority
         ));
+        for queued in &stream.queue {
+            lines.push(format!("    {}", queued_line(queued)));
+        }
     }
     for kept in &host.terminal_kept {
         lines.push(format!("  the terminal keeps {kept}"));
@@ -350,6 +363,19 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         }
     }
     lines
+}
+
+/// A stage waiting for room, with its stream, its priority and the room
+/// it is short of (56, 70, 143).
+fn queued_line(queued: &Queued) -> String {
+    format!(
+        "waiting for room: {}'s {} in {}, priority {}, short of {}",
+        queued.place,
+        queued.stage,
+        queued.stream,
+        queued.priority,
+        queued.wants.words()
+    )
 }
 
 fn tidy_lines(tidy: &Tidied) -> Vec<String> {
@@ -385,6 +411,7 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flume_core::{RoomWanted, StreamStatus};
 
     #[test]
     fn a_refusal_and_an_empty_host() {
@@ -427,6 +454,77 @@ mod tests {
         assert_eq!(
             stage_lines(&once),
             vec!["  stage code: begun, started 2 times".to_string()]
+        );
+    }
+
+    #[test]
+    fn the_hosts_streams() {
+        let queued = |place: &str, stream: &str, wants| Queued {
+            place: flume_seams::PlaceId::new(place),
+            stage: "code".into(),
+            stream: stream.into(),
+            priority: 0,
+            since: Some(5),
+            wants,
+        };
+        let work = queued(
+            "/r/places/fix--w5",
+            "work",
+            RoomWanted::Stream {
+                stream: "work".into(),
+                bound: 4,
+            },
+        );
+        let personal = queued("/r/places/fix--p3", "personal", RoomWanted::Host);
+        let host = HostStatus {
+            running: 6,
+            bound: Some(6),
+            room: Some(0),
+            queue: vec![work.clone(), personal.clone()],
+            streams: vec![
+                StreamStatus {
+                    name: "work".into(),
+                    priority: 10,
+                    running: 4,
+                    bound: Some(4),
+                    room: Some(0),
+                    queue: vec![work],
+                },
+                StreamStatus {
+                    name: "personal".into(),
+                    priority: 0,
+                    running: 2,
+                    bound: Some(3),
+                    room: Some(1),
+                    queue: vec![personal],
+                },
+                StreamStatus {
+                    name: "default".into(),
+                    priority: 0,
+                    running: 0,
+                    bound: None,
+                    room: None,
+                    queue: vec![],
+                },
+            ],
+            ..HostStatus::default()
+        };
+        let w5 = "waiting for room: /r/places/fix--w5's code in work, priority 0, \
+                  short of the stream work's room, at its bound of 4";
+        let p3 = "waiting for room: /r/places/fix--p3's code in personal, priority 0, \
+                  short of the host's room";
+        assert_eq!(
+            host_lines(&host),
+            vec![
+                "host: 6 agents running of 6, room for 0".to_string(),
+                format!("  {w5}"),
+                format!("  {p3}"),
+                "  stream work, priority 10: 4 agents running of 4, room for 0".to_string(),
+                format!("    {w5}"),
+                "  stream personal, priority 0: 2 agents running of 3, room for 1".to_string(),
+                format!("    {p3}"),
+                "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
+            ]
         );
     }
 
