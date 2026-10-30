@@ -52,3 +52,12 @@ brought to the rule.
   so its gate runs the herdr profile's tests, which open a pseudo-terminal
   that sluice 0.56.0's sandbox refuses (sluice #289 allows it). The item
   leaves when the strings say `<group>/<role>`.
+- **Record 0023 waits on the user's yes.** A fix of a base whose own
+  checks failed after a landing is a fix place a caller launched on
+  that base with the failure's words, its submission held where the
+  base's landings wait on a word the merge queue's policy does not ask
+  (core.36, proposed 2026-10-29; blueprints 22bb880). Nothing is built
+  from it: fix@1, the hold and the retry are record 0011's build, where
+  the sluice profile's reading of a submit that answers with a request
+  and no entry (C.6) is checked. The item leaves when the record is
+  accepted.
