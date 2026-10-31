@@ -193,3 +193,64 @@ impl Repository {
         Repository { scratch, dir }
     }
 }
+
+/// A repository a host made bare beside its worktrees by `git init
+/// --bare` rather than by a clone: `project/project.git`, whose `HEAD`
+/// names `master`, a branch never made, with a remote as `origin`,
+/// fetched with no `origin/HEAD` set, and its main worktree
+/// `project/main` on the remote's `main` (design 9).
+pub struct Container {
+    pub scratch: Scratch,
+    /// The directory holding the bare repository and its worktrees, as
+    /// flume names the repository.
+    pub dir: PathBuf,
+}
+
+impl Container {
+    pub fn of(remote: &Path, scratch: Scratch) -> Container {
+        let dir = scratch.path("project");
+        let container = Container { scratch, dir };
+        let bare = container.dir.join("project.git");
+        std::fs::create_dir_all(&bare).expect("the bare repository's directory");
+        git(
+            &bare,
+            &["init", "--quiet", "--bare", "--initial-branch=master"],
+        );
+        container.git(&["remote", "add", "origin", &remote.to_string_lossy()]);
+        container.git(&[
+            "-c",
+            "remote.origin.followRemoteHEAD=never",
+            "fetch",
+            "--quiet",
+            "origin",
+        ]);
+        container.git(&[
+            "worktree",
+            "add",
+            "--quiet",
+            &container.dir.join("main").to_string_lossy(),
+            "main",
+        ]);
+        assert_eq!(container.origin_head(), "", "origin/HEAD is set");
+        container
+    }
+
+    /// The repository's directory, as flume names a repository.
+    pub fn name(&self) -> String {
+        self.dir.to_string_lossy().into_owned()
+    }
+
+    /// Runs git in the bare repository.
+    pub fn git(&self, args: &[&str]) -> String {
+        git(&self.dir.join("project.git"), args)
+    }
+
+    /// The ref `origin/HEAD` names, empty where it is not set.
+    pub fn origin_head(&self) -> String {
+        self.git(&[
+            "for-each-ref",
+            "--format=%(symref)",
+            "refs/remotes/origin/HEAD",
+        ])
+    }
+}

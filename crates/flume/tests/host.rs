@@ -70,6 +70,42 @@ fn a_head_reads_none_for_a_branch_that_does_not_exist() {
     assert!(!GitHistory.holds_since(&repository.name(), &Revision::new("0".repeat(40)), &start));
 }
 
+/// The default branch is the remote's, `origin/HEAD` set from the
+/// remote's own `HEAD` where the repository lacks it, so a second read
+/// answers as the first; the repository's own only where it has no
+/// remote; and a bare repository's `HEAD` naming a branch never made
+/// decides nothing (20, 132, C.7).
+#[test]
+fn the_default_branch_is_the_remotes() {
+    let origin = Repository::new("default-origin");
+    let remote = origin.bare_remote();
+    let container = Container::of(&remote, Scratch::new("default"));
+    let name = container.name();
+    assert_eq!(
+        GitHistory.default_branch(&name),
+        Some("main".into()),
+        "the remote's, not the master the bare repository's HEAD names"
+    );
+    assert_eq!(
+        container.origin_head(),
+        "refs/remotes/origin/main",
+        "origin/HEAD set from the remote's own"
+    );
+    assert_eq!(GitHistory.default_branch(&name), Some("main".into()));
+    container.git(&["remote", "remove", "origin"]);
+    assert_eq!(
+        GitHistory.default_branch(&name),
+        None,
+        "a HEAD naming a branch with no commit"
+    );
+    container.git(&["symbolic-ref", "HEAD", "refs/heads/main"]);
+    assert_eq!(
+        GitHistory.default_branch(&name),
+        Some("main".into()),
+        "the repository's own where it has no remote"
+    );
+}
+
 /// The repository's common git directory, from which its agents'
 /// identities take its id: its own `.git`, or the bare repository its
 /// worktrees share, the same from the repository and from a worktree of
