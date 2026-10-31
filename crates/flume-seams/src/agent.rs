@@ -106,11 +106,12 @@ pub enum Spent {
 }
 
 /// started_without: how the agent began otherwise than its start
-/// recorded, as its own word that it started shows it: each variable the
-/// start's record names that its environment lacks, each it holds with
-/// another value, both by name alone, whether it runs another program,
-/// and the mode it began in where it is not the one its start asked,
-/// none in a word written before (135, 161, 162).
+/// recorded, as its own word that it started shows it, or, for its mode,
+/// its word at its start's first prompt: each variable the start's record
+/// names that its environment lacks, each it holds with another value,
+/// both by name alone, whether it runs another program, and the mode it
+/// began in where it is not the one its start asked, none in a word
+/// written before (135, 161, 162).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(default)]
@@ -254,8 +255,10 @@ pub trait Agent: Send + Sync {
 
     /// How the agent under `agent` began otherwise than its start
     /// recorded, as its own record in the place's own `folder` holds its
-    /// word: none where it began as recorded, has said nothing yet, or
-    /// the program checks nothing at its start (135, 161, 128).
+    /// word, its word that it started or, where its program names its mode
+    /// only with a prompt, its word at its start's first prompt: none where
+    /// it began as recorded, has said nothing yet, or the program checks
+    /// nothing at its start (135, 161, 128).
     fn started_without(&self, _folder: &str, _agent: &Identity) -> Option<Unsettled> {
         None
     }
@@ -271,9 +274,10 @@ pub trait Agent: Send + Sync {
         ))
     }
 
-    /// Whether the program's word that it started names the mode it began
-    /// in, so its start is compared with the mode it asked (161, 169); not
-    /// by default.
+    /// Whether the program's word at its start, its word that it started
+    /// or at its start's first prompt, names the mode it began in, so its
+    /// start is compared with the mode it asked (161, 169); not by
+    /// default.
     fn mode_read_back(&self) -> Offered {
         Offered::NotOffered
     }

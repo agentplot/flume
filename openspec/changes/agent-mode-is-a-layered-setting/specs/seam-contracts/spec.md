@@ -33,8 +33,9 @@ The agent seam SHALL map an agent's entry of a mode, one of flume's
 four or a value of its program's own, to the value of its program's
 that it passes, or refuse it with words naming the mode and the
 program, refusing every entry by default; SHALL say whether its
-program's word that it started reads back the mode it began in, not by
-default; and its command SHALL pass the value mapped, and none where
+program's word at its start, its word that it started or at its start's
+first prompt, reads back the mode it began in, not by default; and its
+command SHALL pass the value mapped, and none where
 the settings give no mode (88, 161, 169).
 
 #### Scenario: A profile that maps no mode

@@ -88,6 +88,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s67_a_mode_the_accounts_configuration_disables,
         },
         Scenario {
+            name: "start integrity: an agent whose program names its mode only at its start's first prompt, its word that it started taken, names another mode at that prompt: the prompt is sent once and never again, the start is read begun without its settings while started, its agent ended once quiet and code started afresh counting no bound, and the fresh start begun so again is never begun, its end and status naming the mode asked and the mode begun",
+            cites: &["S67", "35", "37", "161", "162", "31", "112", "56"],
+            run: another_mode_at_the_first_prompt,
+        },
+        Scenario {
             name: "start integrity: where the agent's profile reads no mode back, a start given edits records the value passed, its word that it started is taken with no mode in it, and status gives the mode as not read back",
             cites: &["161", "169"],
             run: the_fake_reading_no_mode_back,
@@ -729,6 +734,105 @@ fn s67_a_mode_the_accounts_configuration_disables(_: &()) -> Outcome {
     ensure!(
         world.terminal.sent_to(&first).is_empty() && world.terminal.sent_to(&second).is_empty(),
         "a prompt sent to an agent begun in another mode"
+    );
+    Ok(())
+}
+
+fn another_mode_at_the_first_prompt(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    the_fakes_map(&world);
+    world.agent.read_mode_at_prompt();
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(in_mode(Mode::Full)));
+    let first = World::identity("fix", "one", "code", 1);
+    let second = World::identity("fix", "one", "code", 2);
+    world.agent.set_began_in(&first, "ask-each");
+    world.agent.set_began_in(&second, "ask-each");
+    world.agent.set_own_work(&first, Reading::Yes);
+    let id = fix(&world, "one")?;
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Started),
+        "code, its word that it started taken and its first prompt held back"
+    );
+    ensure_eq!(
+        world.terminal.sent_to(&first).len(),
+        1,
+        "the sendings of the first start's prompt"
+    );
+    let status = world.status(&id)?;
+    let agent = status.agent.ok_or("status gives no agent")?;
+    ensure_eq!(agent.started, Reading::Yes, "started");
+    ensure_eq!(
+        status
+            .unsettled
+            .iter()
+            .map(|read| (read.stage.as_str(), read.start, read.unsettled.clone()))
+            .collect::<Vec<_>>(),
+        vec![("code", 1, all_begun_in_ask_each())],
+        "the start read begun without its settings while started"
+    );
+    ensure_eq!(
+        world.terminal.log.count("close"),
+        0,
+        "an agent at work ended"
+    );
+    world.agent.set_own_work(&first, Reading::No);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.of("close").first().cloned(),
+        Some(format!("close {first}")),
+        "the first agent ended once quiet"
+    );
+    ensure_eq!(
+        world.terminal.sent_to(&first).len(),
+        1,
+        "the first start's prompt sent again"
+    );
+    let start = code_start(&world, &id)?;
+    ensure_eq!(start.n, 2, "code's fresh start");
+    let words = start.words.ok_or("the fresh start carries no words")?;
+    ensure!(
+        words.contains("without the settings"),
+        "flume's words do not say why the stage started afresh: {words}"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "code, its agent naming another mode at its first prompt twice"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    ensure_eq!(held.stages[0].starts, 2, "code's starts, no third begun");
+    ensure_eq!(
+        held.submission.send_backs,
+        0,
+        "the kind's bound, counted by the place's send-backs"
+    );
+    let end = held
+        .ends
+        .iter()
+        .find_map(|end| match &end.of {
+            EndOf::Stage {
+                start: 2,
+                state: StageState::NeverBegun,
+                end,
+                ..
+            } => Some(end.clone()),
+            _ => None,
+        })
+        .ok_or("no never-begun end of code's fresh start")?;
+    ensure_eq!(
+        end.unsettled.map(|unsettled| *unsettled),
+        Some(all_begun_in_ask_each()),
+        "the end names both modes"
+    );
+    ensure!(
+        world.terminal.sent_to(&second).len() <= 1,
+        "the fresh start's prompt sent again: {:?}",
+        world.terminal.sent_to(&second)
     );
     Ok(())
 }

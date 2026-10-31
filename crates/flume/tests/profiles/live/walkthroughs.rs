@@ -168,10 +168,12 @@ fn s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own() {
     // `ask`, which the start passes as `--permission-mode manual` over the
     // repository's own `defaultMode` of `acceptEdits`. The session begins
     // in `default`, the pinned release's word for `manual`, only where the
-    // flag reached it, and the SessionStart hook takes the started ack
-    // only once the `permission_mode` it reads back is the mode recorded:
-    // code starts once, nothing unsettled. Every tool the fix uses is
-    // allowed, so the agent asks nothing in `ask`, and the place lands.
+    // flag reached it. The started ack is taken on the program and the
+    // variables, and the UserPromptSubmit hook takes the start's first
+    // prompt only once the `permission_mode` it reads back is the mode
+    // recorded: code begins at its first start, nothing unsettled. Every
+    // tool the fix uses is allowed, so the agent asks nothing in `ask`,
+    // and the place lands.
     let live = Live::with_fix_agents("live-mode", "mode = \"ask\"\n");
     let launched = live.walk.flume(&[
         "launch",
@@ -194,11 +196,12 @@ fn s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own() {
     // As in the fix's walkthrough, the place may be tidied between two
     // reads. A start begun in another mode would be ended and code started
     // afresh in the same mode, never begun, which `until` refuses at once,
-    // so a landing too says the first start's ack was taken.
+    // so a landing too says the first start's prompt was taken.
     let begun = live.until(&place, "its code stage begun or tidied", 5, |status| {
-        status.is_null() || status["agent"]["started"] == "yes"
+        status.is_null() || stage(status, "code")["state"] == "begun"
     });
     if !begun.is_null() {
+        assert_eq!(begun["agent"]["started"], "yes", "{begun}");
         assert_eq!(begun["agent"]["mode"], mode, "{begun}");
         assert_eq!(stage(&begun, "code")["starts"], 1, "{begun}");
         assert!(

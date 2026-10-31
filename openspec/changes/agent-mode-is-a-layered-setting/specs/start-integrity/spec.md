@@ -28,13 +28,16 @@ not be in it (161, 162; core.10, core.30).
 
 ### Requirement: The started ack is taken only where the record matches
 
-The agent's word that it started SHALL be taken only where its program,
-its mode where the record names one and its profile reads it back, and
-every variable the record names match the start's record; an agent
-whose word shows otherwise SHALL not be the stage's, and its start SHALL
-be read as started without its settings, naming each variable that
-differs by its name, whether the program did, and, where the mode did,
-the mode asked and the mode it began in (35, 135, 161, 162).
+The agent's word that it started SHALL be taken only where its program
+and every variable the record names match the start's record, and its
+mode does where the record names one and its profile reads it back, in
+that word or, where its program names its mode only at its start's
+first prompt, in its word at that prompt, which is then not taken as
+received; an agent whose word shows otherwise SHALL not be the stage's,
+and its start SHALL be read as started without its settings, while
+starting or started, naming each variable that differs by its name,
+whether the program did, and, where the mode did, the mode asked and
+the mode it began in (35, 135, 161, 162).
 
 #### Scenario: A variable missing
 
@@ -50,6 +53,11 @@ the mode asked and the mode it began in (35, 135, 161, 162).
 
 - **WHEN** a start's record names the mode `all`, and its agent says it started with every variable as recorded but in the mode `ask-each`
 - **THEN** no started ack is recorded, and the start reads started without its settings, naming the mode asked `all` and the mode begun `ask-each` (135, 161, 162)
+
+#### Scenario: Another mode at the first prompt
+
+- **WHEN** a start's record names the mode `all`, its agent's word that it started is taken, and its word at its start's first prompt names `ask-each`
+- **THEN** the prompt is sent once and not received, the start reads started without its settings, naming the mode asked `all` and the mode begun `ask-each`, and no prompt is sent to it again before flume ends it (37, 161, 162)
 
 ### Requirement: A stage whose agent began without its settings starts afresh
 
@@ -79,7 +87,7 @@ differed by the mode asked and the mode begun (31, 35, 112, 161, 162).
 #### Scenario: No prompt to the agent ended
 
 - **WHEN** a start reads started without its settings
-- **THEN** no prompt is sent to its agent before flume ends it (37, 161)
+- **THEN** no prompt is sent to its agent from then until flume ends it, and one its program held back at its first prompt is not sent again (37, 161)
 
 #### Scenario: A mode the account's configuration disables
 

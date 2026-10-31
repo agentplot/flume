@@ -3,12 +3,14 @@
 //! input Claude Code 2.1.296 hands it on standard input, in an agent flume
 //! started, whose environment names its start (`FLUME_AGENT`), the start's
 //! secret, its place and its stage. SessionStart compares the agent's
-//! program and environment with its start's record before it acks, and,
-//! at the start's first word, the mode its session began in (161, 162).
-//! Outside such an agent every hook does nothing. A hook never fails and never holds up a start or a turn: what
+//! program and environment with its start's record before it acks, and
+//! UserPromptSubmit, at the start's first prompt, the mode its session
+//! runs in, which 2.1.296 gives no SessionStart input, blocking the prompt
+//! where it is another (161, 162). Outside such an agent every hook does
+//! nothing. A hook never fails and never holds up a start or a turn: what
 //! it cannot do it leaves undone, and it always exits 0; it answers only
-//! through the JSON Claude Code reads, a refused command's reason or a
-//! stop's.
+//! through the JSON Claude Code reads, a refused command's reason, a
+//! blocked prompt's or a stop's.
 
 use super::record::{self, Asking, Failure, Record, Started};
 use super::{as_received, collapsed, digest, guard, mode, wrapper, AGENT, PLACE, SECRET, STAGE};
@@ -92,18 +94,13 @@ impl Start {
 /// whether the program the record names, found on `path` as the command
 /// finds it and run in a nix wrapper's place, is another than `ran`, the
 /// program this process's parent runs. The program is compared only
-/// where both are read. Where `began` is given, the mode the session
-/// began in as the start's record names it, none where its word named
-/// none, it is compared with the record's mode, and one that differs is
-/// named with the mode asked and the mode begun (161, 162; core.10,
-/// core.30).
+/// where both are read (161; core.10, core.30).
 pub fn compare(
     recorded: &StartRecord,
     secret: &Secret,
     variable: impl Fn(&str) -> Option<String>,
     ran: Option<&Path>,
     path: &str,
-    began: Option<Option<&str>>,
 ) -> Unsettled {
     let mut unsettled = Unsettled::default();
     for (name, digest) in &recorded.env {
@@ -121,34 +118,35 @@ pub fn compare(
     if let (Some(named), Some(ran)) = (named, ran) {
         unsettled.program = canonical(&named) != canonical(ran);
     }
-    if let (Some(asked), Some(began)) = (&recorded.mode, began) {
-        if began != Some(asked.as_str()) {
-            unsettled.mode = Some(ModeBegan {
-                asked: asked.clone(),
-                began: began.map(str::to_string),
-            });
-        }
-    }
     unsettled
+}
+
+/// The mode asked and the mode begun, where the start's record names a
+/// mode and `began`, the mode the session runs in as the program names it,
+/// read through [`mode::began`], is another or none; none where they
+/// match or the record names no mode (161, 162; core.10).
+pub fn compare_mode(recorded: &StartRecord, began: Option<&str>) -> Option<ModeBegan> {
+    let asked = recorded.mode.as_ref()?;
+    let began = began.map(mode::began);
+    (began != Some(asked.as_str())).then(|| ModeBegan {
+        asked: asked.clone(),
+        began: began.map(str::to_string),
+    })
 }
 
 /// The started ack: the start's session, its transcript, how it began and
 /// the plugin's version, taken only with the start's secret and only where
 /// this process's parent runs the program the start's record names and
-/// every variable the record names matches it, and, where the record
-/// names a mode and the start holds no started ack yet, `began`, the mode
-/// the session began in as the program names it, read through
-/// [`mode::began`], is the record's; it clears the asking mark. A start
-/// already acked compares no mode, since a started session's mode is its
-/// own. Where anything differs it is not taken: the agent's record says
-/// what differed, a variable by name alone and a mode by the mode asked
-/// and the mode begun, and a settle of the place is started detached,
-/// which ends the agent once quiet and starts its stage afresh (35, 90,
-/// 121, 135, 161, 162).
+/// every variable the record names matches it; it clears the asking mark.
+/// The mode is compared at the start's first prompt ([`ack_received`]),
+/// since 2.1.296 gives a SessionStart input none. Where anything differs
+/// it is not taken: the agent's record says what differed, a variable by
+/// name alone, and a settle of the place is started detached, which ends
+/// the agent once quiet and starts its stage afresh (35, 90, 121, 135,
+/// 161).
 pub fn ack_started(
     start: &Start,
     started: &Started,
-    began: Option<&str>,
     build: &dyn Fn() -> Result<Engine, String>,
     binary: &Path,
 ) -> Result<String, String> {
@@ -159,29 +157,21 @@ pub fn ack_started(
     };
     let (folder, recorded) = build()?.start_record(agent, secret)?;
     let record = Record::named(&folder, agent);
-    let first = recorded.mode.is_some() && record.started().is_none();
     let unsettled = compare(
         &recorded,
         &Secret(secret.clone()),
         |name| std::env::var_os(name).map(|value| value.to_string_lossy().into_owned()),
         parent_executable().as_deref(),
         &std::env::var("PATH").unwrap_or_default(),
-        first.then(|| began.map(mode::began)),
     );
     if unsettled != Unsettled::default() {
-        record
-            .set_unsettled(&record::Unsettled {
-                unsettled: unsettled.clone(),
-                session_id: started.session_id.clone(),
-                transcript_path: started.transcript_path.clone(),
-            })
-            .map_err(|error| format!("{}: {error}", record.dir().display()))?;
-        if let Some(place) = &start.place {
-            settle_detached(binary, place, false);
-        }
-        return Err(format!(
-            "{agent} began {}, not as its start recorded, so it is not its stage's agent",
-            unsettled.words()
+        return Err(began_otherwise(
+            start,
+            &record,
+            unsettled,
+            &started.session_id,
+            &started.transcript_path,
+            binary,
         ));
     }
     record
@@ -191,23 +181,106 @@ pub fn ack_started(
     Ok(format!("{agent} started in session {}", started.session_id))
 }
 
+/// Why a received ack was not taken.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Unacked {
+    /// The start's first prompt came in another mode than its start
+    /// asked: the agent is not its stage's, and the prompt is held back
+    /// with these words.
+    Mode(String),
+    /// The ack could not be taken: no start, no secret, or no record.
+    Failed(String),
+}
+
+impl Unacked {
+    pub fn words(self) -> String {
+        match self {
+            Unacked::Mode(words) | Unacked::Failed(words) => words,
+        }
+    }
+}
+
 /// The received ack: the submitted prompt's digest, its paste tags taken
 /// off ([`as_received`]), taken only with the start's secret; it clears
-/// the asking mark (89, 90).
+/// the asking mark (89, 90). At the start's first prompt, where its record
+/// names a mode and nothing yet was received or read begun otherwise,
+/// `began`, the mode the session runs in as the program names it, is
+/// compared first ([`compare_mode`]): where it is another or none, the ack
+/// is not taken, the agent's record names the mode asked and the mode
+/// begun with `session` and `transcript`, the started ack's where it
+/// stands, and a settle of the place is started detached, which ends the
+/// agent once quiet and starts its stage afresh (161, 162). A later
+/// prompt compares no mode, since a started session's mode is its own.
 pub fn ack_received(
     start: &Start,
     digest: &str,
+    began: Option<&str>,
+    session: &str,
+    transcript: &str,
     build: &dyn Fn() -> Result<Engine, String>,
-) -> Result<String, String> {
-    let record = start.record(build)?;
+    binary: &Path,
+) -> Result<String, Unacked> {
+    let (Some(agent), Some(secret)) = (&start.agent, &start.secret) else {
+        return Err(Unacked::Failed(format!(
+            "this agent was not started by flume: {AGENT} or {SECRET} is not set"
+        )));
+    };
+    let (folder, recorded) = build()
+        .and_then(|core| core.start_record(agent, secret))
+        .map_err(Unacked::Failed)?;
+    let record = Record::named(&folder, agent);
+    let first = !record.received_any() && record.unsettled().is_none();
+    if let Some(mode) = first.then(|| compare_mode(&recorded, began)).flatten() {
+        let started = record.started();
+        let (session, transcript) = started.as_ref().map_or((session, transcript), |started| {
+            (
+                started.session_id.as_str(),
+                started.transcript_path.as_str(),
+            )
+        });
+        let unsettled = Unsettled {
+            mode: Some(mode),
+            ..Unsettled::default()
+        };
+        return Err(Unacked::Mode(began_otherwise(
+            start, &record, unsettled, session, transcript, binary,
+        )));
+    }
     record
         .ack_received(digest)
         .and_then(|()| record.clear_asking())
-        .map_err(|error| format!("{}: {error}", record.dir().display()))?;
-    Ok(format!(
-        "{} received the prompt {digest}",
-        start.agent.as_deref().unwrap_or_default()
-    ))
+        .map_err(|error| Unacked::Failed(format!("{}: {error}", record.dir().display())))?;
+    Ok(format!("{agent} received the prompt {digest}"))
+}
+
+/// The agent's record told that it began as `unsettled` says, in
+/// `session` with `transcript`, and a settle of the place started
+/// detached; the words saying so, or why the record could not be written
+/// (161).
+fn began_otherwise(
+    start: &Start,
+    record: &Record,
+    unsettled: Unsettled,
+    session: &str,
+    transcript: &str,
+    binary: &Path,
+) -> String {
+    let agent = start.agent.as_deref().unwrap_or_default();
+    let written = record.set_unsettled(&record::Unsettled {
+        unsettled: unsettled.clone(),
+        session_id: session.to_string(),
+        transcript_path: transcript.to_string(),
+    });
+    if let Err(error) = written {
+        return format!("{}: {error}", record.dir().display());
+    }
+    if let Some(place) = &start.place {
+        settle_detached(binary, place, false);
+    }
+    format!(
+        "{agent} began {}, not as its start recorded, so it is not its stage's agent",
+        unsettled.words()
+    )
 }
 
 /// The words a refused command is answered with (116).
@@ -243,13 +316,27 @@ pub fn hook(
                 source: text("source"),
                 plugin_version: start.plugin_version(),
             };
-            let began = input[mode::FIELD].as_str();
-            let _ = ack_started(start, &started, began, build, binary);
+            let _ = ack_started(start, &started, build, binary);
             String::new()
         }
         "user-prompt-submit" if !subagent => {
-            let _ = ack_received(start, &digest(&as_received(&text("prompt"))), build);
-            String::new()
+            let acked = ack_received(
+                start,
+                &digest(&as_received(&text("prompt"))),
+                input[mode::FIELD].as_str(),
+                &text("session_id"),
+                &text("transcript_path"),
+                build,
+                binary,
+            );
+            match acked {
+                // The prompt is held back, so the agent takes no turn in
+                // a mode its start did not ask (161).
+                Err(Unacked::Mode(words)) => {
+                    json!({ "decision": "block", "reason": words }).to_string()
+                }
+                _ => String::new(),
+            }
         }
         "pre-tool-use" => match input["tool_name"].as_str() {
             Some("Bash") => {

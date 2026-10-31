@@ -13,8 +13,9 @@ use std::sync::{Arc, Mutex};
 /// start where it is set to have begun without its settings; every other answer is
 /// set, unknowns among them. A record kept in a place's folder is read
 /// there alone: a reading handed another folder is unknown (128). It maps
-/// no mode until its map is scripted, and reads none back until set to;
-/// its command passes the value mapped as `--mode <value>` (169).
+/// no mode until its map is scripted, and reads none back until set to,
+/// in its word that it started or at its start's first prompt; its
+/// command passes the value mapped as `--mode <value>` (169).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     state: Mutex<AgentModel>,
@@ -33,6 +34,9 @@ struct AgentModel {
     /// The own values the program names, each passed as written (169).
     own_modes: Vec<String>,
     mode_read_back: bool,
+    /// The mode is named at the start's first prompt, never in the word
+    /// that it started (161).
+    mode_at_prompt: bool,
 }
 
 #[derive(Clone)]
@@ -191,6 +195,16 @@ impl FakeAgent {
         lock(&self.state).mode_read_back = true;
     }
 
+    /// The program names the mode it began in only at its start's first
+    /// prompt: its word that it started names none, and where it began in
+    /// another, its word names the mode once a prompt reached it, which it
+    /// does not receive (161, 169).
+    pub fn read_mode_at_prompt(&self) {
+        let mut state = lock(&self.state);
+        state.mode_read_back = true;
+        state.mode_at_prompt = true;
+    }
+
     /// The program keeps `names` from every process it starts (161).
     pub fn withhold(&self, names: &[&str]) {
         lock(&self.state).withheld = names.iter().map(|name| name.to_string()).collect();
@@ -205,18 +219,45 @@ impl FakeAgent {
     }
 
     /// How the agent began otherwise than its start, as scripted: the
-    /// variables set, and its mode where it began in another (161, 162).
+    /// variables set, and its mode where it began in another, once a
+    /// prompt reached it where it names its mode only then (161, 162).
     fn unsettled(&self, agent: &Identity, record: &Record) -> Option<Unsettled> {
-        match (
-            record.started_without.clone(),
-            self.began_otherwise(agent, record),
-        ) {
+        let at_prompt = lock(&self.state).mode_at_prompt;
+        let mode = self
+            .began_otherwise(agent, record)
+            .filter(|_| !at_prompt || self.prompted(agent));
+        match (record.started_without.clone(), mode) {
             (scripted, None) => scripted,
             (scripted, Some(mode)) => Some(Unsettled {
                 mode: Some(mode),
                 ..scripted.unwrap_or_default()
             }),
         }
+    }
+
+    /// Whether its word that it started shows it began otherwise: the
+    /// variables set, or its mode where that word names it (161).
+    fn unsettled_at_start(&self, agent: &Identity, record: &Record) -> bool {
+        let at_prompt = lock(&self.state).mode_at_prompt;
+        record.started_without.is_some()
+            || (!at_prompt && self.began_otherwise(agent, record).is_some())
+    }
+
+    /// Whether its start's first prompt was held back, its program naming
+    /// another mode than its command passed only then (161).
+    fn held_back(&self, agent: &Identity, record: &Record) -> bool {
+        let at_prompt = lock(&self.state).mode_at_prompt;
+        at_prompt && self.began_otherwise(agent, record).is_some()
+    }
+
+    /// Whether a prompt reached the agent: sent by the terminal, or
+    /// carried by the command it was opened with.
+    fn prompted(&self, agent: &Identity) -> bool {
+        !self.terminal.sent_to(agent).is_empty()
+            || self
+                .terminal
+                .opened(agent)
+                .is_some_and(|(command, carried)| carried && !command.prompt_args.is_empty())
     }
 
     /// The mode the agent began in and the one its command passed, where
@@ -298,7 +339,7 @@ impl Agent for FakeAgent {
         let Some(model) = self.read_in("started", folder, agent) else {
             return Reading::Unknown;
         };
-        if model.started.is_none() && self.unsettled(agent, &model).is_some() {
+        if model.started.is_none() && self.unsettled_at_start(agent, &model) {
             return Reading::No;
         }
         model
@@ -324,6 +365,9 @@ impl Agent for FakeAgent {
             .record
             .clone()
             .unwrap_or_else(|| format!("record:{agent}"));
+        if self.held_back(agent, &model) {
+            return Received::NotReceived { record };
+        }
         let mut sendings = self
             .terminal
             .sent_to(agent)

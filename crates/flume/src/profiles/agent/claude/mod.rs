@@ -481,13 +481,16 @@ impl Agent for Claude {
         mode::map(entry).map(str::to_string)
     }
 
-    /// Every hook input names the mode the session began in (161).
+    /// The start's first prompt's UserPromptSubmit input names the mode
+    /// the session runs in (161).
     fn mode_read_back(&self) -> Offered {
         Offered::Offered
     }
 
-    /// The SessionStart hook's word that the agent began otherwise than
-    /// its start recorded, written in place of the started ack (161).
+    /// The hooks' word that the agent began otherwise than its start
+    /// recorded: SessionStart's, written in place of the started ack, or
+    /// UserPromptSubmit's at the start's first prompt, written in place of
+    /// its received ack (161).
     fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
         let record = Record::at(folder, agent);
         if !record.readable() {

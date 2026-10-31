@@ -58,13 +58,13 @@ them (8, 21, 32, 162).
 
 Where no layer gives a mode, flume SHALL give the agent none: its
 profile is passed no mode, the start's record SHALL name none, and its
-word that it started SHALL be compared with no mode, so the account's
-own configuration decides (32, 161, 162).
+word at its start SHALL be compared with no mode, so the account's own
+configuration decides (32, 161, 162).
 
 #### Scenario: A host and a repository that say nothing
 
 - **WHEN** a fix is launched on a host whose configuration, repository, kind and launch give no mode
-- **THEN** its agent's command carries no mode, its start's record names none, its started ack is taken whatever mode it reports, and status gives no mode with the agent (S66, 161, 162)
+- **THEN** its agent's command carries no mode, its start's record names none, its started ack and its first prompt are taken whatever mode it reports, and status gives no mode with the agent (S66, 161, 162)
 
 ### Requirement: A profile maps a mode exactly or refuses it
 

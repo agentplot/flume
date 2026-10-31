@@ -55,8 +55,9 @@ the values it names; and it SHALL read the mode back (161, 169, C.4).
 A `check-tools` test SHALL read the pinned Claude Code and require the
 source of its modes to stand byte for byte as the profile's map rests
 on it: the release's own modes, its alias reading `manual` as
-`default`, the `--permission-mode` option and every hook input's
-`permission_mode` (core.22, C.4).
+`default`, the `--permission-mode` option, the hook input's builder
+naming the mode, UserPromptSubmit's input built with the session's
+mode, and a hook's block holding back the prompt (core.22, C.4).
 
 #### Scenario: The pinned release's modes read
 

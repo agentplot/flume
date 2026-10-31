@@ -51,6 +51,15 @@ brought to the rule.
   accepted, the mode is built first, before the crew refactor, and the
   plan stage and points after it. The item leaves when both are
   accepted or rejected.
+- **The statement reads Claude Code's mode at SessionStart.** C.4's
+  started and received rows and 161's word that it started, at
+  agentplot/blueprints 5caff76, have the SessionStart hook compare the
+  `permission_mode` "every hook's input carries in 2.1.296". That
+  release gives a SessionStart input none, so the Claude Code profile
+  compares the mode at the start's first prompt, blocking it where it
+  differs, as the user ruled on 2026-10-31 (design 7 of the change
+  agent-mode-is-a-layered-setting; core.10). The item leaves when the
+  statement says so (core.19).
 - **Record 0026 waits on the user's yes.** Every program herdr starts
   runs under an agent profile, its own or the common one, each part of
   the agent seam built or plainly degraded (record 0026; core.1's

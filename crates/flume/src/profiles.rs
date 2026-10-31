@@ -398,14 +398,12 @@ pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>
 
 /// The started ack of the agent this process's environment names: its
 /// session, transcript, source and plugin version, taken only where the
-/// start's record matches it, the mode the session began in, as its
-/// program names it, among it (135, 161, 162).
+/// start's record matches it (135, 161).
 pub fn ack_started(
     session: &str,
     transcript: &str,
     source: &str,
     plugin_version: &str,
-    mode: Option<&str>,
     build: &dyn Fn() -> Result<Engine, String>,
 ) -> Result<String, String> {
     let binary = std::env::current_exe()
@@ -419,17 +417,31 @@ pub fn ack_started(
             source: source.into(),
             plugin_version: plugin_version.into(),
         },
-        mode,
         build,
         &binary,
     )
 }
 
 /// The received ack of the agent this process's environment names: the
-/// submitted prompt's digest (89).
+/// submitted prompt's digest, not taken at the start's first prompt where
+/// the mode the session runs in, as its program names it, is not the one
+/// its start recorded (89, 161, 162).
 pub fn ack_received(
     digest: &str,
+    mode: Option<&str>,
     build: &dyn Fn() -> Result<Engine, String>,
 ) -> Result<String, String> {
-    agent::claude::hook::ack_received(&agent::claude::hook::Start::of_process(), digest, build)
+    let binary = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .unwrap_or_else(|_| "flume".into());
+    agent::claude::hook::ack_received(
+        &agent::claude::hook::Start::of_process(),
+        digest,
+        mode,
+        "",
+        "",
+        build,
+        &binary,
+    )
+    .map_err(agent::claude::hook::Unacked::words)
 }

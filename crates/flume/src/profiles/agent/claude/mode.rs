@@ -5,8 +5,9 @@
 //! programs, is passed as written where it is one of that release's
 //! choices and refused otherwise. 2.1.296 reads `manual` as its own
 //! `default`, the alias its settings schema names, and reports the mode a
-//! session began in as every hook input's `permission_mode`, so the mode
-//! read back is `default` read as `manual` and every other choice as
+//! session runs in as the `permission_mode` of a UserPromptSubmit input,
+//! never of a SessionStart one, so the mode is read back at the start's
+//! first prompt, `default` read as `manual` and every other choice as
 //! itself. Every fragment of the release this map rests on is in
 //! [`fragments`], which a test of the check-tools layer finds byte for
 //! byte in the release the tree pins.
@@ -16,7 +17,8 @@ use flume_seams::{Mode, ModeEntry};
 /// The option that passes the mode.
 pub const FLAG: &str = "--permission-mode";
 
-/// Every hook input's field naming the mode the session runs in.
+/// The field of a UserPromptSubmit input naming the mode the session
+/// runs in, which a SessionStart input does not carry.
 pub const FIELD: &str = "permission_mode";
 
 /// The value 2.1.296 reads as its own [`DEFAULT`].
@@ -81,8 +83,10 @@ pub fn began(reported: &str) -> &str {
 
 /// The source fragments of 2.1.296 the map rests on, each named and as
 /// the release's program holds it: its list of its own choices, the alias
-/// it reads `manual` by, the option that passes the mode, and every hook
-/// input's field naming it.
+/// it reads `manual` by, the option that passes the mode, the hook input's
+/// builder naming the mode by its third argument, UserPromptSubmit's
+/// input built with the session's mode, and a hook's block holding back
+/// the prompt it was given.
 pub fn fragments() -> Vec<(&'static str, String)> {
     let choices: Vec<String> = OWN
         .map(|value| format!("\"{}\"", if value == ALIAS { DEFAULT } else { value }))
@@ -100,7 +104,26 @@ pub fn fragments() -> Vec<(&'static str, String)> {
             "the option that passes the mode",
             format!("\"{FLAG} <mode>\",\"Permission mode to use for the session\""),
         ),
-        ("every hook input's mode", format!("{FIELD}:o().optional()")),
+        (
+            "the hook input's builder, the mode its third argument",
+            format!("cwd:n,{FIELD}:r,"),
+        ),
+        (
+            "UserPromptSubmit's input built with the mode",
+            "{...$d(r.session,se(),n),hook_event_name:\"UserPromptSubmit\",prompt:e".into(),
+        ),
+        (
+            "the session's mode handed to UserPromptSubmit",
+            "qtt(e,de(o).mode,o,".into(),
+        ),
+        (
+            "a block read as a blocking error",
+            "case\"block\":V.permissionBehavior=\"deny\",V.blockingError={blockingError:e.reason||\"Blocked by hook\"".into(),
+        ),
+        (
+            "a prompt a hook blocked returned unsent",
+            "if(s.blockingError){let a=M(p,o.abortController.signal);return{blocked:".into(),
+        ),
     ]
 }
 
@@ -117,7 +140,11 @@ mod tests {
                 r#"["acceptEdits","auto","bypassPermissions","default","dontAsk","plan"]"#,
                 r#"e==="manual"?"default":e"#,
                 r#""--permission-mode <mode>","Permission mode to use for the session""#,
-                "permission_mode:o().optional()",
+                "cwd:n,permission_mode:r,",
+                r#"{...$d(r.session,se(),n),hook_event_name:"UserPromptSubmit",prompt:e"#,
+                "qtt(e,de(o).mode,o,",
+                r#"case"block":V.permissionBehavior="deny",V.blockingError={blockingError:e.reason||"Blocked by hook""#,
+                "if(s.blockingError){let a=M(p,o.abortController.signal);return{blocked:",
             ]
         );
     }

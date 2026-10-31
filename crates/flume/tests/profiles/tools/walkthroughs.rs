@@ -766,9 +766,10 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
     // S66, 162: the host's `[kinds.fix.agents]` gives `edits`, while the
     // repository's `.config/flume.toml` gives `full`; the host's table
     // comes first, so the printed command passes `--permission-mode
-    // acceptEdits`, the stand-in's SessionStart reads `acceptEdits` and
-    // the started ack is taken, status names `edits` from `host-kind`
-    // passed as `acceptEdits`, and the fix lands.
+    // acceptEdits`, the started ack is taken on the program and the
+    // variables, the stand-in's first prompt names `acceptEdits` and is
+    // taken as received, so code begins, status names `edits` from
+    // `host-kind` passed as `acceptEdits`, and the fix lands.
     let walk = Walk::new("walk-mode");
     walk.configure("[kinds.fix.agents]\nmode = \"edits\"\n");
     the_repository_gives(&walk, "[kinds.fix.agents]\nmode = \"full\"\n");
@@ -799,9 +800,10 @@ fn a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one() {
             .unwrap_or_default(),
     );
     let agent = walk.start_agent(&place, Value::Array(acts));
-    let status = walk.until(&place, "its agent started", |status| {
-        status["agent"]["started"] == "yes"
+    let status = walk.until(&place, "code begun", |status| {
+        stage(status, "code")["state"] == "begun"
     });
+    assert_eq!(status["agent"]["started"], "yes", "{status}");
     assert!(
         status["unsettled"].as_array().is_none_or(Vec::is_empty),
         "{status}"
@@ -843,10 +845,12 @@ fn a_fix_begun_in_another_mode_twice_is_never_begun() {
     // S67, 161, 162: a fix launched with `--agent mode=full`, which the
     // start passes as `bypassPermissions`, whose session begins in
     // `default`, as Claude Code begins where the account's configuration
-    // disables the mode asked. Its SessionStart acks nothing; flume ends
-    // that agent once its session ended and starts code afresh, whose
-    // session begins in `default` again: code is never begun, status and
-    // its end naming `bypassPermissions` asked and `manual` begun.
+    // disables the mode asked. Its SessionStart acks it started, and its
+    // first prompt, naming `default`, is blocked, so it takes no turn;
+    // flume ends that agent once its session ended and starts code
+    // afresh, whose session begins in `default` again: code is never
+    // begun, status and its end naming `bypassPermissions` asked and
+    // `manual` begun.
     let walk = Walk::new("walk-other-mode");
     let place = walk.launch(
         "fix",
@@ -859,6 +863,7 @@ fn a_fix_begun_in_another_mode_twice_is_never_begun() {
         "the printed command: {printed}"
     );
     let out = walk.agent(&place, json!([{ "begin_in": "default" }]));
+    assert!(out.contains("prompt blocked"), "{out}");
     assert!(!out.contains("stop blocked"), "{out}");
     let both = json!({ "asked": "bypassPermissions", "began": "manual" });
 

@@ -53,9 +53,11 @@ with points (record 0025) and the other agent profiles (record 0026)
   stage refused at its start in the same words, until a retry (4, 32,
   169).
 - **The start checked against its mode.** A start records the mode as
-  its profile passes it. The SessionStart hook compares it with the
-  `permission_mode` its input carries before it takes the started ack.
-  A start that began in another mode, as Claude Code does when the
+  its profile passes it. Claude Code names its mode only with a
+  prompt, so the UserPromptSubmit hook compares it with the
+  `permission_mode` the input of the start's first prompt carries, and
+  blocks that prompt where it differs, so the agent takes no turn in
+  another mode. A start that began in another mode, as Claude Code does when the
   account's configuration disables the mode asked, is not the stage's
   agent. flume ends it once quiet and starts the stage afresh. A second
   such start in a row is never begun, naming the mode asked and the mode
@@ -80,20 +82,23 @@ with points (record 0025) and the other agent profiles (record 0026)
 
 - `launching`: the six layers resolve the mode beside the program, the
   model and the instructions, and the host's two give the mode.
-- `start-integrity`: a start's record holds its mode. The started ack
-  is taken only where the mode matches. A start in another mode starts
+- `start-integrity`: a start's record holds its mode. An agent is its
+  stage's only where the mode matches, read at its first prompt where
+  its program names it only there. A start in another mode starts
   afresh, and a second in a row is never begun naming both modes.
 - `agent-profile`: `--permission-mode` from Claude Code's map, its own
   values under `claude`, and the map pinned to the release.
-- `claude-code-plugin`: SessionStart compares `permission_mode` at the
-  start's first word, and `flume ack started` takes `--mode`.
+- `claude-code-plugin`: UserPromptSubmit compares `permission_mode` at
+  the start's first prompt, blocking it where it differs, and `flume ack
+  received` takes `--mode`.
 - `place-status`: an agent's mode with its layer, entry, value passed
   and read-back; a start in another mode named with both modes.
 - `command-line`: `--agent` gives `mode` and `mode.<program>`.
 - `seam-contracts`: the agent seam's mode part and the types of a mode;
   `started_without` names the mode.
-- `seam-fakes`: the fake agent scripts a map of modes, its read-back and
-  a start begun in another mode.
+- `seam-fakes`: the fake agent scripts a map of modes, its read-back,
+  at its start or at its first prompt, and a start begun in another
+  mode.
 - `store-profile`: the host's agents tables give `mode`.
 - `kinds-profile`: a declaration's agents tables give `mode`.
 - `clause-coverage`: the suite's list at the statement's current
@@ -102,20 +107,26 @@ with points (record 0025) and the other agent profiles (record 0026)
 
 ## Impact
 
-- agentplot/blueprints: nothing changes. The mode is stated at 9c7490c
-  and a11f6d5 (4, 32, 88, 135, 161, 162, 169, C.2, C.4, C.7, S66, S67),
-  and the suite reads the statement at main's revision. Nothing in weir
+- agentplot/blueprints: the mode is stated at 9c7490c and a11f6d5 (4,
+  32, 88, 135, 161, 162, 169, C.2, C.4, C.7, S66, S67), and the suite
+  reads the statement at main's revision. C.4's started row there has
+  SessionStart read the mode, which the pinned 2.1.296's SessionStart
+  input does not carry. The operator ruled on 2026-10-31 to read it at
+  the start's first prompt, keeping C.4's and S67's guarantee whole, and
+  that row, the received row and 161's word that it started are theirs
+  to amend (design 7; core.19). Nothing in weir
   changes either: weir-kinds returns an agents table as written, `mode`
   "the reader's to check" (weir C.4), so flume's pin stays (core.4).
 - `crates/flume-seams`: `Mode`, `ModeSetting`, `Settings::mode`,
   `StartRecord::mode`, `ModeBegan` and `Unsettled::mode`; the agent
   seam's `mode` and `mode_read_back`; status fields, only added.
 - `crates/flume-core`: `settings.rs` resolves and maps the mode,
-  `launch.rs` refuses it, `start.rs` records it, and `status.rs` gives
-  it.
+  `launch.rs` refuses it, `start.rs` records it, `deliver.rs` reads a
+  start begun in another mode while started as well as starting, and
+  `status.rs` gives it.
 - `crates/flume`: the kinds profile's and the host's agents tables;
-  `--agent` and `flume ack started --mode`; the Claude Code profile's
-  map, its command and its SessionStart comparison; the person's form
+  `--agent` and `flume ack received --mode`; the Claude Code profile's
+  map, its command and its first prompt's comparison; the person's form
   of status; the stand-in's `--permission-mode` and `permission_mode`;
   the walkthroughs and one live walkthrough.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake agent's

@@ -45,10 +45,11 @@ pub struct Failure {
     pub at: u64,
 }
 
-/// The SessionStart hook's word that the agent began otherwise than its
-/// start recorded, in place of the started ack: each variable by its
-/// name alone and whether the program differed, with the session it runs
-/// and its transcript (161).
+/// The hooks' word that the agent began otherwise than its start
+/// recorded: SessionStart's in place of the started ack, each variable by
+/// its name alone and whether the program differed, and UserPromptSubmit's
+/// in place of the start's first received ack, the mode asked and the mode
+/// begun; with the session it runs and its transcript (161).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(flatten)]
@@ -159,6 +160,12 @@ impl Record {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(false),
             Err(_) => None,
         }
+    }
+
+    /// Whether any prompt was acked received: false where none was, or
+    /// the acks cannot be read.
+    pub fn received_any(&self) -> bool {
+        fs::read_to_string(self.file("received")).is_ok_and(|text| !text.trim().is_empty())
     }
 
     pub fn ack_received(&self, digest: &str) -> std::io::Result<()> {

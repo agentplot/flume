@@ -155,7 +155,8 @@ String>`, the value of its program's own that the entry maps to, or
 words naming the mode and the program where it has none (88, 169). By
 default it refuses every entry, since a profile that maps no mode
 refuses one (170). It also gains `mode_read_back(&self) -> Offered`:
-whether the program's word that it started names the mode it began in,
+whether the program's word at its start, its word that it started or
+its word at its start's first prompt, names the mode it began in,
 `NotOffered` by default (161, 169). `command` gains `mode:
 Option<&str>`, the value the claim's resolution mapped, which the
 profile passes as its program's setting. The command never meets a
@@ -207,37 +208,71 @@ mode, and no mode is compared (161, 162). The account's own
 configuration decides, the one setting the agent program's own
 configuration may choose (32).
 
-### 7. The start's record and the hook's comparison
+### 7. The start's record and the first prompt's comparison
 
 `Engine::claim` writes the resolution's `mode` into the start's
-`StartRecord::mode` (161). The SessionStart hook compares it before it
-acks, beside the program and the variables, where the record names a
-mode and the start has no started ack yet. 2.1.296 reports the mode a
-session began in as the hook input's `permission_mode`. It reads
-`--permission-mode manual` as its own `default`, the alias its settings
-schema names ("'manual' is accepted as an alias for 'default'"), so
-the profile reads `default` back as `manual` and every other choice as
-itself (`claude/mode.rs`, `began`). Where the value read is not the
-record's, or the input carries none, `compare` names the mode in
-`Unsettled::mode`, with both values. `ack_started` then acks nothing,
-writes `unsettled.json` and starts the settle, as it does for a
-variable today. `flume ack started` gains `--mode
-<value>`, the mode the session began in as the program names it, which
-it compares as the hook does.
+`StartRecord::mode` (161). 2.1.296 gives a SessionStart input no
+`permission_mode`. It builds that input as
+`{...$d(ke,se()),hook_event_name:"SessionStart",...}`, and its builder
+`$d(e,n,r,s)` sets `permission_mode:r`, so the field is undefined there,
+as it is for Setup, SessionEnd, StopFailure and Notification. A hook's
+environment names no mode either, and the transcript records one only
+when the session's metadata is written again, never at its start. The
+events whose builder is handed the session's mode carry it,
+UserPromptSubmit among them: its input is
+`{...$d(r.session,se(),n),hook_event_name:"UserPromptSubmit",prompt:e`,
+with `n` the session's mode as it stands (`qtt(e,de(o).mode,o,`). So
+SessionStart compares the program and the variables alone and acks
+started where they match, and the mode is compared at the start's
+first prompt.
 
-A SessionStart of a start whose started ack already stands, after a
-resume, a clear or a compaction of its session, compares the program
-and the variables and not the mode. The mode is read at the agent's
-start (162). Once a session has started, its mode is the session's
-own: a person may move it in the pane, and a conversation's operator
-may let its agent out of plan mode. A started agent is never unsettled
-for it, and its later acks still record its transcript.
+The UserPromptSubmit hook compares at the start's first prompt, the
+first with no received ack where no word that the agent began otherwise
+stands. Where the record names a mode, it compares its input's
+`permission_mode` with the record before it acks received. 2.1.296 reads
+`--permission-mode manual` as its own `default`, the alias its settings
+schema names ("'manual' is accepted as an alias for 'default'"), so the
+profile reads `default` back as `manual` and every other choice as
+itself (`claude/mode.rs`, `began`). Where the value read is not the
+record's, or the input carries none, the hook answers `{"decision":
+"block"}` with words naming both modes. 2.1.296 reads that as a blocking
+error: the prompt is held back and no query is made, so the agent takes
+no turn in a mode its start did not ask. The hook acks nothing and
+writes `unsettled.json`, naming the mode in `Unsettled::mode` with both
+values and the started ack's session and transcript beside it. It then
+starts the settle, as SessionStart does for a variable. `flume ack
+received` gains `--mode <value>`, the mode the session runs in as the
+program names it, which it compares at the start's first prompt as the
+hook does. `flume ack started` compares no mode.
+
+A later prompt or tell, and a SessionStart after a resume, a clear or a
+compaction, compare no mode. The mode is read at the agent's start, and
+its first prompt is the first word of the program's that names it
+(162). Once a session has started, its mode is the session's own: a
+person may move it in the pane, and a conversation's operator may let
+its agent out of plan mode. A started agent is never unsettled for it,
+and its later acks still record its transcript.
+
+This reads the mode where the statement's C.4 at 5caff76 does not. Its
+started row has SessionStart compare "the hook input's
+`permission_mode`, which every hook's input carries in 2.1.296", and
+161 takes the word that it started only where the mode matches. Neither
+holds of the pinned release. The operator ruled on 2026-10-31 to read
+the mode at the start's first prompt, keeping C.4's and S67's
+guarantee whole: no agent takes a turn of its stage in a mode its start
+did not ask, and a start begun in another mode is ended and started
+afresh, a second never begun. Those rows and 161's words are the
+operator's to amend in the statement (core.19).
 
 ### 8. A start in another mode starts afresh
 
 A start whose word names a mode other than its record's reads as
 `started_without` with `Unsettled::mode`, and the core's unsettled path
-does the rest, unchanged (35, 161). No prompt is sent. The agent is
+does the rest (35, 161). The core reads `started_without` while the
+start is started as well as while it is starting, since Claude Code's
+word on its mode comes at its first prompt, after its started ack. No
+prompt is sent, or none again where the word came at the first prompt,
+and the stage's limit holds as it does for a start still starting. The agent is
 ended once quiet, and the stage starts afresh under the settings
 resolved then, counting toward no bound and waiting on no caller. A
 second start in a row that began otherwise is never begun, its end
@@ -270,20 +305,33 @@ byte for byte (core.22; C.4):
   `["acceptEdits","auto","bypassPermissions","default","dontAsk","plan"]`;
 - the alias, `e==="manual"?"default":e`;
 - the flag, `"--permission-mode <mode>","Permission mode to use for the session"`;
-- every hook input's field, `permission_mode:o().optional()`.
+- the hook input's builder naming the mode by its third argument,
+  `cwd:n,permission_mode:r,`;
+- UserPromptSubmit's input built with it,
+  `{...$d(r.session,se(),n),hook_event_name:"UserPromptSubmit",prompt:e`;
+- the session's mode handed to it, `qtt(e,de(o).mode,o,`;
+- a block read as a blocking error,
+  `case"block":V.permissionBehavior="deny",V.blockingError={blockingError:e.reason||"Blocked by hook"`;
+- a prompt so blocked returned unsent,
+  `if(s.blockingError){let a=M(p,o.abortController.signal);return{blocked:`.
 
-A bump that renames a choice, drops the alias or moves the field fails
-the gate until the map is read again from the new release.
+A bump that renames a choice, drops the alias, moves the field or stops
+holding back a blocked prompt fails the gate until the map is read
+again from the new release.
 
 ### 11. The stand-in and the walkthroughs
 
 The stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/claude.rs`)
-reads `--permission-mode <value>` and gives every hook input the
-`permission_mode` 2.1.296 would: the value passed, `manual` read as
-`default`, and `default` where none was passed. A script act `{"begin_in":
-"<value>"}` gives that value instead, wherever the act stands, as a
-session whose account's configuration refuses the mode asked begins in
-another.
+reads `--permission-mode <value>` and gives the inputs of
+UserPromptSubmit, PreToolUse, PostToolUse and Stop the `permission_mode`
+2.1.296 would: the value passed, `manual` read as `default`, and
+`default` where none was passed. The inputs of SessionStart, StopFailure
+and SessionEnd name none, as that release's do not. A script act
+`{"begin_in": "<value>"}` gives that value instead, wherever the act
+stands, as a session whose account's configuration refuses the mode
+asked begins in another. A prompt its UserPromptSubmit hook blocks is
+held back: the stand-in makes no act and takes no turn, and its session
+ends.
 
 Two walkthroughs in `crates/flume/tests/profiles/tools/walkthroughs.rs`
 run with the stand-in under the printed command:
@@ -291,14 +339,15 @@ run with the stand-in under the printed command:
 - S66: a fix on a host whose `[kinds.fix.agents]` gives `mode =
   "edits"`, while the scratch repository's `.config/flume.toml` gives
   `[kinds.fix.agents] mode = "full"`. The printed command holds
-  `--permission-mode acceptEdits`, the stand-in's SessionStart reads
-  `acceptEdits` and the ack is taken, status names `edits` from
-  `host-kind` passed as `acceptEdits`, and the place lands. A second fix
+  `--permission-mode acceptEdits`, the started ack is taken, the
+  stand-in's first prompt names `acceptEdits` and is received, so code
+  begins, status names `edits` from `host-kind` passed as `acceptEdits`,
+  and the place lands. A second fix
   on a host and a repository that give no mode prints no
   `--permission-mode`, its start records no mode, and it lands.
 - S67: a fix launched with `--agent mode=full`, whose stand-in script
-  holds `{"begin_in": "default"}`. The first start acks nothing and is
-  ended, and code starts afresh. That start begins in `default` again
+  holds `{"begin_in": "default"}`. The first start acks started, its
+  first prompt is blocked, and it is ended, and code starts afresh. That start begins in `default` again
   and is never begun, status naming `bypassPermissions` asked and
   `manual` begun in.
 
@@ -311,9 +360,10 @@ repository's Claude Code settings give `defaultMode: acceptEdits` and
 allow the tools the fix uses. So the session begins in `default`, the
 release's word for `manual`, only where `--permission-mode manual`
 reached it over the repository's own default. The code agent's
-started ack is taken, which the hook takes only once the real
-`permission_mode` matched. Status names `ask` from `host-kind` passed
-as `manual`, and the place lands. `ask` asks before an edit or a
+started ack is taken, and its first prompt is received, which the
+UserPromptSubmit hook takes only once the real `permission_mode`
+matched, so code begins. Status names `ask` from `host-kind` passed as
+`manual`, and the place lands. `ask` asks before an edit or a
 command the session's rules do not allow, and the settings allow every
 tool the fix uses, so the agent asks nothing.
 
@@ -329,7 +379,7 @@ before its first session in `bypassPermissions`, since flume never
 answers that warning either. The kinds guide gives `mode` in an agents
 table; the configuration reference gives it in the host's two tables;
 the commands reference gives `--agent mode` and `mode.<program>`, and
-`flume ack started --mode`. All of it speaks to any host's operator and
+`flume ack received --mode`. All of it speaks to any host's operator and
 names no host or team of ours (core.35).
 
 ## Risks / Trade-offs
@@ -350,3 +400,10 @@ names no host or team of ours (core.35).
 - A session's mode after its start is not checked, so a person who
   moves it in the pane is not stopped. The mode is the work's word on
   how its agent starts, and the pane is the person's (162).
+- Claude Code names its mode only with a prompt, so a start's started
+  ack is taken before its mode is known, and status reads it started
+  until its first prompt. That prompt is held back where the mode
+  differs, so the agent does no work of its stage first. A start whose
+  prompt is one of Claude Code's own commands fires no
+  UserPromptSubmit, so its mode is compared only at the first prompt it
+  does submit.

@@ -7,8 +7,8 @@
 //! standard input, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR` and
 //! `CLAUDE_CODE_SESSION_ID` over the command's own environment less the
 //! credentials that release keeps from every process it starts, a refusal
-//! read from `permissionDecision` or exit 2, a stop blocked by `decision`
-//! or exit 2), and in place of a model acts the script `STAND_IN_SCRIPT`
+//! read from `permissionDecision` or exit 2, a prompt or a stop blocked by
+//! `decision` or exit 2), and in place of a model acts the script `STAND_IN_SCRIPT`
 //! names, one run's acts as a JSON array, each a tool call:
 //!
 //! - `{"bash": "<line>"}`: Bash, the line run by `sh -c` in the place
@@ -31,19 +31,24 @@
 //!   session's hooks nor its transcript's folder see it;
 //! - `{"begin_in": "<value>"}`: the session begins in the mode `value`,
 //!   wherever the act stands, as a session whose account's configuration
-//!   refuses the mode asked begins in another, so every hook's input
-//!   names it as its `permission_mode`.
+//!   refuses the mode asked begins in another, so every hook input that
+//!   names the mode names it as its `permission_mode`.
 //!
-//! Every hook's input names the mode the session runs in as that release
-//! names it: the `--permission-mode` passed, `manual` read as its own
-//! `default`, `default` where none was passed, or the `begin_in` act's.
+//! The inputs of UserPromptSubmit, PreToolUse, PostToolUse and Stop name
+//! the mode the session runs in as that release names it: the
+//! `--permission-mode` passed, `manual` read as its own `default`,
+//! `default` where none was passed, or the `begin_in` act's. Those of
+//! SessionStart, StopFailure and SessionEnd name none, as that release's
+//! do not.
 //!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
 //!
-//! Then the turn ends: Stop, once more with `stop_hook_active` where the
-//! hook blocked it, or StopFailure where a `fail` act ended it, and the
+//! A prompt UserPromptSubmit blocked is held back, as that release holds
+//! it back: no act is made and no turn taken, and the session ends.
+//! Otherwise the turn ends: Stop, once more with `stop_hook_active` where
+//! the hook blocked it, or StopFailure where a `fail` act ended it, and the
 //! session ends, as a person leaves the printed
 //! command's session, with SessionEnd. Each act is printed on standard
 //! output as one line; the exit status is 1 where an act failed that no
@@ -59,6 +64,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// The release whose shape the transcript takes.
 const VERSION: &str = "2.1.296";
+
+/// The events whose input that release builds with the session's mode.
+const MODED: [&str; 4] = ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -185,7 +193,13 @@ impl Session {
             self.prompt = prompt.to_string();
             let submitted = submitted(prompt);
             self.queued(&submitted);
-            self.hook("UserPromptSubmit", json!({ "prompt": submitted }), None);
+            let answer = self.hook("UserPromptSubmit", json!({ "prompt": submitted }), None);
+            if let Some(reason) = answer.blocked {
+                say(&format!("prompt blocked: {reason}"));
+                self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
+                say("session ended");
+                return failed;
+            }
             self.user(json!(submitted));
             for act in script.as_array().into_iter().flatten() {
                 if let Some(failure) = act.get("fail") {
@@ -412,13 +426,15 @@ impl Session {
     /// Runs the plugin's hooks for `event`, those whose matcher takes
     /// `tool`, with `input` over the fields every hook's input carries.
     fn hook(&self, event: &str, mut input: Value, tool: Option<&str>) -> Answer {
-        let common = json!({
+        let mut common = json!({
             "session_id": self.id,
             "transcript_path": self.transcript,
             "cwd": self.cwd,
-            "permission_mode": self.mode,
             "hook_event_name": event,
         });
+        if MODED.contains(&event) {
+            common["permission_mode"] = json!(self.mode);
+        }
         for (key, value) in common.as_object().into_iter().flatten() {
             input
                 .as_object_mut()
@@ -460,7 +476,7 @@ impl Session {
         if event != "PreToolUse" {
             answer.denied = None;
         }
-        if event != "Stop" {
+        if !matches!(event, "Stop" | "UserPromptSubmit") {
             answer.blocked = None;
         }
         answer
