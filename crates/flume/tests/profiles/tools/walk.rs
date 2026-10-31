@@ -509,8 +509,12 @@ impl Walk {
 /// submission decided as it takes it in: with the entry's record,
 /// exiting as the outcome does, the outcome recorded delivered to the
 /// worktree, so no inbox gives it (sluice's `report_delivering`; 112,
-/// 133). Every other command, and every later submit, is the pinned
-/// sluice's own.
+/// 133). While that submit waits on the rounds that decide it, its inbox
+/// gives no outcome, as the pinned sluice's place inbox gives none of a
+/// submission it decided as it took it in, whose record names the pull
+/// request: a settle beside the submit, the Stop hook's or a caller's,
+/// collects nothing the answer delivers. Every other command, and every
+/// later submit, is the pinned sluice's own.
 pub fn stand_in_sluice(bin: &Path) {
     let pinned = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
         .map(|dir| dir.join("sluice"))
@@ -519,16 +523,28 @@ pub fn stand_in_sluice(bin: &Path) {
     std::fs::create_dir_all(bin).expect("the stand-in's folder");
     let path = bin.join("sluice");
     let script = format!(
-        "#! /bin/sh -e\n\
-         if [ \"$1\" = submit ] && mkdir '{}' 2>/dev/null; then\n  \
-         for word do\n    \
-         shift\n    \
-         [ \"$word\" = --no-wait ] || set -- \"$@\" \"$word\"\n  \
-         done\n\
-         fi\n\
-         exec '{}' \"$@\"\n",
-        bin.join(".sluice-submitted").display(),
-        pinned.display()
+        r#"#! /bin/sh -e
+pinned='{pinned}'
+if [ "$1" = inbox ] && [ -d '{submitting}' ]; then
+  printf '%s\n' '{{"outcomes": []}}'
+  exit 0
+fi
+if [ "$1" = submit ] && mkdir '{submitted}' 2>/dev/null; then
+  for word do
+    shift
+    [ "$word" = --no-wait ] || set -- "$@" "$word"
+  done
+  mkdir '{submitting}'
+  status=0
+  "$pinned" "$@" || status=$?
+  rmdir '{submitting}'
+  exit "$status"
+fi
+exec "$pinned" "$@"
+"#,
+        pinned = pinned.display(),
+        submitted = bin.join(".sluice-submitted").display(),
+        submitting = bin.join(".sluice-submitting").display(),
     );
     std::fs::write(&path, script).expect("the stand-in for sluice");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))

@@ -6,7 +6,8 @@
 //! it; then a submission from a herdr pane's hook, a failed entry
 //! collected once, a queue nothing drives, a step beside a live driver, a
 //! conflict's base revision, a conflict sluice answers at the submit
-//! itself, through the stand-in for sluice, a pull request answered with
+//! itself, through the stand-in for sluice, and a settle beside that
+//! submit, which the inbox gives nothing, a pull request answered with
 //! no entry and the entry taken in from it read to its landing, through
 //! the stand-in for sluice on a base that takes pull requests, and a
 //! fetch that fails.
@@ -499,6 +500,58 @@ fn a_conflict_sluice_answers_at_the_submit_is_its_outcome_never_a_refusal() {
         Revision::new,
     );
     assert_eq!(base, expected, "the base revision");
+    assert_eq!(
+        harness.seam.inbox(&place),
+        Inbox::Outcomes { outcomes: vec![] },
+        "the inbox, once the answer delivered the outcome"
+    );
+}
+
+#[test]
+fn a_settle_beside_the_stand_ins_submit_collects_nothing_its_answer_delivers() {
+    // While the stand-in's first submit waits on the rounds that decide
+    // it, a settle beside it steps main and collects the place's inbox,
+    // as the agent's Stop hook and a caller's settle do: the inbox gives
+    // nothing, and the conflict reaches flume once, in the submit's
+    // answer with its own words, as a pull request's entry sluice decides
+    // as it takes it in reaches the place only by that answer (112, 133).
+    let harness = Harness::new();
+    let (place, head) = harness.place();
+    harness.on_main("work.rs", "the base's own\n");
+    let bin = harness.repository.scratch.path("stand-in");
+    super::walk::stand_in_sluice(&bin);
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    )))
+    .expect("a PATH");
+    let seam = harness
+        .seam
+        .clone()
+        .with_env("PATH", Some(&path.to_string_lossy()));
+    let (answer, collected) = std::thread::scope(|scope| {
+        let submit = scope.spawn(|| seam.submit(&place, &head));
+        let mut collected = vec![];
+        while !submit.is_finished() {
+            seam.step(&place.repository, "main");
+            if let Inbox::Outcomes { outcomes } = seam.inbox(&place) {
+                collected.extend(outcomes);
+            }
+        }
+        (submit.join().expect("the submit"), collected)
+    });
+    assert_eq!(collected, vec![], "the inbox beside the submit");
+    let Submitted::Decided {
+        outcome: SubmissionOutcome::Conflict { files, words, .. },
+        ..
+    } = answer
+    else {
+        panic!("the submit was answered {answer:?}");
+    };
+    assert_eq!(files, vec!["work.rs".to_string()], "the files contested");
+    assert!(
+        words.starts_with("conflict on main: work.rs"),
+        "the record's own words: {words}"
+    );
     assert_eq!(
         harness.seam.inbox(&place),
         Inbox::Outcomes { outcomes: vec![] },
