@@ -184,7 +184,10 @@ fn s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own() {
         "--brief",
         "Create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
     ]);
-    let place = format!("{}/places/fix--one", live.walk.repository.name());
+    let place = launched["launched"]["place"]["place"]
+        .as_str()
+        .expect("the place's location")
+        .to_string();
     // Read from the launch's own answer, which no landing can outrun.
     let mode = json!({ "passed": "manual", "entry": null, "read_back": true });
     let agent = &launched["launched"]["place"]["agent"];

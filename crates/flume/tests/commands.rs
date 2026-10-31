@@ -827,7 +827,7 @@ fn a_mode_and_a_table_at_the_launch() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/change--one", repository.name());
+    let place = host.place_of(&repository, "change--one");
     let file = host.state().join("places").join(format!(
         "{}.json",
         place.trim_start_matches('/').replace('/', "%")
@@ -874,10 +874,7 @@ fn a_mode_and_a_table_at_the_launch() {
         );
         assert_eq!(refused.code, 1, "{}", refused.text);
         assert!(refused.text.contains(named), "{}", refused.text);
-        assert!(!repository
-            .dir
-            .join(format!("places/change--{name}"))
-            .exists());
+        assert!(!Path::new(&host.place_of(&repository, &format!("change--{name}"))).exists());
     }
 }
 

@@ -240,7 +240,7 @@ jq -e '.program == true' "$(unsettled)" >/dev/null || fail "the record does not 
 # S67).
 (cd "$repo" && "$flume" launch --kind fix --name three --brief "fix the reader" \
   --kinds "$fixtures/kinds.toml" --agent mode=full --json >/dev/null) || fail "the launch in full"
-place=$repo/places/fix--three
+place=$(located fix--three)
 [ "$(status | jq -r .agent.mode.passed)" = bypassPermissions ] ||
   fail "the start does not record bypassPermissions: $(status | jq -c .agent.mode)"
 printed=$(status | jq -r '.agent.printed')
