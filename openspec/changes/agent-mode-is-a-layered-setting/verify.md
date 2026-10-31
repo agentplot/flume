@@ -4,10 +4,42 @@ Checked on 2026-10-31 at `change/agent-mode-is-a-layered-setting`
 4383e9e, cut from main at 359f8ce, against this change's proposal,
 design, twelve specs and tasks.
 
-**The work holds.** Every task is ticked, every requirement is built,
-every scenario has a test, and the checks the tasks name pass. The
-warnings below are about wording and how literal some tests are. None
-of them leaves a requirement unmet, so the change is archived.
+**The work falls short, so the change is not archived.** Every task is
+ticked, every requirement is built, every scenario has a test, and the
+gate passes at 4383e9e. But archiving the change breaks the gate (see
+below), so it goes back to its code stage. The warnings further down
+are about wording and how literal some tests are. None of them leaves
+a requirement unmet.
+
+## What fails: the archived specs fail `root:specs`
+
+`openspec archive agent-mode-is-a-layered-setting --yes` syncs the
+change's specs into `openspec/specs/`. After that,
+`sluice exec main -- moon run root:specs` fails:
+`openspec validate --specs --strict` reports 30 passed and 3 failed.
+The strict check counts a warning as an error, and each failure is the
+warning "Requirement text is very long (>500 characters)". Every
+requirement it names is one this change modifies, and each was under
+500 characters before the change:
+
+| Spec | Requirement | Before (359f8ce) | After the archive |
+|---|---|---|---|
+| agent-profile | An agent started as Claude Code with flume's plugin | 493 | 625 |
+| start-integrity | A start records what its agent runs under | 426 | 524 |
+| start-integrity | The started ack is taken only where the record matches | 347 | 667 |
+| store-profile | The host's configuration | 433 | 596 |
+
+`root:changes` passed on the open change at 4383e9e, so the gate does
+not catch this until the change is archived. `root:specs` is a
+`check-fast` task, which every branch requires, so an archive as the
+specs stand cannot land.
+
+**What the code stage needs to do.** Bring each of these four MODIFIED
+requirements under 500 characters, keeping its meaning. Move its
+examples into scenarios, or split it into requirements that each state
+one behaviour. Then check that a trial archive passes
+`openspec validate --specs --strict` before the change comes back to
+verify.
 
 ## Tasks
 
