@@ -30,10 +30,10 @@ the document (62, 102 to 104, 128, C.7).
 The host's configuration SHALL be read from
 `$XDG_CONFIG_HOME/flume/config.toml` at every start: `[host]` `agents`,
 `terminal` and `pool`; `[streams.<stream>]`; `[pools.<pool>]`; agents'
-model, mode and instructions by kind and by repository and kind, each
-with `.stages.<stage>`; `stream` where C.7 names it; and `[roles]`. A
-key left out SHALL be no bound, the printed command, no stream, pool or
-settings (32, 70, 105, 143, 144, 162, C.7).
+model and instructions by kind and by repository and kind, each with
+`.stages.<stage>`; `stream` where C.7 names it; and `[roles]`. A key
+left out SHALL be no bound, the printed command, no stream, pool or
+settings (32, 70, 105, 143, 144, C.7).
 
 #### Scenario: A bound stated
 
@@ -73,20 +73,3 @@ on the host (146, 147, 153, C.7).
 
 - **WHEN** one engine records work-1 spent until 15:00
 - **THEN** a second engine built over the same state directory reads work-1 spent until 15:00, and the file's mode is 0600 (146, 153)
-
-### Requirement: A mode in the host's agents tables
-
-A mode in an agents table of the host's configuration SHALL be read as
-one of flume's four or a table of programs whose entries are strings,
-and any other SHALL refuse the configuration naming the table and
-`mode` (162, 169, C.7).
-
-#### Scenario: A mode for a kind and a table for a repository's stage
-
-- **WHEN** the configuration gives `[kinds.fix.agents] mode = "edits"` and `[repos."/r".kinds.fix.agents.stages.code] mode = { claude = "auto" }`
-- **THEN** the host's settings for fix@1 in `/r` read `edits` for the kind at the host-kind layer and the table for code at the host-repository layer (32, 162, C.7)
-
-#### Scenario: A mode that is neither
-
-- **WHEN** the configuration gives `[kinds.fix.agents] mode = "auto"`, or `mode = 3`, or `mode = { claude = 3 }`
-- **THEN** every launch and start is refused naming `kinds.fix.agents` and `mode` (162, 169, C.7)
