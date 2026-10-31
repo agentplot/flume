@@ -71,7 +71,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 |---|---|
 | `--kind <kind>` | The kind, resolved from the launch's `--kinds` file, then the repository's `.config/flume.toml` at the base, then flume's own. Required. |
 | `--name <name>` | The work's name, which names its branch, `<prefix>/<name>`, and its place, `places/<kind>--<name>`. Required. |
-| `--base <branch>` | The branch the place is cut from and lands on; the repository's default branch where none is named. |
+| `--base <branch>` | The branch the place is cut from and lands on; where none is named, the repository's [default branch](/flume/reference/configuration/#the-repositorys-configflumetoml), its remote's. |
 | `--brief <text>` | What the work is, given whole to every stage whose prompt asks for `{{brief}}`. |
 | `--brief-file <file>` | The brief, read from a file once at the launch. |
 | `--kinds <file>` | A declaration of kinds the launch carries, read from disk with its prompts beside it. |
