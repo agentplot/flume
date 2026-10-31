@@ -232,6 +232,10 @@ fn held() -> HeldState {
                     tasks: vec!["2.1 add the groups".into(), "2.2 read them".into()],
                 }),
                 opening: Some("4242@Thu Oct 30 15:45:50 2026".into()),
+                dialog: Some(Dialog {
+                    words: "New MCP server found in .mcp.json: docs".into(),
+                    since: 6,
+                }),
             }),
             since: Some(120),
         }],
@@ -474,6 +478,7 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         Act::Needs,
         Act::Priority,
         Act::Hold,
+        Act::Answer,
     ] {
         round_trips(act);
     }
@@ -482,6 +487,7 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         Waits::Answer,
         Waits::Lost,
         Waits::NeverBegun,
+        Waits::Dialog,
         Waits::Unready,
         Waits::Refused,
         Waits::Stopped,

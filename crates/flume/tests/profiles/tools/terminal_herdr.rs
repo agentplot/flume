@@ -7,7 +7,8 @@
 //! named `claude`, which herdr's agent start runs by that kind, which
 //! reports its own state to herdr, keeps what it received, clears its
 //! input on ctrl+c as an agent does, and, as its environment asks, shows
-//! the folder-trust question or a warning first.
+//! the folder-trust question, a warning, or a dialog a person answers,
+//! first.
 //!
 //! The terminal seam's scenarios run against the profile; then the
 //! folder-trust question answered (S39), the bypass warning held (S40), a
@@ -20,8 +21,10 @@
 //! instructions to a shell not yet at its prompt, a start the terminal
 //! cannot yet take, a shell never at its prompt, a herdr call that never
 //! answers, a quiet pane not ended,
-//! a finished turn nobody looked at (S42), and a launch and a retry each
-//! sending its agent's prompt with no settle; a nix-wrapped Claude Code
+//! a finished turn nobody looked at (S42), a launch and a retry each
+//! sending its agent's prompt with no settle, a dialog that holds a start
+//! waiting on a person, and an agent that began after its start was read
+//! never begun, which a retry leaves be; a nix-wrapped Claude Code
 //! started from the agent profile, a role run's pane reached by its
 //! address after a move, and a recipient on another server reached
 //! through its own socket.
@@ -111,6 +114,20 @@ if [ -n "$STAND_IN_WARNING" ]; then
   printf '%s\n' "$STAND_IN_WARNING"
   report blocked
   while :; do sleep 1; done
+fi
+if [ -n "$STAND_IN_DIALOG" ]; then
+  # A dialog of the program's own before it starts, as Claude Code's for a
+  # repository's MCP servers, which a person answers with enter. It tells
+  # herdr it is held at a question, or, with STAND_IN_DIALOG_SEEN=no, that
+  # it is ready, as a dialog herdr does not know.
+  printf '\033[2J\033[H%s\n' "$STAND_IN_DIALOG"
+  if [ "$STAND_IN_DIALOG_SEEN" = no ]; then report idle; else report blocked; fi
+  stty -icanon -echo min 1 2>/dev/null
+  while :; do
+    key=$(dd bs=1 count=1 2>/dev/null)
+    if [ -z "$key" ]; then printf '\033[2J\033[H'; echo answered >> "$log/events"; break; fi
+  done
+  stty icanon echo 2>/dev/null
 fi
 : > "$log/started"
 report idle
@@ -1860,6 +1877,8 @@ struct StandIn {
     log: PathBuf,
     program: String,
     terminal: Herdr,
+    /// Variables over the stand-in's own, as a test's dialog asks.
+    env: BTreeMap<String, String>,
 }
 
 impl StandIn {
@@ -1879,16 +1898,18 @@ impl Agent for StandIn {
         _secret: &Secret,
         prompt: &str,
     ) -> AgentCommand {
+        let mut env = BTreeMap::from([
+            (
+                "STAND_IN_LOG".to_string(),
+                self.log.to_string_lossy().into_owned(),
+            ),
+            ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+        ]);
+        env.extend(self.env.clone());
         AgentCommand {
             program: self.program.clone(),
             args: vec![],
-            env: BTreeMap::from([
-                (
-                    "STAND_IN_LOG".to_string(),
-                    self.log.to_string_lossy().into_owned(),
-                ),
-                ("PATH".to_string(), "/usr/bin:/bin".to_string()),
-            ]),
+            env,
             prompt_args: vec![prompt.into()],
             folder_trust: None,
             kind: Some("claude".into()),
@@ -1946,6 +1967,17 @@ impl Agent for StandIn {
 /// A repository of the scratch's bound in `world`'s fakes, with `stages`
 /// as the kind `two`, each run by the stand-in.
 fn bound(server: &TestServer, world: &World, stages: Vec<Stage>) -> String {
+    bound_with(server, world, stages, &[])
+}
+
+/// A repository of the scratch's bound in `world`'s fakes, with `stages`
+/// as the kind `two`, each run by the stand-in with `env` over its own.
+fn bound_with(
+    server: &TestServer,
+    world: &World,
+    stages: Vec<Stage>,
+    env: &[(&str, &str)],
+) -> String {
     let repository = server
         .scratch
         .path("repository")
@@ -1979,6 +2011,10 @@ fn bound(server: &TestServer, world: &World, stages: Vec<Stage>) -> String {
             log: server.scratch.path("log"),
             program: server.scratch.path("bin/claude").to_string_lossy().into(),
             terminal: server.profile(),
+            env: env
+                .iter()
+                .map(|(name, value)| (name.to_string(), value.to_string()))
+                .collect(),
         }),
     );
     server.place("two--one");
@@ -2165,6 +2201,9 @@ fn a_launch_and_a_retry_each_send_their_agents_prompt_with_no_settle() {
     let first = server.profile().pane(&code(1)).expect("the pane recorded");
     server.within("the launch's agent took no prompt", || took(&first));
 
+    // The begun stage's agent is the caller's to end before a retry (50).
+    let stopped = engine(&server, &world).stop(&id, false);
+    assert!(stopped.refusal().is_none(), "the stop: {stopped:?}");
     let retried = engine(&server, &world).retry(&id, Retry::Stage("code".into()), None, false);
     assert!(retried.refusal().is_none(), "the retry: {retried:?}");
     let second = server.profile().pane(&code(2)).expect("the pane recorded");
@@ -2179,5 +2218,209 @@ fn a_launch_and_a_retry_each_send_their_agents_prompt_with_no_settle() {
         stage_state(&server, &world, &id, "code"),
         StageState::Begun,
         "the code stage at the first settle"
+    );
+}
+
+/// A dialog as Claude Code draws one for a repository's MCP servers.
+const MCP_DIALOG: &str = "New MCP server found in .mcp.json: docs";
+
+/// The place's status, as the engine gives it.
+fn place_status(server: &TestServer, world: &World, place: &PlaceId) -> flume_core::PlaceStatus {
+    match engine(server, world).status(Some(place)) {
+        Answer::Status { mut places, .. } => places.remove(0),
+        other => panic!("status answered {other:?}"),
+    }
+}
+
+/// The kind `two` launched as `two--one` in the scratch repository, its
+/// place's id.
+fn launched(server: &TestServer, world: &World, repository: &str) -> PlaceId {
+    let answer = engine(server, world).launch(&Launch {
+        repository: repository.into(),
+        kind: "two".into(),
+        name: "one".into(),
+        base: "main".into(),
+        brief: Some("fix the bug".into()),
+        ..Launch::default()
+    });
+    assert!(answer.refusal().is_none(), "the launch: {answer:?}");
+    PlaceId::new(format!("{repository}/places/two--one"))
+}
+
+#[test]
+fn a_dialog_before_the_prompt_waits_on_a_person_with_its_words() {
+    // On deneb a Claude Code agent stopped at its dialog approving a
+    // repository's MCP server, before it took any prompt, and flume read
+    // its stage never begun, saying nothing of the dialog. A dialog the
+    // program shows a person before it takes its prompt now holds the
+    // start, starting, the place waiting on a person with the dialog's
+    // words for as long as it shows; once answered, the agent starts and
+    // takes its prompt (34, 35, 37).
+    let server = TestServer::start("herdr-dialog");
+    let world = World::new();
+    let mut code = stage("code", Some(Deliverable::Commits), "{{brief}} {{needs}}");
+    code.quiet_limit = Some(1);
+    let repository = bound_with(
+        &server,
+        &world,
+        vec![code],
+        &[("STAND_IN_DIALOG", MCP_DIALOG)],
+    );
+    let id = launched(&server, &world, &repository);
+    let who = Identity {
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
+        place: "two--one".into(),
+        stage: "code".into(),
+        start: 1,
+    };
+    let pane = server.profile().pane(&who).expect("the pane recorded");
+    std::thread::sleep(Duration::from_millis(1500));
+    engine(&server, &world).settle(Some(&id));
+    let status = place_status(&server, &world, &id);
+    assert_eq!(
+        status.stages[0].state,
+        StageState::Starting,
+        "the stage past its limit at the dialog: {status:?}"
+    );
+    let waiting = status
+        .waiting_on
+        .clone()
+        .expect("the place waits on nobody");
+    assert_eq!(
+        (waiting.act, waiting.why, waiting.stage.as_deref()),
+        (Act::Answer, Waits::Dialog, Some("code")),
+        "what the place waits on"
+    );
+    assert!(
+        waiting
+            .words
+            .as_deref()
+            .is_some_and(|words| words.contains(MCP_DIALOG)),
+        "the dialog's words: {waiting:?}"
+    );
+    let dialog = status.agent.and_then(|agent| agent.dialog);
+    assert!(
+        dialog
+            .as_deref()
+            .is_some_and(|words| words.contains(MCP_DIALOG)),
+        "the agent's dialog: {dialog:?}"
+    );
+    assert!(
+        server.kept(&pane.id, "got").is_empty() && server.kept(&pane.id, "events").is_empty(),
+        "something was typed into the dialog"
+    );
+
+    // A person answers it in the pane.
+    server.herdr(&["pane", "send-keys", &pane.id, "enter"]);
+    server.within("the stand-in did not take the answer", || {
+        server.kept(&pane.id, "events") == vec!["answered".to_string()]
+    });
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while stage_state(&server, &world, &id, "code") != StageState::Begun {
+        assert!(
+            Instant::now() < deadline,
+            "the code stage did not begin: {:?}",
+            stage_state(&server, &world, &id, "code")
+        );
+        engine(&server, &world).settle(Some(&id));
+    }
+    assert!(
+        server
+            .kept(&pane.id, "got")
+            .iter()
+            .any(|line| line.contains("fix the bug")),
+        "the agent took no prompt"
+    );
+    let status = place_status(&server, &world, &id);
+    assert_eq!(status.waiting_on, None, "what the place waits on");
+}
+
+#[test]
+fn an_agent_that_began_after_its_start_read_never_begun_is_begun_and_a_retry_leaves_it() {
+    // On deneb a conversation's agent stopped at a dialog herdr read
+    // ready, and its start was read never begun; a person answered it and
+    // the agent began, but flume still held the stage never begun, and the
+    // operator's retry ended the working session. The stage is now begun
+    // once its agent says it started, and a retry is refused, forced or
+    // not, naming the agent and the stop that ends it first (35, 37, 50).
+    let server = TestServer::start("herdr-began");
+    let world = World::new();
+    let mut talk = stage("talk", None, "{{brief}} {{needs}}");
+    talk.quiet_limit = Some(1);
+    let repository = bound_with(
+        &server,
+        &world,
+        vec![talk],
+        &[
+            ("STAND_IN_DIALOG", MCP_DIALOG),
+            ("STAND_IN_DIALOG_SEEN", "no"),
+        ],
+    );
+    let id = launched(&server, &world, &repository);
+    let who = Identity {
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
+        place: "two--one".into(),
+        stage: "talk".into(),
+        start: 1,
+    };
+    let pane = server.profile().pane(&who).expect("the pane recorded");
+    std::thread::sleep(Duration::from_millis(1500));
+    engine(&server, &world).settle(Some(&id));
+    assert_eq!(
+        stage_state(&server, &world, &id, "talk"),
+        StageState::NeverBegun,
+        "a start at a dialog herdr reads ready, past its limit"
+    );
+
+    // A person answers the dialog, and the agent says it started.
+    server.herdr(&["pane", "send-keys", &pane.id, "enter"]);
+    server.within("the stand-in did not take the answer", || {
+        server.kept(&pane.id, "events") == vec!["answered".to_string()]
+    });
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while stage_state(&server, &world, &id, "talk") != StageState::Begun {
+        assert!(
+            Instant::now() < deadline,
+            "the talk stage did not begin: {:?}",
+            stage_state(&server, &world, &id, "talk")
+        );
+        engine(&server, &world).settle(Some(&id));
+    }
+    assert!(
+        server
+            .kept(&pane.id, "got")
+            .iter()
+            .any(|line| line.contains("fix the bug")),
+        "the agent took no prompt"
+    );
+    assert_eq!(
+        place_status(&server, &world, &id).waiting_on,
+        None,
+        "what the place waits on"
+    );
+
+    for force in [false, true] {
+        let retried = engine(&server, &world).retry(&id, Retry::Current, None, force);
+        let reason = retried
+            .refusal()
+            .unwrap_or_else(|| panic!("the retry, forced {force}, was taken: {retried:?}"));
+        assert!(
+            reason.contains(&who.to_string()) && reason.contains("flume stop"),
+            "the refusal names not the agent and its stop: {reason}"
+        );
+    }
+    assert!(
+        server.try_herdr(&["pane", "get", &pane.id]).is_ok(),
+        "the retry ended the working session"
+    );
+    assert!(
+        server
+            .profile()
+            .pane(&Identity {
+                start: 2,
+                ..who.clone()
+            })
+            .is_none(),
+        "a second agent was opened"
     );
 }

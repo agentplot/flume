@@ -3,11 +3,14 @@
 //! no prompt is sent before that word, a start that never says it is
 //! reported never begun with what the terminal shows, and what a terminal
 //! reads of an agent is taken only as far as the agent's own record bears
-//! it out.
+//! it out. A dialog its program shows a person before it takes its prompt
+//! holds the start, the place waiting on a person with the dialog's
+//! words, and a start read never begun whose agent says it started, or
+//! received its prompt, after all goes on as begun.
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, QUIET_LIMIT};
+use flume_core::{Answer, Retry, QUIET_LIMIT};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -18,14 +21,24 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s39_started_then_prompted,
         },
         Scenario {
-            name: "start: held at a dialog, nothing answered, never begun at the stage's limit with the screen",
-            cites: &["S40", "34", "35", "43", "44", "136"],
+            name: "start: held at a dialog its program shows a person, the place waits on a person with the dialog's words, never begun at no limit and stalled; once answered, the agent says it started and is sent its prompt",
+            cites: &["S40", "34", "35", "37", "44", "56", "130", "136"],
             run: s40_held_at_a_dialog,
         },
         Scenario {
-            name: "start: held at the bypass warning by a terminal that says so, never begun at once with the warning, no prompt sent",
+            name: "start: held at the bypass warning by a terminal that says so, starting and waiting on a person with the warning's words, never begun, no prompt sent",
             cites: &["S40", "34", "35", "43", "94"],
-            run: s40_held_never_begun_at_once,
+            run: s40_held_waits_on_a_person,
+        },
+        Scenario {
+            name: "start: read never begun at the stage's limit, its agent then says it started: the stage is its start's after all, a retry refused naming the agent, and its prompt sent",
+            cites: &["35", "37", "43", "49", "50"],
+            run: never_begun_then_started,
+        },
+        Scenario {
+            name: "prompt: read never begun after two sendings, its agent then says it received the prompt: the stage has begun, nothing sent again",
+            cites: &["38", "35", "43"],
+            run: never_begun_then_received,
         },
         Scenario {
             name: "start: a program that never comes up within the terminal's bound is never begun with the screen, no prompt sent",
@@ -135,51 +148,183 @@ fn s39_started_then_prompted(_: &()) -> Outcome {
     Ok(())
 }
 
+/// A dialog as an agent program draws one for a repository's MCP servers.
+const MCP_DIALOG: &str = "New MCP server found in .mcp.json: docs\n\n\u{276f} 1. Use this and all future MCP servers in this project\n  2. Use this MCP server\n  3. Continue without using this MCP server";
+
+/// The place's wait on a person to answer the dialog its agent shows in
+/// `stage`, with `words`.
+fn waits_on_a_dialog(status: &flume_core::PlaceStatus, stage: &str, words: &str) -> Outcome {
+    let waiting = status
+        .waiting_on
+        .clone()
+        .ok_or("the place waits on nobody")?;
+    ensure_eq!(waiting.act, Act::Answer, "the move it waits on");
+    ensure_eq!(waiting.why, Waits::Dialog, "why it waits");
+    ensure_eq!(waiting.stage.as_deref(), Some(stage), "the stage");
+    ensure_eq!(waiting.words.as_deref(), Some(words), "the dialog's words");
+    let agent = status.agent.clone().ok_or("no agent in status")?;
+    ensure_eq!(agent.dialog.as_deref(), Some(words), "the agent's dialog");
+    Ok(())
+}
+
 fn s40_held_at_a_dialog(_: &()) -> Outcome {
     let world = World::new();
     let id = World::id("fix", "one");
     let code = World::identity("fix", "one", "code", 1);
-    let warning = "WARNING: running in Bypass Permissions mode";
     world.agent.set_started(&code, Reading::No);
     launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
     world.terminal.set_state(&code, AgentState::Asking);
-    world.terminal.set_screen(&code, Some(warning));
+    world.terminal.set_screen(&code, Some(MCP_DIALOG));
     world.settle(&id);
-    let agent = agent_status(&world, &id)?;
+    let status = world.status(&id)?;
     ensure_eq!(
-        agent.state,
-        AgentState::Unknown,
-        "a dialog no mark names, as status reads it"
+        status.agent.as_ref().map(|agent| agent.state),
+        Some(AgentState::Unknown),
+        "a dialog no mark names, as status reads the agent"
     );
-    ensure_eq!(
-        agent.screen.as_deref(),
-        Some(warning),
-        "the screen status gives"
-    );
-    world.host.advance(QUIET_LIMIT - 1);
+    waits_on_a_dialog(&status, "code", MCP_DIALOG)?;
+    world.host.advance(QUIET_LIMIT + 1);
     world.settle(&id);
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::Starting),
-        "the start before the stage's limit"
+        "the start past the stage's limit"
     );
-    world.host.advance(1);
+    let status = world.status(&id)?;
+    waits_on_a_dialog(&status, "code", MCP_DIALOG)?;
+    ensure!(
+        status.stalled,
+        "a dialog unanswered past the bound is not said stalled"
+    );
+    ensure!(
+        status
+            .ends
+            .iter()
+            .all(|end| !matches!(end.end.of, EndOf::Stage { .. })),
+        "a stage's end was recorded: {:?}",
+        status.ends
+    );
+    ensure!(
+        world.terminal.sent_to(&code).is_empty(),
+        "flume typed into the dialog"
+    );
+    world.terminal.set_state(&code, AgentState::Waiting);
+    world.agent.set_started(&code, Reading::Yes);
+    world.settle(&id);
+    ensure_eq!(world.terminal.log.count("send"), 1, "prompts sent");
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the stage once a person answered the dialog"
+    );
+    let status = world.status(&id)?;
+    ensure_eq!(status.waiting_on, None, "what the place waits on");
+    ensure_eq!(
+        status.agent.and_then(|agent| agent.dialog),
+        None,
+        "the agent's dialog"
+    );
+    Ok(())
+}
+
+fn s40_held_waits_on_a_person(_: &()) -> Outcome {
+    let world = World::new();
+    let warning = "WARNING: the agent runs in Bypass Permissions mode";
+    world.terminal.hold_opens(warning);
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    world.agent.set_started(&code, Reading::No);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    for _ in 0..2 {
+        ensure_eq!(
+            world.stage_state(&id, "code"),
+            Some(StageState::Starting),
+            "the code stage held at the warning"
+        );
+        waits_on_a_dialog(&world.status(&id)?, "code", warning)?;
+        world.settle(&id);
+        world.host.advance(60);
+    }
+    ensure_eq!(world.terminal.log.count("send"), 0, "prompts sent");
+    ensure_eq!(world.status(&id)?.stages[0].end, None, "the stage's end");
+    Ok(())
+}
+
+fn never_begun_then_started(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    world.agent.set_started(&code, Reading::No);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world.host.advance(QUIET_LIMIT);
     world.settle(&id);
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::NeverBegun),
         "the start at the stage's limit"
     );
-    let end = world.status(&id)?.stages[0].end.clone().ok_or("no end")?;
     ensure_eq!(
-        end.screen.as_deref(),
-        Some(warning),
-        "the screen the end carries"
+        world.status(&id)?.waiting_on.map(|waiting| waiting.why),
+        Some(Waits::NeverBegun),
+        "what the place waits on"
     );
+    // A person answers what held the agent, and it says it started, with
+    // no settle since: the retry reads it so itself.
+    world.agent.set_started(&code, Reading::Yes);
+    let reason = refused(&world.engine().retry(&id, Retry::Current, None, true))?;
     ensure!(
-        world.terminal.sent_to(&code).is_empty(),
-        "flume typed into the dialog"
+        reason.contains(&code.to_string()) && reason.contains("flume stop"),
+        "the refusal names not the agent and its stop: {reason}"
     );
+    ensure_eq!(world.terminal.log.count("close"), 0, "agents closed");
+    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    world.engine().settle(Some(&id));
+    ensure_eq!(world.terminal.sent_to(&code).len(), 1, "prompts sent");
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the stage once its agent said it started"
+    );
+    let status = world.status(&id)?;
+    ensure_eq!(status.stages[0].end, None, "the stage's end");
+    ensure_eq!(status.waiting_on, None, "what the place waits on");
+    ensure!(
+        status.ends.iter().any(|end| matches!(
+            &end.end.of,
+            EndOf::Stage {
+                state: StageState::NeverBegun,
+                ..
+            }
+        )),
+        "the never-begun end read earlier is gone from the record"
+    );
+    Ok(())
+}
+
+fn never_begun_then_received(_: &()) -> Outcome {
+    let world = World::new();
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    world.agent.receives_at(&code, None);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    for _ in 0..3 {
+        world.host.advance(60);
+        world.settle(&id);
+    }
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "the prompt after two sendings not received"
+    );
+    world.agent.receives_at(&code, Some(1));
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the stage once its agent said it received the prompt"
+    );
+    ensure_eq!(world.terminal.sent_to(&code).len(), 2, "prompts sent");
     Ok(())
 }
 
@@ -450,8 +595,8 @@ fn ended_where_the_terminal_reads_nothing(_: &()) -> Outcome {
     Ok(())
 }
 
-/// A start the terminal reads held or never come up: never begun at once,
-/// with the screen it gave, no prompt sent, then or at a later settle.
+/// A start the terminal reads never come up: never begun at once, with
+/// the screen it gave, no prompt sent, then or at a later settle.
 fn never_begun_at_open(world: &World, screen: &str) -> Outcome {
     let id = World::id("fix", "one");
     let code = World::identity("fix", "one", "code", 1);
@@ -476,13 +621,6 @@ fn never_begun_at_open(world: &World, screen: &str) -> Outcome {
     let end = status.stages[0].end.clone().ok_or("no end in status")?;
     ensure_eq!(end.screen.as_deref(), Some(screen), "the end's screen");
     Ok(())
-}
-
-fn s40_held_never_begun_at_once(_: &()) -> Outcome {
-    let world = World::new();
-    let warning = "WARNING: the agent runs in Bypass Permissions mode";
-    world.terminal.hold_opens(warning);
-    never_begun_at_open(&world, warning)
 }
 
 fn s45_never_came_up(_: &()) -> Outcome {

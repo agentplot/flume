@@ -20,6 +20,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s20_a_working_agent_stopped,
         },
         Scenario {
+            name: "retry: refused, forced or not, while the place's agent is live and its stage has begun, naming the agent and the stop that ends it first; once stopped, a retry starts the stage afresh",
+            cites: &["49", "50", "51", "31", "35"],
+            run: a_retry_of_a_begun_stage,
+        },
+        Scenario {
             name: "retry: a retry of a place whose work landed is refused naming it",
             cites: &["S21", "50", "63"],
             run: s21_a_retry_of_a_landed_place,
@@ -158,6 +163,31 @@ fn s20_a_working_agent_stopped(_: &()) -> Outcome {
         "the stage after a settle"
     );
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    taken(&world.engine.retry(&id, Retry::Current, None, false))?;
+    ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
+    Ok(())
+}
+
+fn a_retry_of_a_begun_stage(_: &()) -> Outcome {
+    let world = World::new();
+    let id = world.begun("build", Some(Deliverable::Commits), "one")?;
+    let work = World::identity("build", "one", "work", 1);
+    for (state, force) in [(AgentState::Waiting, false), (AgentState::Working, true)] {
+        world.terminal.set_state(&work, state);
+        let reason = refused(&world.engine.retry(&id, Retry::Current, None, force))?;
+        ensure!(
+            reason.contains(&work.to_string()) && reason.contains(&format!("flume stop {id}")),
+            "the refusal names not the agent and its stop: {reason}"
+        );
+    }
+    ensure_eq!(world.terminal.log.count("close"), 0, "agents closed");
+    ensure_eq!(
+        world.stage_state(&id, "work"),
+        Some(StageState::Begun),
+        "the stage"
+    );
+    world.terminal.set_state(&work, AgentState::Waiting);
+    taken(&world.engine.stop(&id, false))?;
     taken(&world.engine.retry(&id, Retry::Current, None, false))?;
     ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
     Ok(())
@@ -445,6 +475,7 @@ fn a_retry_after_readiness_failed(_: &()) -> Outcome {
             .is_some_and(StageState::running),
         "construct did not start"
     );
+    taken(&world.engine.stop(&id, false))?;
     taken(
         &world
             .engine
