@@ -51,8 +51,8 @@ test names is a scratch directory or file of the test's own.
 
 ## 7. The site
 
-- [ ] 7.1 Write the mode into `site/src/content/docs/guides/agent-settings.md` as design 13 has it, with S66's host and repository; `mode` in an agents table into `guides/kinds.mdx`; `mode` in the host's two tables into `reference/configuration.md`; and `--agent [<stage>.]mode=<mode>`, `--agent [<stage>.]mode.<program>=<value>` and `flume ack received --mode` into `reference/commands.md`. Write it all to any host's operator, naming no host, team or word of ours (design 13; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 7.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 7.1 Write the mode into `site/src/content/docs/guides/agent-settings.md` as design 13 has it, with S66's host and repository; `mode` in an agents table into `guides/kinds.mdx`; `mode` in the host's two tables into `reference/configuration.md`; and `--agent [<stage>.]mode=<mode>`, `--agent [<stage>.]mode.<program>=<value>` and `flume ack received --mode` into `reference/commands.md`; the first prompt's comparison into `guides/claude-code.mdx`'s UserPromptSubmit row; and the agent's `mode` and an unsettled start's into `reference/state.md`. Write it all to any host's operator, naming no host, team or word of ours (design 13; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
+- [x] 7.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 8. Coverage and the gate
 

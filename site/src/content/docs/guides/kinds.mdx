@@ -198,14 +198,19 @@ none of the lines once the place is tidied.
 ### Settings
 
 A kind's `agents` table, and a stage's one agent table, give the
-agent's `program`, `model` and `instructions`, and `beside` for where
-its pane opens. A repository may also give settings to a kind it
-does not declare, flume's own among them, with a table that holds only
-`agents`:
+agent's `program`, `model` and `instructions`, `beside` for where its
+pane opens, and `mode`. The mode says how far the agent may act without
+asking a person: one of `plan`, `ask`, `edits` and `full`, or a table of
+programs such as `{ claude = "auto" }`
+([the mode](/flume/guides/agent-settings/#the-mode)).
+A `mode` that is neither refuses the launch, naming the field. A
+repository may also give settings to a kind it does not declare,
+flume's own among them, with a table that holds only `agents`:
 
 ```toml
 [kinds.change.agents.stages.verify]
 model = "opus"
+mode = "edits"
 ```
 
 A declaration gives no environment: an `env` in any agents table
