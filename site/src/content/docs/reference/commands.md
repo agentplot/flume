@@ -200,7 +200,9 @@ flume retry <place> --submission
 | `--submission` | Submit the place's head again, starting no agent. |
 
 A retry ends the place's agent first, starts the stage with a fresh
-agent, and ends a hold on it.
+agent, and ends a hold on it. It never ends an agent whose stage has
+started or begun: the retry is refused, forced or not, naming the
+agent, and `flume stop <place>` ends it first.
 
 ## `flume stop`, `finish`, `drop` and `done`
 
