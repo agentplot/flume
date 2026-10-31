@@ -53,8 +53,9 @@ pub fn repository(given: Option<&Path>) -> Result<String, String> {
 /// `<kind>--<name>` of the repository `repository` finds, where the place
 /// profile makes it. Where the host's store holds no place there and
 /// holds one at `<repository>/places/<kind>--<name>`, it is that one,
-/// made inside the main worktree before record 0027, which is read and
-/// tidied where it stands.
+/// made before record 0027 inside a clone's main worktree or beside a
+/// bare repository's worktrees, which is read and tidied where it
+/// stands.
 pub fn place(named: &str, repository_given: Option<&Path>) -> Result<PlaceId, String> {
     if named.contains('/') {
         let path = absolute(Path::new(named))?;

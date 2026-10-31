@@ -1,10 +1,11 @@
 //! The place profile over plain git worktree (C.1; design 9): the place
 //! seam's scenarios against it on scratch repositories, S9, S10, S16, a
-//! repository that binds no merge queue, a make that runs no hook, where a
-//! place goes for the bare repository beside its worktrees and for a
-//! clone, a place made inside a clone's main worktree read and removed
-//! where it stands (record 0027), and the toolchain's environment kept in
-//! the place's git directory.
+//! repository that binds no merge queue, a make that runs no hook, every
+//! place under flume's own data directory, for the bare repository beside
+//! its worktrees as for a clone, a place an earlier flume made inside a
+//! clone's main worktree or beside a bare repository's worktrees read and
+//! removed where it stands (record 0027), and the toolchain's environment
+//! kept in the place's git directory.
 
 use crate::common::*;
 use flume::profiles::place::git_worktree::{GitWorktree, Login, PlaceData, Step};
@@ -520,10 +521,9 @@ fn make_runs_no_hook() {
     assert!(!ran.exists(), "a hook ran at make");
 }
 
-#[test]
-fn a_bare_repository_beside_its_worktrees() {
-    let origin = Repository::new("layout");
-    let scratch = Scratch::new("layout-bare");
+/// The directory `project` holding a bare clone of `origin`,
+/// `project.git`, beside its worktree `main` (design 9).
+fn bare_layout(origin: &Repository, scratch: &Scratch) -> PathBuf {
     let project = scratch.path("project");
     std::fs::create_dir_all(&project).unwrap();
     let bare = project.join("project.git");
@@ -547,14 +547,35 @@ fn a_bare_repository_beside_its_worktrees() {
             "main",
         ],
     );
+    project
+}
+
+#[test]
+fn a_bare_repositorys_places_go_under_flumes_own_data_directory() {
+    // The directory holds the bare repository beside its worktrees, and
+    // its places go under flume's own data directory by the repository's
+    // id, as a clone's do, none in the directory itself (3, C.1, C.4;
+    // record 0027).
+    let origin = Repository::new("layout");
+    let scratch = Scratch::new("layout-bare");
+    let project = bare_layout(&origin, &scratch);
     let name = project.to_string_lossy().into_owned();
     let profile = profile(PlaceData::default(), &scratch);
-    // The directory holds the bare repository beside its worktrees, so
-    // its places go beside them, inside none (C.1; record 0027).
+    let common = project.join("project.git").canonicalize().unwrap();
+    let id = flume_core::repository_id(&common.to_string_lossy());
     let location = profile
         .location(&name, "fix--beside")
         .expect("the place's location");
-    assert_eq!(location, format!("{name}/places/fix--beside"));
+    assert_eq!(
+        Path::new(&location),
+        own(&scratch).join("places").join(&id).join("fix--beside")
+    );
+    assert!(!Path::new(&location).starts_with(&project));
+    assert_eq!(
+        profile.location(&project.join("main").to_string_lossy(), "fix--beside"),
+        Ok(location.clone()),
+        "the repository named from its main worktree"
+    );
     let place = PlaceRef {
         repository: name.clone(),
         location,
@@ -567,8 +588,8 @@ fn a_bare_repository_beside_its_worktrees() {
         MakeOutcome::Made
     );
     assert!(
-        !own(&scratch).exists(),
-        "flume's data directory was written"
+        !project.join("places").exists(),
+        "a place was made in the repository's directory"
     );
     assert_eq!(
         git(
@@ -688,6 +709,59 @@ fn a_place_made_inside_the_main_worktree_is_read_and_removed_where_it_stands() {
     assert!(!Path::new(&place.location).exists());
     assert!(matches!(
         profile.remove_branch(&place.repository, &place.branch, "main"),
+        BranchRemoved::Kept { .. }
+    ));
+}
+
+#[test]
+fn a_place_made_beside_a_bare_repositorys_worktrees_is_read_and_removed_where_it_stands() {
+    // A place an earlier flume made at `<repository>/places/<kind>--<name>`
+    // beside a bare repository's worktrees is read and removed at that
+    // location, never moved (record 0027).
+    let origin = Repository::new("made-beside");
+    let scratch = Scratch::new("made-beside-bare");
+    let project = bare_layout(&origin, &scratch);
+    let name = project.to_string_lossy().into_owned();
+    let profile = profile(PlaceData::default(), &scratch);
+    let place = PlaceRef {
+        repository: name.clone(),
+        location: format!("{name}/places/fix--beside"),
+        branch: "fix/beside".into(),
+        base: "main".into(),
+    };
+    assert_ne!(
+        profile.location(&name, "fix--beside"),
+        Ok(place.location.clone())
+    );
+    git(
+        &project.join("project.git"),
+        &[
+            "worktree",
+            "add",
+            "--quiet",
+            "-b",
+            &place.branch,
+            &place.location,
+            "main",
+        ],
+    );
+    let commit = work(&place, "beside.rs");
+    match profile.read(&place) {
+        PlaceRead::Live { branch, head, .. } => {
+            assert_eq!(branch, "fix/beside");
+            assert_eq!(head, Revision::new(commit));
+        }
+        other => panic!("read {other:?}"),
+    }
+    assert!(
+        !own(&scratch).exists(),
+        "the place was moved under flume's data directory"
+    );
+    assert_eq!(profile.remove(&place), Removed::Removed);
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    assert!(!Path::new(&place.location).exists());
+    assert!(matches!(
+        profile.remove_branch(&name, &place.branch, "main"),
         BranchRemoved::Kept { .. }
     ));
 }

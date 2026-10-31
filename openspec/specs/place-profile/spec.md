@@ -32,19 +32,19 @@ every operation all or nothing (78 to 83, C.1).
 - **WHEN** a dropped place's branch holds a commit whose change its base lacks, and another's commit was cherry-picked onto the base
 - **THEN** the first branch is kept naming the commit, and the second deleted (67, S9)
 
-### Requirement: A place is made inside no working tree of its repository
+### Requirement: Every place is made under flume's own data directory
 
-The place profile SHALL give a place's location as
-`<repository>/places/<kind>--<name>` where the repository's directory
-holds its bare repository beside its worktrees, and otherwise as
-`$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`, the repository's id;
-it SHALL read and remove a place where it was made (3, 78, C.1, C.4;
-record 0027; core.40).
+The place profile SHALL give every place's location as
+`$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`, the repository's id,
+whether the repository's directory is a clone's main worktree or holds
+its bare repository beside its worktrees; it SHALL read and remove a
+place where it was made, never moving it (3, 78, C.1, C.4; record 0027;
+core.40).
 
 #### Scenario: A bare repository beside its worktrees
 
-- **WHEN** a place is made of a directory holding `project.git` and its worktree `main`
-- **THEN** it is at `<directory>/places/fix--<name>`, the main worktree's status shows nothing, and nothing is written under flume's data directory
+- **WHEN** a place is made of a directory holding `project.git` and its worktree `main`, and its location asked from the directory and from `main`
+- **THEN** both give `<data>/places/<id>/fix--<name>`, the id the bare repository's, nothing is made under the directory, and the main worktree's status shows nothing
 
 #### Scenario: A clone
 
@@ -55,6 +55,11 @@ record 0027; core.40).
 
 - **WHEN** a place stands at `<clone>/places/fix--<name>`, as an earlier flume made it
 - **THEN** it is read with its branch and head and removed there, its branch kept while it holds a commit the base lacks
+
+#### Scenario: A place made beside a bare repository's worktrees
+
+- **WHEN** a place stands at `<directory>/places/fix--<name>` beside a bare repository's worktrees, as an earlier flume made it
+- **THEN** it is read with its branch and head and removed there, nothing written under flume's data directory, its branch kept while it holds a commit the base lacks
 
 ### Requirement: Readiness and teardown as the merge queue declares
 

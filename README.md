@@ -25,9 +25,9 @@ tidies the place.
 
 - **One launch, one place.** `flume launch` makes a worktree of the
   repository, `<kind>--<name>`, on the branch `<prefix>/<name>` cut
-  from the base, inside no working tree of the repository: beside the
-  worktrees of a bare repository, under `<repository>/places/`, and
-  under flume's data directory for a clone. The prefix is the kind's,
+  from the base, under flume's data directory, inside no working tree
+  of the repository, whether it is a clone or a bare repository beside
+  its worktrees. The prefix is the kind's,
   `fix/`, `chore/` or `change/` for flume's own. The merge queue's
   policy says what a worktree needs to be ready.
 - **A kind is a list of stages.** A fix is code, then a submission to

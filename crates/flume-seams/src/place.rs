@@ -97,8 +97,8 @@ pub enum BranchRemoved {
 /// already exists, and each operation is all or nothing (83).
 pub trait Place: Send + Sync {
     /// Where the place `place`, `<kind>--<name>`, of `repository` is
-    /// made: inside no working tree of the repository, as the profile
-    /// says (3, 78, C.1; record 0027); or why it cannot say.
+    /// made: inside no working tree or directory of the repository, as
+    /// the profile says (3, 78, C.1; record 0027); or why it cannot say.
     fn location(&self, repository: &str, place: &str) -> Result<String, String>;
 
     /// A worktree at `location` on a new branch at `revision` (78).

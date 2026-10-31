@@ -188,7 +188,7 @@ impl Resolver for BuiltIn {
 /// base lives, read from the merge queue's policy at the base's current
 /// revision, none of it where no merge queue is bound. The resolver
 /// hands the one profile's data to the other, and neither calls the
-/// other (core.2). flume's own data directory, where a clone's places go
+/// other (core.2). flume's own data directory, where every place goes
 /// (record 0027), is the login environment's where the resolver was
 /// given one, as the plugin's is.
 struct BoundPlace {

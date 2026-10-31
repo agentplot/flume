@@ -141,7 +141,7 @@ fn the_command_status_gives_carries_the_prompt() {
     let agent = place.agent.expect("an agent in the launch's answer");
     let command = agent.printed.expect("no command printed");
     assert!(
-        command.starts_with("cd /repository/places/fix--one && "),
+        command.starts_with(&format!("cd {} && ", World::id("fix", "one").0)),
         "the command runs elsewhere than the place: {command}"
     );
     assert!(

@@ -2026,8 +2026,22 @@ fn bound_with(
                 .collect(),
         }),
     );
-    server.place("two--one");
+    world
+        .place
+        .locate_under(&server.scratch.path("data/flume").to_string_lossy());
+    fs::create_dir_all(place_of(world, &repository).0).expect("the place's directory");
     repository
+}
+
+/// The place `two--one` of `repository`, where `world`'s fake place makes
+/// it.
+fn place_of(world: &World, repository: &str) -> PlaceId {
+    PlaceId::new(
+        world
+            .place
+            .location(repository, "two--one")
+            .expect("the place's location"),
+    )
 }
 
 /// An engine over `world`'s fakes with herdr for its terminal, the store
@@ -2068,7 +2082,7 @@ fn begun(server: &TestServer, world: &World, repository: &str) -> PlaceId {
         ..Launch::default()
     });
     assert!(answer.refusal().is_none(), "the launch: {answer:?}");
-    let id = PlaceId::new(format!("{repository}/places/two--one"));
+    let id = place_of(world, repository);
     let deadline = Instant::now() + Duration::from_secs(60);
     while stage_state(server, world, &id, "code") != StageState::Begun {
         assert!(
@@ -2194,7 +2208,7 @@ fn a_launch_and_a_retry_each_send_their_agents_prompt_with_no_settle() {
         ..Launch::default()
     });
     assert!(answer.refusal().is_none(), "the launch: {answer:?}");
-    let id = PlaceId::new(format!("{repository}/places/two--one"));
+    let id = place_of(&world, &repository);
     let code = |start| Identity {
         repository: flume_core::repository_id(&format!("{repository}/.git")),
         place: "two--one".into(),
@@ -2253,7 +2267,7 @@ fn launched(server: &TestServer, world: &World, repository: &str) -> PlaceId {
         ..Launch::default()
     });
     assert!(answer.refusal().is_none(), "the launch: {answer:?}");
-    PlaceId::new(format!("{repository}/places/two--one"))
+    place_of(world, repository)
 }
 
 #[test]

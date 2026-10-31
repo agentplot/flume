@@ -24,7 +24,7 @@ pub use host::FakeHost;
 pub use kinds::FakeKinds;
 pub use log::Log;
 pub use merge_queue::{FakeMergeQueue, Plan};
-pub use place::FakePlace;
+pub use place::{place_location, FakePlace};
 pub use resolver::FakeResolver;
 pub use store::FakeStore;
 pub use terminal::FakeTerminal;

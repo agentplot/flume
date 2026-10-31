@@ -295,7 +295,7 @@ impl Default for FakeAgentHarness {
 fn a_place() -> PlaceRef {
     PlaceRef {
         repository: REPOSITORY.into(),
-        location: format!("{REPOSITORY}/places/fix--one"),
+        location: place_location(REPOSITORY, "fix--one"),
         branch: "fix/one".into(),
         base: "main".into(),
     }
