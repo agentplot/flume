@@ -83,14 +83,17 @@ check](/flume/guides/agent-settings/#the-start-check)).
 |---|---|
 | `$XDG_CONFIG_HOME/flume/config.toml` | the host's configuration ([configuration](/flume/reference/configuration/#the-hosts-configuration)) |
 | `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>/` | the Claude Code plugin flume hands its agents, written once per version and binary |
+| `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>/` | a place of a clone, a worktree of it outside its own; `<id>` is the repository's, as its agents' identities carry it |
 | `<place's git directory>/flume/toolchain.sh` | the environment the place's toolchain step printed, which later steps run under; it goes with the worktree |
 | `$XDG_STATE_HOME/herdr/plugins/agentplot.flume/` | the herdr plugin's lease, its last status and `watch.log`, one directory per herdr server |
 
 ## In the repository
 
-Nothing of flume's. A place is a worktree under
-`<repository>/places/`, on a branch of its own, and holds only what its
-agents commit. flume writes no record into a repository's tree or onto
+Nothing of flume's. A place is a worktree on a branch of its own,
+inside no working tree of the repository. It lies under
+`<repository>/places/` where the repository's directory holds a bare
+repository beside its worktrees, and under flume's data directory for a
+clone. It holds only what its agents commit. flume writes no record into a repository's tree or onto
 a branch.
 
 ## The file made.jsonl

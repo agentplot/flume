@@ -69,7 +69,7 @@ stays pending, and the record goes once each end is delivered.
 
 ```console
 $ flume wait fix--the-parser-reads-tabs --submission --recipient me
-~/src/acme/places/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: delivered by this wait
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: delivered by this wait
 ```
 
 - An end pending for the recipient is answered at once and recorded
@@ -93,7 +93,7 @@ write, so two inboxes at once deliver each end once:
 
 ```console
 $ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered; read: flume status ~/src/acme/places/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs code delivered; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume inbox --recipient me
 nothing pending for me
 ```
@@ -109,8 +109,8 @@ submission, with your words saying what it waits for. At the launch:
 ```console
 $ flume launch --kind chore --name tidy-the-readme --brief "Say what the parser reads." \
     --hold code="Wait until the release is cut."
-launched ~/src/acme/places/chore--tidy-the-readme
-~/src/acme/places/chore--tidy-the-readme: chore@1 (flume), live
+launched ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme
+~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme: chore@1 (flume), live
   branch chore/tidy-the-readme from main, head d185a879b51dba33555c036392b50443f4dfc5e8
   stage code: on_hold, started 0 times
   submission: none, submitted 0 times, sent back 0 times

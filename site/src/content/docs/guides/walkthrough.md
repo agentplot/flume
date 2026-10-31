@@ -42,8 +42,9 @@ parallel = 1
 ```
 
 flume reads both at the base's current revision, so they are committed
-on `main`. Its places go under `places/` in the repository, which
-`.gitignore` lists. [sluice's own guide](https://agentplot.github.io/sluice/guides/walkthrough/)
+on `main`. `~/src/acme` is a clone, so its places go under flume's
+data directory, by the repository's id, and never show in its status.
+[sluice's own guide](https://agentplot.github.io/sluice/guides/walkthrough/)
 says how to set sluice up.
 
 ## 2. Launch
@@ -51,13 +52,13 @@ says how to set sluice up.
 ```console
 $ flume launch --kind fix --name the-parser-reads-tabs \
     --brief "The parser drops a tab after a quote." --recipient me
-launched ~/src/acme/places/fix--the-parser-reads-tabs
-~/src/acme/places/fix--the-parser-reads-tabs: fix@1 (flume), live
+launched ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs: fix@1 (flume), live
   branch fix/the-parser-reads-tabs from main, head 84130b3cd2adae9a0ac2117884849d513da80181
   stage code: starting, started 1 times
   agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude): unknown
     program = claude (from default)
-    run: cd ~/src/acme/places/fix--the-parser-reads-tabs && FLUME_AGENT=flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 FLUME_PLACE=~/src/acme/places/fix--the-parser-reads-tabs FLUME_SECRET=3c1a… FLUME_STAGE=code claude --plugin-dir ~/.local/share/flume/plugins/claude/0.0.0-5d294893e56e 'You are the code stage of the fix the-parser-reads-tabs, …'
+    run: cd ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs && FLUME_AGENT=flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 FLUME_PLACE=~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs FLUME_SECRET=3c1a… FLUME_STAGE=code claude --plugin-dir ~/.local/share/flume/plugins/claude/0.0.0-5d294893e56e 'You are the code stage of the fix the-parser-reads-tabs, …'
   the deliverable is missing
   submission: none, submitted 0 times, sent back 0 times
   recipients: me
@@ -65,7 +66,7 @@ launched ~/src/acme/places/fix--the-parser-reads-tabs
   cannot read: whether the agent's own work runs
 ```
 
-flume made the worktree `places/fix--the-parser-reads-tabs` on the
+flume made the worktree `fix--the-parser-reads-tabs` on the
 branch `fix/the-parser-reads-tabs`, cut from `main`, and started the
 fix's one stage, `code`. Each line says one fact:
 
@@ -88,7 +89,7 @@ without starting anything:
 
 ```text
 You are the code stage of the fix the-parser-reads-tabs, working in the place
-~/src/acme/places/fix--the-parser-reads-tabs on the branch fix/the-parser-reads-tabs,
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs on the branch fix/the-parser-reads-tabs,
 which was cut from main.
 
 The parser drops a tab after a quote.
@@ -112,9 +113,9 @@ settle reads that:
 
 ```console
 $ flume settle
-settled ~/src/acme/places/fix--the-parser-reads-tabs
+settled ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume status fix--the-parser-reads-tabs
-~/src/acme/places/fix--the-parser-reads-tabs: fix@1 (flume), live
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs: fix@1 (flume), live
   branch fix/the-parser-reads-tabs from main, head 84130b3cd2adae9a0ac2117884849d513da80181
   stage code: begun, started 1 times
   …
@@ -127,7 +128,7 @@ quiet:
 
 ```console
 $ flume status fix--the-parser-reads-tabs
-~/src/acme/places/fix--the-parser-reads-tabs: fix@1 (flume), live
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs: fix@1 (flume), live
   branch fix/the-parser-reads-tabs from main, head 3abbf3b6b8ed59e66b11146dff00e7f9d418f6c3
   stage code: begun, started 1 times
   …
@@ -144,9 +145,9 @@ branch's head and submits the place, since `fix` lands:
 
 ```console
 $ flume settle
-settled ~/src/acme/places/fix--the-parser-reads-tabs
+settled ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume status fix--the-parser-reads-tabs
-~/src/acme/places/fix--the-parser-reads-tabs: fix@1 (flume), live
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs: fix@1 (flume), live
   branch fix/the-parser-reads-tabs from main, head 3abbf3b6b8ed59e66b11146dff00e7f9d418f6c3
   stage code: delivered, started 1 times, ended at 3abbf3b6b8ed59e66b11146dff00e7f9d418f6c3
   the deliverable exists
@@ -177,7 +178,7 @@ lands the fix, the next settle reads the landing and tidies the place:
 ```console
 $ flume settle
 $ flume status fix--the-parser-reads-tabs
-~/src/acme/places/fix--the-parser-reads-tabs@1793287699: fix@1 (flume), tidied {"at":1793287699,"over":{"landed":{"commit":"d185a879b51dba33555c036392b50443f4dfc5e8"}},"pending_for":["me"]}
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs@1793287699: fix@1 (flume), tidied {"at":1793287699,"over":{"landed":{"commit":"d185a879b51dba33555c036392b50443f4dfc5e8"}},"pending_for":["me"]}
   branch fix/the-parser-reads-tabs from main
   stage code: delivered, started 1 times, ended at 3abbf3b6b8ed59e66b11146dff00e7f9d418f6c3
   recipients: me
@@ -200,7 +201,7 @@ and delivers it:
 
 ```console
 $ flume wait fix--the-parser-reads-tabs --submission --recipient me
-~/src/acme/places/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: delivered by this wait
+~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs submission landed d185a879b51dba33555c036392b50443f4dfc5e8 for me: delivered by this wait
 ```
 
 It exits `0`. `flume inbox` collects everything else pending for the
@@ -208,7 +209,7 @@ recipient, on every place of the host:
 
 ```console
 $ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered; read: flume status ~/src/acme/places/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs code delivered; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume inbox --recipient me
 nothing pending for me
 $ flume status

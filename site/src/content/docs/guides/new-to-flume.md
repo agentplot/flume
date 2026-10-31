@@ -45,8 +45,9 @@ process exited. A repository writes kinds of its own in
 
 ## Places
 
-A **place** is the worktree flume makes for one launch, at
-`<repository>/places/<kind>--<name>`, on a branch of its own,
+A **place** is the worktree flume makes for one launch, named
+`<kind>--<name>` and inside no working tree of the repository, on a
+branch of its own,
 `<prefix>/<name>`, cut from the base. The prefix is the kind's: `fix`,
 `chore` or `change` for the built-in kinds. Every stage of the work
 runs in that one place, one agent at a time, and the place lasts until
