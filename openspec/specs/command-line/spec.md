@@ -41,9 +41,12 @@ missing or not the current start's (41, C.4).
 
 ### Requirement: A place named by its location or its kind and name
 
-A command SHALL name a place by its location or by `<kind>--<name>` in
+A command SHALL name a place by its location or by `<kind>--<name>` of
 the repository it runs in, the repository being the directory holding a
-bare repository and its worktrees, or the main worktree.
+bare repository and its worktrees, or the main worktree; a place named
+by `<kind>--<name>` SHALL be the one at the location the place profile
+gives it, or, where the host's store holds none there and holds one at
+`<repository>/places/<kind>--<name>`, that one (C.1; record 0027).
 
 #### Scenario: Holds and recipients at the launch
 
@@ -57,8 +60,13 @@ bare repository and its worktrees, or the main worktree.
 
 #### Scenario: A place named from inside it
 
-- **WHEN** `flume status fix--one --json` runs inside the place `places/fix--one`
-- **THEN** it answers that place's status
+- **WHEN** `flume status fix--one --json` runs inside the place `fix--one` of a clone, and `flume status ./fix--one --json` in the directory holding it
+- **THEN** each answers that place's status
+
+#### Scenario: A place made inside the main worktree, named by its kind and name
+
+- **WHEN** a clone's place stands at `<clone>/places/fix--one`, as an earlier flume made it, and `flume status fix--one`, `flume drop fix--one` and `flume tidy` run in the clone
+- **THEN** status answers that place, and the drop and the tidy remove its worktree and its branch
 
 ### Requirement: launch takes a stream and an intent
 

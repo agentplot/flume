@@ -2,11 +2,15 @@
 //! design 16): the repository is the directory holding a bare repository
 //! and its worktrees, or the main worktree, found from the directory the
 //! command runs in or `--repository`; a place is named by its location or
-//! by `<kind>--<name>` in that repository. git is no tool a profile
+//! by `<kind>--<name>` of that repository, at the location the one place
+//! profile makes it at (C.1; record 0027). git is no tool a profile
 //! chooses, so nothing here names one (core.1).
 
 use crate::git::Git;
-use flume_seams::PlaceId;
+use crate::host::config;
+use crate::profiles::place::git_worktree;
+use crate::profiles::store::state_dir::StateDir;
+use flume_seams::{PlaceId, Store};
 use std::path::{Path, PathBuf};
 
 /// The repository the command runs in: `given`'s, or the working
@@ -46,14 +50,29 @@ pub fn repository(given: Option<&Path>) -> Result<String, String> {
 }
 
 /// The place `named` names: a location where it holds a `/`, else
-/// `<kind>--<name>` in the repository `repository` finds.
+/// `<kind>--<name>` of the repository `repository` finds, where the place
+/// profile makes it. Where the host's store holds no place there and
+/// holds one at `<repository>/places/<kind>--<name>`, it is that one,
+/// made inside the main worktree before record 0027, which is read and
+/// tidied where it stands.
 pub fn place(named: &str, repository_given: Option<&Path>) -> Result<PlaceId, String> {
     if named.contains('/') {
         let path = absolute(Path::new(named))?;
         return Ok(PlaceId::new(settled(&path).to_string_lossy().into_owned()));
     }
     let repository = repository(repository_given)?;
-    Ok(PlaceId::new(format!("{repository}/places/{named}")))
+    let own = config::flume_data().ok();
+    let place = PlaceId::new(git_worktree::location(&repository, named, own.as_deref())?);
+    let inside = PlaceId::new(format!("{repository}/places/{named}"));
+    if place != inside && !held(&place) && held(&inside) {
+        return Ok(inside);
+    }
+    Ok(place)
+}
+
+/// Whether the host's store holds a place at `place`.
+fn held(place: &PlaceId) -> bool {
+    StateDir::of_host().is_ok_and(|store| store.read(place).is_some())
 }
 
 /// The base a launch naming none is cut from: the repository's default

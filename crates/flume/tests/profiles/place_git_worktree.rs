@@ -1,8 +1,10 @@
 //! The place profile over plain git worktree (C.1; design 9): the place
 //! seam's scenarios against it on scratch repositories, S9, S10, S16, a
-//! repository that binds no merge queue, a make that runs no hook, the
-//! bare repository beside its worktrees, and the toolchain's environment
-//! kept in the place's git directory.
+//! repository that binds no merge queue, a make that runs no hook, where a
+//! place goes for the bare repository beside its worktrees and for a
+//! clone, a place made inside a clone's main worktree read and removed
+//! where it stands (record 0027), and the toolchain's environment kept in
+//! the place's git directory.
 
 use crate::common::*;
 use flume::profiles::place::git_worktree::{GitWorktree, Login, PlaceData, Step};
@@ -10,7 +12,7 @@ use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::place::{self, PlaceHarness};
 use flume_seams::*;
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 /// The login environment the profile's steps run with here: nothing of
@@ -26,12 +28,24 @@ fn login(scratch: &Scratch) -> Login {
     ])
 }
 
+/// flume's own data directory on the scratch's host.
+fn own(scratch: &Scratch) -> PathBuf {
+    scratch.path("data/flume")
+}
+
+/// The profile bound with `data`, its steps run in the scratch's login
+/// environment, and flume's own data directory the scratch's.
+fn profile(data: PlaceData, scratch: &Scratch) -> GitWorktree {
+    GitWorktree::with_login(data, login(scratch)).with_own(&own(scratch))
+}
+
 /// The profile bound with data a scenario changes as it goes, as the
 /// resolver binds it anew for each command.
 struct Bound {
     data: Mutex<PlaceData>,
     path: String,
     home: String,
+    own: PathBuf,
 }
 
 impl Bound {
@@ -42,6 +56,7 @@ impl Bound {
             data: Mutex::default(),
             path: std::env::var("PATH").unwrap_or_default(),
             home: home.to_string_lossy().into_owned(),
+            own: own(scratch),
         }
     }
 
@@ -50,10 +65,15 @@ impl Bound {
             self.data.lock().unwrap().clone(),
             Login::given(&[("HOME", &self.home), ("PATH", &self.path), ("LANG", "C")]),
         )
+        .with_own(&self.own)
     }
 }
 
 impl Place for Bound {
+    fn location(&self, repository: &str, place: &str) -> Result<String, String> {
+        self.profile().location(repository, place)
+    }
+
     fn make(
         &self,
         repository: &str,
@@ -120,10 +140,6 @@ impl PlaceHarness for Harness {
             "main".into(),
             Revision::new(self.repository.head()),
         )
-    }
-
-    fn location(&self, repository: &str, name: &str) -> String {
-        format!("{repository}/places/fix--{name}")
     }
 
     fn branch(&self, repository: &str, branch: &str) -> Revision {
@@ -215,11 +231,14 @@ fn the_place_profile_passes_the_place_scenarios() {
     pass_all("place", &place::scenarios(), Harness::new);
 }
 
-/// A place made by the profile on `fix/<name>` at the base's head.
+/// A place made by the profile on `fix/<name>` at the base's head, where
+/// the profile says.
 fn made(seam: &dyn Place, repository: &Repository, name: &str) -> PlaceRef {
     let place = PlaceRef {
         repository: repository.name(),
-        location: format!("{}/places/fix--{name}", repository.name()),
+        location: seam
+            .location(&repository.name(), &format!("fix--{name}"))
+            .expect("the place's location"),
         branch: format!("fix/{name}"),
         base: "main".into(),
     };
@@ -248,7 +267,7 @@ fn s10_an_untracked_file_and_a_failed_teardown_keep_their_places() {
     let marks = repository.scratch.path("failing");
     std::fs::create_dir_all(&marks).unwrap();
     std::fs::write(marks.join("fix--teardown"), "").unwrap();
-    let profile = GitWorktree::with_login(
+    let profile = profile(
         PlaceData {
             teardown: vec![Step::run(
                 "pre-remove",
@@ -259,7 +278,7 @@ fn s10_an_untracked_file_and_a_failed_teardown_keep_their_places() {
             )],
             ..PlaceData::default()
         },
-        login(&repository.scratch),
+        &repository.scratch,
     );
     let holding = made(&profile, &repository, "holding");
     std::fs::write(Path::new(&holding.location).join("notes.txt"), "mine\n").unwrap();
@@ -294,7 +313,7 @@ fn s10_an_untracked_file_and_a_failed_teardown_keep_their_places() {
 #[test]
 fn s9_a_branch_is_kept_while_it_holds_a_change_its_base_lacks() {
     let repository = Repository::new("s9");
-    let profile = GitWorktree::with_login(PlaceData::default(), login(&repository.scratch));
+    let profile = profile(PlaceData::default(), &repository.scratch);
     let dropped = made(&profile, &repository, "dropped");
     let lacking = work(&dropped, "dropped.rs");
     let picked = made(&profile, &repository, "picked");
@@ -336,13 +355,13 @@ fn a_branch_is_judged_against_the_base_where_it_lands() {
     let origin = Repository::new("landing");
     let remote = origin.bare_remote();
     let repository = Repository::clone_of(&remote, Scratch::new("landing-clone"));
-    let local = GitWorktree::with_login(PlaceData::default(), login(&repository.scratch));
-    let landing = GitWorktree::with_login(
+    let local = profile(PlaceData::default(), &repository.scratch);
+    let landing = profile(
         PlaceData {
             base_remote: Some("origin".into()),
             ..PlaceData::default()
         },
-        login(&repository.scratch),
+        &repository.scratch,
     );
     let place = made(&local, &repository, "landed");
     let commit = work(&place, "landed.rs");
@@ -377,7 +396,7 @@ fn s16_readiness_that_fails_at_its_toolchain() {
     let repository = Repository::new("s16");
     let seen = repository.scratch.path("seen-env");
     let setup = repository.scratch.path("setup-ran");
-    let profile = GitWorktree::with_login(
+    let profile = profile(
         PlaceData {
             readiness: vec![
                 Step::toolchain(
@@ -391,7 +410,7 @@ fn s16_readiness_that_fails_at_its_toolchain() {
             ],
             ..PlaceData::default()
         },
-        login(&repository.scratch),
+        &repository.scratch,
     );
     let place = made(&profile, &repository, "unready");
     let readiness = profile.ready(&place, &Revision::new(repository.head()));
@@ -425,7 +444,7 @@ fn s16_readiness_that_fails_at_its_toolchain() {
 fn the_toolchain_environment_is_kept_in_the_places_git_directory() {
     let repository = Repository::new("toolchain");
     let torn = repository.scratch.path("torn-down");
-    let profile = GitWorktree::with_login(
+    let profile = profile(
         PlaceData {
             readiness: vec![
                 Step::toolchain("toolchain", "echo 'export FLUME_TEST_TOOL=present'"),
@@ -440,7 +459,7 @@ fn the_toolchain_environment_is_kept_in_the_places_git_directory() {
             )],
             ..PlaceData::default()
         },
-        login(&repository.scratch),
+        &repository.scratch,
     );
     let place = made(&profile, &repository, "tooled");
     let readiness = profile.ready(&place, &Revision::new(repository.head()));
@@ -472,7 +491,7 @@ fn the_toolchain_environment_is_kept_in_the_places_git_directory() {
 #[test]
 fn with_no_merge_queue_bound_nothing_runs() {
     let repository = Repository::new("unbound");
-    let profile = GitWorktree::with_login(PlaceData::default(), login(&repository.scratch));
+    let profile = profile(PlaceData::default(), &repository.scratch);
     let place = made(&profile, &repository, "bare");
     let readiness = profile.ready(&place, &Revision::new(repository.head()));
     assert!(readiness.steps.is_empty(), "{readiness:?}");
@@ -496,7 +515,7 @@ fn make_runs_no_hook() {
         .args(["+x", &hook.to_string_lossy()])
         .status()
         .expect("chmod");
-    let profile = GitWorktree::with_login(PlaceData::default(), login(&repository.scratch));
+    let profile = profile(PlaceData::default(), &repository.scratch);
     made(&profile, &repository, "hooked");
     assert!(!ran.exists(), "a hook ran at make");
 }
@@ -529,10 +548,16 @@ fn a_bare_repository_beside_its_worktrees() {
         ],
     );
     let name = project.to_string_lossy().into_owned();
-    let profile = GitWorktree::with_login(PlaceData::default(), login(&scratch));
+    let profile = profile(PlaceData::default(), &scratch);
+    // The directory holds the bare repository beside its worktrees, so
+    // its places go beside them, inside none (C.1; record 0027).
+    let location = profile
+        .location(&name, "fix--beside")
+        .expect("the place's location");
+    assert_eq!(location, format!("{name}/places/fix--beside"));
     let place = PlaceRef {
         repository: name.clone(),
-        location: format!("{name}/places/fix--beside"),
+        location,
         branch: "fix/beside".into(),
         base: "main".into(),
     };
@@ -540,6 +565,18 @@ fn a_bare_repository_beside_its_worktrees() {
     assert_eq!(
         profile.make(&name, &head, &place.branch, &place.location),
         MakeOutcome::Made
+    );
+    assert!(
+        !own(&scratch).exists(),
+        "flume's data directory was written"
+    );
+    assert_eq!(
+        git(
+            &project.join("main"),
+            &["status", "--porcelain", "--untracked-files=all"]
+        ),
+        "",
+        "the main worktree shows the place"
     );
     match profile.read(&place) {
         PlaceRead::Live {
@@ -567,9 +604,98 @@ fn a_bare_repository_beside_its_worktrees() {
 }
 
 #[test]
+fn a_working_trees_places_go_under_flumes_own_data_directory() {
+    // A clone's directory is its main worktree, so its places go under
+    // flume's own data directory by the repository's id, and the clone's
+    // own status shows none of them (3, C.1, C.4; record 0027).
+    let repository = Repository::new("layout-clone");
+    let profile = profile(PlaceData::default(), &repository.scratch);
+    let common = repository.dir.join(".git");
+    let id = flume_core::repository_id(&common.to_string_lossy());
+    let place = made(&profile, &repository, "clone");
+    assert_eq!(
+        Path::new(&place.location),
+        own(&repository.scratch)
+            .join("places")
+            .join(&id)
+            .join("fix--clone")
+    );
+    assert!(!Path::new(&place.location).starts_with(&repository.dir));
+    let inside = repository.dir.join("inside");
+    std::fs::create_dir_all(&inside).unwrap();
+    assert_eq!(
+        profile.location(&inside.to_string_lossy(), "fix--clone"),
+        Ok(place.location.clone()),
+        "the repository named from a directory inside its worktree"
+    );
+    assert!(matches!(profile.read(&place), PlaceRead::Live { .. }));
+    assert_eq!(
+        repository.git(&["status", "--porcelain", "--untracked-files=all"]),
+        "",
+        "the main worktree shows the place"
+    );
+
+    let other = Repository::new("layout-other");
+    assert_ne!(
+        profile.location(&other.name(), "fix--clone"),
+        Ok(place.location.clone()),
+        "two repositories' places of one name share a location"
+    );
+
+    assert_eq!(profile.remove(&place), Removed::Removed);
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    assert_eq!(
+        profile.remove_branch(&repository.name(), "fix/clone", "main"),
+        BranchRemoved::Removed
+    );
+}
+
+#[test]
+fn a_place_made_inside_the_main_worktree_is_read_and_removed_where_it_stands() {
+    // A place an earlier flume made at `<repository>/places/<kind>--<name>`
+    // of a clone is read and removed at that location (record 0027).
+    let repository = Repository::new("made-inside");
+    let profile = profile(PlaceData::default(), &repository.scratch);
+    let place = PlaceRef {
+        repository: repository.name(),
+        location: format!("{}/places/fix--inside", repository.name()),
+        branch: "fix/inside".into(),
+        base: "main".into(),
+    };
+    assert_ne!(
+        profile.location(&place.repository, "fix--inside"),
+        Ok(place.location.clone())
+    );
+    repository.git(&[
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        &place.branch,
+        &place.location,
+        "main",
+    ]);
+    let commit = work(&place, "inside.rs");
+    match profile.read(&place) {
+        PlaceRead::Live { branch, head, .. } => {
+            assert_eq!(branch, "fix/inside");
+            assert_eq!(head, Revision::new(commit));
+        }
+        other => panic!("read {other:?}"),
+    }
+    assert_eq!(profile.remove(&place), Removed::Removed);
+    assert_eq!(profile.read(&place), PlaceRead::Gone);
+    assert!(!Path::new(&place.location).exists());
+    assert!(matches!(
+        profile.remove_branch(&place.repository, &place.branch, "main"),
+        BranchRemoved::Kept { .. }
+    ));
+}
+
+#[test]
 fn the_main_worktree_is_never_removed() {
     let repository = Repository::new("main-worktree");
-    let profile = GitWorktree::with_login(PlaceData::default(), login(&repository.scratch));
+    let profile = profile(PlaceData::default(), &repository.scratch);
     let main = PlaceRef {
         repository: repository.name(),
         location: repository.name(),

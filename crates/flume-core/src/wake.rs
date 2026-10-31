@@ -82,22 +82,21 @@ impl Engine {
         }
     }
 
-    /// The run of the address that stands: the place serving it, or the
-    /// place its run would be made as, a tidied document of an earlier
-    /// run aside (3, 132).
+    /// The run of the address that stands: the place serving it, or a
+    /// place of the repository, kind and name its run would be made as,
+    /// wherever it was made, a tidied document of an earlier run aside
+    /// (3, 132).
     fn run_of(&self, address: &str, run: &RoleRun) -> Option<HeldState> {
-        let location = format!(
-            "{}/places/{}--{}",
-            run.repository,
-            run.kind,
-            role_of(address)
-        );
+        let short = format!("{}--{}", run.kind, role_of(address));
         self.store
             .read_every()
             .into_iter()
             .map(|read| read.state)
             .filter(|held| !matches!(held.phase, Phase::Tidied { .. }))
-            .find(|held| held.role.as_deref() == Some(address) || held.place.location == location)
+            .find(|held| {
+                held.role.as_deref() == Some(address)
+                    || (held.place.repository == run.repository && held.place.short() == short)
+            })
     }
 
     /// The settle's wake step (design 2): each role's address an end of

@@ -67,12 +67,18 @@ repo=$scratch/repository
 git init --quiet -b main "$repo"
 mkdir -p "$repo/.config"
 printf '[profiles]\nplace = "git-worktree"\n' >"$repo/.config/flume.toml"
-printf 'places/\n' >"$repo/.gitignore"
 git -C "$repo" add -A
 git -C "$repo" commit --quiet -m "the binding"
 (cd "$repo" && "$flume" launch --kind fix --name one --brief "fix the parser" \
   --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch"
-place=$repo/places/fix--one
+# The place, named by its kind and name where flume made it: under its
+# data directory, since the repository is a clone (record 0027).
+located() {
+  (cd "$repo" && "$flume" status "$1" --json) | jq -r '.status.places[0].place'
+}
+place=$(located fix--one)
+case $place in "$XDG_DATA_HOME"/flume/places/*/fix--one) ;; *) fail "the place is at $place" ;; esac
+[ -z "$(git -C "$repo" status --porcelain --untracked-files=all)" ] || fail "the repository shows its place"
 
 status() {
   (cd "$repo" && "$flume" status "$place" --json) | jq '.status.places[0]'
@@ -188,7 +194,7 @@ accounts = [{ name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "
 TOML
 (cd "$repo" && "$flume" launch --kind fix --name two --brief "fix the lexer" \
   --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch under an account"
-place=$repo/places/fix--two
+place=$(located fix--two)
 printed=$(status | jq -r '.agent.printed')
 envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
 two=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"

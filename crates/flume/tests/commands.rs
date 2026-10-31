@@ -16,6 +16,7 @@ mod common;
 use common::{git, Repository, Scratch};
 use flume::commands;
 use flume::host::config::{self, HostConfig};
+use flume::profiles::place::git_worktree;
 use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::{core_over, core_with, BuiltIn};
 use flume_core::Answer;
@@ -142,6 +143,41 @@ impl MergeQueue for StandInQueue {
     }
 }
 
+/// The variable that has the stand-in flume make its places inside the
+/// repository's main worktree, at `<repository>/places/<kind>--<name>`,
+/// as flume made them before record 0027.
+const PLACES_INSIDE: &str = "FLUME_TEST_PLACES_INSIDE";
+
+/// The place profile built in, its places made inside the main worktree.
+struct Inside(Arc<dyn Place>);
+
+impl Place for Inside {
+    fn location(&self, repository: &str, place: &str) -> Result<String, String> {
+        Ok(format!("{repository}/places/{place}"))
+    }
+    fn make(
+        &self,
+        repository: &str,
+        revision: &Revision,
+        branch: &str,
+        location: &str,
+    ) -> MakeOutcome {
+        self.0.make(repository, revision, branch, location)
+    }
+    fn ready(&self, place: &PlaceRef, revision: &Revision) -> Readiness {
+        self.0.ready(place, revision)
+    }
+    fn read(&self, place: &PlaceRef) -> PlaceRead {
+        self.0.read(place)
+    }
+    fn remove(&self, place: &PlaceRef) -> Removed {
+        self.0.remove(place)
+    }
+    fn remove_branch(&self, repository: &str, branch: &str, base: &str) -> BranchRemoved {
+        self.0.remove_branch(repository, branch, base)
+    }
+}
+
 /// The profiles built in, with the stand-ins beside them.
 struct StandIn(BuiltIn);
 
@@ -153,7 +189,11 @@ impl Resolver for StandIn {
         self.0.place_profiles()
     }
     fn place(&self, repository: &str, binding: &Binding) -> Option<Arc<dyn Place>> {
-        self.0.place(repository, binding)
+        let place = self.0.place(repository, binding)?;
+        if std::env::var_os(PLACES_INSIDE).is_some() {
+            return Some(Arc::new(Inside(place)));
+        }
+        Some(place)
     }
     fn change(&self, profile: &str) -> Option<Arc<dyn Change>> {
         self.0.change(profile)
@@ -233,6 +273,19 @@ impl Host {
         self.scratch.path("home")
     }
 
+    /// flume's own data on the host, under its home, where the stand-in
+    /// flume's login environment, its `HOME` alone, puts it too.
+    fn data(&self) -> PathBuf {
+        self.home().join(".local/share/flume")
+    }
+
+    /// Where flume makes the place `<kind>--<name>` of `repository` on
+    /// this host (C.1; record 0027).
+    fn place_of(&self, repository: &Repository, place: &str) -> String {
+        git_worktree::location(&repository.name(), place, Some(&self.data()))
+            .expect("the place's location")
+    }
+
     /// Writes the host's configuration.
     fn configure(&self, text: &str) {
         std::fs::write(self.scratch.path("config/flume/config.toml"), text)
@@ -252,6 +305,7 @@ impl Host {
         command
             .env("XDG_STATE_HOME", self.scratch.path("state"))
             .env("XDG_CONFIG_HOME", self.scratch.path("config"))
+            .env("XDG_DATA_HOME", self.home().join(".local/share"))
             .env("HOME", self.home());
         for (name, value) in env {
             command.env(name, value);
@@ -326,7 +380,6 @@ fn repository(label: &str, queue: Option<&str>) -> Repository {
         binding.push_str(&format!("merge_queue = \"{queue}\"\n"));
     }
     repository.write(".config/flume.toml", &binding);
-    repository.write(".gitignore", "places/\n");
     repository.commit("the binding");
     repository
 }
@@ -399,7 +452,7 @@ fn the_same_answer_through_the_command_line_and_the_core() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/fix--one", repository.name());
+    let place = host.place_of(&repository, "fix--one");
     let ran = host.flume(&repository.dir, &["status", &place, "--json"], &[]);
     assert_eq!(ran.code, 0, "{}", ran.text);
     let core = core_over(
@@ -435,7 +488,7 @@ fn a_refusal() {
     assert_eq!(launched.code, 0, "{}", launched.text);
     let ran = host.flume(&repository.dir, &["done", "fix--one", "--json"], &[]);
     assert_eq!(ran.code, 1, "{}", ran.text);
-    let place = format!("{}/places/fix--one", repository.name());
+    let place = host.place_of(&repository, "fix--one");
     let reason = ran
         .answer()
         .refusal()
@@ -544,7 +597,7 @@ fn a_hold_after_the_launch_and_a_stall_bound() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/change--one", repository.name());
+    let place = host.place_of(&repository, "change--one");
     assert_eq!(held_of(&host, &place).state.stall_after, 30 * 60);
     let held = answered(
         &host.flume(
@@ -667,7 +720,7 @@ fn agent_settings_at_the_launch() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/change--one", repository.name());
+    let place = host.place_of(&repository, "change--one");
     let launch = |model: &str| {
         serde_json::json!({
             "model": {"layer": "launch", "value": model},
@@ -702,7 +755,7 @@ fn agent_settings_at_the_launch() {
         "{}",
         refused.text
     );
-    assert!(!repository.dir.join("places/change--two").exists());
+    assert!(!Path::new(&host.place_of(&repository, "change--two")).exists());
 }
 
 #[test]
@@ -735,7 +788,7 @@ fn a_stream_and_an_intent_at_the_launch() {
     };
     let launched = launch("one", "personal");
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/change--one", repository.name());
+    let place = host.place_of(&repository, "change--one");
     let status = host
         .flume(&repository.dir, &["status", &place, "--json"], &[])
         .answer();
@@ -755,7 +808,7 @@ fn a_stream_and_an_intent_at_the_launch() {
     let refused = launch("two", "nightly");
     assert_ne!(refused.code, 0, "{}", refused.text);
     assert!(refused.text.contains("nightly"), "{}", refused.text);
-    assert!(!repository.dir.join("places/change--two").exists());
+    assert!(!Path::new(&host.place_of(&repository, "change--two")).exists());
 }
 
 #[test]
@@ -779,7 +832,7 @@ fn host_settings_and_an_account_for_a_kind() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/change--one", repository.name());
+    let place = host.place_of(&repository, "change--one");
     let agent = current_agent(&host, &repository.dir, &place);
     assert_eq!(agent["stage"], "construct");
     assert_eq!(agent["settings"]["env"]["WORK_HOME"], "<set>", "{agent}");
@@ -843,7 +896,7 @@ fn no_environment_value_is_printed_or_kept() {
         assert_eq!(launched.code, 0, "the launch refused");
         answers.push(launched.text);
     }
-    let place = format!("{}/places/change--one", repository.name());
+    let place = host.place_of(&repository, "change--one");
     deliver(&host, &repository.dir, &place, "construct");
     for words in [
         vec!["status", "--json"],
@@ -904,7 +957,7 @@ fn a_place_named_from_inside_it() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = repository.dir.join("places/fix--one");
+    let place = PathBuf::from(host.place_of(&repository, "fix--one"));
     let ran = host.flume(&place, &["status", "fix--one", "--json"], &[]);
     assert_eq!(ran.code, 0, "{}", ran.text);
     let answer = ran.answer();
@@ -913,11 +966,116 @@ fn a_place_named_from_inside_it() {
         PlaceId::new(place.to_string_lossy())
     );
     let by_location = host.flume(
-        &repository.dir,
-        &["status", "places/fix--one", "--json"],
+        place.parent().expect("the place's folder"),
+        &["status", "./fix--one", "--json"],
         &[],
     );
     assert_eq!(by_location.answer(), answer);
+}
+
+#[test]
+fn a_place_is_made_inside_no_working_tree_of_its_repository() {
+    // 3, C.1, record 0027: a clone's place goes under flume's own data
+    // directory, and the clone's status shows nothing; a place of the
+    // bare repository beside its worktrees goes beside them.
+    let host = Host::new("no-working-tree");
+    let kinds = kinds_file(&host, false);
+    let launch = |dir: &Path| {
+        let launched = host.stand_in(
+            dir,
+            &[
+                "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+            ],
+            &[],
+        );
+        assert_eq!(launched.code, 0, "{}", launched.text);
+        the_place(&launched.answer()).place.0.clone()
+    };
+
+    let clone = repository("no-working-tree", None);
+    let place = launch(&clone.dir);
+    assert_eq!(place, host.place_of(&clone, "fix--one"));
+    assert!(Path::new(&place).starts_with(host.data().join("places")));
+    assert!(Path::new(&place).join(".git").is_file(), "{place}");
+    assert_eq!(
+        clone.git(&["status", "--porcelain", "--untracked-files=all"]),
+        "",
+        "the clone shows its place"
+    );
+
+    let origin = repository("no-working-tree-bare", None);
+    let project = origin.scratch.path("project");
+    let bare = project.join("project.git");
+    git(
+        &origin.scratch.root,
+        &[
+            "clone",
+            "--quiet",
+            "--bare",
+            &origin.name(),
+            &bare.to_string_lossy(),
+        ],
+    );
+    git(&bare, &["remote", "remove", "origin"]);
+    let main = project.join("main");
+    git(
+        &bare,
+        &[
+            "worktree",
+            "add",
+            "--quiet",
+            &main.to_string_lossy(),
+            "main",
+        ],
+    );
+    let place = launch(&main);
+    assert_eq!(
+        place,
+        format!("{}/places/fix--one", project.to_string_lossy())
+    );
+    assert!(Path::new(&place).join(".git").is_file(), "{place}");
+    assert_eq!(
+        git(&main, &["status", "--porcelain", "--untracked-files=all"]),
+        "",
+        "the main worktree shows the place"
+    );
+    let named = host.flume(&main, &["status", "fix--one", "--json"], &[]);
+    assert_eq!(the_place(&named.answer()).place, PlaceId::new(&place));
+}
+
+#[test]
+fn a_place_made_inside_the_main_worktree_is_read_and_tidied_where_it_stands() {
+    // Record 0027: a place an earlier flume made at
+    // `<repository>/places/<kind>--<name>` of a clone is named by its kind
+    // and name, and dropped and tidied there.
+    let host = Host::new("made-inside");
+    let repository = repository("made-inside", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[(PLACES_INSIDE, "1")],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let inside = format!("{}/places/fix--one", repository.name());
+    assert_eq!(the_place(&launched.answer()).place, PlaceId::new(&inside));
+    assert_ne!(inside, host.place_of(&repository, "fix--one"));
+
+    let status = host.flume(&repository.dir, &["status", "fix--one", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    assert_eq!(the_place(&status.answer()).place, PlaceId::new(&inside));
+
+    host.end_agent(&inside, "code", 1);
+    let dropped = host.stand_in(&repository.dir, &["drop", "fix--one", "--json"], &[]);
+    assert_eq!(dropped.code, 0, "{}", dropped.text);
+    let tidied = host.stand_in(&repository.dir, &["tidy", "--json"], &[]);
+    assert_eq!(tidied.code, 0, "{}", tidied.text);
+    assert!(!Path::new(&inside).exists(), "{}", tidied.text);
+    assert_eq!(repository.git(&["branch", "--list", "fix/one"]), "");
+    let every = host.flume(&repository.dir, &["status", "--json"], &[]);
+    assert_eq!(every.json()["status"]["places"], serde_json::json!([]));
 }
 
 /// Every file under `dir` and its bytes.
@@ -954,7 +1112,7 @@ fn status_over_mcp() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/fix--one", repository.name());
+    let place = host.place_of(&repository, "fix--one");
     let status = host.flume(&repository.dir, &["status", &place, "--json"], &[]);
     let every = host.flume(&repository.dir, &["status", "--json"], &[]);
     let before = files_under(&host.state());
@@ -1049,7 +1207,7 @@ fn a_wait_exits_by_its_outcome() {
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
-    let place = format!("{}/places/change--one", repository.name());
+    let place = host.place_of(&repository, "change--one");
     let wait = |stage: &str| {
         host.stand_in(
             &repository.dir,
@@ -1183,10 +1341,10 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
             &[],
         );
         assert_eq!(launched.code, 0, "{}", launched.text);
-        let place = format!("{}/places/change--{name}", repository.name());
+        let place = host.place_of(&repository, &format!("change--{name}"));
         deliver(&host, &repository.dir, &place, "construct");
     }
-    let two = format!("{}/places/change--two", repository.name());
+    let two = host.place_of(&repository, "change--two");
     let store = StateDir::at(host.state());
     let read = held_of(&host, &two);
     let mut role = read.state.clone();
@@ -1285,7 +1443,6 @@ fn a_wake_of_a_roles_address() {
         ),
     );
     repository.write(".config/prompts/plan.md", "Read what is pending for you.\n");
-    repository.write(".gitignore", "places/\n");
     repository.commit("the binding and the planner");
     host.configure(&format!(
         "[roles.\"madswan/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
@@ -1305,7 +1462,7 @@ fn a_wake_of_a_roles_address() {
     assert_eq!(run["base"], "main", "the repository's default branch");
     assert_eq!(run["priority"], 5);
     assert_eq!(run["recipients"], serde_json::json!([]));
-    let place = format!("{}/places/planner--planner", repository.name());
+    let place = host.place_of(&repository, "planner--planner");
     assert_eq!(run["place"], place.as_str());
 
     let again = answered(
