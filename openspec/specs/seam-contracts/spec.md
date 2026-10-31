@@ -96,7 +96,7 @@ stands (2, 3, 8, 76, 78, C.1; record 0027).
 
 #### Scenario: The launch makes its place where the seam says
 
-- **WHEN** a fix is launched over the fake place, which gives `/host/data/flume/places/<the repository flattened>/<kind>--<name>`
+- **WHEN** a fix is launched over the fake place, which gives `/host/data/flume/places/<an id of the repository>/<kind>--<name>`
 - **THEN** the place is made at that location, and its held state's id is that location
 
 #### Scenario: A location outside the repository's directory

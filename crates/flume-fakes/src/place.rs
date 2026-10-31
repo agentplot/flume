@@ -4,6 +4,7 @@ use flume_seams::{
     Revision,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 /// flume's own data directory on the fake host, where every place goes
@@ -11,16 +12,20 @@ use std::sync::{Arc, Mutex};
 const DATA: &str = "/host/data/flume";
 
 /// Where the fake place makes the place `place`, `<kind>--<name>`, of
-/// `repository`: under the fake host's data directory by the
-/// repository's directory, flattened, so no place is in its
-/// repository's directory (3, 78; record 0027).
+/// `repository`: under the fake host's data directory by an id of the
+/// repository's directory, so no place is in its repository's directory
+/// (3, 78; record 0027).
 pub fn place_location(repository: &str, place: &str) -> String {
     under(DATA, repository, place)
 }
 
-/// The place `place` of `repository` under flume's data directory `data`.
+/// The place `place` of `repository` under flume's data directory `data`,
+/// by twelve hex digits of a digest of the repository's directory, as
+/// the place profile names a repository by its id (C.4).
 fn under(data: &str, repository: &str, place: &str) -> String {
-    let id = repository.trim_matches('/').replace('/', "-");
+    let mut digest = DefaultHasher::new();
+    repository.hash(&mut digest);
+    let id = &format!("{:016x}", digest.finish())[..12];
     format!("{data}/places/{id}/{place}")
 }
 
