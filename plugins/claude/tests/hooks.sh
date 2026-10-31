@@ -72,7 +72,7 @@ git -C "$repo" commit --quiet -m "the binding"
 (cd "$repo" && "$flume" launch --kind fix --name one --brief "fix the parser" \
   --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch"
 # The place, named by its kind and name where flume made it: under its
-# data directory, since the repository is a clone (record 0027).
+# data directory, as every place is (record 0027).
 located() {
   (cd "$repo" && "$flume" status "$1" --json) | jq -r '.status.places[0].place'
 }

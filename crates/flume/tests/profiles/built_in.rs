@@ -107,8 +107,8 @@ agents = [{}]
     let Answer::Launched { place } = answer else {
         panic!("the launch answered otherwise: {answer:?}");
     };
-    // The repository is a clone, so its place goes under flume's own data
-    // directory, the login environment's (record 0027).
+    // The place goes under flume's own data directory, the login
+    // environment's, as every place does (record 0027).
     let location = Path::new(&place.place.0).to_path_buf();
     assert!(location.is_dir(), "{}", location.display());
     assert!(

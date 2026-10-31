@@ -106,8 +106,10 @@ impl World {
         )
     }
 
+    /// The place `<kind>--<name>` of the repository, where the fake place
+    /// makes it.
     pub fn id(kind: &str, name: &str) -> PlaceId {
-        PlaceId::new(format!("{REPOSITORY}/places/{kind}--{name}"))
+        PlaceId::new(place_location(REPOSITORY, &format!("{kind}--{name}")))
     }
 
     pub fn held(&self, place: &PlaceId) -> Option<HeldState> {

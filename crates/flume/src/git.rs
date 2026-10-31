@@ -67,13 +67,6 @@ impl Git {
         }
     }
 
-    /// Whether the directory named holds the bare repository beside its
-    /// worktrees, so it is inside none of them, rather than being a
-    /// directory git finds a repository from.
-    pub fn holds_bare(&self) -> bool {
-        matches!(self.at, At::GitDir(_))
-    }
-
     /// The repository's common git directory, by its absolute path with
     /// every link resolved.
     pub fn common_dir(&self) -> Result<String, String> {

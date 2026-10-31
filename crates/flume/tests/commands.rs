@@ -148,12 +148,14 @@ impl MergeQueue for StandInQueue {
     }
 }
 
-/// The variable that has the stand-in flume make its places inside the
-/// repository's main worktree, at `<repository>/places/<kind>--<name>`,
-/// as flume made them before record 0027.
+/// The variable that has the stand-in flume make its places at
+/// `<repository>/places/<kind>--<name>`, inside a clone's main worktree
+/// or beside a bare repository's worktrees, as flume made them before
+/// record 0027.
 const PLACES_INSIDE: &str = "FLUME_TEST_PLACES_INSIDE";
 
-/// The place profile built in, its places made inside the main worktree.
+/// The place profile built in, its places made in the repository's
+/// directory.
 struct Inside(Arc<dyn Place>);
 
 impl Place for Inside {
@@ -287,8 +289,13 @@ impl Host {
     /// Where flume makes the place `<kind>--<name>` of `repository` on
     /// this host (C.1; record 0027).
     fn place_of(&self, repository: &Repository, place: &str) -> String {
-        git_worktree::location(&repository.name(), place, Some(&self.data()))
-            .expect("the place's location")
+        self.place_in(&repository.name(), place)
+    }
+
+    /// Where flume makes the place `<kind>--<name>` of the repository
+    /// named by the directory `repository` on this host.
+    fn place_in(&self, repository: &str, place: &str) -> String {
+        git_worktree::location(repository, place, Some(&self.data())).expect("the place's location")
     }
 
     /// Writes the host's configuration.
@@ -1093,37 +1100,9 @@ fn a_place_named_from_inside_it() {
     assert_eq!(by_location.answer(), answer);
 }
 
-#[test]
-fn a_place_is_made_inside_no_working_tree_of_its_repository() {
-    // 3, C.1, record 0027: a clone's place goes under flume's own data
-    // directory, and the clone's status shows nothing; a place of the
-    // bare repository beside its worktrees goes beside them.
-    let host = Host::new("no-working-tree");
-    let kinds = kinds_file(&host, false);
-    let launch = |dir: &Path| {
-        let launched = host.stand_in(
-            dir,
-            &[
-                "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
-            ],
-            &[],
-        );
-        assert_eq!(launched.code, 0, "{}", launched.text);
-        the_place(&launched.answer()).place.0.clone()
-    };
-
-    let clone = repository("no-working-tree", None);
-    let place = launch(&clone.dir);
-    assert_eq!(place, host.place_of(&clone, "fix--one"));
-    assert!(Path::new(&place).starts_with(host.data().join("places")));
-    assert!(Path::new(&place).join(".git").is_file(), "{place}");
-    assert_eq!(
-        clone.git(&["status", "--porcelain", "--untracked-files=all"]),
-        "",
-        "the clone shows its place"
-    );
-
-    let origin = repository("no-working-tree-bare", None);
+/// The directory `project` beside `origin`, holding a bare clone of it,
+/// `project.git`, beside its worktree `main`, which it returns.
+fn bare_layout(origin: &Repository) -> PathBuf {
     let project = origin.scratch.path("project");
     let bare = project.join("project.git");
     git(
@@ -1148,53 +1127,120 @@ fn a_place_is_made_inside_no_working_tree_of_its_repository() {
             "main",
         ],
     );
-    let place = launch(&main);
-    assert_eq!(
-        place,
-        format!("{}/places/fix--one", project.to_string_lossy())
-    );
+    main
+}
+
+#[test]
+fn every_place_is_made_under_flumes_own_data_directory() {
+    // 3, C.1, C.4, record 0027: a clone's place and a bare repository's
+    // each go under flume's own data directory by the repository's id,
+    // none in the repository's directory, and neither repository's status
+    // shows one.
+    let host = Host::new("data-directory");
+    let kinds = kinds_file(&host, false);
+    let launch = |dir: &Path| {
+        let launched = host.stand_in(
+            dir,
+            &[
+                "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+            ],
+            &[],
+        );
+        assert_eq!(launched.code, 0, "{}", launched.text);
+        the_place(&launched.answer()).place.0.clone()
+    };
+
+    let clone = repository("data-directory", None);
+    let place = launch(&clone.dir);
+    assert_eq!(place, host.place_of(&clone, "fix--one"));
+    assert!(Path::new(&place).starts_with(host.data().join("places")));
+    assert!(!Path::new(&place).starts_with(&clone.dir), "{place}");
     assert!(Path::new(&place).join(".git").is_file(), "{place}");
+    assert_eq!(
+        clone.git(&["status", "--porcelain", "--untracked-files=all"]),
+        "",
+        "the clone shows its place"
+    );
+
+    let origin = repository("data-directory-bare", None);
+    let main = bare_layout(&origin);
+    let project = main.parent().expect("the project");
+    let beside = launch(&main);
+    assert_eq!(
+        beside,
+        host.place_in(&project.to_string_lossy(), "fix--one")
+    );
+    assert!(Path::new(&beside).starts_with(host.data().join("places")));
+    assert!(!Path::new(&beside).starts_with(project), "{beside}");
+    assert!(!project.join("places").exists(), "{beside}");
+    assert_ne!(beside, place, "two repositories' fix--one share a location");
+    assert!(Path::new(&beside).join(".git").is_file(), "{beside}");
     assert_eq!(
         git(&main, &["status", "--porcelain", "--untracked-files=all"]),
         "",
         "the main worktree shows the place"
     );
-    let named = host.flume(&main, &["status", "fix--one", "--json"], &[]);
-    assert_eq!(the_place(&named.answer()).place, PlaceId::new(&place));
+    for dir in [main.as_path(), Path::new(&beside)] {
+        let named = host.flume(dir, &["status", "fix--one", "--json"], &[]);
+        assert_eq!(named.code, 0, "{}", named.text);
+        assert_eq!(the_place(&named.answer()).place, PlaceId::new(&beside));
+    }
 }
 
 #[test]
-fn a_place_made_inside_the_main_worktree_is_read_and_tidied_where_it_stands() {
+fn a_place_made_in_the_repositorys_directory_is_read_and_tidied_where_it_stands() {
     // Record 0027: a place an earlier flume made at
-    // `<repository>/places/<kind>--<name>` of a clone is named by its kind
-    // and name, and dropped and tidied there.
+    // `<repository>/places/<kind>--<name>`, inside a clone's main worktree
+    // or beside a bare repository's worktrees, is named by its kind and
+    // name, refuses a launch of its kind and name, and is dropped and
+    // tidied there, never moved.
     let host = Host::new("made-inside");
-    let repository = repository("made-inside", None);
     let kinds = kinds_file(&host, false);
-    let launched = host.stand_in(
-        &repository.dir,
-        &[
-            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
-        ],
-        &[(PLACES_INSIDE, "1")],
-    );
-    assert_eq!(launched.code, 0, "{}", launched.text);
-    let inside = format!("{}/places/fix--one", repository.name());
-    assert_eq!(the_place(&launched.answer()).place, PlaceId::new(&inside));
-    assert_ne!(inside, host.place_of(&repository, "fix--one"));
+    let launch = |dir: &Path, env: &[(&str, &str)]| {
+        host.stand_in(
+            dir,
+            &[
+                "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+            ],
+            env,
+        )
+    };
+    let clone = repository("made-inside", None);
+    let origin = repository("made-beside", None);
+    let main = bare_layout(&origin);
+    let project = main.parent().expect("the project").to_path_buf();
+    for (dir, repository) in [(clone.dir.clone(), clone.dir.clone()), (main, project)] {
+        let launched = launch(&dir, &[(PLACES_INSIDE, "1")]);
+        assert_eq!(launched.code, 0, "{}", launched.text);
+        let inside = format!("{}/places/fix--one", repository.to_string_lossy());
+        assert_eq!(the_place(&launched.answer()).place, PlaceId::new(&inside));
+        assert_ne!(
+            inside,
+            host.place_in(&repository.to_string_lossy(), "fix--one")
+        );
 
-    let status = host.flume(&repository.dir, &["status", "fix--one", "--json"], &[]);
-    assert_eq!(status.code, 0, "{}", status.text);
-    assert_eq!(the_place(&status.answer()).place, PlaceId::new(&inside));
+        let status = host.flume(&dir, &["status", "fix--one", "--json"], &[]);
+        assert_eq!(status.code, 0, "{}", status.text);
+        assert_eq!(the_place(&status.answer()).place, PlaceId::new(&inside));
+        let again = launch(&dir, &[]);
+        assert_ne!(again.code, 0, "{}", again.text);
+        assert!(again.text.contains("fix/one"), "{}", again.text);
+        assert!(
+            !Path::new(&host.place_in(&repository.to_string_lossy(), "fix--one")).exists(),
+            "{}",
+            again.text
+        );
 
-    host.end_agent(&inside, "code", 1);
-    let dropped = host.stand_in(&repository.dir, &["drop", "fix--one", "--json"], &[]);
-    assert_eq!(dropped.code, 0, "{}", dropped.text);
-    let tidied = host.stand_in(&repository.dir, &["tidy", "--json"], &[]);
-    assert_eq!(tidied.code, 0, "{}", tidied.text);
-    assert!(!Path::new(&inside).exists(), "{}", tidied.text);
-    assert_eq!(repository.git(&["branch", "--list", "fix/one"]), "");
-    let every = host.flume(&repository.dir, &["status", "--json"], &[]);
+        host.end_agent(&inside, "code", 1);
+        let dropped = host.stand_in(&dir, &["drop", "fix--one", "--json"], &[]);
+        assert_eq!(dropped.code, 0, "{}", dropped.text);
+        let tidied = host.stand_in(&dir, &["tidy", "--json"], &[]);
+        assert_eq!(tidied.code, 0, "{}", tidied.text);
+        assert!(!Path::new(&inside).exists(), "{}", tidied.text);
+        assert_eq!(git(&dir, &["branch", "--list", "fix/one"]), "");
+    }
+    assert!(!host.data().join("places").exists(), "a place was moved");
+    let every = host.flume(&clone.dir, &["status", "--json"], &[]);
     assert_eq!(every.json()["status"]["places"], serde_json::json!([]));
 }
 

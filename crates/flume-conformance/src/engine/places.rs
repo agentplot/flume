@@ -1,6 +1,8 @@
 //! A place through its whole life (10, 13, 14, 34): its own branch, only
 //! its readiness, teardown and agents run in it, no branch moved by flume
-//! but its own, and no question answered for its agent.
+//! but its own, no question answered for its agent, and a place kept
+//! where it was made though the place seam now makes one elsewhere (3,
+//! 76; record 0027).
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -27,6 +29,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "places: an agent asking a person is answered nothing by flume",
             cites: &["34", "37", "53", "72"],
             run: no_question_answered,
+        },
+        Scenario {
+            name: "places: a place made where the place seam no longer makes one is read, submitted and tidied where it stands, and a launch of its kind and name is refused",
+            cites: &["3", "76", "77", "64", "111"],
+            run: an_earlier_place_where_it_stands,
         },
     ]
 }
@@ -167,6 +174,39 @@ fn no_question_answered(_: &()) -> Outcome {
         world.stage_state(&id, "code"),
         Some(StageState::Started),
         "the code stage"
+    );
+    Ok(())
+}
+
+fn an_earlier_place_where_it_stands(_: &()) -> Outcome {
+    let world = World::new();
+    world.place.locate_inside(true);
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let earlier = PlaceId::new(format!("{REPOSITORY}/places/fix--one"));
+    ensure!(world.held(&earlier).is_some(), "no place held at {earlier}");
+    world.place.locate_inside(false);
+    let now = World::id("fix", "one");
+    ensure!(now != earlier, "the seam gives the earlier location");
+    let reason = refused(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure!(
+        reason.contains("fix/one"),
+        "the refusal names not the branch: {reason}"
+    );
+    ensure!(world.held(&now).is_none(), "a second place was held");
+    ensure!(!world.place.exists(&now.0), "a second place was made");
+    world.settle(&earlier);
+    world.commit("fix/one", &["Cargo.toml"]);
+    world.settle(&earlier);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure!(
+        world.held(&earlier).is_none(),
+        "held state of the landed place is kept"
+    );
+    ensure!(!world.place.exists(&earlier.0), "the earlier place stands");
+    ensure_eq!(
+        world.place.log.of("remove"),
+        vec![format!("remove {}", earlier.0)],
+        "removes"
     );
     Ok(())
 }

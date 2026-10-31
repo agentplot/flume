@@ -8,13 +8,13 @@
 //! bare repository beside its worktrees (`project/project.git`,
 //! `project/main`).
 //!
-//! A place is made inside no working tree of its repository (record
-//! 0027): at `<repository>/places/<kind>--<name>` where the repository's
-//! directory holds its bare repository beside its worktrees, and under
-//! flume's own data directory, at `places/<id>/<kind>--<name>`, where the
-//! repository's directory is its main worktree, the id its common git
-//! directory's as its agents' identities name it (C.4). A place is read
-//! and removed at the location it was made at, wherever that is.
+//! A place is made inside no working tree or directory of its repository
+//! (record 0027): every place is under flume's own data directory, at
+//! `places/<id>/<kind>--<name>`, a bare repository's as a clone's, the id
+//! its common git directory's as its agents' identities name it (C.4). A
+//! place is read and removed at the location it was made at, wherever
+//! that is, one an earlier flume made at `<repository>/places/` among
+//! them.
 //!
 //! The readiness, the teardown and where the base lives are the merge
 //! queue profile's to declare; the binary's resolver hands them to this
@@ -167,23 +167,18 @@ const REMOVE_STEP: &str = "git worktree remove";
 const WORDS: usize = 4000;
 
 /// Where the place `place`, `<kind>--<name>`, of `repository` is made
-/// (3, C.1; record 0027): `<repository>/places/<place>` where the
-/// repository's directory holds its bare repository beside its
-/// worktrees, so the place is inside none of them; else under `own`,
-/// flume's own data directory, at `places/<id>/<place>`, the id the
-/// repository's, of its common git directory (C.4), since the
-/// repository's directory is then its main worktree.
+/// (3, C.1; record 0027): under `own`, flume's own data directory, at
+/// `places/<id>/<place>`, the id the repository's, of its common git
+/// directory (C.4), whether the repository's directory is its main
+/// worktree or holds its bare repository beside its worktrees.
 pub fn location(repository: &str, place: &str, own: Option<&Path>) -> Result<String, String> {
-    let git = Git::at(repository);
-    if git.holds_bare() {
-        return Ok(format!("{repository}/places/{place}"));
-    }
     let own = own.ok_or_else(|| {
-        format!(
-            "{repository} is a working tree, so its places go under flume's data directory, and neither $XDG_DATA_HOME nor $HOME is set"
-        )
+        "every place goes under flume's data directory, and neither $XDG_DATA_HOME nor $HOME is set"
+            .to_string()
     })?;
-    let common = git.common_dir().unwrap_or_else(|_| repository.to_string());
+    let common = Git::at(repository)
+        .common_dir()
+        .unwrap_or_else(|_| repository.to_string());
     Ok(canonical(own)
         .join("places")
         .join(flume_core::repository_id(&common))

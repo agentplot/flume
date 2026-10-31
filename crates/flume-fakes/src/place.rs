@@ -6,6 +6,24 @@ use flume_seams::{
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
+/// flume's own data directory on the fake host, where every place goes
+/// (record 0027).
+const DATA: &str = "/host/data/flume";
+
+/// Where the fake place makes the place `place`, `<kind>--<name>`, of
+/// `repository`: under the fake host's data directory by the
+/// repository's directory, flattened, so no place is in its
+/// repository's directory (3, 78; record 0027).
+pub fn place_location(repository: &str, place: &str) -> String {
+    under(DATA, repository, place)
+}
+
+/// The place `place` of `repository` under flume's data directory `data`.
+fn under(data: &str, repository: &str, place: &str) -> String {
+    let id = repository.trim_matches('/').replace('/', "-");
+    format!("{data}/places/{id}/{place}")
+}
+
 /// The place seam over the fake git: worktrees by location, each
 /// repository's readiness, what each place holds and how its teardown
 /// goes.
@@ -25,6 +43,8 @@ struct PlaceState {
     unreadable: BTreeMap<String, String>,
     refusal: Option<String>,
     unlocated: Option<String>,
+    inside: bool,
+    data: Option<String>,
 }
 
 impl FakePlace {
@@ -89,6 +109,20 @@ impl FakePlace {
         lock(&self.state).unlocated = Some(reason.into());
     }
 
+    /// Each place given a location in its repository's directory,
+    /// `<repository>/places/<place>`, as flume gave one before record
+    /// 0027, while `inside` holds.
+    pub fn locate_inside(&self, inside: bool) {
+        lock(&self.state).inside = inside;
+    }
+
+    /// Each place given a location under `data` for flume's data
+    /// directory, as a test whose terminal opens the place's real
+    /// directory needs.
+    pub fn locate_under(&self, data: &str) {
+        lock(&self.state).data = Some(data.into());
+    }
+
     /// The worktree at `location` removed through its teardown by another
     /// than flume, as a merge queue that removes a landed place does.
     pub fn vanish(&self, location: &str) {
@@ -104,9 +138,15 @@ impl FakePlace {
 
 impl Place for FakePlace {
     fn location(&self, repository: &str, place: &str) -> Result<String, String> {
-        match &lock(&self.state).unlocated {
+        let state = lock(&self.state);
+        match &state.unlocated {
             Some(reason) => Err(reason.clone()),
-            None => Ok(format!("{repository}/places/{place}")),
+            None if state.inside => Ok(format!("{repository}/places/{place}")),
+            None => Ok(under(
+                state.data.as_deref().unwrap_or(DATA),
+                repository,
+                place,
+            )),
         }
     }
 

@@ -2,6 +2,7 @@
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
+use std::path::Path;
 
 /// What the place scenarios need beyond the seam: a repository to make
 /// places of, and the world arranged around a place.
@@ -70,6 +71,11 @@ pub fn scenarios<H: PlaceHarness>() -> Vec<Scenario<H>> {
             run: a_location_is_the_places_own::<H>,
         },
         Scenario {
+            name: "place: a place's location lies outside its repository's directory",
+            cites: &["3", "78"],
+            run: a_location_outside_the_repository::<H>,
+        },
+        Scenario {
             name: "place: make cuts a new branch at the revision",
             cites: &["78", "9"],
             run: make_cuts_a_branch::<H>,
@@ -116,6 +122,16 @@ fn a_location_is_the_places_own<H: PlaceHarness>(harness: &H) -> Outcome {
         location(harness, &repository, "one")?,
         one,
         "the location asked again"
+    );
+    Ok(())
+}
+
+fn a_location_outside_the_repository<H: PlaceHarness>(harness: &H) -> Outcome {
+    let (repository, _, _) = harness.repository();
+    let location = location(harness, &repository, "outside")?;
+    ensure!(
+        !Path::new(&location).starts_with(&repository),
+        "the place is in its repository's directory: {location}"
     );
     Ok(())
 }
