@@ -17,7 +17,7 @@ members = [
 # into each plugin's manifest in the release commit its tag names
 # (set-version.sh, .github/workflows/ci.yml); root:versions holds them
 # equal.
-version = "0.0.0"
+version = "0.3.8"
 edition = "2021"
 license = "MIT"
 
