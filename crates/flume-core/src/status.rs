@@ -125,6 +125,7 @@ impl Engine {
                 screen: starting
                     .then(|| self.terminal.screen(&start.identity))
                     .flatten(),
+                dialog: start.dialog.as_ref().map(|dialog| dialog.words.clone()),
                 printed: start.printed.clone(),
                 last_words,
                 notes,
@@ -292,9 +293,10 @@ pub(crate) fn group_status(
 }
 
 /// The move a live place waits on its caller for, why, since when and
-/// with what words, read from its held state alone; none where it waits
-/// on nobody, its next step being flume's or an agent's, or the host's
-/// room (56, 70, 130).
+/// with what words, read from its held state alone, a person's answer to
+/// the dialog its agent's program shows before it takes its prompt among
+/// them; none where it waits on nobody, its next step being flume's or an
+/// agent's, or the host's room (34, 35, 56, 70, 130).
 pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
     if held.phase != Phase::Live {
         return None;
@@ -373,6 +375,16 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
     let stage = &held.stages[index];
     let retry = |why, words| waits(Act::Retry, Some(index), why, stage.since, words);
     match stage.state {
+        StageState::Starting | StageState::Started => {
+            let dialog = stage.start.as_ref()?.dialog.as_ref()?;
+            waits(
+                Act::Answer,
+                Some(index),
+                Waits::Dialog,
+                Some(dialog.since),
+                Some(dialog.words.clone()),
+            )
+        }
         StageState::EndedShort => {
             let end = stage.end.as_ref();
             let found = end.and_then(|end| end.needs) == Some(StopKind::FoundWork);

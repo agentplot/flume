@@ -168,7 +168,8 @@ impl FakeTerminal {
     }
 
     /// Every open from now holds its start at a question the program
-    /// asks before it starts, the agent left at it showing `screen`.
+    /// asks before it starts, the agent left at it showing `screen` and
+    /// read asking, as a terminal reads a program held at its question.
     pub fn hold_opens(&self, screen: &str) {
         lock(&self.state).opens_as = OpensAs::Held(screen.into());
     }
@@ -398,7 +399,7 @@ impl Terminal for FakeTerminal {
                     printed: None,
                 },
             ),
-            OpensAs::Held(screen) => (AgentState::Unknown, Opened::Held { screen }),
+            OpensAs::Held(screen) => (AgentState::Asking, Opened::Held { screen }),
             OpensAs::NotComeUp(screen) => return Opened::NotComeUp { screen },
         };
         let mut running = Running::new(comes_up, command.clone());

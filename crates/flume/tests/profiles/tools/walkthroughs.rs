@@ -26,9 +26,11 @@
 //! started afresh under the account, and lands (S65; 161); a fix whose
 //! host's table gives `edits` over its repository's `full` starts its
 //! agent in the mode the host gave and lands, as does a fix no layer gives
-//! a mode, passing none (S66; 162); and a fix whose agent begins in
-//! another mode than its start asked at both its starts is never begun,
-//! naming both modes (S67; 161, 162).
+//! a mode, passing none (S66; 162); a fix whose agent begins in another
+//! mode than its start asked at both its starts is never begun, naming
+//! both modes (S67; 161, 162); and an agent run only after its start was
+//! read never begun acks its start and its prompt, its stage is read
+//! begun, and a retry leaves it be (35, 38, 50).
 
 use super::walk::*;
 use serde_json::{json, Value};
@@ -1158,4 +1160,105 @@ fn a_fix_begun_in_another_mode_twice_is_never_begun() {
         walk.on_remote("parser.rs").is_none(),
         "a fix never begun landed"
     );
+}
+
+/// A kind of one stage that does not land, its start read never begun a
+/// second after it starts with no word that it started.
+const QUICK: &str = r#"[kinds.quick]
+version = 1
+branch = "quick"
+starts_unready = true
+lands = false
+
+[[kinds.quick.stages]]
+name = "code"
+prompt = "prompts/work.md"
+deliverables = ["commits"]
+agents = [{}]
+quiet = "1s"
+"#;
+
+#[test]
+fn an_agent_run_after_its_start_was_read_never_begun_is_begun_and_a_retry_leaves_it() {
+    // On deneb a stage's start was read never begun while its agent sat at
+    // a dialog; a person answered it and the agent began, but flume still
+    // held the stage never begun, and the operator's retry ended the
+    // working session. Here the printed command is run only once the
+    // start was read never begun at the stage's limit: the stand-in acks
+    // its start and its prompt through the plugin's hooks, flume reads the
+    // stage begun, and a retry, forced or not, is refused naming the agent
+    // and the stop that ends it first. The agent then delivers (35, 38,
+    // 43, 50).
+    let walk = Walk::new("walk-began-late");
+    let kinds = walk.repository.scratch.path("kinds/kinds.toml");
+    std::fs::create_dir_all(kinds.parent().expect("a folder").join("prompts"))
+        .expect("the kinds' folder");
+    std::fs::write(&kinds, QUICK).expect("the kinds");
+    std::fs::write(
+        walk.repository.scratch.path("kinds/prompts/work.md"),
+        "Do the work of {{name}}: {{brief}}. To stop short: {{needs}}\n",
+    )
+    .expect("the prompt");
+    let place = walk.launch(
+        "quick",
+        "one",
+        &[
+            "--brief",
+            "fix the parser",
+            "--kinds",
+            &kinds.to_string_lossy(),
+        ],
+    );
+    let status = walk.until(&place, "never begun", |status| {
+        stage(status, "code")["state"] == "never_begun"
+    });
+    assert_eq!(status["waiting_on"]["why"], "never_begun", "{status}");
+    let identity = status["agent"]["identity"]
+        .as_str()
+        .unwrap_or_else(|| panic!("the never-begun start's agent: {status}"))
+        .to_string();
+
+    let midway = walk.signal("midway");
+    let started = walk.signal("started");
+    let agent = walk.start_agent(
+        &place,
+        json!([
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "bash": "git add parser.rs && git commit --quiet -m 'the parser'" },
+            { "bash": format!("touch '{}'", started.display()) },
+            { "wait_for": midway },
+        ]),
+    );
+    let began = std::time::Instant::now();
+    while !started.exists() {
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(60),
+            "the stand-in never came to its commit"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let status = walk.until(&place, "begun", |status| {
+        stage(status, "code")["state"] == "begun"
+    });
+    assert!(status["waiting_on"].is_null(), "{status}");
+    assert!(stage(&status, "code")["end"].is_null(), "{status}");
+    assert_eq!(status["agent"]["identity"], identity.as_str(), "{status}");
+    for words in [&["retry", &place][..], &["retry", &place, "--force"][..]] {
+        let (answer, refused) = walk.flume_ran(words);
+        assert!(refused, "flume {} was taken: {answer}", words.join(" "));
+        let reason = answer.to_string();
+        assert!(
+            reason.contains(&identity) && reason.contains("flume stop"),
+            "the refusal names not the agent and its stop: {reason}"
+        );
+    }
+    assert_eq!(stage(&walk.status(&place), "code")["starts"], 1);
+
+    std::fs::write(&midway, "").expect("the signal");
+    let ran = finish(agent);
+    assert_eq!(ran.code, 0, "{}", ran.out);
+    let status = walk.until(&place, "delivered", |status| {
+        stage(status, "code")["state"] == "delivered"
+    });
+    assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
 }

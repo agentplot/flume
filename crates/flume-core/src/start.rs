@@ -47,8 +47,11 @@ impl Claim {
 pub(crate) enum Start {
     Opened(Identity),
     /// The terminal read the start held at a question its program asks
-    /// before it starts, or its program not come up: never begun at once
-    /// (35).
+    /// before it starts, which flume does not answer: the start waits on
+    /// a person with the question's words (34, 35).
+    Held(Identity),
+    /// The terminal read the start's program not come up: never begun at
+    /// once (35).
     NeverBegun(Identity),
     /// The host has no room, or stages waiting rank ahead of it (70).
     WaitingForRoom,
@@ -437,6 +440,7 @@ impl Engine {
                 printed: None,
                 group: group.clone().flatten(),
                 opening: Some(self.host.command()),
+                dialog: None,
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
@@ -467,7 +471,9 @@ impl Engine {
     /// came up is sent its prompt at once where it said it started and
     /// waits, its receipt read by the settles that follow, so the command
     /// that opened it, a launch, a retry or a settle, moves it on with no
-    /// wait on the agent (6, 37, 38, 46).
+    /// wait on the agent (6, 37, 38, 46). A start held at its program's
+    /// question stays starting, the question's words kept with it, and
+    /// waits on a person (34, 35).
     pub(crate) fn open(&self, id: &PlaceId, claim: Claim) -> Start {
         let Claim {
             identity,
@@ -511,7 +517,17 @@ impl Engine {
                 self.send_prompt(id);
                 Start::Opened(identity)
             }
-            Opened::Held { screen } | Opened::NotComeUp { screen } => {
+            Opened::Held { screen } => {
+                let since = self.host.now();
+                self.with_start(id, &identity, |start, _| {
+                    start.dialog = Some(Dialog {
+                        words: screen.clone(),
+                        since,
+                    });
+                });
+                Start::Held(identity)
+            }
+            Opened::NotComeUp { screen } => {
                 self.never_begun_with(id, &identity, screen);
                 Start::NeverBegun(identity)
             }

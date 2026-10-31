@@ -88,6 +88,8 @@ enum Command {
         /// Words for the stage's agent, after the question it stopped on.
         #[arg(long)]
         words: Option<String>,
+        /// End an agent that is not quiet; never one whose stage started
+        /// or began under it, which `flume stop` ends first (35, 50).
         #[arg(long)]
         force: bool,
     },

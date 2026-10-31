@@ -96,14 +96,17 @@ flume reads the agent's own word:
 1. flume starts the agent and waits for its started ack, under the
    identity and secret flume gave it. herdr's own reading that the
    agent is ready does not count, since herdr reads a first run's setup
-   screens as ready.
+   screens as ready. While Claude Code shows a dialog of its own, such
+   as its approval of a repository's MCP servers, the place waits on a
+   person to answer it, and status gives the dialog's words.
 2. It sends the stage's prompt once the agent waits and is asking
    nothing, clearing anything typed in its input first.
 3. It waits up to sixty seconds for the received ack, whose digest must
    match the prompt sent.
 4. When none comes, flume clears the input and sends the prompt once
    more. When the second sending is not received either, the stage is
-   **never begun**, and status says so.
+   **never begun**, and status says so. An agent that acks its start or
+   its prompt after that goes on, and its stage is begun after all.
 
 Under the printed command, the prompt rides in the command line, and
 its one sending counts from the started ack. A prompt that is a slash
