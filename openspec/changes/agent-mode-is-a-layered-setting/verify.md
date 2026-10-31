@@ -1,89 +1,99 @@
 # Verify: agent-mode-is-a-layered-setting
 
 Checked on 2026-10-31 at `change/agent-mode-is-a-layered-setting`
-4b1e11d, which holds main at df45390, against this change's proposal,
-design, twelve specs and tasks.
+1cfcad8, which holds main at 55a3666 (#77). Main's head is still
+55a3666. The check covers this change's proposal, design, twelve specs
+and tasks.
 
-**The work holds, and the change is archived.** Every task is ticked,
-every requirement is built, every scenario has a test, the gate passes
-at 4b1e11d, and the archived specs pass the strict check. The warnings
-below are about wording and how literal some tests are. None of them
-leaves a requirement unmet.
+**The work holds, and the change is archived.** Every task is ticked
+and every requirement is built. Every scenario has a test, the gate
+passes at 1cfcad8, and the archived specs pass the strict check. The
+warnings below are about wording and how literal some tests are. None
+of them leaves a requirement unmet.
 
 ## Tasks
 
-All 25 tasks of the eight groups are ticked, `[x]`. Each group's
-closing check task is backed by the gate run below. Task 6.1 records
-`flume:live` passing 4 of 4 at d265124 on 2026-10-31. The operator ran
-it outside the gate with a test account's token, as `CLAUDE.md` says.
-It was not run again here: it needs a test account's token, and no
-branch requires `check-live`. Since d265124 the change's side has
-changed only its specs and tasks. The code changes since then are main
-merged in twice, so the run stands for this change's code.
+All 26 tasks of the eight groups are ticked, `[x]`. The gate run below
+backs each group's closing check task.
 
-Task 8.4 is met:
+Task 6.1 records `flume:live` passing 4 of 4 at d265124 on 2026-10-31.
+The operator ran it outside the gate with a test account's token, as
+`CLAUDE.md` says. It was not run again here, because it needs a test
+account's token and no branch requires `check-live` (W5).
 
-- The four requirements that an archive left over 500 characters are
-  each back under it. The mode in each now stands as an ADDED
-  requirement with the scenario that shows it: agent-profile's
-  "The settings' mode passed by --permission-mode", start-integrity's
-  "A start records the mode its profile passes" and "A mode its program
-  names only at the first prompt", and store-profile's "A mode in the
-  host's agents tables". agent-profile's "An agent started as Claude
-  Code with flume's plugin" and start-integrity's "A start records what
-  its agent runs under" are no longer modified. They stand in the main
-  specs as main has them.
-- agent-modes' "Each mode mapped as the profile says" launches `plan`
-  on a conversation, as AM `each_mode_mapped_as_the_profile_says` does.
-  command-line's "A program's own value given bare" expects
-  `--agent mode.<program>=auto`, which is the refusal `commands/launch.rs`
-  gives.
-- Main is merged at 5d29913 and at df45390, and df45390 is main's head
-  today.
+Task 8.5 is met:
+
+- **Out of the archive.** 457b289's tree is 073e2ac's, the tree from
+  before the archive. Nothing differs, the verify report aside. At
+  1cfcad8, `openspec/specs/` is main's at 55a3666 byte for byte, so
+  the specs are unsynced.
+- **Main merged at 55a3666.** f834f18 merges 457b289 and 55a3666.
+  `git merge-tree` of the two gives f834f18's tree, 4e1a08d, so the
+  merge took main whole and changed nothing by hand.
+- **The launches this change added find their place where main makes
+  it.** 643ae69 changes three tests and nothing else:
+  - `plugins/claude/tests/hooks.sh` finds the launch in full,
+    `fix--three`, by main's `located`.
+  - `tests/commands.rs` `a_mode_and_a_table_at_the_launch` finds its
+    held state by `place_of`. It asserts that each refused launch made
+    nothing at the place `place_of` names.
+  - The live S66 walkthrough reads its place from its launch's own
+    answer, `launched.place.place`, which is `PlaceStatus::place`.
+
+  No other test of this change's names a place at
+  `<repository>/places/`. The only paths left in that form are main's
+  own, and the fakes' ids, which name no directory.
+- **The checks.** `flume:test` and `plugin-claude:test` pass in the
+  gate below. The live harness builds under `flume:lint`'s
+  `--all-features`. The trial archive passes 33 of 33.
 
 ## Checks
 
 - **The archive.** `openspec archive agent-mode-is-a-layered-setting --yes`
-  over a copy of `openspec/` at 4b1e11d applies 25 added and 7 modified
-  requirements. `openspec validate --specs --strict` over the result
-  then passes 33 of 33.
-- **The modified requirements.** Each of the seven MODIFIED requirements
-  was compared with main's text at df45390. Each keeps main's text and
-  adds the mode. The exception is clause-coverage's two, which replace
-  the revision, the unbuilt list and the clauses this change cites, as
-  they are meant to. None of the four main specs that main changed
-  after 359f8ce (command-line, history-and-host, kinds-profile and
-  terminal-profiles) holds a requirement this change modifies, so the
-  archive drops nothing of main's.
-- **The gate.** `devenv shell -- sluice exec main` at 4b1e11d, on a
-  clean tree, passed the 24 `#check-fast` and `#check-tools` tasks the
-  branch affects, and sluice recorded the result under 4b1e11d's key.
-  Among them are every task that task 8.3 names except
-  `plugin-claude:validate` and `root:specs`, which the branch's diff
-  from main does not affect:
+  ran over a copy of `openspec/` at 1cfcad8. It applies 25 added and 7
+  modified requirements, and `openspec validate --specs --strict` over
+  the result then passes 33 of 33.
+- **Main's specs kept.** #77 changed command-line, place-profile and
+  seam-contracts. This change only adds to command-line and does not
+  touch place-profile. In seam-contracts it modifies "The agent seam
+  reads a spent account and a start without its settings", which #77
+  did not change. #77's new "The place seam says where a place is made"
+  stands in the archived seam-contracts. The archive drops nothing of
+  main's.
+- **The gate.** `devenv shell -- sluice exec main` at 1cfcad8 passed
+  the 24 `#check-fast` and `#check-tools` tasks the branch affects. The
+  only file in the worktree beyond 1cfcad8 was this report, which no
+  check reads. Among the 24 is every task that tasks 8.3 to 8.5 name,
+  except `plugin-claude:validate` and `root:specs`, which the branch's
+  diff from main does not affect:
   - `seams`, `fakes`, `core`, `conformance` and `flume`: format, lint
-    and test;
+    and test. Among them are `a_mode_and_a_table_at_the_launch`, in
+    `commands.rs` and in `commands/launch.rs`, and HC
+    `manual_read_back_as_default`;
   - `conformance:coverage`;
   - `flume:tools`, 67 tests. Among them are
     `claude_words::the_pinned_release_holds_the_modes_the_map_rests_on`,
-    `walkthroughs::a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one`,
-    `walkthroughs::a_fix_begun_in_another_mode_twice_is_never_begun`,
-    and main's
-    `walkthroughs::an_agent_run_after_its_start_was_read_never_begun_is_begun_and_a_retry_leaves_it`;
-  - `plugin-claude`: format and test;
+    `walkthroughs::a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one`
+    and `walkthroughs::a_fix_begun_in_another_mode_twice_is_never_begun`;
+  - `plugin-claude`: format and test, with `hooks.sh`'s launch in full;
   - `site:prose` and `site:build`;
   - `root:format`, `root:changes` and `root:adrs`.
 
   `root:specs` runs `openspec validate --specs --strict`, so the trial
   archive above is that check over the archived specs. The archive
-  commit makes `root:specs` affected, so the gate runs it there.
+  commit makes `root:specs` affected, and the gate runs on that commit
+  too.
 
 ## Requirements and scenarios
 
-Each scenario was matched to a test and the test's assertions read
-against its WHEN and THEN. The reworded scenarios of task 8.4 were read
-again against their tests at 4b1e11d. Every test named below stands at
-4b1e11d. Short names: SI is
+The earlier verify at 4b1e11d matched each scenario to a test and read
+the test's assertions against its WHEN and THEN. Since then, this
+change's own code has changed only in 643ae69's three place lookups.
+Each test named below was found again at 1cfcad8, and each passes in
+the gate run above, `s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own`
+aside, which is a live walkthrough (W5).
+
+Short names: SI is
 `crates/flume-conformance/src/engine/start_integrity.rs`, AM is
 `engine/agent_modes.rs`, PS is `engine/place_status.rs`, HC is
 `crates/flume/tests/profiles/hooks_claude.rs`, and AC is
@@ -92,13 +102,13 @@ again against their tests at 4b1e11d. Every test named below stands at
 | Spec | Scenarios | Tests | Met |
 |---|---|---|---|
 | agent-modes | 13 | AM: bare value, table of programs, S66's host over the repository, a stage's own first, the host's table changing mid-stage, no mode, each mode mapped (`plan` on a conversation), a mode the profile cannot honour, a later start refused, no entry for the program, `plan` for every stage, `plan` for a conversation, an agent in `ask` asking; `kinds_weir.rs` for the real reader | yes |
-| launching | 1 new | `engine/agent_settings.rs` `a_mode_beside_a_model` | yes (W1) |
-| start-integrity | 7 new or changed, 4 kept | SI: the mode as passed, another mode, another mode at the first prompt, S67's mode disabled by the account's configuration, the fake reading no mode back, everything matching, no prompt to the agent ended, and the four kept scenarios; the stand-in walkthroughs | yes (W1) |
+| launching | 3 | `engine/agent_settings.rs` `a_mode_beside_a_model` and the requirement's existing scenarios | yes (W1) |
+| start-integrity | 11 | SI: the mode as passed, another mode, another mode at the first prompt, S67's mode disabled by the account's configuration, the fake reading no mode back, everything matching, no prompt to the agent ended, and the four kept scenarios; the stand-in walkthroughs | yes (W1) |
 | claude-code-plugin | 7 | HC: SessionStart on the program and variables, `manual` read back as `default`, no mode in the record, another mode blocked, no mode in the input, a later prompt and a compaction, an ack by hand; `plugins/claude/tests/hooks.sh` with its `user-prompt-submit-default.json` fixture | yes |
 | agent-profile | 6 | AC: `the_command_for_a_code_stage` (no `--permission-mode`), `the_command_for_a_stage_in_edits`, `each_of_the_four`, `its_own_value_under_its_name`, `the_mode_read_back`; `claude_words.rs` for the pin | yes |
 | command-line | 3 | `commands/launch.rs` unit tests; `commands.rs` `a_mode_and_a_table_at_the_launch` | yes (W1) |
 | kinds-profile | 2 | `kinds_weir.rs` `a_mode_for_every_stage_and_a_table_for_one`, `a_mode_that_is_neither_refuses_the_launch_naming_the_field` | yes |
-| store-profile | 2 new | `host/config.rs` `a_mode_for_a_kind_and_a_table_for_a_repositorys_stage`, `a_mode_that_is_neither_is_refused_naming_the_table_and_mode` | yes (W1) |
+| store-profile | 6 | `host/config.rs` `a_mode_for_a_kind_and_a_table_for_a_repositorys_stage`, `a_mode_that_is_neither_is_refused_naming_the_table_and_mode`, and the modified requirement's existing scenarios | yes (W1) |
 | place-status | 4 | PS: host table, a table's entry, not read back, a start in another mode, in the JSON form; `print.rs` unit tests for the person's form | yes |
 | seam-contracts | 7 | `seams/agent.rs` over the fake; `flume-seams/src/round_trip.rs` | yes (W1) |
 | seam-fakes | 2 | SI `a_scripted_start_in_another_mode`, `another_mode_at_the_first_prompt`; `fakes.rs` | yes |
@@ -107,8 +117,10 @@ again against their tests at 4b1e11d. Every test named below stands at
 The clause list reads revision 5caff76, Part A and Part B exactly as the
 spec gives them, and S1 to S75. Its unbuilt set is exactly the spec's
 34 clauses, each under its record's change. S64 is cited by
-`caller_waits.rs` `s64_a_fix_of_its_bases_failed_checks`. Clauses 162,
-169, S66 and S67 are each cited by this change's scenarios.
+`caller_waits.rs` `s64_a_fix_of_its_bases_failed_checks`. This change's
+scenarios cite 162, 169, S66 and S67. #77 changed the conformance
+crate's place seam, its launching scenarios and its suite, and none of
+those changes touches the clause list.
 
 ## Design, rules and the merges
 
@@ -117,22 +129,23 @@ spec gives them, and S1 to S75. Its unbuilt set is exactly the spec's
   `Engine::resolve`, `from["mode"]` is the layer that gave the mode,
   with the mode as written. `mode_for` refuses in design 5's three
   wordings. Where no layer gives a mode it returns none and maps
-  nothing. `Engine::launch` asks `resolution` of every stage before
-  anything is made (core.8).
+  nothing.
+- **core.8 over #77.** #77 has `Engine::launch` ask the place seam for
+  the location where it once built `<repository>/places/<kind>--<name>`.
+  `Engine::launch` still asks `resolution` of every stage before
+  anything is made. `a_mode_and_a_table_at_the_launch` shows each mode
+  refused at the launch leaves nothing at the place's location.
 - **Decisions 7 and 8.** SessionStart compares the program and the
   variables alone. UserPromptSubmit compares the mode only at the
   start's first prompt. That is the first prompt with no received ack,
   where no word that the agent began otherwise stands. Where the mode
   differs it answers `{"decision":"block"}` naming both modes, writes
   `unsettled.json` and starts a settle detached.
-- **The merge at df45390.** `deliver.rs` holds both sides. A start begun
-  otherwise is read while Starting or Started, ended once quiet and
-  never sent its prompt again. Main's side holds too: the folder-trust
-  question is answered only while Starting, a dialog shown holds the
-  start from being read never begun, and a started ack clears the
-  dialog. The walkthroughs hold main's `an_agent_run_after_its_start_was_read_never_begun_is_begun_and_a_retry_leaves_it`
-  beside this change's two. `state.md`'s agent row names both `mode`
-  and `dialog`.
+- **The merges.** Main is merged at 5d29913, df45390 and 55a3666.
+  `deliver.rs` holds both sides of df45390. A start begun otherwise is
+  read while Starting or Started, ended once quiet and never sent its
+  prompt again. Main's dialog is read while Starting. 55a3666 merged
+  clean, as above.
 - **Decision 10.** `mode::fragments()` holds the eight fragments design
   10 lists. A unit test pins their text, and `claude_words.rs` finds
   each of them in the pinned release.
@@ -146,7 +159,8 @@ spec gives them, and S1 to S75. Its unbuilt set is exactly the spec's
 - **core.19.** Records 0024, 0025 and 0026 read accepted. core.10's
   detail reads the mode at the start's first prompt. `_open.md` names
   the mode built, the plan stage and points still to build, and the
-  statement's SessionStart reading as an open item.
+  statement's SessionStart reading as an open item. #77's own item on
+  C.1 and record 0027 stands beside them.
 - **core.35.** The site's diff names none of the words core.35 rules
   out.
 
@@ -189,3 +203,12 @@ spec gives them, and S1 to S75. Its unbuilt set is exactly the spec's
   blueprints 5caff76. The operator ruled on 2026-10-31 to read it at
   the start's first prompt. `docs/architecture/_open.md` holds the item
   until the statement says so (core.19).
+- **W5. The live walkthroughs since d265124.** `flume:live` last passed
+  at d265124, before #77 moved a clone's places under flume's data
+  directory. Since then the live harness has changed in two ways. Main
+  finds its walkthroughs' places through `walk.rs`, and this change's
+  S66 reads its place from its launch's answer. Both build under
+  `flume:lint`, and the stand-in walkthroughs pass through the same
+  `walk.rs` in `flume:tools`. Nothing has run them under herdr with the
+  pinned Claude Code since. That run is the operator's to make by hand,
+  and no branch requires it.
