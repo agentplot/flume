@@ -22,6 +22,19 @@ branch name is valid (24, 25, C.1).
 - **WHEN** the history scenarios run against the reader over scratch repositories
 - **THEN** each passes, a head reset to an ancestor of the start holding nothing since it
 
+### Requirement: The default branch read through git
+
+The repository's default branch SHALL be read through `git` as the one
+`origin/HEAD` names, set from `origin`'s own `HEAD` where the repository
+lacks it, and as the one its common git directory's `HEAD` names only
+where it has no `origin`, never a branch that names no commit (20, 132,
+C.7).
+
+#### Scenario: The default branch is the remote's
+
+- **WHEN** a repository made by `git init --bare`, its `HEAD` naming `master`, a branch never made, is given `origin`, whose default branch is `main`, and is fetched with no `origin/HEAD` set, and its default branch is read twice, then again with `origin` removed, then again with its `HEAD` naming `main`
+- **THEN** the first two reads give `main` and `origin/HEAD` names `origin/main` after the first, the third gives none, and the fourth gives `main` (20, 132, C.7)
+
 ### Requirement: The host's facts
 
 The host's facts SHALL be its clock, a sleep, a secret of 32 random
