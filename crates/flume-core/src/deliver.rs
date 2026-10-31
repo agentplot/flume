@@ -11,7 +11,13 @@
 //! at once send it once (75). While the command opening a start's agent
 //! lives, the terminal may still be bringing its program up, so nothing
 //! else is sent to it or answered in it; a start whose opener is gone
-//! is read as opened (34, 35).
+//! is read as opened (34, 35). A dialog the agent's program shows a
+//! person before it takes its prompt holds the start, its words kept
+//! with it: the place waits on a person, and the start is never read
+//! never begun while the dialog shows (34, 35). A stage read never begun
+//! whose agent is still live and then says it started, or received its
+//! prompt, goes on as begun: its start is the stage's after all (35,
+//! 38).
 
 use crate::start::Starts;
 use crate::{Engine, Step, POLL, QUIET_LIMIT, RECEIVED_WITHIN};
@@ -69,21 +75,31 @@ impl Engine {
                         return true;
                     }
                 } else if agent.started(&folder, identity) == Reading::Yes {
-                    self.with_start(id, identity, |_, state| *state = StageState::Started);
+                    self.with_start(id, identity, |start, state| {
+                        start.dialog = None;
+                        *state = StageState::Started;
+                    });
                     sent = true;
                     continue;
                 }
                 // The program may ask whether it may work in the place
                 // after the open returned: the terminal answers it where
                 // it shows it now (34, 35).
-                let _ = self.terminal.answer_trust(identity);
+                let answered = self.terminal.answer_trust(identity);
                 let stopped =
                     self.state_of(Some(agent.as_ref()), &folder, identity) == AgentState::Stopped;
+                // Any other question it shows a person holds the start,
+                // which waits on them however long (34, 35).
+                let dialog = match (answered, stopped) {
+                    (_, true) => false,
+                    (true, false) => start.dialog.is_some(),
+                    (false, false) => self.read_dialog(id, &start),
+                };
                 let limit = held.place.kind.stages[index]
                     .quiet_limit
                     .unwrap_or(QUIET_LIMIT);
                 let waited = self.host.now().saturating_sub(start.started_at);
-                if stopped || waited >= limit {
+                if stopped || (!dialog && waited >= limit) {
                     self.never_begun(id, &held, &start, stopped);
                     return true;
                 }
@@ -95,6 +111,7 @@ impl Engine {
                     start.prompt.received_at = Some(now);
                     start.record = Some(record.clone());
                     start.begun_at = Some(now);
+                    start.dialog = None;
                     *state = StageState::Begun;
                 });
                 return true;
@@ -113,6 +130,10 @@ impl Engine {
                 );
                 return true;
             }
+            // A dialog shown before the agent takes its prompt holds the
+            // prompt: nothing is sent into it, and the prompt is never
+            // read never begun while it shows (34, 35, 37).
+            let dialog = self.read_dialog(id, &start);
             let now = self.host.now();
             if let Some(last) = prompt.sendings.last() {
                 let waited = now.saturating_sub(*last);
@@ -124,6 +145,9 @@ impl Engine {
                     continue;
                 }
                 if prompt.carried || prompt.sendings.len() >= 2 {
+                    if dialog {
+                        return sent;
+                    }
                     self.never_begun(id, &held, &start, false);
                     return true;
                 }
@@ -132,7 +156,10 @@ impl Engine {
                 self.claim_sending(id, identity, prompt.sendings.len(), now);
                 continue;
             }
-            if state != AgentState::Waiting || agent.asking(&folder, identity) != Reading::No {
+            if dialog
+                || state != AgentState::Waiting
+                || agent.asking(&folder, identity) != Reading::No
+            {
                 return sent;
             }
             if !self.claim_sending(id, identity, prompt.sendings.len(), now) {
@@ -179,16 +206,116 @@ impl Engine {
                 if stopped {
                     start.live = false;
                 }
+                start.dialog = None;
                 *state = StageState::NeverBegun;
             },
             Some(end),
         );
     }
 
+    /// Reads whether the agent's program shows a person a dialog before
+    /// it takes its prompt: where the terminal reads it asking, its words
+    /// as the terminal shows them now are kept with the start, since when
+    /// it was first read so; where the terminal reads it otherwise, the
+    /// dialog is gone; where it cannot read it, the start keeps what it
+    /// held. Whether a dialog holds the start (34, 35).
+    fn read_dialog(&self, id: &PlaceId, start: &StartHeld) -> bool {
+        let identity = &start.identity;
+        let dialog = match self.terminal.state(identity) {
+            AgentState::Asking => Some(Dialog {
+                words: self
+                    .terminal
+                    .screen(identity)
+                    .map(|screen| shown(&screen))
+                    .filter(|words| !words.is_empty())
+                    .or_else(|| start.dialog.as_ref().map(|dialog| dialog.words.clone()))
+                    .unwrap_or_default(),
+                since: start
+                    .dialog
+                    .as_ref()
+                    .map_or_else(|| self.host.now(), |dialog| dialog.since),
+            }),
+            AgentState::Unknown => start.dialog.clone(),
+            _ => None,
+        };
+        if dialog != start.dialog {
+            self.with_start(id, identity, |start, _| start.dialog.clone_from(&dialog));
+        }
+        dialog.is_some()
+    }
+
+    /// A stage read never begun whose agent is still live and has since
+    /// said it started, before any sending, or received its prompt, goes
+    /// on as its start's: started, its prompt sent as 37 allows, or begun;
+    /// its never-begun end is read no more, and what was delivered of it
+    /// stays delivered. True when the stage changed (35, 38, 43).
+    pub(crate) fn begun_after(&self, id: &PlaceId) -> bool {
+        let Some(read) = self.store.read(id) else {
+            return false;
+        };
+        let held = read.state;
+        let Some(index) = held.current else {
+            return false;
+        };
+        let stage = &held.stages[index];
+        if stage.state != StageState::NeverBegun {
+            return false;
+        }
+        let Some(start) = stage.start.clone().filter(|start| start.live) else {
+            return false;
+        };
+        if start.opening.as_ref().is_some_and(|by| self.host.alive(by)) {
+            return false;
+        }
+        let Some(agent) = self.agent(&start.program) else {
+            return false;
+        };
+        let folder = self.store.folder(id);
+        let identity = &start.identity;
+        if agent.started_without(&folder, identity).is_some() {
+            return false;
+        }
+        let received = match agent.received(&folder, identity, &start.prompt.text) {
+            Received::Received { record } => Some(record),
+            _ => None,
+        };
+        if received.is_none()
+            && !(start.prompt.sendings.is_empty()
+                && agent.started(&folder, identity) == Reading::Yes)
+        {
+            return false;
+        }
+        let now = self.host.now();
+        self.update(id, |held| {
+            let Some(index) = held.index_of(identity) else {
+                return Step::Keep(false);
+            };
+            let stage = &mut held.stages[index];
+            if stage.state != StageState::NeverBegun {
+                return Step::Keep(false);
+            }
+            let Some(start) = stage.start.as_mut().filter(|start| start.live) else {
+                return Step::Keep(false);
+            };
+            start.dialog = None;
+            stage.end = None;
+            stage.state = match &received {
+                Some(record) => {
+                    start.prompt.received_at = Some(now);
+                    start.record = Some(record.clone());
+                    start.begun_at = Some(now);
+                    StageState::Begun
+                }
+                None => StageState::Started,
+            };
+            Step::Write(true)
+        })
+        .unwrap_or(false)
+    }
+
     /// The start under `identity` reported never begun at once, the
-    /// terminal having read it held at a question its program asks before
-    /// it starts or its program not come up, with what the terminal
-    /// showed then; no prompt is sent (35, 43).
+    /// terminal having read its program not come up, with what the
+    /// terminal showed then; no prompt is sent (35, 43).
     pub(crate) fn never_begun_with(&self, id: &PlaceId, identity: &Identity, screen: String) {
         let Some(read) = self.store.read(id) else {
             return;
@@ -205,7 +332,10 @@ impl Engine {
         self.end_start(
             id,
             identity,
-            |_, state| *state = StageState::NeverBegun,
+            |start, state| {
+                start.dialog = None;
+                *state = StageState::NeverBegun;
+            },
             Some(end),
         );
     }
@@ -228,4 +358,16 @@ impl Engine {
         })
         .unwrap_or(false)
     }
+}
+
+/// What a terminal shows, each line's trailing blanks and the blank lines
+/// around it taken off, so a dialog's words read as it draws them.
+fn shown(screen: &str) -> String {
+    screen
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_matches('\n')
+        .to_string()
 }

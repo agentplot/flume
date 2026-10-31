@@ -68,6 +68,18 @@ gives it, or, where the host's store holds none there and holds one at
 - **WHEN** a clone's place stands at `<clone>/places/fix--one`, as an earlier flume made it, and `flume status fix--one`, `flume drop fix--one` and `flume tidy` run in the clone
 - **THEN** status answers that place, and the drop and the tidy remove its worktree and its branch
 
+### Requirement: A launch naming no base is cut from the default branch
+
+`flume launch` with no `--base` SHALL take the repository's default
+branch as its base, the remote's as the binding's read names it, and
+SHALL be refused, naming why, where the repository names no default
+branch (2, 20).
+
+#### Scenario: A bare repository's HEAD on a branch never made
+
+- **WHEN** a repository made by `git init --bare`, its `HEAD` naming `master`, a branch never made, with `origin` fetched and no `origin/HEAD` set, launches fix twice naming no base
+- **THEN** each place's base is `main` and its branch is cut from `origin`'s `main`
+
 ### Requirement: launch takes a stream and an intent
 
 `flume launch` SHALL take `--stream <stream>` and `--intent <name>`, and

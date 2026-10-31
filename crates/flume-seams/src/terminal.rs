@@ -32,7 +32,8 @@ pub enum Opened {
         printed: Option<String>,
     },
     /// Held at a question the program asks before it starts, which
-    /// flume does not answer (34, 35).
+    /// flume does not answer: the start waits on a person while the
+    /// terminal reads it asking (34, 35).
     Held {
         screen: String,
     },
@@ -173,7 +174,9 @@ pub trait Terminal: Send + Sync {
     fn send(&self, agent: &crate::Identity, text: &str) -> Sent;
 
     /// The agent's state: stopped only when its program no longer runs,
-    /// unknown for anything the terminal cannot classify (96).
+    /// unknown for anything the terminal cannot classify; asking where
+    /// it reads the program waiting on a person, which, before the agent
+    /// takes its prompt, is a dialog its program shows (35, 96).
     fn state(&self, agent: &crate::Identity) -> AgentState;
 
     /// `text` delivered as input to the recipient's session named

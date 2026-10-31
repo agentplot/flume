@@ -35,7 +35,7 @@ happens:
 | `<stage> finished` | a conversation ended by `flume finish` |
 | `<stage> needs an answer` | the agent stopped short with a question, in its words |
 | `<stage> found work` | the agent stopped short with work it cannot deliver past, in its words |
-| `<stage> never begun` | the agent never said it started, or never took its prompt |
+| `<stage> never begun` | the agent never said it started, or never took its prompt; one that says so later goes on, its stage begun |
 | `<stage> lost` | the agent stopped with nothing delivered |
 | `<stage> stuck` | the agent stayed quiet past the stage's limit with nothing delivered |
 | `submission landed <commit>` | the merge queue landed the place's work |
@@ -191,8 +191,10 @@ The answer: The root's README.
 ```
 
 A retry ends the place's agent first; `--force` ends one that is not
-quiet. `flume retry <place> --submission` submits the place's head
-again and starts no agent. A tell is never an answer: only a retry
+quiet. A retry never ends an agent whose stage has started or begun:
+it is refused, forced or not, naming the agent, and
+`flume stop <place>` ends it first. `flume retry <place> --submission`
+submits the place's head again and starts no agent. A tell is never an answer: only a retry
 restarts a stage that ended.
 
 ## Stalls
@@ -200,7 +202,9 @@ restarts a stage that ended.
 A place waits on its caller only as status says: which move, since
 when, and the hold's or the agent's words. Some waits carry no
 hold's words, such as a stage never begun or a fix round past its
-bound. A place waiting so is **stalled** after five minutes, or the
+bound. A place whose agent shows a dialog before it takes its prompt
+waits on a person to answer it in the agent's pane, with the dialog's
+words. A place waiting so is **stalled** after five minutes, or the
 launch's `--stall-after`, and each recipient is told that once. A
 place waiting for room on the host is never stalled, and a hold you
 put never stalls.

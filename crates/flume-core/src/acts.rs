@@ -2,7 +2,8 @@
 //! and the prompt a stage would be sent (29). Each ends an agent only
 //! through the terminal's close, only when it is quiet or the caller
 //! forced it, and answers an end the agent did not take as a failure
-//! (31).
+//! (31); a retry ends none whose stage it started or began under, so it
+//! never ends a working session (35, 50).
 
 use crate::start::{Start, Starts};
 use crate::{Act, Answer, Engine, Step, Tidied, POLL, RECEIVED_WITHIN, TELL_BOUND};
@@ -100,11 +101,34 @@ impl Engine {
         Ok(())
     }
 
+    /// Why a retry leaves the place's agent be: it is live, and the stage
+    /// it runs started or began under it, a stage read never begun whose
+    /// agent said so since among them, so ending it would end a working
+    /// session. The refusal names the agent and the stop that ends it
+    /// first; none where the agent is not so (31, 35, 50, 51).
+    fn working(&self, id: &PlaceId) -> Option<String> {
+        self.begun_after(id);
+        let read = self.store.read(id)?;
+        let (index, start) = read.state.live_start()?;
+        let stage = &read.state.stages[index];
+        let what = match stage.state {
+            StageState::Started => "said it started",
+            StageState::Begun => "has begun",
+            _ => return None,
+        };
+        Some(format!(
+            "the agent {} of the stage {} is live and {what}, and a retry never ends a working session; end it first with flume stop {id}, --force where it is not quiet, then retry",
+            start.identity, stage.name
+        ))
+    }
+
     /// Starts the stage a retry names with a fresh agent and the retry's
     /// words, after the question of the stop-short the stage ended with,
     /// the stages after it then running again in order; or, naming
     /// the submission, submits the place's head again and starts no
-    /// agent. The place's agent is ended first (49, 50, 12).
+    /// agent. The place's agent is ended first, but one whose stage
+    /// started or began under it, which refuses the retry, forced or
+    /// not, naming the agent and its stop (49, 50, 12, 35).
     pub fn retry(
         &self,
         place: &PlaceId,
@@ -133,6 +157,9 @@ impl Engine {
             }
             Retry::Submission => None,
         };
+        if let Some(reason) = self.working(place) {
+            return Answer::refused(reason);
+        }
         if let Err(reason) = self.end_agent(place, force) {
             return Answer::refused(reason);
         }
@@ -182,7 +209,7 @@ impl Engine {
             Step::Write(())
         });
         match self.start_stage(place, index, words) {
-            Start::Opened(_) | Start::NeverBegun(_) | Start::WaitingForRoom => {
+            Start::Opened(_) | Start::Held(_) | Start::NeverBegun(_) | Start::WaitingForRoom => {
                 self.acted(Act::Retry, place)
             }
             Start::Refused(part) => Answer::refused(format!(

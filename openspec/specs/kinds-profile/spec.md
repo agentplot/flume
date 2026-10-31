@@ -36,10 +36,10 @@ fails (19, 20, 23, 84, 85, core.4).
 ### Requirement: The binding from the default branch
 
 The profile SHALL read the `[profiles]` table at the default branch's
-current revision, `origin/HEAD` after one fetch where the repository has
-a remote and the local default branch otherwise, and nothing from
-another tool's files; a seam the table leaves out SHALL be the place
-profile `git-worktree` or unbound (20, 105, C.2, core.3).
+current revision, the remote's after one fetch of it where the
+repository has `origin` and the local branch's otherwise, and nothing
+from another tool's files; a seam the table leaves out SHALL be the
+place profile `git-worktree` or unbound (20, 105, C.2, core.3).
 
 #### Scenario: No table
 
@@ -50,6 +50,20 @@ profile `git-worktree` or unbound (20, 105, C.2, core.3).
 
 - **WHEN** a repository's table names `place = "worktrunk"`
 - **THEN** the launch is refused naming the place profiles there are, and nothing is made (C.1, core.3)
+
+### Requirement: The default branch is the remote's
+
+The default branch the binding is read at SHALL be the one
+`origin/HEAD` names, set from `origin`'s own `HEAD` where the repository
+lacks it, and the one the repository's own `HEAD` names only where it
+has no `origin`; a branch that names no commit SHALL never be the
+default, and the binding SHALL then be answered as could not be read,
+never as empty (20, C.2).
+
+#### Scenario: A bare repository's HEAD on a branch never made
+
+- **WHEN** a repository made by `git init --bare`, its `HEAD` naming `master`, a branch never made, is given `origin`, whose `main` binds the merge queue, and is fetched with no `origin/HEAD` set
+- **THEN** the binding is the one at `origin`'s `main`, and with `origin` removed the binding is answered as could not be read, naming `master` (20, C.2)
 
 ### Requirement: flume's own three kinds and their prompts
 

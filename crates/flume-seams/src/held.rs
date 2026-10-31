@@ -155,7 +155,8 @@ pub struct Waiting {
 /// (56, 130).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WaitingOn {
-    /// A retry, or done.
+    /// A retry, or done; or a person's answer to the agent program's
+    /// dialog, which is no act of flume's.
     pub act: Act,
     /// The stage the retry names; none where it names the submission.
     pub stage: Option<String>,
@@ -174,6 +175,7 @@ impl WaitingOn {
     pub fn move_words(&self) -> String {
         match (self.act, &self.stage) {
             (Act::Done, _) => "done".into(),
+            (Act::Answer, _) => "a person's answer to its agent's dialog".into(),
             (_, Some(stage)) => format!("a retry of {stage}"),
             (_, None) => "a retry of the submission".into(),
         }
@@ -193,6 +195,10 @@ pub enum Act {
     Needs,
     Priority,
     Hold,
+    /// A person's answer, in the agent's terminal, to a dialog its
+    /// program shows before it takes its prompt: what a place waits on
+    /// for a dialog, never an act a caller asks of flume (34, 35).
+    Answer,
 }
 
 /// Why a place waits on its caller (56, 130).
@@ -208,6 +214,9 @@ pub enum Waits {
     Lost,
     /// A stage whose prompt was never begun (38).
     NeverBegun,
+    /// A stage whose agent's program shows a person a dialog before it
+    /// takes its prompt, which flume does not answer (34, 35).
+    Dialog,
     /// A first stage waiting on the place's readiness (12).
     Unready,
     /// A stage whose prompt asks for a part with nothing to fill it
@@ -699,6 +708,20 @@ pub struct StartHeld {
     /// prompt or answers the program's questions (34, 35, 37).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opening: Option<String>,
+    /// The question the agent's program shows a person before it takes
+    /// its prompt, which flume does not answer, as the terminal last read
+    /// it: the place waits on a person while it shows (34, 35).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialog: Option<Dialog>,
+}
+
+/// A question an agent's program shows a person before it takes its
+/// prompt, its words as the terminal shows them, and since when flume
+/// read it shown (34, 35).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Dialog {
+    pub words: String,
+    pub since: Seconds,
 }
 
 /// What a start's agent is to run under (161): the program its settings

@@ -13,7 +13,7 @@
 
 mod common;
 
-use common::{git, Repository, Scratch};
+use common::{git, Container, Repository, Scratch};
 use flume::commands;
 use flume::host::config::{self, HostConfig};
 use flume::profiles::place::git_worktree;
@@ -470,6 +470,39 @@ fn the_same_answer_through_the_command_line_and_the_core() {
         "{}",
         person.text
     );
+}
+
+#[test]
+fn a_launch_naming_no_base_is_cut_from_the_remotes_default_branch() {
+    // 2, 20: in a repository made by `git init --bare`, whose HEAD names
+    // master, a branch never made, and that has no origin/HEAD, every
+    // launch naming no base is cut from the remote's main.
+    let host = Host::new("default-base");
+    let origin = repository("default-base", None);
+    let remote = origin.bare_remote();
+    let container = Container::of(&remote, Scratch::new("default-base"));
+    let kinds = kinds_file(&host, false);
+    for name in ["one", "two"] {
+        let launched = host.stand_in(
+            &container.dir,
+            &[
+                "launch", "--kind", "fix", "--name", name, "--kinds", &kinds, "--json",
+            ],
+            &[],
+        );
+        assert_eq!(launched.code, 0, "{}", launched.text);
+        let answer = launched.answer();
+        let place = the_place(&answer);
+        assert_eq!(place.base, "main", "the launch of {name}");
+        assert_eq!(
+            git(
+                Path::new(&place.place.0),
+                &["rev-parse", &format!("fix/{name}^{{commit}}")]
+            ),
+            origin.head(),
+            "the place of {name} cut from the remote's main"
+        );
+    }
 }
 
 #[test]

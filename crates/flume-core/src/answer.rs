@@ -551,6 +551,12 @@ pub struct AgentStatus {
     /// (35, 136).
     #[serde(default)]
     pub screen: Option<String>,
+    /// The dialog the agent's program shows a person before it takes its
+    /// prompt, which flume does not answer, in its words as the terminal
+    /// shows them: the place waits on a person to answer it in the
+    /// agent's terminal (34, 35).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialog: Option<String>,
     /// The command a person runs in the place to start the agent, where
     /// the terminal printed it (C.5).
     #[serde(default)]
