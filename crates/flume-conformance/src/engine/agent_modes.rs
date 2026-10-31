@@ -20,7 +20,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
             name: "agent modes: a program's own value given bare in a launch's declaration refuses the launch, naming the field and the value and saying it goes under its program's name, and nothing is made",
-            cites: &["4", "169", "C.2"],
+            cites: &["4", "8", "169"],
             run: a_programs_own_value_given_bare,
         },
         Scenario {
