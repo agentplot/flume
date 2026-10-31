@@ -1,19 +1,20 @@
 # Verify: agent-mode-is-a-layered-setting
 
 Checked on 2026-10-31 at `change/agent-mode-is-a-layered-setting`
-1cfcad8, which holds main at 55a3666 (#77). Main's head is still
+355ebbc, which holds main at 55a3666 (#77). Main's head is still
 55a3666. The check covers this change's proposal, design, twelve specs
 and tasks.
 
 **The work holds, and the change is archived.** Every task is ticked
 and every requirement is built. Every scenario has a test, the gate
-passes at 1cfcad8, and the archived specs pass the strict check. The
-warnings below are about wording and how literal some tests are. None
-of them leaves a requirement unmet.
+passes at 355ebbc, `flume:tools` passes twice in a row, and the
+archived specs pass the strict check. The warnings below are about
+wording, how literal some tests are, and how far a stand-in reaches.
+None of them leaves a requirement unmet.
 
 ## Tasks
 
-All 26 tasks of the eight groups are ticked, `[x]`. The gate run below
+All 27 tasks of the eight groups are ticked, `[x]`. The gate run below
 backs each group's closing check task.
 
 Task 6.1 records `flume:live` passing 4 of 4 at d265124 on 2026-10-31.
@@ -21,38 +22,50 @@ The operator ran it outside the gate with a test account's token, as
 `CLAUDE.md` says. It was not run again here, because it needs a test
 account's token and no branch requires `check-live` (W5).
 
-Task 8.5 is met:
+Task 8.6 is met:
 
-- **Out of the archive.** 457b289's tree is 073e2ac's, the tree from
-  before the archive. Nothing differs, the verify report aside. At
-  1cfcad8, `openspec/specs/` is main's at 55a3666 byte for byte, so
-  the specs are unsynced.
-- **Main merged at 55a3666.** f834f18 merges 457b289 and 55a3666.
-  `git merge-tree` of the two gives f834f18's tree, 4e1a08d, so the
-  merge took main whole and changed nothing by hand.
-- **The launches this change added find their place where main makes
-  it.** 643ae69 changes three tests and nothing else:
-  - `plugins/claude/tests/hooks.sh` finds the launch in full,
-    `fix--three`, by main's `located`.
-  - `tests/commands.rs` `a_mode_and_a_table_at_the_launch` finds its
-    held state by `place_of`. It asserts that each refused launch made
-    nothing at the place `place_of` names.
-  - The live S66 walkthrough reads its place from its launch's own
-    answer, `launched.place.place`, which is `PlaceStatus::place`.
-
-  No other test of this change's names a place at
-  `<repository>/places/`. The only paths left in that form are main's
-  own, and the fakes' ids, which name no directory.
-- **The checks.** `flume:test` and `plugin-claude:test` pass in the
-  gate below. The live harness builds under `flume:lint`'s
-  `--all-features`. The trial archive passes 33 of 33.
+- **Out of the archive.** b72d89e's tree is 48ec24e's, the tree from
+  before the archive, byte for byte. At 355ebbc, `openspec/specs/` and
+  `openspec/changes/archive/` are main's at 55a3666, so the specs are
+  unsynced.
+- **What failed.** Sluice entry 79 tested c649d4e, main at 55a3666
+  with bc04493, and failed `flume:tools`, 66 of 67. Its one failure was
+  `a_conflict_sluice_answers_at_the_submit_goes_back_to_code_and_lands`.
+  The send-back prompt held sluice's notice,
+  `[sluice] #1 conflicts on main in work.rs. sluice wait 1 shows it.`,
+  not the record's `conflict on main: work.rs`. Sluice marks the
+  failure flaky, since the same task passed at bc04493 in this place
+  minutes before.
+- **What 459ace5 changes.** It changes two test files of the tools
+  layer and nothing else. No code of flume's and no test of this
+  change's own moved:
+  - `walk.rs` `stand_in_sluice`, main's stand-in for sluice, answers
+    `inbox` with `{"outcomes": []}` while its first submit runs, its
+    `--no-wait` dropped. That is the shape the sluice profile reads
+    from `inbox --json`. Every later command is the pinned sluice's.
+  - `merge_queue_sluice.rs` gains
+    `a_settle_beside_the_stand_ins_submit_collects_nothing_its_answer_delivers`.
+    It steps main and collects the inbox beside that submit until the
+    submit answers. Then it asserts that the inbox gave nothing, that
+    the submit answered the conflict on `work.rs` in the record's
+    words, and that the inbox is empty after.
+- **Twice in a row.** The gate below ran `flume:tools` at 355ebbc, 68
+  of 68. `sluice exec main -- moon run flume:tools --force` then ran it
+  again, 68 of 68. Both runs hold the walkthrough and the new scenario,
+  and both pass `instructions_of_twenty_thousand_characters_reach_the_agent_whole`.
+- **Failing against the old stand-in.** `walk.rs` was put back to
+  459ace5^'s with the new scenario kept, and the scenario run alone
+  three times. It failed each time, its inbox collecting
+  `Conflict { files: ["work.rs"], .. }` with entry 79's notice words.
+  `walk.rs` was then restored to 355ebbc's.
 
 ## Checks
 
 - **The archive.** `openspec archive agent-mode-is-a-layered-setting --yes`
-  ran over a copy of `openspec/` at 1cfcad8. It applies 25 added and 7
+  ran over a copy of `openspec/` at 355ebbc. It applies 25 added and 7
   modified requirements, and `openspec validate --specs --strict` over
-  the result then passes 33 of 33.
+  the result then passes 33 of 33. The specs it gives are bc04493's
+  byte for byte.
 - **Main's specs kept.** #77 changed command-line, place-profile and
   seam-contracts. This change only adds to command-line and does not
   touch place-profile. In seam-contracts it modifies "The agent seam
@@ -60,22 +73,21 @@ Task 8.5 is met:
   did not change. #77's new "The place seam says where a place is made"
   stands in the archived seam-contracts. The archive drops nothing of
   main's.
-- **The gate.** `devenv shell -- sluice exec main` at 1cfcad8 passed
-  the 24 `#check-fast` and `#check-tools` tasks the branch affects. The
-  only file in the worktree beyond 1cfcad8 was this report, which no
-  check reads. Among the 24 is every task that tasks 8.3 to 8.5 name,
-  except `plugin-claude:validate` and `root:specs`, which the branch's
-  diff from main does not affect:
+- **The gate.** `devenv shell -- sluice exec main` at 355ebbc, with the
+  worktree clean, passed the 24 `#check-fast` and `#check-tools` tasks
+  the branch affects, none from cache. Among the 24 is every task that
+  tasks 8.3 to 8.6 name, except `plugin-claude:validate` and
+  `root:specs`, which the branch's diff from main does not affect:
   - `seams`, `fakes`, `core`, `conformance` and `flume`: format, lint
-    and test. Among them are `a_mode_and_a_table_at_the_launch`, in
-    `commands.rs` and in `commands/launch.rs`, and HC
-    `manual_read_back_as_default`;
+    and test;
   - `conformance:coverage`;
-  - `flume:tools`, 67 tests. Among them are
+  - `flume:tools`, 68 tests. Among them are
     `claude_words::the_pinned_release_holds_the_modes_the_map_rests_on`,
-    `walkthroughs::a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one`
-    and `walkthroughs::a_fix_begun_in_another_mode_twice_is_never_begun`;
-  - `plugin-claude`: format and test, with `hooks.sh`'s launch in full;
+    `walkthroughs::a_hosts_mode_over_the_repositorys_and_none_where_no_layer_gives_one`,
+    `walkthroughs::a_fix_begun_in_another_mode_twice_is_never_begun`,
+    `walkthroughs::a_conflict_sluice_answers_at_the_submit_goes_back_to_code_and_lands`
+    and the new `merge_queue_sluice` scenario;
+  - `plugin-claude`: format and test;
   - `site:prose` and `site:build`;
   - `root:format`, `root:changes` and `root:adrs`.
 
@@ -86,12 +98,14 @@ Task 8.5 is met:
 
 ## Requirements and scenarios
 
-The earlier verify at 4b1e11d matched each scenario to a test and read
-the test's assertions against its WHEN and THEN. Since then, this
-change's own code has changed only in 643ae69's three place lookups.
-Each test named below was found again at 1cfcad8, and each passes in
-the gate run above, `s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own`
-aside, which is a live walkthrough (W5).
+The verify at 4b1e11d matched each scenario to a test and read the
+test's assertions against its WHEN and THEN. Since then, this change's
+own code has changed only in 643ae69's three place lookups, and 459ace5
+touches main's stand-in for sluice. Each test named below was found
+again at 355ebbc, and each passes in the gate run above,
+`s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own`
+aside, which is a live walkthrough (W5). The scenario counts are the
+specs' own at 355ebbc.
 
 Short names: SI is
 `crates/flume-conformance/src/engine/start_integrity.rs`, AM is
@@ -118,9 +132,8 @@ The clause list reads revision 5caff76, Part A and Part B exactly as the
 spec gives them, and S1 to S75. Its unbuilt set is exactly the spec's
 34 clauses, each under its record's change. S64 is cited by
 `caller_waits.rs` `s64_a_fix_of_its_bases_failed_checks`. This change's
-scenarios cite 162, 169, S66 and S67. #77 changed the conformance
-crate's place seam, its launching scenarios and its suite, and none of
-those changes touches the clause list.
+scenarios cite 162, 169, S66 and S67. Neither #77 nor 459ace5 touches
+the clause list.
 
 ## Design, rules and the merges
 
@@ -145,14 +158,18 @@ those changes touches the clause list.
   `deliver.rs` holds both sides of df45390. A start begun otherwise is
   read while Starting or Started, ended once quiet and never sent its
   prompt again. Main's dialog is read while Starting. 55a3666 merged
-  clean, as above.
+  clean.
 - **Decision 10.** `mode::fragments()` holds the eight fragments design
   10 lists. A unit test pins their text, and `claude_words.rs` finds
   each of them in the pinned release.
 - **core.1 and core.2.** No line this change adds outside a profile
   directory names a program. `--permission-mode` and Claude Code's
   choices appear only in `profiles/agent/claude/`. The refusal of a bare
-  value names `<program>`, not a program.
+  value names `<program>`, not a program. 459ace5's lines name sluice
+  only in the sluice profile's tests and the walkthroughs' harness.
+- **core.6.** 459ace5 leaves the outcome read from the merge queue's
+  record. The new scenario asserts the conflict reaches flume once, in
+  the submit's answer, and that no inbox gives it again.
 - **core.14.** `AgentStatus::mode`, `ModeStatus`, `Settings::mode`,
   `StartRecord::mode` and `Unsettled::mode` are added fields, each read
   with a default.
@@ -160,7 +177,8 @@ those changes touches the clause list.
   detail reads the mode at the start's first prompt. `_open.md` names
   the mode built, the plan stage and points still to build, and the
   statement's SessionStart reading as an open item. #77's own item on
-  C.1 and record 0027 stands beside them.
+  C.1 and record 0027 stands beside them. 459ace5 and 355ebbc cite 112
+  and 133.
 - **core.35.** The site's diff names none of the words core.35 rules
   out.
 
@@ -212,3 +230,15 @@ those changes touches the clause list.
   `walk.rs` in `flume:tools`. Nothing has run them under herdr with the
   pinned Claude Code since. That run is the operator's to make by hand,
   and no branch requires it.
+- **W6. The stand-in for sluice hides a window.** The stand-in now
+  answers its inbox with nothing for as long as its first submit runs.
+  It rests on the pinned sluice delivering an entry it decides as it
+  takes it in with that submit's answer. Sluice's `report_delivering`
+  marks the outcome delivered once the answer is written and flushed.
+  That was read in a sluice worktree on this host, not in the pinned
+  0.57.1's source. No test now shows what flume does with an outcome an
+  inbox gives in the instant between the decision and its mark. That
+  window is sluice's and the walkthrough is main's, not this change's.
+  Either way, entry 79's prompt shows the send-back still names the
+  files contested and the base's revision, which come from the
+  outcome's own fields.
