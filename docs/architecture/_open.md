@@ -42,15 +42,15 @@ brought to the rule.
   from outside, and a launch names a kind by its name, or by its name
   and version, never by its source. The item leaves
   when the code is brought to core.34.
-- **Records 0024 and 0025 wait on the user's yes.** An agent's mode as
-  a layered setting and a plan stage accepted by its caller's finish
-  (record 0024; core.10, core.12 and core.30 as amended, core.37), and
-  a place's points with a stream's points bound and pace (record 0025;
-  core.26 as amended, core.38), are stated at blueprints 9c7490c (161
-  to 168; weir 54, 57) and proposed on flume-sluice-build's card. Once
-  accepted, the mode is built first, before the crew refactor, and the
-  plan stage and points after it. The item leaves when both are
-  accepted or rejected.
+- **Record 0024's plan stage and record 0025's points wait on their
+  build.** Both records were accepted on 2026-10-30 and are stated at
+  blueprints 9c7490c (161 to 168; weir 54, 57). Record 0024's mode, a
+  layered setting each profile maps or refuses (162, 169), is built. A
+  plan stage accepted by its caller's finish (163, 164), and a place's
+  points with a stream's points bound and pace (165 to 168), are built
+  after it. Until then the code stands against core.37, core.38,
+  core.12 and core.26 as amended, and core.30's plan stage. The item
+  leaves when the code is brought to them.
 - **The statement reads Claude Code's mode at SessionStart.** C.4's
   started and received rows and 161's word that it started, at
   agentplot/blueprints 5caff76, have the SessionStart hook compare the
