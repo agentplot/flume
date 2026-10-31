@@ -8,9 +8,7 @@ The host's configuration SHALL be read from
 model, mode and instructions by kind and by repository and kind, each
 with `.stages.<stage>`; `stream` where C.7 names it; and `[roles]`. A
 key left out SHALL be no bound, the printed command, no stream, pool or
-settings. A mode SHALL be one of flume's four or a table of programs
-whose entries are strings, and any other SHALL refuse the configuration
-naming the key (32, 70, 105, 143, 144, 162, 169, C.7).
+settings (32, 70, 105, 143, 144, 162, C.7).
 
 #### Scenario: A bound stated
 
@@ -31,6 +29,15 @@ naming the key (32, 70, 105, 143, 144, 162, 169, C.7).
 
 - **WHEN** the configuration gives a stream `pool = "missing"` that no `[pools]` table declares, or a pool `strategy = "round-robin"`
 - **THEN** every launch and start is refused naming the key, and status says the host's configuration cannot be read (4, C.7)
+
+## ADDED Requirements
+
+### Requirement: A mode in the host's agents tables
+
+A mode in an agents table of the host's configuration SHALL be read as
+one of flume's four or a table of programs whose entries are strings,
+and any other SHALL refuse the configuration naming the table and
+`mode` (162, 169, C.7).
 
 #### Scenario: A mode for a kind and a table for a repository's stage
 

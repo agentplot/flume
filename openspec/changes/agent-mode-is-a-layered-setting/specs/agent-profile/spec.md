@@ -1,29 +1,20 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: An agent started as Claude Code with flume's plugin
+### Requirement: The settings' mode passed by --permission-mode
 
-The agent profile SHALL start an agent as `claude` in the place, with
-the plugin of the flume that started it loaded by `--plugin-dir`, the
-settings' model and instructions, `--permission-mode` with the value
-its map gives the settings' mode where they give one and nothing where
-they give none, an environment of the host user's login environment
-with its account's variables over it, and `FLUME_AGENT`,
-`FLUME_SECRET`, `FLUME_PLACE` and `FLUME_STAGE`, the identity naming
-the repository by an id from its common git directory; and the prompt
-as its argument under the printed command (29, 32, 33, 88, 144, 162,
-169, C.4).
+The agent profile SHALL start `claude` with `--permission-mode` and the
+value its map gives the settings' mode where they give one, and with no
+`--permission-mode` where they give none (162, 169, C.4).
 
-#### Scenario: The command for a code stage
+#### Scenario: The command for a stage with no mode
 
-- **WHEN** the profile gives the command for a stage with a model and instructions under an account giving `CLAUDE_CONFIG_DIR`
-- **THEN** it runs `claude` with `--plugin-dir`, `--model` and `--append-system-prompt`, the account's `CLAUDE_CONFIG_DIR`, the four `FLUME_*` words, no `--permission-mode`, and nothing of the caller's session
+- **WHEN** the profile gives the command for a stage whose settings give no mode
+- **THEN** it runs `claude` with no `--permission-mode` (162)
 
 #### Scenario: The command for a stage in edits
 
 - **WHEN** the profile gives the command for a stage whose settings give `edits`
 - **THEN** it runs `claude` with `--permission-mode acceptEdits` (S66, 169)
-
-## ADDED Requirements
 
 ### Requirement: Claude Code's map of flume's modes and its own values
 

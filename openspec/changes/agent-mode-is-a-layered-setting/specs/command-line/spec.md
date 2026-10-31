@@ -22,4 +22,4 @@ not one of the four SHALL be refused naming it (7, 162, 169, C.2).
 #### Scenario: A program's own value given bare
 
 - **WHEN** `flume launch --kind fix --agent mode=auto` runs
-- **THEN** it is refused naming `auto` and saying it goes under its program's name, as `mode.claude=auto`, and nothing is launched (169)
+- **THEN** it is refused naming `auto` and saying it goes under its program's name, as `--agent mode.<program>=auto`, and nothing is launched (169)

@@ -75,7 +75,7 @@ pass a wider or a narrower setting (88, 169).
 
 #### Scenario: Each mode mapped as the profile says
 
-- **WHEN** the fake agent's profile maps `plan`, `ask`, `edits` and `full` to `look`, `ask-each`, `edit-files` and `all`, and a fix's code stage is launched once in each
+- **WHEN** the fake agent's profile maps `plan`, `ask`, `edits` and `full` to `look`, `ask-each`, `edit-files` and `all`, a fix's code stage is launched once in each of `ask`, `edits` and `full`, and a repository's conversation kind once in `plan`
 - **THEN** each start's agent is passed the value its mode maps to, and no other (88, 169)
 
 ### Requirement: A mode its profile refuses refuses the launch or the stage

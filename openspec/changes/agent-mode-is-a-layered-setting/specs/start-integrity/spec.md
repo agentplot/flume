@@ -1,43 +1,14 @@
 ## MODIFIED Requirements
 
-### Requirement: A start records what its agent runs under
-
-At each start flume SHALL record, as the start's `start_record`, the
-agent's program, its mode as its profile passes it where its settings
-give one and none where they give none, its account and, for each
-variable of its resolved environment and `FLUME_AGENT`, `FLUME_PLACE`
-and `FLUME_STAGE`, a digest keyed by the start's secret over the
-variable's name and value, and never a value; the variables a terminal
-sets for itself and the login environment beneath the settings SHALL
-not be in it (161, 162; core.10, core.30).
-
-#### Scenario: The record holds no value
-
-- **WHEN** a start's resolved environment gives `CLAUDE_CONFIG_DIR` and a token
-- **THEN** its held record names both with digests, the token's value is in no held state, answer or log, and a digest computed with another secret differs (161)
-
-#### Scenario: What the terminal sets is left out
-
-- **WHEN** the herdr profile sets `PATH` and `SHELL` on the pane for the start
-- **THEN** neither is in the start's record (161)
-
-#### Scenario: The mode as passed
-
-- **WHEN** a start's settings give `edits`, which its profile passes as `edit-files`, and another start's settings give no mode
-- **THEN** the first start's record names the mode `edit-files` and the second's names none (161, 162)
-
 ### Requirement: The started ack is taken only where the record matches
 
-The agent's word that it started SHALL be taken only where its program
-and every variable the record names match the start's record, and its
-mode does where the record names one and its profile reads it back, in
-that word or, where its program names its mode only at its start's
-first prompt, in its word at that prompt, which is then not taken as
-received; an agent whose word shows otherwise SHALL not be the stage's,
-and its start SHALL be read as started without its settings, while
-starting or started, naming each variable that differs by its name,
-whether the program did, and, where the mode did, the mode asked and
-the mode it began in (35, 135, 161, 162).
+The agent's word that it started SHALL be taken only where its program,
+every variable the record names and, where the record names a mode its
+profile reads back, its mode match the start's record; an agent whose
+word shows otherwise SHALL not be the stage's, and its start SHALL be
+read as started without its settings, naming each variable that differs
+by its name, whether the program did, and a mode that did by the mode
+asked and the mode begun (35, 135, 161, 162).
 
 #### Scenario: A variable missing
 
@@ -53,11 +24,6 @@ the mode it began in (35, 135, 161, 162).
 
 - **WHEN** a start's record names the mode `all`, and its agent says it started with every variable as recorded but in the mode `ask-each`
 - **THEN** no started ack is recorded, and the start reads started without its settings, naming the mode asked `all` and the mode begun `ask-each` (135, 161, 162)
-
-#### Scenario: Another mode at the first prompt
-
-- **WHEN** a start's record names the mode `all`, its agent's word that it started is taken, and its word at its start's first prompt names `ask-each`
-- **THEN** the prompt is sent once and not received, the start reads started without its settings, naming the mode asked `all` and the mode begun `ask-each`, and no prompt is sent to it again before flume ends it (37, 161, 162)
 
 ### Requirement: A stage whose agent began without its settings starts afresh
 
@@ -95,6 +61,30 @@ differed by the mode asked and the mode begun (31, 35, 112, 161, 162).
 - **THEN** flume ends the first agent once quiet and starts code afresh, counting no bound, and the fresh start is never begun, its end and status naming the mode asked and the mode it began in (S67, 35, 161, 162)
 
 ## ADDED Requirements
+
+### Requirement: A start records the mode its profile passes
+
+At each start flume SHALL record in the start's `start_record` the mode
+its agent's profile passes, and none where its settings give none (161,
+162; core.10).
+
+#### Scenario: The mode as passed
+
+- **WHEN** a start's settings give `edits`, which its profile passes as `edit-files`, and another start's settings give no mode
+- **THEN** the first start's record names the mode `edit-files` and the second's names none (161, 162)
+
+### Requirement: A mode its program names only at the first prompt
+
+Where the agent's program names its mode only at its start's first
+prompt, flume SHALL compare the mode in the agent's word at that
+prompt; where it differs, that word SHALL not be taken as received, and
+the start SHALL be read as started without its settings although its
+started ack was taken (37, 161, 162).
+
+#### Scenario: Another mode at the first prompt
+
+- **WHEN** a start's record names the mode `all`, its agent's word that it started is taken, and its word at its start's first prompt names `ask-each`
+- **THEN** the prompt is sent once and not received, the start reads started without its settings, naming the mode asked `all` and the mode begun `ask-each`, and no prompt is sent to it again before flume ends it (37, 161, 162)
 
 ### Requirement: A profile that reads no mode back compares none
 
