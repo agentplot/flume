@@ -47,6 +47,14 @@ brought to the rule.
   inbox's outcome alone, and of C.6's table of what the profile reads,
   which names `from.worktree` alone; they say so once the operator
   rules the change (core.19). The item leaves when it lands.
+- **C.1 makes every repository's places at `<repository>/places/`.**
+  Record 0027, proposed on 2026-10-31 on the operator's brief, makes a
+  clone's places under flume's own data directory, since a clone's
+  directory is its main worktree, and keeps a bare repository's beside
+  its worktrees (core.40). The code stands ahead of C.1's make column,
+  which says so once the operator rules the change in agentplot/blueprints
+  `design/flume/requirements.md` (core.19). The item leaves when it
+  lands.
 - **Record 0021 waits on a plan.** The standing prompt with cache use
   in status (record 0021; core.33), accepted 2026-10-29 and stated at
   blueprints 6e5aae2, is built only once the user approves a plan for
