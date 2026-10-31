@@ -57,23 +57,12 @@ pub fn place(named: &str, repository_given: Option<&Path>) -> Result<PlaceId, St
 }
 
 /// The base a launch naming none is cut from: the repository's default
-/// branch, the remote's where `origin/HEAD` names it, its own otherwise
-/// (20).
+/// branch, the remote's where it has one and its own only where it has
+/// none (2, 20).
 pub fn default_base(repository: &str) -> Result<String, String> {
-    let git = Git::at(repository);
-    if let Ok(remote) = git.text(&[
-        "symbolic-ref",
-        "--quiet",
-        "--short",
-        "refs/remotes/origin/HEAD",
-    ]) {
-        if let Some(branch) = remote.trim().strip_prefix("origin/") {
-            return Ok(branch.to_string());
-        }
-    }
-    git.text(&["symbolic-ref", "--quiet", "--short", "HEAD"])
-        .map(|branch| branch.trim().to_string())
-        .map_err(|_| format!("the launch names no base, and {repository} names no default branch"))
+    Git::at(repository).default_branch().map_err(|reason| {
+        format!("the launch names no base, and {repository} names no default branch: {reason}")
+    })
 }
 
 /// `path` from the working directory where it is relative.

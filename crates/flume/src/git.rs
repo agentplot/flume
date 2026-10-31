@@ -8,6 +8,10 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+/// The remote a repository's default branch is read from where it has
+/// one (20).
+pub const REMOTE: &str = "origin";
+
 /// A repository git is run in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Git {
@@ -187,6 +191,69 @@ impl Git {
             .lines()
             .map(str::to_string)
             .collect())
+    }
+
+    /// The repository's default branch (20, C.2): where it has the
+    /// remote, the remote's, the branch `refs/remotes/origin/HEAD` names,
+    /// set from the remote's own `HEAD` where the repository lacks it or
+    /// it names no commit; where it has none, the branch its own `HEAD`
+    /// names. A branch that names no commit is never the default, so a
+    /// bare repository's `HEAD` left on a branch never made decides
+    /// nothing.
+    pub fn default_branch(&self) -> Result<String, String> {
+        if !self.remotes()?.iter().any(|remote| remote == REMOTE) {
+            let branch = self
+                .text(&["symbolic-ref", "--quiet", "--short", "HEAD"])
+                .map_err(|_| "it has no remote, and its HEAD names no branch".to_string())?;
+            let branch = branch.trim();
+            self.commit(&format!("refs/heads/{branch}")).map_err(|_| {
+                format!("it has no remote, and its HEAD names {branch}, which holds no commit")
+            })?;
+            return Ok(branch.to_string());
+        }
+        if let Some(branch) = self.remote_head() {
+            return Ok(branch);
+        }
+        let listed = self
+            .text(&["ls-remote", "--symref", REMOTE, "HEAD"])
+            .map_err(|words| format!("{REMOTE}'s HEAD could not be read: {words}"))?;
+        let branch = listed
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("ref: refs/heads/")?
+                    .strip_suffix("\tHEAD")
+            })
+            .ok_or_else(|| format!("{REMOTE}'s HEAD names no branch"))?;
+        let tracking = format!("refs/remotes/{REMOTE}/{branch}");
+        self.bytes(&[
+            "fetch",
+            "--quiet",
+            REMOTE,
+            &format!("+refs/heads/{branch}:{tracking}"),
+        ])
+        .map_err(|words| format!("the fetch of {branch} from {REMOTE} failed: {words}"))?;
+        self.bytes(&["remote", "set-head", REMOTE, branch])
+            .map_err(|words| format!("{REMOTE}'s HEAD could not be set to {branch}: {words}"))?;
+        self.remote_head()
+            .ok_or_else(|| format!("{REMOTE}'s HEAD names {branch}, which holds no commit"))
+    }
+
+    /// The branch `refs/remotes/origin/HEAD` names, where it is set and
+    /// the branch names a commit.
+    fn remote_head(&self) -> Option<String> {
+        let named = self
+            .text(&[
+                "symbolic-ref",
+                "--quiet",
+                &format!("refs/remotes/{REMOTE}/HEAD"),
+            ])
+            .ok()?;
+        let branch = named
+            .trim()
+            .strip_prefix(&format!("refs/remotes/{REMOTE}/"))?;
+        self.commit(&format!("refs/remotes/{REMOTE}/{branch}"))
+            .ok()?;
+        Some(branch.to_string())
     }
 }
 

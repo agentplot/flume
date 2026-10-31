@@ -93,27 +93,13 @@ impl History for GitHistory {
         Some(common.to_string_lossy().into_owned())
     }
 
-    /// The branch the remote `origin`'s `HEAD` names where the repository
-    /// tracks one, else the one its common git directory's `HEAD` names,
-    /// as a bare repository beside its worktrees holds it (132, C.7).
+    /// The remote `origin`'s default branch where the repository has the
+    /// remote, else the one its common git directory's `HEAD` names, as a
+    /// bare repository beside its worktrees holds it, and never a branch
+    /// that names no commit (20, 132, C.7).
     fn default_branch(&self, repository: &str) -> Option<String> {
-        let git = Git::at(repository);
-        if let Ok(remote) = git.text(&[
-            "symbolic-ref",
-            "--quiet",
-            "--short",
-            "refs/remotes/origin/HEAD",
-        ]) {
-            if let Some(branch) = remote.trim().strip_prefix("origin/") {
-                return Some(branch.to_string());
-            }
-        }
         let common = self.common_dir(repository)?;
-        let branch = Git::at(&common)
-            .text(&["symbolic-ref", "--quiet", "--short", "HEAD"])
-            .ok()?;
-        let branch = branch.trim();
-        (!branch.is_empty()).then(|| branch.to_string())
+        Git::at(&common).default_branch().ok()
     }
 
     fn valid_branch(&self, name: &str) -> bool {
