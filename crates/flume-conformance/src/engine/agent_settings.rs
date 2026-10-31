@@ -1,13 +1,14 @@
-//! An agent's settings, resolved at each start from six layers (32;
-//! records 0017, 0020): the launch's, the host's for the repository and
-//! kind, the host's for the kind, the repository's for a kind it does not
-//! declare, the kind's declaration and flume's default, the host's two
-//! giving a model and instructions alone; the environment its account's
-//! alone, each value read against the login environment (29, 144); the
-//! host's configuration read at every start; and the launch refused for
-//! settings flume cannot run.
+//! An agent's settings, resolved at each start from six layers (32, 162;
+//! records 0017, 0020, 0024): the launch's, the host's for the repository
+//! and kind, the host's for the kind, the repository's for a kind it does
+//! not declare, the kind's declaration and flume's default, the host's two
+//! giving a model, a mode and instructions alone; the environment its
+//! account's alone, each value read against the login environment (29,
+//! 144); the host's configuration read at every start; and the launch
+//! refused for settings flume cannot run.
 
 use super::account_pools::{account, fix_in, pool};
+use super::agent_modes::{in_mode, mode_from, passed, the_fakes_map};
 use super::settling::write_change;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -26,6 +27,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "settings: the host gives each kind a model, and a repository's kind its own, from host-kind and host-repository",
             cites: &["32", "56"],
             run: a_model_for_each_kind,
+        },
+        Scenario {
+            name: "settings: the host gives a repository's kind a mode and every repository's a model, a mode from host-repository beside a model from host-kind, and another repository's own mode from repository",
+            cites: &["32", "162", "56"],
+            run: a_mode_beside_a_model,
         },
         Scenario {
             name: "settings: an agent starts with its account's variables read against the host user's home and login environment, status naming each from the account and no other",
@@ -84,14 +90,14 @@ fn one_account(world: &World, variables: &[(&str, &str)]) {
     world.host.set_host_pool(Some("work"));
 }
 
-fn for_every_stage(settings: Settings) -> KindSettings {
+pub(super) fn for_every_stage(settings: Settings) -> KindSettings {
     KindSettings {
         every_stage: settings,
         stages: BTreeMap::new(),
     }
 }
 
-fn for_stage(stage: &str, settings: Settings) -> KindSettings {
+pub(super) fn for_stage(stage: &str, settings: Settings) -> KindSettings {
     KindSettings {
         every_stage: Settings::default(),
         stages: BTreeMap::from([(stage.to_string(), settings)]),
@@ -99,7 +105,7 @@ fn for_stage(stage: &str, settings: Settings) -> KindSettings {
 }
 
 /// The command the start under `identity` was opened with.
-fn opened(world: &World, identity: &Identity) -> Result<AgentCommand, String> {
+pub(super) fn opened(world: &World, identity: &Identity) -> Result<AgentCommand, String> {
     world
         .terminal
         .opened(identity)
@@ -108,7 +114,7 @@ fn opened(world: &World, identity: &Identity) -> Result<AgentCommand, String> {
 }
 
 /// Construct of the change `name` delivered and code begun.
-fn to_code(world: &World, id: &PlaceId, name: &str) -> Outcome {
+pub(super) fn to_code(world: &World, id: &PlaceId, name: &str) -> Outcome {
     world.settle(id);
     write_change(world, name);
     world.settle(id);
@@ -122,7 +128,7 @@ fn to_code(world: &World, id: &PlaceId, name: &str) -> Outcome {
 }
 
 /// Code of the change `name` delivered and verify begun.
-fn to_verify(world: &World, id: &PlaceId, name: &str) -> Outcome {
+pub(super) fn to_verify(world: &World, id: &PlaceId, name: &str) -> Outcome {
     world.tick(&format!("change/{name}"), name, 1, 1);
     world.settle(id);
     world.settle(id);
@@ -279,6 +285,57 @@ fn a_model_for_each_kind(_: &()) -> Outcome {
         given(Layer::HostRepository, "haiku"),
         "the fix's model the host names for its repository"
     );
+    Ok(())
+}
+
+fn a_mode_beside_a_model(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(model("sonnet")));
+    world.host.set_settings(
+        Some(REPOSITORY),
+        "fix",
+        for_every_stage(in_mode(Mode::Edits)),
+    );
+    world
+        .kinds
+        .set_settings(REPOSITORY, "fix", for_every_stage(in_mode(Mode::Ask)));
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    world
+        .host
+        .set_settings(Some(REPOSITORY), "fix", KindSettings::default());
+    world.host.set_settings(
+        Some("/elsewhere"),
+        "fix",
+        for_every_stage(in_mode(Mode::Edits)),
+    );
+    launched(&world.engine.launch(&launch("fix", "two", Some("x"))))?;
+    let given = |layer, value: &str| {
+        Some(Given {
+            layer,
+            value: value.into(),
+        })
+    };
+    for (name, mode, value) in [
+        ("one", given(Layer::HostRepository, "edits"), "edit-files"),
+        ("two", given(Layer::Repository, "ask"), "ask-each"),
+    ] {
+        let id = World::id("fix", name);
+        ensure_eq!(
+            passed(&world, &World::identity("fix", name, "code", 1))?,
+            Some(value.to_string()),
+            "the value passed in {name}"
+        );
+        ensure_eq!(mode_from(&world, &id)?, mode, "the mode of {name}");
+        let agent = world.status(&id)?.agent.ok_or("no agent")?;
+        ensure_eq!(
+            agent.settings.from.get("model").cloned(),
+            given(Layer::HostKind, "sonnet"),
+            "the model of {name}"
+        );
+    }
     Ok(())
 }
 

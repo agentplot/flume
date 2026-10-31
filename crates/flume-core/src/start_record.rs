@@ -43,7 +43,8 @@ pub fn variable_digest(secret: &Secret, name: &str, value: &str) -> String {
 /// is `env`, each value read against the login environment, for
 /// `identity` in the place at `location`, keyed by `secret`; the
 /// variables the program keeps from the processes it starts, `withheld`,
-/// left out with the terminal's own (161).
+/// left out with the terminal's own (161). It names no mode: the claim
+/// sets the value the start's resolution mapped (162).
 pub(crate) fn start_record(
     program: &str,
     account: Option<&AccountHeld>,
@@ -72,6 +73,7 @@ pub(crate) fn start_record(
         program: program.to_string(),
         account: account.map(|account| account.name.clone()),
         env,
+        mode: None,
     }
 }
 

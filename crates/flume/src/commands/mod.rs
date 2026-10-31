@@ -216,6 +216,11 @@ enum Ack {
     Received {
         #[arg(long)]
         digest: String,
+        /// The mode the session runs in, as its program names it,
+        /// compared at the start's first prompt where its start recorded a
+        /// mode (161, 162).
+        #[arg(long)]
+        mode: Option<String>,
     },
 }
 
@@ -263,7 +268,9 @@ struct LaunchArgs {
     #[arg(long, value_name = "TIME")]
     stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
-    /// field one of program, model, instructions and beside.
+    /// field one of program, model, instructions, beside and mode, the
+    /// mode one of plan, ask, edits and full, or `mode.<program>` for one
+    /// program's entry of a mode (162, 169).
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
     agent: Vec<String>,
     /// The stream the place runs in, one the host's configuration
@@ -336,7 +343,9 @@ where
                 } => {
                     crate::profiles::ack_started(session, transcript, source, plugin_version, build)
                 }
-                Ack::Received { digest } => crate::profiles::ack_received(digest, build),
+                Ack::Received { digest, mode } => {
+                    crate::profiles::ack_received(digest, mode.as_deref(), build)
+                }
             };
             return match acked {
                 Ok(text) => Outcome {

@@ -244,6 +244,201 @@ fn the_agents_record_is_read_in_its_folder_alone() {
 }
 
 #[test]
+fn the_agents_modes_are_scripted() {
+    // Unscripted, the fake maps no mode and reads none back, as the
+    // seam's defaults do; scripted, it maps the four and its own values,
+    // its command passing the value mapped and its log naming each
+    // mapping (161, 169).
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host));
+    let agent = FakeAgent::new(terminal.clone());
+    let full = ModeEntry::Flume(Mode::Full);
+    assert!(agent.mode(&full).is_err(), "an unscripted fake mapped full");
+    assert_eq!(agent.mode_read_back(), Offered::NotOffered);
+    agent.map_mode(Mode::Full, "all");
+    agent.map_mode(Mode::Ask, "ask-each");
+    agent.own_mode("careful");
+    assert_eq!(agent.mode(&full), Ok("all".to_string()));
+    assert_eq!(
+        agent.mode(&ModeEntry::Own("careful".into())),
+        Ok("careful".to_string())
+    );
+    let words = agent
+        .mode(&ModeEntry::Flume(Mode::Edits))
+        .expect_err("a mode left unscripted");
+    assert!(words.contains("`edits`"), "{words}");
+    let words = agent
+        .mode(&ModeEntry::Own("yolo".into()))
+        .expect_err("an own value it does not name");
+    assert!(
+        words.contains("`yolo`") && words.contains("careful"),
+        "{words}"
+    );
+    assert_eq!(
+        agent.log.of("mode"),
+        vec![
+            "mode full",
+            "mode full",
+            "mode careful",
+            "mode edits",
+            "mode yolo"
+        ]
+    );
+
+    let folder = "/state/fix--one";
+    let opened = |who: &Identity, mode: Option<&str>| {
+        let command = agent.command(
+            &Settings::default(),
+            mode,
+            &BTreeMap::new(),
+            &place_ref(),
+            who,
+            &Secret("s".into()),
+            "go",
+        );
+        terminal.open(&place_ref(), folder, &command, who, None, None);
+        command
+    };
+    let who = identity("code", 1);
+    let command = opened(&who, Some("all"));
+    assert!(
+        command
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--mode", "all"]),
+        "{:?}",
+        command.args
+    );
+
+    // Begun in another mode, read only once the fake reads the mode back.
+    agent.set_began_in(&who, "ask-each");
+    assert_eq!(
+        agent.started_without(folder, &who),
+        None,
+        "a fake that reads no mode back compares none"
+    );
+    assert_eq!(agent.started(folder, &who), Reading::Yes);
+    agent.read_mode_back();
+    assert_eq!(agent.mode_read_back(), Offered::Offered);
+    let began = ModeBegan {
+        asked: "all".into(),
+        began: Some("ask-each".into()),
+    };
+    assert_eq!(
+        agent.started_without(folder, &who),
+        Some(Unsettled {
+            mode: Some(began.clone()),
+            ..Unsettled::default()
+        })
+    );
+    assert_eq!(
+        agent.started(folder, &who),
+        Reading::No,
+        "an agent begun in another mode says it started nothing"
+    );
+    agent.set_started_without(
+        &who,
+        Unsettled {
+            missing: vec!["AGENT_HOME".into()],
+            ..Unsettled::default()
+        },
+    );
+    assert_eq!(
+        agent.started_without(folder, &who),
+        Some(Unsettled {
+            missing: vec!["AGENT_HOME".into()],
+            mode: Some(began),
+            ..Unsettled::default()
+        }),
+        "a variable and the mode named together"
+    );
+
+    // Begun in the mode asked, or where its command passed none.
+    let same = identity("code", 2);
+    opened(&same, Some("all"));
+    agent.set_began_in(&same, "all");
+    assert_eq!(agent.started_without(folder, &same), None);
+    let bare = identity("code", 3);
+    let none = opened(&bare, None);
+    assert!(!none.args.iter().any(|arg| arg == "--mode"));
+    agent.set_began_in(&bare, "ask-each");
+    assert_eq!(
+        agent.started_without(folder, &bare),
+        None,
+        "a start that passed no mode compares none"
+    );
+}
+
+#[test]
+fn the_agent_names_its_mode_at_its_first_prompt() {
+    // Scripted to name its mode only at its start's first prompt: its word
+    // that it started is taken whatever mode it began in, and once a prompt
+    // reached it, it names the mode and does not receive the prompt; begun
+    // in the mode asked, it receives it (161).
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host));
+    let agent = FakeAgent::new(terminal.clone());
+    agent.map_mode(Mode::Full, "all");
+    agent.read_mode_at_prompt();
+    assert_eq!(agent.mode_read_back(), Offered::Offered);
+    let folder = "/state/fix--one";
+    let opened = |who: &Identity| {
+        let command = agent.command(
+            &Settings::default(),
+            Some("all"),
+            &BTreeMap::new(),
+            &place_ref(),
+            who,
+            &Secret("s".into()),
+            "go",
+        );
+        terminal.open(&place_ref(), folder, &command, who, None, None);
+    };
+    let who = identity("code", 1);
+    opened(&who);
+    agent.set_began_in(&who, "ask-each");
+    assert_eq!(agent.started(folder, &who), Reading::Yes);
+    assert_eq!(
+        agent.started_without(folder, &who),
+        None,
+        "the mode named before any prompt reached it"
+    );
+    assert_eq!(terminal.send(&who, "go"), Sent::Sent);
+    assert_eq!(
+        agent.started_without(folder, &who),
+        Some(Unsettled {
+            mode: Some(ModeBegan {
+                asked: "all".into(),
+                began: Some("ask-each".into()),
+            }),
+            ..Unsettled::default()
+        })
+    );
+    assert_eq!(
+        agent.started(folder, &who),
+        Reading::Yes,
+        "its word that it started still stands"
+    );
+    assert!(
+        matches!(
+            agent.received(folder, &who, "go"),
+            Received::NotReceived { .. }
+        ),
+        "the prompt held back was received"
+    );
+
+    let same = identity("code", 2);
+    opened(&same);
+    agent.set_began_in(&same, "all");
+    assert_eq!(terminal.send(&same, "go"), Sent::Sent);
+    assert_eq!(agent.started_without(folder, &same), None);
+    assert!(matches!(
+        agent.received(folder, &same, "go"),
+        Received::Received { .. }
+    ));
+}
+
+#[test]
 fn the_agent_gives_both_stop_shorts() {
     let host = Arc::new(FakeHost::default());
     let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));

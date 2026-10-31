@@ -7,15 +7,21 @@
 //! host's layers are read as they stand at the start, every other layer
 //! as the launch read it. An agent's environment is its account's alone,
 //! each value's `~` and variables read against the host user's login
-//! environment (29, 144).
+//! environment (29, 144). Its mode, where a layer gives one, is mapped by
+//! its agent profile to its program's setting, or the stage refused
+//! naming the mode, the program, the stage and the layer (162, 169).
 
 use crate::Engine;
-use flume_seams::{Account, Agent, Given, Kind, KindSettings, Layer, PlaceRecord, Settings, Stage};
+use flume_seams::{
+    Account, Agent, Deliverable, Given, Kind, KindSettings, Layer, Mode, ModeEntry, PlaceRecord,
+    Settings, Stage,
+};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// A stage's settings with each value as its layer wrote it, and the
-/// layer of each, by `program`, `model` or `instructions` (32, 56).
+/// layer of each, by `program`, `model`, `mode` or `instructions` (32,
+/// 56).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Resolved {
     pub settings: Settings,
@@ -23,19 +29,88 @@ pub(crate) struct Resolved {
 }
 
 impl Resolved {
-    /// Where the program came from, as a refusal names it.
-    fn program_from(&self) -> Layer {
+    /// Where the setting `key` came from, as a refusal names it.
+    fn layer_of(&self, key: &str) -> Layer {
         self.from
-            .get("program")
+            .get(key)
             .map_or(Layer::Default, |given| given.layer)
     }
 }
 
 /// A stage's agent at its start: its settings as written with their
-/// layers, and the agent profile that runs its program.
+/// layers, the agent profile that runs its program, and the value that
+/// profile passes for its mode, none where no layer gives one (162, 169).
 pub(crate) struct Resolution {
     pub resolved: Resolved,
     pub agent: Arc<dyn Agent>,
+    pub mode: Option<String>,
+}
+
+/// The program's name, the last component of the program its settings
+/// name, by which its agent profile is bound and its entry of a mode's
+/// table of programs taken (105, 169).
+pub(crate) fn program_name(program: &str) -> &str {
+    std::path::Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+}
+
+/// A deliverable as a refusal names it (24).
+fn deliverable_words(deliverable: &Deliverable) -> String {
+    match deliverable {
+        Deliverable::Commits => "commits".into(),
+        Deliverable::ChangeWritten => "a change written".into(),
+        Deliverable::TasksTicked => "a change's tasks ticked".into(),
+        Deliverable::ChangeArchived => "a change archived".into(),
+        Deliverable::Report { path } => format!("a report at {path}"),
+        Deliverable::CommittedReport { path } => format!("a committed report at {path}"),
+        Deliverable::Unreadable { spelled } => spelled.clone(),
+    }
+}
+
+/// The value `agent` passes for `stage`'s mode as `resolved` gives it,
+/// none where no layer gives one, so nothing is mapped; or why the stage
+/// cannot run in it, naming the mode as written, the program, the stage
+/// and the layer: a table of programs naming no entry for its program,
+/// which no later layer's mode stands in for, `plan` on a stage that is
+/// no conversation, or a mode its profile refuses (4, 32, 109, 169).
+fn mode_for(
+    resolved: &Resolved,
+    agent: &dyn Agent,
+    stage: &Stage,
+) -> Result<Option<String>, String> {
+    let Some(mode) = &resolved.settings.mode else {
+        return Ok(None);
+    };
+    let written = mode.written();
+    let layer = resolved.layer_of("mode");
+    let program = program_name(resolved.settings.program.as_deref().unwrap_or_default());
+    let name = &stage.name;
+    let entry = mode.entry(program).ok_or_else(|| {
+        format!(
+            "the stage `{name}`'s mode `{written}`, from the layer `{layer}`, names no entry for `{program}`"
+        )
+    })?;
+    let plan = ModeEntry::Flume(Mode::Plan);
+    let planning = entry == plan
+        || matches!(&entry, ModeEntry::Own(value) if agent.mode(&plan).as_ref() == Ok(value));
+    if planning && !stage.conversation {
+        let delivers = stage
+            .deliverables
+            .iter()
+            .map(deliverable_words)
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "the stage `{name}` delivers {delivers}, which an agent in plan mode cannot write, and its mode `{written}`, from the layer `{layer}`, is plan"
+        ));
+    }
+    agent.mode(&entry).map(Some).map_err(|words| {
+        format!(
+            "the stage `{name}`'s mode `{written}`, from the layer `{layer}`, cannot run on `{program}`: {words}"
+        )
+    })
 }
 
 /// Settings with `beside` taken away, for a layer that does not say
@@ -141,6 +216,15 @@ impl Engine {
                     );
                 }
             }
+            if let Some(mode) = &given.mode {
+                resolved.from.insert(
+                    "mode".into(),
+                    Given {
+                        layer,
+                        value: mode.written(),
+                    },
+                );
+            }
             resolved.settings = resolved.settings.under(&given);
         }
         resolved
@@ -153,7 +237,7 @@ impl Engine {
         resolved: &Resolved,
         stage: &str,
     ) -> Result<Arc<dyn Agent>, String> {
-        let layer = resolved.program_from();
+        let layer = resolved.layer_of("program");
         let Some(program) = &resolved.settings.program else {
             return Err(format!("no agent program is named for the stage {stage}"));
         };
@@ -188,9 +272,9 @@ impl Engine {
             .collect()
     }
 
-    /// The stage's agent at a start: its settings resolved, and the
-    /// agent profile that runs its program; or why the stage is refused
-    /// (27, 32).
+    /// The stage's agent at a start: its settings resolved, the agent
+    /// profile that runs its program, and the value it passes for its
+    /// mode; or why the stage is refused (27, 32, 169).
     pub(crate) fn resolution(
         &self,
         place: &PlaceRecord,
@@ -198,7 +282,12 @@ impl Engine {
     ) -> Result<Resolution, String> {
         let resolved = self.resolve(place, stage);
         let agent = self.agent_for(&resolved, &stage.name)?;
-        Ok(Resolution { resolved, agent })
+        let mode = mode_for(&resolved, agent.as_ref(), stage)?;
+        Ok(Resolution {
+            resolved,
+            agent,
+            mode,
+        })
     }
 }
 

@@ -7,8 +7,8 @@
 //! standard input, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PROJECT_DIR` and
 //! `CLAUDE_CODE_SESSION_ID` over the command's own environment less the
 //! credentials that release keeps from every process it starts, a refusal
-//! read from `permissionDecision` or exit 2, a stop blocked by `decision`
-//! or exit 2), and in place of a model acts the script `STAND_IN_SCRIPT`
+//! read from `permissionDecision` or exit 2, a prompt or a stop blocked by
+//! `decision` or exit 2), and in place of a model acts the script `STAND_IN_SCRIPT`
 //! names, one run's acts as a JSON array, each a tool call:
 //!
 //! - `{"bash": "<line>"}`: Bash, the line run by `sh -c` in the place
@@ -28,14 +28,27 @@
 //! - `{"unset": "<name>"}`: the variable is gone from the session's
 //!   environment before the session starts, wherever the act stands, as a
 //!   pane brought back without it starts the program, so neither the
-//!   session's hooks nor its transcript's folder see it.
+//!   session's hooks nor its transcript's folder see it;
+//! - `{"begin_in": "<value>"}`: the session begins in the mode `value`,
+//!   wherever the act stands, as a session whose account's configuration
+//!   refuses the mode asked begins in another, so every hook input that
+//!   names the mode names it as its `permission_mode`.
+//!
+//! The inputs of UserPromptSubmit, PreToolUse, PostToolUse and Stop name
+//! the mode the session runs in as that release names it: the
+//! `--permission-mode` passed, `manual` read as its own `default`,
+//! `default` where none was passed, or the `begin_in` act's. Those of
+//! SessionStart, StopFailure and SessionEnd name none, as that release's
+//! do not.
 //!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
 //!
-//! Then the turn ends: Stop, once more with `stop_hook_active` where the
-//! hook blocked it, or StopFailure where a `fail` act ended it, and the
+//! A prompt UserPromptSubmit blocked is held back, as that release holds
+//! it back: no act is made and no turn taken, and the session ends.
+//! Otherwise the turn ends: Stop, once more with `stop_hook_active` where
+//! the hook blocked it, or StopFailure where a `fail` act ended it, and the
 //! session ends, as a person leaves the printed
 //! command's session, with SessionEnd. Each act is printed on standard
 //! output as one line; the exit status is 1 where an act failed that no
@@ -52,15 +65,20 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// The release whose shape the transcript takes.
 const VERSION: &str = "2.1.296";
 
+/// The events whose input that release builds with the session's mode.
+const MODED: [&str; 4] = ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"];
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut plugin = None;
     let mut prompt = None;
+    let mut mode = None;
     let mut words = args.iter();
     while let Some(word) = words.next() {
         match word.as_str() {
             "--plugin-dir" => plugin = words.next().map(PathBuf::from),
-            "--model" | "--append-system-prompt" | "--settings" | "--permission-mode" => {
+            "--permission-mode" => mode = words.next().cloned(),
+            "--model" | "--append-system-prompt" | "--settings" => {
                 words.next();
             }
             flag if flag.starts_with("--") => {}
@@ -72,13 +90,20 @@ fn main() {
         .and_then(|file| std::fs::read_to_string(file).ok())
         .and_then(|text| serde_json::from_str::<Value>(&text).ok())
         .unwrap_or(json!([]));
+    let mut mode = match mode.as_deref() {
+        None | Some("manual") => "default".to_string(),
+        Some(passed) => passed.to_string(),
+    };
     for act in script.as_array().into_iter().flatten() {
         if let Some(name) = act["unset"].as_str() {
             std::env::remove_var(name);
         }
+        if let Some(began) = act["begin_in"].as_str() {
+            mode = began.to_string();
+        }
     }
     let cwd = std::env::current_dir().expect("the place");
-    let mut session = Session::new(cwd, plugin);
+    let mut session = Session::new(cwd, plugin, mode);
     let failed = session.run(prompt.as_deref(), &script);
     std::process::exit(i32::from(failed));
 }
@@ -106,10 +131,12 @@ struct Session {
     prompt: String,
     parent: Option<String>,
     calls: u32,
+    /// The mode the session runs in, as every hook's input names it.
+    mode: String,
 }
 
 impl Session {
-    fn new(cwd: PathBuf, plugin: Option<PathBuf>) -> Session {
+    fn new(cwd: PathBuf, plugin: Option<PathBuf>, mode: String) -> Session {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |since| since.as_nanos());
@@ -149,6 +176,7 @@ impl Session {
             prompt: String::new(),
             parent: None,
             calls: 0,
+            mode,
         }
     }
 
@@ -165,7 +193,13 @@ impl Session {
             self.prompt = prompt.to_string();
             let submitted = submitted(prompt);
             self.queued(&submitted);
-            self.hook("UserPromptSubmit", json!({ "prompt": submitted }), None);
+            let answer = self.hook("UserPromptSubmit", json!({ "prompt": submitted }), None);
+            if let Some(reason) = answer.blocked {
+                say(&format!("prompt blocked: {reason}"));
+                self.hook("SessionEnd", json!({ "reason": "prompt_input_exit" }), None);
+                say("session ended");
+                return failed;
+            }
             self.user(json!(submitted));
             for act in script.as_array().into_iter().flatten() {
                 if let Some(failure) = act.get("fail") {
@@ -266,7 +300,7 @@ impl Session {
         if let Some(files) = act.get("merge_named") {
             return self.merge_named(files);
         }
-        if act.get("unset").is_some() {
+        if act.get("unset").is_some() || act.get("begin_in").is_some() {
             // Made before the session started.
             return true;
         }
@@ -392,13 +426,15 @@ impl Session {
     /// Runs the plugin's hooks for `event`, those whose matcher takes
     /// `tool`, with `input` over the fields every hook's input carries.
     fn hook(&self, event: &str, mut input: Value, tool: Option<&str>) -> Answer {
-        let common = json!({
+        let mut common = json!({
             "session_id": self.id,
             "transcript_path": self.transcript,
             "cwd": self.cwd,
-            "permission_mode": "default",
             "hook_event_name": event,
         });
+        if MODED.contains(&event) {
+            common["permission_mode"] = json!(self.mode);
+        }
         for (key, value) in common.as_object().into_iter().flatten() {
             input
                 .as_object_mut()
@@ -440,7 +476,7 @@ impl Session {
         if event != "PreToolUse" {
             answer.denied = None;
         }
-        if event != "Stop" {
+        if !matches!(event, "Stop" | "UserPromptSubmit") {
             answer.blocked = None;
         }
         answer

@@ -106,10 +106,12 @@ pub enum Spent {
 }
 
 /// started_without: how the agent began otherwise than its start
-/// recorded, as its own word that it started shows it: each variable the
-/// start's record names that its environment lacks, each it holds with
-/// another value, both by name alone, and whether it runs another program
-/// (135, 161).
+/// recorded, as its own word that it started shows it, or, for its mode,
+/// its word at its start's first prompt: each variable the start's record
+/// names that its environment lacks, each it holds with another value,
+/// both by name alone, whether it runs another program, and the mode it
+/// began in where it is not the one its start asked, none in a word
+/// written before (135, 161, 162).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(default)]
@@ -118,11 +120,22 @@ pub struct Unsettled {
     pub different: Vec<String>,
     #[serde(default)]
     pub program: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ModeBegan>,
+}
+
+/// The mode a start asked, as its profile passed it, and the one the
+/// agent's word says it began in, none where its word names none (161,
+/// 162).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModeBegan {
+    pub asked: String,
+    pub began: Option<String>,
 }
 
 impl Unsettled {
     /// How the agent began otherwise, naming each variable and never a
-    /// value (56, 161).
+    /// value, and both modes where it began in another (56, 161, 162).
     pub fn words(&self) -> String {
         let mut words = vec![];
         if !self.missing.is_empty() {
@@ -133,6 +146,12 @@ impl Unsettled {
         }
         if self.program {
             words.push("under another program".to_string());
+        }
+        if let Some(ModeBegan { asked, began }) = &self.mode {
+            words.push(match began {
+                Some(began) => format!("in the mode `{began}`, where its start asked `{asked}`"),
+                None => format!("in a mode its word did not name, where its start asked `{asked}`"),
+            });
         }
         if words.is_empty() {
             return "otherwise than its start recorded".to_string();
@@ -187,10 +206,14 @@ pub struct StopShort {
 pub trait Agent: Send + Sync {
     /// How to start the agent with its settings and `env`, its account's
     /// variables read against the login environment, in the place under
-    /// its identity and secret, the prompt in `prompt_args` (88, 29, 144).
+    /// its identity and secret, the prompt in `prompt_args` (88, 29, 144);
+    /// `mode` is the value [`Agent::mode`] mapped, passed as its program's
+    /// setting, and nothing is passed where it is none (162, 169).
+    #[allow(clippy::too_many_arguments)]
     fn command(
         &self,
         settings: &crate::Settings,
+        mode: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &crate::PlaceRef,
         identity: &Identity,
@@ -232,10 +255,31 @@ pub trait Agent: Send + Sync {
 
     /// How the agent under `agent` began otherwise than its start
     /// recorded, as its own record in the place's own `folder` holds its
-    /// word: none where it began as recorded, has said nothing yet, or
-    /// the program checks nothing at its start (135, 161, 128).
+    /// word, its word that it started or, where its program names its mode
+    /// only with a prompt, its word at its start's first prompt: none where
+    /// it began as recorded, has said nothing yet, or the program checks
+    /// nothing at its start (135, 161, 128).
     fn started_without(&self, _folder: &str, _agent: &Identity) -> Option<Unsettled> {
         None
+    }
+
+    /// The value of its program's own that `entry` maps to, which its
+    /// command passes, or words naming the mode where its program has no
+    /// setting that means it, never read wider or narrower (88, 169); every
+    /// entry refused by default, since a profile that maps no mode refuses
+    /// one (170).
+    fn mode(&self, entry: &crate::ModeEntry) -> Result<String, String> {
+        Err(format!(
+            "its agent profile maps no mode, `{entry}` among them"
+        ))
+    }
+
+    /// Whether the program's word at its start, its word that it started
+    /// or at its start's first prompt, names the mode it began in, so its
+    /// start is compared with the mode it asked (161, 169); not by
+    /// default.
+    fn mode_read_back(&self) -> Offered {
+        Offered::NotOffered
     }
 
     /// The variables the agent program keeps from every process it

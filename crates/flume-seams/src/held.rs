@@ -733,12 +733,16 @@ pub struct Dialog {
 /// which a terminal sets for its own sake, the login environment beneath
 /// the settings, or `FLUME_SECRET`, which the started ack checks itself.
 /// No value is kept, and no guessed value is tested against a digest
-/// without the secret (core.30).
+/// without the secret (core.30). Its mode is the value the start's
+/// profile passes, none where the settings give no mode, and in a record
+/// written before (161, 162).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartRecord {
     pub program: String,
     pub account: Option<String>,
     pub env: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
 }
 
 /// The account a start runs under: its pool, its name, and whether the

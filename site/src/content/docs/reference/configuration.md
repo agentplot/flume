@@ -108,11 +108,15 @@ in that order, where the launch and the intent name none.
 
 ### `[kinds.<kind>.agents]`
 
-Settings for a kind's agents in every repository: `model` and
-`instructions`, with `[kinds.<kind>.agents.stages.<stage>]` for one
-stage's. A stage's own setting comes before one for every stage. Each
-value is a string, and any other key is not read.
-[Agent settings](/flume/guides/agent-settings/) gives the layers.
+Settings for a kind's agents in every repository: `model`,
+`instructions` and `mode`, with `[kinds.<kind>.agents.stages.<stage>]`
+for one stage's. A stage's own setting comes before one for every
+stage. `model` and `instructions` are strings. `mode` is one of `plan`,
+`ask`, `edits` and `full`, or a table of programs whose values are
+strings, as `mode = { claude = "auto" }`. Any other key is not read.
+[Agent settings](/flume/guides/agent-settings/) gives the layers and
+[the mode](/flume/guides/agent-settings/#the-mode) what each mode
+means.
 
 ### `[repos."<repository>".kinds.<kind>.agents]`
 
@@ -131,6 +135,9 @@ flume refuses the file, naming the key, for:
 - an account with no `name` or no `program`;
 - an `agents` of a stream or an account that is not a whole number
   above zero;
+- a `mode` in an agents table that is neither one of `plan`, `ask`,
+  `edits` and `full` nor a table of programs whose values are strings,
+  naming the table and `mode`;
 - a key a stream, a pool or an account does not know.
 
 A file that refuses leaves every launch and every start refused,
@@ -237,7 +244,7 @@ known fields fail, naming every field that does.
 | `branch` | a non-empty string | the prefix of its places' branches | the kind's name |
 | `starts_unready` | `true`, `false` | its first stage starts in a place whose readiness failed | `false` |
 | `lands` | `true`, `false` | its work is submitted to the merge queue after the last stage | `false` |
-| `agents` | a table | settings for every stage's agents, and `agents.stages.<stage>` for one stage's | none |
+| `agents` | a table | settings for every stage's agents, and `agents.stages.<stage>` for one stage's: `program`, `model`, `instructions`, `beside`, `mode` | none |
 | `stages` | an array of tables | its stages, at least one | refused |
 
 ### A stage
@@ -248,7 +255,7 @@ known fields fail, naming every field that does.
 | `prompt` | a path | its prompt, relative to the declaring file's folder; for a repository, read from git at the same revision | refused |
 | `deliverables` | a list of one spelling | what ends it: `commits`, `change`, `tasks`, `archived`, `report:<path>` or `committed:<path>` | refused, unless a conversation |
 | `conversation` | `true`, `false` | a stage with no deliverable, ended by `flume finish` | `false` |
-| `agents` | a list of one table | its agent's settings: `program`, `model`, `instructions`, `beside`; an `env` refuses the launch | refused by flume, which runs one agent per stage |
+| `agents` | a list of one table | its agent's settings: `program`, `model`, `instructions`, `beside`, `mode`; an `env` refuses the launch | refused by flume, which runs one agent per stage |
 | `makes` | a list of names | what it makes besides its deliverable, each recorded as a line of `made.jsonl` | none |
 | `wait` | `true`, `false` | the stage is held before it starts until a retry names it | `false` |
 | `quiet` | a whole number then `s`, `m` or `h`, as `"45m"` | how long its agent may be quiet with nothing delivered before it is stuck | 30 minutes |

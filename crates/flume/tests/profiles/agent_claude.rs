@@ -1,13 +1,16 @@
 //! The agent profile for Claude Code (C.4; design 14; record 0016): the
 //! agent seam's scenarios against it over fixture transcripts and hook
 //! records of Claude Code 2.1.296, the release `devenv.nix` pins; the
-//! command for a code stage; the plugin an agent loads, written once per
-//! version; a prompt queued while the agent worked; a slash command's
+//! command for a code stage and for a stage in a mode; the map of
+//! flume's modes and the release's own, and the mode read back; the
+//! plugin an agent loads, written once per version; a prompt queued while
+//! the agent worked; a slash command's
 //! prompt; and the folder-trust dialog the command names, against that
 //! release's screen. The hooks themselves are driven through the built
 //! binary in `hooks_claude.rs`.
 
 use crate::common::*;
+use flume::profiles::agent::claude::mode;
 use flume::profiles::agent::claude::record::{self, Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
@@ -15,7 +18,7 @@ use flume::profiles::agent::claude::{
 };
 use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::agent::{self, AgentHarness};
+use flume_conformance::seams::agent::{self, AgentHarness, Modes};
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -198,6 +201,46 @@ impl AgentHarness for Harness {
             })
             .expect("the word");
     }
+
+    /// The four as the profile maps them, and 2.1.296's own six.
+    fn modes(&self) -> Modes {
+        Modes {
+            four: BTreeMap::from([
+                (Mode::Plan, "plan".into()),
+                (Mode::Ask, "manual".into()),
+                (Mode::Edits, "acceptEdits".into()),
+                (Mode::Full, "bypassPermissions".into()),
+            ]),
+            own: [
+                "acceptEdits",
+                "auto",
+                "bypassPermissions",
+                "manual",
+                "dontAsk",
+                "plan",
+            ]
+            .map(String::from)
+            .to_vec(),
+        }
+    }
+
+    /// The SessionStart hook found the session begun in another mode and
+    /// wrote its word in place of the started ack, both modes named.
+    fn begin_in(&self, identity: &Identity, asked: &str, began: &str) {
+        self.record(identity)
+            .set_unsettled(&record::Unsettled {
+                unsettled: Unsettled {
+                    mode: Some(ModeBegan {
+                        asked: asked.to_string(),
+                        began: Some(began.to_string()),
+                    }),
+                    ..Unsettled::default()
+                },
+                session_id: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+                transcript_path: self.transcript(identity).to_string_lossy().into(),
+            })
+            .expect("the word");
+    }
 }
 
 #[test]
@@ -218,8 +261,8 @@ fn identity(stage: &str) -> Identity {
 fn the_command_for_a_code_stage() {
     // The command for a code stage: `claude` with the plugin, the model
     // and the instructions, the four FLUME_* words over its account's
-    // environment, and nothing of the caller's session (29, 32, 88, 144,
-    // C.4).
+    // environment, no `--permission-mode` where the settings give no mode,
+    // and nothing of the caller's session (29, 32, 88, 144, 162, C.4).
     let harness = Harness::new();
     let settings = Settings {
         model: Some("opus".into()),
@@ -235,6 +278,7 @@ fn the_command_for_a_code_stage() {
     let who = identity("code");
     let command = harness.seam.command(
         &settings,
+        None,
         &env,
         &harness.place(),
         &who,
@@ -270,6 +314,10 @@ fn the_command_for_a_code_stage() {
         "the environment holds the account's and flume's words alone"
     );
     assert_eq!(command.prompt_args, vec!["fix the parser".to_string()]);
+    assert!(
+        !command.args.iter().any(|arg| arg == "--permission-mode"),
+        "a mode passed where the settings give none"
+    );
 
     // A program the settings name by its path runs as named.
     let by_path = Settings {
@@ -278,6 +326,7 @@ fn the_command_for_a_code_stage() {
     };
     let command = harness.seam.command(
         &by_path,
+        None,
         &env,
         &harness.place(),
         &who,
@@ -285,6 +334,125 @@ fn the_command_for_a_code_stage() {
         "x",
     );
     assert_eq!(command.program, "/opt/claude/bin/claude");
+}
+
+#[test]
+fn the_command_passes_the_mode_it_is_given() {
+    // The value the claim's resolution mapped goes to
+    // `--permission-mode`, after the model; none is passed where no mode
+    // is given (162, 169).
+    let harness = Harness::new();
+    let settings = Settings {
+        model: Some("opus".into()),
+        ..Settings::default()
+    };
+    let command = |mode: Option<&str>| {
+        harness.seam.command(
+            &settings,
+            mode,
+            &BTreeMap::new(),
+            &harness.place(),
+            &identity("code"),
+            &Secret("s".into()),
+            "x",
+        )
+    };
+    assert_eq!(
+        command(Some("acceptEdits")).args[2..],
+        ["--model", "opus", "--permission-mode", "acceptEdits"]
+    );
+    assert!(
+        !command(None)
+            .args
+            .iter()
+            .any(|arg| arg == "--permission-mode"),
+        "a mode passed where none was given"
+    );
+}
+
+#[test]
+fn the_command_for_a_stage_in_edits() {
+    // Settings giving `edits` start `claude` with `--permission-mode
+    // acceptEdits`: the entry the program's name takes, mapped by the
+    // profile, passed by its command (S66, 169).
+    let harness = Harness::new();
+    let settings = Settings {
+        mode: Some(ModeSetting::from_word("edits").expect("edits")),
+        ..Settings::default()
+    };
+    let entry = settings
+        .mode
+        .as_ref()
+        .and_then(|mode| mode.entry(NAME))
+        .expect("the entry for claude");
+    let value = harness.seam.mode(&entry).expect("edits mapped");
+    // A `PATH` holding no `claude`, so the program runs by its name.
+    let command = harness.seam.command(
+        &settings,
+        Some(&value),
+        &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
+        &harness.place(),
+        &identity("code"),
+        &Secret("s".into()),
+        "x",
+    );
+    assert_eq!(command.program, NAME);
+    assert_eq!(command.args[2..], ["--permission-mode", "acceptEdits"]);
+}
+
+#[test]
+fn each_of_the_four() {
+    // Each of flume's four maps to the one choice of 2.1.296's that means
+    // it (169, C.4).
+    let seam = Harness::new().seam;
+    let mapped: Vec<String> = Mode::ALL
+        .iter()
+        .map(|mode| seam.mode(&ModeEntry::Flume(*mode)).expect("mapped"))
+        .collect();
+    assert_eq!(
+        mapped,
+        ["plan", "manual", "acceptEdits", "bypassPermissions"]
+    );
+}
+
+#[test]
+fn its_own_value_under_its_name() {
+    // `{ claude = "auto" }`'s entry passes `auto` as written, and `{ claude
+    // = "yolo" }`'s is refused naming `yolo`, `claude` and the release's
+    // six values (169, C.4).
+    let seam = Harness::new().seam;
+    let entry = |value: &str| {
+        ModeSetting::from_programs(BTreeMap::from([(NAME.to_string(), value.to_string())]))
+            .expect("a table")
+            .entry(NAME)
+            .expect("claude's entry")
+    };
+    assert_eq!(seam.mode(&entry("auto")), Ok("auto".to_string()));
+    let words = seam.mode(&entry("yolo")).expect_err("yolo taken");
+    for named in [
+        "`yolo`",
+        "`claude`",
+        "acceptEdits",
+        "auto",
+        "bypassPermissions",
+        "manual",
+        "dontAsk",
+        "plan",
+    ] {
+        assert!(words.contains(named), "{named} not named: {words}");
+    }
+}
+
+#[test]
+fn the_mode_read_back() {
+    // 2.1.296 reports `--permission-mode manual` as `default`: the profile
+    // reads it back as `manual`, and every other choice as itself (161,
+    // C.4).
+    assert_eq!(Harness::new().seam.mode_read_back(), Offered::Offered);
+    assert_eq!(
+        ["default", "acceptEdits", "plan"].map(mode::began),
+        ["manual", "acceptEdits", "plan"]
+    );
 }
 
 #[test]
@@ -305,6 +473,7 @@ fn the_plugin_an_agent_loads() {
     let who = identity("code");
     let first = harness.seam.command(
         &Settings::default(),
+        None,
         &BTreeMap::new(),
         &place,
         &who,
@@ -319,6 +488,7 @@ fn the_plugin_an_agent_loads() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     let second = harness.seam.command(
         &Settings::default(),
+        None,
         &BTreeMap::new(),
         &place,
         &identity("verify"),
@@ -531,6 +701,7 @@ fn the_trust_screen() {
     let harness = Harness::new();
     let command = harness.seam.command(
         &Settings::default(),
+        None,
         &BTreeMap::new(),
         &harness.place(),
         &identity("code"),

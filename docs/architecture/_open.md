@@ -94,16 +94,24 @@ brought to the rule.
   from outside, and a launch names a kind by its name, or by its name
   and version, never by its source. The item leaves
   when the code is brought to core.34.
-- **Records 0024 and 0025 wait on their build.** An agent's mode as
-  a layered setting and a plan stage accepted by its caller's finish
-  (record 0024; core.10, core.12 and core.30 as amended, core.37), and
-  a place's points with a stream's points bound and pace (record 0025;
-  core.26 as amended, core.38), stated at blueprints 9c7490c (161 to
-  168; weir 54, 57), were accepted on 2026-10-30. The mode is built
-  first, before the crew refactor, once the user approves its plan;
-  the plan stage and points come after it. Until then the code stands
-  against core.37 and core.38 and against those amendments. The item
+- **Record 0024's plan stage and record 0025's points wait on their
+  build.** Both records were accepted on 2026-10-30 and are stated at
+  blueprints 9c7490c (161 to 168; weir 54, 57). Record 0024's mode, a
+  layered setting each profile maps or refuses (162, 169), is built. A
+  plan stage accepted by its caller's finish (163, 164), and a place's
+  points with a stream's points bound and pace (165 to 168), are built
+  after it. Until then the code stands against core.37, core.38,
+  core.12 and core.26 as amended, and core.30's plan stage. The item
   leaves when the code is brought to them.
+- **The statement reads Claude Code's mode at SessionStart.** C.4's
+  started and received rows and 161's word that it started, at
+  agentplot/blueprints 5caff76, have the SessionStart hook compare the
+  `permission_mode` "every hook's input carries in 2.1.296". That
+  release gives a SessionStart input none, so the Claude Code profile
+  compares the mode at the start's first prompt, blocking it where it
+  differs, as the user ruled on 2026-10-31 (design 7 of the change
+  agent-mode-is-a-layered-setting; core.10). The item leaves when the
+  statement says so (core.19).
 - **Record 0026 waits on its build.** Every program herdr starts runs
   under an agent profile, its own or the common one, each part of the
   agent seam built or plainly degraded (record 0026; core.1's details,

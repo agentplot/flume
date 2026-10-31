@@ -3,10 +3,13 @@
 //! started.
 
 use super::account_pools::{account, fix_in, host, pool, spent};
+use super::agent_modes::{in_mode, in_programs, the_fakes_map};
+use super::agent_settings::for_every_stage;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
-    AccountStatus, Act, Answer, Cache, MoveStatus, PlaceStatus, PoolStatus, Retry, WaitingOn, Waits,
+    AccountStatus, Act, Answer, Cache, ModeStatus, MoveStatus, PlaceStatus, PoolStatus, Retry,
+    WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -72,7 +75,181 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "144", "145"],
             run: a_pool_with_a_spent_account,
         },
+        Scenario {
+            name: "status: an agent that took edits from the host's table gives its mode as written from host-kind, the value its profile passed and that it was read back, in the JSON form",
+            cites: &["S66", "56", "162", "169"],
+            run: a_mode_from_the_hosts_table,
+        },
+        Scenario {
+            name: "status: an agent that took its program's entry of the launch's table gives the table as written from launch, the entry and the value passed",
+            cites: &["56", "169"],
+            run: a_tables_entry,
+        },
+        Scenario {
+            name: "status: an agent whose profile reads no mode back gives its mode as not read back",
+            cites: &["169", "161"],
+            run: a_mode_not_read_back,
+        },
+        Scenario {
+            name: "status: a code start begun in ask-each where its record named all is named with the mode asked and the mode begun, and no variable, in the JSON form",
+            cites: &["56", "161", "162", "S67"],
+            run: a_start_in_another_mode,
+        },
     ]
+}
+
+/// The fix `given` launches, settled once: its agent's status, and the
+/// same in the JSON form.
+fn fix_with_a_mode(
+    world: &World,
+    given: &Launch,
+) -> Result<(flume_core::AgentStatus, serde_json::Value), String> {
+    launched(&world.engine.launch(given))?;
+    let id = World::id("fix", &given.name);
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    Ok((status.agent.ok_or("no agent")?, json["agent"].clone()))
+}
+
+fn a_mode_from_the_hosts_table(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    world.agent.read_mode_back();
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(in_mode(Mode::Edits)));
+    let (agent, json) = fix_with_a_mode(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(
+        agent.mode,
+        Some(ModeStatus {
+            passed: "edit-files".into(),
+            entry: None,
+            read_back: true,
+        }),
+        "the agent's mode"
+    );
+    ensure_eq!(
+        (
+            json["settings"]["mode"].clone(),
+            json["settings"]["from"]["mode"].clone(),
+            json["mode"].clone()
+        ),
+        (
+            serde_json::json!("edits"),
+            serde_json::json!({"layer": "host-kind", "value": "edits"}),
+            serde_json::json!({"passed": "edit-files", "entry": null, "read_back": true})
+        ),
+        "the mode in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_tables_entry(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    world.agent.read_mode_back();
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.every_stage = in_programs(&[("agent", "careful"), ("other", "edits")]);
+    let (agent, json) = fix_with_a_mode(&world, &fix)?;
+    ensure_eq!(
+        agent.settings.from.get("mode"),
+        Some(&Given {
+            layer: Layer::Launch,
+            value: r#"{ agent = "careful", other = "edits" }"#.into(),
+        }),
+        "the mode as written and its layer"
+    );
+    ensure_eq!(
+        agent.mode,
+        Some(ModeStatus {
+            passed: "careful".into(),
+            entry: Some("agent".into()),
+            read_back: true,
+        }),
+        "the agent's mode"
+    );
+    ensure_eq!(
+        (
+            json["settings"]["mode"].clone(),
+            json["mode"]["entry"].clone()
+        ),
+        (
+            serde_json::json!({"agent": "careful", "other": "edits"}),
+            serde_json::json!("agent")
+        ),
+        "the table and the entry in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_mode_not_read_back(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.every_stage = in_mode(Mode::Edits);
+    let (agent, json) = fix_with_a_mode(&world, &fix)?;
+    ensure_eq!(
+        agent.mode.as_ref().map(|mode| mode.read_back),
+        Some(false),
+        "the mode read back"
+    );
+    ensure_eq!(
+        json["mode"]["read_back"].clone(),
+        serde_json::json!(false),
+        "read_back in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_start_in_another_mode(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    world.agent.read_mode_back();
+    let who = World::identity("fix", "one", "code", 1);
+    world.agent.set_began_in(&who, "ask-each");
+    world.agent.set_own_work(&who, Reading::Yes);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.every_stage = in_mode(Mode::Full);
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status
+            .unsettled
+            .iter()
+            .map(|read| (read.stage.as_str(), read.start, read.unsettled.clone()))
+            .collect::<Vec<_>>(),
+        vec![(
+            "code",
+            1,
+            Unsettled {
+                mode: Some(ModeBegan {
+                    asked: "all".into(),
+                    began: Some("ask-each".into()),
+                }),
+                ..Unsettled::default()
+            }
+        )],
+        "the start named with both modes and no variable"
+    );
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    let read = &json["unsettled"][0];
+    ensure_eq!(
+        (
+            read["mode"].clone(),
+            read["missing"].clone(),
+            read["different"].clone()
+        ),
+        (
+            serde_json::json!({"asked": "all", "began": "ask-each"}),
+            serde_json::json!([]),
+            serde_json::json!([])
+        ),
+        "the start in the JSON form"
+    );
+    Ok(())
 }
 
 fn clues_in_status(_: &()) -> Outcome {

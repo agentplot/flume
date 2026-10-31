@@ -3,10 +3,11 @@
 //! at one head per place; nothing written, sent or started (57, 58).
 
 use crate::reading::{find_group, reads_change};
+use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
-    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, GroupStatus, MoveStatus,
-    PlaceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, GroupStatus, ModeStatus,
+    MoveStatus, PlaceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -85,13 +86,21 @@ impl Engine {
             let folder = self.store.folder(&place.id);
             let mut last_words = None;
             let mut notes = vec![];
+            let mut read_back = false;
             if let Some(agent) = self.agent(&start.program) {
                 if let Guarded::Refused { acts } = agent.guard(&folder, &start.identity) {
                     refused_acts.extend(acts);
                 }
                 last_words = agent.last_words(&folder, &start.identity);
                 notes = agent.notes(&folder, &start.identity);
+                read_back = agent.mode_read_back() == Offered::Offered;
             }
+            let mode = start.start_record.mode.clone().map(|passed| ModeStatus {
+                passed,
+                entry: matches!(start.settings.mode, Some(ModeSetting::Programs(_)))
+                    .then(|| program_name(&start.program).to_string()),
+                read_back,
+            });
             let starting = held.stages[index].state == StageState::Starting;
             AgentStatus {
                 identity: start.identity.to_string(),
@@ -120,6 +129,7 @@ impl Engine {
                 printed: start.printed.clone(),
                 last_words,
                 notes,
+                mode,
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);

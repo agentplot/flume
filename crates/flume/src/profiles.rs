@@ -441,10 +441,25 @@ pub fn ack_started(
 }
 
 /// The received ack of the agent this process's environment names: the
-/// submitted prompt's digest (89).
+/// submitted prompt's digest, not taken at the start's first prompt where
+/// the mode the session runs in, as its program names it, is not the one
+/// its start recorded (89, 161, 162).
 pub fn ack_received(
     digest: &str,
+    mode: Option<&str>,
     build: &dyn Fn() -> Result<Engine, String>,
 ) -> Result<String, String> {
-    agent::claude::hook::ack_received(&agent::claude::hook::Start::of_process(), digest, build)
+    let binary = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .unwrap_or_else(|_| "flume".into());
+    agent::claude::hook::ack_received(
+        &agent::claude::hook::Start::of_process(),
+        digest,
+        mode,
+        "",
+        "",
+        build,
+        &binary,
+    )
+    .map_err(agent::claude::hook::Unacked::words)
 }

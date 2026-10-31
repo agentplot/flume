@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151).
+//! 135, 151, 161, 162, 169).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -48,6 +48,24 @@ pub trait AgentHarness {
     /// The agent begins without the variable `variable` its start
     /// recorded, as the program's own word at its start shows it (161).
     fn begin_without(&self, identity: &Identity, variable: &str);
+
+    /// The profile's map of modes, as its program's release has it or the
+    /// harness scripted it (169).
+    fn modes(&self) -> Modes;
+
+    /// The agent begins in the mode `began` where its start asked
+    /// `asked`, as the program's own word at its start shows it (161,
+    /// 162).
+    fn begin_in(&self, identity: &Identity, asked: &str, began: &str);
+}
+
+/// A profile's map of modes: the value each of flume's four it maps to,
+/// none for one its program has no setting for, and its program's own
+/// values, each passed as written (169).
+#[derive(Clone, Debug, Default)]
+pub struct Modes {
+    pub four: BTreeMap<Mode, String>,
+    pub own: Vec<String>,
 }
 
 fn identity(stage: &str) -> Identity {
@@ -63,6 +81,7 @@ fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
     let who = identity(stage);
     let command = harness.seam().command(
         &Settings::default(),
+        None,
         &BTreeMap::new(),
         &harness.place(),
         &who,
@@ -108,8 +127,8 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             run: the_guard_reports::<H>,
         },
         Scenario {
-            name: "agent: send-back and on-quiet say whether the program offers them",
-            cites: &["115", "121", "110"],
+            name: "agent: send-back, on-quiet and the mode read back say whether the program offers them",
+            cites: &["115", "121", "110", "161"],
             run: what_the_program_offers::<H>,
         },
         Scenario {
@@ -147,7 +166,148 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["91", "90", "31", "161"],
             run: begun_without_and_no_turn::<H>,
         },
+        Scenario {
+            name: "agent: mode maps each of flume's four and the program's own values as its program has them, and refuses any other naming it",
+            cites: &["88", "169"],
+            run: mode_maps_as_its_program_has_them::<H>,
+        },
+        Scenario {
+            name: "agent: the command passes the mode mapped, and none where none is given",
+            cites: &["88", "162", "169"],
+            run: the_command_passes_the_mode::<H>,
+        },
+        Scenario {
+            name: "agent: started without names the mode asked and the mode begun where the agent began in another, and no variable",
+            cites: &["135", "161", "162"],
+            run: started_without_names_the_mode::<H>,
+        },
     ]
+}
+
+fn mode_maps_as_its_program_has_them<H: AgentHarness>(harness: &H) -> Outcome {
+    let modes = harness.modes();
+    for mode in Mode::ALL {
+        match (
+            harness.seam().mode(&ModeEntry::Flume(mode)),
+            modes.four.get(&mode),
+        ) {
+            (Ok(value), Some(due)) => ensure_eq!(&value, due, format!("{mode} mapped")),
+            (Err(words), None) => ensure!(
+                words.contains(mode.word()),
+                "the refusal of {mode} does not name it: {words}"
+            ),
+            (Ok(value), None) => {
+                return Err(format!(
+                    "{mode} mapped to {value}, where its program has no setting for it"
+                ))
+            }
+            (Err(words), Some(due)) => {
+                return Err(format!("{mode} refused, where it maps to {due}: {words}"))
+            }
+        }
+    }
+    for own in &modes.own {
+        ensure_eq!(
+            harness.seam().mode(&ModeEntry::Own(own.clone())),
+            Ok::<String, String>(own.clone()),
+            format!("the own value {own}")
+        );
+    }
+    let other = "a-mode-of-no-program";
+    match harness.seam().mode(&ModeEntry::Own(other.into())) {
+        Ok(value) => Err(format!("{other} mapped to {value}")),
+        Err(words) => {
+            ensure!(
+                words.contains(other),
+                "the refusal of {other} does not name it: {words}"
+            );
+            Ok(())
+        }
+    }
+}
+
+fn the_command_passes_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
+    let modes = harness.modes();
+    let who = identity("code");
+    let command = |mode: Option<&str>| {
+        harness.seam().command(
+            &Settings::default(),
+            mode,
+            &BTreeMap::new(),
+            &harness.place(),
+            &who,
+            &Secret("secret".into()),
+            "begin",
+        )
+    };
+    let none = command(None);
+    for value in modes.four.values().chain(&modes.own) {
+        ensure!(
+            command(Some(value)).args.iter().any(|arg| arg == value),
+            "the command passes no {value}"
+        );
+        ensure!(
+            !none.args.iter().any(|arg| arg == value),
+            "a command given no mode passes {value}"
+        );
+    }
+    Ok(())
+}
+
+fn started_without_names_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
+    // A profile that reads no mode back compares none, so its agent
+    // never reads begun in another (169).
+    if harness.seam().mode_read_back() == Offered::NotOffered {
+        return Ok(());
+    }
+    let modes = harness.modes();
+    let (Some(asked), Some(began)) = (modes.four.get(&Mode::Full), modes.four.get(&Mode::Ask))
+    else {
+        return Ok(());
+    };
+    let who = identity("code");
+    let folder = harness.folder();
+    let command = harness.seam().command(
+        &Settings::default(),
+        Some(asked),
+        &BTreeMap::new(),
+        &harness.place(),
+        &who,
+        &Secret("secret".into()),
+        "begin",
+    );
+    harness.start(&command, &who, &folder);
+    ensure_eq!(
+        harness.seam().started_without(&folder, &who),
+        None,
+        "an agent begun in the mode its start asked"
+    );
+    harness.begin_in(&who, asked, began);
+    let Some(unsettled) = harness.seam().started_without(&folder, &who) else {
+        return Err(format!(
+            "an agent begun in {began} where its start asked {asked} read as begun as asked"
+        ));
+    };
+    ensure_eq!(
+        unsettled.mode,
+        Some(ModeBegan {
+            asked: asked.clone(),
+            began: Some(began.clone()),
+        }),
+        "the modes"
+    );
+    ensure!(
+        unsettled.missing.is_empty() && unsettled.different.is_empty() && !unsettled.program,
+        "nothing else differed: {unsettled:?}"
+    );
+    ensure_eq!(
+        harness
+            .seam()
+            .started_without(&format!("{folder}-of-another-place"), &who),
+        None,
+        "started without, read in another folder"
+    );
+    Ok(())
 }
 
 fn begun_without_and_no_turn<H: AgentHarness>(harness: &H) -> Outcome {
@@ -283,6 +443,7 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
     )]);
     let command = harness.seam().command(
         &settings,
+        None,
         &env,
         &harness.place(),
         &who,
@@ -396,7 +557,11 @@ fn the_guard_reports<H: AgentHarness>(harness: &H) -> Outcome {
 }
 
 fn what_the_program_offers<H: AgentHarness>(harness: &H) -> Outcome {
-    let offered = [harness.seam().send_back(), harness.seam().on_quiet()];
+    let offered = [
+        harness.seam().send_back(),
+        harness.seam().on_quiet(),
+        harness.seam().mode_read_back(),
+    ];
     ensure!(
         offered
             .iter()

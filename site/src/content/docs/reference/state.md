@@ -133,7 +133,7 @@ Each place:
 | `readiness` | each readiness step, whether it passed and what it printed |
 | `stages` | each stage: `name`, `state`, `starts`, `end`, `conversation`, and the part or setting it was refused for |
 | `current` | the current stage's name |
-| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity` or `strategy`; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes` |
+| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity` or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes` |
 | `head` | the place's branch head |
 | `delivered` | whether the current stage's deliverable exists |
 | `tasks` | a change's tasks ticked and in all |
@@ -148,7 +148,7 @@ Each place:
 | `stream` | the stream the place runs in, `name` and `from`: `launch`, `intent`, `host-repository-kind`, `host-repository`, `host-kind` or `default` |
 | `intent` | the intent the place serves: `from` `launch` with its `name`, or `base` with its `repository` and `base`; and its `digest` |
 | `moves` | each move between accounts, of a stage (`on` `stage` with its `stage`) or of the intent (`on` `intent`): `from`, `to`, `why`, `at`, and `cache`, `lost` |
-| `unsettled` | each start whose agent began without its settings: `stage`, `start`, `at`, the variables `missing` and `different` by name, and `program`, whether the program differed |
+| `unsettled` | each start whose agent began without its settings: `stage`, `start`, `at`, the variables `missing` and `different` by name, `program`, whether the program differed, and `mode`, where the mode did, with `asked` and `began` |
 | `ends` | each end, with whom it was delivered to, when and by what, `notice`, `wait` or `inbox`, and whom it is pending for |
 | `clues` | the display hints: the stage, the state, the pane's title and name, and where herdr shows them |
 

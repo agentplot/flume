@@ -1,11 +1,11 @@
 ---
 title: Agent settings
-description: The settings each agent starts with and the six layers they come from; the streams a host runs its places in, the pools of accounts its agents run under, and how a start is checked against what it was given.
+description: The settings each agent starts with and the six layers they come from; the mode an agent may act in; the streams a host runs its places in, the pools of accounts its agents run under, and how a start is checked against what it was given.
 sidebar:
   order: 6
 ---
 
-Each agent flume starts runs with four settings, resolved at its start
+Each agent flume starts runs with five settings, resolved at its start
 from six layers, and under an account of a pool when the host names
 one. The account gives the agent its environment. `flume status` gives
 each setting of the current agent with the layer it came from, and the
@@ -19,6 +19,7 @@ account with what chose it.
 | `model` | the model, passed as `--model` |
 | `instructions` | text appended to the agent's system prompt, passed as `--append-system-prompt` |
 | `beside` | a pane the agent's pane opens beside, under herdr |
+| `mode` | how far the agent may act in its place without asking a person: one of flume's four modes, or a table of programs ([the mode](#the-mode)) |
 
 `program` defaults to `claude`. Every other setting is empty unless a
 layer gives it.
@@ -42,8 +43,8 @@ one given for every stage. In the kind's layer, a stage's own agent
 table comes before the kind's `agents` table. Each setting is taken
 whole from the first layer that gives it.
 
-The host's two layers give `model` and `instructions` alone, and flume
-reads no other key of those tables. `beside` comes only from the launch
+The host's two layers give `model`, `instructions` and `mode` alone,
+and flume reads no other key of those tables. `beside` comes only from the launch
 and the kind, since where a pane opens is the caller's to say or the
 kind's to need. No layer gives an environment: an agent's environment
 is its account's ([the environment](#the-environment)).
@@ -52,7 +53,8 @@ is its account's ([the environment](#the-environment)).
 
 The host's layers are read from its configuration as it stands at each
 agent's start. Change a model in the host's file and retry a stage, and
-the next agent runs on the new model, with no new launch. Every other
+the next agent runs on the new model, with no new launch. A mode changed
+the same way reaches the next agent's start the same way. Every other
 layer is what the launch read: a place keeps its launch's settings, its
 repository's and its kind's for its whole life.
 
@@ -62,13 +64,20 @@ repository's and its kind's for its whole life.
 flume launch --kind change --name csv-export --brief "Export the ledger as CSV." \
   --agent model=sonnet \
   --agent verify.model=opus \
-  --agent code.instructions="Run the tests before every commit."
+  --agent code.instructions="Run the tests before every commit." \
+  --agent code.mode=edits
 ```
 
-The field is one of `program`, `model`, `instructions` and `beside`,
-with an optional stage before it. A setting for a stage the kind does
-not hold refuses the launch, naming the stage, and so does a field that
-is none of the four.
+The field is one of `program`, `model`, `instructions`, `beside` and
+`mode`, with an optional stage before it. A setting for a stage the
+kind does not hold refuses the launch, naming the stage, and so does a
+field that is none of the five.
+
+`mode=<mode>` gives one of flume's four modes. `mode.<program>=<value>`
+gives one entry of a table of programs, and several such entries build
+one table: `--agent mode.claude=auto`. A mode word and a table for the
+same stage, or for every stage, refuse the launch naming both, since a
+mode is one word or one table.
 
 ## On the host
 
@@ -108,6 +117,103 @@ instructions = "Check every scenario of the change's specs, not only its tasks."
 A declaration gives no environment: an `env` in any agents table of a
 repository's file or a launch's declaration refuses the launch, naming
 the field. What a host's agents run under is that host's to say.
+
+## The mode
+
+`mode` says how far a stage's agent may act in its place without asking
+a person. It is one of flume's four modes, which mean the same on every
+program:
+
+| Mode | The agent |
+|---|---|
+| `plan` | reads the place and changes nothing in it |
+| `ask` | reads without asking, and asks a person before each change to a file and each command that is not a read |
+| `edits` | changes files in its place without asking, and asks before any command that reaches beyond them |
+| `full` | acts without asking |
+
+Each program's agent profile maps each mode to the one setting of its
+program that means it, never a wider or a narrower one, and refuses a
+mode its program has no setting for. Claude Code's are its
+`--permission-mode` choices:
+
+| Mode | Passed to Claude Code as |
+|---|---|
+| `plan` | `--permission-mode plan` |
+| `ask` | `--permission-mode manual` |
+| `edits` | `--permission-mode acceptEdits` |
+| `full` | `--permission-mode bypassPermissions` |
+
+`plan` suits a conversation, whose agent plans with you and asks in its
+pane to leave plan mode, which you answer there. A launch that gives
+`plan` to any other stage is refused, naming the stage and its
+deliverable, since an agent in plan mode could not write it.
+
+### A host's mode over a repository's
+
+A host that sets its agents' reach states the mode in its own layers,
+which come before a repository's and a kind's. This host runs every fix
+in `edits`, whatever a repository asks:
+
+```toml
+# the host's ~/.config/flume/config.toml
+[kinds.fix.agents]
+mode = "edits"
+```
+
+```toml
+# the repository's .config/flume.toml
+[kinds.fix.agents]
+mode = "full"
+```
+
+A fix's agent here starts in `edits`, passed to Claude Code as
+`--permission-mode acceptEdits`, and status names `host-kind` as where
+its mode came from.
+
+### A program's own value
+
+In place of one of the four, a layer may give a table of programs, each
+entry one of the four or a value of that program's own:
+
+```toml
+[kinds.review.agents]
+mode = { claude = "auto" }
+```
+
+The table is taken whole from its layer, and the agent's entry is its
+program's. A program the table names no entry for refuses the stage:
+the mode never passes to a later layer. Claude Code's own values are the
+`--permission-mode` choices of the release flume pins: `acceptEdits`,
+`auto`, `bypassPermissions`, `manual`, `dontAsk` and `plan`, each passed
+as written. A program's own value given bare, as `mode = "auto"`, is
+refused where it is read, naming it: give it under its program's name.
+
+### No mode
+
+Where no layer gives a mode, flume passes none, and the account's own
+configuration of its program decides, as it decides everything else
+flume does not give. A host and a repository that say nothing change
+nothing.
+
+### What refuses
+
+A launch is refused where a stage's agent resolves to a mode its
+profile cannot run, or to a table that names no entry for its program.
+The refusal names the mode as written, the program, the stage and the
+layer.
+A host's table changed after the launch leaves the stage refused at its
+start in the same words, starting no agent until a retry.
+
+### What a mode leaves to you
+
+flume answers no question an agent puts, in any mode. An agent in `ask`
+or `edits` that asks a person waits asking until someone answers it in
+its pane, and status says it is asking, so keep those modes for work
+someone watches. Claude Code warns before an account's first session in
+`bypassPermissions`, and flume never answers that warning either:
+accept it once yourself under the account, as
+`CLAUDE_CONFIG_DIR=~/.claude-work-1 claude --permission-mode
+bypassPermissions`, before its agents run `full`.
 
 ## Streams
 
@@ -268,7 +374,8 @@ account's cache.
 
 At each start flume records what the agent is to run under: its
 program, its account, and a digest of each variable of its account's
-environment and of `FLUME_AGENT`, `FLUME_PLACE` and `FLUME_STAGE`. The
+environment and of `FLUME_AGENT`, `FLUME_PLACE` and `FLUME_STAGE`.
+Where a layer gives a mode, the record holds it as passed. The
 start's secret keys each digest, so the record holds no value and
 tests no guess. `PATH`, `SHELL` and the rest of the login environment
 are not in it. Nor is a credential the agent program keeps from the
@@ -284,15 +391,34 @@ records what differed by name, and starts a settle. flume takes that
 agent as no stage's agent: it sends it no prompt, ends it once it is
 quiet, and starts the stage afresh under its settings. A second
 difference in a row, or an agent still not quiet at the stage's limit,
-ends the stage **never begun**, naming the variables. Status lists each such start with each variable's name and
-whether the program differed, never a value.
+ends the stage **never begun**, naming the variables.
+
+Claude Code names the mode a session runs in only with a prompt, so its
+mode is compared at the start's first prompt. The plugin's
+UserPromptSubmit hook compares the session's mode with the one its start
+passed, Claude Code's `default` read as `manual`. Where the account's
+configuration disables the mode asked, Claude Code begins in another,
+and the hook then blocks the prompt, so the agent takes no turn, and
+records both modes. flume treats that start as it treats a variable
+that differed: it ends the agent once quiet and starts the stage
+afresh. A second start in another mode ends the stage never begun,
+naming the mode asked and the mode it began in. Once a start's first
+prompt is taken, its session's mode is its own. A later prompt, and a
+session resumed or compacted, compare none, so a mode you move in the
+pane stops nothing. Where a program's profile cannot read its mode
+back, the start records the mode passed and compares none, and status
+says the mode was not read back.
+
+Status lists each such start with each variable's name, whether the
+program differed and the modes asked and begun, never a value.
 
 ## What status shows
 
 ```text
   stream work (from host-repository), intent of /home/you/src/acme on main
-  agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude) on the account work-1 of work (from the strategy): working
+  agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude) on the account work-1 of work (from the strategy): working, in the mode edits (from host-kind) passed as acceptEdits
     env.CLAUDE_CONFIG_DIR = <set> (from account)
+    mode = edits (from host-kind)
     model = sonnet (from host-kind)
     program = claude (from default)
 ```
@@ -300,7 +426,8 @@ whether the program differed, never a value.
 A place gives its stream with where it came from, and its intent. Its
 current agent gives its account, with `from` saying whether the
 intent's affinity or the pool's strategy chose it, and each variable
-`env.<NAME>` from `account` as `<set>`. The place lists its `moves` and
+`env.<NAME>` from `account` as `<set>`, and its `mode` with the value
+passed and whether it was read back. The place lists its `moves` and
 each start in `unsettled`. The host gives its `streams`, each with its
 running agents, bound, room and queue, and its `pools`, each account
 with its running agents, its bound and the time it is spent until. The

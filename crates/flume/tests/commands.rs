@@ -41,7 +41,7 @@ const AS_FLUME: &str = "FLUME_TEST_AS_FLUME";
 /// The stand-in agent: it says it started and received its prompt at
 /// once, never asks or keeps own work, and reads its session ended once
 /// the test writes the mark `stand-in/<stage>-<start>` in the place's
-/// folder.
+/// folder. It maps each mode to its own word and reads none back.
 struct StandInAgent;
 
 fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
@@ -54,6 +54,7 @@ impl Agent for StandInAgent {
     fn command(
         &self,
         settings: &Settings,
+        _mode: Option<&str>,
         env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
@@ -102,6 +103,10 @@ impl Agent for StandInAgent {
     }
     fn stop_short(&self, _agent: &Identity) -> String {
         "flume needs \"<words>\"".into()
+    }
+    /// Each of flume's four as its word, and an own value as written.
+    fn mode(&self, entry: &ModeEntry) -> Result<String, String> {
+        Ok(entry.to_string())
     }
     fn send_back(&self) -> Offered {
         Offered::NotOffered
@@ -789,6 +794,88 @@ fn agent_settings_at_the_launch() {
         refused.text
     );
     assert!(!Path::new(&host.place_of(&repository, "change--two")).exists());
+}
+
+#[test]
+fn a_mode_and_a_table_at_the_launch() {
+    // 7, 32, 162, 169: one of the four for every stage and a table of
+    // programs for one, kept as the launch gave them in the place's held
+    // settings; a word and a table for one stage refused naming both,
+    // and a program's own value given bare refused naming it, nothing
+    // made.
+    let host = Host::new("agent-mode");
+    let repository = repository("agent-mode", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "mode=edits",
+            "--agent",
+            &format!("code.mode.{STAND_IN}=careful"),
+            "--agent",
+            "code.mode.other=ask",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "change--one");
+    let file = host.state().join("places").join(format!(
+        "{}.json",
+        place.trim_start_matches('/').replace('/', "%")
+    ));
+    let written: Value =
+        serde_json::from_slice(&std::fs::read(&file).expect("the held state")).unwrap();
+    assert_eq!(
+        written["state"]["place"]["every_stage"]["mode"], "edits",
+        "a word as Settings writes it"
+    );
+    assert_eq!(
+        written["state"]["place"]["settings"]["code"]["mode"],
+        serde_json::json!({STAND_IN: "careful", "other": "ask"}),
+        "a table as Settings writes it"
+    );
+    let held = held_of(&host, &place).state.place;
+    assert_eq!(held.every_stage.mode, Some(ModeSetting::Flume(Mode::Edits)));
+    assert_eq!(
+        held.settings["code"].mode,
+        Some(ModeSetting::Programs(BTreeMap::from([
+            (STAND_IN.to_string(), "careful".to_string()),
+            ("other".to_string(), "ask".to_string()),
+        ])))
+    );
+    for (name, words, named) in [
+        (
+            "two",
+            ["code.mode=edits", "code.mode.other=ask"],
+            "code.mode.other=ask",
+        ),
+        (
+            "three",
+            ["mode=careful", "model=opus"],
+            "mode.<program>=careful",
+        ),
+    ] {
+        let refused = host.stand_in(
+            &repository.dir,
+            &[
+                "launch", "--kind", "change", "--name", name, "--kinds", &kinds, "--agent",
+                words[0], "--agent", words[1], "--json",
+            ],
+            &[],
+        );
+        assert_eq!(refused.code, 1, "{}", refused.text);
+        assert!(refused.text.contains(named), "{}", refused.text);
+        assert!(!Path::new(&host.place_of(&repository, &format!("change--{name}"))).exists());
+    }
 }
 
 #[test]

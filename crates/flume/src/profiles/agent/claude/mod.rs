@@ -8,19 +8,21 @@
 //! started ack recorded (128). Every fact of Claude Code read here is
 //! checked against the release `devenv.nix` pins, 2.1.296: its hook
 //! events and their inputs, its transcript's records, its folder-trust
-//! dialog and the keys that answer it, and the words of its usage limits.
+//! dialog and the keys that answer it, the words of its usage limits, and
+//! its permission modes ([`mode`]).
 
 pub mod guard;
 pub mod hook;
 pub mod limit;
+pub mod mode;
 pub mod record;
 pub mod transcript;
 pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
-    Agent, AgentCommand, FolderTrust, Guarded, Identity, Offered, PlaceRef, Reading, Received,
-    Secret, Settings, Spent, Unsettled,
+    Agent, AgentCommand, FolderTrust, Guarded, Identity, ModeEntry, Offered, PlaceRef, Reading,
+    Received, Secret, Settings, Spent, Unsettled,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -237,10 +239,12 @@ impl Claude {
 }
 
 impl Agent for Claude {
-    /// `claude --plugin-dir <plugin> [--model <m>] [--append-system-prompt
-    /// <instructions>]` in the place, the program the settings name by
-    /// name or path, or the program it runs where it is a nix wrapper,
-    /// with the variables the wrapper sets ([`wrapper`]), its account's
+    /// `claude --plugin-dir <plugin> [--model <m>] [--permission-mode
+    /// <mode>] [--append-system-prompt <instructions>]` in the place, the
+    /// mode passed where one is given and none where it is none (162),
+    /// the program the settings name by name or path, or the program it
+    /// runs where it is a nix wrapper, with the variables the wrapper
+    /// sets ([`wrapper`]), its account's
     /// environment and the four `FLUME_*` words, the prompt as its argument where the terminal cannot send
     /// it; nothing of the caller's session (29, 32, 33, 88, C.4). The
     /// host user's login environment is the terminal's to give, set on
@@ -249,6 +253,7 @@ impl Agent for Claude {
     fn command(
         &self,
         settings: &Settings,
+        mode: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
         identity: &Identity,
@@ -262,6 +267,9 @@ impl Agent for Claude {
         ];
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
+        }
+        if let Some(mode) = mode {
+            args.extend([mode::FLAG.to_string(), mode.to_string()]);
         }
         if let Some(instructions) = &settings.instructions {
             args.extend(["--append-system-prompt".to_string(), instructions.clone()]);
@@ -463,8 +471,22 @@ impl Agent for Claude {
             .collect()
     }
 
-    /// The SessionStart hook's word that the agent began otherwise than
-    /// its start recorded, written in place of the started ack (161).
+    /// The choice of 2.1.296's own that the entry means, or its own value
+    /// as written where it is one of that release's ([`mode`]; 169, C.4).
+    fn mode(&self, entry: &ModeEntry) -> Result<String, String> {
+        mode::map(entry).map(str::to_string)
+    }
+
+    /// The start's first prompt's UserPromptSubmit input names the mode
+    /// the session runs in (161).
+    fn mode_read_back(&self) -> Offered {
+        Offered::Offered
+    }
+
+    /// The hooks' word that the agent began otherwise than its start
+    /// recorded: SessionStart's, written in place of the started ack, or
+    /// UserPromptSubmit's at the start's first prompt, written in place of
+    /// its received ack (161).
     fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
         let record = Record::at(folder, agent);
         if !record.readable() {

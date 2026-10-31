@@ -346,8 +346,7 @@ impl Engine {
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
         };
         for stage in &kind.stages {
-            let resolved = self.resolve(&held.place, stage);
-            self.agent_for(&resolved, &stage.name)?;
+            self.resolution(&held.place, stage)?;
         }
         if self.create(&held).is_none() {
             return Err(format!("the place {id} already stands"));

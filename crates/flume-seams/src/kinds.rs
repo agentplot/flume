@@ -90,6 +90,158 @@ pub struct Settings {
     pub instructions: Option<String>,
     /// The pane the agent opens beside, named by the launch's settings.
     pub beside: Option<String>,
+    /// How far the agent may act without asking a person, as its layer
+    /// gave it; none where the layer gives none, and in settings written
+    /// before (162, 169).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ModeSetting>,
+}
+
+/// flume's four modes, which mean the same on every program (169).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    Plan,
+    Ask,
+    Edits,
+    Full,
+}
+
+impl Mode {
+    /// The four, in order.
+    pub const ALL: [Mode; 4] = [Mode::Plan, Mode::Ask, Mode::Edits, Mode::Full];
+
+    /// The mode as a layer writes it.
+    pub fn word(self) -> &'static str {
+        match self {
+            Mode::Plan => "plan",
+            Mode::Ask => "ask",
+            Mode::Edits => "edits",
+            Mode::Full => "full",
+        }
+    }
+
+    /// The mode `word` spells, none where it spells none of the four.
+    pub fn from_word(word: &str) -> Option<Mode> {
+        Mode::ALL.into_iter().find(|mode| mode.word() == word)
+    }
+}
+
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.word())
+    }
+}
+
+/// A mode as a layer gives it: one of flume's four, or a table of
+/// programs, each entry as written, the agent's taken by its program's
+/// name (162, 169). It is written as the word or as an object, and read
+/// through [`ModeSetting::from_word`] and [`ModeSetting::from_programs`],
+/// so held state, the launch's JSON form and every reader spell it alike.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "WrittenMode", into = "WrittenMode")]
+pub enum ModeSetting {
+    Flume(Mode),
+    Programs(BTreeMap<String, String>),
+}
+
+/// A mode as JSON spells it, before it is read.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum WrittenMode {
+    Word(String),
+    Programs(BTreeMap<String, String>),
+}
+
+impl TryFrom<WrittenMode> for ModeSetting {
+    type Error = String;
+
+    fn try_from(written: WrittenMode) -> Result<ModeSetting, String> {
+        match written {
+            WrittenMode::Word(word) => ModeSetting::from_word(&word),
+            WrittenMode::Programs(programs) => ModeSetting::from_programs(programs),
+        }
+    }
+}
+
+impl From<ModeSetting> for WrittenMode {
+    fn from(setting: ModeSetting) -> WrittenMode {
+        match setting {
+            ModeSetting::Flume(mode) => WrittenMode::Word(mode.word().to_string()),
+            ModeSetting::Programs(programs) => WrittenMode::Programs(programs),
+        }
+    }
+}
+
+impl ModeSetting {
+    /// One of flume's four, given bare; any other word refused naming it,
+    /// since a program's own value goes under its program's name (169).
+    pub fn from_word(word: &str) -> Result<ModeSetting, String> {
+        Mode::from_word(word)
+            .map(ModeSetting::Flume)
+            .ok_or_else(|| {
+                format!(
+                    "the mode `{word}` is none of flume's four, plan, ask, edits and full: \
+                 a program's own value goes under its program's name, as \
+                 mode = {{ <program> = \"{word}\" }}"
+                )
+            })
+    }
+
+    /// A table of programs, each entry as written; one that names no
+    /// program refused (169).
+    pub fn from_programs(programs: BTreeMap<String, String>) -> Result<ModeSetting, String> {
+        if programs.is_empty() {
+            return Err("the mode's table of programs names no program".into());
+        }
+        Ok(ModeSetting::Programs(programs))
+    }
+
+    /// The mode as a layer would write it, `edits` or `{ agent =
+    /// "careful", other = "edits" }`, its programs in order (56).
+    pub fn written(&self) -> String {
+        match self {
+            ModeSetting::Flume(mode) => mode.word().to_string(),
+            ModeSetting::Programs(programs) => {
+                let entries: Vec<String> = programs
+                    .iter()
+                    .map(|(program, value)| format!("{program} = {value:?}"))
+                    .collect();
+                format!("{{ {} }}", entries.join(", "))
+            }
+        }
+    }
+
+    /// The entry of the agent whose program is named `program`: one of the
+    /// four given whole, or the table's entry for it; none where the table
+    /// names no entry for it, since the table is taken whole (169).
+    pub fn entry(&self, program: &str) -> Option<ModeEntry> {
+        match self {
+            ModeSetting::Flume(mode) => Some(ModeEntry::Flume(*mode)),
+            ModeSetting::Programs(programs) => programs.get(program).map(|value| {
+                Mode::from_word(value)
+                    .map_or_else(|| ModeEntry::Own(value.clone()), ModeEntry::Flume)
+            }),
+        }
+    }
+}
+
+/// An agent's entry of a mode: one of flume's four, or a value of its
+/// program's own, as written, which its profile maps or refuses (169).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModeEntry {
+    Flume(Mode),
+    Own(String),
+}
+
+impl std::fmt::Display for ModeEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModeEntry::Flume(mode) => f.write_str(mode.word()),
+            ModeEntry::Own(value) => f.write_str(value),
+        }
+    }
 }
 
 /// What stands in a record or an answer for an environment variable's
@@ -99,8 +251,9 @@ pub struct Settings {
 pub const SET: &str = "<set>";
 
 impl Settings {
-    /// These settings with `over`'s fields set over them, field by field
-    /// (32).
+    /// These settings with `over`'s fields set over them, field by field,
+    /// each taken whole: a mode's table of programs is never merged with
+    /// another's (32, 169).
     pub fn under(&self, over: &Settings) -> Settings {
         Settings {
             program: over.program.clone().or_else(|| self.program.clone()),
@@ -110,6 +263,7 @@ impl Settings {
                 .clone()
                 .or_else(|| self.instructions.clone()),
             beside: over.beside.clone().or_else(|| self.beside.clone()),
+            mode: over.mode.clone().or_else(|| self.mode.clone()),
         }
     }
 }

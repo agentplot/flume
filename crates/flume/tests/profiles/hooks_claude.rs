@@ -161,23 +161,28 @@ impl Host {
     /// Launches `<kind>--one` and gives its agent, as the printed command
     /// names it.
     fn launch(&self, kind: &str) -> Agent {
+        self.launch_with(kind, &[])
+    }
+
+    /// Launches `<kind>--one` with `more` words of the launch's own, and
+    /// gives its agent.
+    fn launch_with(&self, kind: &str, more: &[&str]) -> Agent {
         let kinds = self.path("kinds/kinds.toml");
-        let ran = self.flume(
-            &[
-                "launch",
-                "--kind",
-                kind,
-                "--name",
-                "one",
-                "--brief",
-                "fix the parser",
-                "--kinds",
-                &kinds.to_string_lossy(),
-                "--json",
-            ],
-            &[],
-            "",
-        );
+        let kinds = kinds.to_string_lossy();
+        let mut words = vec![
+            "launch",
+            "--kind",
+            kind,
+            "--name",
+            "one",
+            "--brief",
+            "fix the parser",
+            "--kinds",
+            &kinds,
+            "--json",
+        ];
+        words.extend(more);
+        let ran = self.flume(&words, &[], "");
         assert_eq!(ran.code, 0, "the launch: {}", ran.out);
         let place = git_worktree::location(
             &self.repository.name(),
@@ -605,6 +610,247 @@ fn another_program() {
         .expect("the word that it began otherwise");
     assert!(unsettled.unsettled.program, "{unsettled:?}");
     assert!(unsettled.unsettled.missing.is_empty() && unsettled.unsettled.different.is_empty());
+}
+
+/// The start's mode as its record names it, from the place's held state.
+fn recorded_mode(host: &Host, agent: &Agent) -> Option<String> {
+    let status = host.status(&agent.place);
+    status["places"][0]["agent"]["mode"]["passed"]
+        .as_str()
+        .map(str::to_string)
+}
+
+/// The start's first prompt submitted as Claude Code 2.1.296 runs
+/// UserPromptSubmit, its input naming the session's mode where `mode` is
+/// given.
+fn first_prompt(host: &Host, agent: &Agent, mode: Option<&str>) -> Ran {
+    let mut input = json!({ "prompt": agent.prompt });
+    if let Some(mode) = mode {
+        input["permission_mode"] = json!(mode);
+    }
+    host.hook(agent, "user-prompt-submit", input)
+}
+
+#[test]
+fn another_mode() {
+    // The start's record names bypassPermissions. SessionStart's input
+    // names no mode, as 2.1.296's never does, and the started ack is taken
+    // on the program and the variables. The start's first prompt's input
+    // reads `default`, as Claude Code begins where the account's
+    // configuration disables the mode asked: the prompt is blocked with
+    // words naming both modes, so the agent takes no turn, no received ack
+    // is written, the agent's record names the mode asked and the mode
+    // begun as the record would name it with the started ack's session, a
+    // settle of the place is started, which reads the start begun without
+    // its settings, and the hook exits 0 (161, 162, S67).
+    let host = Host::new("another-mode");
+    let agent = host.launch_with("fix", &["--agent", "mode=full"]);
+    assert_eq!(
+        recorded_mode(&host, &agent).as_deref(),
+        Some("bypassPermissions")
+    );
+    let ran = host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    assert_eq!(decision(&ran), None);
+    assert_eq!(host.agent_status(&agent.place)["started"], "yes");
+    let ran = first_prompt(&host, &agent, Some("default"));
+    let blocked = decision(&ran).expect("the prompt blocked");
+    assert_eq!(blocked["decision"], "block", "{blocked}");
+    assert!(
+        blocked["reason"].as_str().is_some_and(|reason| reason
+            .contains("in the mode `manual`, where its start asked `bypassPermissions`")),
+        "{blocked}"
+    );
+    let record = record_of(&host, &agent);
+    assert!(!record.received_any(), "the prompt held back was acked");
+    let unsettled = record
+        .unsettled()
+        .expect("the word that it began otherwise");
+    assert_eq!(
+        unsettled.unsettled.mode,
+        Some(flume_seams::ModeBegan {
+            asked: "bypassPermissions".into(),
+            began: Some("manual".into()),
+        })
+    );
+    assert!(
+        unsettled.unsettled.missing.is_empty()
+            && unsettled.unsettled.different.is_empty()
+            && !unsettled.unsettled.program,
+        "{unsettled:?}"
+    );
+    assert_eq!(
+        Path::new(&unsettled.transcript_path),
+        agent.transcript.as_path(),
+        "the started ack's transcript"
+    );
+    let status = until(&host, &agent.place, Duration::from_secs(20), |status| {
+        status["places"][0]["unsettled"]
+            .as_array()
+            .is_some_and(|read| !read.is_empty())
+    });
+    let read = &status["places"][0]["unsettled"][0];
+    assert_eq!(
+        read["mode"],
+        json!({ "asked": "bypassPermissions", "began": "manual" }),
+        "{status}"
+    );
+}
+
+#[test]
+fn manual_read_back_as_default() {
+    // Claude Code 2.1.296 reads `--permission-mode manual` as its own
+    // `default` and reports it so: the first prompt is taken (161, C.4).
+    let host = Host::new("manual-mode");
+    let agent = host.launch_with("fix", &["--agent", "mode=ask"]);
+    assert_eq!(recorded_mode(&host, &agent).as_deref(), Some("manual"));
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let ran = first_prompt(&host, &agent, Some("default"));
+    assert_eq!(decision(&ran), None);
+    let record = record_of(&host, &agent);
+    assert!(record.received_any(), "the first prompt was not acked");
+    assert!(record.unsettled().is_none());
+}
+
+#[test]
+fn no_mode_in_the_record() {
+    // A start whose settings give no mode passes none and compares none,
+    // whatever mode the account's configuration began the session in
+    // (161, 162).
+    let host = Host::new("no-mode");
+    let agent = host.launch("fix");
+    assert_eq!(recorded_mode(&host, &agent), None);
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let ran = first_prompt(&host, &agent, Some("acceptEdits"));
+    assert_eq!(decision(&ran), None);
+    let record = record_of(&host, &agent);
+    assert!(record.received_any(), "the first prompt was not acked");
+    assert!(record.unsettled().is_none());
+}
+
+#[test]
+fn no_mode_in_the_input() {
+    // The start's record names acceptEdits and its first prompt's input
+    // names no mode: the prompt is blocked, no received ack, the agent's
+    // record naming the mode asked and no mode begun (161).
+    let host = Host::new("no-mode-input");
+    let agent = host.launch_with("fix", &["--agent", "mode=edits"]);
+    assert_eq!(recorded_mode(&host, &agent).as_deref(), Some("acceptEdits"));
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let ran = first_prompt(&host, &agent, None);
+    assert_eq!(
+        decision(&ran).map(|blocked| blocked["decision"].clone()),
+        Some(json!("block"))
+    );
+    let record = record_of(&host, &agent);
+    assert!(!record.received_any(), "the prompt held back was acked");
+    let unsettled = record
+        .unsettled()
+        .expect("the word that it began otherwise");
+    assert_eq!(
+        unsettled.unsettled.mode,
+        Some(flume_seams::ModeBegan {
+            asked: "acceptEdits".into(),
+            began: None,
+        })
+    );
+}
+
+#[test]
+fn a_later_prompt_and_a_compaction_after_the_mode_moved() {
+    // A start's first prompt taken in acceptEdits; once started, a person
+    // moves its session's mode. A later prompt, a tell, compares no mode
+    // and is acked received; the session compacts, SessionStart compares
+    // no mode either, so the started ack is written again with the
+    // session's transcript, and nothing is unsettled (161, 162).
+    let host = Host::new("compaction-mode");
+    let agent = host.launch_with("fix", &["--agent", "mode=edits"]);
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let ran = first_prompt(&host, &agent, Some("acceptEdits"));
+    assert_eq!(decision(&ran), None);
+    let ran = host.hook(
+        &agent,
+        "user-prompt-submit",
+        json!({ "prompt": "a tell", "permission_mode": "default" }),
+    );
+    assert_eq!(decision(&ran), None, "a later prompt blocked");
+    let compacted = host.path("sessions/compacted.jsonl");
+    std::fs::write(&compacted, fixture("session.jsonl")).expect("the transcript");
+    host.hook(
+        &agent,
+        "session-start",
+        json!({ "source": "compact", "transcript_path": compacted }),
+    );
+    let record = record_of(&host, &agent);
+    let started = record.started().expect("the started ack");
+    assert_eq!(started.source, "compact");
+    assert_eq!(
+        Path::new(&started.transcript_path),
+        compacted.as_path(),
+        "{started:?}"
+    );
+    assert!(
+        record.unsettled().is_none(),
+        "unsettled after the mode moved"
+    );
+    assert_eq!(
+        std::fs::read_to_string(record.received_path())
+            .unwrap_or_default()
+            .lines()
+            .count(),
+        2,
+        "both prompts acked received"
+    );
+    assert_eq!(host.agent_status(&agent.place)["started"], "yes");
+}
+
+#[test]
+fn an_ack_by_hand_with_no_mode() {
+    // `flume ack received` at the first prompt of a start whose record
+    // names acceptEdits: with `--mode acceptEdits` it is taken; with no
+    // `--mode` it acks nothing, naming the mode asked and no mode begun
+    // (135, 161).
+    let by_hand = |label: &str, mode: Option<&str>| {
+        let host = Host::new(label);
+        let agent = host.launch_with("fix", &["--agent", "mode=edits"]);
+        let mut words = vec!["ack", "received", "--digest", "a1b2c3"];
+        if let Some(mode) = mode {
+            words.extend(["--mode", mode]);
+        }
+        let env = agent.env();
+        let env: Vec<(&str, &str)> = env
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+            .collect();
+        let ran = host.flume(&words, &env, "");
+        let record = record_of(&host, &agent);
+        (ran, record, host)
+    };
+
+    let (ran, record, _host) = by_hand("ack-with-mode", Some("acceptEdits"));
+    assert_eq!(ran.code, 0, "{}", ran.out);
+    assert_eq!(
+        record.received("a1b2c3"),
+        Some(true),
+        "the ack was not taken"
+    );
+    assert!(record.unsettled().is_none());
+
+    let (ran, record, _host) = by_hand("ack-without-mode", None);
+    assert_eq!(ran.code, 1, "{}", ran.out);
+    assert!(!record.received_any(), "a received ack was written");
+    assert_eq!(
+        record.unsettled().map(|unsettled| unsettled.unsettled.mode),
+        Some(Some(flume_seams::ModeBegan {
+            asked: "acceptEdits".into(),
+            began: None,
+        }))
+    );
+    assert!(
+        ran.out
+            .contains("in a mode its word did not name, where its start asked `acceptEdits`"),
+        "{}",
+        ran.out
+    );
 }
 
 #[test]

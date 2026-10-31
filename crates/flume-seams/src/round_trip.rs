@@ -17,7 +17,17 @@ fn settings() -> Settings {
         model: Some("large".into()),
         instructions: Some("be brief".into()),
         beside: Some("operator".into()),
+        mode: None,
     }
+}
+
+/// A mode as a table of programs: an own value under one program's name
+/// and one of flume's four under another's (169).
+fn programs() -> ModeSetting {
+    ModeSetting::Programs(BTreeMap::from([
+        ("agent".into(), "careful".into()),
+        ("other".into(), "edits".into()),
+    ]))
 }
 
 fn stage() -> Stage {
@@ -65,6 +75,7 @@ fn kind_settings() -> KindSettings {
     KindSettings {
         every_stage: Settings {
             model: Some("sonnet".into()),
+            mode: Some(ModeSetting::Flume(Mode::Edits)),
             ..Settings::default()
         },
         stages: BTreeMap::from([("code".into(), settings())]),
@@ -133,7 +144,13 @@ fn held() -> HeldState {
             },
             brief: Some("bump it".into()),
             mark: Some("team-a".into()),
-            settings: BTreeMap::from([("code".into(), settings())]),
+            settings: BTreeMap::from([(
+                "code".into(),
+                Settings {
+                    mode: Some(programs()),
+                    ..settings()
+                },
+            )]),
             every_stage: settings(),
             repository_settings: kind_settings(),
             hold: vec!["review".into()],
@@ -193,13 +210,23 @@ fn held() -> HeldState {
                 identity: identity(),
                 secret: Secret("s3cret".into()),
                 program: "agent".into(),
-                settings: settings(),
+                settings: Settings {
+                    mode: Some(programs()),
+                    ..settings()
+                },
                 from: BTreeMap::from([
                     (
                         "model".into(),
                         Given {
                             layer: Layer::Repository,
                             value: "opus".into(),
+                        },
+                    ),
+                    (
+                        "mode".into(),
+                        Given {
+                            layer: Layer::Launch,
+                            value: programs().written(),
                         },
                     ),
                     (
@@ -303,8 +330,8 @@ fn held() -> HeldState {
     }
 }
 
-/// A start's record: the program, the account and two digests, no value
-/// (161).
+/// A start's record: the program, the account, two digests, no value,
+/// and the mode its profile passed (161, 162).
 fn start_record() -> StartRecord {
     StartRecord {
         program: "agent".into(),
@@ -313,16 +340,22 @@ fn start_record() -> StartRecord {
             ("AGENT_HOME".into(), "9f2c".into()),
             ("FLUME_AGENT".into(), "41ab".into()),
         ]),
+        mode: Some("careful".into()),
     }
 }
 
-/// An agent begun without one variable, with another value of a second
-/// and under another program (161).
+/// An agent begun without one variable, with another value of a second,
+/// under another program and in another mode than its start asked (161,
+/// 162).
 fn unsettled() -> Unsettled {
     Unsettled {
         missing: vec!["AGENT_HOME".into()],
         different: vec!["FLUME_STAGE".into()],
         program: true,
+        mode: Some(ModeBegan {
+            asked: "careful".into(),
+            began: Some("ask-each".into()),
+        }),
     }
 }
 
@@ -619,6 +652,285 @@ fn a_held_state_with_a_stream_an_account_and_a_record() {
     assert_eq!(start["start_record"]["account"], "work-2");
     assert_eq!(start["start_record"]["env"]["AGENT_HOME"], "9f2c");
     assert_eq!(start["from"]["env.AGENT_HOME"]["layer"], "account");
+}
+
+/// `value` with every `mode` key taken out, at any depth.
+fn without_modes(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            object.remove("mode");
+            object.values_mut().for_each(without_modes);
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(without_modes),
+        _ => {}
+    }
+}
+
+#[test]
+fn a_held_state_with_a_mode() {
+    // The launch gives code a table of programs, the kind gives every
+    // stage `edits`, and the start records the value passed and began in
+    // another (161, 162, 169).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["place"]["settings"]["code"]["mode"],
+        serde_json::json!({"agent": "careful", "other": "edits"})
+    );
+    assert_eq!(
+        json["place"]["kind"]["agents"]["every_stage"]["mode"],
+        "edits"
+    );
+    let start = &json["stages"][0]["start"];
+    assert_eq!(start["start_record"]["mode"], "careful");
+    assert_eq!(
+        start["from"]["mode"]["value"],
+        r#"{ agent = "careful", other = "edits" }"#
+    );
+    assert_eq!(
+        json["unsettled"][0]["mode"],
+        serde_json::json!({"asked": "careful", "began": "ask-each"})
+    );
+
+    // The same state written before the mode reads with none, and writes
+    // none back.
+    let mut before = json.clone();
+    without_modes(&mut before);
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read with no mode");
+    assert_eq!(read.place.settings["code"].mode, None);
+    assert_eq!(read.place.kind.agents.every_stage.mode, None);
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!(start.start_record.mode, None);
+    assert_eq!(start.settings.mode, None);
+    assert_eq!(read.unsettled[0].unsettled.mode, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no mode written where none is held"
+    );
+}
+
+#[test]
+fn a_bare_word_of_a_programs_own() {
+    // A program's own value goes under its program's name, never bare,
+    // wherever a mode is read (169).
+    let refused = serde_json::from_str::<ModeSetting>(r#""auto""#)
+        .expect_err("a bare word of a program's own");
+    let words = refused.to_string();
+    assert!(words.contains("`auto`"), "{words}");
+    assert!(
+        words.contains("a program's own value goes under its program's name"),
+        "{words}"
+    );
+    assert!(
+        serde_json::from_str::<Settings>(r#"{"mode":"auto"}"#).is_err(),
+        "settings with a bare word of a program's own"
+    );
+    assert!(
+        serde_json::from_str::<ModeSetting>("{}").is_err(),
+        "a table naming no program"
+    );
+    for mode in Mode::ALL {
+        round_trips(mode);
+        round_trips(ModeSetting::Flume(mode));
+        round_trips(ModeEntry::Flume(mode));
+    }
+    round_trips(programs());
+    round_trips(ModeEntry::Own("careful".into()));
+    round_trips(ModeBegan {
+        asked: "careful".into(),
+        began: None,
+    });
+    assert_eq!(
+        serde_json::to_value(ModeSetting::Flume(Mode::Full)).unwrap(),
+        "full"
+    );
+}
+
+#[test]
+fn a_mode_read_from_its_word() {
+    for (word, mode) in [
+        ("plan", Mode::Plan),
+        ("ask", Mode::Ask),
+        ("edits", Mode::Edits),
+        ("full", Mode::Full),
+    ] {
+        assert_eq!(ModeSetting::from_word(word), Ok(ModeSetting::Flume(mode)));
+        assert_eq!(mode.to_string(), word);
+    }
+    let words = ModeSetting::from_word("auto").expect_err("an own value given bare");
+    assert_eq!(
+        words,
+        "the mode `auto` is none of flume's four, plan, ask, edits and full: a program's own \
+         value goes under its program's name, as mode = { <program> = \"auto\" }"
+    );
+    assert!(
+        ModeSetting::from_word("Edits").is_err(),
+        "a mode is spelled as written"
+    );
+    assert!(ModeSetting::from_programs(BTreeMap::new()).is_err());
+    assert_eq!(
+        ModeSetting::from_programs(BTreeMap::from([("agent".into(), "careful".into())])),
+        Ok(ModeSetting::Programs(BTreeMap::from([(
+            "agent".into(),
+            "careful".into()
+        )])))
+    );
+}
+
+#[test]
+fn a_mode_as_its_layer_wrote_it() {
+    assert_eq!(ModeSetting::Flume(Mode::Edits).written(), "edits");
+    assert_eq!(
+        programs().written(),
+        r#"{ agent = "careful", other = "edits" }"#,
+        "each program in order"
+    );
+}
+
+#[test]
+fn an_agents_entry_of_a_mode() {
+    // One of the four is every program's; a table's entry is its
+    // program's alone, one of the four or an own value, and a program it
+    // names no entry for has none (169).
+    let full = ModeSetting::Flume(Mode::Full);
+    assert_eq!(full.entry("agent"), Some(ModeEntry::Flume(Mode::Full)));
+    assert_eq!(full.entry("other"), Some(ModeEntry::Flume(Mode::Full)));
+    assert_eq!(
+        programs().entry("agent"),
+        Some(ModeEntry::Own("careful".into()))
+    );
+    assert_eq!(
+        programs().entry("other"),
+        Some(ModeEntry::Flume(Mode::Edits))
+    );
+    assert_eq!(programs().entry("third"), None, "no entry for the program");
+    assert_eq!(ModeEntry::Own("careful".into()).to_string(), "careful");
+    assert_eq!(ModeEntry::Flume(Mode::Plan).to_string(), "plan");
+}
+
+#[test]
+fn a_start_begun_in_another_mode_in_words() {
+    let began = |began: Option<&str>| Unsettled {
+        mode: Some(ModeBegan {
+            asked: "all".into(),
+            began: began.map(String::from),
+        }),
+        ..Unsettled::default()
+    };
+    assert_eq!(
+        began(Some("ask-each")).words(),
+        "in the mode `ask-each`, where its start asked `all`",
+        "both modes named"
+    );
+    assert_eq!(
+        began(None).words(),
+        "in a mode its word did not name, where its start asked `all`",
+        "a mode with none begun"
+    );
+    assert_eq!(
+        Unsettled {
+            missing: vec!["AGENT_HOME".into()],
+            ..began(Some("ask-each"))
+        }
+        .words(),
+        "without AGENT_HOME, in the mode `ask-each`, where its start asked `all`"
+    );
+}
+
+/// An agent profile that keeps every default of the agent seam.
+struct Bare;
+
+impl Agent for Bare {
+    fn command(
+        &self,
+        _settings: &Settings,
+        _mode: Option<&str>,
+        _env: &BTreeMap<String, String>,
+        _place: &PlaceRef,
+        _identity: &Identity,
+        _secret: &Secret,
+        _prompt: &str,
+    ) -> AgentCommand {
+        AgentCommand::default()
+    }
+
+    fn started(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn received(&self, _folder: &str, _agent: &Identity, _text: &str) -> Received {
+        Received::Unknown
+    }
+
+    fn asking(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn own_work(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn ended(&self, _folder: &str, _agent: &Identity) -> Reading {
+        Reading::Unknown
+    }
+
+    fn last_words(&self, _folder: &str, _agent: &Identity) -> Option<String> {
+        None
+    }
+
+    fn stop_short(&self, _agent: &Identity) -> String {
+        String::new()
+    }
+
+    fn send_back(&self) -> Offered {
+        Offered::NotOffered
+    }
+
+    fn guard(&self, _folder: &str, _agent: &Identity) -> Guarded {
+        Guarded::NotOffered
+    }
+
+    fn on_quiet(&self) -> Offered {
+        Offered::NotOffered
+    }
+}
+
+#[test]
+fn a_profile_that_maps_no_mode() {
+    // A profile that keeps the seam's defaults refuses every entry, one
+    // of the four or its program's own, naming it, and reads no mode back
+    // (169, 170).
+    let words = Bare
+        .mode(&ModeEntry::Flume(Mode::Edits))
+        .expect_err("a profile that maps no mode mapped edits");
+    assert!(words.contains("`edits`"), "{words}");
+    let words = Bare
+        .mode(&ModeEntry::Own("careful".into()))
+        .expect_err("a profile that maps no mode mapped an own value");
+    assert!(words.contains("`careful`"), "{words}");
+    assert_eq!(Bare.mode_read_back(), Offered::NotOffered);
+}
+
+#[test]
+fn settings_under_others_take_the_mode_whole() {
+    // A table over a table is taken whole, never merged; a mode under
+    // settings that give none stands (32, 169).
+    let under = Settings {
+        mode: Some(programs()),
+        ..Settings::default()
+    };
+    let over = Settings {
+        mode: Some(ModeSetting::Programs(BTreeMap::from([(
+            "third".into(),
+            "full".into(),
+        )]))),
+        ..Settings::default()
+    };
+    assert_eq!(under.under(&over).mode, over.mode);
+    assert_eq!(under.under(&Settings::default()).mode, Some(programs()));
+    assert_eq!(Settings::default().under(&under).mode, Some(programs()));
 }
 
 #[test]
@@ -1416,7 +1728,8 @@ fn the_agent_seams_answers() {
     round_trips(Unsettled::default());
     assert_eq!(
         unsettled().words(),
-        "without AGENT_HOME, with another FLUME_STAGE, under another program"
+        "without AGENT_HOME, with another FLUME_STAGE, under another program, \
+         in the mode `ask-each`, where its start asked `careful`"
     );
     round_trips(Offered::Offered);
     round_trips(Offered::NotOffered);

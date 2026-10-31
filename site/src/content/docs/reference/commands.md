@@ -81,7 +81,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
-| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions` or `beside`. Repeatable. |
+| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside` or `mode`: `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. Repeatable. |
 | `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
 | `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
 
@@ -335,7 +335,7 @@ case do nothing.
 |---|---|
 | `flume needs <words>` | The stage ends short with the words: it needs an answer. `--found` says it found work it cannot deliver past instead. |
 | `flume ack started --session <id> --transcript <path> --plugin-version <v> [--source <how>]` | The agent started under its identity and secret, in a session with a transcript. `--source` says how the session began, `startup` where none is given. flume takes it only where the agent runs the program its start recorded and every variable of the record matches. Otherwise it refuses, naming each variable that differed and whether the program did, and starts a settle of the place. |
-| `flume ack received --digest <hex>` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. |
+| `flume ack received --digest <hex> [--mode <mode>]` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. At the start's first prompt, where its start passed a mode, flume takes it only where `--mode` names that mode as the program names it. Otherwise it refuses, naming the mode asked and the one given, records the start begun without its settings and starts a settle of the place. A later prompt compares no mode. |
 | `flume hook <event>` | What the hook for the event does with the input on standard input: `session-start`, `user-prompt-submit`, `pre-tool-use`, `permission-request`, `post-tool-use`, `stop`, `stop-failure` or `session-end`. Any other event does nothing. It always exits `0`. |
 
 flume's Claude Code plugin runs `flume hook` for every event;

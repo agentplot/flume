@@ -2,12 +2,18 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::AgentHarness, change::ChangeHarness, history::HistoryHarness, kinds::KindsHarness,
-    merge_queue::MergeQueueHarness, place::PlaceHarness, store::StoreHarness,
+    agent::{AgentHarness, Modes},
+    change::ChangeHarness,
+    history::HistoryHarness,
+    kinds::KindsHarness,
+    merge_queue::MergeQueueHarness,
+    place::PlaceHarness,
+    store::StoreHarness,
     terminal::TerminalHarness,
 };
 use flume_fakes::*;
 use flume_seams::*;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 const REPOSITORY: &str = "/repository";
@@ -248,12 +254,38 @@ pub struct FakeAgentHarness {
     pub agent: FakeAgent,
 }
 
+/// The fake agent's map of modes the seam's scenarios run with: each of
+/// flume's four to a setting of its own, and the own value `careful`
+/// (169).
+pub fn fake_modes() -> Modes {
+    Modes {
+        four: BTreeMap::from([
+            (Mode::Plan, "planning".to_string()),
+            (Mode::Ask, "ask-each".to_string()),
+            (Mode::Edits, "edits-only".to_string()),
+            (Mode::Full, "all".to_string()),
+        ]),
+        own: vec!["careful".into()],
+    }
+}
+
 impl Default for FakeAgentHarness {
+    /// The fake agent scripted with [`fake_modes`], reading the mode
+    /// back (161, 169).
     fn default() -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
+        let agent = FakeAgent::new(terminal.clone());
+        let modes = fake_modes();
+        for (mode, value) in &modes.four {
+            agent.map_mode(*mode, value);
+        }
+        for value in &modes.own {
+            agent.own_mode(value);
+        }
+        agent.read_mode_back();
         FakeAgentHarness {
-            agent: FakeAgent::new(terminal.clone()),
+            agent,
             terminal,
             host,
         }
@@ -339,6 +371,16 @@ impl AgentHarness for FakeAgentHarness {
                 ..Unsettled::default()
             },
         );
+    }
+
+    fn modes(&self) -> Modes {
+        fake_modes()
+    }
+
+    /// The fake compares `began` with the mode its command passed, which
+    /// is `asked`.
+    fn begin_in(&self, identity: &Identity, _asked: &str, began: &str) {
+        self.agent.set_began_in(identity, began);
     }
 }
 

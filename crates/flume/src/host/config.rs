@@ -7,8 +7,10 @@
 //! word left out is no bound and the printed command. Its
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
-//! give a kind's agents in every repository and in one their `model` and
-//! `instructions`, each kept as written (32, C.7; records 0017, 0020); a
+//! give a kind's agents in every repository and in one their `model`,
+//! `instructions` and `mode`, each kept as written, a mode one of
+//! flume's four or a table of programs whose entries are strings (32,
+//! 162, 169, C.7; records 0017, 0020, 0024); a
 //! repository's key has a leading `~` read as the home, so it names the
 //! repository by its location as a launch does. Its
 //! `[roles."<partition>/<role>"]` tables are the runs the host wakes for
@@ -499,18 +501,25 @@ fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
     Ok(runs)
 }
 
-/// One agents table's `model` and `instructions`, each as written; any
-/// other key, `stages` among them, is not a setting of the host's (32,
-/// C.7; record 0020).
+/// One agents table's `model`, `instructions` and `mode`, each as
+/// written, the mode read as a declaration's is (162, 169); any other
+/// key, `stages` among them, is not a setting of the host's (32, C.7;
+/// record 0020).
 fn agent_settings(table: &Table, at: &str) -> Result<Settings, String> {
     let text = |name: &str| match table.get(name) {
         None => Ok(None),
         Some(Value::String(value)) => Ok(Some(value.clone())),
         Some(_) => Err(format!("[{at}] {name} is not a string")),
     };
+    let mode = table
+        .get("mode")
+        .map(crate::mode::read)
+        .transpose()
+        .map_err(|reason| format!("[{at}] mode: {reason}"))?;
     Ok(Settings {
         model: text("model")?,
         instructions: text("instructions")?,
+        mode,
         ..Settings::default()
     })
 }
@@ -547,6 +556,7 @@ pub fn config_file() -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flume_seams::{Mode, ModeSetting};
 
     #[test]
     fn a_bound_and_a_terminal_stated() {
@@ -580,6 +590,50 @@ mod tests {
         let repository = &config.repos["/r"]["change"];
         assert_eq!(repository.every_stage, Settings::default());
         assert_eq!(repository.stages["verify"].model.as_deref(), Some("sonnet"));
+    }
+
+    #[test]
+    fn a_mode_for_a_kind_and_a_table_for_a_repositorys_stage() {
+        // 32, 162, C.7: one of flume's four at the host-kind layer, a
+        // table of programs for one stage at the host-repository layer.
+        let config = HostConfig::parse(
+            "[kinds.fix.agents]\nmode = \"edits\"\n\
+             [repos.\"/r\".kinds.fix.agents.stages.code]\nmode = { agent = \"careful\" }\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.kinds["fix"].every_stage.mode,
+            Some(ModeSetting::Flume(Mode::Edits))
+        );
+        let repository = &config.repos["/r"]["fix"];
+        assert_eq!(repository.every_stage, Settings::default());
+        assert_eq!(
+            repository.stages["code"].mode,
+            Some(ModeSetting::Programs(BTreeMap::from([(
+                "agent".to_string(),
+                "careful".to_string()
+            )])))
+        );
+    }
+
+    #[test]
+    fn a_mode_that_is_neither_is_refused_naming_the_table_and_mode() {
+        // 162, 169, C.7: a program's own value given bare, a number and a
+        // table whose entry is no string.
+        for mode in ["\"careful\"", "3", "{ agent = 3 }"] {
+            let text = format!("[kinds.fix.agents]\nmode = {mode}\n");
+            let refused = HostConfig::parse(&text).unwrap_err();
+            assert!(
+                refused.contains("kinds.fix.agents") && refused.contains("mode"),
+                "{text}: {refused}"
+            );
+        }
+        let refused = HostConfig::parse("[repos.\"/r\".kinds.fix.agents.stages.code]\nmode = {}\n")
+            .unwrap_err();
+        assert!(
+            refused.contains("kinds.fix.agents.stages.code") && refused.contains("mode"),
+            "{refused}"
+        );
     }
 
     #[test]

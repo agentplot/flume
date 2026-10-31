@@ -1,11 +1,13 @@
 //! A start whose agent began without its settings (35, 135, 161;
-//! core.10): where the agent program's own word at its start shows it
-//! began otherwise than its start recorded, the start is recorded so on
-//! the place by its variables' names alone, its agent is sent no prompt,
-//! and once quiet it is ended and its stage started afresh under the
-//! settings resolved then, counted toward no bound of the kind's and
-//! waiting on no caller (31, 112). A fresh start whose agent begins so
-//! again is never begun, its end naming the same.
+//! core.10): where the agent program's own word at its start, or at its
+//! start's first prompt for a mode its program names only with a prompt,
+//! shows it began otherwise than its start recorded, the start is
+//! recorded so on the place by its variables' names alone and its mode,
+//! its agent is sent no prompt, or none again, and once quiet it is ended
+//! and its stage started afresh under the settings resolved then, counted
+//! toward no bound of the kind's and waiting on no caller (31, 112). A
+//! fresh start whose agent begins so again is never begun, its end naming
+//! the same.
 
 use crate::start::{StartReason, Starts};
 use crate::{Engine, Step};

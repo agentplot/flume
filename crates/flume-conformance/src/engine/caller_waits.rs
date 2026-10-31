@@ -28,6 +28,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_hold_on_the_submission,
         },
         Scenario {
+            name: "caller waits: a fix of its base's failed checks, launched on the base with the failure's words as its brief and its submission held, is cut from the base's current revision, its code delivers and the place waits on the hold, and a retry naming the submission submits it and it lands",
+            cites: &["S64", "7", "22", "47", "49", "111", "131"],
+            run: s64_a_fix_of_its_bases_failed_checks,
+        },
+        Scenario {
             name: "caller waits: a hold on the stage whose agent works is refused naming the stage, and nothing changes",
             cites: &["130", "47", "8"],
             run: a_hold_on_a_running_stage,
@@ -250,6 +255,57 @@ fn a_hold_on_the_submission(_: &()) -> Outcome {
         world.status(&id)?.holds.is_empty(),
         "the submission still held"
     );
+    Ok(())
+}
+
+fn s64_a_fix_of_its_bases_failed_checks(_: &()) -> Outcome {
+    let world = World::new();
+    let failure = "main's checks failed at the landed revision: the test parser::reads_tabs panicked at src/parser.rs:41";
+    let base = world
+        .git
+        .branch_head(REPOSITORY, "main")
+        .ok_or("main has no head")?;
+    let mut fix = launch("fix", "main-checks", Some(failure));
+    fix.hold_submission = true;
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "main-checks");
+    world.settle(&id);
+    ensure_eq!(
+        world.git.branch_head(REPOSITORY, "fix/main-checks"),
+        Some(base),
+        "the fix's branch, cut from the base's current revision"
+    );
+    let code = World::identity("fix", "main-checks", "code", 1);
+    let prompt = world.prompt(&id, &code).ok_or("no prompt sent")?;
+    ensure!(
+        prompt.contains(failure),
+        "the prompt lacks the failure's words: {prompt}"
+    );
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Delivered),
+        "code"
+    );
+    ensure_eq!(world.queue.log.count("submit"), 0, "submissions held");
+    let status = world.status(&id)?;
+    ensure!(
+        status.submission.as_ref().is_some_and(|s| s.held),
+        "status gives the submission not held"
+    );
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage, waiting.why),
+        (Act::Retry, None, Waits::OnHold),
+        "the move the place waits on"
+    );
+    let retried = world.engine.retry(&id, Retry::Submission, None, false);
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    world.settle(&id);
+    ensure!(world.held(&id).is_none(), "the fix did not land");
     Ok(())
 }
 

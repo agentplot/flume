@@ -1,7 +1,9 @@
 //! Delivering a stage's prompt (35, 37, 38): a start is starting until
 //! its agent says it started, read begun without its settings where its
-//! agent's word shows so (161), and never begun at once when its agent
-//! stops first, or at the stage's limit while it stays starting; the
+//! agent's word shows so, at its start or, for a mode its program names
+//! only with a prompt, at its start's first prompt (161), and never begun
+//! at once when its agent stops first, or at the stage's limit while it
+//! stays starting or so begun; the
 //! prompt is sent only once the agent said it started and waits and is
 //! not asking, read within 60 seconds of each sending whether it was
 //! received, sent once more where the terminal can send, and reported
@@ -66,15 +68,18 @@ impl Engine {
             let identity = &start.identity;
             let prompt = &start.prompt;
             let folder = self.store.folder(id);
-            if stage.state == StageState::Starting {
-                // An agent begun without its settings is sent no prompt:
-                // it is ended once quiet and its stage started afresh
-                // (161).
-                if let Some(unsettled) = agent.started_without(&folder, identity) {
-                    if self.read_unsettled(id, index, &start, unsettled) {
-                        return true;
-                    }
-                } else if agent.started(&folder, identity) == Reading::Yes {
+            // An agent begun without its settings is sent no prompt, or
+            // none again where its word came at its start's first prompt,
+            // which it then did not take: it is ended once quiet and its
+            // stage started afresh (161).
+            let unsettled = agent.started_without(&folder, identity);
+            if let Some(unsettled) = &unsettled {
+                if self.read_unsettled(id, index, &start, unsettled.clone()) {
+                    return true;
+                }
+            }
+            if stage.state == StageState::Starting || unsettled.is_some() {
+                if unsettled.is_none() && agent.started(&folder, identity) == Reading::Yes {
                     self.with_start(id, identity, |start, state| {
                         start.dialog = None;
                         *state = StageState::Started;
@@ -85,7 +90,8 @@ impl Engine {
                 // The program may ask whether it may work in the place
                 // after the open returned: the terminal answers it where
                 // it shows it now (34, 35).
-                let answered = self.terminal.answer_trust(identity);
+                let answered =
+                    stage.state == StageState::Starting && self.terminal.answer_trust(identity);
                 let stopped =
                     self.state_of(Some(agent.as_ref()), &folder, identity) == AgentState::Stopped;
                 // Any other question it shows a person holds the start,

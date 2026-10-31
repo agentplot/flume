@@ -404,9 +404,12 @@ fn map_agents(
 }
 
 /// An agent's settings, its table as written: `program`, `model`,
-/// `instructions` and `beside` (32, 107); an `env` fails it, naming the
-/// field, since an agent's environment is its account's alone (144, C.2);
-/// every other key is the runner's, and ignored.
+/// `instructions`, `beside` and `mode` (32, 107, 162), the mode one of
+/// flume's four or a table of programs, read as the host's configuration
+/// reads it, any other failing it naming the field (169, C.2); an `env`
+/// fails it, naming the field, since an agent's environment is its
+/// account's alone (144, C.2); every other key is the runner's, and
+/// ignored.
 fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
     let mut text = |name: &str| match agent.get(name) {
         None => None,
@@ -420,6 +423,11 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
     let model = text("model");
     let instructions = text("instructions");
     let beside = text("beside");
+    let mode = agent.get("mode").and_then(|mode| {
+        crate::mode::read(mode)
+            .map_err(|reason| problems.push(format!("{at}.mode: {reason}")))
+            .ok()
+    });
     if agent.contains_key("env") {
         problems.push(format!(
             "{at}.env: an agent's environment is its account's to give, and no declaration gives one"
@@ -430,5 +438,6 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
         model,
         instructions,
         beside,
+        mode,
     }
 }

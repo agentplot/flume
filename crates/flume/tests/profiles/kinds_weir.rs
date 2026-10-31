@@ -1,6 +1,7 @@
 //! The kinds profile over weir's kind format (C.2; design 7): the kinds
 //! seam's scenarios against it on scratch repositories, S13, S33, a
-//! stage's repeat (140; weir 53, 57), an elaboration section, the binding
+//! stage's repeat (140; weir 53, 57), an agents table's mode (162, 169),
+//! an elaboration section, the binding
 //! from the default branch, a place profile flume does not hold, flume's
 //! own kinds, one declaration per version with change@1 and change@2
 //! side by side, and what their prompts ask (22, 141, 157).
@@ -17,6 +18,7 @@ use flume_core::Answer;
 use flume_fakes::Plan;
 use flume_seams::*;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -562,6 +564,100 @@ agents = [{ env = { B = "c" } }]
         ),
         other => panic!("a launch's declaration giving an environment read as {other:?}"),
     }
+}
+
+#[test]
+fn a_mode_for_every_stage_and_a_table_for_one() {
+    // 23, 162, C.2: a kind's agents table gives one of flume's four for
+    // every stage, and a stage's a table of programs, kept as written.
+    let repository = Repository::new("declared-mode");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.bump.agents]
+mode = "edits"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ mode = { claude = "auto" } }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("a mode for bump and a table for its code");
+    let revision = Revision::new(repository.head());
+    let KindsRead::Read { kinds, .. } = Weir.read_kinds(&repository.name(), &revision) else {
+        panic!("the declaration did not read");
+    };
+    let bump = &kinds[0];
+    assert_eq!(
+        bump.agents.every_stage.mode,
+        Some(ModeSetting::Flume(Mode::Edits))
+    );
+    assert_eq!(
+        bump.stages[0].agents[0].mode,
+        Some(ModeSetting::Programs(BTreeMap::from([(
+            "claude".to_string(),
+            "auto".to_string()
+        )])))
+    );
+}
+
+#[test]
+fn a_mode_that_is_neither_refuses_the_launch_naming_the_field() {
+    // 4, 169, C.2: a program's own value given bare, a list and a table
+    // naming no program each fail the read, naming the table's `mode`, in
+    // a repository's table for a kind it does not declare, in a stage's
+    // of a kind's own and in its agents table; the launch is refused with
+    // nothing made.
+    let repository = Repository::new("declared-bad-mode");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.change.agents]
+mode = "auto"
+
+[kinds.bump.agents.stages.code]
+mode = {}
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ mode = ["edits"] }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("modes that are neither");
+    let name = repository.name();
+    let head = repository.head();
+    match Weir.read_kinds(&name, &Revision::new(head.clone())) {
+        KindsRead::CouldNotRead { reason } => {
+            for field in [
+                "kinds.change.agents.mode",
+                "kinds.bump.agents.stages.code.mode",
+                "kinds.bump.stages[0].agents[0].mode",
+                "`auto`",
+            ] {
+                assert!(
+                    reason.contains(field),
+                    "the read names not {field}: {reason}"
+                );
+            }
+        }
+        other => panic!("a declaration giving modes that are neither read as {other:?}"),
+    }
+    let world = World::new();
+    base_at(&world, &name, &head);
+    let mut change = launch("change", "one", Some("x"));
+    change.repository = name;
+    let reason =
+        refused(&engine(&world, Arc::new(Weir)).launch(&change)).expect("the launch refused");
+    assert!(
+        reason.contains("kinds.change.agents.mode"),
+        "the refusal names not the field: {reason}"
+    );
+    assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
 }
 
 #[test]
