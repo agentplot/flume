@@ -22,19 +22,17 @@ on a remote, flume fetches that remote first and cuts the branch from
 the remote's revision; a launch whose fetch fails is refused. With no
 merge queue bound, it cuts from the local base.
 
-The repository is the directory git finds one in. A place goes inside
-no working tree of it, so the repository's status, its formatters and
-its other tools never see one:
-
-- In a bare layout, `project/project.git` with its worktrees beside it,
-  the repository is `project`, and places go beside the worktrees, under
-  `project/places/`.
-- In a clone, whose directory is its main worktree, places go under
-  flume's own data directory,
-  `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`, by default
-  `~/.local/share/flume/places/<id>/`, where `<id>` is the repository's,
-  the same id its agents' identities carry. `flume status` names each
-  place's location.
+The repository is the directory git finds one in, a clone's main
+worktree, or, in a bare layout, `project/project.git` with its
+worktrees beside it, the directory `project`. Every place goes under
+flume's own data directory, inside no working tree or directory of the
+repository, so the repository's status, its formatters and its other
+tools never see one: `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`,
+by default `~/.local/share/flume/places/<id>/`, where `<id>` is the
+repository's, the same id its agents' identities carry. `flume status`
+names each place's location. A place an earlier flume made at
+`<repository>/places/<kind>--<name>` stays there until it is tidied,
+and is named by its kind and name as before.
 
 A repository binds the place tool in its `.config/flume.toml`:
 

@@ -42,8 +42,8 @@ parallel = 1
 ```
 
 flume reads both at the base's current revision, so they are committed
-on `main`. `~/src/acme` is a clone, so its places go under flume's
-data directory, by the repository's id, and never show in its status.
+on `main`. Its places go under flume's data directory, by the
+repository's id, and never show in its status.
 [sluice's own guide](https://agentplot.github.io/sluice/guides/walkthrough/)
 says how to set sluice up.
 

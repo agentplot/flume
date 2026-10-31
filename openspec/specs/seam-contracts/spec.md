@@ -87,15 +87,27 @@ place's own folder beside its held state, for a report kept there (128,
 ### Requirement: The place seam says where a place is made
 
 The place seam SHALL answer where a place of a repository, named
-`<kind>--<name>`, is made, the same at every ask and its own, or why it
-cannot say; a launch SHALL make its place there, its id that location,
-and a launch whose location cannot be found SHALL be refused naming why
-(2, 3, 8, 78, C.1; record 0027).
+`<kind>--<name>`, is made, the same at every ask, its own, and outside
+the repository's directory, or why it cannot say; a launch SHALL make
+its place there, its id that location, and a launch whose location
+cannot be found SHALL be refused naming why; a place made where the
+seam no longer gives SHALL be read, submitted and tidied where it
+stands (2, 3, 8, 76, 78, C.1; record 0027).
 
 #### Scenario: The launch makes its place where the seam says
 
-- **WHEN** a fix is launched over the fake place, which gives `<repository>/places/<kind>--<name>`
+- **WHEN** a fix is launched over the fake place, which gives `/host/data/flume/places/<the repository flattened>/<kind>--<name>`
 - **THEN** the place is made at that location, and its held state's id is that location
+
+#### Scenario: A location outside the repository's directory
+
+- **WHEN** the place seam is asked where a place of a repository goes
+- **THEN** the location lies outside the repository's directory
+
+#### Scenario: A place made where the seam no longer gives
+
+- **WHEN** a fix is launched over the fake place giving `<repository>/places/fix--one`, the fake then gives its data directory's, a fix of the same name is launched, and the first's code delivers
+- **THEN** the second launch is refused naming `fix/one`, and the first place is submitted, lands and is removed at `<repository>/places/fix--one`
 
 ### Requirement: The types the seams pass
 
