@@ -72,7 +72,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "launch: a place the place seam gives no location refuses the launch, nothing made",
-            cites: &["2", "8", "C.1"],
+            cites: &["2", "78"],
             run: no_location,
         },
         Scenario {

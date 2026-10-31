@@ -66,7 +66,7 @@ pub fn scenarios<H: PlaceHarness>() -> Vec<Scenario<H>> {
     vec![
         Scenario {
             name: "place: each place's location is its own, and the same at every ask",
-            cites: &["3", "78", "C.1"],
+            cites: &["3", "78"],
             run: a_location_is_the_places_own::<H>,
         },
         Scenario {
