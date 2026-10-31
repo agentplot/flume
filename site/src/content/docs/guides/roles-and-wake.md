@@ -51,8 +51,8 @@ brief = "Read the records and plan the next unit."
 A key the table does not know, or a key that is no address, makes the
 host's configuration unreadable, and every command of flume's says so.
 
-A run of the role is a place like any other: `<repository>/places/<kind>--<role>`,
-here `places/planner--planner`, named by the role, with the address as
+A run of the role is a place like any other, `<kind>--<role>`, here
+`planner--planner`, named by the role, with the address as
 its role and as the session name its agents carry. It has no recipient
 of its own. Since the run's name is the role's, at most one run of an
 address stands at a time.

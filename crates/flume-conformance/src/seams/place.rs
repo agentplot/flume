@@ -13,10 +13,6 @@ pub trait PlaceHarness {
     /// A repository, its base branch and the base's head.
     fn repository(&self) -> (String, String, Revision);
 
-    /// A place's location in `repository` for `name`, where nothing
-    /// stands.
-    fn location(&self, repository: &str, name: &str) -> String;
-
     /// A branch made at a commit of its own, as by a hand.
     fn branch(&self, repository: &str, branch: &str) -> Revision;
 
@@ -41,10 +37,18 @@ pub trait PlaceHarness {
     fn apply_to_base(&self, repository: &str, base: &str, commit: &Revision);
 }
 
+/// The location the seam gives the place `fix--<name>` of `repository`.
+fn location<H: PlaceHarness>(harness: &H, repository: &str, name: &str) -> Result<String, String> {
+    harness
+        .seam()
+        .location(repository, &format!("fix--{name}"))
+        .map_err(|reason| format!("no location for fix--{name}: {reason}"))
+}
+
 fn made<H: PlaceHarness>(harness: &H, name: &str) -> Result<(PlaceRef, Revision), String> {
     let (repository, base, revision) = harness.repository();
     let place = PlaceRef {
-        location: harness.location(&repository, name),
+        location: location(harness, &repository, name)?,
         branch: format!("fix/{name}"),
         repository: repository.clone(),
         base,
@@ -60,6 +64,11 @@ fn made<H: PlaceHarness>(harness: &H, name: &str) -> Result<(PlaceRef, Revision)
 
 pub fn scenarios<H: PlaceHarness>() -> Vec<Scenario<H>> {
     vec![
+        Scenario {
+            name: "place: each place's location is its own, and the same at every ask",
+            cites: &["3", "78"],
+            run: a_location_is_the_places_own::<H>,
+        },
         Scenario {
             name: "place: make cuts a new branch at the revision",
             cites: &["78", "9"],
@@ -98,6 +107,19 @@ pub fn scenarios<H: PlaceHarness>() -> Vec<Scenario<H>> {
     ]
 }
 
+fn a_location_is_the_places_own<H: PlaceHarness>(harness: &H) -> Outcome {
+    let (repository, _, _) = harness.repository();
+    let one = location(harness, &repository, "one")?;
+    let two = location(harness, &repository, "two")?;
+    ensure!(one != two, "two places given one location: {one}");
+    ensure_eq!(
+        location(harness, &repository, "one")?,
+        one,
+        "the location asked again"
+    );
+    Ok(())
+}
+
 fn make_cuts_a_branch<H: PlaceHarness>(harness: &H) -> Outcome {
     let (place, revision) = made(harness, "cut")?;
     ensure_eq!(
@@ -118,7 +140,7 @@ fn make_cuts_a_branch<H: PlaceHarness>(harness: &H) -> Outcome {
 fn make_refuses_an_existing_branch<H: PlaceHarness>(harness: &H) -> Outcome {
     let (repository, _, revision) = harness.repository();
     let held = harness.branch(&repository, "fix/taken");
-    let location = harness.location(&repository, "taken");
+    let location = location(harness, &repository, "taken")?;
     let outcome = harness
         .seam()
         .make(&repository, &revision, "fix/taken", &location);
@@ -140,7 +162,7 @@ fn make_refuses_an_existing_branch<H: PlaceHarness>(harness: &H) -> Outcome {
 
 fn make_refuses_an_existing_location<H: PlaceHarness>(harness: &H) -> Outcome {
     let (repository, _, revision) = harness.repository();
-    let location = harness.location(&repository, "occupied");
+    let location = location(harness, &repository, "occupied")?;
     harness.occupy(&location);
     let outcome = harness
         .seam()

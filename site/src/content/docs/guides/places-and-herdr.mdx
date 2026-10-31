@@ -14,19 +14,27 @@ in herdr panes, or as commands flume prints.
 
 ## The place
 
-flume makes a plain `git worktree` of the repository at
-`<repository>/places/<kind>--<name>`, on the branch `<prefix>/<name>`,
-where the prefix is the kind's. It cuts the branch from the base's
+flume makes a plain `git worktree` of the repository, named
+`<kind>--<name>`, on the branch `<prefix>/<name>`, where the prefix is
+the kind's. It cuts the branch from the base's
 current revision. Where the repository's sluice policy lands the base
 on a remote, flume fetches that remote first and cuts the branch from
 the remote's revision; a launch whose fetch fails is refused. With no
 merge queue bound, it cuts from the local base.
 
-The repository is the directory git finds one in. In a bare layout,
-`project/project.git` with its worktrees beside it, the repository is
-`project`, and places go under `project/places/`. List `places/` in
-the repository's `.gitignore` where the places would otherwise show as
-untracked files.
+The repository is the directory git finds one in. A place goes inside
+no working tree of it, so the repository's status, its formatters and
+its other tools never see one:
+
+- In a bare layout, `project/project.git` with its worktrees beside it,
+  the repository is `project`, and places go beside the worktrees, under
+  `project/places/`.
+- In a clone, whose directory is its main worktree, places go under
+  flume's own data directory,
+  `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`, by default
+  `~/.local/share/flume/places/<id>/`, where `<id>` is the repository's,
+  the same id its agents' identities carry. `flume status` names each
+  place's location.
 
 A repository binds the place tool in its `.config/flume.toml`:
 
@@ -66,7 +74,7 @@ stripped:
 
 ```console
 $ flume status change--tabs-in-quotes
-~/src/acme/places/change--tabs-in-quotes: change@2 (flume), live
+~/.local/share/flume/places/f5f5e14159a8/change--tabs-in-quotes: change@2 (flume), live
   branch change/tabs-in-quotes from main, head 84130b3cd2adae9a0ac2117884849d513da80181
   …
   readiness toolchain: passed
@@ -243,8 +251,8 @@ place or all. flume:
    flume names it once:
 
    ```text
-   removed ~/src/acme/places/chore--tidy-the-readme
-   kept the branch chore/tidy-the-readme of ~/src/acme/places/chore--tidy-the-readme, 1 commits not landed
+   removed ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme
+   kept the branch chore/tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme, 1 commits not landed
    ```
 
 4. under herdr, closes the place's tab, and its base's workspace once

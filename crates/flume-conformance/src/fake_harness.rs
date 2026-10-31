@@ -119,10 +119,6 @@ impl PlaceHarness for FakePlaceHarness {
         (REPOSITORY.into(), "main".into(), head)
     }
 
-    fn location(&self, repository: &str, name: &str) -> String {
-        format!("{repository}/places/fix--{name}")
-    }
-
     fn branch(&self, repository: &str, branch: &str) -> Revision {
         let base = self.git.branch_head(repository, "main").expect("main");
         self.git.set_branch(repository, branch, &base);

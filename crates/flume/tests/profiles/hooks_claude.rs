@@ -9,6 +9,7 @@
 
 use super::agent_claude::fixture;
 use crate::common::*;
+use flume::profiles::place::git_worktree;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -87,7 +88,6 @@ impl Host {
             ".config/flume.toml",
             "[profiles]\nplace = \"git-worktree\"\n",
         );
-        repository.write(".gitignore", "places/\n");
         repository.commit("the binding");
         let host = Host { repository };
         for dir in [
@@ -179,7 +179,12 @@ impl Host {
             "",
         );
         assert_eq!(ran.code, 0, "the launch: {}", ran.out);
-        let place = format!("{}/places/{kind}--one", self.repository.name());
+        let place = git_worktree::location(
+            &self.repository.name(),
+            &format!("{kind}--one"),
+            Some(&self.path("data/flume")),
+        )
+        .expect("the place's location");
         self.agent(&place)
     }
 

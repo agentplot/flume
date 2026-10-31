@@ -52,8 +52,8 @@ impl fmt::Display for Revision {
     }
 }
 
-/// A place, by its location `<repository>/places/<kind>--<name>` (C.1),
-/// which names one place on the host.
+/// A place, by the location the place profile made it at (C.1), which
+/// names one place on the host.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PlaceId(pub String);

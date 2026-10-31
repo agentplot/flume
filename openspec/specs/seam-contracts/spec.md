@@ -84,6 +84,19 @@ place's own folder beside its held state, for a report kept there (128,
 - **WHEN** the fake merge queue refuses to give the base's revision, naming a failed fetch
 - **THEN** the launch is refused naming the fetch, and nothing is made
 
+### Requirement: The place seam says where a place is made
+
+The place seam SHALL answer where a place of a repository, named
+`<kind>--<name>`, is made, the same at every ask and its own, or why it
+cannot say; a launch SHALL make its place there, its id that location,
+and a launch whose location cannot be found SHALL be refused naming why
+(2, 3, 8, 78, C.1; record 0027).
+
+#### Scenario: The launch makes its place where the seam says
+
+- **WHEN** a fix is launched over the fake place, which gives `<repository>/places/<kind>--<name>`
+- **THEN** the place is made at that location, and its held state's id is that location
+
 ### Requirement: The types the seams pass
 
 The seams SHALL pass one type for each of: a launch with its priority,

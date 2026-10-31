@@ -24,6 +24,7 @@ struct PlaceState {
     teardown: BTreeMap<String, (String, String)>,
     unreadable: BTreeMap<String, String>,
     refusal: Option<String>,
+    unlocated: Option<String>,
 }
 
 impl FakePlace {
@@ -82,6 +83,12 @@ impl FakePlace {
         lock(&self.state).refusal = Some(reason.into());
     }
 
+    /// No place given a location, for `reason`, as a host with no data
+    /// directory would.
+    pub fn refuse_locations(&self, reason: &str) {
+        lock(&self.state).unlocated = Some(reason.into());
+    }
+
     /// The worktree at `location` removed through its teardown by another
     /// than flume, as a merge queue that removes a landed place does.
     pub fn vanish(&self, location: &str) {
@@ -96,6 +103,13 @@ impl FakePlace {
 }
 
 impl Place for FakePlace {
+    fn location(&self, repository: &str, place: &str) -> Result<String, String> {
+        match &lock(&self.state).unlocated {
+            Some(reason) => Err(reason.clone()),
+            None => Ok(format!("{repository}/places/{place}")),
+        }
+    }
+
     fn make(
         &self,
         repository: &str,
