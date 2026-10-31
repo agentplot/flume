@@ -32,11 +32,14 @@ fn binding(merge_queue: Option<&str>) -> Binding {
     }
 }
 
-/// A place of `repository` on `fix/<name>` made through `seam`.
+/// A place of `repository` on `fix/<name>` made through `seam`, where
+/// the seam says.
 fn made(seam: &dyn Place, repository: &Repository, name: &str) -> PlaceRef {
     let place = PlaceRef {
         repository: repository.name(),
-        location: format!("{}/places/fix--{name}", repository.name()),
+        location: seam
+            .location(&repository.name(), &format!("fix--{name}"))
+            .expect("the place's location"),
         branch: format!("fix/{name}"),
         base: "main".into(),
     };
@@ -104,6 +107,16 @@ agents = [{}]
     let Answer::Launched { place } = answer else {
         panic!("the launch answered otherwise: {answer:?}");
     };
+    // The repository is a clone, so its place goes under flume's own data
+    // directory, the login environment's (record 0027).
+    let location = Path::new(&place.place.0).to_path_buf();
+    assert!(location.is_dir(), "{}", location.display());
+    assert!(
+        location.starts_with(scratch.path("home/.local/share/flume/places")),
+        "{}",
+        location.display()
+    );
+    assert!(location.ends_with("survey--first"));
     let agent = place.agent.expect("the stage's agent");
     assert_eq!(agent.program, DEFAULT_PROGRAM);
     let printed = agent.printed.expect("the command printed");
@@ -116,7 +129,6 @@ agents = [{}]
         ),
         "{printed}"
     );
-    assert!(repository.dir.join("places/survey--first").is_dir());
 }
 
 #[test]

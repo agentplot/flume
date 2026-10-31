@@ -70,6 +70,10 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 struct LaxPlace(FakePlaceHarness);
 
 impl Place for LaxPlace {
+    fn location(&self, repository: &str, place: &str) -> Result<String, String> {
+        self.0.place.location(repository, place)
+    }
+
     fn make(
         &self,
         repository: &str,
@@ -107,10 +111,6 @@ impl PlaceHarness for LaxPlace {
 
     fn repository(&self) -> (String, String, Revision) {
         self.0.repository()
-    }
-
-    fn location(&self, repository: &str, name: &str) -> String {
-        self.0.location(repository, name)
     }
 
     fn branch(&self, repository: &str, branch: &str) -> Revision {

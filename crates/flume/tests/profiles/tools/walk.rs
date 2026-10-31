@@ -16,6 +16,7 @@
 //! core.22, core.29): the remote is a directory.
 
 use crate::common::*;
+use flume::profiles::place::git_worktree;
 use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -93,7 +94,6 @@ impl Walk {
         repository.write(".config/sluice.toml", POLICY);
         repository.write(".config/flume.toml", BINDING);
         repository.write("check.sh", CHECK);
-        repository.write(".gitignore", "places/\n");
         repository.write("openspec/config.yaml", "schema: spec-driven\n");
         repository.write("work.rs", "one\n");
         repository.commit("the binding, the gate and the specs' root");
@@ -290,7 +290,12 @@ impl Walk {
         let mut launch = vec!["launch", "--kind", kind, "--name", name];
         launch.extend(words);
         self.flume(&launch);
-        format!("{}/places/{kind}--{name}", self.repository.name())
+        git_worktree::location(
+            &self.repository.name(),
+            &format!("{kind}--{name}"),
+            Some(&self.home.join("data/flume")),
+        )
+        .expect("the place's location")
     }
 
     /// Every place's status and the host's.

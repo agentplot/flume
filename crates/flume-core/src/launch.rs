@@ -231,7 +231,9 @@ impl Engine {
                 launch.name
             ));
         }
-        let location = format!("{repository}/places/{}--{}", kind.name, launch.name);
+        let location = place_seam
+            .location(repository, &format!("{}--{}", kind.name, launch.name))
+            .map_err(|reason| format!("the place's location could not be found: {reason}"))?;
         let id = PlaceId::new(location.clone());
         if reads {
             let change = change.as_ref().expect("bound");

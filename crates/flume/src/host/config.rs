@@ -543,6 +543,11 @@ pub fn flume_state() -> Result<PathBuf, String> {
     xdg("XDG_STATE_HOME", ".local/state").map(|dir| dir.join("flume"))
 }
 
+/// flume's own data on the host, `$XDG_DATA_HOME/flume` (C.7).
+pub fn flume_data() -> Result<PathBuf, String> {
+    xdg("XDG_DATA_HOME", ".local/share").map(|dir| dir.join("flume"))
+}
+
 /// The host's configuration file, `$XDG_CONFIG_HOME/flume/config.toml`.
 pub fn config_file() -> Result<PathBuf, String> {
     xdg("XDG_CONFIG_HOME", ".config").map(|dir| dir.join("flume").join("config.toml"))

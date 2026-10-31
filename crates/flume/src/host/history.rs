@@ -85,12 +85,7 @@ impl History for GitHistory {
     }
 
     fn common_dir(&self, repository: &str) -> Option<String> {
-        let common = Git::at(repository)
-            .text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])
-            .ok()?;
-        let common = std::path::PathBuf::from(common.trim());
-        let common = common.canonicalize().unwrap_or(common);
-        Some(common.to_string_lossy().into_owned())
+        Git::at(repository).common_dir().ok()
     }
 
     /// The remote `origin`'s default branch where the repository has the

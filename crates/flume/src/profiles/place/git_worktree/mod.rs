@@ -1,12 +1,20 @@
 //! The place profile over plain `git worktree` (C.1; design 9). A place
-//! is a worktree of the repository at `<repository>/places/<kind>--<name>`
-//! on a branch of its own, made with no hook run (78), read by `git
-//! status` and the worktree's lock (80), removed by the teardown it was
-//! handed and `git worktree remove` with no force (81, core.18), and its
-//! branch removed only where `git cherry` against the base names no
-//! commit the base lacks (82, 67). The repository is the directory git
-//! finds one in, or the one holding a bare repository beside its
-//! worktrees (`project/project.git`, `project/main`).
+//! is a worktree of the repository on a branch of its own, made with no
+//! hook run (78), read by `git status` and the worktree's lock (80),
+//! removed by the teardown it was handed and `git worktree remove` with no
+//! force (81, core.18), and its branch removed only where `git cherry`
+//! against the base names no commit the base lacks (82, 67). The
+//! repository is the directory git finds one in, or the one holding a
+//! bare repository beside its worktrees (`project/project.git`,
+//! `project/main`).
+//!
+//! A place is made inside no working tree of its repository (record
+//! 0027): at `<repository>/places/<kind>--<name>` where the repository's
+//! directory holds its bare repository beside its worktrees, and under
+//! flume's own data directory, at `places/<id>/<kind>--<name>`, where the
+//! repository's directory is its main worktree, the id its common git
+//! directory's as its agents' identities name it (C.4). A place is read
+//! and removed at the location it was made at, wherever that is.
 //!
 //! The readiness, the teardown and where the base lives are the merge
 //! queue profile's to declare; the binary's resolver hands them to this
@@ -140,6 +148,9 @@ impl Login {
 pub struct GitWorktree {
     data: PlaceData,
     login: Login,
+    /// flume's own data directory, `$XDG_DATA_HOME/flume`, where it could
+    /// be found.
+    own: Option<PathBuf>,
 }
 
 /// The name a place profile binding gives this profile (C.1).
@@ -155,6 +166,32 @@ const REMOVE_STEP: &str = "git worktree remove";
 /// The most of a step's words kept, its end.
 const WORDS: usize = 4000;
 
+/// Where the place `place`, `<kind>--<name>`, of `repository` is made
+/// (3, C.1; record 0027): `<repository>/places/<place>` where the
+/// repository's directory holds its bare repository beside its
+/// worktrees, so the place is inside none of them; else under `own`,
+/// flume's own data directory, at `places/<id>/<place>`, the id the
+/// repository's, of its common git directory (C.4), since the
+/// repository's directory is then its main worktree.
+pub fn location(repository: &str, place: &str, own: Option<&Path>) -> Result<String, String> {
+    let git = Git::at(repository);
+    if git.holds_bare() {
+        return Ok(format!("{repository}/places/{place}"));
+    }
+    let own = own.ok_or_else(|| {
+        format!(
+            "{repository} is a working tree, so its places go under flume's data directory, and neither $XDG_DATA_HOME nor $HOME is set"
+        )
+    })?;
+    let common = git.common_dir().unwrap_or_else(|_| repository.to_string());
+    Ok(canonical(own)
+        .join("places")
+        .join(flume_core::repository_id(&common))
+        .join(place)
+        .to_string_lossy()
+        .into_owned())
+}
+
 impl GitWorktree {
     /// The profile bound with `data`, its steps run in the host user's
     /// login environment.
@@ -164,7 +201,19 @@ impl GitWorktree {
 
     /// The profile bound with `data`, its steps run in `login`.
     pub fn with_login(data: PlaceData, login: Login) -> GitWorktree {
-        GitWorktree { data, login }
+        GitWorktree {
+            data,
+            login,
+            own: crate::host::config::flume_data().ok(),
+        }
+    }
+
+    /// The profile with `own` for flume's own data directory.
+    pub fn with_own(self, own: &Path) -> GitWorktree {
+        GitWorktree {
+            own: Some(own.into()),
+            ..self
+        }
     }
 
     /// The worktree entry of `location` in `repository`'s list, if git
@@ -333,6 +382,10 @@ fn status(text: &str) -> (Option<String>, Option<String>, Holds) {
 }
 
 impl Place for GitWorktree {
+    fn location(&self, repository: &str, place: &str) -> Result<String, String> {
+        location(repository, place, self.own.as_deref())
+    }
+
     fn make(
         &self,
         repository: &str,

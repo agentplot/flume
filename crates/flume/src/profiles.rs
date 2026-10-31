@@ -13,7 +13,7 @@ use flume_seams::{
     PlaceRef, Readiness, ReadyStep, Removed, Resolver, Revision, Settings, Terminal,
 };
 use place::git_worktree::{self, GitWorktree, Login, PlaceData, Step};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 // ---- the place seam's profiles: a profile unit appends its module line below ----
@@ -103,6 +103,23 @@ impl BuiltIn {
             ),
         }
     }
+
+    /// The login environment's `$XDG_DATA_HOME`, or its
+    /// `$HOME/.local/share`, where the resolver was given one.
+    fn login_data(&self) -> Option<PathBuf> {
+        let variables = self.login.as_ref()?;
+        let given = |name: &str| {
+            variables
+                .iter()
+                .find(|(variable, value)| variable == name && !value.is_empty())
+                .map(|(_, value)| PathBuf::from(value))
+        };
+        Some(given("XDG_DATA_HOME").unwrap_or_else(|| {
+            given("HOME")
+                .unwrap_or_else(std::env::temp_dir)
+                .join(".local/share")
+        }))
+    }
 }
 
 impl Resolver for BuiltIn {
@@ -120,6 +137,7 @@ impl Resolver for BuiltIn {
                 repository: repository.into(),
                 merge_queue: binding.merge_queue.clone(),
                 login: self.login.clone(),
+                own: self.login_data().map(|data| data.join("flume")),
             })),
             Some(_) => None,
         }
@@ -151,20 +169,9 @@ impl Resolver for BuiltIn {
         if name != agent::claude::NAME {
             return None;
         }
-        let claude = match &self.login {
+        let claude = match self.login_data() {
             None => agent::claude::Claude::of_host(),
-            Some(variables) => {
-                let given = |name: &str| {
-                    variables
-                        .iter()
-                        .find(|(variable, value)| variable == name && !value.is_empty())
-                        .map(|(_, value)| std::path::PathBuf::from(value))
-                };
-                let data = given("XDG_DATA_HOME").unwrap_or_else(|| {
-                    given("HOME")
-                        .unwrap_or_else(std::env::temp_dir)
-                        .join(".local/share")
-                });
+            Some(data) => {
                 let binary = std::env::current_exe()
                     .and_then(std::fs::canonicalize)
                     .unwrap_or_else(|_| "flume".into());
@@ -181,11 +188,14 @@ impl Resolver for BuiltIn {
 /// base lives, read from the merge queue's policy at the base's current
 /// revision, none of it where no merge queue is bound. The resolver
 /// hands the one profile's data to the other, and neither calls the
-/// other (core.2).
+/// other (core.2). flume's own data directory, where a clone's places go
+/// (record 0027), is the login environment's where the resolver was
+/// given one, as the plugin's is.
 struct BoundPlace {
     repository: String,
     merge_queue: Option<String>,
     login: Option<Vec<(String, String)>>,
+    own: Option<PathBuf>,
 }
 
 /// The step a place's data is named by where the merge queue's policy
@@ -217,7 +227,7 @@ impl BoundPlace {
 
     /// The profile bound with `data`.
     fn bound(&self, data: PlaceData) -> GitWorktree {
-        match &self.login {
+        let profile = match &self.login {
             Some(variables) => {
                 let variables: Vec<(&str, &str)> = variables
                     .iter()
@@ -226,11 +236,19 @@ impl BoundPlace {
                 GitWorktree::with_login(data, Login::given(&variables))
             }
             None => GitWorktree::new(data),
+        };
+        match &self.own {
+            Some(own) => profile.with_own(own),
+            None => profile,
         }
     }
 }
 
 impl Place for BoundPlace {
+    fn location(&self, repository: &str, place: &str) -> Result<String, String> {
+        self.bound(PlaceData::default()).location(repository, place)
+    }
+
     fn make(
         &self,
         repository: &str,

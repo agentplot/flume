@@ -67,6 +67,22 @@ impl Git {
         }
     }
 
+    /// Whether the directory named holds the bare repository beside its
+    /// worktrees, so it is inside none of them, rather than being a
+    /// directory git finds a repository from.
+    pub fn holds_bare(&self) -> bool {
+        matches!(self.at, At::GitDir(_))
+    }
+
+    /// The repository's common git directory, by its absolute path with
+    /// every link resolved.
+    pub fn common_dir(&self) -> Result<String, String> {
+        let common = self.text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+        let common = PathBuf::from(common.trim());
+        let common = common.canonicalize().unwrap_or(common);
+        Ok(common.to_string_lossy().into_owned())
+    }
+
     fn command(&self, args: &[&str]) -> Command {
         let mut command = Command::new("git");
         match &self.at {

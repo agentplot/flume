@@ -71,6 +71,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_refused_make,
         },
         Scenario {
+            name: "launch: a place the place seam gives no location refuses the launch, nothing made",
+            cites: &["2", "78"],
+            run: no_location,
+        },
+        Scenario {
             name: "launch: a base whose revision cannot be read refuses the launch",
             cites: &["9", "2"],
             run: no_base_revision,
@@ -504,6 +509,25 @@ fn a_refused_make(_: &()) -> Outcome {
         reason.contains(&location),
         "the refusal names not the location: {reason}"
     );
+    ensure!(world.store.places().is_empty(), "held state was left");
+    ensure!(
+        world.git.branch_head(REPOSITORY, "fix/one").is_none(),
+        "a branch was left"
+    );
+    Ok(())
+}
+
+fn no_location(_: &()) -> Outcome {
+    let world = World::new();
+    world
+        .place
+        .refuse_locations("neither $XDG_DATA_HOME nor $HOME is set");
+    let reason = refused(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure!(
+        reason.contains("location") && reason.contains("$XDG_DATA_HOME"),
+        "the refusal names not why: {reason}"
+    );
+    ensure_eq!(makes(&world.place.log), 0, "makes");
     ensure!(world.store.places().is_empty(), "held state was left");
     ensure!(
         world.git.branch_head(REPOSITORY, "fix/one").is_none(),
