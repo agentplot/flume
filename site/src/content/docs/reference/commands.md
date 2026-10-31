@@ -71,7 +71,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 |---|---|
 | `--kind <kind>` | The kind, resolved from the launch's `--kinds` file, then the repository's `.config/flume.toml` at the base, then flume's own. Required. |
 | `--name <name>` | The work's name, which names its branch, `<prefix>/<name>`, and its place, `places/<kind>--<name>`. Required. |
-| `--base <branch>` | The branch the place is cut from and lands on; the repository's default branch where none is named. |
+| `--base <branch>` | The branch the place is cut from and lands on; where none is named, the repository's [default branch](/flume/reference/configuration/#the-repositorys-configflumetoml), its remote's. |
 | `--brief <text>` | What the work is, given whole to every stage whose prompt asks for `{{brief}}`. |
 | `--brief-file <file>` | The brief, read from a file once at the launch. |
 | `--kinds <file>` | A declaration of kinds the launch carries, read from disk with its prompts beside it. |
@@ -122,7 +122,9 @@ With a place, its status; with none, every place on the host. Each
 place gives:
 
 - its kind, version and origin, and its phase, live or tidied;
-- its branch, base and head, and its readiness steps;
+- its branch, base and head, and whether each readiness step passed or
+  failed, with the last ten lines a failed step printed, its terminal
+  escapes stripped;
 - each stage's state and starts;
 - its current agent's identity, program, settings with their layers
   and state, and whether it started, is asking or has its own work
@@ -139,7 +141,8 @@ place gives:
 The host part gives the agents running, the bound, the room, the
 queue, each stream's and each pool's part, the watch, each base's
 count, the role addresses with ends pending, and what a tidy kept in
-the terminal.
+the terminal. Where the terminal keeps no watch, it says so: places
+then move on only at flume's commands and when their agents go quiet.
 
 flume reads each fact where it lives when asked, and keeps none
 between asks. The [state reference](/flume/reference/state/) lists the
@@ -264,7 +267,8 @@ starts the next stage or the waiting ones there is room for, and
 submits. It collects the merge queue's outcomes, delivers pending
 ends, wakes roles and tidies. Safe to repeat. `--on-quiet` first reads the place's
 agent until it is quiet, for up to sixty seconds; the Stop hook runs it.
-herdr's watch runs `flume settle` whenever an agent changes state.
+herdr's watch runs `flume settle` whenever an agent changes state,
+comes up or goes.
 
 ## `flume wait`
 

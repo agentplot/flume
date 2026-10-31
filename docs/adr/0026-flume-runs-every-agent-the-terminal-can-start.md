@@ -1,7 +1,7 @@
 ---
 number: 26
 title: Flume runs every agent the terminal can start, each part of the agent seam built for its program or plainly degraded
-status: proposed
+status: accepted
 date: 2026-10-30
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # Flume runs every agent the terminal can start, each part of the agent seam built for its program or plainly degraded
 
-Status: proposed to the user on 2026-10-30; accepted only on their yes.
+Status: accepted by the user on 2026-10-30, on flume-sluice-build's card (req_bb65e1d78dd14c8d859f, "Approved", no note).
 
 Deciders: the user, 2026-10-30: "Are the mode values properly encapsulated along the agent seam so that it won't be awkward when we go to add support for other agents? In fact we should be supporting all agents out of the box since our multiplexer supports all the agents". What the agent seam requires of a program, what flume does where a program lacks a part, how a profile is declared, where the line is drawn, how a model is named, which program a stage with none named runs, and which profiles are built first are the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at a11f6d5, clauses 3, 31, 32, 35, 38, 88, 89, 93, 105, 135, 144, 164, 170 to 174, B.4, C.4, C.5 and S73 to S75, as amended with this record; records 0003, 0016, 0017, 0018, 0020, 0021, 0024; rules core.1, core.2, core.9, core.10, core.29, core.30; `crates/flume-seams/src/agent.rs` (the `Agent` trait: `command`, `started`, `received`, `asking`, `own_work`, `ended`, `last_words`, `spent`, `started_without`, `stop_short`, `send_back`, `guard`, `on_quiet`), `crates/flume/src/profiles.rs` (`agent`, which binds Claude Code's profile and resolves any other program to nothing), `crates/flume/src/profiles/terminal/herdr/mod.rs` (`KINDS`, herdr 0.9.5's 24 agent kinds); herdr 0.9.5's `agent start --help` (`--kind`, "Success means the expected agent was detected in the same terminal and is ready for input"), `agent prompt --help` (`--wait`, `--until`, `agent_prompt_stalled`), `agent explain --help` and `integration status`; herdr's documentation at <https://herdr.dev/llms.txt>, its Agents page (which agents herdr reads by screen, which report their own state, "state requires the integration" for OMP and MastraCode, "state only, less tested" for Gemini CLI and Cline, idle with background tasks still running for Antigravity and Grok, and "Adding a completely new agent still requires a Herdr binary update"); the `--help` of Codex 0.165.0, Gemini CLI 0.66.0, GitHub Copilot CLI 1.0.104 and OpenCode 1.19.4, read on 2026-10-30.
@@ -93,7 +93,7 @@ Programs option 2, declaration option 1, start option 2, model option 1, program
 
 ### Consequences
 
-- Clauses 3, 31, 32, 35, 38, 88, 89, 93, 105, 135, 144, 164, C.4 and C.5 of flume's statement are amended, and 170 to 174 and S73 to S75 added, at blueprints a11f6d5. Rule core.1's details, core.10 and core.30 are amended and core.39 drawn from this record, each marked proposed.
+- Clauses 3, 31, 32, 35, 38, 88, 89, 93, 105, 135, 144, 164, C.4 and C.5 of flume's statement are amended, and 170 to 174 and S73 to S75 added, at blueprints a11f6d5. Rule core.1's details, core.10 and core.30 are amended and core.39 drawn from this record.
 - The agent seam gains a profile's declaration of which parts it builds, which status reads to name the degraded ones; the common profile and the launcher are flume's own, in `profiles/agent/`, and name no program outside its table (core.1).
 - The herdr profile's `send` waits on `agent prompt` for the turn where the agent's profile reads no received ack, and its `open` accepts every kind in `KINDS`, as it already does.
 - A host with a pool of several programs gains nothing until it writes accounts of them (144); a host that writes none sees no change.

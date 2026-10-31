@@ -2,14 +2,22 @@
 //! the place's head once its last stage delivered and its agent ended,
 //! unless the launch holds it or the work is over, with no wait held on
 //! it. Its outcomes are collected at the settles that follow through the
-//! merge queue's inbox and acted on once each: a landing makes the work
-//! over, a failure or a conflict starts the kind's fix round, as found
+//! merge queue's inbox, or read from submit's answer where the merge
+//! queue decided the submission as it took it in and delivered the
+//! outcome with that answer, and acted on once each: a landing makes the
+//! work over, a failure or a conflict starts the kind's fix round, as found
 //! work from its last stage does, every going-back counted together up to
 //! the kind's bound. A withdrawal, and a landing before flume
 //! submits, are read from the merge queue's record of the branch, never
-//! one it held before the place's launch (3, 99); an
-//! open submission's base is driven one round per command, and never
-//! submitted anew.
+//! one it held before the place's launch or before flume's submit (3,
+//! 99); an open submission's base is driven one round per command, and
+//! never submitted anew. Where the merge queue answers a submit with a
+//! request it holds and no entry, the submission is open and undecided
+//! until an intake takes the request in, its base driven as an open
+//! submission's is; the entry taken in from it is followed in the
+//! merge queue's record, which gives its outcome where the merge queue
+//! delivered it to the request rather than the place, acted on once
+//! whichever of the record and the inbox gives it first (124, 133, C.6).
 
 use crate::start::Starts;
 use crate::{Engine, Step};
@@ -47,23 +55,43 @@ impl Engine {
                     true
                 }
                 SubmissionState::Withdrawn
-                    if ours.id.as_ref() == Some(&submission.id) && ours.waiting.is_none() =>
+                    if is_ours(&held.submission, &submission) && ours.waiting.is_none() =>
                 {
                     self.verdict(id, Verdict::Withdrawn);
                     true
                 }
-                state if state.open() => {
-                    self.step_base(queue.as_ref(), &place.repository, &submission.target)
+                SubmissionState::Failed { .. } | SubmissionState::Conflict { .. }
+                    if submission.request.is_some()
+                        && is_ours(&held.submission, &submission)
+                        && ours.verdict.is_none() =>
+                {
+                    self.taken_in(id, &submission);
+                    match recorded(queue.as_ref(), place, &submission.state) {
+                        Some(outcome) => {
+                            self.verdict(id, verdict_of(outcome));
+                            true
+                        }
+                        None => false,
+                    }
                 }
-                _ => self.due(held),
+                state if state.open() => {
+                    let taken = self.taken_in(id, &submission);
+                    let stepped =
+                        self.step_base(queue.as_ref(), &place.repository, &submission.target);
+                    taken || stepped
+                }
+                _ => self.due(held, queue.as_ref()),
             },
-            SubmissionRead::None => self.due(held),
+            SubmissionRead::None => self.due(held, queue.as_ref()),
         }
     }
 
     /// Collects the place's pending outcomes and acts on each once, in
     /// the order given; an inbox that cannot be read is named in status
-    /// and acts on nothing (133, 68). True when it changed something.
+    /// and acts on nothing (133, 68). The outcome of a request's entry,
+    /// which the merge queue's record gives as well, is acted on only
+    /// where neither gave it since flume's submit (124, C.6). True when
+    /// it changed something.
     fn collect(&self, id: &PlaceId, queue: &dyn MergeQueue, place: &PlaceRef) -> bool {
         match queue.inbox(place) {
             Inbox::CouldNotRead { reason } => {
@@ -81,12 +109,33 @@ impl Engine {
                     })
                     .unwrap_or(false);
                 for outcome in outcomes {
-                    self.verdict(id, verdict_of(outcome));
+                    let acted = self.store.read(id).is_some_and(|read| {
+                        let ours = &read.state.submission;
+                        ours.request.is_some() && ours.verdict.is_some()
+                    });
+                    if !acted {
+                        self.verdict(id, verdict_of(outcome));
+                    }
                     changed = true;
                 }
                 changed
             }
         }
+    }
+
+    /// The entry an intake took the place's request in as, recorded as
+    /// the place's submission once read; true when it was recorded now
+    /// (124).
+    fn taken_in(&self, id: &PlaceId, submission: &Submission) -> bool {
+        self.update(id, |held| {
+            let ours = &mut held.submission;
+            if ours.id.is_some() || ours.request.is_none() || submission.request != ours.request {
+                return Step::Keep(false);
+            }
+            ours.id = Some(submission.id.clone());
+            Step::Write(true)
+        })
+        .unwrap_or(false)
     }
 
     /// Drives `base`'s queue one round, once per repository and base in
@@ -101,11 +150,17 @@ impl Engine {
     }
 
     /// A due submission is made unless held, with no agent of the place
-    /// live (47, 111).
-    fn due(&self, held: &HeldState) -> bool {
+    /// live (47, 111). A request the merge queue holds for the place, not
+    /// yet taken in, is open and undecided, its base driven one round as
+    /// an open submission's is, so an intake there takes it in (124, 125).
+    fn due(&self, held: &HeldState, queue: &dyn MergeQueue) -> bool {
         let ours = &held.submission;
+        let place = &held.place;
         if ours.due && held.submission_hold().is_none() && held.live_start().is_none() {
-            return self.submit(&held.place.id, false);
+            return self.submit(&place.id, false);
+        }
+        if ours.request.is_some() && ours.id.is_none() && ours.verdict.is_none() {
+            return self.step_base(queue, &place.repository, &place.base);
         }
         false
     }
@@ -120,7 +175,10 @@ impl Engine {
             }
             held.submission.due = false;
             held.submission.submits += 1;
-            held.submission.id = None;
+            if let Some(previous) = held.submission.id.take() {
+                held.submission.before = Some(previous);
+            }
+            held.submission.request = None;
             held.submission.verdict = None;
             held.submission.waiting = None;
             Step::Write(Some(held.place.clone()))
@@ -135,16 +193,54 @@ impl Engine {
             .history
             .head(&place.repository, &place.branch)
             .unwrap_or_else(|| place.base_revision.clone());
+        // The branch's newest entry now is never this submission, whose
+        // entry is the one the submit makes, or the one an intake takes
+        // its request in as later (99, 124).
+        let before = match queue.read_submission(&place.repository, &place.branch) {
+            SubmissionRead::Found { submission } => Some(submission.id),
+            SubmissionRead::None | SubmissionRead::CouldNotRead { .. } => None,
+        };
         match queue.submit(&place.place_ref(), &head) {
             Submitted::Submitted { submission } => {
-                self.update(id, |held| {
-                    held.submission.id = Some(submission.id.clone());
-                    Step::Write(())
-                });
+                self.submitted(id, Some(&submission), None, before)
             }
-            Submitted::Refused { reason } => self.verdict(id, Verdict::Refused { reason }),
+            Submitted::Requested { request } => self.submitted(id, None, Some(request), before),
+            Submitted::Decided {
+                submission,
+                outcome,
+            } => {
+                self.submitted(id, Some(&submission), None, before);
+                self.verdict(id, verdict_of(outcome));
+            }
+            Submitted::Refused { reason } => {
+                self.submitted(id, None, None, before);
+                self.verdict(id, Verdict::Refused { reason });
+            }
         }
         true
+    }
+
+    /// What the merge queue holds of flume's submit recorded as the
+    /// place's own: the entry it made, or the request it opened, the
+    /// branch's newest entry before it never read as the place's (99,
+    /// 124).
+    fn submitted(
+        &self,
+        id: &PlaceId,
+        submission: Option<&Submission>,
+        request: Option<String>,
+        before: Option<String>,
+    ) {
+        self.update(id, |held| {
+            held.submission.id = submission.map(|submission| submission.id.clone());
+            held.submission.request = submission
+                .and_then(|submission| submission.request.clone())
+                .or_else(|| request.clone());
+            if before.is_some() {
+                held.submission.before = before.clone();
+            }
+            Step::Write(())
+        });
     }
 
     /// Acts on an outcome of the place's submission, or its refusal at
@@ -270,6 +366,48 @@ pub(crate) fn own_read(held: &HeldState, read: SubmissionRead) -> SubmissionRead
             SubmissionRead::None
         }
         read => read,
+    }
+}
+
+/// Whether the entry read is the place's submission: the one flume's
+/// submit made, or one an intake took in from the request it opened
+/// (99, 124).
+fn is_ours(ours: &SubmissionHeld, submission: &Submission) -> bool {
+    ours.id.as_ref() == Some(&submission.id)
+        || (ours.request.is_some() && submission.request == ours.request)
+}
+
+/// A decided entry's outcome as the merge queue's record gives it; a
+/// conflict found before any test names the base's revision where it
+/// lives now, and is read at a later settle where that cannot be read
+/// (112, 126).
+fn recorded(
+    queue: &dyn MergeQueue,
+    place: &PlaceRecord,
+    state: &SubmissionState,
+) -> Option<SubmissionOutcome> {
+    match state {
+        SubmissionState::Landed { commit } => Some(SubmissionOutcome::Landed {
+            commit: commit.clone(),
+        }),
+        SubmissionState::Failed { words } => Some(SubmissionOutcome::Failed {
+            words: words.clone(),
+        }),
+        SubmissionState::Conflict { files, base, words } => {
+            let base = match base {
+                Some(base) => base.clone(),
+                None => match queue.base_revision(&place.repository, &place.base) {
+                    BaseRevision::At { revision } => revision,
+                    BaseRevision::Refused { .. } => return None,
+                },
+            };
+            Some(SubmissionOutcome::Conflict {
+                files: files.clone(),
+                base,
+                words: words.clone(),
+            })
+        }
+        SubmissionState::Waiting | SubmissionState::UnderTest | SubmissionState::Withdrawn => None,
     }
 }
 

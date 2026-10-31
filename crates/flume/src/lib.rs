@@ -12,9 +12,7 @@ pub mod mode;
 pub mod profiles;
 pub mod shell;
 
-/// flume's version: a release's, from its tag (`FLUME_VERSION` when the
-/// release is built), and the cargo workspace's in any other build.
-pub const VERSION: &str = match option_env!("FLUME_VERSION") {
-    Some(version) if !version.is_empty() => version,
-    _ => env!("CARGO_PKG_VERSION"),
-};
+/// flume's version: the cargo workspace's, 0.0.0 on main and a release's
+/// in the release commit its tag names, which each plugin's manifest
+/// carries too (`set-version.sh`).
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

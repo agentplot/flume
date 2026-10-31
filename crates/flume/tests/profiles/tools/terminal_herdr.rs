@@ -17,8 +17,11 @@
 //! (S48), titles that follow the stage (S49), a conversation beside a
 //! named pane, a launch from a herdr pane, herdr's readings, a prompt
 //! left typed (S43), a pane herdr could not bring back, long
-//! instructions, a herdr call that never answers, a quiet pane not ended
-//! and a finished turn nobody looked at (S42); a nix-wrapped Claude Code
+//! instructions to a shell not yet at its prompt, a start the terminal
+//! cannot yet take, a shell never at its prompt, a herdr call that never
+//! answers, a quiet pane not ended,
+//! a finished turn nobody looked at (S42), and a launch and a retry each
+//! sending its agent's prompt with no settle; a nix-wrapped Claude Code
 //! started from the agent profile, a role run's pane reached by its
 //! address after a move, and a recipient on another server reached
 //! through its own socket.
@@ -31,7 +34,7 @@ use flume::profiles::terminal::herdr::{herdr_name, Herdr, Pane, Server, START_TI
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
-use flume_core::{Answer, Engine};
+use flume_core::{Answer, Engine, Retry};
 use flume_seams::*;
 use serde_json::Value;
 use std::cell::RefCell;
@@ -1591,10 +1594,126 @@ fn a_pane_herdr_could_not_bring_back_reads_stopped() {
     );
 }
 
+/// The host user's login shell as a loaded host runs it, slow to come to
+/// its prompt, held at a gate until the test lets it go: named `bash`, so
+/// the pane's shell runs it with `--noprofile --norc`, it says what it is
+/// given, marks that it holds, and waits on the gate by the shell's own
+/// `read`, so the pane's foreground holds nothing but the shell and its
+/// terminal stays canonical, as it is until a line editor takes it; let
+/// go, it becomes bash.
+struct HeldShell {
+    dir: PathBuf,
+    /// The shell, as the host user's login environment names it.
+    login: String,
+}
+
+impl HeldShell {
+    fn new(server: &TestServer, says: &str) -> HeldShell {
+        let dir = server.scratch.path("held");
+        fs::create_dir_all(&dir).expect("the held shell's folder");
+        let gate = dir.join("gate");
+        let made = Command::new("mkfifo")
+            .arg(&gate)
+            .status()
+            .expect("mkfifo runs");
+        assert!(made.success(), "the gate made");
+        let says = if says.is_empty() {
+            String::new()
+        } else {
+            format!("printf '%s\\n' '{says}'\n")
+        };
+        let script = format!(
+            "#!/bin/sh\n{says}: > '{}'\nread -r _ < '{}'\nexec bash \"$@\"\n",
+            dir.join("holds").display(),
+            gate.display()
+        );
+        let path = dir.join("bash");
+        fs::write(&path, script).expect("the held shell written");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+            .expect("the held shell made executable");
+        HeldShell {
+            dir,
+            login: path.to_string_lossy().into_owned(),
+        }
+    }
+
+    /// Whether the shell holds at its gate.
+    fn holds(&self) -> bool {
+        self.dir.join("holds").exists()
+    }
+
+    /// Lets the shell go on to its prompt: the gate opened without
+    /// blocking, so a shell that never reads it fails the test rather
+    /// than hanging it.
+    fn let_go(&self) {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match fs::OpenOptions::new()
+                .write(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(self.dir.join("gate"))
+            {
+                Ok(mut gate) => {
+                    gate.write_all(b"go\n").expect("the gate opened");
+                    return;
+                }
+                Err(error) => {
+                    assert!(
+                        Instant::now() < deadline,
+                        "no shell reads the gate: {error}"
+                    );
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
+    }
+}
+
+/// What open answered for the agent under `who`, opened in the place
+/// `fix--one` in a pane whose shell `shell` holds: once open has made the
+/// pane, the shell holds at its gate and the pane's screen `shows` as the
+/// test asks, the shell is let go, open still under way.
+fn opened_once_let_go(
+    server: &TestServer,
+    profile: &Herdr,
+    shell: &HeldShell,
+    who: &Identity,
+    command: &AgentCommand,
+    shows: impl Fn(&str) -> bool,
+) -> Opened {
+    let place = server.place("fix--one");
+    let folder = server.folder();
+    std::thread::scope(|scope| {
+        let opening = scope.spawn(|| profile.open(&place, &folder, command, who, None, None));
+        server.within(
+            "open made no pane whose held shell shows what it says",
+            || {
+                opening.is_finished()
+                    || (shell.holds() && profile.screen(who).is_some_and(|screen| shows(&screen)))
+            },
+        );
+        if opening.is_finished() {
+            let opened = opening.join().expect("open answers");
+            panic!("open answered {opened:?} while the pane's shell held before its prompt");
+        }
+        shell.let_go();
+        opening.join().expect("open answers")
+    })
+}
+
+/// Instructions of 20,000 characters, opened in a pane whose shell has
+/// not yet come to its prompt, its screen blank and its terminal taking
+/// no line past its canonical limit, as under the gate's load on deneb
+/// (2026-10-30): open waits for the prompt rather than starting the agent
+/// into the shell, and the agent starts with them whole once the shell
+/// comes to it (C.5; record 0018).
 #[test]
 fn instructions_of_twenty_thousand_characters_reach_the_agent_whole() {
     let server = TestServer::start("herdr-long");
-    let profile = server.profile();
+    let shell = HeldShell::new(&server, "");
+    let profile = server.profile_with_login(&[("SHELL", shell.login.as_str())]);
     let who = identity(1);
     let instructions: String =
         "keep the lockfile exactly as it stands: 'quotes', $HOME, `ticks` and é; "
@@ -1604,7 +1723,17 @@ fn instructions_of_twenty_thousand_characters_reach_the_agent_whole() {
             .collect();
     let mut command = server.command(&[]);
     command.args = vec!["--append-system-prompt".into(), instructions.clone()];
-    let pane = opened(&server, &profile, &who, &command);
+    let opened = opened_once_let_go(&server, &profile, &shell, &who, &command, |screen| {
+        screen.trim().is_empty()
+    });
+    assert!(
+        matches!(opened, Opened::Opened { .. }),
+        "open gave {opened:?}"
+    );
+    let pane = profile.pane(&who).expect("the pane recorded");
+    server.within("the stand-in did not come up waiting", || {
+        profile.state(&who) == AgentState::Waiting
+    });
     let argv = fs::read(server.scratch.path("log").join(&pane.id).join("argv"))
         .expect("the arguments the agent started with");
     let mut given = b"--append-system-prompt\0".to_vec();
@@ -1620,6 +1749,93 @@ fn instructions_of_twenty_thousand_characters_reach_the_agent_whole() {
             &argv[at.saturating_sub(20)..(at + 20).min(argv.len())]
         )
         .into_owned())
+    );
+}
+
+/// The words a shell says as it starts, before its line editor takes the
+/// terminal, as macOS's bash says the default shell is now zsh.
+const SAYS: &str = "The shell starts.";
+
+/// Instructions past the terminal's canonical limit, 1024 bytes on macOS,
+/// and within Linux's, where herdr checks no line.
+fn past_the_canonical_limit() -> String {
+    "keep the lockfile as it stands; ".repeat(100)
+}
+
+/// A shell that says something as it starts and is held before its line
+/// editor takes the terminal: open's wait for its first output is over,
+/// and herdr answers agent_start_input_failed, the terminal not yet
+/// taking the line; open asks again and the agent starts once the shell
+/// comes to its prompt (C.5; record 0018).
+#[test]
+fn a_start_the_terminal_cannot_yet_take_is_asked_again_until_it_can() {
+    let server = TestServer::start("herdr-not-yet");
+    let shell = HeldShell::new(&server, SAYS);
+    let profile = server.profile_with_login(&[("SHELL", shell.login.as_str())]);
+    let who = identity(1);
+    let mut command = server.command(&[]);
+    let instructions = past_the_canonical_limit();
+    command.args = vec!["--append-system-prompt".into(), instructions.clone()];
+    let opened = opened_once_let_go(&server, &profile, &shell, &who, &command, |screen| {
+        screen.contains(SAYS)
+    });
+    assert!(
+        matches!(opened, Opened::Opened { .. }),
+        "open gave {opened:?}"
+    );
+    let pane = profile.pane(&who).expect("the pane recorded");
+    server.within("the stand-in did not come up waiting", || {
+        profile.state(&who) == AgentState::Waiting
+    });
+    let argv = fs::read(server.scratch.path("log").join(&pane.id).join("argv"))
+        .expect("the arguments the agent started with");
+    assert_eq!(
+        String::from_utf8_lossy(&argv),
+        format!("--append-system-prompt\0{instructions}\0"),
+        "the arguments the agent started with"
+    );
+}
+
+/// A shell that never comes to its prompt within the start's bound: open
+/// asks agent start again until the bound, and the start has not come up,
+/// with the screen and, on macOS, where herdr checks the line, herdr's
+/// words; it is never refused (35, C.5; record 0018).
+#[test]
+fn a_shell_never_at_its_prompt_is_not_come_up_and_never_refused() {
+    let server = TestServer::start("herdr-never-prompt");
+    let shell = HeldShell::new(&server, SAYS);
+    let profile = server
+        .profile_with_login(&[("SHELL", shell.login.as_str())])
+        .with_start_timeout(SHORT_START);
+    let mut command = server.command(&[]);
+    command.args = vec!["--append-system-prompt".into(), past_the_canonical_limit()];
+    let began = Instant::now();
+    let answer = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &command,
+        &identity(1),
+        None,
+        None,
+    );
+    let took = began.elapsed();
+    let Opened::NotComeUp { screen } = &answer else {
+        panic!("open of a pane whose shell never came to its prompt gave {answer:?}");
+    };
+    assert!(screen.contains(SAYS), "the screen given: {screen:?}");
+    if cfg!(target_os = "macos") {
+        assert!(
+            screen.contains("agent_start_input_failed"),
+            "herdr's words not given: {screen:?}"
+        );
+        assert!(
+            took >= SHORT_START - Duration::from_millis(500),
+            "open asked again for only {took:?}"
+        );
+    }
+    assert!(
+        took < SHORT_START + Duration::from_secs(10),
+        "open waited {took:?}"
     );
 }
 
@@ -1911,5 +2127,66 @@ fn s42_a_finished_turn_nobody_looked_at_delivers_and_the_next_stage_starts() {
             StageState::Starting | StageState::Started | StageState::Begun
         ),
         "the review stage did not start"
+    );
+}
+
+#[test]
+fn a_launch_and_a_retry_each_send_their_agents_prompt_with_no_settle() {
+    // On deneb a retry's agent came up ready in herdr and sat with no
+    // prompt until a settle by hand: the watch's settle had sent it while
+    // the retry still opened the agent, into a program not yet reading
+    // its input. The command that opens an agent now sends its prompt
+    // once its open answers, and nothing else sends while it opens, so
+    // each agent here takes its prompt with no settle run (6, 37, 38, 46).
+    let server = TestServer::start("herdr-sent");
+    let world = World::new();
+    let repository = bound(
+        &server,
+        &world,
+        vec![stage(
+            "code",
+            Some(Deliverable::Commits),
+            "{{brief}} {{needs}}",
+        )],
+    );
+    let answer = engine(&server, &world).launch(&Launch {
+        repository: repository.clone(),
+        kind: "two".into(),
+        name: "one".into(),
+        base: "main".into(),
+        brief: Some("fix the bug".into()),
+        ..Launch::default()
+    });
+    assert!(answer.refusal().is_none(), "the launch: {answer:?}");
+    let id = PlaceId::new(format!("{repository}/places/two--one"));
+    let code = |start| Identity {
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
+        place: "two--one".into(),
+        stage: "code".into(),
+        start,
+    };
+    let took = |pane: &Pane| {
+        server
+            .kept(&pane.id, "got")
+            .iter()
+            .any(|line| line.contains("fix the bug"))
+    };
+    let first = server.profile().pane(&code(1)).expect("the pane recorded");
+    server.within("the launch's agent took no prompt", || took(&first));
+
+    let retried = engine(&server, &world).retry(&id, Retry::Stage("code".into()), None, false);
+    assert!(retried.refusal().is_none(), "the retry: {retried:?}");
+    let second = server.profile().pane(&code(2)).expect("the pane recorded");
+    server.within("the retry's agent took no prompt", || took(&second));
+    assert_eq!(
+        server.kept(&second.id, "got").len(),
+        1,
+        "the retry's sendings"
+    );
+    engine(&server, &world).settle(Some(&id));
+    assert_eq!(
+        stage_state(&server, &world, &id, "code"),
+        StageState::Begun,
+        "the code stage at the first settle"
     );
 }

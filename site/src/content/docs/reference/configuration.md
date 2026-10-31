@@ -168,6 +168,16 @@ one fetch of `origin` where the repository has it, and the kinds at the
 base's current revision for each launch. A place keeps what its launch read.
 flume never writes it.
 
+The repository's default branch is its remote's: the branch
+`origin/HEAD` names. Where the repository has `origin` and no
+`origin/HEAD`, as a repository made by `git init --bare` and then given
+a remote has none, flume asks `origin` which branch its `HEAD` names and
+sets `origin/HEAD` to it, as `git clone` does. A repository with no
+`origin` has its own `HEAD`'s branch as its default. A `HEAD` naming a
+branch that holds no commit names no default branch, so a launch that
+names no base, and the binding's read, are refused rather than taking
+it.
+
 ```toml
 [profiles]
 place = "git-worktree"

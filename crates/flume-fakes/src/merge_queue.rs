@@ -6,8 +6,8 @@ use flume_seams::{
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-/// What the fake merge queue does with a submission: refused at submit,
-/// or held and decided by the round that next reaches it.
+/// What the fake merge queue does with a submission: refused or decided
+/// at submit, or held and decided by the round that next reaches it.
 #[derive(Clone, Debug)]
 pub enum Plan {
     /// It lands, merged into its base.
@@ -15,12 +15,36 @@ pub enum Plan {
     Fail(String),
     /// It conflicts with its base on the files named, with the words.
     Conflict(Vec<String>, String),
+    /// Submit finds it in conflict with its base as it takes it in, on
+    /// the files named, and answers with the outcome, which it delivers
+    /// so no inbox gives it (133).
+    ConflictAtSubmit(Vec<String>, String),
     /// It is withdrawn, which no inbox gives (99).
     Withdraw,
     /// Submit refuses it with the reason.
     Refuse(String),
     /// It stays open through every round.
     Hold,
+    /// Submit opens a request for the branch, or updates the one it
+    /// opened, and makes no entry; `take_in` takes the request in as an
+    /// entry, which comes to `then`, its outcome delivered to the request
+    /// and left in the place's inbox as well only where `to_place` (124,
+    /// 133, C.6).
+    Request {
+        then: Box<Plan>,
+        to_place: bool,
+    },
+}
+
+/// A request the fake opened for a branch, and what submit planned for
+/// its next entry.
+#[derive(Clone, Debug)]
+struct Requested {
+    number: String,
+    target: String,
+    location: String,
+    /// What the entry it is taken in as comes to, none once taken in.
+    plan: Option<(Plan, bool)>,
 }
 
 /// The merge queue seam over the fake git: where each base lives, what
@@ -28,7 +52,9 @@ pub enum Plan {
 /// made it, and each place's pending outcomes. Submit holds no wait: a
 /// submission is decided by a round, which `step` drives unless the
 /// queue moves on its own, and its outcome is delivered once through
-/// the place's inbox. It removes nothing of a place (113).
+/// the place's inbox; or, where submit opens a request, its entry is
+/// made only once `take_in` takes the request in, and its outcome is
+/// delivered to the request. It removes nothing of a place (113).
 pub struct FakeMergeQueue {
     git: Arc<FakeGit>,
     state: Mutex<QueueState>,
@@ -44,9 +70,12 @@ struct QueueState {
     plans: BTreeMap<String, (Plan, Option<String>)>,
     /// Each place's outcomes not yet delivered, by location.
     inboxes: BTreeMap<String, Vec<SubmissionOutcome>>,
+    /// Each branch's request, by repository and branch.
+    requests: BTreeMap<(String, String), Requested>,
     unreadable: Option<String>,
     moves_on_its_own: bool,
     next: u64,
+    next_request: u64,
 }
 
 impl FakeMergeQueue {
@@ -167,13 +196,50 @@ impl FakeMergeQueue {
             .unwrap_or_default()
     }
 
+    /// `outcome` left pending for the place at `location`, as a merge
+    /// queue leaves one it could not deliver to its request (133).
+    pub fn leave_pending(&self, location: &str, outcome: SubmissionOutcome) {
+        lock(&self.state)
+            .inboxes
+            .entry(location.into())
+            .or_default()
+            .push(outcome);
+    }
+
+    /// `branch`'s request taken in as an entry, as an intake on whichever
+    /// host takes the base's requests in does, coming to what submit
+    /// planned for it; nothing where no request waits to be taken in.
+    pub fn take_in(&self, repository: &str, branch: &str) -> Option<Submission> {
+        let mut queue = lock(&self.state);
+        let key = (repository.to_string(), branch.to_string());
+        let request = queue.requests.get_mut(&key)?;
+        let (plan, to_place) = request.plan.take()?;
+        let (number, target, location) = (
+            request.number.clone(),
+            request.target.clone(),
+            request.location.clone(),
+        );
+        let submission = Self::record(
+            &mut queue,
+            repository,
+            branch,
+            &target,
+            SubmissionState::Waiting,
+            Some(number),
+        );
+        queue
+            .plans
+            .insert(submission.id.clone(), (plan, to_place.then_some(location)));
+        Some(submission)
+    }
+
     fn record(
         queue: &mut QueueState,
         repository: &str,
         branch: &str,
         target: &str,
         state: SubmissionState,
-        from: Option<(Plan, String)>,
+        request: Option<String>,
     ) -> Submission {
         queue.next += 1;
         let submission = Submission {
@@ -181,12 +247,8 @@ impl FakeMergeQueue {
             branch: branch.into(),
             target: target.into(),
             state,
+            request,
         };
-        if let Some((plan, location)) = from {
-            queue
-                .plans
-                .insert(submission.id.clone(), (plan, Some(location)));
-        }
         queue
             .submissions
             .entry((repository.into(), branch.into()))
@@ -215,7 +277,9 @@ impl FakeMergeQueue {
             .cloned()
             .unwrap_or((Plan::Land, None));
         let (state, outcome) = match plan {
-            Plan::Hold | Plan::Refuse(_) => return,
+            Plan::Hold | Plan::Refuse(_) | Plan::ConflictAtSubmit(..) | Plan::Request { .. } => {
+                return
+            }
             Plan::Land => {
                 let head = self
                     .git
@@ -243,6 +307,7 @@ impl FakeMergeQueue {
                 (
                     SubmissionState::Conflict {
                         files: files.clone(),
+                        base: Some(base.clone()),
                         words: words.clone(),
                     },
                     Some(SubmissionOutcome::Conflict { files, base, words }),
@@ -275,14 +340,59 @@ impl MergeQueue for FakeMergeQueue {
         if let Plan::Refuse(reason) = plan {
             return Submitted::Refused { reason };
         }
+        if let Plan::ConflictAtSubmit(files, words) = plan {
+            let base = self
+                .git
+                .branch_head(&place.repository, &place.base)
+                .expect("a base");
+            let submission = Self::record(
+                &mut queue,
+                &place.repository,
+                &place.branch,
+                &place.base,
+                SubmissionState::Conflict {
+                    files: files.clone(),
+                    base: Some(base.clone()),
+                    words: words.clone(),
+                },
+                None,
+            );
+            return Submitted::Decided {
+                submission,
+                outcome: SubmissionOutcome::Conflict { files, base, words },
+            };
+        }
+        if let Plan::Request { then, to_place } = plan {
+            let key = (place.repository.clone(), place.branch.clone());
+            let number = match queue.requests.get(&key) {
+                Some(open) => open.number.clone(),
+                None => {
+                    queue.next_request += 1;
+                    queue.next_request.to_string()
+                }
+            };
+            queue.requests.insert(
+                key,
+                Requested {
+                    number: number.clone(),
+                    target: place.base.clone(),
+                    location: place.location.clone(),
+                    plan: Some((*then, to_place)),
+                },
+            );
+            return Submitted::Requested { request: number };
+        }
         let submission = Self::record(
             &mut queue,
             &place.repository,
             &place.branch,
             &place.base,
             SubmissionState::Waiting,
-            Some((plan, place.location.clone())),
+            None,
         );
+        queue
+            .plans
+            .insert(submission.id.clone(), (plan, Some(place.location.clone())));
         Submitted::Submitted { submission }
     }
 

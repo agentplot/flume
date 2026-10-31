@@ -134,7 +134,7 @@ Each place:
 | `head` | the place's branch head |
 | `delivered` | whether the current stage's deliverable exists |
 | `tasks` | a change's tasks ticked and in all |
-| `submission` | `read`, what the merge queue holds; `submits`; `send_backs`; `verdict`; `waiting`, why the place waits on its submission; `held` |
+| `submission` | `read`, what the merge queue holds; `request`, the pull request flume's last submit opened or updated where the base takes them, and `read`'s entry names it once taken in; `submits`; `send_backs`; `verdict`; `waiting`, why the place waits on its submission; `held` |
 | `refused_acts` | each act the guard refused |
 | `cannot_read` | each fact flume could not read when asked |
 | `failures` | each act that failed, in flume's words |

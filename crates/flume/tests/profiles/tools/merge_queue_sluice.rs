@@ -5,7 +5,11 @@
 //! session reaches sluice. The merge-queue seam's scenarios run against
 //! it; then a submission from a herdr pane's hook, a failed entry
 //! collected once, a queue nothing drives, a step beside a live driver, a
-//! conflict's base revision and a fetch that fails.
+//! conflict's base revision, a conflict sluice answers at the submit
+//! itself, through the stand-in for sluice, a pull request answered with
+//! no entry and the entry taken in from it read to its landing, through
+//! the stand-in for sluice on a base that takes pull requests, and a
+//! fetch that fails.
 
 use crate::common::*;
 use flume::profiles::merge_queue::sluice::{for_place, Sluice};
@@ -235,6 +239,7 @@ impl MergeQueueHarness for Harness {
             branch: place.branch.clone(),
             target: "main".into(),
             state: SubmissionState::Waiting,
+            request: None,
         }
     }
 
@@ -441,6 +446,145 @@ fn a_conflicts_base_revision_and_words_are_sluices() {
         }
         other => panic!("a conflicting entry came to {other:?}"),
     }
+}
+
+#[test]
+fn a_conflict_sluice_answers_at_the_submit_is_its_outcome_never_a_refusal() {
+    // sluice answers the submit with the entry's record, in conflict with
+    // the one queued ahead of it, exiting as a conflict does, and records
+    // it delivered: submit answers the outcome, and no inbox gives it.
+    let harness = Harness::new();
+    let (place, head) = harness.place();
+    let other = Harness::worktree(&harness.repository, "other", "other", "work.rs");
+    harness.sluice(
+        Path::new(&other.location),
+        &["submit", "main", "--no-wait", "--json"],
+    );
+    let bin = harness.repository.scratch.path("stand-in");
+    super::walk::stand_in_sluice(&bin);
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    )))
+    .expect("a PATH");
+    let seam = harness
+        .seam
+        .clone()
+        .with_env("PATH", Some(&path.to_string_lossy()));
+    let answer = seam.submit(&place, &head);
+    let record = harness.record("fix/one").expect("sluice's entry");
+    assert_eq!(record["state"], "conflict", "{record}");
+    let Submitted::Decided {
+        submission,
+        outcome: SubmissionOutcome::Conflict { files, base, words },
+    } = answer
+    else {
+        panic!("a conflict at the submit was answered {answer:?}");
+    };
+    assert_eq!(submission.id, record["id"].to_string(), "the entry");
+    assert!(
+        matches!(submission.state, SubmissionState::Conflict { .. }),
+        "{submission:?}"
+    );
+    assert_eq!(files, vec!["work.rs".to_string()], "the files contested");
+    let ahead = harness.record("other").expect("the entry ahead")["id"].to_string();
+    for named in [
+        "conflict on main: work.rs with ",
+        &format!("#{ahead} ("),
+        "other)",
+    ] {
+        assert!(words.contains(named), "{named} is not in {words}");
+    }
+    let expected = record["tested"]["on"].as_str().map_or_else(
+        || Revision::new(harness.repository.git(&["rev-parse", "main"])),
+        Revision::new,
+    );
+    assert_eq!(base, expected, "the base revision");
+    assert_eq!(
+        harness.seam.inbox(&place),
+        Inbox::Outcomes { outcomes: vec![] },
+        "the inbox, once the answer delivered the outcome"
+    );
+}
+
+#[test]
+fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_to_its_landing() {
+    // On a base that takes pull requests, sluice answers the submit with
+    // the request and no entry: submit answers it held, never refused.
+    // Once an intake takes it in, read-submission finds the entry sluice
+    // records from `pull/<n>`, the place's branch its `from.head`, and
+    // reads it to its landing; the inbox gives nothing, the outcome
+    // having gone to the request.
+    let harness = Harness::new();
+    let (place, head) = harness.place();
+    let bin = harness.repository.scratch.path("stand-in");
+    super::walk::stand_in_pull_requests(&bin);
+    let path = std::env::join_paths(std::iter::once(bin.clone()).chain(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    )))
+    .expect("a PATH");
+    let seam = harness
+        .seam
+        .clone()
+        .with_env("PATH", Some(&path.to_string_lossy()));
+    let request = super::walk::PULL_REQUEST.to_string();
+    assert_eq!(
+        seam.submit(&place, &head),
+        Submitted::Requested {
+            request: request.clone()
+        }
+    );
+    assert_eq!(
+        seam.read_submission(&place.repository, &place.branch),
+        SubmissionRead::None,
+        "before it is taken in"
+    );
+    let mut take_in = Command::new(bin.join("sluice"));
+    for (name, _) in std::env::vars() {
+        if name.starts_with("SLUICE_") || name.starts_with("HERDR_") || name.starts_with("TMUX") {
+            take_in.env_remove(name);
+        }
+    }
+    let took = take_in
+        .arg("take-in")
+        .current_dir(&harness.repository.dir)
+        .env("PATH", &path)
+        .env("HOME", &harness.home)
+        .env("XDG_STATE_HOME", harness.home.join("state"))
+        .env("XDG_CONFIG_HOME", harness.home.join("config"))
+        .stdin(Stdio::null())
+        .output()
+        .expect("the stand-in takes the request in");
+    assert!(took.status.success(), "{took:?}");
+    let entry = harness.record("fix/one").expect("the entry taken in");
+    let SubmissionRead::Found { submission } =
+        seam.read_submission(&place.repository, &place.branch)
+    else {
+        panic!("the entry taken in is not read");
+    };
+    assert_eq!(submission.id, entry["id"].to_string(), "the entry");
+    assert_eq!(submission.request.as_deref(), Some(request.as_str()));
+    assert_eq!(submission.target, "main");
+    assert!(submission.state.open(), "{submission:?}");
+    harness.decide("fix/one");
+    let landed = harness.record("fix/one").expect("the entry decided");
+    assert_eq!(landed["state"], "landed", "{landed}");
+    assert_eq!(
+        seam.read_submission(&place.repository, &place.branch),
+        SubmissionRead::Found {
+            submission: Submission {
+                state: SubmissionState::Landed {
+                    commit: Revision::new(landed["landed_as"].as_str().expect("its commit")),
+                },
+                ..submission
+            }
+        },
+        "the landing"
+    );
+    assert_eq!(
+        seam.inbox(&place),
+        Inbox::Outcomes { outcomes: vec![] },
+        "the inbox, the outcome delivered to the request"
+    );
 }
 
 #[test]

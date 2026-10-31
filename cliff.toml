@@ -1,7 +1,10 @@
 # git-cliff: the next version and the release notes, from the
-# conventional commits since the last v* tag. CI releases with it on each
+# conventional commits since the newest v* tag. CI releases with it on each
 # push to main; `git cliff --unreleased --bump` shows what would be
-# released. The version lives only in the tag.
+# released. A tag names its release commit, cut from the commit it
+# released with the release's version written into the workspace and each
+# plugin's manifest (set-version.sh), and main keeps 0.0.0, so the newest
+# tag is off main's history and only `--unreleased` starts the range at it.
 
 [changelog]
 header = ""

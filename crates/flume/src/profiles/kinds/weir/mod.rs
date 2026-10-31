@@ -15,11 +15,11 @@
 //! each a declaration of its own with its prompts beside it (157).
 //!
 //! The repository's binding is the declaration's `[profiles]` table at
-//! the default branch: `origin/HEAD` after one fetch where the
-//! repository has a remote, the local default branch otherwise (20,
-//! 105). No other tool's file is read to choose a profile (core.3).
+//! the default branch: the remote's, after one fetch, where the
+//! repository has a remote, and the local default branch otherwise (20,
+//! 105, C.2). No other tool's file is read to choose a profile (core.3).
 
-use crate::git::{tree_path, Git};
+use crate::git::{tree_path, Git, REMOTE};
 use flume_seams::{
     Binding, BindingRead, Deliverable, Kind, KindSettings, Kinds, KindsRead, Revision, Settings,
     Stage,
@@ -31,10 +31,6 @@ use weir_kinds::{End, Refusal};
 
 /// Where a repository declares its kinds and its binding, in its tree.
 pub const DECLARATION: &str = ".config/flume.toml";
-
-/// The remote a repository's default branch is read from where it has
-/// one.
-const REMOTE: &str = "origin";
 
 /// One version of one of flume's own kinds, built into the binary: its
 /// declaration and each prompt it names by its path within the version's
@@ -170,44 +166,33 @@ impl Kinds for Weir {
 
     fn read_binding(&self, repository: &str) -> BindingRead {
         match default_revision(repository) {
-            Ok(Some(revision)) => binding_at(repository, &revision),
-            Ok(None) => BindingRead::Read {
-                binding: Binding::default(),
-            },
+            Ok(revision) => binding_at(repository, &revision),
             Err(reason) => BindingRead::CouldNotRead { reason },
         }
     }
 }
 
-/// The revision of the repository's default branch: `origin/HEAD` after
-/// one fetch where it has the remote, the local default branch otherwise;
-/// `None` where it has no commit (20, 105).
-pub fn default_revision(repository: &str) -> Result<Option<Revision>, String> {
+/// The revision of the repository's default branch (20, C.2): the
+/// remote's after one fetch of it where the repository has the remote,
+/// and the local branch's otherwise; why there is none where git names
+/// no default branch.
+pub fn default_revision(repository: &str) -> Result<Revision, String> {
     let git = Git::at(repository);
-    let local = git
-        .text(&["symbolic-ref", "--quiet", "--short", "HEAD"])
-        .map(|name| name.trim().to_string())
-        .ok();
-    if git.remotes()?.iter().any(|remote| remote == REMOTE) {
-        git.bytes(&["fetch", "--quiet", REMOTE])
-            .map_err(|words| format!("the fetch of {REMOTE} failed: {words}"))?;
-        let tracking = format!("refs/remotes/{REMOTE}/HEAD");
-        if let Ok(commit) = git.commit(&tracking) {
-            return Ok(Some(Revision(commit)));
-        }
-        if let Some(name) = &local {
-            if let Ok(commit) = git.commit(&format!("refs/remotes/{REMOTE}/{name}")) {
-                return Ok(Some(Revision(commit)));
-            }
-        }
-        return Err(format!(
-            "{REMOTE} names no default branch: {tracking} is not set"
-        ));
+    let branch = git
+        .default_branch()
+        .map_err(|reason| format!("{repository} names no default branch: {reason}"))?;
+    if !git.remotes()?.iter().any(|remote| remote == REMOTE) {
+        return git.commit(&format!("refs/heads/{branch}")).map(Revision);
     }
-    match local {
-        Some(name) => Ok(git.commit(&format!("refs/heads/{name}")).ok().map(Revision)),
-        None => Ok(git.commit("HEAD").ok().map(Revision)),
-    }
+    let tracking = format!("refs/remotes/{REMOTE}/{branch}");
+    git.bytes(&[
+        "fetch",
+        "--quiet",
+        REMOTE,
+        &format!("+refs/heads/{branch}:{tracking}"),
+    ])
+    .map_err(|words| format!("the fetch of {branch} from {REMOTE} failed: {words}"))?;
+    git.commit(&tracking).map(Revision)
 }
 
 /// The `[profiles]` table of the repository's declaration at `revision`:

@@ -60,6 +60,27 @@ chore starts anyway and its prompt names the failed step, and a change
 waits with the step in `flume status`. A repository with no such steps
 is ready at once, and the prompt says it declares no readiness.
 
+`flume status` gives each step in one line, passed or failed, and under
+a failed step the last ten lines it printed, its terminal escapes
+stripped:
+
+```console
+$ flume status change--tabs-in-quotes
+~/src/acme/places/change--tabs-in-quotes: change@2 (flume), live
+  branch change/tabs-in-quotes from main, head 84130b3cd2adae9a0ac2117884849d513da80181
+  …
+  readiness toolchain: passed
+  readiness moon setup: failed
+    Installing node 22.11.0
+    Error: node 22.11.0 could not be downloaded: the connection timed out
+  stage construct: waiting_on_readiness, started 0 times
+  …
+  waits on its caller to retry construct (unready) since 1793287734
+```
+
+`flume status --json` gives what each step printed, its escapes and
+all, passed or failed.
+
 ## The terminal: printed or herdr
 
 The host's configuration names the terminal:
@@ -96,6 +117,14 @@ flume keeps its agents in a herdr session of its own, named `flume`:
   herdr's `agent start`, with the agent's environment set on the pane,
   so nothing is typed into a shell. The pane's shell reads no startup
   file, so nothing in your shell's files reorders the pane's `PATH`.
+  flume starts the agent once that shell has come to its prompt, which
+  on a loaded host can be some seconds after the pane opens. A start
+  whose shell and agent aren't both up within two minutes ends never
+  begun, with the pane's screen in `flume status`.
+  The command that opened the agent, a launch, a retry or a settle,
+  sends it its prompt once the agent has said it started and waits. The
+  settles that follow read whether it was received. Until that
+  command's open is done, nothing else is sent to the agent.
 
 Each agent carries a herdr name made from its identity, at most 32
 characters and ending in a digest of it. flume holds a pane by its id
@@ -136,12 +165,13 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
 
 - **The watch.** herdr starts it with its server, one per server. Every
   two seconds it reads every pane's agent state in one listing. When one
-  of flume's agents changes state, or thirty seconds pass, it runs
-  `flume settle`, then writes `flume status --json` for the sidebar and
-  the popup. An agent that crashed, hung or was killed is read within
-  that bound. While the watch's lease is fresh, flume's commands leave
-  the settling to it; once it stops, each command settles every place
-  first, as with no watch.
+  of flume's agents changes state, an agent comes up or goes in one of
+  the server's panes, or thirty seconds pass, it runs `flume settle`,
+  then writes `flume status --json` for the sidebar and the popup. An
+  agent that crashed, hung or was killed is read within that bound.
+  While the watch's lease is fresh, flume's commands leave the settling
+  to it; once it stops, each command settles every place first, as with
+  no watch.
 - **Display hints.** After each settle the watch titles each agent's
   pane `<stage> · <state>` and names it `<kind>--<name>`, and gives
   each base's workspace the token `flume`, a count of its places:

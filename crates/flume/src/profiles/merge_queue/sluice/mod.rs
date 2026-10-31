@@ -5,20 +5,40 @@
 //! every multiplexer's session stripped from its environment, so sluice
 //! records the place's worktree as the submitter, pushes into no pane and
 //! answers at once; never `--check`, never `wt submit` (111, 113, 117,
-//! core.6). inbox is `sluice inbox --json` in the place: each record
-//! landed with its commit, failed or in conflict with sluice's `notice`
-//! as its words, a conflict's files from the record's `conflict.paths`
-//! and its base revision from its `tested.on`, never parsed from the
-//! notice (112, 133). read-submission reads `sluice status <base> --all
-//! --json` for each branch `sluice overview --json` names, the newest
-//! entry submitted from the branch (99, 101). step is `sluice step
-//! <base>`, which beside a live `sluice run` finds the branch's lock held
-//! and does nothing, so no liveness is read (124, 125). The base lives at
-//! `<remote>/<base>` after one fetch where `.config/sluice.toml` lands it
-//! on a remote, and at the local base otherwise (9, 126, C.1). What the
-//! same policy at the base's revision says of a place, its toolchain, its
-//! runner's setup, its teardown and the base's remote, is read for the
-//! resolver to hand the place profile (C.1, C.6, core.3).
+//! core.6). Where sluice finds the submission decided as it takes it in,
+//! as on a base that takes pull requests, it answers with the entry's
+//! record, exiting as the outcome does, and records the outcome delivered
+//! to the place, so the outcome is read from that answer as the inbox
+//! reads one, never as a refusal (112, 133). On such a base sluice pushes
+//! the place's branch and opens or updates its pull request, and where
+//! intake has not taken it in answers `{pull_request, branch, state}`
+//! with no entry: the request is held, open and undecided, and an intake
+//! on whichever host takes the base's requests in takes it in later; a
+//! request answered `closed` was closed without landing (124, C.6). An
+//! entry intake took in names its place `pull/<n>` as its `from.worktree`
+//! and the branch the request was opened from as its `from.head`, and
+//! sluice delivers its outcome to the request, so read-submission reads
+//! it, and the inbox only where it is still pending for the place (133).
+//! inbox is `sluice inbox
+//! --json` in the place: each record landed with its commit, failed or in
+//! conflict with sluice's `notice` as its words, a conflict's files from
+//! the record's `conflict.paths` and its base revision from its
+//! `tested.on`, never parsed from the notice; a record with no notice
+//! says its state, and a conflict's files and the entries its
+//! `conflict.with` names; one found in conflict before any test names the
+//! base's current revision (112, 133). read-submission reads `sluice
+//! status <base> --all --json` for each branch `sluice overview --json`
+//! names, the newest entry submitted from the branch, by a worktree on
+//! it or from a pull request opened from it, a conflict's base revision
+//! its `tested.on` where it holds one (99, 101). step is
+//! `sluice step <base>`, which takes in the base's pull requests before
+//! its round, and beside a live `sluice run` finds the branch's lock held
+//! and does nothing, so no liveness is read (124, 125). The base lives at `<remote>/<base>` after one fetch where
+//! `.config/sluice.toml` lands it on a remote, and at the local base
+//! otherwise (9, 126, C.1). What the same policy at the base's revision
+//! says of a place, its toolchain, its runner's setup, its teardown and
+//! the base's remote, is read for the resolver to hand the place profile
+//! (C.1, C.6, core.3).
 
 use crate::git::Git;
 use crate::shell;
@@ -121,6 +141,36 @@ impl Sluice {
         }
     }
 
+    /// A decided record's outcome: landed with its commit, failed with
+    /// its words, or in conflict with the files contested, its words and
+    /// the base's revision it was tested on, or where it was found in
+    /// conflict before any test, the base's current revision where it
+    /// lives, else its tracking copy's (112, 133).
+    fn outcome(&self, record: &Value, place: &PlaceRef) -> Result<SubmissionOutcome, String> {
+        match state(record)? {
+            SubmissionState::Landed { commit } => Ok(SubmissionOutcome::Landed { commit }),
+            SubmissionState::Failed { words } => Ok(SubmissionOutcome::Failed { words }),
+            SubmissionState::Conflict {
+                files,
+                base: tested,
+                words,
+            } => {
+                let base = match tested {
+                    Some(base) => base,
+                    None => match self.base_revision(&place.repository, &place.base) {
+                        BaseRevision::At { revision } => revision,
+                        BaseRevision::Refused { reason } => base_at(&place.repository, &place.base)
+                            .ok_or_else(|| {
+                                format!("{words}, and the base's revision is unread: {reason}")
+                            })?,
+                    },
+                };
+                Ok(SubmissionOutcome::Conflict { files, base, words })
+            }
+            other => Err(format!("sluice gave a submission undecided: {other:?}")),
+        }
+    }
+
     /// Each branch sluice keeps a queue for in the repository.
     fn branches(&self, dir: &Path) -> Result<Vec<String>, String> {
         let overview = self.json(dir, &["overview", "--json"])?;
@@ -174,6 +224,27 @@ fn id(record: &Value) -> Option<String> {
     }
 }
 
+/// The pull request an answer or a record names: a submit's
+/// `pull_request`, or an entry's submitter `pull/<n>`, as sluice names
+/// the place of an entry intake took in from a request.
+fn request(record: &Value) -> Option<String> {
+    if let Some(number) = record.get("pull_request").and_then(Value::as_u64) {
+        return Some(number.to_string());
+    }
+    let from = record.get("from").and_then(|from| text(from, "worktree"))?;
+    let number = from.strip_prefix("pull/")?;
+    number.parse::<u64>().is_ok().then(|| number.to_string())
+}
+
+/// Whether a record was submitted from `branch`: by a worktree on it, or
+/// by intake from a pull request opened from it, which sluice records as
+/// `from.head` (99).
+fn submitted_from(record: &Value, branch: &str) -> bool {
+    let from = record.get("from");
+    let by = |key| from.and_then(|from| text(from, key));
+    by("worktree").as_deref() == Some(branch) || by("head").as_deref() == Some(branch)
+}
+
 /// The files a conflict record contests.
 fn contested(record: &Value) -> Vec<String> {
     record
@@ -187,25 +258,56 @@ fn contested(record: &Value) -> Vec<String> {
         .collect()
 }
 
+/// The entries a conflict record conflicts with, each by its id and
+/// what submitted it, as sluice's forecast names them.
+fn contested_with(record: &Value) -> Vec<String> {
+    record
+        .get("conflict")
+        .and_then(|conflict| conflict.get("with"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            let from = entry.get("from");
+            let by = |key| from.and_then(|from| text(from, key)).unwrap_or_default();
+            Some(format!(
+                "#{} ({}, {})",
+                id(entry)?,
+                by("agent"),
+                by("worktree")
+            ))
+        })
+        .collect()
+}
+
 /// A decided record's words: sluice's notice, or where a record holds
-/// none, its state and the checks that failed.
+/// none, its state and the checks that failed, or the files contested
+/// and the entries it conflicts with.
 fn said(record: &Value) -> String {
     text(record, "notice").unwrap_or_else(|| {
-        let failed: Vec<String> = record
-            .get("failed")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|check| text(check, "task"))
-            .collect();
         let state = text(record, "state").unwrap_or_default();
-        match failed.is_empty() {
-            true => format!("{state} on {}", text(record, "branch").unwrap_or_default()),
-            false => format!(
-                "{state} on {}: {}",
-                text(record, "branch").unwrap_or_default(),
-                failed.join(", ")
-            ),
+        let named = match state.as_str() {
+            "conflict" => {
+                let with = contested_with(record);
+                let files = contested(record).join(", ");
+                match with.is_empty() {
+                    true => files,
+                    false => format!("{files} with {}", with.join(", ")),
+                }
+            }
+            _ => record
+                .get("failed")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|check| text(check, "task"))
+                .collect::<Vec<String>>()
+                .join(", "),
+        };
+        let branch = text(record, "branch").unwrap_or_default();
+        match named.is_empty() {
+            true => format!("{state} on {branch}"),
+            false => format!("{state} on {branch}: {named}"),
         }
     })
 }
@@ -225,6 +327,10 @@ fn state(record: &Value) -> Result<SubmissionState, String> {
         },
         "conflict" => SubmissionState::Conflict {
             files: contested(record),
+            base: record
+                .get("tested")
+                .and_then(|tested| text(tested, "on"))
+                .map(Revision::new),
             words: said(record),
         },
         "withdrawn" => SubmissionState::Withdrawn,
@@ -346,20 +452,66 @@ fn base_at(repository: &str, base: &str) -> Option<Revision> {
 
 impl MergeQueue for Sluice {
     fn submit(&self, place: &PlaceRef, _head: &Revision) -> Submitted {
-        let location = Path::new(&place.location);
-        match self.json(location, &["submit", &place.base, "--no-wait", "--json"]) {
-            Ok(entry) => match id(&entry) {
-                Some(id) => Submitted::Submitted {
-                    submission: Submission {
-                        id,
-                        branch: place.branch.clone(),
-                        target: place.base.clone(),
-                        state: SubmissionState::Waiting,
-                    },
+        let args = ["submit", place.base.as_str(), "--no-wait", "--json"];
+        let (success, stdout, stderr) = match self.run(Path::new(&place.location), &args) {
+            Ok(output) => output,
+            Err(reason) => return Submitted::Refused { reason },
+        };
+        // A submission sluice found decided as it took it in is answered
+        // with its record, exiting as the outcome does, and delivered.
+        let entry = serde_json::from_str::<Value>(stdout.trim())
+            .ok()
+            .filter(|entry| entry.get("error").is_none())
+            .filter(|entry| success || entry.get("state").is_some());
+        let Some(entry) = entry else {
+            return Submitted::Refused {
+                reason: words(&args, &stdout, &stderr),
+            };
+        };
+        // On a base that takes pull requests, sluice answers the request
+        // it opened or updated and no entry where intake has not taken it
+        // in, which a later intake does; and a request closed without
+        // landing, exiting as a failure does (124, C.6).
+        let Some(id) = id(&entry) else {
+            return match (request(&entry), success) {
+                (Some(request), true) => Submitted::Requested { request },
+                (Some(request), false) => Submitted::Refused {
+                    reason: format!(
+                        "sluice submit: pull request #{request} is {}",
+                        text(&entry, "state").unwrap_or_default()
+                    ),
                 },
-                None => Submitted::Refused {
+                (None, _) => Submitted::Refused {
                     reason: format!("sluice submit answered no entry: {entry}"),
                 },
+            };
+        };
+        let state = match entry.get("state") {
+            Some(_) => match state(&entry) {
+                Ok(state) => state,
+                Err(reason) => return Submitted::Refused { reason },
+            },
+            None => SubmissionState::Waiting,
+        };
+        let submission = Submission {
+            id,
+            branch: place.branch.clone(),
+            target: place.base.clone(),
+            state,
+            request: request(&entry),
+        };
+        if !matches!(
+            submission.state,
+            SubmissionState::Landed { .. }
+                | SubmissionState::Failed { .. }
+                | SubmissionState::Conflict { .. }
+        ) {
+            return Submitted::Submitted { submission };
+        }
+        match self.outcome(&entry, place) {
+            Ok(outcome) => Submitted::Decided {
+                submission,
+                outcome,
             },
             Err(reason) => Submitted::Refused { reason },
         }
@@ -381,24 +533,13 @@ impl MergeQueue for Sluice {
         };
         let outcomes = records
             .iter()
-            .filter_map(|record| match text(record, "state").as_deref() {
-                Some("landed") => Some(SubmissionOutcome::Landed {
-                    commit: Revision::new(text(record, "landed_as")?),
-                }),
-                Some("failed") => Some(SubmissionOutcome::Failed {
-                    words: said(record),
-                }),
-                Some("conflict") => Some(SubmissionOutcome::Conflict {
-                    files: contested(record),
-                    base: record
-                        .get("tested")
-                        .and_then(|tested| text(tested, "on"))
-                        .map(Revision::new)
-                        .or_else(|| base_at(&place.repository, &place.base))?,
-                    words: said(record),
-                }),
-                _ => None,
+            .filter(|record| {
+                matches!(
+                    text(record, "state").as_deref(),
+                    Some("landed" | "failed" | "conflict")
+                )
             })
+            .filter_map(|record| self.outcome(record, place).ok())
             .collect();
         Inbox::Outcomes { outcomes }
     }
@@ -422,9 +563,8 @@ impl MergeQueue for Sluice {
                 .into_iter()
                 .flatten()
             {
-                let from = record.get("from").and_then(|from| text(from, "worktree"));
                 let number = record.get("id").and_then(Value::as_u64).unwrap_or_default();
-                if from.as_deref() == Some(branch)
+                if submitted_from(record, branch)
                     && newest.as_ref().is_none_or(|(id, _)| number > *id)
                 {
                     newest = Some((number, record.clone()));
@@ -441,6 +581,7 @@ impl MergeQueue for Sluice {
                     branch: branch.into(),
                     target: text(&record, "branch").unwrap_or_default(),
                     state,
+                    request: request(&record),
                 },
             },
             (None, _) => SubmissionRead::CouldNotRead {

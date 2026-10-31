@@ -5,11 +5,18 @@
 //! settling as a caller would between its commands. A kind runs through
 //! on its own: a fix lands through flume's own submission (S1); a failed
 //! submission and a conflicting one each go back to code with sluice's
-//! words and land on the second (112); a change runs construct, code and
+//! words and land on the second (112), a conflict the stand-in for sluice
+//! answers at the submit itself among them (133); a pull request the
+//! stand-in for sluice answers with no entry is followed until it is
+//! taken in, then to its landing, and a failure of the entry taken in
+//! from it goes back to code once and lands on the next (124, C.6); a change runs construct, code and
 //! verify, its report committed in the archived change (S2, S35); verify
 //! finding work sends the place back to code (131); a fix whose prompt
 //! Claude Code submits inside paste tags lands (89); a host's bound
-//! queues a launch and starts the waiting ones by priority (S37); and
+//! queues a launch and starts the waiting ones by priority (S37), and a
+//! stage waiting for room starts at the next command of flume's once the
+//! host's configuration gives it room, status saying no watch is kept
+//! (70, 119); and
 //! change@2's code stage works a change of three task groups one fresh
 //! agent at a time, and a failed submission sends it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
@@ -214,6 +221,192 @@ fn a_conflicting_submission_merges_the_base_and_lands() {
 }
 
 #[test]
+fn a_conflict_sluice_answers_at_the_submit_goes_back_to_code_and_lands() {
+    // 112, 133: the stand-in for sluice answers the first submission with
+    // its entry's record, found in conflict as it was taken in, exiting
+    // as a conflict does and delivered, as sluice answers a no-wait submit
+    // on a base that takes pull requests. The place goes back to code with
+    // the files contested and the base's revision in its words, never
+    // waiting on its caller as if refused, and lands on the second.
+    let walk = Walk::new("walk-conflict-at-submit");
+    walk.sluice_decides_the_first_submit();
+    let place = walk.launch("fix", "four", &["--brief", "rework the work"]);
+    let base = walk.landed_elsewhere("work.rs", "the base's own\n");
+    walk.agent(&place, commits("work.rs", "the place's own\n"));
+    let status = walk.until(&place, "its code stage started again", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert!(status["submission"]["waiting"].is_null(), "{status}");
+    assert_eq!(
+        status["submission"]["verdict"]["conflict"]["files"],
+        json!(["work.rs"]),
+        "{status}"
+    );
+    let first = walk.submissions();
+    assert_eq!(first.len(), 1, "{first:?}");
+    assert_eq!(first[0]["state"], "conflict", "{first:?}");
+    assert!(
+        first[0]["delivered"].is_string(),
+        "the outcome sluice's answer delivered: {first:?}"
+    );
+    let prompt = walk.prompt(&place);
+    for named in [
+        "conflict on main: work.rs",
+        "The files contested: work.rs.",
+        &base,
+    ] {
+        assert!(prompt.contains(named), "{named} is not in {prompt}");
+    }
+    walk.agent(
+        &place,
+        json!([{ "merge_named": { "work.rs": "the place's own and the base's own\n" } }]),
+    );
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("work.rs").as_deref(),
+        Some("the place's own and the base's own\n")
+    );
+    // sluice withdraws the conflicting entry once the worktree submits
+    // again.
+    let states: Vec<Value> = walk
+        .submissions()
+        .iter()
+        .map(|entry| entry["state"].clone())
+        .collect();
+    assert_eq!(states.len(), 2, "{states:?}");
+    assert_eq!(states[1], "landed", "{states:?}");
+    assert!(!walk.has_branch("fix/four"));
+}
+
+#[test]
+fn a_pull_request_is_followed_from_no_entry_to_its_entry_and_its_landing() {
+    // 124, C.6: the stand-in for sluice answers the submission as sluice
+    // answers one on a base that takes pull requests whose request no
+    // intake has taken in yet: the pull request and no entry. The place's
+    // submission is open and undecided, never refused nor waiting on its
+    // caller, until the host that takes the base's requests in takes it
+    // in; flume follows the entry, reads its landing from sluice's
+    // record, the inbox giving nothing, and tidies the place.
+    let walk = Walk::new("walk-pull-request");
+    walk.sluice_takes_pull_requests();
+    let place = walk.launch("fix", "five", &["--brief", "fix the parser"]);
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    walk.until(&place, "its submission held as a pull request", |status| {
+        status["submission"]["request"] == PULL_REQUEST
+    });
+    for _ in 0..3 {
+        walk.settle(&place);
+    }
+    let status = walk.status(&place);
+    assert_eq!(status["phase"], "live", "{status}");
+    assert_eq!(status["submission"]["submits"], 1, "{status}");
+    assert_eq!(status["submission"]["read"], "none", "{status}");
+    for unset in ["verdict", "waiting"] {
+        assert!(status["submission"][unset].is_null(), "{status}");
+    }
+    assert!(status["waiting_on"].is_null(), "{status}");
+    assert_eq!(status["stalled"], false, "{status}");
+    assert!(walk.submissions().is_empty(), "an entry before intake");
+    let person = walk.person(&["status", &place]);
+    assert!(
+        person.contains(&format!(
+            "pull request #{PULL_REQUEST}, not yet taken in by the merge queue"
+        )),
+        "{person}"
+    );
+
+    let entry = walk.take_in_request();
+    let status = walk.status(&place);
+    let read = &status["submission"]["read"]["found"]["submission"];
+    assert_eq!(read["id"], entry["id"].to_string(), "{status}");
+    assert_eq!(read["request"], PULL_REQUEST, "{status}");
+    assert_eq!(read["state"], "waiting", "{status}");
+    until_landed(&walk, &place);
+
+    let submissions = walk.submissions();
+    assert_eq!(submissions.len(), 1, "{submissions:?}");
+    let landed = &submissions[0];
+    assert_eq!(landed["state"], "landed", "{landed}");
+    assert_eq!(
+        landed["from"]["worktree"],
+        format!("pull/{PULL_REQUEST}"),
+        "{landed}"
+    );
+    assert_eq!(landed["from"]["head"], "fix/five", "{landed}");
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+    assert!(!Path::new(&place).exists(), "the place is left");
+    assert!(!walk.has_branch("fix/five"), "the place's branch is left");
+}
+
+#[test]
+fn a_pull_requests_failure_goes_back_to_code_once_and_its_next_request_lands() {
+    // 112, 124, 133: the gate fails the entry taken in from the place's
+    // pull request, its outcome read from sluice's record; the code stage
+    // starts again once with sluice's words, its agent fixes it, and the
+    // request flume submits again waits to be taken in, the failed entry
+    // never read as it, then lands.
+    let walk = Walk::new("walk-pull-request-failed");
+    walk.sluice_takes_pull_requests();
+    let place = walk.launch("fix", "six", &["--brief", "fix the parser"]);
+    walk.agent(
+        &place,
+        json!([
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "write": { "path": "broken", "text": "not yet\n" } },
+            { "bash": "git add -A && git commit --quiet -m 'fix the parser'" },
+        ]),
+    );
+    walk.until(&place, "its submission held as a pull request", |status| {
+        status["submission"]["request"] == PULL_REQUEST
+    });
+    walk.take_in_request();
+    let status = walk.until(&place, "its code stage started again", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert_eq!(status["submission"]["send_backs"], 1, "{status}");
+    assert!(
+        status["submission"]["verdict"]["failed"].is_object(),
+        "{status}"
+    );
+    let prompt = walk.prompt(&place);
+    assert!(prompt.contains("failed on main"), "{prompt}");
+    for _ in 0..3 {
+        walk.settle(&place);
+    }
+    assert_eq!(
+        stage(&walk.status(&place), "code")["starts"],
+        2,
+        "the failure acted on again"
+    );
+
+    walk.agent(
+        &place,
+        json!([{ "bash": "git rm --quiet broken && git commit --quiet -m 'the parser test passes'" }]),
+    );
+    let status = walk.until(&place, "its second submission held", |status| {
+        status["submission"]["submits"] == 2
+    });
+    assert_eq!(status["submission"]["read"], "none", "{status}");
+    assert_eq!(status["submission"]["request"], PULL_REQUEST, "{status}");
+    assert_eq!(status["submission"]["send_backs"], 1, "{status}");
+    walk.take_in_request();
+    until_landed(&walk, &place);
+    // sluice withdraws the failed entry once the request is taken in
+    // again, and the place never reads that withdrawal as its own.
+    let states: Vec<Value> = walk
+        .submissions()
+        .iter()
+        .map(|entry| entry["state"].clone())
+        .collect();
+    assert_eq!(states, vec![json!("withdrawn"), json!("landed")]);
+    assert_eq!(walk.on_remote("broken"), None);
+    assert!(!walk.has_branch("fix/six"));
+}
+
+#[test]
 fn a_change_runs_construct_code_and_verify() {
     // S2, S35: construct writes the change, code ticks its tasks, status
     // showing them ticked along the way, and verify commits its report and
@@ -395,6 +588,65 @@ fn a_bound_host_queues_launches_and_starts_them_by_priority() {
         !status["agent"].is_null()
     });
     assert_eq!(walk.host()["queue"], json!([]));
+}
+
+#[test]
+fn a_stage_waiting_for_room_starts_at_the_next_command_once_the_host_gives_room() {
+    // On deneb a stage waiting for room still waited once the host's
+    // configuration gave it room, until a settle by hand: the printed
+    // command keeps no watch, so a place moves on only when a command of
+    // flume's acts or an agent goes quiet (119). Status says so and
+    // settles nothing; the next command that acts, a launch here, reads
+    // the configuration as it stands and starts the waiting stage before
+    // its own (46, 57, 70).
+    let walk = Walk::new("walk-room-given");
+    walk.configure("[host]\nagents = 1\n");
+    let first = walk.launch("fix", "first", &["--brief", "one"]);
+    let waiting = walk.launch("fix", "waiting", &["--brief", "two"]);
+    assert!(
+        !walk.status(&first)["agent"].is_null(),
+        "the first did not start"
+    );
+    assert!(
+        walk.status(&waiting)["agent"].is_null(),
+        "the second launch started past the bound"
+    );
+    assert_eq!(walk.host()["watch"], json!("none"));
+    let said = walk.person(&["status"]);
+    assert!(
+        said.contains(
+            "the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+        ),
+        "{said}"
+    );
+
+    walk.configure("[host]\nagents = 2\n");
+    let host = walk.host();
+    assert_eq!(
+        (host["running"].clone(), host["room"].clone()),
+        (json!(1), json!(1)),
+        "{host}"
+    );
+    assert!(
+        walk.status(&waiting)["agent"].is_null(),
+        "status started the waiting stage"
+    );
+
+    let third = walk.launch("fix", "third", &["--brief", "three"]);
+    let started = walk.status(&waiting);
+    assert!(!started["agent"]["printed"].is_null(), "{started}");
+    assert!(
+        walk.status(&third)["agent"].is_null(),
+        "the launch's own stage took the room"
+    );
+    let host = walk.host();
+    let queue: Vec<Value> = host["queue"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|queued| queued["place"].clone())
+        .collect();
+    assert_eq!(queue, vec![json!(third)], "{host}");
 }
 
 /// The three task groups of the repeating walkthrough's change, two

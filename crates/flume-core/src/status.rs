@@ -146,6 +146,7 @@ impl Engine {
                 }
                 SubmissionStatus {
                     read,
+                    request: held.submission.request.clone(),
                     submits: held.submission.submits,
                     send_backs: held.submission.send_backs,
                     verdict: held.submission.verdict.clone(),

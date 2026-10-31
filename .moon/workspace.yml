@@ -9,8 +9,8 @@
 #                 manifest, its lint and its scripts against stand-in
 #                 herdr and flume; the conformance suite's clause
 #                 coverage; the root's format, toolchain, records, specs,
-#                 changes, hooks and layers. Every branch requires it, and
-#                 CI runs it on Linux and macOS
+#                 changes, hooks, layers and versions. Every branch
+#                 requires it, and CI runs it on Linux and macOS
 #   check-tools   the sluice and herdr profiles against the pinned tools,
 #                 the herdr plugin linked into the pinned herdr, and the
 #                 walkthroughs with a stand-in agent program. main

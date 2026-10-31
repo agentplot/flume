@@ -22,6 +22,31 @@ brought to the rule.
   agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
   operator rules (Part C's preamble; core.19). The item leaves when it
   lands.
+- **Clause 117 has submit answered before the merge queue decides.**
+  sluice 0.57.1, on a base that takes pull requests, can answer a
+  no-wait submit with the record of an entry it found decided as it
+  took it in, exiting as the outcome does, and records the outcome
+  delivered to the place, so no inbox gives it (133). The merge-queue
+  seam's submit answers such a submission with its outcome, which the
+  settle that submitted acts on as it acts on the inbox's (112). The
+  code stands ahead of 117, C.6 and core.6, which reads an outcome
+  only at the settles that follow; they say so once the operator rules
+  the change (core.19). The item leaves when it lands.
+- **A pull request's entry and outcome are read where C.6 does not
+  say.** sluice 0.57.1, on a base that takes pull requests, answers a
+  submit whose request intake has not taken in with `{pull_request,
+  branch, state}` and no entry, records the entry intake takes in
+  later from `pull/<n>` with the place's branch as its `from.head`, and
+  delivers its outcome to the request rather than the place. The
+  merge-queue seam's submit answers such a submission as the request
+  held; read-submission takes an entry submitted from the branch by a
+  worktree or from a pull request opened from it; and the place's
+  entry taken in from its request has its landing, failure or conflict
+  read from read-submission as well as the inbox, acted on once. The
+  code stands ahead of 111 and 133, which settle a place by the
+  inbox's outcome alone, and of C.6's table of what the profile reads,
+  which names `from.worktree` alone; they say so once the operator
+  rules the change (core.19). The item leaves when it lands.
 - **Record 0021 waits on a plan.** The standing prompt with cache use
   in status (record 0021; core.33), accepted 2026-10-29 and stated at
   blueprints 6e5aae2, is built only once the user approves a plan for
@@ -60,16 +85,17 @@ brought to the rule.
   differs, as the user ruled on 2026-10-31 (design 7 of the change
   agent-mode-is-a-layered-setting; core.10). The item leaves when the
   statement says so (core.19).
-- **Record 0026 waits on the user's yes.** Every program herdr starts
-  runs under an agent profile, its own or the common one, each part of
-  the agent seam built or plainly degraded (record 0026; core.1's
-  details, core.10 and core.30 as amended, core.39), and record 0024's
-  modes are flume's own four, each profile mapping them or refusing,
-  stated at blueprints a11f6d5 (169 to 174). Until then `profiles.rs`
-  binds Claude Code's profile alone and refuses every other program.
-  Once accepted, the common profile is built with entries for Codex,
-  Gemini CLI, GitHub Copilot CLI and OpenCode, then Codex's own
-  profile. The item leaves when it is accepted or rejected.
+- **Record 0026 waits on its build.** Every program herdr starts runs
+  under an agent profile, its own or the common one, each part of the
+  agent seam built or plainly degraded (record 0026; core.1's details,
+  core.10 and core.30 as amended, core.39), and record 0024's modes are
+  flume's own four, each profile mapping them or refusing, stated at
+  blueprints a11f6d5 (169 to 174) and accepted on 2026-10-30. Until it
+  is built `profiles.rs` binds Claude Code's profile alone and refuses
+  every other program, against core.39. The common profile is built
+  with entries for Codex, Gemini CLI, GitHub Copilot CLI and OpenCode,
+  then Codex's own profile. The item leaves when the code is brought
+  to core.39.
 - **The command line still says `<partition>/<role>`.** `flume wake
   --help` and the refusals of a name that is no address, in
   `commands/mod.rs`, `host/config.rs` and `flume-core`'s `wake.rs`,

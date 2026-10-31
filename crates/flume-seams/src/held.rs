@@ -693,6 +693,12 @@ pub struct StartHeld {
     /// where every task was ticked there (140).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupHeld>,
+    /// The command of flume's opening the agent, as the host names it,
+    /// until the terminal's open answers: while it lives, the terminal may
+    /// still be bringing the program up, and no other command sends the
+    /// prompt or answers the program's questions (34, 35, 37).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opening: Option<String>,
 }
 
 /// What a start's agent is to run under (161): the program its settings
@@ -799,12 +805,21 @@ pub struct SubmissionHeld {
     /// How many send-backs the place has taken (112).
     pub send_backs: u32,
     /// The submission flume last made, by the merge queue's id, so a
-    /// withdrawal of it is told from a hand's (99, 112).
+    /// withdrawal of it is told from a hand's (99, 112); for a request,
+    /// the entry its intake took it in as, once read.
     #[serde(default)]
     pub id: Option<String>,
+    /// The request the merge queue answered flume's last submit with, a
+    /// forge's pull request by its number, where it takes the base's work
+    /// as requests: the submission is the entry an intake takes it in as
+    /// (124, C.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<String>,
     /// The newest submission of the branch the merge queue held when the
-    /// place was launched, by its id: an earlier place's of the same
-    /// name, which this place never reads as its own (3, 99, 132).
+    /// place was launched, and again before each submit of flume's, by
+    /// its id: an earlier place's of the same name, or the entry of the
+    /// place's submission before, which this place never reads as its
+    /// own (3, 99, 124, 132).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// The last outcome flume collected, or its refusal at submit.

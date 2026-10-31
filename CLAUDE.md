@@ -40,7 +40,7 @@ branch requires:
 
 | layer | what | who requires it |
 |---|---|---|
-| `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the Claude Code plugin's hooks against the built binary; the herdr plugin's manifest, its lint (shellcheck) and its scripts against stand-in herdr and flume under sh and dash; the conformance suite's clause coverage; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks and layers | every branch, and CI on Linux and macOS |
+| `check-fast` | the site's prose (Vale) and its build; each crate's format (rustfmt), lint (clippy) and tests over the fakes, and every profile over real git and files on scratch repositories; the Claude Code plugin's hooks against the built binary; the herdr plugin's manifest, its lint (shellcheck) and its scripts against stand-in herdr and flume under sh and dash; the conformance suite's clause coverage; the root's format (treefmt), toolchain, records, specs, open changes, commit hooks, layers and versions, every file that carries flume's version giving the workspace's | every branch, and CI on Linux and macOS |
 | `check-tools` | the sluice and herdr profiles against the pinned tools, the herdr plugin linked into the pinned herdr, and the walkthroughs with the stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/`) | main |
 | `check-live` | the walkthroughs with the pinned Claude Code under herdr (`crates/flume/tests/profiles/live/`) | no branch: run by hand in the devenv shell, `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live`, the token a test account's from `claude setup-token` |
 

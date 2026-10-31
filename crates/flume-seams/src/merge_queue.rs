@@ -42,9 +42,13 @@ pub enum SubmissionState {
     Failed {
         words: String,
     },
-    /// It conflicted with its base, naming the files contested (112).
+    /// It conflicted with its base, naming the files contested, and the
+    /// base's revision it was tested against where the merge queue
+    /// records one (112).
     Conflict {
         files: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        base: Option<Revision>,
         words: String,
     },
     Withdrawn,
@@ -64,6 +68,12 @@ pub struct Submission {
     pub branch: String,
     pub target: String,
     pub state: SubmissionState,
+    /// The request it was taken in from, where the merge queue takes the
+    /// base's work as requests, a forge's pull request by its number:
+    /// its outcome is delivered to the request, so it is read from the
+    /// merge queue's record as well as the place's inbox (124, 133, C.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<String>,
 }
 
 /// submit: the submission once the merge queue holds it, with no wait on
@@ -71,8 +81,27 @@ pub struct Submission {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Submitted {
-    Submitted { submission: Submission },
-    Refused { reason: String },
+    Submitted {
+        submission: Submission,
+    },
+    /// The merge queue opened or updated a request for the place's branch,
+    /// a forge's pull request by its number, and holds no entry for it
+    /// yet: an intake takes the request in later, on whichever host takes
+    /// the base's requests in, and the submission is open and undecided
+    /// until then (124, C.6).
+    Requested {
+        request: String,
+    },
+    /// The merge queue decided the submission as it took it in, and its
+    /// answer gave the outcome, which it records delivered to the place,
+    /// so no inbox gives it again (112, 133).
+    Decided {
+        submission: Submission,
+        outcome: SubmissionOutcome,
+    },
+    Refused {
+        reason: String,
+    },
 }
 
 /// One outcome of a place's submission, delivered to the place once
@@ -116,7 +145,8 @@ pub enum Stepped {
 }
 
 /// read-submission: the newest submission of a branch, whoever made it,
-/// or none, or that the merge queue could not be read (99).
+/// one taken in from a request opened from the branch among them, or
+/// none, or that the merge queue could not be read (99).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubmissionRead {

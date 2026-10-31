@@ -797,6 +797,36 @@ fn the_binding_is_read_beside_a_bare_repository() {
     );
 }
 
+/// The binding is read at the remote's default branch, though the bare
+/// repository's own `HEAD` names a branch never made and no
+/// `origin/HEAD` was set; with no remote, that `HEAD` names no default
+/// branch, and the binding is not read as empty (20, C.2).
+#[test]
+fn the_binding_is_read_at_the_remotes_default_branch_beside_a_bare_repository() {
+    let origin = Repository::new("remote-default");
+    origin.write(DECLARATION, "[profiles]\nmerge_queue = \"sluice\"\n");
+    origin.commit("the merge queue bound");
+    let remote = origin.bare_remote();
+    let container = Container::of(&remote, Scratch::new("container"));
+    assert_eq!(
+        Weir.read_binding(&container.name()),
+        BindingRead::Read {
+            binding: Binding {
+                merge_queue: Some("sluice".into()),
+                ..Binding::default()
+            }
+        },
+        "the binding at origin's main"
+    );
+    container.git(&["remote", "remove", "origin"]);
+    match Weir.read_binding(&container.name()) {
+        BindingRead::CouldNotRead { reason } => {
+            assert!(reason.contains("master"), "{reason}")
+        }
+        other => panic!("a binding read where HEAD names no commit: {other:?}"),
+    }
+}
+
 #[test]
 fn flumes_own_repository_binds_git_worktree_openspec_and_sluice() {
     crate::common::isolate();
