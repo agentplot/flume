@@ -8,7 +8,8 @@ use flume_core::{
     Tidied, Woke,
 };
 use flume_seams::{
-    HoldOn, IntentKey, Made, Readiness, SubmissionRead, UnsettledStart, WaitingOn, Waits, Watch,
+    Act, HoldOn, IntentKey, Made, Readiness, SubmissionRead, UnsettledStart, WaitingOn, Waits,
+    Watch,
 };
 use serde_json::{json, Value};
 
@@ -265,30 +266,46 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
 
 /// What a place waits on its caller for, since when, and its words; a
 /// place waiting on its readiness without them, since its readiness
-/// lines give the failed step and the last of its words (12, 56).
+/// lines give the failed step and the last of its words (12, 56); a
+/// place waiting on a person to answer its agent's dialog with the
+/// dialog's lines beneath, as the terminal draws them (34, 35).
 fn waiting_line(waiting: &WaitingOn, stalled: bool) -> String {
-    let mut line = format!(
-        "  waits on its caller to {}{} ({})",
-        word(json!(waiting.act)),
-        waiting
-            .stage
-            .as_ref()
-            .map(|stage| format!(" {stage}"))
-            .unwrap_or_default(),
-        word(json!(waiting.why))
-    );
+    let mut line = match waiting.act {
+        Act::Answer => format!(
+            "  waits on a person to answer the dialog its agent shows{} ({})",
+            waiting
+                .stage
+                .as_ref()
+                .map(|stage| format!(" in {stage}"))
+                .unwrap_or_default(),
+            word(json!(waiting.why))
+        ),
+        _ => format!(
+            "  waits on its caller to {}{} ({})",
+            word(json!(waiting.act)),
+            waiting
+                .stage
+                .as_ref()
+                .map(|stage| format!(" {stage}"))
+                .unwrap_or_default(),
+            word(json!(waiting.why))
+        ),
+    };
     if let Some(since) = waiting.since {
         line.push_str(&format!(" since {since}"));
     }
     if stalled {
         line.push_str(", stalled");
     }
-    if let Some(words) = waiting
-        .words
-        .as_ref()
-        .filter(|_| waiting.why != Waits::Unready)
-    {
-        line.push_str(&format!(": {words}"));
+    match &waiting.words {
+        Some(words) if waiting.act == Act::Answer => {
+            line.push(':');
+            for drawn in plain(words).lines() {
+                line.push_str(&format!("\n    {drawn}"));
+            }
+        }
+        Some(words) if waiting.why != Waits::Unready => line.push_str(&format!(": {words}")),
+        _ => {}
     }
     line
 }
@@ -605,6 +622,7 @@ mod tests {
             own_work: Reading::No,
             past_limit: false,
             screen: None,
+            dialog: None,
             printed: None,
             last_words: None,
             notes: vec![],
@@ -890,6 +908,24 @@ mod tests {
         assert_eq!(
             waiting_line(&unready, true),
             "  waits on its caller to retry construct (unready) since 54000, stalled"
+        );
+    }
+
+    #[test]
+    fn a_wait_on_a_dialog_gives_its_lines_beneath() {
+        let dialog = WaitingOn {
+            act: Act::Answer,
+            stage: Some("talk".into()),
+            why: Waits::Dialog,
+            since: Some(54_000),
+            words: Some(
+                "New MCP server found in .mcp.json: docs\n\u{1b}[1m\u{276f} 1. Use this and all future MCP servers\u{1b}[0m"
+                    .into(),
+            ),
+        };
+        assert_eq!(
+            waiting_line(&dialog, false),
+            "  waits on a person to answer the dialog its agent shows in talk (dialog) since 54000:\n    New MCP server found in .mcp.json: docs\n    \u{276f} 1. Use this and all future MCP servers"
         );
     }
 

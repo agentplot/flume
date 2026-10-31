@@ -277,6 +277,12 @@ echo q | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
 grep -q 'change · code · waiting · stalled' "$t/out" || fail "the row reads: $(cat "$t/out")"
 pass
 
+fresh 'sidebar: a place whose agent shows a dialog waits on a person'
+status_of p1 0 starting | jq '.status.places[0] |= (.waiting_on = {act: "answer", why: "dialog"} | .tasks = null)' >"$S/status.json"
+echo q | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
+grep -q 'change · code · starting · waits on a person' "$t/out" || fail "the row reads: $(cat "$t/out")"
+pass
+
 fresh 'keys: retry from the sidebar, one key and the words as lines'
 status_of p1 2 'ended short' | jq '.status.places[0] |= (.current = "construct" | .clues.stage = "construct")' >"$S/status.json"
 printf 'r\n\nq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1

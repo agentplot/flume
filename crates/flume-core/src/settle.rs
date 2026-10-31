@@ -139,6 +139,7 @@ impl Engine {
         };
         match held.stages[index].state {
             StageState::Starting | StageState::Started => self.deliver(id),
+            StageState::NeverBegun => self.begun_after(id),
             StageState::Begun | StageState::Stuck | StageState::Lost => self.read_end(id),
             StageState::Delivered | StageState::Finished | StageState::Repeating => {
                 self.advance(id)

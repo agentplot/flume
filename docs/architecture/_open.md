@@ -47,6 +47,25 @@ brought to the rule.
   inbox's outcome alone, and of C.6's table of what the profile reads,
   which names `from.worktree` alone; they say so once the operator
   rules the change (core.19). The item leaves when it lands.
+- **A dialog before the prompt waits on a person, and a retry leaves
+  an agent whose stage began.** On deneb, 2026-10-31, a conversation's
+  Claude Code stopped at its dialog approving a repository's MCP
+  server; flume read the start never begun, a person answered the
+  dialog and the agent began, and the operator's retry ended that
+  working session. A start the terminal reads held at its program's
+  question, at the open or at a settle before the agent takes its
+  prompt, now stays starting with the question's words, the place
+  waiting on a person's answer (`waiting_on` `answer`, `dialog`), never
+  read never begun while the dialog shows. A stage read never begun
+  whose live agent then acks its start, before any sending, or its
+  prompt, goes on started or begun. A retry is refused, forced or not,
+  while the place's agent is live and its stage started or began,
+  naming the agent and `flume stop`. The code stands ahead of 35 and
+  C.4's paragraph after its table, which read a start held at a
+  question never begun at once, of S40 and C.5's herdr rows, of 50,
+  which has a retry end a quiet agent, and of core.12's details; they
+  say so once the operator rules the change (core.19). The item leaves
+  when it lands.
 - **Record 0021 waits on a plan.** The standing prompt with cache use
   in status (record 0021; core.33), accepted 2026-10-29 and stated at
   blueprints 6e5aae2, is built only once the user approves a plan for

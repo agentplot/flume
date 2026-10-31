@@ -258,6 +258,13 @@ fn s7_two_held_places(_: &()) -> Outcome {
         Some(StageState::OnHold),
         "the second's"
     );
+    world.tick("change/one", "one", 1, 1);
+    world.settle(&ids[0]);
+    ensure_eq!(
+        world.stage_state(&ids[0], "verify"),
+        Some(StageState::OnHold),
+        "the first place's verify once its code delivered"
+    );
     let opened = world.terminal.log.count("open");
     let answer = world.engine.retry(&ids[0], Retry::Submission, None, false);
     ensure!(
@@ -354,6 +361,12 @@ fn opened_and_sent_under_a_watch(_: &()) -> Outcome {
     );
     let second = World::identity("fix", "one", "code", 2);
     world.agent.receives_at(&second, Some(2));
+    // The begun stage's agent is the caller's to end first (50).
+    let stopped = world.engine().stop(&id, false);
+    ensure!(
+        stopped.refusal().is_none(),
+        "the stop was refused: {stopped:?}"
+    );
     let retried = world
         .engine()
         .retry(&id, Retry::Stage("code".into()), None, false);

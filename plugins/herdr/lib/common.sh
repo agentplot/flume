@@ -74,8 +74,9 @@ on_this_server() {
 
 # A place's row, as the sidebar and the popup show it, from its status
 # alone: kind, stage, the stage's state, the change's tasks ticked, the
-# submission, and whether it waits on its caller or is stalled (56, 60;
-# core.14). A jq function, defined for every program that includes it.
+# submission, and whether it waits on its caller, on a person to answer
+# its agent's dialog, or is stalled (34, 35, 56, 60; core.14). A jq
+# function, defined for every program that includes it.
 rows_jq='
 def phase_word: if type == "string" then . else keys[0] end;
 def submission_word:
@@ -89,6 +90,9 @@ def row:
     (.clues.state // (.phase | phase_word)),
     (if .tasks then "\([.tasks[] | select(.ticked)] | length)/\(.tasks | length)" else empty end),
     (.submission | submission_word),
-    (if .stalled then "stalled" elif .waiting_on then "waits on caller" else empty end)
+    (if .stalled then "stalled"
+     elif .waiting_on.act == "answer" then "waits on a person"
+     elif .waiting_on then "waits on caller"
+     else empty end)
   ] | join(" · ");
 '
