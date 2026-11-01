@@ -1,0 +1,817 @@
+# Design
+
+## Context
+
+flume's tree at b6cd1b5 finds a kind in three declarations. `resolve_kind`
+in `crates/flume-core/src/launch.rs` looks a launch's name up in the
+launch's `--kinds` file, then in the repository's `.config/flume.toml`
+at the base's revision, then among flume's own kinds. `named_version`
+splits `<name>@<version>` in the core. The kinds seam
+(`crates/flume-seams/src/kinds.rs`) offers `read_kinds`,
+`read_declaration`, `flumes_own` and `read_binding`, and a kind's
+`Declared` is `launch`, `repository` or `flume`. flume's own kinds are
+already laid out one directory per version,
+`crates/flume/src/profiles/kinds/weir/own/<name>@<version>/kind.toml`
+with its prompts beside it, built into the binary. A place's held state
+keeps the whole kind it launched with, prompts included
+(`PlaceRecord::kind`), so a later change to a declaration never reaches
+it (21). A launch naming `crew/design@1` today is refused as resolving
+to no declaration.
+
+Record 0022, accepted on 2026-10-29, is stated at blueprints 57a1ba9
+(154 to 160, S59 to S63; weir 88 to 93). It makes a kind a package named
+`<source>/<name>@<version>`, with versions side by side, and runs a kind
+from outside only where the repository's lock or the host's records its
+content's hash. It puts the host's packages at a fixed directory,
+`$XDG_DATA_HOME/flume/kinds/<source>/<name>@<version>/` (C.7), and leaves
+open how they get there (159). It waits on a build plan, weir-kinds'
+part first (`_open.md`). weir-kinds at flume's pin, 0b6eb5a, reads a
+declaration and nothing of packages, identities, hashes or locks.
+
+The user ruled on 2026-11-01, reviewing the flywheel runner's design,
+that kinds are flume's concern. The runner's configuration holds
+`kinds = { crew = "/nix/store/…-crew/plugin/flume/kinds.toml" }`, and it
+passes that path as `--kinds` to each role's launch. The user asked
+instead for:
+
+1. the host's configuration to name kind sources;
+2. a launch to name a kind by its identity;
+3. a design that fits a marketplace configuring each host with no
+   person; and
+4. `--kinds <file>` kept for a one-off launch.
+
+The cloud's domain model, ruling T3 of 2026-10-31, has a kind built
+into flume, declared in a repository, or a package from a marketplace,
+with the cloud copying its identity and hash.
+
+This change builds record 0022 with the host's sources in place of its
+fixed packages directory. It needs a few clauses the statement lacks,
+and it amends 154's bare name. Section *For the user's ruling* names
+each, with words for the statement.
+
+The rules this design relies on:
+
+- **The seams.** core.1 and core.2: the core names no tool, and only
+  the kinds profile names weir-kinds. core.3: a source binds no
+  profile.
+- **The format.** core.4: a package, an identity, a hash and a lock are
+  read and written by weir-kinds alone. core.41: a statechart kind in a
+  package is refused as one elsewhere is.
+- **Launches and acts.** core.8: every refusal comes before anything is
+  made. core.17: `flume kinds lock` is safe to repeat.
+- **Status.** core.14: status's JSON form only gains fields. core.15:
+  status reads a source where it lies when asked.
+- **The repository.** core.16: nothing of flume's goes into a
+  repository's content but the lock its caller asks for.
+- **Settings.** core.30: a source names a location on the host, so only
+  the host declares one.
+- **Kinds from outside.** core.34 stands as written: nothing from
+  outside runs unlocked, flume fetches nothing, and it writes no lock at
+  a launch or a settle. Its details gain the sources directory and the
+  bare name.
+- **The site.** core.35: the site and `/launch` speak to any host's
+  operator.
+- **The gate.** core.21 and core.22: weir-kinds' pin moves by a chore of
+  its own. No new moon project.
+
+The one rules page is `docs/architecture/core.md`. This change touches
+no area another page would own. Where flume has no rule, the kit
+standard's code profile binds (kit:specs.3, kit:testing.5).
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- A host says where kinds come from, beyond flume's own and its
+  repositories', in files a program can write, replace and remove with
+  no person and no edit to a file a person keeps (brief 1, 3).
+- A launch, and a role, names any kind on the host by its identity, and
+  is refused naming what is missing when the host does not hold it
+  (brief 2; 4, 154).
+- A caller's bare name means tomorrow what it means today, whatever
+  sources a program adds to the host (brief 2).
+- Several versions of a kind stand side by side, and a place runs the
+  kind its launch read whatever happens to its source after (brief 3;
+  21).
+- Nothing from outside runs unless a lock records its content, and a
+  program can lock exactly the content a marketplace published (155,
+  156; core.34).
+- Status says, for every place, which kind it runs and where that kind
+  came from (brief; 19, 56).
+
+**Non-Goals:**
+
+- **Fetching.** flume fetches nothing at a launch, a settle or `flume
+  kinds lock` (core.34). How a package reaches a source's directory, a
+  marketplace's registry, publishing and discovery all belong to the
+  program that manages the host (159).
+- **A catalogue in flume.** A `flume kinds` listing beyond the host's
+  part of status, and an install, update or search command.
+- **A kind that refers to another.** Composition stays out, as record
+  0022 says (157).
+- **Statechart kinds.** A statechart kind in a source's package is
+  refused at its launch as one in a repository is (core.41). Records
+  0028 and 0029 are built after crew's rewrite.
+- **Sources by repository.** A source declared for one repository on
+  the host alone. A launch names its source, and a lock gates what
+  runs, so a narrower declaration would add a layer and no safety.
+- **The runner's and crew's changes.** crew lays out its release's kinds
+  as packages, and the runner gives the host a source file and names
+  identities. Each is built in its own repository.
+- **The standing prompt.** Record 0021 waits on a plan of its own, and
+  so does its effect on flume's own kinds' versions. See *Risks*.
+
+## Decisions
+
+### 1. A source is one file in the host's sources directory
+
+The host declares a source by a file of its configuration:
+
+```
+$XDG_CONFIG_HOME/flume/sources/<source>.toml
+```
+
+```toml
+# ~/.config/flume/sources/acme.toml
+kinds_dir = "~/.local/share/flume/kinds/acme"
+```
+
+- **The name.** The file's name, less `.toml`, is the source's name. A
+  name is stated in one place, so a file cannot say one name while
+  lying under another.
+- **`kinds_dir`.** Its one key is the directory that holds the source's
+  packages. The value is an absolute path, or one whose leading `~` is
+  the host user's home, as a repository's key in `[repos]` is read (C.7).
+  The key ends in `_dir` because it names a directory. It says `kinds`,
+  flume's word, rather than `packages`, which other tools on a host use
+  for their own things.
+- **Read at each launch.** flume reads the directory as it stands at
+  each launch, at each role's wake, at `flume kinds lock` and at each
+  status, and writes nothing in it or in a source's `kinds_dir`.
+- **Entries flume reads.** It reads every regular file whose name ends
+  in `.toml` and begins with no `.`, and ignores every other entry. So a
+  program writes `.acme.toml.tmp` and renames it over `acme.toml`, and
+  no reader ever sees half a file.
+- **A missing directory.** It is a host with no sources, as a missing
+  `config.toml` is a host with no bound.
+
+**Why a directory of files, and not a table of `config.toml`.** A
+program that manages the host owns its files whole. It never parses,
+edits or reformats a file a person keeps, and two programs, or a
+program and a person, never write one file. Adding, replacing and
+removing a source are each one rename or one delete, so the host is
+never between two states. A source named both in `config.toml` and in a
+file would need a rule for which wins, and one place for a fact needs
+none. A person writes a source's file by hand as easily as a program
+does.
+
+**Layering.** The brief asks for sources to be layered as flume's other
+settings are where that makes sense. It makes sense in three places:
+
+- **A bare name.** It resolves over the declarations as it does today:
+  the launch's, then the repository's, then flume's own (decision 4).
+- **A version.** The locks pick it, the repository's over the host's
+  (decision 5).
+- **Settings.** A kind's settings stay given by its name in the
+  repository's and the host's tables, and join whichever source and
+  version the launch resolves to (158).
+
+The sources themselves are declared at one layer, the host's. A
+source's `kinds_dir` is a location on the host, which no repository,
+kind or launch may name (158; core.30). A launch's one-off source is
+already its own layer, `--kinds <file>`.
+
+**A source's fault stays its own.** Each of these refuses every launch
+that names the source, naming the file and the fault, and no other
+launch (4):
+
+- a file that is not TOML;
+- one that gives no `kinds_dir`, a `kinds_dir` that is neither absolute
+  nor under `~`, or a key flume does not know;
+- one whose name is not a key weir's identity allows;
+- one named `flume.toml`, `repo.toml` or `launch.toml`, since those
+  sources are flume's own, the repository's and a launch's (154; weir
+  C.4).
+
+`flume/change@1` still resolves to flume's own whatever the sources
+directory holds. Status's host part names each fault (decision 9). A
+`kinds_dir` that does not exist is no fault of the file's, since a
+program may write the file before its packages. A launch naming that
+source is refused, naming the directory as missing.
+
+This differs from a fault in `config.toml`, which refuses every launch
+and start. A source a program dropped in must not stop the host's other
+work.
+
+### 2. A source holds packages, one version each, side by side
+
+A source's packages lie at `<kinds_dir>/<name>@<version>/`, each a
+package as weir 89 has it: its `kind.toml` at its root, declaring
+exactly one kind, with every `prompt` and `standing` path inside the
+directory. The kinds profile reads one through weir-kinds' package
+reader, given the directory and the identity it lies at (weir 92).
+
+The reader answers with the kind and its content hash, `sha256:` over
+each file's path within the package, its length and its bytes (weir
+90). The same package hashes the same in a nix store path, under
+`$XDG_DATA_HOME` or anywhere else.
+
+Each of these refuses the launch, naming the package and the field
+(157, 158; S63):
+
+- a package whose name or version is not the identity it lies at;
+- one that declares no kind, or more than one;
+- one that names a part outside itself;
+- one whose agents tables give an `env`, or a program by a path.
+
+Any number of versions of one name stand side by side in one
+`kinds_dir`. The source's listing, read-source, answers every
+`<name>@<version>` directory holding a `kind.toml`, by identity. It
+ignores entries of any other shape.
+
+**Why packages, and not a file of declarations.** crew ships its kinds
+today as one declaration file of several kinds sharing a prompt. A
+source could have pointed at such a file, but three facts rule it out:
+
+- weir keys a declaration's kinds by name, so a file holds one version
+  of each and cannot stand versions side by side (weir 88).
+- weir's content hash is a package's, so a kind inside a shared file
+  has no hash a lock could record, short of flume hashing it itself,
+  which core.4 rules out.
+- A declaration's prompts lie wherever its file says. A package's lie
+  inside it, so its hash covers its whole meaning (157).
+
+crew's release lays its kinds out as packages, a `turn.md` in each. That
+is crew's change, and the runner keeps `--kinds` until it lands.
+
+### 3. A launch names a kind by its identity
+
+The core never parses or spells an identity. `flume launch --kind` and a
+role's `kind` are read through the kinds seam's `read_named`, which asks
+weir-kinds (weir C.4; core.4). It answers the source, the name and the
+version, the source and the version each optional, or why the text names
+no kind.
+
+| written | searched | version taken |
+|---|---|---|
+| `review` | the launch's declaration, else the repository's, else flume's own (decision 4) | the declaration's one, or for flume's own as decision 5 picks |
+| `review@2` | the same | 2, refused where the declaration that resolves the name holds another |
+| `acme/review` | the source `acme` the host declares, alone | as decision 5 picks |
+| `acme/review@2` | the source `acme`, alone | 2 |
+| `flume/change`, `flume/change@1` | flume's own alone | as decision 5 picks, or the one named |
+| `repo/bump`, `repo/bump@2` | the repository's declaration alone | its one, refused where another is named |
+| `launch/x`, `launch/x@1` | the launch's `--kinds` file alone, refused where the launch carries none | its one, refused where another is named |
+
+Each of these refuses the launch, naming what is missing, and makes
+nothing (4, 154; core.8):
+
+- **A source the host does not declare.** "the kind acme/review@2 names
+  the source acme, which the host does not declare: no file
+  `<sources>/acme.toml`; the host declares crew".
+- **A version the source does not hold.** "the source acme holds no
+  review@3: it holds review@1 and review@2 in <kinds_dir>".
+- **A name the source does not hold.** "the source acme holds no review:
+  it holds lint@1".
+
+In this design, "a host's source" means a source the host declares, and
+"a kind of a host's source" one of its packages. The place's location
+and branch are made
+from the kind's name and its declaration's prefix, as today (C.1, C.2).
+So a place of `acme/review` named `one` is `review--one`. A second
+launch of a `review` from another source with the name `one`, in the
+same repository, is refused because that location stands (3).
+
+### 4. A bare name keeps today's meaning
+
+A kind named with no source resolves among the launch's declaration,
+the repository's own and flume's own alone. It never resolves to a kind
+of a host's source, locked or not.
+
+Where none of the three holds the name, the refusal names each identity
+the host's sources hold under it: "the kind review resolves to no
+declaration: the launch carries none, the repository declares no
+review, flume holds none; the host's sources hold acme/review@1 and
+beta/review@3, which a launch names by its source".
+
+This departs from 154 as stated. There a bare name reaches "the one
+other source that holds the name, flume's own or one a lock records",
+and two such sources refuse it, naming each (S60, S62). The brief says
+a bare kind name keeps today's meaning, and a host managed by a program
+is why. Under 154 as stated, a program that installs and locks a source
+holding `fix` would leave every caller's `flume launch --kind fix`
+refused as ambiguous between flume's own and the new source. Every
+caller would then have to change because the host changed.
+
+Under this decision, adding a source never changes what a bare name
+runs. A kind from outside is named by its source, which says to every
+reader where it came from. The machines that launch from a source, the
+runner and the cloud, already name kinds by their whole identity (the
+domain model's unit). *For the user's ruling* gives 154's words, S60's
+and S62's.
+
+### 5. Locks: nothing from outside runs unlocked
+
+core.34 stands. A kind of a host's source runs only where a lock
+records its identity:
+
+- the repository's lock, `.config/flume.lock` at the base's revision,
+  read with its kinds (20); or
+- the host's lock, `$XDG_CONFIG_HOME/flume/flume.lock`, read as it
+  stands at the launch (155).
+
+Both are read through weir-kinds' lock reader (weir 91, 93). A missing
+lock records nothing. At each launch of a kind a lock records, flume
+reads its content as the host holds it, or as flume carries it for its
+own, hashes it through weir-kinds, and checks it against every lock
+that records the identity (156). Each of these refuses the launch and
+makes nothing (4):
+
+| case | the refusal names |
+|---|---|
+| no lock records a kind from outside (S60) | the identity, and both ways to record it: `flume kinds lock <identity>` committed on the base, or `flume kinds lock --host <identity>` |
+| the content's hash is not the lock's (S61) | the kind, the lock's file and both hashes |
+| the two locks give one identity two hashes | both locks and both hashes |
+| a lock cannot be read | the lock's file and its fault |
+
+A lock that cannot be read refuses only the launches it bears on: each
+launch that resolves to flume's own or to a host's source. A launch of
+the repository's own kind, or of a launch's, reads no lock, since
+neither needs one (155).
+
+**The version a launch takes when it names none** (154; S59):
+
+1. the newest version of that kind the repository's lock records; else
+2. the newest the host's lock records; else
+3. the newest its source holds.
+
+For flume's own, this is how a repository that records `flume/change@1`
+keeps launching change@1 with a bare `change`. For a host's source,
+step 3 picks a version that no lock records, and the launch is refused
+naming it as unlocked. So a version a program installed but has not yet
+locked never runs, and a launch meanwhile takes the newest the locks
+record.
+
+Locks record flume's own kinds only to pick a version. A launch of a
+version of flume's own that no lock records runs unchecked, since flume
+carries it (155). A version that a lock records is checked against the
+hash flume carries.
+
+### 6. `flume kinds lock`
+
+```
+flume kinds lock [--host] [--remove] [--hash <hash>] <identity>…
+```
+
+- **Records each identity.** Each must be named whole,
+  `<source>/<name>@<version>`, and each is recorded at its content's
+  hash. A host's source's kind is read as the host holds it, and
+  flume's own as flume carries it.
+- **Where it writes.** The lock it writes is `.config/flume.lock` of the
+  working copy it runs in, or with `--host` the host's lock. It records
+  each identity beside any other version of the same kind the lock
+  holds, and replaces an entry of the same identity.
+- **`--remove`** takes each named entry out, reading no package. So a
+  program can unlock a version whose directory it already removed.
+- **`--hash <hash>`**, with one identity named, records it only where
+  its content hashes to `<hash>`. Otherwise it refuses, naming both
+  hashes, and leaves the lock as it was. This is how a program records
+  exactly the content a marketplace published, and not whatever lies on
+  disk when it runs. It is a flag C.2 lacks (*For the user's ruling*).
+- **What it refuses.** An identity of `repo` or `launch`, since a lock
+  never records those (155). An identity no source holds, named as a
+  launch's refusal names it. A lock that cannot be read, which it never
+  overwrites.
+- **How it writes.** It writes the lock whole, through weir-kinds' lock
+  writer, beside the lock and renamed over it. It holds an advisory lock
+  kept under flume's state directory while it reads and writes, so two
+  writers on the host never lose each other's entry and nothing is left
+  in the working copy but the lock. Run twice, it leaves the same lock
+  (core.17).
+- **What it never does.** It fetches nothing and commits nothing. A
+  repository's lock reaches its places once its caller commits it on
+  the base (155; core.16).
+- **Its answer.** It answers through the core, as every command does
+  (core.14). The JSON form is `{"locked": {"lock_file", "recorded":
+  [{"kind", "hash"}], "removed": [<identity>]}}`, and the person's form
+  is one line per entry.
+
+### 7. flume's own kinds are packages, each with a fixed hash
+
+The kinds profile's `OWN` table already holds each version's
+declaration and its prompts by their paths within the version's
+directory. `flumes_own` gives each as a package: its identity, which
+weir-kinds spells, its kind, and its content hash, which weir-kinds
+computes over those paths and bytes (156, 157).
+
+This is the first release of flume that reads locks. From it on, a
+version of flume's own kinds keeps its content in every later release
+(156). A test in `crates/flume/tests/profiles/built_in.rs` holds each
+version's hash as this change records it, and fails, naming the version,
+where a hash moves. A change to what change@2 holds is then change@3,
+and the test says so before the gate does.
+
+### 8. A place keeps the kind its launch read
+
+`PlaceRecord` gains `kind_from`, written once at the launch:
+
+| field | what it holds |
+|---|---|
+| `identity` | the identity as weir-kinds spelled it, with its parts |
+| `source` | the source's name |
+| `source_file`, `kind_dir` | for a host's source: its file and the package's directory as read |
+| `declaration_file` | for the repository's: `.config/flume.toml` |
+| `revision` | for the repository's: the base's revision |
+| `declaration_file` | for a launch's: the file's path |
+| `hash` | the content's hash, for any package |
+| `lock_file` | the lock that recorded it: the repository's where it does, else the host's; none where neither does |
+
+`Declared` gains `host`.
+
+The place's `kind` already holds its whole content, so none of these
+reaches a place already launched (21):
+
+- a source's file renamed over, or naming another `kinds_dir`;
+- a package edited, or its directory removed;
+- a lock moved, or its entry removed.
+
+Held state written before this change reads with no `kind_from`. Its
+status gives no identity or hash, and gives the source from `declared`:
+`flume`, `repo` or `launch` (core.14).
+
+### 9. Status
+
+A place's status gains:
+
+- **`identity`**, as `acme/review@2`.
+- **`kind_from`**, as decision 8 has it, each field present only where
+  it applies.
+- **`host`** as a value of `declared`, which keeps its other values.
+
+The host's part gains `sources`, read from the sources directory when
+asked (core.15). Each entry gives `name`, `source_file`, `kinds_dir`,
+`kinds`, every identity the directory holds, and `cannot_read`, the
+fault where the file or the directory cannot be read.
+
+The person's form gives the identity on the place's kind line, followed
+by `from the source acme (<source_file>) at <kind_dir>`, or `from the
+repository at <revision>`, or `from <declaration_file>`, or `flume's
+own`. Then come the hash, and `locked in <lock_file>` where a lock
+recorded it. Every field is only added (core.14).
+
+### 10. The seams
+
+The kinds seam gains these operations, each answering the same for the
+same input and changing nothing (85, 160):
+
+- **`read_named(text)`**: the parts of a kind as a launch writes it, or
+  why the text names no kind.
+- **`read_source(kinds_dir)`**: every identity the source's directory
+  holds, or why it could not be read.
+- **`read_package(source, kinds_dir, name, version)`**: the package's
+  kind, identity and hash, or why it could not be read (157, 158).
+- **`read_lock_at(repository, revision)`**: the repository's lock at the
+  revision.
+- **`read_lock_file(path)`**: a lock on disk, the host's or a working
+  copy's.
+- **`write_lock(path, entries)`**: a lock written whole.
+
+`flumes_own` answers packages, each with its identity and hash.
+
+The types are `Identity` (`source`, `name`, `version` and `spelled`,
+weir's spelling), `KindNamed`, `Packaged`, `PackageRead`, `SourceRead`,
+`LockEntry` (`kind`, `hash`), `LockRead` (none, read, or could not be
+read) and `KindFrom`.
+
+The host's sources are configuration, read beside `config.toml` by
+`crates/flume/src/host/config.rs` and given to the core by
+`Host::sources()`. Each entry is a name, its file, its `kinds_dir`, or
+its fault.
+
+In the core, `resolve_kind` takes the named parts and searches as
+decision 3 has it. It checks the locks as decision 5 has them and
+returns `kind_from` beside the kind. `named_version` goes, since weir
+parses. `Engine::lock_kinds` holds `flume kinds lock`'s act. A role's
+wake resolves its `kind` through the same path (132).
+
+The fake kinds scripts:
+
+- flume's own as packages with hashes;
+- sources, each a set of packages by identity, or a fault;
+- a package's refusal;
+- the repository's lock at each revision;
+- the host's lock;
+- a lock written.
+
+The fake host scripts the sources declared. The kinds seam's scenarios
+in `crates/flume-conformance/src/seams/kinds.rs` gain these operations,
+generic over the trait, below the seam's marker.
+
+### 11. Roles
+
+A role's `kind` in `[roles."<group>/<role>"]` is read as a launch's
+`--kind` is, so `kind = "acme/turn@1"` or `kind = "acme/turn"` wakes a
+kind of a host's source under the same locks (132, C.2, C.7). A bare
+`kind` keeps its meaning (decision 4). A role's run has no `--kinds`
+file. So the runner can drop its `kinds` table once crew's kinds lie in
+a source, and its role records name `crew/<role>@<version>`.
+
+### 12. A program configuring the host with no person
+
+This is the brief's third ask, followed through. A program that manages
+the host, such as a marketplace's agent, does the following. Each step
+is a whole-file write, a rename, a delete or a `flume` command, and
+none needs a person or touches a running place.
+
+**Install acme/review@2:**
+
+1. Write the package to a directory it owns, such as
+   `$XDG_DATA_HOME/flume/kinds/acme/review@2/`, host data under the
+   storage rule (section 9).
+2. Write `.acme.toml.tmp` in the sources directory and rename it to
+   `acme.toml`.
+3. Run `flume kinds lock --host --hash sha256:… acme/review@2`, the hash
+   being the one the marketplace published.
+
+**Update to review@3.** Add `review@3/` beside `review@2/` and lock it.
+A launch of `acme/review` then takes review@3, the host lock's newest,
+unless the repository's lock records another. Places on review@2 run on
+(21).
+
+**Retire review@2.** Run `flume kinds lock --host --remove
+acme/review@2`, then remove the directory. Places on review@2 run on.
+
+**Remove the source.** Remove its lock entries, then its file.
+
+**Read back.** `flume status --json` gives `status.host.sources`:
+every source, the identities each holds, and every fault.
+
+Between any two steps the host only refuses launches that name what is
+half-installed. An unlocked version is refused as unlocked, and a
+locked one whose directory is gone as not held. It never runs content
+the lock did not record.
+
+### 13. How each part is proved
+
+Every proof is a check of flume's own, named task by task (kit:testing.5).
+
+- **Seams** (`seams:test`). The round trip of a held state with
+  `kind_from`, and of status with `identity`, `kind_from` and the host's
+  `sources`. The kinds seam's scenarios over the fake.
+- **The kinds profile** (`flume:test`, in
+  `crates/flume/tests/profiles/kinds_weir.rs`), over scratch
+  directories:
+  - a package read, and its hash the same in two places;
+  - S63's path outside and `env`;
+  - a name that is not the identity it lies at;
+  - two versions side by side;
+  - the repository's lock at a revision;
+  - a lock written and read back.
+- **flume's own kinds' hashes**, pinned in `built_in.rs`.
+- **The sources directory** (`crates/flume/tests/host.rs`), over a
+  scratch `XDG_CONFIG_HOME`:
+  - a source read;
+  - a temporary and a non-TOML entry ignored;
+  - each fault of decision 1 confined to its source.
+- **The core** (`core:test`, `conformance:test`). A new
+  `crates/flume-conformance/src/engine/kind_sources.rs` holds each
+  scenario of the kind-sources spec over the fakes, citing 154 to 160,
+  S59 to S63 and the clauses the user rules. `launching.rs` gains the
+  launching spec's scenarios, `place_status.rs` the place-status
+  spec's, and `role_waking.rs` the role-waking spec's.
+- **The command line** (`flume:test`, in
+  `crates/flume/tests/commands.rs`). The binary over a scratch
+  repository and a scratch host:
+  - a launch by identity, refused unlocked;
+  - `flume kinds lock --host`, after which the launch is made;
+  - `flume kinds lock` in the working copy, with nothing committed;
+  - `--hash` refused with the lock unchanged;
+  - two writers at once, both recorded;
+  - `--remove`.
+- **A walkthrough** (`flume:tools`, in
+  `crates/flume/tests/profiles/tools/walkthroughs.rs`), under the
+  printed command with the stand-in. A scratch host's source `acme`
+  holds `review@1`, a one-stage kind that commits and lands, and the
+  host locks it.
+  - A launch of `acme/review` lands, and status names `acme/review@1`
+    from its file and directory with its hash, locked in the host's
+    lock.
+  - `review@2` is then added and locked, and the source's file is
+    renamed over by one naming a directory that holds `review@2`
+    alone. A second launch of `acme/review` runs review@2.
+  - A place of review@1 launched before the rename runs on to its
+    landing.
+
+### 14. The site and `/launch`
+
+- **The kinds guide** gains *Kinds from a source on the host*:
+  - the identity;
+  - the sources directory and a source's file;
+  - packages side by side;
+  - locking and `flume kinds lock`, `--hash` among it;
+  - the hash checked at each launch;
+  - a bare name keeping its meaning;
+  - a place keeping its kind;
+  - decision 12's steps for a program that manages the host.
+- **The configuration reference** gains the sources directory, a
+  source's file and `kinds_dir`, and both locks.
+- **The commands reference** gains `--kind <identity>` and `flume kinds
+  lock`.
+- **The state reference** gains `identity`, `kind_from`, `declared`'s
+  `host` and the host's `sources`.
+- **The roles guide** gains a role's `kind` as an identity.
+- **The plugin's `/launch`** says that a kind of a host's source is
+  named `<source>/<name>`.
+
+All of it speaks to any host's operator. It names no host, team or
+program of ours, and calls a program that manages the host just that
+(core.35).
+
+## For the user's ruling
+
+The statement lacks the host's sources. It also has a bare name reach a
+locked kind from outside, which decision 4 departs from. Each item below
+is the user's to rule, and is then written into
+`design/flume/requirements.md` in agentplot/blueprints before the code
+relies on it (core.19).
+
+Records 0028 and 0029 already wait on clauses after 174, written by the
+domain model's ledger items T1.a and T3.a. T3.a's "a package from a
+plugin marketplace" is what these clauses give the host. So the new
+clauses take their numbers with T3.a's, and these words name them by
+what they say.
+
+1. **A new clause of A.3, the host's sources** (decision 1):
+
+   > The host's configuration declares each source of the kinds from
+   > outside it holds, one file per source, named by the source and
+   > naming the directory that holds the source's packages. A person,
+   > or a program that manages the host, writes a source's file whole,
+   > replaces it by renaming another over it, and removes it. flume
+   > reads the sources as they stand at each launch and writes nothing
+   > in them or in a source's directory. A source's file that cannot be
+   > read, or that takes the name of flume's own source, the
+   > repository's or a launch's, refuses each launch that names its
+   > source, naming the file and why, and no other launch (4).
+
+2. **154 amended** (decision 4). From "Naming no source" to its
+   sentence's end:
+
+   > Naming no source, it takes the kind of that name from the launch's
+   > declaration, else the repository's own, else flume's own, and never
+   > a kind of a source the host declares, which a launch names by its
+   > source; where none of the three holds the name, the launch is
+   > refused naming each kind of that name the host's sources hold (4).
+
+   4's sentence "So is a launch whose kind's name two sources hold where
+   it names no source, naming each" goes. Its "one naming a version its
+   kind's source does not hold, naming it" stays.
+
+   S60 becomes:
+
+   > The host's source acme holds review@1, and a repository declares
+   > no `review` and locks nothing. A launch of `acme/review` is refused
+   > naming acme/review@1 as recorded in no lock, and makes nothing; a
+   > launch of `review` is refused naming acme/review@1 as the host's.
+   > Once `flume kinds lock acme/review@1` is run in the repository and
+   > its lock committed on the base, the launch of `acme/review` runs
+   > it, and status names `acme/review@1` with its hash.
+
+   S62 becomes:
+
+   > The host's sources hold acme/review@1 and beta/review@3, both
+   > locked. A launch of `review` is refused naming both as the host's
+   > sources'; a launch of `beta/review` runs beta/review@3.
+
+   core.34 keeps its words, since it orders a name as 154 does. Its
+   details say a bare name resolved to a kind of a host's source is
+   ruled out.
+
+3. **159 and C.7 amended** (decisions 1 and 2). 159:
+
+   > The host holds the packages of the kinds from outside it may run
+   > in the directories its sources name, each at its name and version,
+   > several versions of one name side by side.
+
+   Its last two sentences stay. In C.7, the bullet on packages
+   becomes:
+
+   > The sources the host declares are files of its configuration,
+   > `$XDG_CONFIG_HOME/flume/sources/<source>.toml`, each giving
+   > `kinds_dir`, an absolute path or one under `~`, the directory
+   > holding the source's packages, each at `<name>@<version>/` with its
+   > `kind.toml` at its root (157, 159). flume reads each such file whose
+   > name begins with no `.`, ignores every other entry, and writes
+   > none. `$XDG_DATA_HOME/flume/kinds/<source>/` is host data where a
+   > program that fetches a source's packages may put them. The host's
+   > lock is `$XDG_CONFIG_HOME/flume/flume.lock`, of the host's
+   > configuration (155, C.2).
+
+4. **C.2's `flume kinds lock` gains `--hash`** (decision 6):
+
+   > `--hash <hash>`, naming one kind, records it only where its content
+   > hashes so, and otherwise refuses naming both hashes and leaves the
+   > lock as it was.
+
+5. **19's last sentence, and 56's list, amended** (decisions 8 and 9).
+   19's last sentence:
+
+   > Status names the identity of the kind each place runs and where it
+   > came from: its source, with the source's file and the kind's
+   > directory or the declaration's file, and for a package the hash of
+   > its content and the lock that recorded it (155).
+
+   56's host part gains each source the host declares, the kinds it
+   holds, or why it cannot be read.
+
+6. **B.2 amended** (decision 10). 160 takes "the host's sources" for
+   "the packages the host holds", and a clause beside it is added:
+
+   > **read-source**: given a source's directory, the identity of every
+   > package it holds; or that it could not be read, with the reason.
+   > The same directory always gives the same answer, and reading
+   > changes nothing.
+
+7. **Three scenarios added**, their numbers after T1.a's and T3.a's:
+
+   > The host's source acme holds review@1 and review@2, both in the
+   > host's lock. A launch of `acme/review` runs review@2. A program
+   > renames over `acme.toml` a file naming a directory that holds
+   > review@2 and review@3, and locks review@3 by `flume kinds lock
+   > --host --hash`. The next launch of `acme/review` runs review@3, one
+   > of `acme/review@1` is refused naming review@1 as one acme does not
+   > hold, and the place of review@2 runs on as launched (21, 154, 155,
+   > 159).
+
+   > A program writes `bad.toml` into the host's sources with no
+   > `kinds_dir`. A launch of `bad/x@1` is refused naming the file and
+   > `kinds_dir`; a launch of `fix` and one of `acme/review@1` go on as
+   > before, and status names the fault (4).
+
+   > A host's source holds `fix@1`, locked. A launch of `fix` runs
+   > flume's own fix@1, and a launch of `<source>/fix` runs the
+   > source's (154).
+
+Record 0030 holds what the user rules here, as accepted, and the rules
+come with it in one commit: core.34's details, and `_open.md`'s item on
+record 0022 (task 1.1).
+
+## What this change rests on
+
+1. **weir-kinds reads packages, identities, hashes and locks, and writes
+   a lock.** weir's statement holds 88 to 93 and C.4 since blueprints
+   57a1ba9. weir-kinds at 0b6eb5a builds none of it. flume may read none
+   of it with its own code (core.4). From weir-kinds, this change needs:
+   - an identity read from `<source>/<name>@<version>`, its source and
+     version each optional, and spelled back (C.4);
+   - read-package, given a directory and its identity, with 89's
+     refusals (92);
+   - the content hash over a package's files, read from disk or given
+     as paths and bytes for a tool's own built-in kinds (90);
+   - read-lock (93);
+   - a lock written in C.4's form, which 93 does not name and this
+     change asks of weir.
+
+   That is a change in agentplot/weir, landed before this one is built,
+   and task 2.1 moves flume's pin to it. Should it not have landed when
+   the build starts, the build stops short at 2.1, naming it.
+2. **The statement amended as the user rules** (*For the user's
+   ruling*). Task 8.1's clause list reads the revision that holds the
+   amendment.
+3. **Records 0021, 0024's plan stage, 0025 and 0026** are not needed.
+   See *Risks* for 0021.
+
+## Risks / Trade-offs
+
+- **flume's own kinds' content is fixed from this release.** Record
+  0021's split of flume's own prompts into standing instructions, built
+  after this change, then gives each kind it touches a new version, as
+  that record foresaw: change@3, fix@2, chore@2. A repository that locks
+  `flume/change@2` keeps today's text. Building record 0021 first would
+  spare the versions. The user decides which lands first. This design
+  works either way, and the pinned hashes are recorded at whatever
+  `own/` holds when the change is built.
+- **Hashing at each launch** reads every file of the kind's package once.
+  Packages are a declaration and a few prompts, read in milliseconds.
+  Status reads a source's listing, never its packages, so it stays as
+  fast as today.
+- **A bare name never reaches a host's source.** A caller who wants
+  acme's `review` types `acme/review`. The refusal of a bare `review`
+  names it, so the cost is one look. The gain is that a program never
+  breaks a caller's launch by installing something.
+- **A source's fault is said, not shouted.** A malformed source file
+  refuses only the launches naming it. An operator who never names that
+  source learns of it from status's host part, and from nothing else.
+- **Two sources' kinds of one name share a place's location** in one
+  repository under one place name, and the second launch is refused as
+  the place stands (3). The place's name is the caller's to vary.
+- **Settings by name join every source's kind of that name** (158).
+  `[kinds.review.agents]` gives acme's review and beta's review alike.
+  That is 158 as stated. A host that needs them apart names a
+  repository and kind instead.
+- **A program that edits a package in place** without a new version
+  sees its next launch refused with both hashes, and a place already
+  running unchanged. This is 156's guarantee. The docs say a change to
+  a package is a new version.
+- **The runner and crew wait on two changes of their own** before they
+  stop carrying a kinds file by path. Until then `--kinds` works as
+  today.
