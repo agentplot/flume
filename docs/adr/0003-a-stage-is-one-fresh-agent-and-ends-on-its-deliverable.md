@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-26, on their card.
 
+Amended 2026-11-01 by record 0028, accepted by the user: a stage that ended short needing an answer carries on in its agent's session when the answer comes while that session is open for it, an hour by default, starting no fresh agent and counting no start; past that time, or once its agent stops or its account is spent, flume ends the agent once it is quiet, and the answer is a retry with a fresh agent.
+
 Deciders: the user, in flume's statement, taking over crew's `teams.2` to `teams.4`, `teams.11` and `teams.15`.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 24, 25, 30 to 36, 39 to 45, 109, 110, 118, I1, I2; crew's `teams.2`, `teams.3`, `teams.4`, `teams.11`, `teams.15`.
 

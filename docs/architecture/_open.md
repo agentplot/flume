@@ -75,6 +75,23 @@ brought to the rule.
   which has a retry end a quiet agent, and of core.12's details; they
   say so once the operator rules the change (core.19). The item leaves
   when it lands.
+- **Record 0028 waits on the statement and on its build.** An answer
+  that comes while the asking agent's session is open for it, an hour
+  where the launch and the host give no other time, reaches that
+  session and is recorded with the stage, which carries on there; past
+  that time, or once the agent stops or its account is spent, flume
+  ends the agent once it is quiet, and a later answer is a retry
+  (record 0028, accepted by the user on 2026-11-01; core.27 and the
+  details of core.27 and core.30 as amended). The statement at
+  agentplot/blueprints 92afa99 still has every answer a retry and the
+  asking agent live until one: section 3's settings, 32, 41, 42, 49,
+  50, 53 to 56, 118, 130, C.2, C.4's send-back row, C.5, C.7 and S4 are
+  to be amended, and scenarios added, as design 12 of the change
+  `an-answer-reaches-the-open-session-within-an-hour` words them, once
+  the operator rules the amendment in `design/flume/requirements.md`
+  (core.19). Until the change is built the code stands against core.27
+  as amended. The item leaves when the statement says so and the code
+  is brought to core.27.
 - **Record 0021 waits on a plan.** The standing prompt with cache use
   in status (record 0021; core.33), accepted 2026-10-29 and stated at
   blueprints 6e5aae2, is built only once the user approves a plan for
