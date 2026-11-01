@@ -6,10 +6,12 @@ import { herdr } from "./herdr";
 import { hero } from "./hero";
 import { kinds } from "./kinds";
 import type { Layout } from "./kit";
+import { place } from "./place";
 import { tidy } from "./tidy";
 
 export const diagrams: Record<string, (layout: Layout) => string> = {
   hero,
+  place,
   kinds,
   herdr,
   tidy,
