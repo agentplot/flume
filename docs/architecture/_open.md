@@ -124,6 +124,20 @@ brought to the rule.
   with entries for Codex, Gemini CLI, GitHub Copilot CLI and OpenCode,
   then Codex's own profile. The item leaves when the code is brought
   to core.39.
+- **Records 0028 and 0029 wait on the statements, the engine's move
+  and crew's rewrite.** Statechart kinds beside simple kinds on one
+  branch (record 0028; core.41), run on flywheel-engine moved into weir
+  and taken at the revision of weir flume pins (record 0029; core.42),
+  were accepted on 2026-11-01 and are stated in neither statement.
+  flume's 4, 18, 23, 30, 84, 85, C.2 and I2 are amended, and its
+  clauses after 174 and scenarios after S75 added, by the domain
+  model's ledger items T1.a and T3.a in agentplot/blueprints
+  `design/flume/requirements.md`; weir's 51, 81 and C.4 by T1.b; and
+  weir's section for the engine with its move into weir (core.19). The
+  build (T1.c) follows crew's rewrite onto flume (crew records 0047,
+  0050). Until it lands flume runs simple kinds alone and refuses a
+  statechart kind (4, 23), and core.42 binds no code. The item leaves
+  when the build lands.
 - **The command line still says `<partition>/<role>`.** `flume wake
   --help` and the refusals of a name that is no address, in
   `commands/mod.rs`, `host/config.rs` and `flume-core`'s `wake.rs`,
