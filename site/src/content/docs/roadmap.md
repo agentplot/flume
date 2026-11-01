@@ -75,3 +75,19 @@ the rest of this site says.
   `flume.lock`, written by a new `flume kinds lock` and by nothing else.
   flume fetches nothing at a launch. Settings given by a kind's name
   hold for every version of it.
+
+- **Points, a points bound and a pace**
+  ([record 0025](https://github.com/agentplot/flume/blob/main/docs/adr/0025-work-carries-its-callers-points-and-a-stream-may-bound-its-points-in-flight-and-set-a-pace-over-a-rolling-span.md)).
+  `flume launch --points <n>` gives a place's points, a number of the
+  Fibonacci scale its caller sets and flume never estimates. They are
+  in flight from the place's first start until its last stage delivers,
+  and again through a fix round. A stream may state `points`, a bound
+  on its points in flight beside its bound on agents, and a pace,
+  `pace = { points = 8, per = "day" }`, over a rolling hour, day or
+  week. Both hold a place's first start alone, and a place larger than
+  either starts once its stream has nothing in flight, or started
+  nothing in the span. A launch that gives no points on a stream that
+  states either is refused, naming the stream. Status gives points
+  queued and in flight for the host and each stream, what each stream
+  started in its span and when the next charge leaves it, and each
+  stream's tokens.
