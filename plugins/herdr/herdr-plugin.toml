@@ -1,6 +1,6 @@
 id = "agentplot.flume"
 name = "flume"
-version = "0.0.0"
+version = "0.4.3"
 min_herdr_version = "0.9.5"
 description = "flume's watch, which settles every place on its bound and at each change of an agent's state, so flume runs unattended; and the places in flight in the sidebar and a popup, with keys that act through flume's commands."
 platforms = ["linux", "macos"]
