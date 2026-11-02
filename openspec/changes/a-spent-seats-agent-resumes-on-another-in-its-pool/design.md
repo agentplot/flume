@@ -193,24 +193,30 @@ the chosen account's home holds the transcript.
 `Claude::carry` reads the earlier start's started ack,
 `Record::at(folder, earlier).started()`:
 
-1. No ack: `No`, "the agent that stopped never said it started, so its
-   conversation is not known".
+1. No ack, or one naming no session: `No`, "its conversation is not
+   known: the agent that stopped never said it started, so no
+   configuration home (`CLAUDE_CONFIG_DIR`) is known to hold it".
 2. The ack's transcript cannot be read by `fs::metadata`: `No`, "its
-   conversation's transcript cannot be read".
+   conversation's transcript, in the stopped account's configuration
+   home (`CLAUDE_CONFIG_DIR`), cannot be read".
 3. `<home>` is the chosen account's `CLAUDE_CONFIG_DIR` from `env`, else
    `$HOME/.claude` of flume's own environment, the host user's login
-   environment. The candidate is `<home>/projects/<folder>/<file>`,
-   `<folder>` and `<file>` the last two names of the ack's transcript
-   path, so flume computes no name of Claude Code's.
+   environment. An empty `CLAUDE_CONFIG_DIR` is none, as 2.1.296 reads
+   it (`CLAUDE_CONFIG_DIR||…`). The candidate is
+   `<home>/projects/<folder>/<file>`, `<folder>` and `<file>` the last
+   two names of the ack's transcript path, so flume computes no name of
+   Claude Code's.
 4. The candidate and the ack's transcript are the same file, by
    `MetadataExt::dev` and `ino` with symbolic links followed: `Yes {
    session: ack.session_id }`. Otherwise `No`, "the chosen account's
    configuration home (`CLAUDE_CONFIG_DIR`) does not reach its
    conversation: its `projects` folder is not the stopped account's".
+   A copy of the transcript under the same names is another file, so no.
 
-Nothing in a configuration home is written, linked or copied. The
-command adds `--resume <session>` where `resume` is given (C.4).
-`Claude::carry` reads only, so it is safe to ask at every claim (core.17).
+Each `No` names `CLAUDE_CONFIG_DIR` and no path (core.30). Nothing in a
+configuration home is written, linked or copied. The command adds
+`--resume <session>` where `resume` is given (C.4). `Claude::carry`
+reads only, so it is safe to ask at every claim (core.17).
 
 ### 5. A carried start that does not begin
 
@@ -256,9 +262,13 @@ or a clear's, never moves it. `transcript::Transcript::read_from(path,
 from)` reads the records that begin at or after `from`, or all of a
 file shorter than `from`, which Claude Code replaced. Own work, last
 words, asking's answer and the slash-command receipt read through it
-(43, 89, 90, 91). For a fresh start `from` is 0 and nothing changes. A
-carried start then reads none of the stopped agent's turns, background
-tasks or last words as its own. Without this, a background task the
+(43, 89, 90, 91). The word that an agent began otherwise,
+`unsettled.json`, records its own `from` the same way, the transcript's
+length when the word was written, so the own work of a carried start
+read begun otherwise, which `read_unsettled` waits on before it ends the
+agent, is read past it too. For a fresh start `from` is 0 and nothing
+changes. A carried start then reads none of the stopped agent's turns,
+background tasks or last words as its own. Without this, a background task the
 stopped agent left running when it was ended would read as the carried
 agent's own work for ever, and it would never be quiet (31).
 
