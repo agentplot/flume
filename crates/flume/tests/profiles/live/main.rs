@@ -9,7 +9,10 @@
 //! code stage whose agent ends its turn to wait on a suite it started, its
 //! pane quiet with no deliverable, is not ended until it delivers (39,
 //! S3); and a fix whose host gives the mode `ask` begins in it over the
-//! repository's own default, its started ack taken (162, S66).
+//! repository's own default, its started ack taken (162, S66); and a
+//! fix whose code agent stops at its account's usage limit goes on in its
+//! own conversation under the pool's other account, whose `projects` is a
+//! link to the first's, and lands (S76).
 //!
 //! Run by hand, outside the gate, required by no branch, in the devenv
 //! shell, so the pinned Claude Code and herdr lead `PATH`:
@@ -20,9 +23,9 @@
 //!
 //! The token is a test account's, made by `claude setup-token` signed in
 //! to that account; the host's own sign-in, configuration and accounts are
-//! never read: each agent runs under the walkthrough's host's one-account
-//! pool, whose account gives a scratch `CLAUDE_CONFIG_DIR` and that token
-//! (144). With no token the
+//! never read: each agent runs under the walkthrough's host's pool, whose
+//! accounts each give a scratch `CLAUDE_CONFIG_DIR` and that token (144).
+//! With no token the
 //! walkthroughs fail at once, naming it. `FLUME_LIVE_MODEL` names a model
 //! for the agents where the account's default is not wanted.
 
@@ -36,9 +39,12 @@ mod walk;
 
 mod walkthroughs;
 
+use flume::profiles::store::state_dir::StateDir;
+use flume_seams::{PlaceId, StartHeld, Store};
 use serde_json::Value;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 use walk::Walk;
 
@@ -73,6 +79,8 @@ pub struct Live {
     link: PathBuf,
     /// The test account's token, which no answer of flume's may hold.
     token: String,
+    /// Each account's scratch configuration home, in the pool's order.
+    pub homes: Vec<PathBuf>,
 }
 
 impl Live {
@@ -85,6 +93,19 @@ impl Live {
     /// A walkthrough as `new` makes it, the host's `[kinds.fix.agents]`
     /// holding `lines` beside the operator's model, if any (32).
     pub fn with_fix_agents(label: &str, lines: &str) -> Live {
+        Live::made(label, lines, 1)
+    }
+
+    /// A walkthrough as `new` makes it on a fill-first pool of two
+    /// accounts, each signed in by the operator's test token with a scratch
+    /// configuration home of its own, the second's `projects` a link to the
+    /// first's, as a host shares one between its accounts (175).
+    pub fn sharing_projects(label: &str) -> Live {
+        Live::made(label, "", 2)
+    }
+
+    /// A walkthrough on a fill-first pool of `accounts` accounts.
+    fn made(label: &str, lines: &str, accounts: usize) -> Live {
         let token = std::env::var(TOKEN)
             .ok()
             .filter(|token| !token.trim().is_empty())
@@ -103,20 +124,51 @@ impl Live {
         let walk = walk.with_home(link.clone());
 
         pinned_claude();
-        let config = walk.repository.scratch.path("claude-config");
-        std::fs::create_dir_all(&config).expect("the agents' Claude Code folder");
-        std::fs::write(
-            config.join(".claude.json"),
-            "{\"hasCompletedOnboarding\": true, \"theme\": \"dark\"}\n",
-        )
-        .expect("the agents' Claude Code configuration");
+        let homes: Vec<PathBuf> = (1..=accounts)
+            .map(|n| {
+                let home = walk.repository.scratch.path(&match n {
+                    1 => "claude-config".to_string(),
+                    _ => format!("claude-config-{n}"),
+                });
+                std::fs::create_dir_all(&home).expect("the agents' Claude Code folder");
+                std::fs::write(
+                    home.join(".claude.json"),
+                    "{\"hasCompletedOnboarding\": true, \"theme\": \"dark\"}\n",
+                )
+                .expect("the agents' Claude Code configuration");
+                home
+            })
+            .collect();
+        if let [first, others @ ..] = homes.as_slice() {
+            if !others.is_empty() {
+                std::fs::create_dir_all(first.join("projects")).expect("the first's projects");
+            }
+            for home in others {
+                std::os::unix::fs::symlink(first.join("projects"), home.join("projects"))
+                    .expect("a link to the first's projects");
+            }
+        }
         let model = std::env::var(MODEL)
             .ok()
             .filter(|model| !model.trim().is_empty());
+        let accounts: Vec<String> = homes
+            .iter()
+            .enumerate()
+            .map(|(at, home)| {
+                let name = match at {
+                    0 => "test-account".to_string(),
+                    _ => format!("test-account-{}", at + 1),
+                };
+                format!(
+                    "{{ name = {name:?}, program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = {token:?} }} }}",
+                    home.display().to_string()
+                )
+            })
+            .collect();
         let mut text = format!(
             "[host]\nterminal = \"herdr\"\npool = \"live\"\n\n[pools.live]\nstrategy = \"fill-first\"\n\
-             accounts = [{{ name = \"test-account\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = {token:?} }} }}]\n",
-            config.display().to_string()
+             accounts = [{}]\n",
+            accounts.join(", ")
         );
         for kind in ["fix", "change"] {
             let mut table = model
@@ -137,7 +189,12 @@ impl Live {
         repository.write("suite.sh", SUITE);
         repository.commit("Claude Code's settings and the slow suite");
         repository.git(&["push", "--quiet", "origin", "main"]);
-        Live { walk, link, token }
+        Live {
+            walk,
+            link,
+            token,
+            homes,
+        }
     }
 
     /// herdr's answer on flume's own session's server, as JSON.
@@ -197,11 +254,24 @@ impl Live {
         minutes: u64,
         holds: impl Fn(&Value) -> bool,
     ) -> Value {
+        self.until_every(place, what, minutes, Duration::from_secs(5), holds)
+    }
+
+    /// As `until`, settling every `pause`, for a state a place may pass
+    /// through within seconds.
+    pub fn until_every(
+        &self,
+        place: &str,
+        what: &str,
+        minutes: u64,
+        pause: Duration,
+        holds: impl Fn(&Value) -> bool,
+    ) -> Value {
         self.walk.until_within(
             place,
             what,
             Duration::from_secs(minutes * 60),
-            Duration::from_secs(5),
+            pause,
             |status| {
                 // Checked before anything prints the status (32, 56).
                 assert!(
@@ -217,6 +287,65 @@ impl Live {
     /// Settles the place until it is tidied, its work landed.
     pub fn until_landed(&self, place: &str, minutes: u64) {
         self.until(place, "landed and tidied", minutes, Value::is_null);
+    }
+
+    /// flume's store in the walkthrough's home.
+    fn store(&self) -> StateDir {
+        StateDir::at(self.walk.home().join("state/flume"))
+    }
+
+    /// The place's own folder in flume's store, where its agents' records
+    /// are.
+    pub fn folder(&self, place: &str) -> String {
+        self.store().folder(&PlaceId::new(place))
+    }
+
+    /// The start of the place's live agent, as flume holds it: its
+    /// identity and secret among it, which the agent's environment carries
+    /// to its hooks (30).
+    pub fn live_start(&self, place: &str) -> StartHeld {
+        let held = self
+            .store()
+            .read(&PlaceId::new(place))
+            .unwrap_or_else(|| panic!("no held state of {place}"))
+            .state;
+        held.stages
+            .into_iter()
+            .filter_map(|stage| stage.start)
+            .find(|start| start.live)
+            .unwrap_or_else(|| panic!("no live start in {place}"))
+    }
+
+    /// The plugin's hook for `event` run as the pinned Claude Code runs it
+    /// in the session of `start` in the place, with `input`, the variables
+    /// the start gives its agent's hooks over the walkthrough's environment;
+    /// it exits 0, as each of the plugin's hooks does.
+    pub fn hook(&self, place: &str, start: &StartHeld, event: &str, input: &Value) {
+        let mut hook = self
+            .walk
+            .command(env!("CARGO_BIN_EXE_flume"), Path::new(place))
+            .args(["hook", event])
+            .env("FLUME_AGENT", start.identity.to_string())
+            .env("FLUME_SECRET", &start.secret.0)
+            .env("FLUME_PLACE", place)
+            .env("FLUME_STAGE", &start.identity.stage)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("flume's hook runs");
+        hook.stdin
+            .take()
+            .expect("the hook's input")
+            .write_all(input.to_string().as_bytes())
+            .expect("the hook's input written");
+        let output = hook.wait_with_output().expect("the hook ends");
+        assert!(
+            output.status.success(),
+            "the hook {event}: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 
