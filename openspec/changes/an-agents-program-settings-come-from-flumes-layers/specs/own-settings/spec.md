@@ -1,14 +1,16 @@
 ## Purpose
 
-An agent program's own settings, its status line, its renderer, hooks
-or tools' permissions among them, given through flume's layers as a
-table of programs, each entry a settings file the layer names and keys
-it gives inline: each top-level key taken whole from the first layer
-that gives it, a layer's file beneath its own keys, only the agent's
-program's keys passed, as its profile takes them, over its account's
-own configuration; nothing passed where no layer gives one; a reserved
-key refused where a layer writes it and left out of a named file; and
-a credential-shaped value or a program that takes none refused.
+An agent program's own settings, its status line, its renderer, hooks,
+tools' permissions or what its commits and pull requests say about who
+made them among them, given through flume's layers as a table of
+programs, each entry a settings file the layer names and keys it gives
+inline: each top-level key taken whole from the first layer that gives
+it, a layer's file beneath its own keys, a repository's word given once
+for every kind, only the agent's program's keys passed, as its profile
+takes them, over its account's own configuration; nothing passed where
+no layer gives one; a reserved key refused where a layer writes it and
+left out of a named file; and a credential-shaped value or a program
+that takes none refused.
 
 ## ADDED Requirements
 
@@ -131,6 +133,45 @@ as the launch read them (8, 21, 32, 175).
 
 - **WHEN** the host's `[agents.programs.agent.settings]` changes `line` while code's agent works
 - **THEN** code's agent keeps what it started with, and verify's is given the new `line` (8, 32)
+
+### Requirement: The host gives a repository's own settings for every kind
+
+The host's `[repos."<repository>".agents]` SHALL give own settings to
+every agent of every kind in that repository, read as it stands at
+each start, within the `host-repository` layer beneath
+`[repos."<repository>".kinds.<kind>.agents]` (32, 175, C.7).
+
+#### Scenario: The host's word for every kind of a repository
+
+- **WHEN** the host's `[repos."/r".agents.programs.agent.settings]` gives `line = "repo"` and its `[kinds.fix.agents.programs.agent.settings]` gives `line = "kind"`
+- **THEN** a fix and a chore in `/r` are given `line = "repo"` from `host-repository`, and a fix in `/s` `line = "kind"` from `host-kind` (S78, 32, 175)
+
+#### Scenario: The host's word for one kind of a repository before every kind
+
+- **WHEN** the host's `[repos."/r".kinds.fix.agents.programs.agent.settings]` gives `line = "fix"` and its `[repos."/r".agents.programs.agent.settings]` gives `line = "repo"`
+- **THEN** a fix in `/r` is given `line = "fix"` and a chore in `/r` `line = "repo"`, each from `host-repository` (32)
+
+### Requirement: A repository gives its own settings for every kind
+
+The repository's `[agents]` in its `.config/flume.toml` SHALL give own
+settings to every agent of every kind it runs, its own kinds among
+them, as the launch read it, within the `repository` layer beneath its
+`[kinds.<kind>.agents]` (21, 32, 175, C.2).
+
+#### Scenario: The repository's own file for every kind
+
+- **WHEN** the repository's `.config/flume.toml` gives `[agents.programs.agent.settings] line = "ours"` and `[kinds.fix.agents.programs.agent.settings] tips = true`, and no host table gives either
+- **THEN** a fix is given `line = "ours"` and `tips = true` and a chore `line = "ours"`, each from `repository` (S78, 32, 175, C.2)
+
+#### Scenario: A host table before the repository's file
+
+- **WHEN** the host's `[agents.programs.agent.settings]` gives `line = "host"` and the repository's `[agents.programs.agent.settings]` gives `line = "ours"`
+- **THEN** a fix is given `line = "host"` from `host`, the host's layers coming before the repository's (32)
+
+#### Scenario: The repository's file changes after the launch
+
+- **WHEN** a commit to the base after a fix's launch changes the repository's `[agents.programs.agent.settings] line`
+- **THEN** every stage of the fix is given the `line` the launch read, from `repository` (21)
 
 ### Requirement: Nothing passed where no layer gives own settings
 

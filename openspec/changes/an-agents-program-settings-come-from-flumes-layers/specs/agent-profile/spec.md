@@ -46,14 +46,40 @@ sign-in keys `forceLoginMethod` and `forceLoginOrgUUID`,
 - **WHEN** the profile is asked to take `statusLine`, `tui`, `hooks`, `permissions = { allow = ["Bash(git log:*)"] }` and `enableAllProjectMcpServers = true`
 - **THEN** it takes them, and its command's file holds each as written (175)
 
+### Requirement: A repository's tagline reaches Claude Code's settings file
+
+Claude Code's `attribution`, its commit and pull request text and its
+session link, SHALL be an own setting like any other: given by a
+repository's layers for every kind, taken whole, and written into the
+`--settings` file of each agent of that repository as the layer wrote
+it, with nothing of flume's added to it or read in it; a repository no
+layer gives it for SHALL get no `attribution` from flume (175, C.4).
+
+#### Scenario: A fork that carries no tagline
+
+- **WHEN** the host's `[repos."<fork>".agents.programs.claude.settings]` gives `attribution = { commit = "", pr = "", sessionUrl = false }`, and a fix and a chore run in the fork
+- **THEN** the `--settings` file of every stage of each holds `attribution` as `{"commit":"","pr":"","sessionUrl":false}`, the stand-in read it, and status names `programs.claude.settings.attribution` from `host-repository` (S78, 175)
+
+#### Scenario: A repository's own words from its file
+
+- **WHEN** the repository's `.config/flume.toml` gives `[agents.programs.claude.settings] attribution = { commit = "Assisted-by: Claude Code", pr = "" }` and no host table gives `attribution`
+- **THEN** a fix's `--settings` file holds that `attribution` as written, and status names it from `repository` (S78, 175, C.2)
+
+#### Scenario: A repository nothing names
+
+- **WHEN** no layer gives `attribution` and no other own setting for a fix's repository
+- **THEN** the fix's agent starts with no `--settings`, and the stand-in read no `attribution` but its account's (S78, 175)
+
 ### Requirement: Own settings pinned to the release the tree holds
 
 A check-tools test SHALL find in the pinned Claude Code, byte for byte,
 the `--settings <file-or-json>` option and its words, its sources'
 order with `flagSettings` after the user's, the project's and the local
 settings, the merge that joins a source's lists with those beneath it,
-and each reserved key as its settings schema names it, naming any it
-does not find (175, C.4; core.22).
+each reserved key as its settings schema names it, and the
+`attribution` schema's commit and pull request texts, each saying an
+empty string hides attribution, naming any it does not find (175, C.4;
+core.22).
 
 #### Scenario: The pinned release read
 

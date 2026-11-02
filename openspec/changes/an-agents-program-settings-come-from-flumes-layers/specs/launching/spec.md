@@ -9,11 +9,13 @@
 
 At each start an agent's program, model, mode, instructions and own
 settings SHALL each come from the first that gives it of: the launch's
-settings; the host's for the repository and kind; the host's for the
-kind; the host's for the stream; the host's for every agent; the
-repository's for a kind it does not declare; the kind's declaration;
-flume's default. The host's four SHALL give no program. Within each, a
-stage's own SHALL come first, each setting taken whole (32, 175).
+settings; the host's for the repository, for its kind and then for
+every kind; the host's for the kind; the host's for the stream; the
+host's for every agent; the repository's, for a kind it does not
+declare and then for every kind; the kind's declaration; flume's
+default. The host's four SHALL give no program. Within each, a stage's
+own SHALL come first, then the kind's for every stage, then a
+repository's for every kind, each setting taken whole (32, 175).
 
 #### Scenario: Settings from four layers
 
@@ -34,3 +36,8 @@ stage's own SHALL come first, each setting taken whole (32, 175).
 
 - **WHEN** the host gives `[agents] model = "sonnet"`, `[agents.streams.work] model = "opus"` and `[kinds.fix.agents] model = "haiku"`, and the repository's file gives `[kinds.change.agents] model = "other"`
 - **THEN** a change place's agents start with `opus` from `host-stream` in `work` and with `sonnet` from `host` in `default`, and a fix place's with `haiku` from `host-kind` in either (32, 143)
+
+#### Scenario: A model for every kind of a repository
+
+- **WHEN** the host gives `[repos."/r".agents] model = "opus"` and `[kinds.fix.agents] model = "haiku"`, and the repository `/s`'s file gives `[agents] model = "sonnet"`
+- **THEN** a fix's and a chore's agents in `/r` start with `opus` from `host-repository`, a fix's in `/s` with `haiku` from `host-kind`, and a chore's in `/s` with `sonnet` from `repository` (32)

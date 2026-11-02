@@ -3,11 +3,12 @@
 ### Requirement: Every layer may give the mode, taken whole
 
 An agent's mode SHALL come from the first of the eight layers that
-gives one: the launch's, the host's for the repository and kind, for
-the kind, for the stream and for every agent, the repository's for a
-kind it does not declare, the kind's, and flume's default, which gives
+gives one: the launch's, the host's for the repository, for its kind
+and then for every kind, the host's for the kind, for the stream and
+for every agent, the repository's for a kind it does not declare and
+then for every kind, the kind's, and flume's default, which gives
 none; within each that names stages a stage's own SHALL come before one
-for every stage. The host's layers SHALL be read as they stand at each
+for every stage, and that before a repository's for every kind. The host's layers SHALL be read as they stand at each
 start, and the others as the launch read them (8, 21, 32, 162).
 
 #### Scenario: The host's table over the repository's

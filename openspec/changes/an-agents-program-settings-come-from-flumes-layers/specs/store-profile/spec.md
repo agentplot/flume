@@ -49,3 +49,22 @@ configuration naming the file (175, C.7).
 
 - **WHEN** the configuration gives `[agents.programs.claude] file = "settings.yaml"`, or names a `.json` file that does not parse
 - **THEN** every launch and start is refused naming `agents.programs.claude.file` and the file (C.7)
+
+### Requirement: The host's table for every kind of a repository
+
+The host's configuration SHALL read `[repos."<repository>".agents]`,
+settings for every agent of every kind in that repository, by its
+location as `[repos."<repository>"]` is, giving `model`, `mode`,
+`instructions` and `programs` as the host's kind tables do. A
+`program`, `env`, `beside`, `stages` or `streams` there SHALL refuse
+the configuration naming the table and the key (32, 175, C.7).
+
+#### Scenario: A fork's table for every kind
+
+- **WHEN** the configuration gives `[repos."~/Code/upstream-fork".agents.programs.claude.settings] attribution = { commit = "", pr = "", sessionUrl = false }`
+- **THEN** the host's settings for every kind of the repository at `~/Code/upstream-fork`, under the host user's home, read `attribution` as written, at the `host-repository` layer beneath its kinds' tables (S78, 32, C.7)
+
+#### Scenario: A repository's table that names a stage
+
+- **WHEN** the configuration gives `[repos."/r".agents.stages.code] model = "opus"`, or `[repos."/r".agents] program = "claude"`
+- **THEN** every launch and start is refused naming `repos."/r".agents` and the key (C.7)

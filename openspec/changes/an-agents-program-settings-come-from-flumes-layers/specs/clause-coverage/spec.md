@@ -11,7 +11,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the revision of blueprints main that holds 175, 176, S76 and S77, or the later one the build read; Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124, 129 to 132, 137, 140 to 149, 154 to 159, 161 to 163, 165 to 173 and 175; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128, 133 to 136, 138, 139, 151 to 153, 160, 164, 174 and 176; the scenarios run S1 to S77 as that revision holds them; and it names as unbuilt each clause the list names unbuilt today by its change, and nothing else
+- **THEN** it names the revision of blueprints main that holds 175, 176, S76, S77 and S78, or the later one the build read; Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124, 129 to 132, 137, 140 to 149, 154 to 159, 161 to 163, 165 to 173 and 175; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128, 133 to 136, 138, 139, 151 to 153, 160, 164, 174 and 176; the scenarios run S1 to S78 as that revision holds them; and it names as unbuilt each clause the list names unbuilt today by its change, and nothing else
 
 ### Requirement: A clause cited by nothing fails the suite
 
@@ -28,4 +28,4 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and S1 to S77 but those named as unbuilt is cited, 175, 176, S76 and S77 by this change's scenarios
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and S1 to S78 but those named as unbuilt is cited, 175, 176, S76, S77 and S78 by this change's scenarios

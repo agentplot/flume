@@ -69,6 +69,29 @@ that record a person's acceptance of a warning,
 `skipDangerousModePermissionPrompt` ("Whether the user has accepted the
 bypass permissions mode dialog") and `skipAutoPermissionPrompt`.
 
+The user, 2026-11-02, gave the change its first use beyond the pane:
+what an agent's commits and pull requests say about who made them must
+be configurable where it makes sense, starting with the tagline,
+whether a commit or a pull request says `Generated with` or
+`Co-Authored-By` anything, and in what words. An upstream project
+refused the user's pull requests over Claude Code's `Generated with
+Claude Code` line. A fork of someone else's project is to carry none
+while the user's own repositories keep theirs, each repository's word
+given by its `.config/flume.toml` or by the host's
+`[repos."<repository>"]` table. The pinned release's settings schema
+gives that word as `attribution`: `commit`, "Attribution text for git
+commits, including any trailers. Empty string hides attribution.";
+`pr`, "Attribution text for pull request descriptions. Empty string
+hides attribution."; and `sessionUrl`, whether a session started from
+the web or by Remote Control appends its link. `false` in its place
+hides all three, and the deprecated `includeCoAuthoredBy` is read only
+where `attribution` gives neither text. Where `attribution` gives one
+text and not the other, the other is the release's own,
+`Co-Authored-By: <model> <noreply@anthropic.com>` for a commit and
+`🤖 Generated with [Claude Code](…)` for a pull request. Codex 0.165.0
+adds `Co-authored-by: Codex <noreply@openai.com>` and `Generated with
+[Codex](…)` by instructions of its own.
+
 Two places run beside this one in the repository. The research
 conversation `research--mcp-servers-for-flumes-agents` is converging, as
 of its transcript on 2026-11-01, on an `mcp` setting of the same layers,
@@ -77,7 +100,7 @@ passes its own way (Claude Code by `--mcp-config <file>
 --strict-mcp-config`). The held change `every-agent-shows-its-place-in-its-pane`
 passes Claude Code `--settings` with a JSON string holding flume's own
 `statusLine`, whose hook prints the place's line above the session's
-own status line. Design 16 says what each takes from this one. A third,
+own status line. Design 17 says what each takes from this one. A third,
 `change--an-answer-reaches-the-open-session-within-an-hour`, adds
 `keep_open` to the same `Settings` and host tables.
 
@@ -125,13 +148,34 @@ rule, the kit standard's code profile binds (kit:specs.3, kit:testing.5).
   (29, 34, 144, 162, 172; core.12, core.30).
 - Every refusal names the key, the program, the stage, the layer and
   the file it came from, and never a value (4, 32).
+- A repository says once, for every kind run in it, what its agents'
+  commits and pull requests say about who made them, by its own
+  `.config/flume.toml` or by the host's table for it, so a fork of
+  someone else's project carries no tagline while the host's own
+  repositories keep theirs (design 16).
 
 **Non-Goals:**
 
 - The MCP servers an agent gets. The research place decides them, as a
-  setting beside this one (design 16).
+  setting beside this one (design 17).
 - flume's own status line. The held change builds it on this change's
-  file (design 16).
+  file (design 17).
+- A word of flume's for attribution. A program's tagline is its own
+  key, Claude Code's `attribution` and whatever Codex's release names,
+  given under its program's name as every own setting is. A word of
+  flume's that each profile maps, as a mode is, waits for a second
+  program whose entry takes own settings (design 16).
+- A host's defaults given by a control plane. A future control plane
+  that gives a host its default attribution, or any default, writes
+  the host's configuration as any configurer does; flume reads that
+  configuration alone.
+- A commit's signature, author and committer. The host's git and the
+  merge queue own them: git signs and names the author as the host's
+  configuration says, sluice as its own does, and no layer of flume's
+  gives either.
+- What the merge queue writes. A landing's commit and anything the
+  merge queue writes when it submits a place are the merge queue's own
+  words (core.6).
 - Every other program's way. Codex, Gemini CLI, Copilot CLI and
   OpenCode run through record 0026's common profile, which is not built;
   their entries take own settings once their way is checked against
@@ -211,16 +255,18 @@ settings = { statusLine = { type = "command", command = "~/.config/flume/status-
 An agent on this host gets `tui` from the file and `statusLine` from
 `settings`. Within a layer that names stages, a stage's table, its
 `settings` over its file, comes before the table for every stage, its
-`settings` over its file, as a stage's own comes first today (32). So a
-stage's file outranks every stage's inline keys: the stage's table is
-the more specific, and the file is the coarser half of each table.
+`settings` over its file, as a stage's own comes first today (32), and
+in a repository's two layers that comes before the table for every
+kind, its `settings` over its file (design 3). So a stage's file
+outranks every stage's inline keys: the stage's table is the more
+specific, and the file is the coarser half of each table.
 
 A path is read where its layer lives, when its layer is read:
 
 | layer | `file` names | read |
 |---|---|---|
 | the host's, each of its tables | a file on the host: absolute, beginning `~/` read against the host user's home as a repository's key is, or relative to the configuration's own directory, `$XDG_CONFIG_HOME/flume/` | at each start, with the host's configuration (C.7) |
-| the repository's, for a kind it does not declare | a file of the repository, relative to `.config/flume.toml`'s directory | at the launch, at the revision the launch read, as a prompt is (21) |
+| the repository's, for a kind it does not declare and for every kind | a file of the repository, relative to `.config/flume.toml`'s directory | at the launch, at the revision the launch read, as a prompt is (21) |
 | the kind's declaration | a file of its package, relative to its declaration's file | at the launch, beside it as its prompts are: at the revision for a repository's kind, on disk for a launch's (157) |
 | the launch's | a file on the host, which the command line names relative to its working directory or absolutely, and the JSON form absolutely | at the launch |
 
@@ -242,18 +288,64 @@ the keys the layers resolved (design 9). A key the file gives that
 another setting owns never reaches the program, and a layer's own keys
 lie over the file's.
 
-### 3. Eight layers: the host's for every agent and for a stream
+### 3. Eight layers: the host's for every agent and for a stream, and a repository's for every kind
 
 Clause 32's layers become eight, most specific first:
 
 1. the launch's settings;
-2. the host's, for the repository and kind;
+2. the host's, for the place's repository: for its kind,
+   `[repos."<repository>".kinds.<kind>.agents]`, then for every kind,
+   `[repos."<repository>".agents]`;
 3. the host's, for the kind;
 4. the host's, for the place's stream, `[agents.streams.<stream>]`;
 5. the host's, for every agent, `[agents]`;
-6. the repository's, for a kind it does not declare;
+6. the repository's: for a kind it does not declare,
+   `[kinds.<kind>.agents]`, then for every kind, `[agents]`;
 7. the kind's declaration;
 8. flume's default.
+
+Within every layer that names stages, a stage's own comes first, then
+the table for every stage of the kind, then, in the two layers of a
+repository, the table for every kind.
+
+**A repository's word for every kind.** Whether a project takes an
+agent's tagline is the project's rule (design 16), the same for every
+kind and every stage that works in it and different between two
+repositories on one host. `[agents]` cannot say it, and a kind's table
+would have to be repeated for every kind, missing a kind added later.
+So each of the two layers of a repository gains a table for every
+kind, beneath its tables for one kind as a kind's table for every
+stage lies beneath a stage's own. Status names their layers as it names
+the kind tables', `host-repository` and `repository`, since each is
+that layer's own word: the host's for a repository, and the repository's
+for itself. The layers stay eight, and `host-repository` is the host's
+word for the repository.
+
+The host's `[repos."<repository>".agents]` comes before the host's for
+the kind. It names where the work lands, whose rules a fork's upstream
+sets, and the kind's table names the work for every repository. It
+gives what the host's kind tables give, and `programs`, and names no
+stage and no stream. It is how a host speaks for a repository it may
+not write to, a fork of someone else's project among them, whose own
+`.config/flume.toml` would travel upstream in the pull request.
+
+The repository's `[agents]` is flume's own table of
+`.config/flume.toml`, beside `[profiles]` and `[prompt]`: the
+repository's and no part of any kind, which weir returns among the
+sections it does not name, so flume reads it as it reads `[profiles]`
+and the kind format is not touched (23; core.4). It is read with the
+kinds at the revision the launch reads them, kept as the launch read
+it, and travels with the repository to every host that runs it (20,
+21). It gives what the repository's kind tables give, `program` among
+them, and `programs`; it names no stage, no stream, no `env` and no
+`beside`. A launch's declaration and a package's `kind.toml` are not
+read for it, as they are not for `[profiles]`.
+
+It applies to every kind the repository runs, its own among them, and
+so comes before a kind the repository declares, as the repository's
+layer comes before the kind's. A repository whose own kind should
+differ on a key leaves that key out of `[agents]` and gives it in each
+kind's table.
 
 `[streams.<stream>]` already holds `agents` as its bound on agents
 running, so a stream's settings cannot be `[streams.<stream>.agents]`.
@@ -275,17 +367,17 @@ tui = "default"
 Neither table names a stage, since a stage's name is its kind's: a
 `stages` table under either fails the configuration, naming it and
 `[kinds.<kind>.agents.stages.<stage>]` as where a stage's own settings
-go. `[agents.streams.<stream>]` naming a stream the host does not
+go, and so does one under either table for every kind of a repository. `[agents.streams.<stream>]` naming a stream the host does not
 declare fails the configuration naming it, as a stream's pool that no
 `[pools]` table declares does; `default` always stands. Neither gives
 `program`, since the host chooses a program by the accounts it pools
 (record 0020), nor `env`, which is an account's alone (144), nor
 `beside`, which is the launch's and the stage's alone (107).
 
-The stream's table comes after the host's for a kind and for a
-repository and kind, and before the host's for every agent. The kind
-tables name the work itself, the stream's names a share of the host the
-work runs in, and `[agents]` names nothing. A host that wants a
+The stream's table comes after the host's for a repository and for a
+kind, and before the host's for every agent. The repository and kind
+tables name the work and where it lands, the stream's names a share of
+the host the work runs in, and `[agents]` names nothing. A host that wants a
 stream's word to stand for a kind leaves that key out of its kind
 table.
 
@@ -294,7 +386,10 @@ does today. A host that wants the last word on its agents states it in
 its own layers (record 0024), and a stream whose model or status line
 the host chose for its pool's accounts would otherwise lose to any kind
 that names one. The cost is that a kind's own status line never shows
-on a host that gives one; the user rules on it (question 2).
+on a host that gives one, and a repository's own `[agents]` never
+overrides a host's `[agents]` or kind table; the user rules on it
+(question 2). Under this order a host that gives a default lets one
+repository differ by `[repos."<repository>".agents]`.
 
 This departs from core.30's details, which rule out "settings given by
 a stream (record 0020, as amended 2026-10-29)", and from 143's "a
@@ -310,8 +405,8 @@ record this change's first group writes amends record 0020, 143 and
 core.30 together (core.19).
 
 `Layer` gains `HostStream`, named `host-stream` in status, and `Host`,
-named `host`. In every layer that names stages, a stage's own comes
-before the settings for every stage, as today (32).
+named `host`. `HostRepository` and `Repository` keep their names and
+gain the tables for every kind.
 
 ### 4. Key by key, each key taken whole
 
@@ -426,7 +521,7 @@ account's to give today, and a hook of the layers runs beside flume's
 plugin's, as one of the account's does. Claude Code's MCP keys,
 `enableAllProjectMcpServers`, `enabledMcpjsonServers` and
 `disabledMcpjsonServers`, stay open until the MCP setting stands
-(design 16).
+(design 17).
 
 The reserved keys are code in the profile, beside its map of modes,
 and a `check-tools` test finds each in the pinned release's settings
@@ -542,7 +637,7 @@ long and hold the shell's own quoting, a hook's command or a status
 line's, which a JSON string would carry through herdr's typed line and
 the printed command a second time. A file also holds exactly what the
 program read, for a person to look at, and is where the held change's
-hook reads the layers' status line (design 16).
+hook reads the layers' status line (design 17).
 
 `claude/settings.rs` holds the reserved keys with their owners, the
 file's name, and `fragments()`, which a `check-tools` test in
@@ -557,11 +652,18 @@ byte in the pinned release (C.4; core.22):
   otherwise;
 - each reserved key as the settings schema names it, `apiKeyHelper:`,
   `disableAllHooks:`, `skipDangerousModePermissionPrompt:` and the
-  rest.
+  rest;
+- the attribution the docs give as the worked example (design 16), by
+  its schema's two texts, `Attribution text for git commits, including
+  any trailers. Empty string hides attribution.` and `Attribution text
+  for pull request descriptions. Empty string hides attribution.`
 
 A bump that renames the option, moves the flag's source below the
-user's, or drops a reserved key fails the gate until the profile is
-read again from the new release.
+user's, drops a reserved key, or changes what an empty attribution
+means fails the gate until the profile and the docs are read again from
+the new release. `attribution` is not a reserved key and is named
+nowhere else in the profile: the fragment pins the docs' example, not a
+key flume treats apart.
 
 ### 10. Every other program's way
 
@@ -600,11 +702,14 @@ the core's (design 7).
 
 - The host's `agent_settings` calls it for `[kinds.<kind>.agents]`,
   `[repos."<repository>".kinds.<kind>.agents]`, their `.stages.<stage>`,
-  `[agents]` and `[agents.streams.<stream>]`, reading a file by design
-  2's host paths. `HostConfig` gains `every_agent: Settings` and
-  `streams_agents: BTreeMap<String, Settings>`. `HostSettings` gains the
-  settings for the place's stream, which its held state names, and for
-  every agent, which `Engine::layers` reads at each start.
+  `[repos."<repository>".agents]`, `[agents]` and
+  `[agents.streams.<stream>]`, reading a file by design 2's host paths.
+  `HostConfig` gains `every_agent: Settings`, `streams_agents:
+  BTreeMap<String, Settings>` and `repos_agents: BTreeMap<String,
+  Settings>`, the last by the repository's location as `repos` is.
+  `HostSettings` gains the settings for the place's repository for
+  every kind, for the place's stream, which its held state names, and
+  for every agent, which `Engine::layers` reads at each start.
 - The kinds profile's `map_agent` calls it for every agents table of a
   declaration, a kind's, a stage's and the repository's for a kind it
   does not declare, reading a file by the function `read` is given for
@@ -613,6 +718,13 @@ the core's (design 7).
   field where it fails (4, 23, C.2). Weir's C.4 names `programs` in an
   agents table, the reader's to check, as it names `mode`, so weir-kinds
   returns it as written and flume's pin stays (core.4).
+- The kinds profile reads a repository's `[agents]` from the sections
+  weir returns unnamed, at the revision, with `map_agent` and the same
+  file reader, refusing `stages`, `streams`, `env` and `beside` there
+  naming the field. `read_kinds` returns it as `KindsRead::Read`'s
+  `agents`, and the launch keeps it in the place's held state as
+  `repository_agents`, beside `repository_settings`. `read_declaration`
+  and the packages do not read it.
 - `--agent [<stage>.]programs.<program>.settings.<key>=<value>` gives
   one key, its value read as JSON where it parses as JSON and as the
   text written otherwise, so `tui=fullscreen` is a string and
@@ -629,7 +741,8 @@ the core's (design 7).
 BTreeMap<String, Value>`, and `NamedFile` the path as written, the path
 read, its keys as read and `left_out`, the reserved keys' paths the
 core took out. Each is read with a default and written only where it
-holds something, so held state written before them reads with none.
+holds something, so held state written before them reads with none, as
+`KindsRead::Read`'s `agents` and the held `repository_agents` are.
 
 ### 12. Status and the JSON form
 
@@ -712,22 +825,104 @@ with the stand-in under the printed command:
   a status line whose command holds a value shaped as a token; a host
   file whose `statusLine` command holds one; a host whose file does not
   exist; and a repository whose `file` is `../claude.json`.
+- S78: three scratch repositories on one host. The host's
+  `[repos."<fork>".agents.programs.claude.settings]` gives `attribution
+  = { commit = "", pr = "", sessionUrl = false }`, for a fork of a
+  project that refuses a tagline; the repository `ours` commits a
+  `.config/flume.toml` whose `[agents.programs.claude.settings]` gives
+  `attribution = { commit = "Assisted-by: Claude Code", pr = "" }`; and
+  `plain` gives none. A fix and a chore in `fork`: each stage's
+  `--settings` file holds `attribution` exactly as the host wrote it,
+  the stand-in read it, and status names
+  `programs.claude.settings.attribution` from `host-repository`. A fix
+  in `ours`: its file holds the repository's `attribution`, from
+  `repository`. A fix in `plain` prints no `--settings`, and the
+  stand-in read no `attribution`. Each lands.
 
 ### 15. Own settings reaching a real Claude Code agent
 
 One walkthrough in `crates/flume/tests/profiles/live/walkthroughs.rs`
 runs a fix under herdr with the pinned Claude Code, on a walkthrough
-host whose `[agents.programs.claude]` names a scratch settings file.
-That file gives `tui = "fullscreen"` and a `hooks` table with a
+host whose `[agents.programs.claude]` names a scratch settings file and
+whose `[repos."<the scratch repository>".agents.programs.claude.settings]`
+gives `attribution = { commit = "", pr = "", sessionUrl = false }`.
+The file gives `tui = "fullscreen"` and a `hooks` table with a
 SessionStart hook that writes a file of the scratch directory's. The
 hook's file is written once the session starts, which only the named
 file's keys reaching the release through `--settings` could do, and the
 code agent's started ack is taken as well, so the layers' hook ran
-beside flume's plugin's. Status names `programs.claude.settings.hooks`
-and `programs.claude.settings.tui` from `host` with the file, and the
+beside flume's plugin's. The commit the code agent made holds no
+`Co-Authored-By` trailer, which the release's own text asks it to add.
+Status names `programs.claude.settings.hooks` and
+`programs.claude.settings.tui` from `host` with the file and
+`programs.claude.settings.attribution` from `host-repository`, and the
 place lands.
 
-### 16. What the two places beside this one take from it
+### 16. A worked example: what a commit says about who made it
+
+Claude Code's `attribution` is one top-level key of its settings, so
+it is given, resolved, checked and passed as every own setting is, and
+nothing in the core, the readers or the profile's command names it.
+
+A host whose fork of someone else's project must carry no tagline says
+so for every kind and every stage run there:
+
+```toml
+[repos."~/Code/upstream-fork".agents.programs.claude.settings]
+attribution = { commit = "", pr = "", sessionUrl = false }
+```
+
+A repository of the host's own that wants its own words says so in its
+`.config/flume.toml`, for every kind run in it, and the words travel
+with it to every host:
+
+```toml
+[agents.programs.claude.settings]
+attribution = { commit = "Assisted-by: Claude Code", pr = "" }
+```
+
+A repository neither names keeps its account's attribution: no layer
+gives the key, and Claude Code writes what the account's
+`settings.json` says, else its own default (design 5).
+
+Every agent of a place in the fork is started with `attribution` in its
+`--settings` file as the host wrote it, and status names
+`programs.claude.settings.attribution` from `host-repository`. The
+release lays it over the account's settings, and with both texts empty
+and no session link, nothing it asks of a commit or a pull request
+names who made it.
+
+The value is taken whole (design 4). A layer that gives `attribution =
+{ commit = "" }` alone hides the commit's trailer and leaves the pull
+request's text to the account's settings or the release's default,
+since the release fills a text `attribution` leaves out. The docs say
+to give both texts, and `sessionUrl = false`, for none. `attribution =
+false`, which the 2.1.296 release reads as all three, passes as written
+too, but older releases refuse it, so the docs show the table.
+
+Why a repository's layers: whether a project takes a tagline is the
+project's rule, the same for every kind and stage that works in it and
+different between two repositories on one host (design 3). A fork's own
+`.config/flume.toml` is no place for its upstream's rule, since a file
+committed there would travel in the pull request the upstream reviews,
+so a fork's word is the host's `[repos."<repository>".agents]`. Under
+question 2's recommended order, that table comes before every host
+table but the repository and kind's, so the fork carries no tagline
+whatever the host's default. A repository's own `[agents]` stands
+where no host table gives the key.
+
+Codex 0.165.0 adds its own trailer and pull request line by
+instructions of its own (Context). Which key of its configuration, if
+any, turns them off is read from its release when its entry is built
+(design 10), and a host or a repository gives it under
+`programs.codex` then, in the same tables. The other programs' releases
+are read for theirs the same way.
+
+`attribution` is credential-free text, and the check of design 7 reads
+it as any value: `Co-Authored-By: Claude <noreply@anthropic.com>` and
+`Assisted-by: Claude Code` pass it.
+
+### 17. What the two places beside this one take from it
 
 **The MCP research** (`research--mcp-servers-for-flumes-agents`)
 should take:
@@ -740,6 +935,10 @@ should take:
   program's own and are never mapped.
 - **The merge unit.** Each server's name is taken whole from the first
   layer that names it, as each top-level key of own settings is.
+- **A repository's tables for every kind.** A repository's servers are
+  as much its own as its tagline: `[repos."<repository>".agents]` and
+  the repository's `[agents]` (design 3) give `mcp` as they give own
+  settings, so a repository names its servers once for every kind.
 - **A named file, where it wants one.** A host whose people's sessions
   get their servers from one file, as `--mcp-config` takes, would name
   it as design 2 names a settings file: read where its layer lives, its
@@ -788,7 +987,7 @@ should take:
 - **The shared fragments** of `--settings` and the sources' order,
   pinned once.
 
-### 17. The statement and the rules, drafted for the user's ruling
+### 18. The statement and the rules, drafted for the user's ruling
 
 The statement at blueprints main, 92afa99, holds no clause for a
 program's own settings and says a stream gives no settings. Drafts:
@@ -796,8 +995,9 @@ program's own settings and says a stream gives no settings. Drafts:
 - **175** (A.4). An agent's own settings are one of its settings (32):
   a table of programs, each entry naming, for its program, a settings
   file in the program's own words and keys given as the program spells
-  them, its status line, its renderer, hooks or tools' permissions
-  among them. Every layer of 32 may give them. A layer's file is read
+  them, its status line, its renderer, hooks, tools' permissions or
+  what its commits and pull requests say about who made them among
+  them. Every layer of 32 may give them. A layer's file is read
   where the layer lives: the host's on the host at each start, the
   repository's and the kind's within their repository or package at the
   launch, and the launch's at the launch (21, 157). The file's keys lie
@@ -826,10 +1026,15 @@ program's own settings and says a stream gives no settings. Drafts:
   folder, by arguments or by a variable of the program's, or that the
   program gives no way to take them (175).
 - **32**: eight layers, the host's for the place's stream and for
-  every agent fourth and fifth, which name no stage; each top-level key
-  of own settings taken whole as a setting, a layer's file beneath its
-  own keys (175); and, on question 1's answer, the model, the mode and
-  the instructions given by both.
+  every agent fourth and fifth, which name no stage; the host's for the
+  place's repository giving, beneath its word for the kind, its word
+  for every kind, and the repository's, beneath its word for a kind it
+  does not declare, its word for every kind it runs, its own kinds'
+  among them, neither naming a stage; within each, a stage's own before
+  the kind's every stage, and that before a repository's every kind;
+  each top-level key of own settings taken whole as a setting, a
+  layer's file beneath its own keys (175); and, on question 1's answer,
+  the model, the mode and the instructions given by every new table.
 - **143**: "a stream gives its agents no settings (32)" becomes "a
   stream's agents take the settings the host's configuration gives for
   the stream (32)".
@@ -842,17 +1047,34 @@ program's own settings and says a stream gives no settings. Drafts:
   (an account usable only where its program takes the stage's keys)
   and section 3's **settings** and two new terms, **own settings** and
   **named file**.
+- **C.2**: the repository's `[agents]`, flume's beside `[profiles]`
+  and `[prompt]`, the repository's and no part of any kind, its agents'
+  settings for every kind it runs, read at the base's revision with the
+  kinds; with `programs` in every agents table a declaration holds.
 - **C.4**: the command row's `--settings` and design 6's reserved keys;
-  the common profile's own settings row. **C.7**: `[agents]`,
-  `[agents.streams.<stream>]` and `programs` in every agents table, an
-  entry's `file` and `settings`, and design 2's host paths.
-- **S76** and **S77**, as design 14's walkthroughs.
+  the common profile's own settings row; Claude Code's `attribution`
+  as the docs' example of own settings. **C.7**: `[agents]`,
+  `[agents.streams.<stream>]`, `[repos."<repository>".agents]` and
+  `programs` in every agents table, an entry's `file` and `settings`,
+  and design 2's host paths.
+- **S76** and **S77**, as design 14's walkthroughs, and **S78**: a
+  host runs places in a fork of a project whose maintainers refuse a
+  commit or a pull request that names an agent program, and in a
+  repository of its own. The host's `[repos."<fork>".agents]` gives
+  Claude Code's attribution with no text and no link; the repository's
+  own `.config/flume.toml` gives its own words in `[agents]`. Every
+  agent of every kind in the fork starts with no attribution, status
+  naming the setting from `host-repository`; every agent in the
+  repository with its words, from `repository`; and an agent in a
+  repository neither names with its account's own.
 - **weir C.4**: `programs` in an agents table, the reader's to check.
 
 The rules: **core.30**'s text reads "the layers clause 32 orders". Its
-details lose "settings given by a stream" and gain, among what is not
-ruled out, a profile's own variable for its program's settings, and a
-host's settings file's path read with a leading `~` as the home, as a
+details lose "settings given by a stream", read "a program, or a pool,
+chosen by the host's tables for a kind, for a repository or for a
+repository and kind", and gain, among what is not ruled out, a
+profile's own variable for its program's settings, and a host's
+settings file's path read with a leading `~` as the home, as a
 repository's key is. A new rule, **core.43**, in "Stages and agents":
 
 > A program's own settings are given under its name and reach no other
@@ -878,8 +1100,10 @@ status; `--settings` passed, or a file written, where no layer gives a
 key; and own settings taken silently by a profile that gives no way.
 They leave open the program's own merge over its account's
 configuration, a host's file read again at each start and reached by a
-link, a host's path in a kind's own settings' values (158), and flume's
-own status line wrapped around the layers'. The record is the next free
+link, a host's path in a kind's own settings' values (158), flume's
+own status line wrapped around the layers', and a repository's
+attribution given once for every kind by its own file or by the host's
+table for it. The record is the next free
 number at its writing, 0030 at main b6cd1b5. The place
 `change--an-answer-reaches-the-open-session-within-an-hour` holds a
 record numbered 0028 that main's 0028 already takes, so whichever lands
@@ -887,21 +1111,29 @@ second renumbers.
 
 ## Questions for the user's ruling
 
-1. **Do `model`, `mode` and `instructions` gain the two host tables
-   too?** Recommended: yes, every setting but the program and the
-   environment in every layer. A stream is where the host's allowance
-   is spent, through its pool's accounts, so a stream on a smaller
-   model or in a narrower mode is a host's word no kind table can say.
-   One rule for every setting is simpler to write and to read in
-   status. If no, `[agents]` and `[agents.streams.<stream>]` refuse
-   `model`, `mode` and `instructions`, naming `[kinds.<kind>.agents]`
-   as where they go, and the agent-modes and launching deltas keep the
-   six layers for them.
+1. **Do `model`, `mode` and `instructions` gain the new tables too:
+   the host's `[agents]` and `[agents.streams.<stream>]`, and a
+   repository's tables for every kind, the host's
+   `[repos."<repository>".agents]` and the repository's `[agents]`?**
+   Recommended: yes, every setting but the program and the environment
+   in every layer, the repository's `[agents]` giving a program as its
+   kind tables do. A stream is where the host's allowance is spent,
+   through its pool's accounts, so a stream on a smaller model or in a
+   narrower mode is a host's word no kind table can say, and a
+   repository's own rules may ask a mode of every kind run in it. One
+   rule for every setting is simpler to write and to read in status.
+   If no, the new tables give `programs` alone and refuse `model`,
+   `mode` and `instructions`, naming `[kinds.<kind>.agents]` as where
+   they go, and the agent-modes and launching deltas keep the six
+   layers' tables for them.
 2. **Do the two host tables come before the repository's and the
    kind's?** Recommended: yes, the host's word, as every host table is
    today (record 0024). The cost is that a kind's own status line or
-   model never shows where the host gives one. The other order makes
-   them defaults the work overrides: launch, host-repository, host-kind,
+   model never shows where the host gives one, and a repository's own
+   `[agents]`, its attribution among it, yields to a host's `[agents]`
+   or kind table that gives the same key; a host lets one repository
+   differ by `[repos."<repository>".agents]`. The other order makes the
+   two defaults the work overrides: launch, host-repository, host-kind,
    repository, kind, host-stream, host, default.
 
 ## Risks / Trade-offs
@@ -934,6 +1166,18 @@ second renumbers.
   a release that changes how it merges, shows no difference at the
   start. The `check-tools` fragments fail at the bump, and the live
   walkthrough proves a named file's keys reach the real program.
+- **A tagline given in part.** `attribution = { commit = "" }` alone
+  leaves the pull request's text to the account or the release's
+  default, since the key is taken whole and the release fills what it
+  leaves out. The docs give both texts and `sessionUrl = false` for
+  none, and S78 tests that form.
+- **A repository's `[agents]` comes before its own kind.** A
+  repository whose own kind should differ from its `[agents]` on a key
+  moves the key into each kind's table (design 3).
+- **A host's word for a repository follows its location.**
+  `[repos."<repository>"]` names a repository by its location on the
+  host, so a fork cloned again elsewhere carries its upstream's rule
+  only once its new location is named, as its stream does today.
 - **Three changes touch `Settings` and the host's tables.** This one,
   the held status-line change and the open-session change each add to
   `Settings`, `Engine::resolve` and `agent_settings`. Whichever lands

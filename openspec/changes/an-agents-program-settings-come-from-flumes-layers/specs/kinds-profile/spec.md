@@ -31,3 +31,28 @@ declaration naming the field (157, 175, C.2; core.34).
 
 - **WHEN** a declaration's agents table gives `programs = { claude = { file = "../claude.json" } }`, or names a file the revision does not hold
 - **THEN** the declaration cannot be read, naming the field, and nothing is launched (4, 157; core.34)
+
+### Requirement: A repository's settings for every kind
+
+The kinds profile SHALL read a repository's `[agents]`, flume's own
+table of `.config/flume.toml` beside `[profiles]` and no part of any
+kind, from the sections weir's crate returns unnamed, at the revision
+the kinds are read at, giving `program`, `model`, `mode`,
+`instructions` and `programs` as the repository's kind tables do (21,
+23, 32, 175, C.2; core.4).
+
+#### Scenario: A repository's agents for every kind
+
+- **WHEN** a scratch repository's `.config/flume.toml` at the revision gives `[agents.programs.claude.settings] attribution = { commit = "Assisted-by: Claude Code", pr = "" }` beside a `[kinds.fix.agents]` table
+- **THEN** the kinds read give the repository's settings for every kind with that `attribution` as written, apart from its settings for fix (S78, 32, C.2)
+
+### Requirement: A repository's agents table gives no stage, stream or environment
+
+A `stages`, `streams`, `env` or `beside` in a repository's `[agents]`
+SHALL fail the declaration naming the field, and a launch's declaration
+and a package's SHALL not be read for the table (4, 32, C.2).
+
+#### Scenario: A repository's agents table that names a stage
+
+- **WHEN** a repository's `[agents]` gives `stages = { code = { model = "opus" } }`, or `env = { X = "1" }`
+- **THEN** the declaration cannot be read, naming `agents.stages` or `agents.env`, and nothing is launched (4, C.2)

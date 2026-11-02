@@ -44,11 +44,24 @@ The seams SHALL pass `programs`, a table of programs each giving a
 named file, with its path as written and as read, its keys and the keys
 left out of it, and `settings`, a table of JSON values, in an agent's
 settings; the layers `host-stream` and `host` beside the others; a
-profile's reserved keys; and a command's files. Each SHALL serialize to
-JSON and back unchanged, and a held state written before them SHALL
-read with none (32, 175, 176).
+profile's reserved keys; and a command's files.
+Each SHALL serialize to JSON and back unchanged, and a held state
+written before them SHALL read with none (32, 175, 176).
 
 #### Scenario: A held state with own settings
 
 - **WHEN** a held state whose launch gives `programs` for two programs, one with a named file whose `env` was left out, and whose start took a key from `host-stream`, is written and read
 - **THEN** it reads back unchanged, holding `env` by name alone, and the same state written with no `programs` reads with none (175)
+
+### Requirement: The seams carry a repository's settings for every kind
+
+The kinds read SHALL carry a repository's settings for every kind
+apart from its settings for each kind, and a place's held state SHALL
+keep them as the launch read them; each SHALL serialize to JSON and
+back unchanged, and one written before them SHALL read with none (21,
+32, 175, C.2).
+
+#### Scenario: A held state with a repository's settings for every kind
+
+- **WHEN** a kinds read and a held state whose repository gave `attribution` for every kind are written and read
+- **THEN** each reads back unchanged, and the same written with none reads with none (175)

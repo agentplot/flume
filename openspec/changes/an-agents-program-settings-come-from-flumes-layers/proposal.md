@@ -20,6 +20,16 @@ file's keys under the inline ones, so a host hands flume's agents the
 file its people use. The account's own configuration stays underneath
 (32, 143, 158, 162, C.4, C.7).
 
+The user, 2026-11-02: what an agent's commits and pull requests say
+about who made them must be configurable where it makes sense,
+starting with the tagline, whether a commit or a pull request says
+`Generated with` or `Co-Authored-By` anything, and in what words. An
+upstream project refused the user's pull requests over Claude Code's
+`Generated with Claude Code` line. A fork of someone else's project is
+to carry none while the host's own repositories keep theirs, each
+repository's word given by its own `.config/flume.toml` or by the
+host's `[repos."<repository>"]` table (32, 175, C.2, C.7).
+
 ## What Changes
 
 - **A program's own settings.** Every layer that gives an agent's
@@ -39,9 +49,27 @@ file its people use. The account's own configuration stays underneath
   table comes before every stage's (21, 157, 175; core.34).
 - **Two host layers.** `[agents]` gives settings for every agent on the
   host, and `[agents.streams.<stream>]` for every agent in one stream.
-  They come after the host's tables for a kind and for a repository and
-  kind, and before the repository's and the kind's, so clause 32's
-  layers become eight. Neither names a stage (32, 143).
+  They come after the host's tables for a repository and for a kind,
+  and before the repository's and the kind's, so clause 32's layers
+  become eight. Neither names a stage (32, 143).
+- **A repository's word for every kind.** The host's
+  `[repos."<repository>".agents]` and the repository's own `[agents]`
+  in `.config/flume.toml`, flume's table beside `[profiles]`, give
+  settings for every agent working in that repository, whatever its
+  kind. Each lies in its layer, `host-repository` or `repository`,
+  beneath that layer's table for the kind; neither names a stage. The
+  host's table speaks for a repository it may not write to, a fork
+  among them (32, C.2, C.7).
+- **A worked example: the tagline.** Claude Code's own `attribution`,
+  its commit and pull request text, empty for none, is given as any
+  own setting:
+  `[repos."~/Code/upstream-fork".agents.programs.claude.settings]
+  attribution = { commit = "", pr = "", sessionUrl = false }` keeps
+  every agent's commits and pull requests in the fork free of a
+  tagline, and a repository's own `.config/flume.toml` gives its own
+  words for every kind. A test reads that layer's value in the agent's
+  `--settings` file, and a walkthrough, S78, in what the program read
+  (175).
 - **Key by key.** Each top-level key of a program's settings is one
   setting, taken whole from the first layer that gives it, and within a
   layer from its `settings` before its file. A layer never merges inside
@@ -83,53 +111,61 @@ file its people use. The account's own configuration stays underneath
   [<stage>.]programs.<program>.settings.<key>=<value>`, the value read
   as JSON where it parses and as the text written otherwise, and
   `--agent [<stage>.]programs.<program>.file=<path>`.
+- **Outside this change.** A word of flume's for attribution mapped by
+  each profile; a host's defaults given by a future control plane,
+  which writes the host's configuration as any configurer does; a
+  commit's signature, author and committer, which the host's git and
+  sluice own; and what the merge queue writes.
 - **For the user's ruling.** Whether `model`, `mode` and `instructions`
-  gain the two host layers too (recommended: yes). Whether the two come
-  before the repository's and the kind's, as every host table does
-  today (recommended), or after them as defaults (design, questions).
+  gain the new tables too (recommended: yes). Whether the two host
+  layers come before the repository's and the kind's, as every host
+  table does today (recommended), or after them as defaults (design,
+  questions).
 
 ## Capabilities
 
 ### New Capabilities
 
 - `own-settings`: a program's own settings as a table of programs, each
-  entry a named file and inline keys, in every layer, key by key;
-  nothing passed where none is given; each profile's way or refusal;
-  reserved keys refused where written and left out of a file;
-  credential-shaped values refused.
+  entry a named file and inline keys, in every layer, key by key, a
+  repository's for every kind among them; nothing passed where none is
+  given; each profile's way or refusal; reserved keys refused where
+  written and left out of a file; credential-shaped values refused.
 
 ### Modified Capabilities
 
 - `launching`: clause 32's layers become eight, the host's for every
-  agent and for a stream among them, and resolve own settings key by
-  key.
+  agent and for a stream among them, a repository's two layers each
+  gain a table for every kind, and own settings resolve key by key.
 - `agent-modes`: the mode is given in the eight layers (on the user's
   yes to the first question).
-- `store-profile`: the host's `[agents]` and `[agents.streams.<stream>]`
-  tables, and `programs` with its files in every agents table of the
-  host's.
+- `store-profile`: the host's `[agents]`, `[agents.streams.<stream>]`
+  and `[repos."<repository>".agents]` tables, and `programs` with its
+  files in every agents table of the host's.
 - `streams`: a stream's agents take settings from its host table.
 - `kinds-profile`: a declaration's agents tables give `programs`, a
-  file read beside the declaration as its prompts are.
+  file read beside the declaration as its prompts are, and a
+  repository's `[agents]` gives its settings for every kind.
 - `command-line`: `--agent` gives `programs.<program>.settings.<key>`
   and `programs.<program>.file`.
 - `agent-profile`: Claude Code passes its settings by `--settings
-  <file>`, names its reserved keys, and both rest on the pinned
-  release.
+  <file>`, names its reserved keys, carries a repository's
+  `attribution` as written, and rests on the pinned release.
 - `place-status`: an agent's own settings, each with its layer and its
   file, and the keys left out.
 - `seam-contracts`: the agent seam's own-settings part, its reserved
-  keys, a command's files in the start's folder, and the types.
+  keys, a command's files in the start's folder, and the types, a
+  repository's settings for every kind among them.
 - `seam-fakes`: the fake agent scripts its way, its reserved keys and
   none.
 - `clause-coverage`: the list at the statement's revision holding 175,
-  176, S76 and S77.
+  176, S76, S77 and S78.
 
 ## Impact
 
-- agentplot/blueprints: the statement gains 175, 176, S76 and S77 and
-  amends 4, 32, 56, 88, 143, 158, 171, 173, C.4, C.7 and section 3's
-  settings, drafted in design 17 for the user's ruling. Clause 143's "a
+- agentplot/blueprints: the statement gains 175, 176, S76, S77 and S78
+  and amends 4, 32, 56, 88, 143, 158, 171, 173, C.2, C.4, C.7 and
+  section 3's settings, drafted in design 18 for the user's ruling. Clause 143's "a
   stream gives its agents no settings" and core.30's rule against a
   stream's settings change first (core.19). weir's C.4 names `programs`
   in an agents table, the reader's to check, so weir-kinds returns it
@@ -138,7 +174,8 @@ file its people use. The account's own configuration stays underneath
   amending records 0017, 0020 and 0024; core.30 amended and core.43
   drawn with it.
 - `crates/flume-seams`: `Settings::programs` with `ProgramSettings` and
-  `NamedFile`, `Layer::HostStream` and `Layer::Host`, `Agent::reserved`,
+  `NamedFile`, `Layer::HostStream` and `Layer::Host`, `KindsRead::Read`'s
+  `agents` and the held `repository_agents`, `Agent::reserved`,
   `Agent::own`, the folder and `AgentCommand::files` of `Agent::command`;
   status fields, only added.
 - `crates/flume-core`: a new `own.rs` leaves a file's reserved keys
@@ -148,18 +185,20 @@ file its people use. The account's own configuration stays underneath
   `accounts.rs` reads an account usable only where its program takes
   what is given; `status.rs` gives them.
 - `crates/flume`: a new `own.rs` reading an agents table's `programs`
-  and its files; the host's configuration, the kinds profile's agents
-  tables and `--agent`; the Claude Code profile's `--settings` and its
+  and its files; the host's configuration with
+  `[repos."<repository>".agents]`, the kinds profile's agents tables and
+  a repository's `[agents]`, and `--agent`; the Claude Code profile's `--settings` and its
   reserved keys in a new `claude/settings.rs`; the person's form of
   status; the stand-in's `--settings`; walkthroughs and one live
   walkthrough.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake agent's
   way and reserved keys, a new `engine/own_settings.rs`, and the clause
   list.
-- `site/`: the agent-settings, kinds and Claude Code guides, and the
-  configuration, commands and state references.
+- `site/`: the agent-settings, kinds and Claude Code guides, the
+  tagline among their examples, and the configuration, commands and
+  state references.
 - The research place `research--mcp-servers-for-flumes-agents` and the
   held change `every-agent-shows-its-place-in-its-pane` each take
-  something from this one (design 16).
+  something from this one (design 17).
 - No new crate, plugin or site part, so no new moon project; no new
   dependency (`serde_json` and `toml` are the workspace's already).
