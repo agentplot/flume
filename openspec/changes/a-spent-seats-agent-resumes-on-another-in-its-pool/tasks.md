@@ -43,8 +43,8 @@ the test's own.
 
 ## 5. The site
 
-- [ ] 5.1 Write the carried conversation into `site/src/content/docs/guides/agent-settings.md`'s "A spent account", as design 10 has it: which start carries, how a host shares one `projects` folder between accounts by a link, what that shares, that flume writes nothing in a configuration home, and what status says when the conversation stayed. Write the carry and the session compared into `guides/claude-code.mdx`, and the agent's `conversation`, the move's `carried` and the place's `uncarried` into `reference/state.md`. Write it all to any host's operator, naming no host, team or word of ours (design 10; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 5.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 5.1 Write the carried conversation into `site/src/content/docs/guides/agent-settings.md`'s "A spent account", as design 10 has it: which start carries, how a host shares one `projects` folder between accounts by a link, what that shares, that flume writes nothing in a configuration home, and what status says when the conversation stayed. Write the carry and the session compared into `guides/claude-code.mdx`, and the agent's `conversation`, the move's `carried` and the place's `uncarried` into `reference/state.md`. Write it all to any host's operator, naming no host, team or word of ours (design 10; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
+- [x] 5.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 6. Coverage and the gate
 
