@@ -241,6 +241,11 @@ impl AgentHarness for Harness {
             })
             .expect("the word");
     }
+
+    /// The profile keeps the seam's default carry, offering none.
+    fn carry_accounts(&self, _earlier: &Identity) -> Option<agent::CarryAccounts> {
+        None
+    }
 }
 
 #[test]
