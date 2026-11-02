@@ -47,15 +47,6 @@ brought to the rule.
   inbox's outcome alone, and of C.6's table of what the profile reads,
   which names `from.worktree` alone; they say so once the operator
   rules the change (core.19). The item leaves when it lands.
-- **C.1 makes every repository's places at `<repository>/places/`.**
-  Record 0027, accepted by the operator on 2026-10-31, makes every
-  place under flume's own data directory,
-  `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`, a bare
-  repository's as a clone's (core.40). The code stands ahead of C.1's
-  make column, which is to say every place is under flume's data
-  directory once the operator rules the change in agentplot/blueprints
-  `design/flume/requirements.md` (core.19). The item leaves when it
-  lands.
 - **A dialog before the prompt waits on a person, and a retry leaves
   an agent whose stage began.** On deneb, 2026-10-31, a conversation's
   Claude Code stopped at its dialog approving a repository's MCP
@@ -104,15 +95,6 @@ brought to the rule.
   after it. Until then the code stands against core.37, core.38,
   core.12 and core.26 as amended, and core.30's plan stage. The item
   leaves when the code is brought to them.
-- **The statement reads Claude Code's mode at SessionStart.** C.4's
-  started and received rows and 161's word that it started, at
-  agentplot/blueprints 5caff76, have the SessionStart hook compare the
-  `permission_mode` "every hook's input carries in 2.1.296". That
-  release gives a SessionStart input none, so the Claude Code profile
-  compares the mode at the start's first prompt, blocking it where it
-  differs, as the user ruled on 2026-10-31 (design 7 of the change
-  agent-mode-is-a-layered-setting; core.10). The item leaves when the
-  statement says so (core.19).
 - **Record 0026 waits on its build.** Every program herdr starts runs
   under an agent profile, its own or the common one, each part of the
   agent seam built or plainly degraded (record 0026; core.1's details,
