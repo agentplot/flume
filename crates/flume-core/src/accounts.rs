@@ -177,6 +177,7 @@ impl Engine {
                 to: chosen.account.name.clone(),
                 why,
                 at: now,
+                carried: None,
             })
         });
         (chose(chosen, AccountFrom::Strategy), moved)
@@ -241,6 +242,7 @@ impl Engine {
             to: to.name.clone(),
             why,
             at: now,
+            carried: None,
         })
     }
 }

@@ -199,6 +199,14 @@ fn held() -> HeldState {
             room: Some(RoomWait {
                 order: 3,
                 words: Some("the merge queue's words".into()),
+                carry: Some(AfterSpent {
+                    start: Identity {
+                        start: 1,
+                        ..identity()
+                    },
+                    carry: true,
+                    why: None,
+                }),
             }),
             made_from: Some(1),
             start: Some(StartHeld {
@@ -263,6 +271,11 @@ fn held() -> HeldState {
                     words: "New MCP server found in .mcp.json: docs".into(),
                     since: 6,
                 }),
+                conversation: Some(Conversation {
+                    from: 1,
+                    carried: true,
+                    why: None,
+                }),
             }),
             since: Some(120),
         }],
@@ -301,6 +314,7 @@ fn held() -> HeldState {
                 to: "work-2".into(),
                 why: MoveWhy::Spent,
                 at: 110,
+                carried: Some(true),
             },
             AccountMove {
                 on: MoveOn::Intent,
@@ -308,6 +322,7 @@ fn held() -> HeldState {
                 to: "work-2".into(),
                 why: MoveWhy::Full,
                 at: 110,
+                carried: None,
             },
         ],
         unsettled: vec![UnsettledStart {
@@ -315,6 +330,12 @@ fn held() -> HeldState {
             start: 1,
             at: 4,
             unsettled: unsettled(),
+        }],
+        uncarried: vec![UncarriedStart {
+            stage: "code".into(),
+            start: 3,
+            at: 8,
+            words: "the start that carried its conversation ended before it said it started".into(),
         }],
         waiting: Some(Waiting {
             on: WaitingOn {
@@ -331,7 +352,8 @@ fn held() -> HeldState {
 }
 
 /// A start's record: the program, the account, two digests, no value,
-/// and the mode its profile passed (161, 162).
+/// the mode its profile passed and the session it resumes (161, 162,
+/// 175).
 fn start_record() -> StartRecord {
     StartRecord {
         program: "agent".into(),
@@ -341,17 +363,19 @@ fn start_record() -> StartRecord {
             ("FLUME_AGENT".into(), "41ab".into()),
         ]),
         mode: Some("careful".into()),
+        session: Some("4e3c05c8-51c4-4449-8577-4f7038e394bf".into()),
     }
 }
 
 /// An agent begun without one variable, with another value of a second,
-/// under another program and in another mode than its start asked (161,
-/// 162).
+/// under another program, in another conversation than its start resumes
+/// and in another mode than its start asked (161, 162, 175).
 fn unsettled() -> Unsettled {
     Unsettled {
         missing: vec!["AGENT_HOME".into()],
         different: vec!["FLUME_STAGE".into()],
         program: true,
+        session: true,
         mode: Some(ModeBegan {
             asked: "careful".into(),
             began: Some("ask-each".into()),
@@ -839,6 +863,120 @@ fn a_start_begun_in_another_mode_in_words() {
     );
 }
 
+#[test]
+fn a_start_begun_in_another_conversation_in_words() {
+    // The words say another conversation and name no session, which the
+    // start's record holds and status never gives (56, 161, 175).
+    let session = start_record().session.expect("a session");
+    let other = Unsettled {
+        session: true,
+        ..Unsettled::default()
+    };
+    assert_eq!(
+        other.words(),
+        "in another conversation than the one its start resumes"
+    );
+    assert!(!other.words().contains(&session), "{}", other.words());
+    assert_eq!(
+        Unsettled {
+            missing: vec!["AGENT_HOME".into()],
+            ..other
+        }
+        .words(),
+        "without AGENT_HOME, in another conversation than the one its start resumes"
+    );
+}
+
+#[test]
+fn a_held_state_with_a_carried_start() {
+    // A stage waits after a spent agent, its start carries a conversation
+    // with its record's session, its move says carried, and the place
+    // lists a start carried that did not begin (146, 161, 175).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let stage = &json["stages"][0];
+    assert_eq!(stage["room"]["carry"]["start"]["start"], 1);
+    assert_eq!(stage["room"]["carry"]["carry"], true);
+    assert!(
+        stage["room"]["carry"].get("why").is_none(),
+        "a why where it may carry"
+    );
+    assert_eq!(
+        stage["start"]["conversation"],
+        serde_json::json!({"from": 1, "carried": true})
+    );
+    assert_eq!(
+        stage["start"]["start_record"]["session"],
+        "4e3c05c8-51c4-4449-8577-4f7038e394bf"
+    );
+    assert_eq!(json["moves"][0]["carried"], true);
+    assert!(
+        json["moves"][1].get("carried").is_none(),
+        "an intent's move"
+    );
+    assert_eq!(json["unsettled"][0]["session"], true);
+    assert_eq!(
+        json["uncarried"][0],
+        serde_json::json!({
+            "stage": "code",
+            "start": 3,
+            "at": 8,
+            "words": "the start that carried its conversation ended before it said it started",
+        })
+    );
+    round_trips(AfterSpent {
+        start: identity(),
+        carry: false,
+        why: Some("the start that carried its conversation ended before it said it started".into()),
+    });
+    round_trips(Conversation {
+        from: 1,
+        carried: false,
+        why: Some("its agent profile carries no conversation".into()),
+    });
+}
+
+#[test]
+fn a_held_state_written_before_carried_starts() {
+    // The same state written before this change reads with no wait after
+    // a spent agent, no conversation, no session, no move carried and no
+    // start carried that did not begin, and writes none back (146).
+    let mut before = serde_json::to_value(held()).expect("held state as JSON");
+    let stage = &mut before["stages"][0];
+    stage["room"].as_object_mut().unwrap().remove("carry");
+    stage["start"]
+        .as_object_mut()
+        .unwrap()
+        .remove("conversation");
+    stage["start"]["start_record"]
+        .as_object_mut()
+        .unwrap()
+        .remove("session");
+    for moved in before["moves"].as_array_mut().unwrap() {
+        moved.as_object_mut().unwrap().remove("carried");
+    }
+    before["unsettled"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("session");
+    before.as_object_mut().unwrap().remove("uncarried");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    let stage = &read.stages[0];
+    assert_eq!(stage.room.as_ref().expect("a room").carry, None);
+    let start = stage.start.as_ref().expect("a start");
+    assert_eq!(start.conversation, None);
+    assert_eq!(start.start_record.session, None);
+    assert!(read.moves.iter().all(|moved| moved.carried.is_none()));
+    assert!(!read.unsettled[0].unsettled.session);
+    assert!(read.uncarried.is_empty());
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "nothing of a carried start written where none is held"
+    );
+}
+
 /// An agent profile that keeps every default of the agent seam.
 struct Bare;
 
@@ -847,6 +985,7 @@ impl Agent for Bare {
         &self,
         _settings: &Settings,
         _mode: Option<&str>,
+        _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
@@ -911,6 +1050,18 @@ fn a_profile_that_maps_no_mode() {
         .expect_err("a profile that maps no mode mapped an own value");
     assert!(words.contains("`careful`"), "{words}");
     assert_eq!(Bare.mode_read_back(), Offered::NotOffered);
+}
+
+#[test]
+fn a_profile_that_carries_no_conversation() {
+    // A profile that keeps the seam's default offers no carry, for any
+    // start and account (175).
+    let env = BTreeMap::from([("AGENT_HOME".to_string(), "/scratch/work-2".to_string())]);
+    assert_eq!(Bare.carry("/folder", &identity(), &env), Carry::NotOffered);
+    assert_eq!(
+        Bare.carry("/folder", &identity(), &BTreeMap::new()),
+        Carry::NotOffered
+    );
 }
 
 #[test]
@@ -1140,6 +1291,7 @@ fn the_hosts_own_documents_and_their_keys() {
             to: "work-2".into(),
             why: MoveWhy::Spent,
             at: 47_400,
+            carried: None,
         }],
         gone: Some(50_000),
     };
@@ -1729,8 +1881,18 @@ fn the_agent_seams_answers() {
     assert_eq!(
         unsettled().words(),
         "without AGENT_HOME, with another FLUME_STAGE, under another program, \
+         in another conversation than the one its start resumes, \
          in the mode `ask-each`, where its start asked `careful`"
     );
+    round_trips(Carry::Yes {
+        session: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+    });
+    round_trips(Carry::No {
+        why: "the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach \
+              its conversation"
+            .into(),
+    });
+    round_trips(Carry::NotOffered);
     round_trips(Offered::Offered);
     round_trips(Offered::NotOffered);
     round_trips(Guarded::Refused {

@@ -69,6 +69,11 @@ pub struct HeldState {
     /// its start recorded, in order, by its variables' names alone (56,
     /// 161).
     pub unsettled: Vec<UnsettledStart>,
+    /// Each start of the place's that carried its stage's conversation and
+    /// did not begin, in order, with what happened: its stage started
+    /// afresh after it (56, 146, S77).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub uncarried: Vec<UncarriedStart>,
 }
 
 /// A start whose agent began without the settings its start recorded:
@@ -81,6 +86,17 @@ pub struct UnsettledStart {
     pub at: Seconds,
     #[serde(flatten)]
     pub unsettled: Unsettled,
+}
+
+/// A start that carried its stage's conversation and did not begin: its
+/// stage and number, when a settle read it so, and the words saying what
+/// happened, naming no session (146, 175, S77).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UncarriedStart {
+    pub stage: String,
+    pub start: u32,
+    pub at: Seconds,
+    pub words: String,
 }
 
 /// How long a place waits on its caller under no hold's words before it
@@ -576,6 +592,26 @@ pub struct RoomWait {
     pub order: u64,
     /// The words it starts with: a fix round's or a retry's (49, 112).
     pub words: Option<String>,
+    /// For a stage waiting after its agent stopped at its account's usage
+    /// limit, that start and whether the next may carry its conversation;
+    /// none for any other wait, so no other start carries one (30, 146,
+    /// 175).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carry: Option<AfterSpent>,
+}
+
+/// A stage's wait after its agent stopped at its account's usage limit:
+/// the start that stopped, whether the next start may carry its
+/// conversation, and why not where it may not (146, 175, S77).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AfterSpent {
+    /// The start whose agent stopped at its account's usage limit.
+    pub start: Identity,
+    /// Whether the next start may carry its conversation.
+    pub carry: bool,
+    /// Why it does not, where it may not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
 }
 
 /// A stage's end as reported when it ended (43).
@@ -713,6 +749,23 @@ pub struct StartHeld {
     /// it: the place waits on a person while it shows (34, 35).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dialog: Option<Dialog>,
+    /// For a start after its stage's agent stopped at its account's usage
+    /// limit, whether it carries that agent's conversation, or why not;
+    /// none for any other start (56, 146, 175).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<Conversation>,
+}
+
+/// Whether a start carries the conversation of its stage's start before
+/// it, whose agent stopped at its account's usage limit: that start's
+/// number, and why not where it does not (56, 146, 175).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Conversation {
+    /// The number of the start whose agent stopped.
+    pub from: u32,
+    pub carried: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
 }
 
 /// A question an agent's program shows a person before it takes its
@@ -735,7 +788,9 @@ pub struct Dialog {
 /// No value is kept, and no guessed value is tested against a digest
 /// without the secret (core.30). Its mode is the value the start's
 /// profile passes, none where the settings give no mode, and in a record
-/// written before (161, 162).
+/// written before (161, 162). Its session is the one the start resumes,
+/// none where it carries no conversation, and in a record written before
+/// (161, 175).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartRecord {
     pub program: String,
@@ -743,6 +798,8 @@ pub struct StartRecord {
     pub env: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
 }
 
 /// The account a start runs under: its pool, its name, and whether the
@@ -765,7 +822,9 @@ pub enum AccountFrom {
 /// A move from one account to another: of a stage, whose start went to
 /// another account than its last, or of an intent, whose affinity moved;
 /// why, and when. The agents after it start without the earlier
-/// account's cache (56, 145 to 147).
+/// account's cache (56, 145 to 147). A stage's move after its agent
+/// stopped at its account's usage limit says whether its conversation
+/// went with it, none for any other (56, 175).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountMove {
     #[serde(flatten)]
@@ -774,6 +833,8 @@ pub struct AccountMove {
     pub to: String,
     pub why: MoveWhy,
     pub at: Seconds,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carried: Option<bool>,
 }
 
 /// What moved between accounts: a stage, or the intent (147).

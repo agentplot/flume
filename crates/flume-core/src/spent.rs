@@ -114,6 +114,7 @@ impl Engine {
                 stage.room = Some(RoomWait {
                     order,
                     words: Some(words.clone()),
+                    carry: None,
                 });
                 Step::Write(())
             });

@@ -279,6 +279,7 @@ fn the_command_for_a_code_stage() {
     let command = harness.seam.command(
         &settings,
         None,
+        None,
         &env,
         &harness.place(),
         &who,
@@ -327,6 +328,7 @@ fn the_command_for_a_code_stage() {
     let command = harness.seam.command(
         &by_path,
         None,
+        None,
         &env,
         &harness.place(),
         &who,
@@ -350,6 +352,7 @@ fn the_command_passes_the_mode_it_is_given() {
         harness.seam.command(
             &settings,
             mode,
+            None,
             &BTreeMap::new(),
             &harness.place(),
             &identity("code"),
@@ -390,6 +393,7 @@ fn the_command_for_a_stage_in_edits() {
     let command = harness.seam.command(
         &settings,
         Some(&value),
+        None,
         &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
         &harness.place(),
         &identity("code"),
@@ -474,6 +478,7 @@ fn the_plugin_an_agent_loads() {
     let first = harness.seam.command(
         &Settings::default(),
         None,
+        None,
         &BTreeMap::new(),
         &place,
         &who,
@@ -488,6 +493,7 @@ fn the_plugin_an_agent_loads() {
     std::thread::sleep(std::time::Duration::from_millis(20));
     let second = harness.seam.command(
         &Settings::default(),
+        None,
         None,
         &BTreeMap::new(),
         &place,
@@ -701,6 +707,7 @@ fn the_trust_screen() {
     let harness = Harness::new();
     let command = harness.seam.command(
         &Settings::default(),
+        None,
         None,
         &BTreeMap::new(),
         &harness.place(),

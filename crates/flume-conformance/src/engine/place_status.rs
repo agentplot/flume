@@ -665,6 +665,7 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             to: "work-2".into(),
             why: MoveWhy::Spent,
             at,
+            carried: None,
         },
         cache: Cache::Lost,
     };

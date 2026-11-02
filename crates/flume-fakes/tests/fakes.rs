@@ -290,6 +290,7 @@ fn the_agents_modes_are_scripted() {
         let command = agent.command(
             &Settings::default(),
             mode,
+            None,
             &BTreeMap::new(),
             &place_ref(),
             who,
@@ -386,6 +387,7 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
         let command = agent.command(
             &Settings::default(),
             Some("all"),
+            None,
             &BTreeMap::new(),
             &place_ref(),
             who,

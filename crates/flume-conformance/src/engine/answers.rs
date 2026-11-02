@@ -267,6 +267,7 @@ fn place_status() -> PlaceStatus {
             to: "work-2".into(),
             why: MoveWhy::Spent,
             at: 110,
+            carried: None,
         })],
         unsettled: vec![UnsettledStart {
             stage: "code".into(),
@@ -276,6 +277,7 @@ fn place_status() -> PlaceStatus {
                 missing: vec!["AGENT_HOME".into()],
                 different: vec!["FLUME_STAGE".into()],
                 program: false,
+                session: false,
                 mode: Some(ModeBegan {
                     asked: "all".into(),
                     began: Some("ask-each".into()),

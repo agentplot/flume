@@ -793,6 +793,7 @@ mod tests {
             to: "work-2".into(),
             why: MoveWhy::Spent,
             at: 54_000,
+            carried: None,
         });
         assert_eq!(
             moved.words(),

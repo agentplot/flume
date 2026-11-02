@@ -511,6 +511,7 @@ fn s56_three_units_of_one_intent(_: &()) -> Outcome {
         to: "work-2".into(),
         why: MoveWhy::Spent,
         at: world.host.now(),
+        carried: None,
     };
     let held = affinity(&world, &intent).ok_or("no affinity")?;
     ensure_eq!(

@@ -354,6 +354,7 @@ impl Engine {
                     stage.room = Some(RoomWait {
                         order: queue.next_order(),
                         words: words.clone(),
+                        carry: None,
                     });
                     held.current = Some(index);
                     return Step::Write(Err(Start::WaitingForRoom));
@@ -441,6 +442,7 @@ impl Engine {
                 group: group.clone().flatten(),
                 opening: Some(self.host.command()),
                 dialog: None,
+                conversation: None,
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
@@ -490,6 +492,7 @@ impl Engine {
         let command = agent.command(
             &settings,
             mode.as_deref(),
+            None,
             &env,
             &place,
             &identity,

@@ -254,6 +254,7 @@ impl Agent for Claude {
         &self,
         settings: &Settings,
         mode: Option<&str>,
+        _resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
         identity: &Identity,

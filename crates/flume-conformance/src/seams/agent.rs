@@ -82,6 +82,7 @@ fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
     let command = harness.seam().command(
         &Settings::default(),
         None,
+        None,
         &BTreeMap::new(),
         &harness.place(),
         &who,
@@ -233,6 +234,7 @@ fn the_command_passes_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
         harness.seam().command(
             &Settings::default(),
             mode,
+            None,
             &BTreeMap::new(),
             &harness.place(),
             &who,
@@ -270,6 +272,7 @@ fn started_without_names_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
     let command = harness.seam().command(
         &Settings::default(),
         Some(asked),
+        None,
         &BTreeMap::new(),
         &harness.place(),
         &who,
@@ -443,6 +446,7 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
     )]);
     let command = harness.seam().command(
         &settings,
+        None,
         None,
         &env,
         &harness.place(),

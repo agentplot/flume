@@ -55,6 +55,7 @@ impl Agent for StandInAgent {
         &self,
         settings: &Settings,
         _mode: Option<&str>,
+        _resume: Option<&str>,
         env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
