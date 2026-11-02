@@ -47,15 +47,6 @@ brought to the rule.
   inbox's outcome alone, and of C.6's table of what the profile reads,
   which names `from.worktree` alone; they say so once the operator
   rules the change (core.19). The item leaves when it lands.
-- **C.1 makes every repository's places at `<repository>/places/`.**
-  Record 0027, accepted by the operator on 2026-10-31, makes every
-  place under flume's own data directory,
-  `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`, a bare
-  repository's as a clone's (core.40). The code stands ahead of C.1's
-  make column, which is to say every place is under flume's data
-  directory once the operator rules the change in agentplot/blueprints
-  `design/flume/requirements.md` (core.19). The item leaves when it
-  lands.
 - **A dialog before the prompt waits on a person, and a retry leaves
   an agent whose stage began.** On deneb, 2026-10-31, a conversation's
   Claude Code stopped at its dialog approving a repository's MCP
@@ -104,15 +95,6 @@ brought to the rule.
   after it. Until then the code stands against core.37, core.38,
   core.12 and core.26 as amended, and core.30's plan stage. The item
   leaves when the code is brought to them.
-- **The statement reads Claude Code's mode at SessionStart.** C.4's
-  started and received rows and 161's word that it started, at
-  agentplot/blueprints 5caff76, have the SessionStart hook compare the
-  `permission_mode` "every hook's input carries in 2.1.296". That
-  release gives a SessionStart input none, so the Claude Code profile
-  compares the mode at the start's first prompt, blocking it where it
-  differs, as the user ruled on 2026-10-31 (design 7 of the change
-  agent-mode-is-a-layered-setting; core.10). The item leaves when the
-  statement says so (core.19).
 - **Record 0026 waits on its build.** Every program herdr starts runs
   under an agent profile, its own or the common one, each part of the
   agent seam built or plainly degraded (record 0026; core.1's details,
@@ -124,20 +106,26 @@ brought to the rule.
   with entries for Codex, Gemini CLI, GitHub Copilot CLI and OpenCode,
   then Codex's own profile. The item leaves when the code is brought
   to core.39.
-- **Records 0028 and 0029 wait on the statements, the engine's move
-  and crew's rewrite.** Statechart kinds beside simple kinds on one
-  branch (record 0028; core.41), run on flywheel-engine moved into weir
-  and taken at the revision of weir flume pins (record 0029; core.42),
-  were accepted on 2026-11-01 and are stated in neither statement.
-  flume's 4, 18, 23, 30, 84, 85, C.2 and I2 are amended, and its
-  clauses after 174 and scenarios after S75 added, by the domain
-  model's ledger items T1.a and T3.a in agentplot/blueprints
-  `design/flume/requirements.md`; weir's 51, 81 and C.4 by T1.b; and
-  weir's section for the engine with its move into weir (core.19). The
-  build (T1.c) follows crew's rewrite onto flume (crew records 0047,
-  0050). Until it lands flume runs simple kinds alone and refuses a
-  statechart kind (4, 23), and core.42 binds no code. The item leaves
-  when the build lands.
+- **Records 0028 and 0029 wait on the engine's move and crew's
+  rewrite.** Statechart kinds beside simple kinds on one branch (record
+  0028; core.41), run on flywheel-engine moved into weir and taken at
+  the revision of weir flume pins (record 0029; core.42), are stated in
+  agentplot/blueprints `design/flume/requirements.md`, 175 to 178, and
+  `design/weir/requirements.md`, 94 to 99 and A.13. The engine moves
+  into weir as weir's section 9 says, and the build (T1.c) follows
+  crew's rewrite onto flume (crew records 0047, 0050). Until it lands
+  flume runs simple kinds alone and refuses a statechart kind (4), and
+  core.42 binds no code. The item leaves when the build lands.
+- **Ledger item T3.a waits on the user's ruling.** Record 0028 plans
+  clauses by which a kind of either format is built into flume,
+  declared in a repository's configuration, or a package from a plugin
+  marketplace, as Claude Code's and herdr's plugins are, amending 19
+  and 155 to 159, and by which flume checks and draws a kind when it
+  loads it and a repository's gate checks it too. Record 0022 left a
+  marketplace's registry, publishing and discovery to a later record,
+  and 159 leaves how a package reaches the host outside the statement,
+  so no clause states T3.a until the user rules how it meets them
+  (core.19, core.34). The item leaves when the statement states it.
 - **The command line still says `<partition>/<role>`.** `flume wake
   --help` and the refusals of a name that is no address, in
   `commands/mod.rs`, `host/config.rs` and `flume-core`'s `wake.rs`,
