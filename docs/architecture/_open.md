@@ -132,7 +132,10 @@ brought to the rule.
   amended), is stated on blueprints' branch
   `design/flume-a-spent-seats-agent-resumes` at ec16d03 (30, 56, 88,
   146, 161, 171, 175, C.4, S55, S76, S77), to land on blueprints main.
-  Until it is built, every spent agent's stage starts afresh, against
+  Main has since given 175 to 178, S76 and S77 to statechart kinds
+  (ee2dd50; records 0028 and 0029), so the amendment takes other
+  numbers when it lands, and this repository's citations of the carry's
+  175, S76 and S77 move to them (core.19). Until it is built, every spent agent's stage starts afresh, against
   core.32. The change `a-spent-seats-agent-resumes-on-another-in-its-pool`
   builds it. The item leaves when the amendment is built.
 - **Records 0028 and 0029 wait on the statements, the engine's move
