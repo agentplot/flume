@@ -884,9 +884,22 @@ fn the_stage_moves(_: &()) -> Outcome {
         "code's move"
     );
     ensure_eq!(
-        stage_move.moved.carried,
-        Some(false),
-        "whether code's conversation went with it"
+        (
+            stage_move.moved.carried,
+            status
+                .agent
+                .as_ref()
+                .and_then(|agent| agent.conversation.clone())
+        ),
+        (
+            Some(false),
+            Some(Conversation {
+                from: 1,
+                carried: false,
+                why: Some(UNREACHED.into()),
+            })
+        ),
+        "whether code's conversation went with it, and why not"
     );
     ensure!(
         world.held(&id).is_some_and(|held| held.ends.is_empty()),
