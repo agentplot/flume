@@ -330,10 +330,15 @@ acts.
   herdr with the pinned Claude Code over two scratch configuration
   homes signed in by the test account's token, the second's `projects`
   a link to the first's. No test account reaches its limit on demand,
-  so once its code agent has taken its first turn, the test runs the
-  plugin's StopFailure hook for that start with a usage limit's input,
-  as 2.1.296 builds it. The carried agent resumes the session and the
-  place lands. The operator runs it by hand, as `CLAUDE.md` says.
+  so once its code agent has taken its first turn and waits in it on a
+  foreground sleep its brief asks for first, the test runs the plugin's
+  StopFailure hook for that start with a usage limit's input, as 2.1.296
+  builds it, and ends the turn by interrupting it in herdr. An
+  interrupted turn runs no Stop hook, as a turn the API failed runs
+  none; a turn left to end on its own would meet the stop check and
+  deliver. The carried agent says it started in the first's session,
+  goes on from the brief its prompt does not hold, and the place lands.
+  The operator runs it by hand, as `CLAUDE.md` says.
 
 ### 10. The site
 
