@@ -20,8 +20,11 @@ under `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>`, and
 starts each agent with it:
 
 ```sh
-claude --plugin-dir <plugin> [--model <model>] [--append-system-prompt <instructions>] '<prompt>'
+claude --plugin-dir <plugin> [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt <instructions>] '<prompt>'
 ```
+
+`--resume` is there only for a start that carries a spent agent's
+conversation ([a conversation carried](#a-conversation-carried)).
 
 in the place, with the agent's environment and four variables of
 flume's:
@@ -55,7 +58,7 @@ every hook does nothing.
 
 | Hook | What flume does with it |
 |---|---|
-| SessionStart | the **started ack**: the session, its transcript and the plugin's version, taken only with the start's secret. flume takes it only where the agent's program and environment match its start's record ([the start check](/flume/guides/agent-settings/#the-start-check)) |
+| SessionStart | the **started ack**: the session, its transcript, the transcript's length when the start's first ack came, and the plugin's version, taken only with the start's secret. flume takes it only where the agent's program and environment match its start's record, and, for a start that resumes a session, only in that session ([the start check](/flume/guides/agent-settings/#the-start-check)) |
 | UserPromptSubmit | the **received ack**: a digest of the prompt the agent took, the tags Claude Code may wrap a pasted prompt in taken off and its whitespace collapsed. At the start's first prompt it first compares the mode the session runs in with the one its start passed, and blocks the prompt where it differs ([the start check](/flume/guides/agent-settings/#the-start-check)) |
 | PreToolUse, for Bash | the **guard**: refuses `git push`, `sluice submit`, and worktrunk's `wt submit` and `wt merge`, wherever the line runs them, and records each refusal |
 | PreToolUse, for AskUserQuestion and ExitPlanMode | the **asking mark**: the agent is asking a person, until its transcript holds the answer |
@@ -134,11 +137,57 @@ starts, ends or moves a stage.
 | `unknown` | flume cannot read it, as under the printed command |
 
 with `started`, `asking` and `own_work`, whether background shells or
-tasks the transcript shows are still running. A stage whose agent
+tasks the transcript shows are still running. Each start reads only its
+own part of the transcript, what follows the length its first started
+ack recorded. So a carried agent never reads the spent agent's turns,
+background tasks or last words as its own. A stage whose agent
 stopped with nothing delivered is **lost**; one quiet past the stage's
 `quiet` limit with nothing delivered is **stuck**; and one working past
 it is said to be. flume ends none of these: a retry or a drop is
 yours.
+
+## A conversation carried
+
+The start after a spent agent carries its conversation where Claude
+Code can find it under the account chosen ([a spent
+account](/flume/guides/agent-settings/#a-spent-account)). Claude Code
+keeps a session's transcript at
+`<home>/projects/<folder>/<session>.jsonl`, `<home>` its configuration
+home, and `--resume <session>` looks for the session under that home's
+`projects` folder alone.
+
+So at the start after a spent agent, flume reads the transcript that
+agent's started ack named. It looks for the file of the same folder and
+name under the chosen account's `projects`, `<home>` its
+`CLAUDE_CONFIG_DIR`, or `~/.claude` where the account sets none. It
+compares the two by device and inode. Where they are one file, as when
+the two homes share their `projects` folder by a link, flume starts
+Claude Code with `--resume <session>`, and the session goes on under
+the same id. A copy of the transcript is another file, so a copy
+carries nothing. flume only reads: it writes, links and copies nothing
+in either home.
+
+Where they are not one file, the start is afresh and status gives why,
+naming `CLAUDE_CONFIG_DIR` and no path:
+
+| Why | When |
+|---|---|
+| its conversation is not known: the agent that stopped never said it started, so no configuration home (`CLAUDE_CONFIG_DIR`) is known to hold it | the spent agent wrote no started ack, or one naming no session |
+| its conversation's transcript, in the stopped account's configuration home (`CLAUDE_CONFIG_DIR`), cannot be read | the spent agent's transcript is gone or unreadable |
+| the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's | the chosen account's `projects` holds another file of that name, or none |
+
+The carried agent's SessionStart hook compares the session it runs in
+with the one its start's record names. One that came up in another
+session acks nothing and records that it began in another
+conversation, naming no session. flume then ends it once it is quiet
+and starts the stage afresh. A session Claude Code cannot find ends the
+program before any hook runs, and flume reads that start as a carried
+start that did not begin, and starts the stage afresh as well.
+
+flume checks the option text of `--resume` and `--fork-session`, where
+2.1.296 keeps its `projects` folder, and its words for a session it
+cannot find, against the release its repository pins. flume never
+passes `--fork-session`, so a resumed session keeps its id.
 
 ## In your own sessions
 
