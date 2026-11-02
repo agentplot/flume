@@ -12,6 +12,7 @@ use super::account_pools::*;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::Retry;
+use flume_fakes::FakeAgent;
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -55,6 +56,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "carried conversations: under a profile that offers no carry the stage starts afresh, saying its agent profile carries no conversation",
             cites: &["146", "171", "175"],
             run: a_profile_that_carries_nothing,
+        },
+        Scenario {
+            name: "carried conversations: a carried start whose program finds no such conversation and ends before it says it started delivers no end, and code starts afresh at once with flume's words, saying why and counting no bound",
+            cites: &["S77", "146", "175", "35", "112"],
+            run: s77_no_such_conversation,
+        },
+        Scenario {
+            name: "carried conversations: a carried start whose agent says it started in another session is not taken, is ended once quiet, and the stage starts afresh carrying nothing",
+            cites: &["161", "175", "146"],
+            run: another_session,
+        },
+        Scenario {
+            name: "carried conversations: the fresh start after a carried start that ended first, come up without its account's variable, is ended once quiet and the stage starts afresh once more, and the start after it come up so is never begun",
+            cites: &["161", "146", "35"],
+            run: the_fresh_start_after_it_begins_otherwise,
+        },
+        Scenario {
+            name: "carried conversations: a carried start that does not say it started by the stage's limit, or does not receive its prompt, is sent nothing more, is ended once quiet and the stage starts afresh, saying which",
+            cites: &["35", "38", "146", "175"],
+            run: by_the_limit_and_not_received,
+        },
+        Scenario {
+            name: "seam fakes: the fake agent scripted to end its carried start before its word: the core starts the stage afresh carrying nothing, the fake's log showing the fresh start's command with no session",
+            cites: &["S77", "146", "106"],
+            run: a_scripted_carried_start_that_ends_first,
         },
     ]
 }
@@ -516,6 +542,383 @@ fn a_profile_that_carries_nothing(_: &()) -> Outcome {
         resumed(&world, &start.identity)?,
         None,
         "the session the fresh start resumes"
+    );
+    Ok(())
+}
+
+/// The fix `name` launched for the recipient `ops`, whose pane waits, an
+/// intent of its own, its code begun.
+fn begun_for_ops(world: &World, name: &str) -> Result<PlaceId, String> {
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let mut given = launch("fix", name, Some("x"));
+    given.intent = Some(name.into());
+    given.recipients = vec!["ops".into()];
+    launched(&world.engine.launch(&given))?;
+    let id = World::id("fix", name);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "{name}'s code"
+    );
+    Ok(id)
+}
+
+/// No end recorded or delivered, no notice sent, and the kind's bound
+/// not counted.
+fn nothing_delivered(world: &World, id: &PlaceId) -> Outcome {
+    let held = world.held(id).ok_or("no held state")?;
+    ensure_eq!(
+        (
+            held.ends.len(),
+            world.terminal.notices("ops").len(),
+            held.submission.send_backs
+        ),
+        (0, 0, 0),
+        "the ends recorded, the notices sent and the kind's bound counted"
+    );
+    ensure!(
+        world.status(id)?.waiting_on.is_none(),
+        "the place waits on its caller"
+    );
+    Ok(())
+}
+
+/// The fresh start after the carried start `carried`, which did not
+/// begin as `why` says: afresh under flume's words for a spent agent,
+/// after code's start 1, resuming nothing.
+fn afresh_after(world: &World, start: &StartHeld, why: &str) -> Outcome {
+    ensure_eq!(
+        start.conversation,
+        Some(Conversation {
+            from: 1,
+            carried: false,
+            why: Some(why.to_string()),
+        }),
+        format!("{}'s conversation", start.identity)
+    );
+    ensure_eq!(
+        (
+            start.start_record.session.clone(),
+            resumed(world, &start.identity)?
+        ),
+        (None, None),
+        format!("the session {} resumes", start.identity)
+    );
+    ensure!(
+        start.prompt.text.starts_with("Fix one on fix/one.")
+            && start
+                .prompt
+                .text
+                .contains("The stage's earlier agent stopped at its account's usage limit"),
+        "the fresh start's prompt is not the stage's with flume's words: {}",
+        start.prompt.text
+    );
+    Ok(())
+}
+
+/// The place's carried starts that did not begin, by start and words.
+fn uncarried(world: &World, id: &PlaceId) -> Result<Vec<(u32, String)>, String> {
+    Ok(world
+        .held(id)
+        .ok_or("no held state")?
+        .uncarried
+        .into_iter()
+        .map(|read| (read.start, read.words))
+        .collect())
+}
+
+const ENDED_FIRST: &str = "the start that carried its conversation ended before it said it started";
+
+fn s77_no_such_conversation(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-2");
+    world.agent.carried_starts_end();
+    let id = begun_for_ops(&world, "one")?;
+    stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    let start = start_of(&world, &id, "code")?;
+    ensure_eq!(start.n, 3, "code's start once the carried one ended");
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code's fresh start"
+    );
+    afresh_after(&world, &start, ENDED_FIRST)?;
+    ensure_eq!(
+        uncarried(&world, &id)?,
+        vec![(2, ENDED_FIRST.to_string())],
+        "the carried starts that did not begin"
+    );
+    ensure_eq!(
+        world.terminal.sent_to(&code("one", 2)),
+        Vec::<String>::new(),
+        "what the carried start's agent was sent"
+    );
+    ensure_eq!(
+        world.agent.log.count("carry"),
+        1,
+        "carries asked of the profile"
+    );
+    nothing_delivered(&world, &id)
+}
+
+fn another_session(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-2");
+    world.agent.set_session(&code("one", 2), "s-2");
+    let id = begun_for_ops(&world, "one")?;
+    let carried_start = code("one", 2);
+    world.agent.set_own_work(&carried_start, Reading::Yes);
+    stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    ensure_eq!(
+        (
+            world.stage_state(&id, "code"),
+            start_of(&world, &id, "code")?.n
+        ),
+        (Some(StageState::Starting), 2),
+        "code while the carried start's agent works"
+    );
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.agent.map(|agent| agent.started),
+        Some(Reading::No),
+        "the carried start's started ack"
+    );
+    world.agent.set_own_work(&carried_start, Reading::No);
+    world.settle(&id);
+    ensure!(
+        world
+            .terminal
+            .log
+            .of("close")
+            .contains(&format!("close {carried_start}")),
+        "the carried start's agent was not ended"
+    );
+    let start = start_of(&world, &id, "code")?;
+    ensure_eq!(start.n, 3, "code's start after the carried one");
+    afresh_after(
+        &world,
+        &start,
+        "the start that carried its conversation began in another conversation than the one its start resumes",
+    )?;
+    ensure_eq!(
+        world.terminal.sent_to(&carried_start),
+        Vec::<String>::new(),
+        "what the carried start's agent was sent"
+    );
+    ensure_eq!(
+        world
+            .held(&id)
+            .ok_or("no held state")?
+            .unsettled
+            .iter()
+            .map(|read| (read.start, read.unsettled.session))
+            .collect::<Vec<_>>(),
+        vec![(2, true)],
+        "the starts read begun without their settings"
+    );
+    nothing_delivered(&world, &id)
+}
+
+fn the_fresh_start_after_it_begins_otherwise(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-2");
+    world.agent.carried_starts_end();
+    for start in [3, 4] {
+        world.agent.set_started_without(
+            &code("one", start),
+            Unsettled {
+                missing: vec![FakeAgent::HOME.into()],
+                ..Unsettled::default()
+            },
+        );
+    }
+    let id = begun_for_ops(&world, "one")?;
+    stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        (
+            world.stage_state(&id, "code"),
+            start_of(&world, &id, "code")?.n
+        ),
+        (Some(StageState::NeverBegun), 4),
+        "code once the start after the fresh one came up so too"
+    );
+    ensure!(
+        world
+            .terminal
+            .log
+            .of("close")
+            .contains(&format!("close {}", code("one", 3))),
+        "the fresh start's agent was not ended"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    ensure_eq!(
+        held.unsettled
+            .iter()
+            .map(|read| read.start)
+            .collect::<Vec<_>>(),
+        vec![3, 4],
+        "the starts read begun without their settings"
+    );
+    ensure_eq!(
+        held.stages[0]
+            .start
+            .as_ref()
+            .and_then(|start| start.conversation.clone()),
+        None,
+        "the conversation of the start after the fresh one"
+    );
+    ensure_eq!(
+        uncarried(&world, &id)?,
+        vec![(2, ENDED_FIRST.to_string())],
+        "the carried starts that did not begin"
+    );
+    Ok(())
+}
+
+fn by_the_limit_and_not_received(_: &()) -> Outcome {
+    for (scripted, why) in [
+        (
+            "unstarted",
+            "the start that carried its conversation did not say it started by the stage's limit",
+        ),
+        (
+            "unreceived",
+            "the start that carried its conversation did not receive its prompt",
+        ),
+    ] {
+        let world = World::new();
+        fill_first_at_homes(&world);
+        carries_to(&world, "work-2");
+        let carried_start = code("one", 2);
+        if scripted == "unstarted" {
+            world.agent.set_started(&carried_start, Reading::No);
+        } else {
+            world.agent.receives_at(&carried_start, None);
+        }
+        let id = begun_for_ops(&world, "one")?;
+        stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+        world.settle(&id);
+        for _ in 0..4 {
+            if start_of(&world, &id, "code")?.n > 2 {
+                break;
+            }
+            world.host.advance(flume_core::QUIET_LIMIT);
+            world.settle(&id);
+        }
+        let start = start_of(&world, &id, "code")?;
+        ensure_eq!(
+            start.n,
+            3,
+            format!("code's start after its carried start {scripted}")
+        );
+        afresh_after(&world, &start, why)?;
+        ensure_eq!(
+            uncarried(&world, &id)?,
+            vec![(2, why.to_string())],
+            format!("the carried starts that did not begin, {scripted}")
+        );
+        ensure!(
+            world
+                .terminal
+                .log
+                .of("close")
+                .contains(&format!("close {carried_start}")),
+            "the carried start's agent, {scripted}, was not ended"
+        );
+        ensure!(
+            world.terminal.sent_to(&carried_start).len() <= 2,
+            "the carried start's agent, {scripted}, was sent more than its two sendings: {:?}",
+            world.terminal.sent_to(&carried_start)
+        );
+        nothing_delivered(&world, &id)?;
+    }
+    working_past_the_limit()
+}
+
+/// A carried start read not begun at the stage's limit while its agent
+/// works: recorded once, and its agent, which then says it started and
+/// goes quiet, sent nothing before it is ended (35, 146).
+fn working_past_the_limit() -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-2");
+    let carried_start = code("one", 2);
+    world.agent.set_started(&carried_start, Reading::No);
+    world.agent.set_own_work(&carried_start, Reading::Yes);
+    let id = begun_for_ops(&world, "one")?;
+    stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    world.host.advance(flume_core::QUIET_LIMIT);
+    world.settle(&id);
+    world.settle(&id);
+    ensure_eq!(
+        (start_of(&world, &id, "code")?.n, uncarried(&world, &id)?),
+        (
+            2,
+            vec![(
+                2,
+                "the start that carried its conversation did not say it started by the stage's limit"
+                    .to_string()
+            )]
+        ),
+        "code's start and the carried starts that did not begin while its agent works"
+    );
+    world.agent.set_started(&carried_start, Reading::Yes);
+    world.agent.set_own_work(&carried_start, Reading::No);
+    world.settle(&id);
+    ensure_eq!(
+        (
+            start_of(&world, &id, "code")?.n,
+            world.terminal.sent_to(&carried_start)
+        ),
+        (3, vec![]),
+        "code's start once the carried start's agent is quiet, and what that agent was sent"
+    );
+    nothing_delivered(&world, &id)
+}
+
+fn a_scripted_carried_start_that_ends_first(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-2");
+    world.agent.carried_starts_end();
+    let id = begun_fix(&world, "one")?;
+    stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    ensure_eq!(
+        world.agent.log.of("command"),
+        vec![
+            format!("command {}", code("one", 1)),
+            format!("command {} --resume s-1", code("one", 2)),
+            format!("command {}", code("one", 3)),
+        ],
+        "the commands the fake's log shows"
+    );
+    carries_none_but_after(&world, &start_of(&world, &id, "code")?)
+}
+
+/// The start after a carried one that did not begin: its record names no
+/// session and its command resumes none.
+fn carries_none_but_after(world: &World, start: &StartHeld) -> Outcome {
+    ensure_eq!(
+        (
+            start
+                .conversation
+                .as_ref()
+                .map(|conversation| conversation.carried),
+            start.start_record.session.clone(),
+            resumed(world, &start.identity)?
+        ),
+        (Some(false), None, None),
+        format!("{}'s conversation and session", start.identity)
     );
     Ok(())
 }
