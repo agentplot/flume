@@ -208,11 +208,11 @@ impl Session {
                 // Chained to the transcript's last record, its ids past
                 // every one the transcript holds.
                 let text = std::fs::read_to_string(&transcript).unwrap_or_default();
-                let parent = text
-                    .lines()
-                    .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-                    .filter_map(|record| record["uuid"].as_str().map(str::to_string))
-                    .last();
+                let parent = text.lines().rev().find_map(|line| {
+                    serde_json::from_str::<Value>(line)
+                        .ok()
+                        .and_then(|record| record["uuid"].as_str().map(str::to_string))
+                });
                 let calls = u32::try_from(text.lines().count()).unwrap_or(u32::MAX);
                 (id, transcript, parent, calls)
             }
