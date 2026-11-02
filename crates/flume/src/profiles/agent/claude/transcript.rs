@@ -6,7 +6,10 @@
 //! `tool_use` calls; and `queue-operation` records, an `enqueue` holding a
 //! prompt queued while the agent worked. A slash command's turn holds
 //! `<command-name>` and `<command-args>`, and the end of work started in
-//! the background a `<task-notification>` naming its `<task-id>`.
+//! the background a `<task-notification>` naming its `<task-id>`. A
+//! start's readings read only the records that begin at or after the
+//! length its started ack recorded, which a resumed session's earlier
+//! records come before (31, 175).
 
 use super::record::Asking;
 use super::{as_received, collapsed};
@@ -61,11 +64,35 @@ fn tagged<'a>(text: &'a str, tag: &str) -> Vec<&'a str> {
     found
 }
 
+/// The length in bytes of the transcript at `path`, 0 where none is
+/// written (175).
+pub fn length(path: &Path) -> u64 {
+    std::fs::metadata(path).map_or(0, |meta| meta.len())
+}
+
 impl Transcript {
     /// The transcript at `path`.
     pub fn read(path: &Path) -> Read {
-        match std::fs::read_to_string(path) {
-            Ok(text) => Read::Read(Transcript::parse(&text)),
+        Transcript::read_from(path, 0)
+    }
+
+    /// The records of the transcript at `path` that begin at or after the
+    /// byte `from`, a line cut there left out; all of a file shorter than
+    /// `from`, which Claude Code wrote again (31, 175).
+    pub fn read_from(path: &Path, from: u64) -> Read {
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                let from = usize::try_from(from)
+                    .ok()
+                    .filter(|from| *from <= bytes.len())
+                    .unwrap_or(0);
+                let mut rest = &bytes[from..];
+                if from > 0 && bytes[from - 1] != b'\n' {
+                    let cut = rest.iter().position(|byte| *byte == b'\n');
+                    rest = cut.map_or(&[][..], |cut| &rest[cut + 1..]);
+                }
+                Read::Read(Transcript::parse(&String::from_utf8_lossy(rest)))
+            }
             Err(error) if error.kind() == ErrorKind::NotFound => Read::NotWritten,
             Err(_) => Read::Unreadable,
         }
