@@ -21,7 +21,10 @@
 //! agent at a time, and a failed submission sends it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
 //! code agent stops at its account's usage limit moves to the pool's
-//! second account and lands (S55; 146, 151); and a fix whose first code
+//! second account and lands (S55; 146, 151), and, where the second's
+//! `projects` is a link to the first's, goes on there in its own
+//! conversation and lands, flume writing nothing in either home (S76;
+//! 175); and a fix whose first code
 //! agent comes up without its account's variable is ended and its stage
 //! started afresh under the account, and lands (S65; 161); a fix whose
 //! host's table gives `edits` over its repository's `full` starts its
@@ -33,8 +36,10 @@
 //! begun, and a retry leaves it be (35, 38, 50).
 
 use super::walk::*;
+use flume::profiles::agent::claude::carry::UNREACHED;
 use serde_json::{json, Value};
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 /// The acts of a code stage that writes `file` and commits it.
 fn commits(file: &str, text: &str) -> Value {
@@ -818,48 +823,141 @@ fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_g
     assert!(walk.on_remote("parser.rs").is_some());
 }
 
-/// The seconds since the epoch now.
-fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("a clock past the epoch")
-        .as_secs()
-}
+/// The words a carried start's prompt opens with, flume's own (146, 175).
+const CARRIED: &str = "Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.";
 
-/// The top of the UTC hour two hours on from `at`, well clear of any
-/// walk's length, and the session limit naming it in the words the pinned
-/// Claude Code writes, a time of day in en-US's 12-hour form (151, C.4).
-fn session_limit_after(at: u64) -> (u64, String) {
-    let reset = at - at % 3600 + 2 * 3600;
-    let hour = reset % 86_400 / 3600;
-    let clock = match hour {
-        0 => "12am".to_owned(),
-        1..=11 => format!("{hour}am"),
-        12 => "12pm".to_owned(),
-        _ => format!("{}pm", hour - 12),
-    };
-    (
-        reset,
-        format!("You've hit your session limit · resets {clock} (UTC)"),
-    )
-}
+/// The way to stop short the Claude Code profile gives every start (28).
+const STOP_SHORT: &str = "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop.";
 
-#[test]
-fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
-    // S55, 146, 151: on a fill-first pool of two accounts, each a scratch
-    // `CLAUDE_CONFIG_DIR`, the fix's code agent starts under the first and
-    // its turn fails at the session limit through StopFailure. The first
-    // account reads spent until the hour the words name, code starts afresh under the
-    // second with flume's words, the move recorded with its cache lost;
-    // the second's agent commits what the first left, and the place lands.
-    let walk = Walk::new("walk-spent");
-    let first = walk.account().to_path_buf();
-    let second = walk.account_folder("account-2");
+/// The host's fill-first pool of two accounts, `stand-in-1` and
+/// `stand-in-2`, whose `CLAUDE_CONFIG_DIR`s are `first` and `second`.
+fn two_accounts(walk: &Walk, first: &Path, second: &Path) {
     walk.configure_whole(&format!(
         "[host]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [\n  {{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }},\n  {{ name = \"stand-in-2\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?} }} }},\n]\n",
         first.display().to_string(),
         second.display().to_string(),
     ));
+}
+
+/// One thing a configuration home holds.
+#[derive(Debug, PartialEq)]
+enum Holding {
+    Folder,
+    File(String),
+    Link(PathBuf),
+}
+
+/// What a configuration home holds, links not followed: each path below
+/// it, with a file's text and a link's target.
+fn holdings(home: &Path) -> BTreeMap<PathBuf, Holding> {
+    let mut held = BTreeMap::new();
+    let mut folders = vec![home.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(&folder)
+            .expect("a home's folder")
+            .flatten()
+        {
+            let path = entry.path();
+            let below = path
+                .strip_prefix(home)
+                .expect("below the home")
+                .to_path_buf();
+            let kind = std::fs::symlink_metadata(&path)
+                .expect("a home's entry")
+                .file_type();
+            let holding = if kind.is_symlink() {
+                Holding::Link(std::fs::read_link(&path).expect("a link's target"))
+            } else if kind.is_dir() {
+                folders.push(path);
+                Holding::Folder
+            } else {
+                Holding::File(std::fs::read_to_string(&path).expect("a home's file"))
+            };
+            held.insert(below, holding);
+        }
+    }
+    held
+}
+
+/// A home as an account's holds it before any agent ran under it: its
+/// credentials, a file of the walk's own, which no agent and no command
+/// of flume's may touch; the holdings it gives are read after.
+fn signed_in(home: &Path, account: &str) -> BTreeMap<PathBuf, Holding> {
+    std::fs::write(
+        home.join(".credentials.json"),
+        format!("{{\"stand-in\": \"the credentials of {account}\"}}\n"),
+    )
+    .expect("the account's credentials");
+    holdings(home)
+}
+
+/// The sessions the stand-in said it ran, in the order it ran them.
+fn sessions(out: &str) -> Vec<String> {
+    out.lines()
+        .filter_map(|line| line.strip_prefix("stand-in: session "))
+        .filter_map(|rest| rest.split_once(" in "))
+        .map(|(session, _)| session.to_string())
+        .collect()
+}
+
+/// `home` holds what it held, `held`, as it held it, and besides only the
+/// transcripts the stand-in wrote of `sessions`, under `projects`, with
+/// their folders: flume copied, linked and wrote nothing there (175, C.4;
+/// core.32).
+fn holds_only(home: &Path, held: &BTreeMap<PathBuf, Holding>, sessions: &[String]) {
+    let now = holdings(home);
+    for (path, holding) in held {
+        assert_eq!(
+            now.get(path),
+            Some(holding),
+            "{} changed in {}",
+            path.display(),
+            home.display()
+        );
+    }
+    for (path, holding) in now.iter().filter(|(path, _)| !held.contains_key(*path)) {
+        let names: Vec<String> = path
+            .components()
+            .map(|name| name.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        let transcript = match names.as_slice() {
+            [projects, _, file] if projects == "projects" => {
+                file.strip_suffix(".jsonl")
+                    .is_some_and(|session| sessions.iter().any(|ran| ran == session))
+                    && matches!(holding, Holding::File(_))
+            }
+            [projects] | [projects, _] if projects == "projects" => holding == &Holding::Folder,
+            _ => false,
+        };
+        assert!(
+            transcript,
+            "{} holds {} ({holding:?}), which no session of {sessions:?} wrote",
+            home.display(),
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
+    // S55, 146, 151, 175: on a fill-first pool of two accounts, each a
+    // scratch `CLAUDE_CONFIG_DIR` of its own, the fix's code agent starts
+    // under the first and its turn fails at the session limit through
+    // StopFailure. The first account reads spent until the hour the words
+    // name, code starts afresh under the second with flume's words, the
+    // move recorded with its cache lost and its conversation stayed
+    // behind, since the second's home does not reach it, said naming
+    // `CLAUDE_CONFIG_DIR` and no path; the second's agent commits what the
+    // first left, and the place lands. Each home holds what it held and the
+    // transcript its agent wrote, and nothing else (C.4; core.32).
+    let walk = Walk::new("walk-spent");
+    let first = walk.account().to_path_buf();
+    let second = walk.account_folder("account-2");
+    let held = [
+        signed_in(&first, "stand-in-1"),
+        signed_in(&second, "stand-in-2"),
+    ];
+    two_accounts(&walk, &first, &second);
 
     let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
     let status = walk.status(&place);
@@ -874,6 +972,7 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
     );
     assert!(out.contains("the turn failed"), "{out}");
     assert!(!out.contains("stop blocked"), "{out}");
+    let mut ran = sessions(&out);
 
     let status = walk.until(&place, "code started afresh", |status| {
         stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
@@ -881,6 +980,141 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
     assert_eq!(
         status["agent"]["account"],
         json!({ "pool": "stand-in", "name": "stand-in-2", "from": "strategy" }),
+        "{status}"
+    );
+    assert_eq!(
+        status["agent"]["conversation"],
+        json!({ "from": 1, "carried": false, "why": UNREACHED }),
+        "{status}"
+    );
+    assert!(UNREACHED.contains("`CLAUDE_CONFIG_DIR`"), "{UNREACHED}");
+    for home in [&first, &second] {
+        assert!(
+            !status.to_string().contains(&*home.to_string_lossy()),
+            "status holds a configuration home's path: {status}"
+        );
+    }
+    let moved = status["moves"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|moved| moved["on"] == "stage")
+        .unwrap_or_else(|| panic!("no move of code: {status}"));
+    assert_eq!(
+        (
+            &moved["stage"],
+            &moved["from"],
+            &moved["to"],
+            &moved["why"],
+            &moved["cache"],
+            &moved["carried"]
+        ),
+        (
+            &json!("code"),
+            &json!("stand-in-1"),
+            &json!("stand-in-2"),
+            &json!("spent"),
+            &json!("lost"),
+            &json!(false)
+        ),
+        "{status}"
+    );
+    assert!(stage(&status, "code")["end"].is_null(), "{status}");
+    assert_eq!(walk.resumes(&place), None, "{}", walk.printed(&place));
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.contains("stopped at its account's usage limit"),
+        "flume's words: {prompt}"
+    );
+    assert!(
+        prompt.contains("fix the parser"),
+        "the stage's own: {prompt}"
+    );
+    let host = walk.host();
+    let accounts = &host["pools"][0]["accounts"];
+    assert_eq!(accounts[0]["name"], "stand-in-1", "{host}");
+    assert_eq!(accounts[0]["spent_until"], reset, "{host}");
+    assert_eq!(accounts[0]["running"], 0, "{host}");
+    assert_eq!(accounts[1]["name"], "stand-in-2", "{host}");
+    assert!(accounts[1]["spent_until"].is_null(), "{host}");
+    assert_eq!(accounts[1]["running"], 1, "{host}");
+
+    let out = walk.agent(
+        &place,
+        json!([{ "bash": "git add -A && git commit --quiet -m 'fix the parser'" }]),
+    );
+    ran.extend(sessions(&out));
+    assert_eq!(ran.len(), 2, "a session each: {ran:?}");
+    assert_ne!(ran[0], ran[1], "the second agent's session is its own");
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n"),
+        "what the first agent left, committed by the second"
+    );
+    assert!(!walk.has_branch("fix/one"));
+    for (account, held) in [&first, &second].into_iter().zip(&held) {
+        assert!(
+            account.join("projects").exists(),
+            "an agent under {}",
+            account.display()
+        );
+        holds_only(account, held, &ran);
+    }
+}
+
+#[test]
+fn a_spent_agents_conversation_goes_on_under_the_pools_next_and_the_fix_lands() {
+    // S76, 146, 175: on a fill-first pool of two accounts, each a scratch
+    // `CLAUDE_CONFIG_DIR`, the second's `projects` a link to the first's,
+    // the fix's code agent starts under the first and its turn fails at
+    // the session limit through StopFailure. Code starts again under the
+    // second, its printed command resuming the first's session, and its
+    // prompt flume's carry words and the way to stop short, nothing of the
+    // stage's own; status gives the conversation carried from start 1 and
+    // the move with it. The resumed session goes on in the first's
+    // transcript, commits what the first left, and the place lands. Each
+    // home holds what it held and the transcript the stand-in wrote, the
+    // link as the host made it, and nothing else (C.4; core.32).
+    let walk = Walk::new("walk-carried");
+    let first = walk.account().to_path_buf();
+    let second = walk.account_folder("account-2");
+    std::fs::create_dir_all(first.join("projects")).expect("the first's projects");
+    std::os::unix::fs::symlink(first.join("projects"), second.join("projects"))
+        .expect("the second's projects, a link to the first's");
+    let held = [
+        signed_in(&first, "stand-in-1"),
+        signed_in(&second, "stand-in-2"),
+    ];
+    two_accounts(&walk, &first, &second);
+
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let status = walk.status(&place);
+    assert_eq!(status["agent"]["account"]["name"], "stand-in-1", "{status}");
+    assert!(status["agent"]["conversation"].is_null(), "{status}");
+    let (_, limit) = session_limit_after(now());
+    let out = walk.agent(
+        &place,
+        json!([
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "fail": { "error": "rate_limit", "words": limit } },
+        ]),
+    );
+    assert!(out.contains("the turn failed"), "{out}");
+    let ran = sessions(&out);
+    assert_eq!(ran.len(), 1, "{out}");
+
+    let status = walk.until(&place, "code started again", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert_eq!(
+        status["agent"]["account"],
+        json!({ "pool": "stand-in", "name": "stand-in-2", "from": "strategy" }),
+        "{status}"
+    );
+    assert_eq!(
+        status["agent"]["conversation"],
+        json!({ "from": 1, "carried": true }),
         "{status}"
     );
     let moved = status["moves"]
@@ -895,49 +1129,83 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
             &moved["from"],
             &moved["to"],
             &moved["why"],
-            &moved["cache"]
+            &moved["cache"],
+            &moved["carried"]
         ),
         (
             &json!("code"),
             &json!("stand-in-1"),
             &json!("stand-in-2"),
             &json!("spent"),
-            &json!("lost")
+            &json!("lost"),
+            &json!(true)
         ),
         "{status}"
     );
-    assert!(stage(&status, "code")["end"].is_null(), "{status}");
-    let prompt = walk.prompt(&place);
+    for home in [&first, &second] {
+        assert!(
+            !status.to_string().contains(&*home.to_string_lossy()),
+            "status holds a configuration home's path: {status}"
+        );
+    }
+    let person = walk.person(&["status"]);
     assert!(
-        prompt.contains("stopped at its account's usage limit"),
-        "flume's words: {prompt}"
+        person.contains("carries the conversation of start 1")
+            && person.contains("its conversation with it"),
+        "{person}"
     );
-    let host = walk.host();
-    let accounts = &host["pools"][0]["accounts"];
-    assert_eq!(accounts[0]["name"], "stand-in-1", "{host}");
-    assert_eq!(accounts[0]["spent_until"], reset, "{host}");
-    assert_eq!(accounts[0]["running"], 0, "{host}");
-    assert_eq!(accounts[1]["name"], "stand-in-2", "{host}");
-    assert!(accounts[1]["spent_until"].is_null(), "{host}");
-    assert_eq!(accounts[1]["running"], 1, "{host}");
+    assert_eq!(
+        walk.resumes(&place).as_deref(),
+        Some(ran[0].as_str()),
+        "{}",
+        walk.printed(&place)
+    );
+    let prompt = walk.prompt(&place);
+    assert_eq!(prompt, format!("{CARRIED}\n\n{STOP_SHORT}"));
 
-    walk.agent(
+    let out = walk.agent(
         &place,
         json!([{ "bash": "git add -A && git commit --quiet -m 'fix the parser'" }]),
     );
+    assert!(out.contains(", resumed"), "{out}");
+    assert_eq!(sessions(&out), ran, "the first's session resumed: {out}");
+    let transcripts: Vec<PathBuf> = std::fs::read_dir(first.join("projects"))
+        .expect("the transcripts' folder")
+        .flatten()
+        .flat_map(|folder| {
+            std::fs::read_dir(folder.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+        })
+        .map(|file| file.path())
+        .collect();
+    assert_eq!(transcripts.len(), 1, "{transcripts:?}");
+    let text = std::fs::read_to_string(&transcripts[0]).expect("the transcript");
+    let turns: Vec<Value> = text
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("a JSON record"))
+        .filter(|record| record["type"] == "user" && record["message"]["content"].is_string())
+        .map(|record| record["message"]["content"].clone())
+        .collect();
+    assert_eq!(turns.len(), 2, "the stage's prompt, then flume's: {text}");
+    assert!(
+        turns[0]
+            .as_str()
+            .is_some_and(|turn| turn.contains("fix the parser")),
+        "{text}"
+    );
+    assert_eq!(turns[1], json!(prompt), "{text}");
+
     until_landed(&walk, &place);
     assert_eq!(
         walk.on_remote("parser.rs").as_deref(),
         Some("fn parse() {}\n"),
-        "what the first agent left, committed by the second"
+        "what the first agent left, committed in its own conversation"
     );
     assert!(!walk.has_branch("fix/one"));
-    for account in [&first, &second] {
-        assert!(
-            account.join("projects").exists(),
-            "an agent under {}",
-            account.display()
-        );
+    for (account, held) in [&first, &second].into_iter().zip(&held) {
+        holds_only(account, held, &ran);
     }
 }
 
