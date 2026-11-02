@@ -106,20 +106,26 @@ brought to the rule.
   with entries for Codex, Gemini CLI, GitHub Copilot CLI and OpenCode,
   then Codex's own profile. The item leaves when the code is brought
   to core.39.
-- **Records 0028 and 0029 wait on the statements, the engine's move
-  and crew's rewrite.** Statechart kinds beside simple kinds on one
-  branch (record 0028; core.41), run on flywheel-engine moved into weir
-  and taken at the revision of weir flume pins (record 0029; core.42),
-  were accepted on 2026-11-01 and are stated in neither statement.
-  flume's 4, 18, 23, 30, 84, 85, C.2 and I2 are amended, and its
-  clauses after 174 and scenarios after S75 added, by the domain
-  model's ledger items T1.a and T3.a in agentplot/blueprints
-  `design/flume/requirements.md`; weir's 51, 81 and C.4 by T1.b; and
-  weir's section for the engine with its move into weir (core.19). The
-  build (T1.c) follows crew's rewrite onto flume (crew records 0047,
-  0050). Until it lands flume runs simple kinds alone and refuses a
-  statechart kind (4, 23), and core.42 binds no code. The item leaves
-  when the build lands.
+- **Records 0028 and 0029 wait on the engine's move and crew's
+  rewrite.** Statechart kinds beside simple kinds on one branch (record
+  0028; core.41), run on flywheel-engine moved into weir and taken at
+  the revision of weir flume pins (record 0029; core.42), are stated in
+  agentplot/blueprints `design/flume/requirements.md`, 175 to 178, and
+  `design/weir/requirements.md`, 94 to 99 and A.13. The engine moves
+  into weir as weir's section 9 says, and the build (T1.c) follows
+  crew's rewrite onto flume (crew records 0047, 0050). Until it lands
+  flume runs simple kinds alone and refuses a statechart kind (4), and
+  core.42 binds no code. The item leaves when the build lands.
+- **Ledger item T3.a waits on the user's ruling.** Record 0028 plans
+  clauses by which a kind of either format is built into flume,
+  declared in a repository's configuration, or a package from a plugin
+  marketplace, as Claude Code's and herdr's plugins are, amending 19
+  and 155 to 159, and by which flume checks and draws a kind when it
+  loads it and a repository's gate checks it too. Record 0022 left a
+  marketplace's registry, publishing and discovery to a later record,
+  and 159 leaves how a package reaches the host outside the statement,
+  so no clause states T3.a until the user rules how it meets them
+  (core.19, core.34). The item leaves when the statement states it.
 - **The command line still says `<partition>/<role>`.** `flume wake
   --help` and the refusals of a name that is no address, in
   `commands/mod.rs`, `host/config.rs` and `flume-core`'s `wake.rs`,
