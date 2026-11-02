@@ -124,16 +124,17 @@ brought to the rule.
   with entries for Codex, Gemini CLI, GitHub Copilot CLI and OpenCode,
   then Codex's own profile. The item leaves when the code is brought
   to core.39.
-- **Record 0020's amendment waits on the user's yes.** A spent
+- **Record 0020's amendment is accepted and not yet built.** A spent
   account's agent going on with its own conversation on the account its
   pool chooses, where its program can carry it there, and starting
-  afresh otherwise (record 0020's amendment, proposed 2026-11-02;
-  core.32 and core.10's details as amended), is stated on blueprints'
-  branch `design/flume-a-spent-seats-agent-resumes` at ec16d03 (30, 56,
-  88, 146, 161, 171, 175, C.4, S55, S76, S77). Until it is accepted and
-  built, every spent agent's stage starts afresh, against core.32 as
-  amended. The change `a-spent-seats-agent-resumes-on-another-in-its-pool`
-  builds it. The item leaves when the amendment is built, or rejected.
+  afresh otherwise (record 0020's amendment, accepted by the user on
+  2026-11-02 on their review; core.32 and core.10's details as
+  amended), is stated on blueprints' branch
+  `design/flume-a-spent-seats-agent-resumes` at ec16d03 (30, 56, 88,
+  146, 161, 171, 175, C.4, S55, S76, S77), to land on blueprints main.
+  Until it is built, every spent agent's stage starts afresh, against
+  core.32. The change `a-spent-seats-agent-resumes-on-another-in-its-pool`
+  builds it. The item leaves when the amendment is built.
 - **Records 0028 and 0029 wait on the statements, the engine's move
   and crew's rewrite.** Statechart kinds beside simple kinds on one
   branch (record 0028; core.41), run on flywheel-engine moved into weir

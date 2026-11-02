@@ -29,12 +29,12 @@ stage's limit, or when no sending of its prompt is received.
 `unsettled.rs` ends an agent begun without its settings once quiet and
 starts its stage afresh.
 
-Record 0020's amendment, proposed 2026-11-02, is stated at blueprints
+Record 0020's amendment, accepted by the user on 2026-11-02, is stated at blueprints
 ec16d03 on the branch `design/flume-a-spent-seats-agent-resumes`. It
 amends 30, 56, 88, 146, 161 and 171, C.4's command and started rows,
 its paragraph on accounts and its common profile's table, and S55, and
 adds 175, C.4's carry row, S76 and S77. The build reads the statement
-from blueprints main once the user rules it (core.19).
+from blueprints main once it lands there (core.19).
 
 What the pinned Claude Code, 2.1.296, does, read from the program
 `devenv.nix` pins:
@@ -63,8 +63,8 @@ core.14 (the JSON form only gains fields), core.16 and core.17 (held
 state by compare-and-set, every act safe to repeat), core.30 (no
 variable's value given), core.32 (accounts, spent pauses, and the
 conversation carried, as amended) and core.35 (the site's neutral
-voice). core.32's amendment and core.10's details are marked proposed
-until the user's yes. The one rules page is `docs/architecture/core.md`.
+voice). core.32's amendment and core.10's details stand accepted with
+the record. The one rules page is `docs/architecture/core.md`.
 Where flume has no rule, the kit standard's code profile binds
 (kit:specs.3, kit:testing.5).
 

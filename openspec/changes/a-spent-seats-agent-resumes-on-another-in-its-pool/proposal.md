@@ -11,7 +11,7 @@ and not yet written down. A conversation (109), an agent planning or
 researching with its person, loses the talk itself.
 
 On 2026-11-02 the user asked that the agent keep its conversation and
-go on where it stopped. Record 0020's amendment, proposed the same day,
+go on where it stopped. Record 0020's amendment, accepted by the user the same day,
 decides how. The start after a spent agent resumes that agent's own
 conversation on the account the pool chooses, where its program can
 carry it there, and starts afresh otherwise, status saying which. The
@@ -95,8 +95,9 @@ any code, and the change is built once they accept the amendment.
 ## Impact
 
 - agentplot/blueprints: the statement's amendment at ec16d03 on the
-  branch `design/flume-a-spent-seats-agent-resumes`, for the user's
-  ruling. The build reads it from blueprints main once ruled (core.19).
+  branch `design/flume-a-spent-seats-agent-resumes`, accepted with the
+  record. The build reads it from blueprints main once it lands there
+  (core.19).
   Nothing in weir changes, and no kind gains a field (core.4).
 - `crates/flume-seams`: `Carry`, `Agent::carry`, `Agent::command`'s
   `resume`, `StartRecord::session`, `Unsettled::session`,
