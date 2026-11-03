@@ -20,7 +20,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         Scenario {
             name: "carried conversations: once quiet, an agent stopped at work-1's usage limit is ended and its stage starts under work-2 resuming its conversation, with no caller's word and no bound of the kind's counted",
             cites: &["S78", "146", "179", "112"],
-            run: s76_carried_to_the_pools_other_account,
+            run: s78_carried_to_the_pools_other_account,
         },
         Scenario {
             name: "carried conversations: a stage whose agent stopped at its limit waits while no account of its pool is usable, and the start that takes an account once the reset passes carries the conversation",
@@ -60,7 +60,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         Scenario {
             name: "carried conversations: a carried start whose program finds no such conversation and ends before it says it started delivers no end, and code starts afresh at once with flume's words, saying why and counting no bound",
             cites: &["S79", "146", "179", "35", "112"],
-            run: s77_no_such_conversation,
+            run: s79_no_such_conversation,
         },
         Scenario {
             name: "carried conversations: a carried start whose agent says it started in another session is not taken, is ended once quiet, and the stage starts afresh carrying nothing",
@@ -190,7 +190,7 @@ fn carries_none(world: &World, start: &StartHeld) -> Outcome {
     Ok(())
 }
 
-fn s76_carried_to_the_pools_other_account(_: &()) -> Outcome {
+fn s78_carried_to_the_pools_other_account(_: &()) -> Outcome {
     let world = World::new();
     fill_first_at_homes(&world);
     carries_to(&world, "work-2");
@@ -630,7 +630,7 @@ fn uncarried(world: &World, id: &PlaceId) -> Result<Vec<(u32, String)>, String> 
 
 const ENDED_FIRST: &str = "the start that carried its conversation ended before it said it started";
 
-fn s77_no_such_conversation(_: &()) -> Outcome {
+fn s79_no_such_conversation(_: &()) -> Outcome {
     let world = World::new();
     fill_first_at_homes(&world);
     carries_to(&world, "work-2");

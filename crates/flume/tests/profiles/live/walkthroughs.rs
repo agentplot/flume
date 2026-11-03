@@ -273,7 +273,7 @@ fn sleeping(path: &str) -> bool {
 }
 
 #[test]
-fn s76_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
+fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
     // S78, 146, 161, 179, C.4: on a fill-first pool of two accounts signed
     // in by the test account's token, each with a scratch configuration
     // home, the second's `projects` a link to the first's, the fix's code
