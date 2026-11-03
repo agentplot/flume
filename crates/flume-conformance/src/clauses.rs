@@ -70,11 +70,6 @@ pub const POINTS: &str = "record 0025's change, points, built after the mode";
 /// parts of the agent seam.
 pub const PROFILES: &str = "record 0026's change, every program the terminal starts, once accepted";
 
-/// The change that builds record 0020's second amendment: an intent's
-/// account per program, and a pool that cannot run a stage refusing it.
-pub const PER_PROGRAM: &str =
-    "an-intents-affinity-is-kept-per-program, record 0020's second amendment";
-
 /// The change that builds records 0028 and 0029: statechart kinds, run
 /// on the family's engine moved into weir.
 pub const STATECHART: &str =
