@@ -576,7 +576,7 @@ fn unsettled_line(unsettled: &UnsettledStart) -> String {
 
 /// Whether the current agent carries the conversation of its stage's
 /// start whose agent stopped at its account's usage limit, or why not,
-/// naming no path (56, 146, 175; core.30).
+/// naming no path (56, 146, 179; core.30).
 fn conversation_line(conversation: &Conversation) -> String {
     match &conversation.why {
         None if conversation.carried => {
@@ -594,7 +594,7 @@ fn conversation_line(conversation: &Conversation) -> String {
 }
 
 /// A start that carried its stage's conversation and did not begin, with
-/// what happened (56, 146, S77).
+/// what happened (56, 146, S79).
 fn uncarried_line(uncarried: &UncarriedStart) -> String {
     format!(
         "  carried and not begun: {}'s start {} at {}: {}, and its stage started afresh",

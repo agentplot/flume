@@ -351,7 +351,7 @@ impl AgentHarness for Harness {
 
     /// `work-2`, whose `projects` is a link to `work-1`'s, where `earlier`
     /// ran, and `work-3`, whose `projects` is a folder of its own holding a
-    /// copy of its transcript (175, C.4).
+    /// copy of its transcript (179, C.4).
     fn carry_accounts(&self, earlier: &Identity) -> Option<agent::CarryAccounts> {
         Some(agent::CarryAccounts {
             reaches: at_home(&self.sharing("work-2")),
@@ -871,7 +871,7 @@ fn the_trust_screen() {
 fn the_command_of_a_carried_start() {
     // The command for a start resuming the session `s-1` holds `--resume
     // s-1` beside `--plugin-dir`, and one resuming none holds no
-    // `--resume` (88, 175).
+    // `--resume` (88, 179).
     let harness = Harness::new();
     let command = |resume: Option<&str>| {
         harness.seam.command(
@@ -931,7 +931,7 @@ fn a_conversation_carried_to_a_home_whose_projects_links_the_firsts() {
     // the ack's session, and the next start's command resumes it. So does
     // work-1's own home, a pool of one account across its reset, and the
     // host user's `~/.claude` where the account names no
-    // `CLAUDE_CONFIG_DIR`. Nothing in either home is written (175, C.4;
+    // `CLAUDE_CONFIG_DIR`. Nothing in either home is written (179, C.4;
     // core.32).
     let harness = Harness::new();
     let who = identity("code");
@@ -1001,7 +1001,7 @@ fn two_homes_of_their_own() {
     // work-2's `projects` is a folder of its own holding no such
     // transcript, then a copy of it under the same names, which is another
     // file: carry answers no each time, naming `CLAUDE_CONFIG_DIR` and no
-    // path (175; core.30, core.32).
+    // path (179; core.30, core.32).
     let harness = Harness::new();
     let who = identity("code");
     let folder = harness.folder();
@@ -1022,7 +1022,7 @@ fn two_homes_of_their_own() {
 fn a_start_that_never_said_it_started() {
     // The stopped start has no started ack: carry answers no, saying its
     // conversation is not known; one whose ack's transcript is gone, that
-    // it cannot be read (175).
+    // it cannot be read (179).
     let harness = Harness::new();
     let who = identity("code");
     let folder = harness.folder();
@@ -1049,7 +1049,7 @@ fn a_background_task_the_stopped_agent_left() {
     // The stopped agent started a background shell and never finished it,
     // before the length the carried start's ack recorded: own work reads
     // no for the carried start, and yes for the stopped one; once the
-    // carried agent starts work of its own, yes (31, 91, 175).
+    // carried agent starts work of its own, yes (31, 91, 179).
     let harness = Harness::new();
     let who = identity("code");
     let folder = harness.folder();
@@ -1070,7 +1070,7 @@ fn last_words_before_the_carried_agent_wrote_any() {
     // The carried agent stops before it writes a message, and the
     // transcript's last message is the stopped agent's: the carried
     // start's last words are none, and the stopped start's its own; once
-    // the carried agent writes one, it is its last words (43, 175).
+    // the carried agent writes one, it is its last words (43, 179).
     let harness = Harness::new();
     let who = identity("code");
     let folder = harness.folder();
@@ -1095,7 +1095,7 @@ fn a_question_and_a_slash_command_of_the_stopped_agent() {
     // received before the carried start's length: the carried agent's
     // mark on the same call is not answered by them, and its own
     // `/compact` is not received until its own part holds it (89, 90,
-    // 175).
+    // 179).
     let harness = Harness::new();
     let who = identity("code");
     let folder = harness.folder();
@@ -1176,7 +1176,7 @@ fn a_fresh_start_reads_its_whole_transcript() {
 fn a_transcript_read_from_its_length() {
     // The records that begin at or after the length are read, a line cut
     // there left out; a file shorter than the length, which Claude Code
-    // wrote again, is read whole (175).
+    // wrote again, is read whole (179).
     let harness = Harness::new();
     let who = identity("code");
     harness.start(&AgentCommand::default(), &who, &harness.folder());

@@ -71,7 +71,7 @@ pub struct HeldState {
     pub unsettled: Vec<UnsettledStart>,
     /// Each start of the place's that carried its stage's conversation and
     /// did not begin, in order, with what happened: its stage started
-    /// afresh after it (56, 146, S77).
+    /// afresh after it (56, 146, S79).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub uncarried: Vec<UncarriedStart>,
 }
@@ -90,7 +90,7 @@ pub struct UnsettledStart {
 
 /// A start that carried its stage's conversation and did not begin: its
 /// stage and number, when a settle read it so, and the words saying what
-/// happened, naming no session (146, 175, S77).
+/// happened, naming no session (146, 179, S79).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UncarriedStart {
     pub stage: String,
@@ -595,14 +595,14 @@ pub struct RoomWait {
     /// For a stage waiting after its agent stopped at its account's usage
     /// limit, that start and whether the next may carry its conversation;
     /// none for any other wait, so no other start carries one (30, 146,
-    /// 175).
+    /// 179).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carry: Option<AfterSpent>,
 }
 
 /// A stage's wait after its agent stopped at its account's usage limit:
 /// the start that stopped, whether the next start may carry its
-/// conversation, and why not where it may not (146, 175, S77).
+/// conversation, and why not where it may not (146, 179, S79).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AfterSpent {
     /// The start whose agent stopped at its account's usage limit.
@@ -751,14 +751,14 @@ pub struct StartHeld {
     pub dialog: Option<Dialog>,
     /// For a start after its stage's agent stopped at its account's usage
     /// limit, whether it carries that agent's conversation, or why not;
-    /// none for any other start (56, 146, 175).
+    /// none for any other start (56, 146, 179).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
 }
 
 /// Whether a start carries the conversation of its stage's start before
 /// it, whose agent stopped at its account's usage limit: that start's
-/// number, and why not where it does not (56, 146, 175).
+/// number, and why not where it does not (56, 146, 179).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Conversation {
     /// The number of the start whose agent stopped.
@@ -790,7 +790,7 @@ pub struct Dialog {
 /// profile passes, none where the settings give no mode, and in a record
 /// written before (161, 162). Its session is the one the start resumes,
 /// none where it carries no conversation, and in a record written before
-/// (161, 175).
+/// (161, 179).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartRecord {
     pub program: String,
@@ -824,7 +824,7 @@ pub enum AccountFrom {
 /// why, and when. The agents after it start without the earlier
 /// account's cache (56, 145 to 147). A stage's move after its agent
 /// stopped at its account's usage limit says whether its conversation
-/// went with it, none for any other (56, 175).
+/// went with it, none for any other (56, 179).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountMove {
     #[serde(flatten)]

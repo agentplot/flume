@@ -9,7 +9,7 @@
 //! the background a `<task-notification>` naming its `<task-id>`. A
 //! start's readings read only the records that begin at or after the
 //! length its started ack recorded, which a resumed session's earlier
-//! records come before (31, 175).
+//! records come before (31, 179).
 
 use super::record::Asking;
 use super::{as_received, collapsed};
@@ -65,7 +65,7 @@ fn tagged<'a>(text: &'a str, tag: &str) -> Vec<&'a str> {
 }
 
 /// The length in bytes of the transcript at `path`, 0 where none is
-/// written (175).
+/// written (179).
 pub fn length(path: &Path) -> u64 {
     std::fs::metadata(path).map_or(0, |meta| meta.len())
 }
@@ -78,7 +78,7 @@ impl Transcript {
 
     /// The records of the transcript at `path` that begin at or after the
     /// byte `from`, a line cut there left out; all of a file shorter than
-    /// `from`, which Claude Code wrote again (31, 175).
+    /// `from`, which Claude Code wrote again (31, 179).
     pub fn read_from(path: &Path, from: u64) -> Read {
         match std::fs::read(path) {
             Ok(bytes) => {

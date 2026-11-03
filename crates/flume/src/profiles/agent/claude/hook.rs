@@ -99,7 +99,7 @@ impl Start {
 /// program this process's parent runs, and whether `session`, the session
 /// it runs, is another than the one the record names it resumes. The
 /// program is compared only where both are read, and the session only
-/// where the record names one (161, 175; core.10, core.30).
+/// where the record names one (161, 179; core.10, core.30).
 pub fn compare(
     recorded: &StartRecord,
     secret: &Secret,
@@ -274,7 +274,7 @@ pub fn ack_received(
 /// The agent's record told that it began as `unsettled` says, in
 /// `session` with `transcript` and the transcript's length now, and a
 /// settle of the place started detached; the words saying so, or why the
-/// record could not be written (161, 175).
+/// record could not be written (161, 179).
 fn began_otherwise(
     start: &Start,
     record: &Record,

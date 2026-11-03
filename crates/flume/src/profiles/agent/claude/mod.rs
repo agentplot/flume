@@ -243,7 +243,7 @@ impl Claude {
 impl Agent for Claude {
     /// `claude --plugin-dir <plugin> [--resume <session>] [--model <m>]
     /// [--permission-mode <mode>] [--append-system-prompt <instructions>]`
-    /// in the place, the session resumed where the start carries one (175),
+    /// in the place, the session resumed where the start carries one (179),
     /// the mode passed where one is given and none where it is none (162),
     /// the program the settings name by name or path, or the program it
     /// runs where it is a nix wrapper, with the variables the wrapper
@@ -403,7 +403,7 @@ impl Agent for Claude {
     /// or, for an agent begun otherwise than its start recorded, the one
     /// its word named, each past the length it held then; a transcript not
     /// yet written shows none, since 2.1.296 writes it at the session's
-    /// first message and own work starts only in a turn (31, 91, 161, 175).
+    /// first message and own work starts only in a turn (31, 91, 161, 179).
     fn own_work(&self, folder: &str, agent: &Identity) -> Reading {
         let record = Record::at(folder, agent);
         let Some((transcript, from)) = record.readable().then(|| record.transcript()).flatten()
@@ -436,7 +436,7 @@ impl Agent for Claude {
     }
 
     /// The reason the StopFailure hook recorded, else the last message of
-    /// the start's own part of the transcript (43, 175).
+    /// the start's own part of the transcript (43, 179).
     fn last_words(&self, folder: &str, agent: &Identity) -> Option<String> {
         let record = Record::at(folder, agent);
         if !record.readable() {
@@ -473,7 +473,7 @@ impl Agent for Claude {
     /// Yes with the stopped start's session where the chosen account's
     /// configuration home reaches its transcript, the very file, and no
     /// otherwise, naming `CLAUDE_CONFIG_DIR` and no path; read only, the
-    /// host user's home its `HOME` ([`carry`]; 175, C.4).
+    /// host user's home its `HOME` ([`carry`]; 179, C.4).
     fn carry(&self, folder: &str, earlier: &Identity, env: &BTreeMap<String, String>) -> Carry {
         let login = std::env::var_os("HOME")
             .filter(|home| !home.is_empty())

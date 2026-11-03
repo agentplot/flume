@@ -7,7 +7,7 @@
 //! account of the pool or waiting for one, carrying the agent's
 //! conversation where its profile answers that the account chosen reaches
 //! it and afresh otherwise, counted toward no bound of the kind's and
-//! waiting on no caller (31, 112, 175). A start under no account is read
+//! waiting on no caller (31, 112, 179). A start under no account is read
 //! as clause 43 reads it, and no other agent on the account is ended for
 //! it.
 
@@ -68,7 +68,7 @@ impl Engine {
     /// [`StartReason::Spent`]'s words, its wait naming `start` so the next
     /// start may carry its conversation; true when it was. A start under
     /// no account, or whose agent's record shows no usage limit, is left
-    /// to the reading of its end (43, 146, 175).
+    /// to the reading of its end (43, 146, 179).
     pub(crate) fn read_spent(
         &self,
         id: &PlaceId,

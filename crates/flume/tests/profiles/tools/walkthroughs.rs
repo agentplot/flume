@@ -23,8 +23,8 @@
 //! code agent stops at its account's usage limit moves to the pool's
 //! second account and lands (S55; 146, 151), and, where the second's
 //! `projects` is a link to the first's, goes on there in its own
-//! conversation and lands, flume writing nothing in either home (S76;
-//! 175); and a fix whose first code
+//! conversation and lands, flume writing nothing in either home (S78;
+//! 179); and a fix whose first code
 //! agent comes up without its account's variable is ended and its stage
 //! started afresh under the account, and lands (S65; 161); a fix whose
 //! host's table gives `edits` over its repository's `full` starts its
@@ -823,7 +823,7 @@ fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_g
     assert!(walk.on_remote("parser.rs").is_some());
 }
 
-/// The words a carried start's prompt opens with, flume's own (146, 175).
+/// The words a carried start's prompt opens with, flume's own (146, 179).
 const CARRIED: &str = "Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.";
 
 /// The way to stop short the Claude Code profile gives every start (28).
@@ -902,7 +902,7 @@ fn sessions(out: &str) -> Vec<String> {
 
 /// `home` holds what it held, `held`, as it held it, and besides only the
 /// transcripts the stand-in wrote of `sessions`, under `projects`, with
-/// their folders: flume copied, linked and wrote nothing there (175, C.4;
+/// their folders: flume copied, linked and wrote nothing there (179, C.4;
 /// core.32).
 fn holds_only(home: &Path, held: &BTreeMap<PathBuf, Holding>, sessions: &[String]) {
     let now = holdings(home);
@@ -940,7 +940,7 @@ fn holds_only(home: &Path, held: &BTreeMap<PathBuf, Holding>, sessions: &[String
 
 #[test]
 fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
-    // S55, 146, 151, 175: on a fill-first pool of two accounts, each a
+    // S55, 146, 151, 179: on a fill-first pool of two accounts, each a
     // scratch `CLAUDE_CONFIG_DIR` of its own, the fix's code agent starts
     // under the first and its turn fails at the session limit through
     // StopFailure. The first account reads spent until the hour the words
@@ -1065,7 +1065,7 @@ fn a_spent_account_moves_the_stage_to_the_pools_next_and_the_fix_lands() {
 
 #[test]
 fn a_spent_agents_conversation_goes_on_under_the_pools_next_and_the_fix_lands() {
-    // S76, 146, 175: on a fill-first pool of two accounts, each a scratch
+    // S78, 146, 179: on a fill-first pool of two accounts, each a scratch
     // `CLAUDE_CONFIG_DIR`, the second's `projects` a link to the first's,
     // the fix's code agent starts under the first and its turn fails at
     // the session limit through StopFailure. Code starts again under the

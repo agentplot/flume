@@ -9,7 +9,7 @@
 //! fresh start whose agent begins so again is never begun, its end naming
 //! the same. A start that carried its stage's conversation and began so
 //! is followed by a fresh start after the one whose agent stopped at its
-//! account's usage limit, carrying nothing (146, 175).
+//! account's usage limit, carrying nothing (146, 179).
 
 use crate::start::{StartReason, Starts};
 use crate::uncarried::{after_uncarried, carries};
@@ -25,7 +25,7 @@ impl Engine {
     /// words, or, where the start carried its stage's conversation, with
     /// [`StartReason::Spent`]'s after the start whose agent stopped,
     /// carrying nothing; true when the stage moved (31, 35, 37, 43, 112,
-    /// 146, 161, 175).
+    /// 146, 161, 179).
     pub(crate) fn read_unsettled(
         &self,
         id: &PlaceId,

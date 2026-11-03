@@ -1,4 +1,4 @@
-//! Claude Code's carry (175, C.4; core.32): whether the account chosen for
+//! Claude Code's carry (179, C.4; core.32): whether the account chosen for
 //! a stage's next start reaches the conversation of the start whose agent
 //! stopped at its account's usage limit. 2.1.296 keeps a session's
 //! transcript at `<home>/projects/<folder>/<session>.jsonl`, `<home>` its
@@ -50,7 +50,7 @@ pub fn home(env: &BTreeMap<String, String>, login: Option<&Path>) -> Option<Path
 /// whose environment is `env`, `login` the host user's home: yes with the
 /// session its started ack named where the account's home reaches that
 /// ack's transcript, and no otherwise, the words naming `CLAUDE_CONFIG_DIR`
-/// and no path (175; core.30).
+/// and no path (179; core.30).
 pub fn carry(record: &Record, env: &BTreeMap<String, String>, login: Option<&Path>) -> Carry {
     let no = |why: &str| Carry::No { why: why.into() };
     let Some(started) = record

@@ -353,7 +353,7 @@ fn held() -> HeldState {
 
 /// A start's record: the program, the account, two digests, no value,
 /// the mode its profile passed and the session it resumes (161, 162,
-/// 175).
+/// 179).
 fn start_record() -> StartRecord {
     StartRecord {
         program: "agent".into(),
@@ -369,7 +369,7 @@ fn start_record() -> StartRecord {
 
 /// An agent begun without one variable, with another value of a second,
 /// under another program, in another conversation than its start resumes
-/// and in another mode than its start asked (161, 162, 175).
+/// and in another mode than its start asked (161, 162, 179).
 fn unsettled() -> Unsettled {
     Unsettled {
         missing: vec!["AGENT_HOME".into()],
@@ -866,7 +866,7 @@ fn a_start_begun_in_another_mode_in_words() {
 #[test]
 fn a_start_begun_in_another_conversation_in_words() {
     // The words say another conversation and name no session, which the
-    // start's record holds and status never gives (56, 161, 175).
+    // start's record holds and status never gives (56, 161, 179).
     let session = start_record().session.expect("a session");
     let other = Unsettled {
         session: true,
@@ -891,7 +891,7 @@ fn a_start_begun_in_another_conversation_in_words() {
 fn a_held_state_with_a_carried_start() {
     // A stage waits after a spent agent, its start carries a conversation
     // with its record's session, its move says carried, and the place
-    // lists a start carried that did not begin (146, 161, 175).
+    // lists a start carried that did not begin (146, 161, 179).
     let state = held();
     round_trips(state.clone());
     let json = serde_json::to_value(&state).expect("held state as JSON");
@@ -1055,7 +1055,7 @@ fn a_profile_that_maps_no_mode() {
 #[test]
 fn a_profile_that_carries_no_conversation() {
     // A profile that keeps the seam's default offers no carry, for any
-    // start and account (175).
+    // start and account (179).
     let env = BTreeMap::from([("AGENT_HOME".to_string(), "/scratch/work-2".to_string())]);
     assert_eq!(Bare.carry("/folder", &identity(), &env), Carry::NotOffered);
     assert_eq!(

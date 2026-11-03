@@ -197,7 +197,7 @@ pub struct PlaceStatus {
     pub unsettled: Vec<UnsettledStart>,
     /// Each start of the place's that carried its stage's conversation and
     /// did not begin, with what happened: its stage started afresh after
-    /// it (56, 146, S77).
+    /// it (56, 146, S79).
     #[serde(default)]
     pub uncarried: Vec<UncarriedStart>,
     /// Every end of the place, with whom it was delivered to and when,
@@ -234,7 +234,7 @@ impl MoveStatus {
 
     /// The move as a person reads it, with whether a stage's conversation
     /// went with it where its agent stopped at its account's usage limit
-    /// (56, 175).
+    /// (56, 179).
     pub fn words(&self) -> String {
         let moved = &self.moved;
         let what = match &moved.on {
@@ -588,7 +588,7 @@ pub struct AgentStatus {
     /// For the agent of a start after its stage's agent stopped at its
     /// account's usage limit, that start's number and whether this agent
     /// carries its conversation, or why not, naming a variable and never
-    /// a path; none for any other (56, 146, 175; core.30).
+    /// a path; none for any other (56, 146, 179; core.30).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
 }

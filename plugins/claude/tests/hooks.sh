@@ -267,7 +267,7 @@ jq -e '.mode == {"asked": "bypassPermissions", "began": "manual"} and .different
 # settle reads it spent and starts the stage under carry-2, resuming that
 # session. That start's SessionStart names another session: no started
 # ack, and the agent's record says it came up in another session, naming
-# neither (161, 175).
+# neither (161, 179).
 mkdir -p "$scratch/home-1/projects/place" "$scratch/home-2"
 ln -s "$scratch/home-1/projects" "$scratch/home-2/projects"
 cat >"$XDG_CONFIG_HOME/flume/config.toml" <<TOML

@@ -1,4 +1,4 @@
-//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161, 175), an agent's
+//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161, 179), an agent's
 //! identity and its start's secret (33, 41). Every reading of an agent's
 //! own record is handed the place's own folder with the identity, where
 //! the agent profile keeps its marks (128).
@@ -109,7 +109,7 @@ pub enum Spent {
 /// start whose agent stopped at its account's usage limit to the account
 /// chosen for the next start, with the session that start resumes; why
 /// not, naming a variable and never its value; or that the program gives
-/// no way to (175; core.30).
+/// no way to (179; core.30).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Carry {
@@ -125,7 +125,7 @@ pub enum Carry {
 /// both by name alone, whether it runs another program, whether it came
 /// up in another conversation than the one its start resumes, and the
 /// mode it began in where it is not the one its start asked, none in a
-/// word written before (135, 161, 162, 175).
+/// word written before (135, 161, 162, 179).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(default)]
@@ -231,7 +231,7 @@ pub trait Agent: Send + Sync {
     /// setting, and nothing is passed where it is none (162, 169);
     /// `resume` is the session the start resumes, which [`Agent::carry`]
     /// answered yes with, so a profile that answers no yes is never given
-    /// one (88, 175).
+    /// one (88, 179).
     #[allow(clippy::too_many_arguments)]
     fn command(
         &self,
@@ -282,7 +282,7 @@ pub trait Agent: Send + Sync {
     /// place's own `folder`, to the account whose environment is `env`,
     /// each value read against the login environment, with the session the
     /// next start resumes, or why not, naming a variable and never its
-    /// value (128, 146, 175; core.30); not offered by default, for a
+    /// value (128, 146, 179; core.30); not offered by default, for a
     /// program that carries none. It reads only, so it is safe to ask at
     /// every claim (core.17).
     fn carry(&self, _folder: &str, _earlier: &Identity, _env: &BTreeMap<String, String>) -> Carry {

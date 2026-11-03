@@ -1219,7 +1219,7 @@ struct Carried {
 /// the first's: the fix's code agent under work-1 acks in `SESSION`, its
 /// transcript in work-1's home, and takes its prompt; its turn fails at
 /// the session limit and its session ends; a settle reads it spent, and the stage's start under
-/// work-2 resumes that session (146, 175, C.4).
+/// work-2 resumes that session (146, 179, C.4).
 fn carried(host: &Host) -> Carried {
     let first = host.path("home-1");
     let second = host.path("home-2");
@@ -1307,7 +1307,7 @@ fn a_carried_start_in_another_session() {
     // agent's word says it came up in another session and names neither,
     // a settle of the place is started, and the hook exits 0. The record
     // keeps the session the agent runs and its transcript, as every such
-    // word does, for reading its own work (161, 175).
+    // word does, for reading its own work (161, 179).
     let host = Host::new("carried-elsewhere");
     let carried = carried(&host);
     let other = "9b1f6a2e-0c4d-4e8f-a1b2-c3d4e5f60718";
@@ -1396,7 +1396,7 @@ fn a_carried_starts_length_kept_at_a_compaction() {
     // The hook acks a carried start whose transcript holds 4,096 bytes,
     // and the ack records 4,096; the start compacts, its transcript grows
     // and SessionStart runs again with `source` `compact`: the ack still
-    // records 4,096 (91, 175).
+    // records 4,096 (91, 179).
     let host = Host::new("carried-length");
     let carried = carried(&host);
     fill_to(&carried.transcript, 4096);

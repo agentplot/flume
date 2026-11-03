@@ -446,7 +446,7 @@ fn the_agents_carry_is_scripted_by_each_accounts_home() {
     // it answers yes with the session to one account and no with the words
     // to another, no naming the variable to an account none is scripted
     // for and for a start kept in another folder, and logs each answer
-    // (128, 175).
+    // (128, 179).
     let host = Arc::new(FakeHost::default());
     let terminal = Arc::new(FakeTerminal::new(host));
     let agent = FakeAgent::new(terminal);
@@ -513,7 +513,7 @@ fn the_agents_carry_is_scripted_by_each_accounts_home() {
 #[test]
 fn the_agents_command_resumes_the_session_it_is_given() {
     // The command passes `--resume <session>` where it is given one, and
-    // its log names it (88, 175).
+    // its log names it (88, 179).
     let host = Arc::new(FakeHost::default());
     let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
     let command = |who: &Identity, resume: Option<&str>| {
@@ -551,7 +551,7 @@ fn the_agents_word_names_the_session_it_resumes() {
     // A start that resumes a session says it started in that session
     // unless scripted otherwise; in another, it says it started nothing
     // and began in another conversation; a start that resumes none
-    // compares none (161, 175).
+    // compares none (161, 179).
     let host = Arc::new(FakeHost::default());
     let terminal = Arc::new(FakeTerminal::new(host));
     let agent = FakeAgent::new(terminal.clone());
@@ -601,7 +601,7 @@ fn a_carried_start_scripted_to_end_before_its_word() {
     // Scripted so, a start that resumes a session ends before its word
     // that it started: it reads not started and ended, and the terminal
     // reads it stopped; a start that resumes none is not touched (146,
-    // S77).
+    // S79).
     let host = Arc::new(FakeHost::default());
     let terminal = Arc::new(FakeTerminal::new(host));
     let agent = FakeAgent::new(terminal.clone());

@@ -7,7 +7,7 @@
 //! names the length the session's transcript held when it was first
 //! written, from which every reading of the start's transcript reads, so
 //! a start that carries a conversation reads none of its earlier agent's
-//! records as its own (31, 175).
+//! records as its own (31, 179).
 
 use flume_seams::Identity;
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ pub struct Started {
     pub plugin_version: String,
     /// The transcript's length in bytes when the start's first started ack
     /// came, 0 where none was written then or in an ack written before
-    /// (91, 175).
+    /// (91, 179).
     #[serde(default)]
     pub from: u64,
 }
@@ -60,7 +60,7 @@ pub struct Failure {
 /// in place of the start's first received ack, the mode asked and the mode
 /// begun; with the session it runs, its transcript and the transcript's
 /// length in bytes when the word was written, 0 in a word written before
-/// (161, 175).
+/// (161, 179).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(flatten)]
@@ -138,7 +138,7 @@ impl Record {
 
     /// The started ack written, keeping the length an ack already written
     /// names, so a later SessionStart of the start, a compaction's or a
-    /// clear's, never moves it (91, 175).
+    /// clear's, never moves it (91, 179).
     pub fn ack_started(&self, started: &Started) -> std::io::Result<()> {
         let from = self.started().map_or(started.from, |earlier| earlier.from);
         let started = Started {

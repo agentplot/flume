@@ -220,7 +220,7 @@ impl Engine {
     /// ran under to `to`, in the same pool, where that account is spent or
     /// at its own bound now, with whether its conversation went with it,
     /// `carried`, where its agent stopped at its account's usage limit;
-    /// none otherwise (56, 145, 146, 175).
+    /// none otherwise (56, 145, 146, 179).
     pub(crate) fn stage_moved(
         &self,
         held: &HeldState,

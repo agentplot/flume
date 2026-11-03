@@ -22,7 +22,7 @@
 //! 38). A start that carries its stage's conversation and would be read
 //! never begun, at its agent's stop, at the stage's limit or on a prompt
 //! not received, is read as a carried start that did not begin, its agent
-//! sent nothing more, and its stage starts afresh (146, 175).
+//! sent nothing more, and its stage starts afresh (146, 179).
 
 use crate::start::Starts;
 use crate::uncarried::{carries, uncarried, ENDED_FIRST, NOT_BY_THE_LIMIT, NOT_RECEIVED};

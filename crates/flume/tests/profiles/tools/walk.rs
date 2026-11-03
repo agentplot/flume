@@ -371,7 +371,7 @@ impl Walk {
     }
 
     /// The session the printed command resumes, none where it resumes
-    /// none (175).
+    /// none (179).
     pub fn resumes(&self, place: &str) -> Option<String> {
         let printed = self.printed(place);
         let (_, after) = printed.split_once(" --resume ")?;

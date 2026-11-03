@@ -1,4 +1,4 @@
-//! A carried start that does not begin (146, 161, 175; S77): where a
+//! A carried start that does not begin (146, 161, 179; S79): where a
 //! start that carries the conversation of its stage's agent stopped at
 //! its account's usage limit would be read never begun, at its agent's
 //! stop, at the stage's limit or on a prompt it did not receive, it is
@@ -13,7 +13,7 @@ use crate::{Engine, Step};
 use flume_seams::*;
 
 /// What happened to a carried start whose agent stopped before it said it
-/// started (146, S77).
+/// started (146, S79).
 pub(crate) const ENDED_FIRST: &str =
     "the start that carried its conversation ended before it said it started";
 
@@ -27,7 +27,7 @@ pub(crate) const NOT_BY_THE_LIMIT: &str =
 pub(crate) const NOT_RECEIVED: &str =
     "the start that carried its conversation did not receive its prompt";
 
-/// Whether `start` carries its stage's conversation (175).
+/// Whether `start` carries its stage's conversation (179).
 pub(crate) fn carries(start: &StartHeld) -> bool {
     start
         .conversation
@@ -46,7 +46,7 @@ pub(crate) fn uncarried<'a>(held: &'a HeldState, start: &StartHeld) -> Option<&'
 
 /// The wait of a stage whose carried start `start` did not begin: after
 /// the start whose agent stopped at its account's usage limit, carrying
-/// nothing, with `why` (146, 175).
+/// nothing, with `why` (146, 179).
 pub(crate) fn after_uncarried(start: &StartHeld, why: String) -> Option<AfterSpent> {
     let from = start.conversation.as_ref()?.from;
     Some(AfterSpent {
@@ -65,7 +65,7 @@ impl Engine {
     /// is quiet, at once where it stopped, the agent ended and the stage
     /// started afresh with [`StartReason::Spent`]'s words after the start
     /// whose agent stopped at its account's usage limit, carrying nothing;
-    /// true when the stage moved (31, 35, 112, 146, 175).
+    /// true when the stage moved (31, 35, 112, 146, 179).
     pub(crate) fn read_uncarried(
         &self,
         id: &PlaceId,

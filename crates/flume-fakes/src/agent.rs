@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 /// no conversation until its carry is scripted, by each account's
 /// [`FakeAgent::HOME`]; its command passes the session a start resumes as
 /// `--resume <session>`, and a start's word that it started names the
-/// session it resumes unless scripted otherwise (175).
+/// session it resumes unless scripted otherwise (179).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     state: Mutex<AgentModel>,
@@ -42,10 +42,10 @@ struct AgentModel {
     /// that it started (161).
     mode_at_prompt: bool,
     /// The answer of carry to each account, by its [`FakeAgent::HOME`]
-    /// (175).
+    /// (179).
     carries: BTreeMap<String, Carry>,
     /// Each start whose command resumes a session ends before its word
-    /// that it started (S77).
+    /// that it started (S79).
     carried_starts_end: bool,
 }
 
@@ -66,7 +66,7 @@ struct Record {
     /// The mode the agent's word says it began in, as scripted (161).
     began_in: Option<String>,
     /// The session the agent's word that it started names, as scripted
-    /// (161, 175).
+    /// (161, 179).
     session: Option<String>,
 }
 
@@ -93,7 +93,7 @@ impl Default for Record {
 
 impl FakeAgent {
     /// The variable of an account's environment by which the fake knows
-    /// the account, as a program knows its configuration home (175).
+    /// the account, as a program knows its configuration home (179).
     pub const HOME: &'static str = "AGENT_HOME";
 
     pub fn new(terminal: Arc<FakeTerminal>) -> FakeAgent {
@@ -178,7 +178,7 @@ impl FakeAgent {
 
     /// The agent's word that it started names `session`, which is
     /// compared with the session its command resumes, where it resumes
-    /// one (161, 175).
+    /// one (161, 179).
     pub fn set_session(&self, agent: &Identity, session: &str) {
         let session = session.to_string();
         self.with(agent, |record| record.session = Some(session));
@@ -186,14 +186,14 @@ impl FakeAgent {
 
     /// The program carries a stopped start's conversation to the account
     /// whose [`FakeAgent::HOME`] is `home` as `carry` says: yes with the
-    /// session it resumes, or no with the words (175).
+    /// session it resumes, or no with the words (179).
     pub fn carry_to(&self, home: &str, carry: Carry) {
         lock(&self.state).carries.insert(home.to_string(), carry);
     }
 
     /// Each start whose command resumes a session finds no such
     /// conversation and ends before its word that it started, as a program
-    /// does whose account cannot reach it (146, S77).
+    /// does whose account cannot reach it (146, S79).
     pub fn carried_starts_end(&self) {
         lock(&self.state).carried_starts_end = true;
     }
@@ -261,7 +261,7 @@ impl FakeAgent {
     /// How the agent began otherwise than its start, as scripted: the
     /// variables set, another session than its command resumes, and its
     /// mode where it began in another, once a prompt reached it where it
-    /// names its mode only then (161, 162, 175).
+    /// names its mode only then (161, 162, 179).
     fn unsettled(&self, agent: &Identity, record: &Record) -> Option<Unsettled> {
         let at_prompt = lock(&self.state).mode_at_prompt;
         let mode = self
@@ -282,7 +282,7 @@ impl FakeAgent {
 
     /// Whether its word that it started shows it began otherwise: the
     /// variables set, another session than its command resumes, or its
-    /// mode where that word names it (161, 175).
+    /// mode where that word names it (161, 179).
     fn unsettled_at_start(&self, agent: &Identity, record: &Record) -> bool {
         let at_prompt = lock(&self.state).mode_at_prompt;
         record.started_without.is_some()
@@ -291,7 +291,7 @@ impl FakeAgent {
     }
 
     /// The session the agent's command resumes, none where it resumes
-    /// none (175).
+    /// none (179).
     fn resumed(&self, agent: &Identity) -> Option<String> {
         let (command, _) = self.terminal.opened(agent)?;
         command
@@ -304,7 +304,7 @@ impl FakeAgent {
 
     /// Whether its word that it started names another session than the
     /// one its command resumes; none is compared where it resumes none
-    /// (161, 175).
+    /// (161, 179).
     fn in_another_session(&self, agent: &Identity, record: &Record) -> bool {
         match (self.resumed(agent), &record.session) {
             (Some(resumed), Some(session)) => resumed != *session,
@@ -313,7 +313,7 @@ impl FakeAgent {
     }
 
     /// Whether the agent resumes a session where carried starts are
-    /// scripted to end before their word that they started (S77).
+    /// scripted to end before their word that they started (S79).
     fn ends_unfound(&self, agent: &Identity) -> bool {
         let end = lock(&self.state).carried_starts_end;
         end && self.resumed(agent).is_some()
@@ -359,7 +359,7 @@ impl FakeAgent {
 
     /// The agent's record as read in `folder`: none where it is kept in
     /// another. A start scripted to end before its word has ended by the
-    /// first reading, its terminal reading it stopped (S77).
+    /// first reading, its terminal reading it stopped (S79).
     fn read_in(&self, operation: &str, folder: &str, agent: &Identity) -> Option<Record> {
         self.log.push(format!("{operation} {agent} in {folder}"));
         if self.ends_unfound(agent) {
@@ -514,7 +514,7 @@ impl Agent for FakeAgent {
     /// each logged with its answer: not offered where no account's is
     /// scripted, as the seam's default; otherwise no, naming the variable,
     /// to an account none is scripted for, or for a stopped start whose
-    /// record is kept in another folder (128, 175).
+    /// record is kept in another folder (128, 179).
     fn carry(&self, folder: &str, earlier: &Identity, env: &BTreeMap<String, String>) -> Carry {
         let home = env.get(Self::HOME);
         let known = self

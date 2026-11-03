@@ -3,7 +3,7 @@
 //! waiting on its suite with its pane quiet (39, S3), a fix begun in
 //! the mode its host gives (162, S66), and a fix whose code agent stops
 //! at its account's usage limit going on in its own conversation under
-//! the pool's other account (S76). Each brief asks for what the
+//! the pool's other account (S78). Each brief asks for what the
 //! stand-in's script acted; the kinds' own prompts say the rest.
 
 use super::walk::{now, session_limit_after, stage};
@@ -274,7 +274,7 @@ fn sleeping(path: &str) -> bool {
 
 #[test]
 fn s76_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
-    // S76, 146, 161, 175, C.4: on a fill-first pool of two accounts signed
+    // S78, 146, 161, 179, C.4: on a fill-first pool of two accounts signed
     // in by the test account's token, each with a scratch configuration
     // home, the second's `projects` a link to the first's, the fix's code
     // agent starts under the first and, in its first turn, waits on a

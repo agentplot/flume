@@ -417,7 +417,7 @@ pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>
 /// The started ack of the agent this process's environment names: its
 /// session, transcript, source and plugin version, with the transcript's
 /// length the ack measures, taken only where the start's record matches
-/// it, the session among it where the start resumes one (135, 161, 175).
+/// it, the session among it where the start resumes one (135, 161, 179).
 pub fn ack_started(
     session: &str,
     transcript: &str,

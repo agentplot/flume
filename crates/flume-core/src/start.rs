@@ -34,7 +34,7 @@ pub(crate) struct Claim {
     /// layer gives one (162, 169).
     mode: Option<String>,
     /// The session it resumes, carrying the conversation of the stage's
-    /// start whose agent stopped at its account's usage limit (146, 175).
+    /// start whose agent stopped at its account's usage limit (146, 179).
     resume: Option<String>,
 }
 
@@ -84,7 +84,7 @@ pub(crate) enum StartReason {
     Unsettled,
     /// The stage's earlier agent stopped at its account's usage limit, and
     /// this start resumes its conversation: its prompt is these words and
-    /// the way to stop short alone (28, 146, 175).
+    /// the way to stop short alone (28, 146, 179).
     Carried,
 }
 
@@ -100,14 +100,14 @@ impl StartReason {
 }
 
 /// Why a start after a spent agent carries no conversation where its
-/// agent profile offers no carry (171, 175).
+/// agent profile offers no carry (171, 179).
 pub(crate) const CARRIES_NONE: &str = "its agent profile carries no conversation";
 
 /// Whether the start after `after`, the stage's start whose agent stopped
 /// at its account's usage limit, carries that agent's conversation, as
 /// `carry`, its profile's answer for the account chosen, says; or why
 /// not: the profile's words, or the wait's where it may not carry, or
-/// that no account was chosen to carry it to (146, 175).
+/// that no account was chosen to carry it to (146, 179).
 fn conversation(after: &AfterSpent, carry: Option<&Carry>) -> Conversation {
     let why = match carry {
         Some(Carry::Yes { .. }) => None,
@@ -291,7 +291,7 @@ impl Engine {
     /// account's usage limit resumes that agent's conversation where the
     /// stage's profile answers that the account chosen reaches it, its
     /// prompt flume's words alone and its record naming the session, and
-    /// starts afresh otherwise, saying why (28, 146, 175).
+    /// starts afresh otherwise, saying why (28, 146, 179).
     pub(crate) fn claim(
         &self,
         id: &PlaceId,
@@ -333,7 +333,7 @@ impl Engine {
         // A stage waiting after its agent stopped at its account's usage
         // limit: its profile is asked, under the room lock once an account
         // is chosen, whether that account reaches the agent's conversation
-        // (145, 146, 175).
+        // (145, 146, 179).
         let after = read.state.stages[index]
             .room
             .as_ref()

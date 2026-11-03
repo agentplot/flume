@@ -12,7 +12,7 @@
 //! repository's own default, its started ack taken (162, S66); and a
 //! fix whose code agent stops at its account's usage limit goes on in its
 //! own conversation under the pool's other account, whose `projects` is a
-//! link to the first's, and lands (S76).
+//! link to the first's, and lands (S78).
 //!
 //! Run by hand, outside the gate, required by no branch, in the devenv
 //! shell, so the pinned Claude Code and herdr lead `PATH`:
@@ -99,7 +99,7 @@ impl Live {
     /// A walkthrough as `new` makes it on a fill-first pool of two
     /// accounts, each signed in by the operator's test token with a scratch
     /// configuration home of its own, the second's `projects` a link to the
-    /// first's, as a host shares one between its accounts (175).
+    /// first's, as a host shares one between its accounts (179).
     pub fn sharing_projects(label: &str) -> Live {
         Live::made(label, "", 2)
     }
