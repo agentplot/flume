@@ -281,7 +281,10 @@ of the managed layer does. A local unit whose path the pin equals or
 lies under is passed over, named with its pin.
 
 **Merging.** Each unit not passed over is set into the managed table,
-replacing the managed value whole. The merged table is read by today's
+replacing the managed value whole. A unit under `repos` is set into the
+managed layer's table for the same repository, the two keys compared
+with `~` read as the home, so `~/Code/acme` in one layer and its full
+path in the other name one repository. The merged table is read by today's
 reader, extended (section 5). A reading of the merged table that fails
 where the managed table alone reads is a fault of the local layer: the
 local layer is not taken, its fault named. A fault of the managed
@@ -311,8 +314,10 @@ pub struct HostConfiguration {
 
 `values` holds every leaf of the merged table as TOML writes it, a
 unit of the list whole, an array of tables by index
-(`pools.work.accounts[0].name`), and an account's `env` values as
-`<set>` (core.30). `Host` gains `fn configuration(&self) ->
+(`pools.work.accounts[0].name`), and the values of every `env` table
+as `<set>`, an account's among them, so a variable's value written
+where the reader ignores it is never given either (core.30). `Host`
+gains `fn configuration(&self) ->
 HostConfiguration`.
 
 ### 5. Labels and sessions in the configuration
