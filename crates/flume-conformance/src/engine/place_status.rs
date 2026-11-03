@@ -693,7 +693,9 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             moved(MoveOn::Stage {
                 stage: "code".into()
             }),
-            moved(MoveOn::Intent)
+            moved(MoveOn::Intent {
+                program: Some("agent".into())
+            })
         ],
         "the place's moves"
     );

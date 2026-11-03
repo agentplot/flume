@@ -317,7 +317,9 @@ fn held() -> HeldState {
                 carried: Some(true),
             },
             AccountMove {
-                on: MoveOn::Intent,
+                on: MoveOn::Intent {
+                    program: Some("agent".into()),
+                },
                 from: "work-1".into(),
                 to: "work-2".into(),
                 why: MoveWhy::Full,
@@ -1281,24 +1283,9 @@ fn the_hosts_own_documents_and_their_keys() {
             recorded_at: 47_400,
         }),
     });
-    let affinity = Affinity {
-        stream: "work".into(),
-        pool: "work".into(),
-        account: "work-2".into(),
-        moves: vec![AccountMove {
-            on: MoveOn::Intent,
-            from: "work-1".into(),
-            to: "work-2".into(),
-            why: MoveWhy::Spent,
-            at: 47_400,
-            carried: None,
-        }],
-        gone: Some(50_000),
-    };
-    assert!(affinity.left("work-1") && !affinity.left("work-2"));
     round_trips(HostVersioned {
         version: 4,
-        document: HostDocument::Intent(affinity),
+        document: HostDocument::Intent(two_programs()),
     });
     assert_eq!(
         HostKey::Account {
@@ -1308,6 +1295,88 @@ fn the_hosts_own_documents_and_their_keys() {
         .to_string(),
         "account work/work-1"
     );
+}
+
+/// An affinity holding an account for `agent` and one for `other`, and
+/// an intent's move for `agent` (147).
+fn two_programs() -> Affinity {
+    Affinity {
+        stream: "work".into(),
+        accounts: BTreeMap::from([
+            (
+                "agent".into(),
+                AffinityAccount {
+                    pool: "work".into(),
+                    account: "agent-2".into(),
+                },
+            ),
+            (
+                "other".into(),
+                AffinityAccount {
+                    pool: "work".into(),
+                    account: "other-1".into(),
+                },
+            ),
+        ]),
+        moves: vec![AccountMove {
+            on: MoveOn::Intent {
+                program: Some("agent".into()),
+            },
+            from: "agent-1".into(),
+            to: "agent-2".into(),
+            why: MoveWhy::Spent,
+            at: 47_400,
+            carried: None,
+        }],
+        gone: Some(50_000),
+        pool: None,
+        account: None,
+    }
+}
+
+#[test]
+fn an_affinity_of_two_programs() {
+    let affinity = two_programs();
+    round_trips(affinity.clone());
+    let json = serde_json::to_value(&affinity).unwrap();
+    assert_eq!(json["moves"][0]["program"], serde_json::json!("agent"));
+    assert!(json.get("pool").is_none() && json.get("account").is_none());
+    assert!(affinity.left("agent", "agent-1"));
+    assert!(!affinity.left("other", "agent-1"));
+    assert!(!affinity.left("agent", "agent-2"));
+}
+
+#[test]
+fn an_affinity_written_before() {
+    let json = serde_json::json!({
+        "stream": "work",
+        "pool": "work",
+        "account": "work-2",
+        "moves": [{
+            "on": "intent",
+            "from": "work-1",
+            "to": "work-2",
+            "why": "spent",
+            "at": 47_400,
+        }],
+        "gone": null,
+    });
+    let before: Affinity = serde_json::from_value(json).expect("read");
+    assert_eq!(before.pool.as_deref(), Some("work"));
+    assert_eq!(before.account.as_deref(), Some("work-2"));
+    assert!(before.accounts.is_empty());
+    assert_eq!(before.moves[0].on, MoveOn::Intent { program: None });
+    assert!(!before.left("agent", "work-1"));
+    round_trips(before.clone());
+    let taken = Affinity {
+        pool: None,
+        account: None,
+        ..before
+    };
+    let written = serde_json::to_value(&taken).unwrap();
+    assert!(written.get("pool").is_none() && written.get("account").is_none());
+    assert!(written["moves"][0].get("program").is_none());
+    assert_eq!(written["accounts"], serde_json::json!({}));
 }
 
 #[test]

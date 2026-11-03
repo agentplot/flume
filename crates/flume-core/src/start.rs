@@ -310,14 +310,12 @@ impl Engine {
             .pool_of(&place.stream.name)
             .and_then(|_| self.affinity(&place.intent))
             .map(|(_, affinity)| affinity);
+        let program = resolution
+            .as_ref()
+            .ok()
+            .and_then(|resolution| resolution.resolved.settings.program.clone());
         let (chosen, intent_moved) = match &resolution {
-            Ok(resolution) => self.choose_account(
-                place,
-                resolution.resolved.settings.program.as_deref(),
-                affinity.as_ref(),
-                queue,
-                now,
-            ),
+            Ok(_) => self.choose_account(place, program.as_deref(), affinity.as_ref(), queue, now),
             Err(_) => (Choice::NoPool, None),
         };
         let stage_name = &place.kind.stages[index].name;
@@ -541,9 +539,9 @@ impl Engine {
             }))
         });
         let claimed = claimed.unwrap_or(Err(Start::NoPlace));
-        if let (Ok(claim), Some(place)) = (&claimed, self.store.read(id)) {
+        if let (Ok(claim), Some(place), Some(program)) = (&claimed, self.store.read(id), &program) {
             if let Some(account) = &claim.account {
-                self.affinity_after(&place.state.place, account, intent_moved.as_ref());
+                self.affinity_after(&place.state.place, program, account, intent_moved.as_ref());
             }
         }
         claimed

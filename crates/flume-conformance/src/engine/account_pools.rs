@@ -464,6 +464,15 @@ pub fn affinity(world: &World, intent: &IntentKey) -> Option<Affinity> {
     }
 }
 
+/// The account the intent's affinity keeps for `program`, as its pool
+/// and name.
+pub fn kept(world: &World, intent: &IntentKey, program: &str) -> Option<(String, String)> {
+    affinity(world, intent)?
+        .accounts
+        .remove(program)
+        .map(|kept| (kept.pool, kept.account))
+}
+
 /// The intent the place `id` serves.
 fn intent_of(world: &World, id: &PlaceId) -> Result<IntentKey, String> {
     Ok(world.held(id).ok_or("no held state")?.place.intent)
@@ -513,7 +522,9 @@ fn s56_three_units_of_one_intent(_: &()) -> Outcome {
         "the next start's account once work-1 is spent"
     );
     let moved = AccountMove {
-        on: MoveOn::Intent,
+        on: MoveOn::Intent {
+            program: Some("agent".into()),
+        },
         from: "work-1".into(),
         to: "work-2".into(),
         why: MoveWhy::Spent,
@@ -522,9 +533,9 @@ fn s56_three_units_of_one_intent(_: &()) -> Outcome {
     };
     let held = affinity(&world, &intent).ok_or("no affinity")?;
     ensure_eq!(
-        (held.account.as_str(), held.moves.clone()),
-        ("work-2", vec![moved.clone()]),
-        "the affinity's account and its moves"
+        (kept(&world, &intent, "agent"), held.moves.clone()),
+        (on("work", "work-2"), vec![moved.clone()]),
+        "the affinity's account for agent and its moves"
     );
     ensure_eq!(
         world.held(&next).map(|held| held.moves),
@@ -558,9 +569,9 @@ fn never_back(_: &()) -> Outcome {
     );
     let held = affinity(&world, &intent).ok_or("no affinity")?;
     ensure_eq!(
-        (held.account.as_str(), held.moves.len()),
-        ("work-2", 1),
-        "the affinity, which never moves back"
+        (kept(&world, &intent, "agent"), held.moves.len()),
+        (on("work", "work-2"), 1),
+        "the affinity for agent, which never moves back"
     );
     ensure_eq!(
         world.held(&back).map(|held| held.moves.len()),
@@ -613,6 +624,11 @@ fn dropped_an_hour_after_the_last_place(_: &()) -> Outcome {
         (DEFAULT_STREAM, None, 0),
         "the affinity the later place wrote"
     );
+    ensure_eq!(
+        kept(&world, &intent, "agent"),
+        account_of(&world, &later, "code"),
+        "the affinity's account for agent the later place wrote"
+    );
     Ok(())
 }
 
@@ -634,6 +650,11 @@ fn no_intent_named(_: &()) -> Outcome {
             "{id}'s account"
         );
     }
+    ensure_eq!(
+        kept(&world, &first, "agent"),
+        on("work", "work-1"),
+        "the shared affinity's account for agent"
+    );
     Ok(())
 }
 

@@ -239,7 +239,7 @@ impl MoveStatus {
         let moved = &self.moved;
         let what = match &moved.on {
             MoveOn::Stage { stage } => stage.clone(),
-            MoveOn::Intent => "the intent".to_string(),
+            MoveOn::Intent { .. } => "the intent".to_string(),
         };
         let conversation = match moved.carried {
             Some(true) => ", its conversation with it",
