@@ -140,3 +140,17 @@ brought to the rule.
   so its gate runs the herdr profile's tests, which open a pseudo-terminal
   that sluice 0.56.0's sandbox refuses (sluice #289 allows it). The item
   leaves when the strings say `<group>/<role>`.
+- **`root:changes` passes a requirement too long to archive.** The
+  `changes` task's comment in `moon.yml` says an open change's strict
+  validation fails a requirement its archive would refuse, at the
+  change's own checks. openspec 1.14.3, as `devenv.nix` pins it,
+  measures no delta's requirement text, so a requirement over the
+  strict check's 500 characters passes `root:changes` and every check a
+  change's tasks name, and fails `root:specs` only once the archive
+  syncs it. Two changes' verify stages found it so:
+  agent-mode-is-a-layered-setting's four requirements (e4007c0) and
+  an-intents-affinity-is-kept-per-program's two (its verify's F1). A
+  task that archives each open change over a copy of `openspec/` and
+  runs the strict check over the specs it leaves would find it at the
+  change (core.21). The item leaves when the gate checks each open
+  change's specs as its archive leaves them.
