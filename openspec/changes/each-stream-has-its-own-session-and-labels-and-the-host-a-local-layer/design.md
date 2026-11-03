@@ -182,7 +182,11 @@ the terminal's own session`, and so on.
   <name> server` where none runs. Today's `socket()` and
   `start_session()` become `socket_of(&Server)`, used for both. A name
   the pinned herdr refuses refuses the open with herdr's words, and the
-  profile names no rule of its own for a session's name (core.29).
+  profile names no rule of its own for a session's name (core.29). herdr
+  0.9.5 refuses such a name before its server starts, its words on the
+  server's stderr, which the profile keeps under its records'
+  `servers/`, so a server that ends before herdr lists it running is
+  refused in those words.
 
 Within the server so found, the layout is record 0018's: the
 repository and base's workspace, labelled `<repository> <base>`, and
@@ -200,15 +204,17 @@ where it stands (138).
 - `tidy(place)` closes the place's tab on every server a record names,
   then each base's workspace on that server once it holds no tab of a
   live place and no pane flume did not open, keeping and naming it
-  otherwise (137, 138).
+  otherwise (137, 138). A place that has no tab, its agents opened beside
+  a pane, tidies the base's workspace on every server, as before.
 - `kept()` reads every workspace record, of every server.
 - `show(place, clues)` titles the live agent's pane on its own server,
   and gives the base's count to each of the base's workspaces, on every
   server (139).
 - `shown_at(place, agent)` gives the tab and the base's workspace on
-  the live agent's server, else the place's newest tab's. `ShownAt`
-  gains `bases: Vec<String>`, each workspace the base has on any
-  server, as `herdr:<id>@<socket>`.
+  the live agent's server, else the place's newest tab's, and the base's
+  newest workspace where the place has no tab. `ShownAt` gains `bases:
+  Vec<String>`, each workspace the base has on any server, as
+  `herdr:<id>@<socket>`.
 
 `Engine::bases` (`clues.rs`) gives a base once for each workspace
 `shown_at`'s `bases` names, each with the base's one count, and once
@@ -222,7 +228,9 @@ the host's. `Herdr::with_session_home(path)` runs every herdr call and
 every session server the profile starts with that home in the
 environment the pinned herdr reads its sessions from, and the tools
 test reads which variables those are from the pinned release
-(core.29).
+(core.29). herdr 0.9.5 reads `XDG_CONFIG_HOME`, else `~/.config`, and
+keeps a session at `<it>/herdr/sessions/<name>`, its socket
+`herdr.sock` there.
 
 ### 3. The printed command and the fakes
 
