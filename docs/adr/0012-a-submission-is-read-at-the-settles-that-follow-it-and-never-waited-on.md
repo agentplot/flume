@@ -13,6 +13,8 @@ Status: accepted by the user on 2026-10-28, in their design session ("i agree wi
 
 Amended 2026-10-28 by record 0014, accepted by the user: the settle's `untold` is `inbox`, collecting the place's pending outcomes by `sluice inbox`; and there is no worktrunk place profile.
 
+Amended 2026-11-02, following clauses 117 and 101 as blueprints 4074bf9 amended them with this record: its consequences name B.6's submit, which holds no wait and removes nothing, by 117, and B.6's guarantee, that submit removes no place and a pending outcome is delivered once, by 101; rule core.6 cites both.
+
 Deciders: the user, accepting recommendations R2 and R4 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 43, 46, 66, 111, 113, 120, 124, 125, 133, I8, C.6 and S34, as amended with this record; records 0002, 0005, 0009; `agentplot/sluice:docs/adr/0065` (the driver's wait removes a landed worktree) and `0068` (an outcome pushed to its submitter and kept until told; an entry submitted outside a multiplexer stands untold until asked); sluice clauses 51 and 135; `afterthought/crew:docs/adr/0048`, pattern 5; rules core.6, core.13, core.18, core.25.
 
@@ -42,7 +44,7 @@ Option 2.
 
 ### Consequences
 
-- Clauses 43, 46, 66, 111, 113, 120, 124, I8, C.6 and S34 of the statement are amended, B.6's `submit` holds no wait, `wait` becomes `step`, and `untold` (133) is added; rules core.6, core.13 and core.18 are rewritten from them.
+- Clauses 43, 46, 66, 111, 113, 120, 124, I8, C.6 and S34 of the statement are amended, B.6's `submit` (117) holds no wait and removes nothing, its guarantee (101) has submit remove no place and a pending outcome delivered once, `wait` becomes `step` (125), and `untold` (133) is added; rules core.6, core.13 and core.18 are rewritten from them.
 - Records 0002, 0005 and 0009 carry an amendment line naming this record.
 - The merge-queue profile's units: submit with `--no-wait --json` and a cleaned environment; `untold` at every settle for each place with an open submission; `step` where no `sluice run` is live; the tidy for every landed place. They wait on sluice's untold command (sluice record 0068's units), which flume calls by the name sluice gives it.
 - Rule core.25's details drop "crew's session-start hook": a caller's start asks, crew's by a role run's start (record 0013).
