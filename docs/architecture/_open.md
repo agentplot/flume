@@ -153,6 +153,23 @@ brought to the rule.
   the host's configuration is `config.toml` alone, and a stream has no
   labels, against core.44, core.45, core.46 and core.26. The item
   leaves when the code is brought to them.
+- **The herdr tools tests name their sessions by one letter.** sluice's
+  sandbox lets a check write only `SLUICE_TMP`, `<common
+  dir>/sluice/.tmp/<10 hex>`, and herdr 0.9.5 binds a named session's
+  `herdr.sock` and `herdr-client.sock` in
+  `$XDG_CONFIG_HOME/herdr/sessions/<name>` whatever `HERDR_SOCKET_PATH`
+  or `HERDR_CLIENT_SOCKET_PATH` says, against the 103 bytes of path a
+  socket's address holds on macOS. So `terminal_herdr.rs` keeps its
+  named sessions in `SLUICE_TMP` itself, named `w`, `p` and `t`, and
+  fails naming the bytes wherever the path leaves no room (the change
+  `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`,
+  design 2). On the host it was built on, whose common directory's path
+  is 50 bytes, `SLUICE_TMP` is 73 and the client socket 108, so the two
+  tests that start a session fail under sluice there. The user ruled on 2026-11-03 that
+  the fix is sluice's, "a confined run's scratch at a short path",
+  theirs to make in agentplot/sluice. The item leaves when sluice gives
+  a confined run a short scratch and the tests name their sessions
+  `work` and `personal` again.
 - **weir's format holds no simple kind's `label`.** C.2 of flume's
   statement puts a kind's `label` in its table (180), but weir's
   statement names no `label` for a simple kind (weir 52, C.4), and

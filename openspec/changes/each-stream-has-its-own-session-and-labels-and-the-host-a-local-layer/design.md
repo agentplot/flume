@@ -232,6 +232,28 @@ test reads which variables those are from the pinned release
 keeps a session at `<it>/herdr/sessions/<name>`, its socket
 `herdr.sock` there.
 
+The tools tests' session home is the run's own scratch, `SLUICE_TMP`
+under sluice and the temporary folder run directly, and each test names
+its sessions by one letter of its own: `w` and `p` for `work` and
+`personal`, `t` for the place tidied in two sessions. sluice's sandbox
+lets a check write `SLUICE_TMP` alone, `<common dir>/sluice/.tmp/<10
+hex>`. herdr 0.9.5 binds a named session's two sockets, `herdr.sock`
+and `herdr-client.sock`, in `herdr/sessions/<name>` under the session
+home, whatever `HERDR_SOCKET_PATH` or `HERDR_CLIENT_SOCKET_PATH` says,
+and a socket's address holds 103 bytes of path on macOS. The longer
+socket's path is the session home's and 35 bytes with a one-letter
+name, and a test whose path leaves no room fails naming its bytes and
+the limit.
+The user ruled it on 2026-11-03: "Build B now: the named-session tests
+use SLUICE_TMP itself as the session home with one-letter session
+names, failing with a clear message naming the byte count wherever the
+path leaves no room. A is the right fix and is mine to make in
+agentplot/sluice later (a confined run's scratch at a short path) [...]
+C is out: a test run by hand is no verification." A, sluice giving a
+confined run's scratch a short path, returns the tests to `work` and
+`personal` (`docs/architecture/_open.md`). C, the named-session tests
+run by hand outside the gate as `check-live` is, verifies nothing.
+
 ### 3. The printed command and the fakes
 
 The printed command takes `at` and prints as before: a session names
