@@ -37,7 +37,7 @@ a scratch one of the test's own.
 ## 4. The site
 
 - [x] 4.1 Write design 9 into `site/src/content/docs/guides/agent-settings.md`: in "Pools of accounts", a stage waiting only while its pool holds an account of its program and refused otherwise, at its launch or a later start; "An intent keeps to its account" become "An intent keeps an account per program", every link to its anchor following; and "What status shows" with the agent's account from the affinity for its program. Write into `reference/state.md` the intent's document's `accounts`, an intent's move's `program`, and the queue's wants without a program's. Write into `reference/configuration.md` that a pool with no account of a stage's program refuses that stage. Write it all to any host's operator, naming no host, team or word of ours (core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 4.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 4.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 5. Coverage and the gate
 
