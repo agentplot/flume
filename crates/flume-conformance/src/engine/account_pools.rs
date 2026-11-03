@@ -3,10 +3,12 @@
 //! is chosen under the room lock, the strategy's over the pool's usable
 //! accounts in order, usable meaning not spent, under its own bound and
 //! running the stage's program; with none usable the stage waits for
-//! room, its want naming the pool. An intent keeps to its account while
-//! it is usable, its affinity moving where the strategy goes when that
-//! account is spent or full and never back, and gone an hour after the
-//! intent's last place (147). An agent stopped at its account's usage
+//! room, its want naming the pool. An intent keeps an account for each
+//! program its agents run while it is usable, its affinity for that
+//! program alone moving where the strategy goes when that account is
+//! spent or full and never back, a document written before read as its
+//! account's program's, and gone an hour after the intent's last place
+//! (147). An agent stopped at its account's usage
 //! limit pauses the account for every flume process until the reset its
 //! record names, or for an hour, and once quiet is ended and its stage
 //! started again with flume's words, carrying its conversation where the
@@ -16,7 +18,7 @@
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, Cache, HostStatus, RoomWanted};
+use flume_core::{Answer, Cache, HostStatus, Retry, RoomWanted};
 use flume_fakes::FakeAgent;
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -57,6 +59,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "account pools: three places of one intent on a least-busy pool start on the first one's account, and once it is spent the next start goes to another, the affinity moving",
             cites: &["S56", "147", "145"],
             run: s56_three_units_of_one_intent,
+        },
+        Scenario {
+            name: "account pools: three places of one intent each running code on one program and review on another keep an account for each, the later starts from the affinity with no move, and once the first program's account is spent its next start moves the intent for that program alone",
+            cites: &["S80", "147", "145"],
+            run: s80_two_programs_of_one_intent,
+        },
+        Scenario {
+            name: "account pools: a start on another program while the intent's account for its first program is at its bound records no move and leaves that account as it was",
+            cites: &["147", "145"],
+            run: a_start_on_another_program,
+        },
+        Scenario {
+            name: "account pools: an intent's document written before, holding one account and a move with no program, reads as that account's program's affinity, and its next change writes an account for each program and the move naming its program",
+            cites: &["147", "153"],
+            run: a_document_written_before,
+        },
+        Scenario {
+            name: "account pools: an intent's document written before whose account its pool no longer declares reads with its stream alone, and the intent's next start takes the strategy's choice",
+            cites: &["147", "153"],
+            run: a_document_written_before_whose_account_is_gone,
         },
         Scenario {
             name: "account pools: an affinity that moved stays on its new account once the old one's reset passes, and a start the strategy sends back to the old one leaves the affinity where it is",
@@ -654,6 +676,347 @@ fn no_intent_named(_: &()) -> Outcome {
         kept(&world, &first, "agent"),
         on("work", "work-1"),
         "the shared affinity's account for agent"
+    );
+    Ok(())
+}
+
+/// An account like [`account`], unbounded, running the fake's program
+/// `other`.
+fn of_other(name: &str) -> Account {
+    Account {
+        program: "other".into(),
+        ..account(name, None)
+    }
+}
+
+/// `other` bound to the fake agent; a fill-first pool `work` of agent-1,
+/// bounded at `bound`, agent-2, other-1 and other-2, the host's own; and
+/// the repository's kinds `two`, whose code runs `agent` and whose review
+/// runs `other`, and `check`, whose one stage, review, runs `other`.
+fn two_programs(world: &World, bound: Option<u32>) {
+    world.resolver.bind_agent("other", world.agent.clone());
+    pool(
+        world,
+        "work",
+        Strategy::FillFirst,
+        vec![
+            account("agent-1", bound),
+            account("agent-2", None),
+            of_other("other-1"),
+            of_other("other-2"),
+        ],
+    );
+    world.host.set_host_pool(Some("work"));
+    let mut review = stage("review", Some(Deliverable::Commits), "{{brief}}");
+    review.agents = vec![Settings {
+        program: Some("other".into()),
+        ..Settings::default()
+    }];
+    world.kinds.set_kinds(
+        REPOSITORY,
+        vec![
+            kind(
+                "two",
+                false,
+                vec![
+                    stage("code", Some(Deliverable::Commits), "{{brief}}"),
+                    review.clone(),
+                ],
+            ),
+            kind("check", false, vec![review]),
+        ],
+    );
+}
+
+/// The place `name` of the kind `kind` serving the intent the-surfaces,
+/// launched with its first stage held where `held` names it, and settled
+/// once.
+fn of_the_surfaces(
+    world: &World,
+    kind: &str,
+    name: &str,
+    held: Option<&str>,
+) -> Result<PlaceId, String> {
+    launched(&world.engine.launch(&Launch {
+        intent: Some("the-surfaces".into()),
+        hold: held.into_iter().map(str::to_string).collect(),
+        ..launch(kind, name, Some("x"))
+    }))?;
+    let id = World::id(kind, name);
+    world.settle(&id);
+    Ok(id)
+}
+
+/// The code of the place `name` of the kind `two` delivered, and its
+/// review started.
+fn code_delivered(world: &World, id: &PlaceId, name: &str) -> Outcome {
+    world.commit(&format!("two/{name}"), &["fix.rs"]);
+    world.settle(id);
+    ensure!(
+        world
+            .stage_state(id, "review")
+            .is_some_and(StageState::running),
+        "{name}'s review did not start: {:?}",
+        world.stage_state(id, "review")
+    );
+    Ok(())
+}
+
+/// The account the stage `stage` of the place `id` last started under,
+/// as its name and what chose it.
+fn chosen(world: &World, id: &PlaceId, stage: &str) -> Option<(String, AccountFrom)> {
+    world
+        .held(id)?
+        .stages
+        .into_iter()
+        .find(|held| held.name == stage)?
+        .start?
+        .account
+        .map(|account| (account.name, account.from))
+}
+
+fn by(account: &str, from: AccountFrom) -> Option<(String, AccountFrom)> {
+    Some((account.to_string(), from))
+}
+
+fn s80_two_programs_of_one_intent(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    let mut intent = None;
+    for (n, name) in ["a", "b", "c"].into_iter().enumerate() {
+        let id = of_the_surfaces(&world, "two", name, None)?;
+        code_delivered(&world, &id, name)?;
+        let from = match n {
+            0 => AccountFrom::Strategy,
+            _ => AccountFrom::Affinity,
+        };
+        ensure_eq!(
+            (chosen(&world, &id, "code"), chosen(&world, &id, "review")),
+            (by("agent-1", from), by("other-1", from)),
+            "{name}'s code and review"
+        );
+        ensure_eq!(
+            world.held(&id).map(|held| held.moves),
+            Some(vec![]),
+            "{name}'s moves"
+        );
+        intent = Some(intent_of(&world, &id)?);
+    }
+    let intent = intent.ok_or("no place")?;
+    ensure_eq!(
+        affinity(&world, &intent).map(|held| held.moves),
+        Some(vec![]),
+        "the affinity's moves before agent-1 is spent"
+    );
+    spent(&world, "work", "agent-1", world.host.now() + 3600);
+    let next = of_the_surfaces(&world, "two", "d", None)?;
+    ensure_eq!(
+        chosen(&world, &next, "code"),
+        by("agent-2", AccountFrom::Strategy),
+        "the next code once agent-1 is spent"
+    );
+    code_delivered(&world, &next, "d")?;
+    ensure_eq!(
+        chosen(&world, &next, "review"),
+        by("other-1", AccountFrom::Affinity),
+        "the next review"
+    );
+    let moved = AccountMove {
+        on: MoveOn::Intent {
+            program: Some("agent".into()),
+        },
+        from: "agent-1".into(),
+        to: "agent-2".into(),
+        why: MoveWhy::Spent,
+        at: world.host.now(),
+        carried: None,
+    };
+    ensure_eq!(
+        world.held(&next).map(|held| held.moves),
+        Some(vec![moved.clone()]),
+        "the moves the next place records"
+    );
+    let held = affinity(&world, &intent).ok_or("no affinity")?;
+    ensure_eq!(
+        (
+            kept(&world, &intent, "agent"),
+            kept(&world, &intent, "other"),
+            held.moves
+        ),
+        (on("work", "agent-2"), on("work", "other-1"), vec![moved]),
+        "the affinity's accounts and its moves"
+    );
+    Ok(())
+}
+
+fn a_start_on_another_program(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, Some(1));
+    let code = of_the_surfaces(&world, "two", "a", None)?;
+    ensure_eq!(
+        (
+            chosen(&world, &code, "code"),
+            world.stage_state(&code, "code")
+        ),
+        (
+            by("agent-1", AccountFrom::Strategy),
+            Some(StageState::Begun)
+        ),
+        "the code holding agent-1 at its bound"
+    );
+    let intent = intent_of(&world, &code)?;
+    let review = of_the_surfaces(&world, "check", "b", None)?;
+    ensure_eq!(
+        chosen(&world, &review, "review"),
+        by("other-1", AccountFrom::Strategy),
+        "the review on other"
+    );
+    ensure_eq!(
+        world.held(&review).map(|held| held.moves),
+        Some(vec![]),
+        "the moves the review's place records"
+    );
+    let held = affinity(&world, &intent).ok_or("no affinity")?;
+    ensure_eq!(
+        (
+            kept(&world, &intent, "agent"),
+            kept(&world, &intent, "other"),
+            held.moves
+        ),
+        (on("work", "agent-1"), on("work", "other-1"), vec![]),
+        "the affinity's accounts and its moves"
+    );
+    Ok(())
+}
+
+/// The intent's document as a release before an intent kept an account
+/// per program wrote it: in `stream`, holding `account` of the pool
+/// `work`, with `moves` (147, 153).
+fn written_before(
+    world: &World,
+    intent: &IntentKey,
+    stream: &str,
+    account: &str,
+    moves: Vec<AccountMove>,
+) {
+    world.store.put_host(
+        &HostKey::Intent {
+            digest: intent.digest().to_string(),
+        },
+        HostDocument::Intent(Affinity {
+            stream: stream.into(),
+            accounts: BTreeMap::new(),
+            moves,
+            gone: None,
+            pool: Some("work".into()),
+            account: Some(account.into()),
+        }),
+    );
+}
+
+fn a_document_written_before(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    let id = of_the_surfaces(&world, "two", "a", Some("code"))?;
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::OnHold),
+        "the held code"
+    );
+    let intent = intent_of(&world, &id)?;
+    let before = AccountMove {
+        on: MoveOn::Intent { program: None },
+        from: "agent-1".into(),
+        to: "agent-2".into(),
+        why: MoveWhy::Spent,
+        at: world.host.now(),
+        carried: None,
+    };
+    written_before(
+        &world,
+        &intent,
+        DEFAULT_STREAM,
+        "agent-2",
+        vec![before.clone()],
+    );
+    let answer = world
+        .engine()
+        .retry(&id, Retry::Stage("code".into()), None, false);
+    ensure!(answer.refusal().is_none(), "the retry: {answer:?}");
+    ensure_eq!(
+        chosen(&world, &id, "code"),
+        by("agent-2", AccountFrom::Affinity),
+        "the code"
+    );
+    code_delivered(&world, &id, "a")?;
+    ensure_eq!(
+        chosen(&world, &id, "review"),
+        by("other-1", AccountFrom::Strategy),
+        "the review"
+    );
+    ensure_eq!(
+        world.held(&id).map(|held| held.moves),
+        Some(vec![]),
+        "the moves the place records"
+    );
+    let held = affinity(&world, &intent).ok_or("no affinity")?;
+    ensure_eq!(
+        (
+            kept(&world, &intent, "agent"),
+            kept(&world, &intent, "other"),
+            held.moves,
+            held.pool,
+            held.account
+        ),
+        (
+            on("work", "agent-2"),
+            on("work", "other-1"),
+            vec![AccountMove {
+                on: MoveOn::Intent {
+                    program: Some("agent".into())
+                },
+                ..before
+            }],
+            None,
+            None
+        ),
+        "the document once written again"
+    );
+    Ok(())
+}
+
+fn a_document_written_before_whose_account_is_gone(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    stream_on(&world, "work", Some("work"), 0);
+    let id = of_the_surfaces(&world, "two", "a", Some("code"))?;
+    let intent = intent_of(&world, &id)?;
+    written_before(&world, &intent, "work", "agent-9", vec![]);
+    let later = of_the_surfaces(&world, "two", "b", None)?;
+    let place = world.held(&later).ok_or("no held state")?;
+    ensure_eq!(
+        place.place.stream,
+        StreamHeld {
+            name: "work".into(),
+            from: StreamFrom::Intent
+        },
+        "the later place's stream, from the affinity"
+    );
+    ensure_eq!(
+        (chosen(&world, &later, "code"), place.moves),
+        (by("agent-1", AccountFrom::Strategy), vec![]),
+        "the later place's code and its moves"
+    );
+    let held = affinity(&world, &intent).ok_or("no affinity")?;
+    ensure_eq!(
+        (
+            held.accounts.keys().cloned().collect::<Vec<_>>(),
+            kept(&world, &intent, "agent"),
+            held.pool,
+            held.account
+        ),
+        (vec!["agent".to_string()], on("work", "agent-1"), None, None),
+        "the document once written again"
     );
     Ok(())
 }
