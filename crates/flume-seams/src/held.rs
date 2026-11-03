@@ -837,12 +837,19 @@ pub struct AccountMove {
     pub carried: Option<bool>,
 }
 
-/// What moved between accounts: a stage, or the intent (147).
+/// What moved between accounts: a stage, or the intent's affinity for
+/// the program whose account moved, none on a move recorded before an
+/// intent kept an account per program (147).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "on", rename_all = "snake_case")]
 pub enum MoveOn {
-    Stage { stage: String },
-    Intent,
+    Stage {
+        stage: String,
+    },
+    Intent {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program: Option<String>,
+    },
 }
 
 /// Why a start went to another account: the one before was spent, or at

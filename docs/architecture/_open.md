@@ -104,8 +104,14 @@ brought to the rule.
   is built `profiles.rs` binds Claude Code's profile alone and refuses
   every other program, against core.39. The common profile is built
   with entries for Codex, Gemini CLI, GitHub Copilot CLI and OpenCode,
-  then Codex's own profile. The item leaves when the code is brought
-  to core.39.
+  then Codex's own profile. Its build of 173, a stage whose layers name
+  no program running its account's, also builds 145's and 147's halves
+  for such a stage, as stated at blueprints a15d927: the pool's accounts
+  whose program can run it, and the affinity for the program the
+  intent's last agent ran, which the affinity's document then keeps
+  (record 0020's second amendment; core.32's details). It also adds
+  S80's walkthrough under the printed command, once a second program
+  runs. The item leaves when the code is brought to core.39.
 - **Records 0028 and 0029 wait on the engine's move and crew's
   rewrite.** Statechart kinds beside simple kinds on one branch (record
   0028; core.41), run on flywheel-engine moved into weir and taken at
@@ -164,3 +170,17 @@ brought to the rule.
   decided (record 0033). Until the user decides it and the statement
   states it, no server's `labels` is read, and the suite names 183
   unbuilt. The item leaves when the question is answered and 183 built.
+- **`root:changes` passes a requirement too long to archive.** The
+  `changes` task's comment in `moon.yml` says an open change's strict
+  validation fails a requirement its archive would refuse, at the
+  change's own checks. openspec 1.14.3, as `devenv.nix` pins it,
+  measures no delta's requirement text, so a requirement over the
+  strict check's 500 characters passes `root:changes` and every check a
+  change's tasks name, and fails `root:specs` only once the archive
+  syncs it. Two changes' verify stages found it so:
+  agent-mode-is-a-layered-setting's four requirements (e4007c0) and
+  an-intents-affinity-is-kept-per-program's two (its verify's F1). A
+  task that archives each open change over a copy of `openspec/` and
+  runs the strict check over the specs it leaves would find it at the
+  change (core.21). The item leaves when the gate checks each open
+  change's specs as its archive leaves them.

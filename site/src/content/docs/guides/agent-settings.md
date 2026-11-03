@@ -262,7 +262,7 @@ A place's stream is fixed at its launch, from the first of:
 | Source | Status names it |
 |---|---|
 | `flume launch --stream <stream>` | `launch` |
-| the stream of the intent's affinity ([affinity](#an-intent-keeps-to-its-account)) | `intent` |
+| the stream of the intent's affinity ([affinity](#an-intent-keeps-an-account-per-program)) | `intent` |
 | `stream` in the host's `[repos."<repository>".kinds.<kind>]` | `host-repository-kind` |
 | `stream` in the host's `[repos."<repository>"]` | `host-repository` |
 | `stream` in the host's `[kinds.<kind>]` | `host-kind` |
@@ -301,16 +301,36 @@ never take one account's last room:
 | `fill-first` | the first usable account in the pool's order |
 | `least-busy` | the usable account running the fewest of flume's agents, equals in the pool's order |
 
-The intent's affinity comes first while its account is usable. With no
+The intent's account for the stage's program comes first while it is
+usable ([affinity](#an-intent-keeps-an-account-per-program)). With no
 usable account the stage waits for room, and status names the pool and
-the soonest time an account of it stops being spent. A stage whose
-program no account of the pool runs waits the same way, and status says
-so. Sessions you run yourself under an account are not counted:
-flume counts its own agents.
+the soonest time an account of it stops being spent. Sessions you run
+yourself under an account are not counted: flume counts its own agents.
 
 Sign each account's configuration home in once, by running
 `CLAUDE_CONFIG_DIR=~/.claude-work-1 claude` yourself, since flume
 answers no sign-in on an agent's behalf.
+
+### A pool that cannot run a stage
+
+A stage waits for room only while its pool holds an account of its
+program, spent or at its bound, since only then can a reset or an
+agent's end make room for it. A pool that holds no account of the
+program the stage's layers resolve refuses the stage, naming the stage,
+the pool and the program:
+
+```text
+the stage code's agent runs claude, and the pool personal holds no account of claude, so no room it gives could start it (145)
+```
+
+flume reads the pool at the launch, from the host's configuration as it
+stands then, and refuses the launch with nothing made. It reads the pool
+again at each later start. So where you take a pool's last account of a
+program away after the launch, the stage of that program is refused
+when it comes to start. A stage already waiting for room is refused at
+the next settle, whatever room the host has. A stage so refused
+starts no agent, and its place waits for your retry: put an account of
+the program back in the pool, then run `flume retry <place>`.
 
 ## The environment
 
@@ -416,19 +436,30 @@ among it. Accounts you keep apart for a reason stay apart only while
 their `projects` folders do. A pool whose homes share nothing works as
 before: each spent agent's stage starts afresh, and status says why.
 
-## An intent keeps to its account
+## An intent keeps an account per program
 
 An **intent** is the work a place serves: the name `flume launch
---intent <name>` gives, else the place's repository and base. Its
-agents keep to one account and one stream while that account is
-usable, so they read what they share from that account's prompt cache.
-A later place of the intent takes its stream.
+--intent <name>` gives, else the place's repository and base. It keeps
+one stream, which a later place of the intent takes. For each program
+its agents run, it keeps the account the first of them on that program
+started on. Its agents on that program keep to that account while it is
+usable, so they read what they share from its prompt cache. An intent
+whose stages run two programs keeps one account for each.
 
-The intent moves to another account when its account is spent or at its
-bound, and it never moves back to an account it left. flume drops it an
-hour after its last place is gone. Status lists each move with its
-reason, and says that the agents after it start without the earlier
-account's cache.
+A start takes the intent's account for its stage's program. It leaves
+every other program's account as it was, so a start on one program is
+no move of the intent, even while another program's account is spent or
+at its bound. The account for a program moves to another account of
+that program when it is spent or at its bound, and it never moves back
+to an account it left. flume drops the intent an hour after its last
+place is gone. Status lists each move with the program whose account
+moved and its reason, and says that the agents after it start without
+the earlier account's cache.
+
+An intent an earlier release recorded holds one account. flume reads it
+as the account for the program the host's configuration gives that
+account, and keeps the stream alone where the pool no longer declares
+the account.
 
 ## The start check
 
@@ -487,10 +518,25 @@ program differed and the modes asked and begun, never a value.
 
 A place gives its stream with where it came from, and its intent. Its
 current agent gives its account, with `from` saying whether the
-intent's affinity or the pool's strategy chose it, and each variable
-`env.<NAME>` from `account` as `<set>`, and its `mode` with the value
-passed and whether it was read back. The place lists its `moves` and
-each start in `unsettled`.
+intent's affinity for the agent's program or the pool's strategy chose
+it, and each variable `env.<NAME>` from `account` as `<set>`, and its
+`mode` with the value passed and whether it was read back. The place
+lists its `moves` and each start in `unsettled`.
+
+A change whose code started on work-2 once the intent's account for
+`claude`, work-1, was spent runs its verify on work-2 from the
+affinity:
+
+```text
+  agent flume:f5f5e14159a8:change--csv-export:verify:1 (claude) on the account work-2 of work (from the affinity for claude): working
+    env.CLAUDE_CONFIG_DIR = <set> (from account)
+    program = claude (from default)
+  moved: the intent moved for claude from work-1 to work-2 at 1793291334, work-1 spent, its agents after starting without work-1's cache
+```
+
+A stage its pool cannot run reads `refused` on its line, with the
+refusal's words after `refused:` ([a pool that cannot run a
+stage](#a-pool-that-cannot-run-a-stage)).
 
 The agent of a start after a spent agent says whether it carries that
 agent's conversation, and the stage's move says whether the

@@ -9,7 +9,7 @@ decision-makers:
 
 # A host's work runs in named streams, each with its own bound, priority and pool of accounts, and an intent keeps to the account its prompt cache is on
 
-Status: accepted by the user, 2026-10-29, in their design session, on how one host runs work for several purposes under several Claude accounts without one queue and one account per kind. Amended 2026-10-29 by the user, approving its plan: accounts exist only in pools and give an agent its whole environment. Amended 2026-11-02, the last section below, accepted by the user the same day on their review of the change that builds it: an agent stopped at its account's usage limit goes on with its own conversation on the account its pool chooses, where its program can carry it there.
+Status: accepted by the user, 2026-10-29, in their design session, on how one host runs work for several purposes under several Claude accounts without one queue and one account per kind. Amended 2026-10-29 by the user, approving its plan: accounts exist only in pools and give an agent its whole environment. Amended 2026-11-02, the first of the two sections below, accepted by the user the same day on their review of the change that builds it: an agent stopped at its account's usage limit goes on with its own conversation on the account its pool chooses, where its program can carry it there. Amended again 2026-11-02, the second section below, accepted by the user the same day on their Pending You card req_f861af4d, "Fix both": an intent keeps an account for each program its agents run, and a stage whose pool holds no account that can run it is refused, at its launch or a later start, rather than left waiting.
 
 Deciders: the user, who chose named streams with their own limits, priorities and account pools under the host's limit, the two strategies, the pause honoured by every flume process, affinity for the prompt cache, the deferral of the weekly allowance, that a kind stays portable, naming nothing a host owns, and that accounts exist only in pools, a stream or the host naming the pool and no other layer giving an environment or choosing an account; that the host's tables give no program, the layers' order without the environment, the affinity's key, an account's own bound, the order of the queue across streams and what happens to a stage whose account is spent are the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at 6e5aae2, clauses 2, 4, 7, 8, 32, 56, 70, 143 to 147, 151, 153, C.4, C.7, I6 and S53 to S56, and section 10's question on the weekly allowance, as amended with this record, and at 87a7458, clauses 29, 32, 143, 144, C.2, C.7 and S44, as amended with it; records 0010, 0016, 0017; rules core.26, core.30, core.32; `crates/flume-core/src/room.rs` (`Queue`, `must_wait`), `crates/flume-core/src/settings.rs` (`layers`), `crates/flume/src/host/config.rs` (`HostConfig`); the StopFailure hook flume's Claude Code plugin already holds (`crates/flume/src/profiles/agent/claude/hook.rs`), and Claude Code 2.1.296's `rate_limit` error and its "You've hit your limit · resets …" words.
@@ -118,3 +118,52 @@ Option 1 is what the user asked to change. Option 3 has flume write into a confi
 - Rule core.32 and core.10's details are amended with it. `_open.md` names the build until it lands.
 - Accounts that share `projects` share everything Claude Code keeps of a project there, what their agents remember of each project among it. The site's agent-settings guide says so beside how a host shares the folder.
 - The change `a-spent-seats-agent-resumes-on-another-in-its-pool` builds it.
+
+## Amendment, 2026-11-02: an intent keeps an account per program, and a pool that cannot run a stage refuses it
+
+Status: accepted by the user on 2026-11-02, on their Pending You card req_f861af4d, "Fix both".
+
+Deciders: the user, who chose to fix both: that an intent keep an account for each program its agents run, and that a stage whose pool holds no account that can run it be refused rather than left waiting. The affinity's document's shape, how a document written before reads, the move's program, and where the refusal is read, at the launch, at a later start and at the settle of a waiting stage, are the writing agent's.
+Sources: `agentplot/blueprints:design/flume/requirements.md` on main at a15d927, clauses 4, 32, 145 and 147 and the definition of affinity as amended there, and S80 and S81 added; records 0017 and 0026; rules core.26, core.30, core.32; `crates/flume-core/src/accounts.rs` (`Engine::choose_account`, `Engine::affinity_after`, `PoolRoom::usable`), `crates/flume-core/src/room.rs` (`Queue::wants`, `Engine::start_waiting`), `crates/flume-core/src/launch.rs` (`make_place`), `crates/flume-seams/src/store.rs` (`Affinity`).
+
+### Context and problem statement
+
+The decision above keeps an intent's affinity as one account: its stream and the account its first agent started on. A place's stages may run different programs, code on Claude Code and review on Codex, and one account runs one program (144). A review on Codex finds the Claude Code account not usable for its program and takes the strategy's choice, so no account is kept for Codex and the review loses its prompt cache from start to start. Where the Claude Code account is at its bound when the review starts, flume reads it full and records the intent moved to the Codex account; the next code start finds that account not usable for Claude Code and moves the intent back. Each move says the cache was lost, when nothing of the kind happened.
+
+And a stage whose pool holds no account of its program waits for room (145). `PoolRoom::usable` answers that no account runs the program, the queue gives the stage as wanting one, and every settle passes over it. No reset ends that wait, and status points at the pool as though one would. A launch already refuses a program no agent profile binds, and a stage at a later start a setting its profile cannot honour (4, 32, 169), so the launch could have said so.
+
+### Considered options
+
+For the affinity:
+
+1. Keep one account, a start on another program taking the strategy's choice and moving nothing.
+2. An account per program the intent's agents run, a start taking the one for its stage's program.
+3. An account per program and stage.
+
+For a pool that holds no account of a stage's program:
+
+1. Wait, status naming the pool, as today.
+2. Refuse the launch, and the stage at a later start, naming the stage, the pool and the program.
+3. Refuse the launch alone.
+
+### Decision outcome
+
+For the affinity, option 2; for the pool, option 2.
+
+1. **An account per program (147).** An intent's affinity is its stream and, for each program its agents run, the pool and account the first of them on that program started on. Every later start of an agent serving the intent takes the account of its affinity for the stage's program while that account is usable, and otherwise goes where the strategy chooses. A start on one program leaves the intent's account for every other program as it was, and is no move of the intent. A spent or full account moves the affinity for its own program alone, never back, and status says the intent moved, for which program, from which account to which and why, and that its agents on that program start without the earlier account's cache (56). The key is the program as the stage's layers resolve it and the account's `program` names it, the string that makes the account usable for the stage (144). Each program keeps its own pool, since an intent's places may run in streams of different pools (143).
+2. **A document written before.** A document written before holds one account and its pool and names no program; only the host's configuration does. flume reads it as the affinity for the program the pool the host's configuration declares gives that account, and gives that program to each of its moves recorded with none. Where the pool no longer declares the account, the account is dropped and the stream kept, since no stage could take it. The next write puts the document in the new shape, and a read that changes nothing writes nothing (core.17).
+3. **A pool that cannot run a stage refuses it (4, 32, 145).** A stage waits for room only while its pool holds an account that can run it, spent or without room. Where it holds none, no wait would end. The launch is refused, naming the stage, the pool and the program, with nothing made (core.8). At a later start, read against the host's configuration as it stands, the stage is refused the same way, starts no agent and waits on its caller's retry (27, 32). A waiting stage whose pool loses its last account of its program is refused at the next settle, whatever room the host has. The queue gives no stage as wanting a program any more, since none waits on one.
+4. **What stands.** The strategies, the spent pause, the carry, the queue's order and the hour an affinity outlives its intent's last place are as the sections above decide. A stage whose layers name no program (173) takes the halves of 145 and 147 the statement gives it, the pool's accounts whose program can run it and the affinity for the program the intent's last agent ran, when record 0026's change builds 173.
+
+### Why not the others
+
+The affinity's option 1 is today's: the second program never keeps an account, and an account full at the wrong moment moves the intent to an account that cannot run its first program, a move status reports as a cache lost. Option 3 splits one program's cache between its stages, when the cache belongs to the account and an intent's stages on one program share what it holds, the same brief and the same tree. The pool's option 1 is a wait that cannot end, said as a wait for a reset. Option 3 leaves a host that drops an account after the launch with that same wait; the host's configuration is read at each start (32), and a stage refused then is retried once the pool is mended.
+
+### Consequences
+
+- The statement's 4, 32, 145, 147 and the definition of affinity are amended, and S80 and S81 added, on blueprints main at a15d927, accepted with this amendment (core.19). S80 and S81 follow the carry's S78 and S79.
+- Rule core.32 is amended with it, its rule and its details, and core.26's and core.30's details: a stage refused for its pool is not refused for want of room, and a pool that cannot run a stage is found at the launch where the launch can find it.
+- A host that removes a program's last account from a pool while a stage of that program waits sees the stage refused, and retries it once the account is back.
+- An affinity holds an entry for each program its intent ran, for an hour after its last place.
+- The halves of 145 and 147 for a stage whose layers name no program wait on record 0026's change, which builds 173: until it lands every stage resolves a program, flume's default naming Claude Code's, and the binary runs no second program, so S80 is held by the engine's scenario alone until then.
+- `_open.md` names the build until it lands. The change `an-intents-affinity-is-kept-per-program` builds it.
