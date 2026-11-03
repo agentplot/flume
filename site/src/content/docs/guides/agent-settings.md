@@ -347,14 +347,74 @@ session limit · resets 5pm (America/New_York)`. The record is a
 document of the host's own, so every flume process on the host skips
 the account until then.
 
-Once the spent agent is quiet, flume ends it and starts its stage
-afresh on another usable account, or the stage waits for one. The fresh
-agent's prompt says, in flume's own words, that the earlier agent
-stopped at its account's usage limit and that what it committed and
-left is in the place. No caller's word is needed, and the fresh start
-counts as no send-back. Other agents on the spent account work on until
-their own turn fails. flume asks no one whether a limit has reset: the
-next settle after the reset finds the account usable.
+Once the spent agent is quiet, flume ends it and starts its stage again
+on the account its pool chooses, or the stage waits for one. No
+caller's word is needed, and the start counts as no send-back. Other
+agents on the spent account work on until their own turn fails. flume
+asks no one whether a limit has reset: the next settle after the reset
+finds the account usable.
+
+### The conversation carried
+
+The start after a spent agent goes on with that agent's own
+conversation where the agent program can carry it to the account
+chosen. Claude Code carries it when the chosen account's configuration
+home reaches the transcript the spent agent wrote ([the Claude Code
+plugin](/flume/guides/claude-code/#a-conversation-carried)). flume then
+starts the agent in that session, and its prompt is flume's words alone,
+with the way to stop short:
+
+```text
+Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.
+```
+
+The carried start is a start like any other, with its own identity,
+secret and record, and its record names the session it resumes. flume
+takes its agent as the stage's only once the agent says it started in
+that session ([the start check](#the-start-check)). A pool of one
+account carries its agent's conversation across the account's own
+reset, since its home holds the transcript.
+
+Where the conversation cannot go to the account chosen, the start is
+afresh. The fresh agent's prompt says, in flume's own words, that the
+earlier agent stopped at its account's usage limit and that what it
+committed and left is in the place. The agent reads only that.
+
+Only the start after a spent agent carries a conversation. A retry, a
+fix round, a later stage and the start after an agent a caller ended
+start afresh.
+
+A carried start may not begin: its agent stops before it says it
+started, says nothing by the stage's limit, never receives its prompt,
+or comes up in another session. flume then sends it nothing more, ends
+it once it is quiet, and starts the stage afresh at once, with no
+caller's word and no send-back counted.
+
+### Sharing one projects folder
+
+flume copies, links and writes nothing in an account's configuration
+home. Whether a conversation can go from one account to another is
+yours to set up, once, with a link. Claude Code keeps each session's
+transcript under its configuration home's `projects` folder, so
+accounts that share one `projects` folder reach each other's
+conversations. To let `work-2` carry on what `work-1` began, move any
+`projects` folder of `work-2`'s aside, then link it to `work-1`'s:
+
+```sh
+mv ~/.claude-work-2/projects ~/.claude-work-2/projects.before
+ln -s ~/.claude-work-1/projects ~/.claude-work-2/projects
+```
+
+Link each further account of the pool the same way. The link carries
+both ways: an agent that began under `work-2` carries on under `work-1`
+as well.
+
+The link shares everything Claude Code keeps under `projects`: every
+session's transcript under those accounts, your own sessions among them,
+and what it keeps of each project there, its memory of each project
+among it. Accounts you keep apart for a reason stay apart only while
+their `projects` folders do. A pool whose homes share nothing works as
+before: each spent agent's stage starts afresh, and status says why.
 
 ## An intent keeps to its account
 
@@ -384,9 +444,11 @@ programs it starts, its hooks among them: Claude Code keeps
 account's token reaches the agent and is never compared.
 
 The agent's SessionStart hook compares its own program and environment
-with the record before it says the agent started. A pane brought back
-without its environment, a program started again by hand, or another
-`claude` found earlier on `PATH` then differs. The hook acks nothing,
+with the record before it says the agent started, and, where the record
+names a session the start resumes, the session it runs in. A pane
+brought back without its environment, a program started again by hand,
+another `claude` found earlier on `PATH`, or a carried start that came
+up in another conversation then differs. The hook acks nothing,
 records what differed by name, and starts a settle. flume takes that
 agent as no stage's agent: it sends it no prompt, ends it once it is
 quiet, and starts the stage afresh under its settings. A second
@@ -428,7 +490,26 @@ current agent gives its account, with `from` saying whether the
 intent's affinity or the pool's strategy chose it, and each variable
 `env.<NAME>` from `account` as `<set>`, and its `mode` with the value
 passed and whether it was read back. The place lists its `moves` and
-each start in `unsettled`. The host gives its `streams`, each with its
+each start in `unsettled`.
+
+The agent of a start after a spent agent says whether it carries that
+agent's conversation, and the stage's move says whether the
+conversation went with it. Where it stayed behind, the agent's line
+says why, naming the variable and never a path:
+
+```text
+  agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:2 (claude) on the account work-2 of work (from the strategy): working
+    env.CLAUDE_CONFIG_DIR = <set> (from account)
+    program = claude (from default)
+    starts afresh after start 1: the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's
+  moved: code moved from work-1 to work-2 at 1793291334, work-1 spent, its conversation stayed behind, its agents after starting without work-1's cache
+```
+
+Where it went, the agent's line reads `carries the conversation of
+start 1` and the move `its conversation with it`. A carried start that
+did not begin is listed with what happened, `carried and not begun:
+code's start 2 at 1793291340: the start that carried its conversation
+ended before it said it started, and its stage started afresh`. The host gives its `streams`, each with its
 running agents, bound, room and queue, and its `pools`, each account
 with its running agents, its bound and the time it is spent until. The
 [state reference](/flume/reference/state/) lists the JSON fields.

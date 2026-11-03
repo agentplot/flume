@@ -33,6 +33,9 @@ pub(crate) struct Claim {
     /// The value its agent profile passes for its mode, none where no
     /// layer gives one (162, 169).
     mode: Option<String>,
+    /// The session it resumes, carrying the conversation of the stage's
+    /// start whose agent stopped at its account's usage limit (146, 179).
+    resume: Option<String>,
 }
 
 impl Claim {
@@ -79,6 +82,10 @@ pub(crate) enum StartReason {
     /// The stage's earlier agent began without the settings its start
     /// recorded (161).
     Unsettled,
+    /// The stage's earlier agent stopped at its account's usage limit, and
+    /// this start resumes its conversation: its prompt is these words and
+    /// the way to stop short alone (28, 146, 179).
+    Carried,
 }
 
 impl StartReason {
@@ -87,7 +94,37 @@ impl StartReason {
         match self {
             StartReason::Spent => "The stage's earlier agent stopped at its account's usage limit, and this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.".into(),
             StartReason::Unsettled => "The stage's earlier agent began without the settings its start recorded and was ended, and this agent starts the stage afresh. Anything it committed is on the place's branch and anything it left is in the place: read them and carry the stage on from there.".into(),
+            StartReason::Carried => "Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.".into(),
         }
+    }
+}
+
+/// Why a start after a spent agent carries no conversation where its
+/// agent profile offers no carry (171, 179).
+pub(crate) const CARRIES_NONE: &str = "its agent profile carries no conversation";
+
+/// Whether the start after `after`, the stage's start whose agent stopped
+/// at its account's usage limit, carries that agent's conversation, as
+/// `carry`, its profile's answer for the account chosen, says; or why
+/// not: the profile's words, or the wait's where it may not carry, or
+/// that no account was chosen to carry it to (146, 179).
+fn conversation(after: &AfterSpent, carry: Option<&Carry>) -> Conversation {
+    let why = match carry {
+        Some(Carry::Yes { .. }) => None,
+        Some(Carry::No { why }) => Some(why.clone()),
+        Some(Carry::NotOffered) => Some(CARRIES_NONE.to_string()),
+        None => Some(
+            after
+                .why
+                .clone()
+                .filter(|_| !after.carry)
+                .unwrap_or_else(|| "its start runs under no account".to_string()),
+        ),
+    };
+    Conversation {
+        from: after.start.start,
+        carried: why.is_none(),
+        why,
     }
 }
 
@@ -249,7 +286,12 @@ impl Engine {
 
     /// Claims the stage's start in held state: refused naming the part
     /// its prompt cannot fill, left waiting for room where `admit` says
-    /// so, or written as live; called under the room lock.
+    /// so, its wait after a spent agent kept, or written as live; called
+    /// under the room lock. A start after its stage's agent stopped at its
+    /// account's usage limit resumes that agent's conversation where the
+    /// stage's profile answers that the account chosen reaches it, its
+    /// prompt flume's words alone and its record naming the session, and
+    /// starts afresh otherwise, saying why (28, 146, 179).
     pub(crate) fn claim(
         &self,
         id: &PlaceId,
@@ -288,6 +330,29 @@ impl Engine {
             _ => resolution,
         };
         let env = env.unwrap_or_default();
+        // A stage waiting after its agent stopped at its account's usage
+        // limit: its profile is asked, under the room lock once an account
+        // is chosen, whether that account reaches the agent's conversation
+        // (145, 146, 179).
+        let after = read.state.stages[index]
+            .room
+            .as_ref()
+            .and_then(|room| room.carry.clone());
+        let carry = match (&after, &chosen, &resolution) {
+            (Some(after), Choice::Chose { .. }, Ok(resolution)) if after.carry => Some(
+                resolution
+                    .agent
+                    .carry(&self.store.folder(id), &after.start, &env),
+            ),
+            _ => None,
+        };
+        let conversation = after
+            .as_ref()
+            .map(|after| conversation(after, carry.as_ref()));
+        let resume = match carry {
+            Some(Carry::Yes { session }) => Some(session),
+            _ => None,
+        };
         let made_from = self.store.made(id).len();
         let claimed = self.update(id, |held| {
             if let Admit::Waiting(_) = admit {
@@ -323,23 +388,33 @@ impl Engine {
             let group = self.group_at(held, index, &head);
             let identity = self.next_identity(held, index);
             let agent = resolution.agent.as_ref();
-            let text = match self.fill(
-                held,
-                index,
-                &identity,
-                words.as_deref(),
-                Some(agent),
-                group.as_ref().map(Option::as_ref),
-            ) {
-                Err(part) => {
-                    let stage = &mut held.stages[index];
-                    stage.state = StageState::Refused;
-                    stage.refused_part = Some(part.name().into());
-                    stage.refused_setting = None;
-                    stage.room = None;
-                    return Step::Write(Err(Start::Refused(part)));
+            // A start that carries its conversation is sent flume's words
+            // and the way to stop short alone, nothing of the stage's
+            // prompt filled (28, 146).
+            let (text, started_with) = match &resume {
+                Some(_) => {
+                    let words = StartReason::Carried.words();
+                    let text = format!("{words}\n\n{}", agent.stop_short(&identity));
+                    (text, Some(words))
                 }
-                Ok(text) => text,
+                None => match self.fill(
+                    held,
+                    index,
+                    &identity,
+                    words.as_deref(),
+                    Some(agent),
+                    group.as_ref().map(Option::as_ref),
+                ) {
+                    Err(part) => {
+                        let stage = &mut held.stages[index];
+                        stage.state = StageState::Refused;
+                        stage.refused_part = Some(part.name().into());
+                        stage.refused_setting = None;
+                        stage.room = None;
+                        return Step::Write(Err(Start::Refused(part)));
+                    }
+                    Ok(text) => (text, words.clone()),
+                },
             };
             if let (Admit::Waiting(_), Choice::Wait) = (admit, &chosen) {
                 return Step::Keep(Err(Start::WaitingForRoom));
@@ -354,6 +429,7 @@ impl Engine {
                     stage.room = Some(RoomWait {
                         order: queue.next_order(),
                         words: words.clone(),
+                        carry: after.clone(),
                     });
                     held.current = Some(index);
                     return Step::Write(Err(Start::WaitingForRoom));
@@ -363,7 +439,12 @@ impl Engine {
                 Choice::Chose { held, .. } => Some(held.clone()),
                 _ => None,
             };
-            if let Some(moved) = self.stage_moved(held, index, account.as_ref(), queue, now) {
+            let carried = conversation
+                .as_ref()
+                .map(|conversation| conversation.carried);
+            if let Some(moved) =
+                self.stage_moved(held, index, account.as_ref(), carried, queue, now)
+            {
                 held.moves.push(moved);
             }
             if let Some(moved) = &intent_moved {
@@ -394,6 +475,7 @@ impl Engine {
                 .unwrap_or_default();
             let start_record = StartRecord {
                 mode: resolution.mode.clone(),
+                session: resume.clone(),
                 ..start_record(
                     &program,
                     account.as_ref(),
@@ -416,7 +498,7 @@ impl Engine {
                 started_at: now,
                 start_head: head.clone(),
                 made_from,
-                words: words.clone(),
+                words: started_with,
                 identity: identity.clone(),
                 secret: secret.clone(),
                 program,
@@ -441,6 +523,7 @@ impl Engine {
                 group: group.clone().flatten(),
                 opening: Some(self.host.command()),
                 dialog: None,
+                conversation: conversation.clone(),
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
@@ -454,6 +537,7 @@ impl Engine {
                 session: held.role.clone(),
                 account,
                 mode: resolution.mode.clone(),
+                resume: resume.clone(),
             }))
         });
         let claimed = claimed.unwrap_or(Err(Start::NoPlace));
@@ -486,10 +570,12 @@ impl Engine {
             session,
             account: _,
             mode,
+            resume,
         } = claim;
         let command = agent.command(
             &settings,
             mode.as_deref(),
+            resume.as_deref(),
             &env,
             &place,
             &identity,

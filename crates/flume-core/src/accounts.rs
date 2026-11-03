@@ -177,6 +177,7 @@ impl Engine {
                 to: chosen.account.name.clone(),
                 why,
                 at: now,
+                carried: None,
             })
         });
         (chose(chosen, AccountFrom::Strategy), moved)
@@ -217,12 +218,15 @@ impl Engine {
 impl Engine {
     /// The move of the stage at `index` from the account its last start
     /// ran under to `to`, in the same pool, where that account is spent or
-    /// at its own bound now; none otherwise (56, 145, 146).
+    /// at its own bound now, with whether its conversation went with it,
+    /// `carried`, where its agent stopped at its account's usage limit;
+    /// none otherwise (56, 145, 146, 179).
     pub(crate) fn stage_moved(
         &self,
         held: &HeldState,
         index: usize,
         to: Option<&AccountHeld>,
+        carried: Option<bool>,
         queue: &Queue,
         now: Seconds,
     ) -> Option<AccountMove> {
@@ -241,6 +245,7 @@ impl Engine {
             to: to.name.clone(),
             why,
             at: now,
+            carried,
         })
     }
 }

@@ -2,7 +2,7 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::{AgentHarness, Modes},
+    agent::{AgentHarness, CarryAccounts, Modes},
     change::ChangeHarness,
     history::HistoryHarness,
     kinds::KindsHarness,
@@ -252,6 +252,20 @@ pub struct FakeAgentHarness {
     pub host: Arc<FakeHost>,
     pub terminal: Arc<FakeTerminal>,
     pub agent: FakeAgent,
+    /// Whether the harness scripts the fake to carry a conversation, or
+    /// leaves it carrying none, as a profile that offers no carry (179).
+    carries: bool,
+}
+
+impl FakeAgentHarness {
+    /// The fake left carrying no conversation, as a profile that keeps the
+    /// seam's default (179).
+    pub fn carrying_none() -> Self {
+        FakeAgentHarness {
+            carries: false,
+            ..FakeAgentHarness::default()
+        }
+    }
 }
 
 /// The fake agent's map of modes the seam's scenarios run with: each of
@@ -288,6 +302,7 @@ impl Default for FakeAgentHarness {
             agent,
             terminal,
             host,
+            carries: true,
         }
     }
 }
@@ -381,6 +396,36 @@ impl AgentHarness for FakeAgentHarness {
     /// is `asked`.
     fn begin_in(&self, identity: &Identity, _asked: &str, began: &str) {
         self.agent.set_began_in(identity, began);
+    }
+
+    /// The fake scripted to carry to one account's home with the session
+    /// `s-1`, and to answer no to another's with words naming its
+    /// variable; none where the harness leaves it carrying none (179).
+    fn carry_accounts(&self, _earlier: &Identity) -> Option<CarryAccounts> {
+        if !self.carries {
+            return None;
+        }
+        let home = |home: &str| BTreeMap::from([(FakeAgent::HOME.to_string(), home.to_string())]);
+        self.agent.carry_to(
+            "/scratch/agent-work-2",
+            Carry::Yes {
+                session: "s-1".into(),
+            },
+        );
+        self.agent.carry_to(
+            "/scratch/agent-work-3",
+            Carry::No {
+                why: format!(
+                    "the account's {} does not reach its conversation",
+                    FakeAgent::HOME
+                ),
+            },
+        );
+        Some(CarryAccounts {
+            reaches: home("/scratch/agent-work-2"),
+            session: "s-1".into(),
+            reaches_none: home("/scratch/agent-work-3"),
+        })
     }
 }
 

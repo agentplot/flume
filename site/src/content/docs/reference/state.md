@@ -24,7 +24,7 @@ $XDG_STATE_HOME/flume/              ~/.local/state/flume by default
     <place>/                        the place's own folder
       made.jsonl                    what a stage's run made, a JSON line each
       claude/<identity>/            the plugin's record of one agent's start
-        started.json                the started ack: session, transcript, plugin version
+        started.json                the started ack: session, transcript, its length at the first ack, plugin version
         received                    the digests of the prompts the agent received
         asking.json                 the asking mark, while a question is open
         refused                     each act the guard refused
@@ -73,7 +73,11 @@ agent's `program`, its `account`, and `env`, a digest of each variable
 by its name, leaving out those the agent program keeps from its hooks,
 such as Claude Code's `CLAUDE_CODE_OAUTH_TOKEN`. Each digest is HMAC-SHA256, keyed by the start's secret,
 over the variable's name, a zero byte and its value, in hex; no value
-is kept. The place's `unsettled` lists each start whose agent began
+is kept. A start that carries a spent agent's conversation also
+records `session`, the session it resumes ([a spent
+account](/flume/guides/agent-settings/#the-conversation-carried)).
+Every start after a spent agent records `conversation` in the held
+state, as status gives it. The place's `unsettled` lists each start whose agent began
 otherwise than its record says ([the start
 check](/flume/guides/agent-settings/#the-start-check)).
 
@@ -132,7 +136,7 @@ Each place:
 | `readiness` | each readiness step, whether it passed and what it printed |
 | `stages` | each stage: `name`, `state`, `starts`, `end`, `conversation`, and the part or setting it was refused for |
 | `current` | the current stage's name |
-| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity` or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes` |
+| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity` or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; and, for the agent of a start after a spent agent, `conversation`: `from`, the spent agent's start, `carried`, and `why` where it was not carried, naming a variable and never a path |
 | `head` | the place's branch head |
 | `delivered` | whether the current stage's deliverable exists |
 | `tasks` | a change's tasks ticked and in all |
@@ -146,8 +150,9 @@ Each place:
 | `priority` | the place's priority |
 | `stream` | the stream the place runs in, `name` and `from`: `launch`, `intent`, `host-repository-kind`, `host-repository`, `host-kind` or `default` |
 | `intent` | the intent the place serves: `from` `launch` with its `name`, or `base` with its `repository` and `base`; and its `digest` |
-| `moves` | each move between accounts, of a stage (`on` `stage` with its `stage`) or of the intent (`on` `intent`): `from`, `to`, `why`, `at`, and `cache`, `lost` |
-| `unsettled` | each start whose agent began without its settings: `stage`, `start`, `at`, the variables `missing` and `different` by name, `program`, whether the program differed, and `mode`, where the mode did, with `asked` and `began` |
+| `moves` | each move between accounts, of a stage (`on` `stage` with its `stage`) or of the intent (`on` `intent`): `from`, `to`, `why`, `at`, and `cache`, `lost`; and `carried`, whether a stage's conversation went with it, where its agent was spent |
+| `unsettled` | each start whose agent began without its settings: `stage`, `start`, `at`, the variables `missing` and `different` by name, `program`, whether the program differed, `session`, `true` where it came up in another session than the one its start resumes, and `mode`, where the mode did, with `asked` and `began` |
+| `uncarried` | each start that carried a spent agent's conversation and did not begin: `stage`, `start`, `at` and `words`, what happened; its stage started afresh after it |
 | `ends` | each end, with whom it was delivered to, when and by what, `notice`, `wait` or `inbox`, and whom it is pending for |
 | `clues` | the display hints: the stage, the state, the pane's title and name, and where herdr shows them |
 

@@ -130,6 +130,7 @@ impl Engine {
                 last_words,
                 notes,
                 mode,
+                conversation: start.conversation.clone(),
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);
@@ -210,6 +211,7 @@ impl Engine {
             intent: place.intent.clone(),
             moves: held.moves.iter().map(MoveStatus::of).collect(),
             unsettled: held.unsettled.clone(),
+            uncarried: held.uncarried.clone(),
             ends: held
                 .ends
                 .iter()

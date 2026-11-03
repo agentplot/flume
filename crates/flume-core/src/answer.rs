@@ -195,6 +195,11 @@ pub struct PlaceStatus {
     /// its start recorded, each variable by its name alone and whether
     /// the program differed, never a value (56, 161).
     pub unsettled: Vec<UnsettledStart>,
+    /// Each start of the place's that carried its stage's conversation and
+    /// did not begin, with what happened: its stage started afresh after
+    /// it (56, 146, S79).
+    #[serde(default)]
+    pub uncarried: Vec<UncarriedStart>,
     /// Every end of the place, with whom it was delivered to and when,
     /// and for whom it stands pending (43).
     #[serde(default)]
@@ -227,15 +232,22 @@ impl MoveStatus {
         }
     }
 
-    /// The move as a person reads it.
+    /// The move as a person reads it, with whether a stage's conversation
+    /// went with it where its agent stopped at its account's usage limit
+    /// (56, 179).
     pub fn words(&self) -> String {
         let moved = &self.moved;
         let what = match &moved.on {
             MoveOn::Stage { stage } => stage.clone(),
             MoveOn::Intent => "the intent".to_string(),
         };
+        let conversation = match moved.carried {
+            Some(true) => ", its conversation with it",
+            Some(false) => ", its conversation stayed behind",
+            None => "",
+        };
         format!(
-            "{what} moved from {} to {} at {}, {} {}, its agents after starting without {}'s cache",
+            "{what} moved from {} to {} at {}, {} {}{conversation}, its agents after starting without {}'s cache",
             moved.from,
             moved.to,
             moved.at,
@@ -573,6 +585,12 @@ pub struct AgentStatus {
     /// mode as written and its layer are its settings' (56, 162, 169).
     #[serde(default)]
     pub mode: Option<ModeStatus>,
+    /// For the agent of a start after its stage's agent stopped at its
+    /// account's usage limit, that start's number and whether this agent
+    /// carries its conversation, or why not, naming a variable and never
+    /// a path; none for any other (56, 146, 179; core.30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<Conversation>,
 }
 
 /// An agent's mode at its start: `passed`, the value its profile passed,

@@ -74,19 +74,25 @@ flume SHALL ask no agent program or its maker whether a limit has reset
 - **WHEN** the record names a usage limit and no reset
 - **THEN** the account is spent for an hour from the reading (146)
 
-### Requirement: A spent agent's stage starts afresh on another account
+### Requirement: A spent agent's stage starts again on another account
 
 An agent stopped at its account's usage limit SHALL be ended once
-quiet and its stage started afresh on a usable account of the pool, or
-left waiting for one, with flume's own words saying why and that its
-work is in the place; the start SHALL count toward no bound of the
-kind's and wait on no caller; agents still running on that account
-SHALL not be ended for it (31, 112, 146).
+quiet and its stage started on a usable account of the pool, or left
+waiting for one, carrying the agent's conversation where its program
+can carry it there and afresh otherwise, with flume's own words; the
+start SHALL count toward no bound of the kind's and wait on no caller;
+agents still running on that account SHALL not be ended for it (31,
+112, 146, 179).
 
 #### Scenario: The stage moves
 
-- **WHEN** a code agent under work-1 stops at its usage limit and work-2 is usable
-- **THEN** once quiet the agent is ended, code starts afresh under work-2 with flume's words, status says code moved from work-1 to work-2 because work-1 was spent and that the fresh agent starts without work-1's cache, and the kind's bound is unchanged (S55)
+- **WHEN** a code agent under work-1 stops at its usage limit, and work-2 is usable and does not reach its conversation
+- **THEN** once quiet the agent is ended, code starts afresh under work-2 with flume's words, status says code moved from work-1 to work-2 because work-1 was spent, that its conversation stayed and why, and that the fresh agent starts without work-1's cache, and the kind's bound is unchanged (S55)
+
+#### Scenario: The stage moves with its conversation
+
+- **WHEN** a code agent under work-1 stops at its usage limit, and work-2 is usable and reaches its conversation
+- **THEN** once quiet the agent is ended, code starts under work-2 resuming that conversation, status says code moved from work-1 to work-2 with its conversation and without work-1's cache, and the kind's bound is unchanged (S78)
 
 #### Scenario: Another agent on the spent account
 

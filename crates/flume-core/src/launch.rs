@@ -341,6 +341,7 @@ impl Engine {
             unwoken: Default::default(),
             moves: vec![],
             unsettled: vec![],
+            uncarried: vec![],
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),

@@ -415,8 +415,9 @@ pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>
 }
 
 /// The started ack of the agent this process's environment names: its
-/// session, transcript, source and plugin version, taken only where the
-/// start's record matches it (135, 161).
+/// session, transcript, source and plugin version, with the transcript's
+/// length the ack measures, taken only where the start's record matches
+/// it, the session among it where the start resumes one (135, 161, 179).
 pub fn ack_started(
     session: &str,
     transcript: &str,
@@ -434,6 +435,7 @@ pub fn ack_started(
             transcript_path: transcript.into(),
             source: source.into(),
             plugin_version: plugin_version.into(),
+            from: 0,
         },
         build,
         &binary,

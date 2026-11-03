@@ -200,6 +200,12 @@ impl Engine {
         }
         let words = answered(&held.stages[index], words);
         self.update(place, |held| {
+            // A retry's start carries no conversation, though the stage
+            // waits after an agent stopped at its account's usage limit
+            // (30, 146).
+            if let Some(room) = held.stages[index].room.as_mut() {
+                room.carry = None;
+            }
             for stage in held.stages.iter_mut().skip(index + 1) {
                 stage.state = StageState::NotReached;
                 stage.made_from = None;

@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151, 161, 162, 169).
+//! 135, 151, 161, 162, 169, 179).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -57,6 +57,22 @@ pub trait AgentHarness {
     /// `asked`, as the program's own word at its start shows it (161,
     /// 162).
     fn begin_in(&self, identity: &Identity, asked: &str, began: &str);
+
+    /// The accounts the profile's carry is read against for `earlier`, a
+    /// start the harness started whose agent stopped at its account's
+    /// usage limit, as the program's release has them or the harness
+    /// scripted them; none where the profile offers no carry (179).
+    fn carry_accounts(&self, earlier: &Identity) -> Option<CarryAccounts>;
+}
+
+/// The accounts a profile's carry is read against: one whose environment
+/// reaches a stopped start's conversation, with the session it resumes
+/// there, and one whose environment reaches none of it (179).
+#[derive(Clone, Debug, Default)]
+pub struct CarryAccounts {
+    pub reaches: BTreeMap<String, String>,
+    pub session: String,
+    pub reaches_none: BTreeMap<String, String>,
 }
 
 /// A profile's map of modes: the value each of flume's four it maps to,
@@ -81,6 +97,7 @@ fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
     let who = identity(stage);
     let command = harness.seam().command(
         &Settings::default(),
+        None,
         None,
         &BTreeMap::new(),
         &harness.place(),
@@ -181,7 +198,117 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["135", "161", "162"],
             run: started_without_names_the_mode::<H>,
         },
+        Scenario {
+            name: "agent: carry is not offered by a profile that offers none, for any start and account",
+            cites: &["179"],
+            run: carry_not_offered::<H>,
+        },
+        Scenario {
+            name: "agent: carry answers yes with the session to an account that reaches a stopped start's conversation and no, naming no value, to one that does not, and the command resumes the session it is given",
+            cites: &["179", "88", "128"],
+            run: carry_to_the_account_that_reaches_it::<H>,
+        },
     ]
+}
+
+fn carry_not_offered<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    harness.hit_usage_limit(&who);
+    // A profile that offers carry answers by the accounts it reaches.
+    if harness.carry_accounts(&who).is_some() {
+        return Ok(());
+    }
+    let folder = harness.folder();
+    let home = BTreeMap::from([(
+        "AGENT_HOME".to_string(),
+        "/scratch/agent-work-2".to_string(),
+    )]);
+    for (start, env) in [
+        (&who, &BTreeMap::new()),
+        (&who, &home),
+        (&identity("verify"), &home),
+    ] {
+        ensure_eq!(
+            harness.seam().carry(&folder, start, env),
+            Carry::NotOffered,
+            format!("carry of {start} to {env:?}")
+        );
+    }
+    Ok(())
+}
+
+fn carry_to_the_account_that_reaches_it<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "code");
+    harness.hit_usage_limit(&who);
+    let Some(accounts) = harness.carry_accounts(&who) else {
+        return Ok(());
+    };
+    let folder = harness.folder();
+    ensure_eq!(
+        harness.seam().carry(&folder, &who, &accounts.reaches),
+        Carry::Yes {
+            session: accounts.session.clone()
+        },
+        "carry to the account that reaches the conversation"
+    );
+    match harness.seam().carry(&folder, &who, &accounts.reaches_none) {
+        Carry::No { why } => {
+            ensure!(!why.trim().is_empty(), "no, with no words");
+            for (name, value) in &accounts.reaches_none {
+                ensure!(
+                    !why.contains(value.as_str()),
+                    "the words give {name}'s value: {why}"
+                );
+            }
+        }
+        other => {
+            return Err(format!(
+                "carry to an account that reaches none of the conversation answered {other:?}"
+            ))
+        }
+    }
+    ensure!(
+        !matches!(
+            harness.seam().carry(
+                &format!("{folder}-of-another-place"),
+                &who,
+                &accounts.reaches
+            ),
+            Carry::Yes { .. }
+        ),
+        "carry, read in another folder, answered yes"
+    );
+    let next = Identity {
+        start: 2,
+        ..who.clone()
+    };
+    let command = |resume: Option<&str>| {
+        harness.seam().command(
+            &Settings::default(),
+            None,
+            resume,
+            &accounts.reaches,
+            &harness.place(),
+            &next,
+            &Secret("secret".into()),
+            "begin",
+        )
+    };
+    let passes = |command: AgentCommand| {
+        command
+            .args
+            .iter()
+            .any(|arg| arg.contains(accounts.session.as_str()))
+    };
+    ensure!(
+        passes(command(Some(&accounts.session))),
+        "the command passes no session it is given"
+    );
+    ensure!(
+        !passes(command(None)),
+        "a command given no session passes one"
+    );
+    Ok(())
 }
 
 fn mode_maps_as_its_program_has_them<H: AgentHarness>(harness: &H) -> Outcome {
@@ -233,6 +360,7 @@ fn the_command_passes_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
         harness.seam().command(
             &Settings::default(),
             mode,
+            None,
             &BTreeMap::new(),
             &harness.place(),
             &who,
@@ -270,6 +398,7 @@ fn started_without_names_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
     let command = harness.seam().command(
         &Settings::default(),
         Some(asked),
+        None,
         &BTreeMap::new(),
         &harness.place(),
         &who,
@@ -443,6 +572,7 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
     )]);
     let command = harness.seam().command(
         &settings,
+        None,
         None,
         &env,
         &harness.place(),

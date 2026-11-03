@@ -9,13 +9,15 @@
 //! intent's last place (147). An agent stopped at its account's usage
 //! limit pauses the account for every flume process until the reset its
 //! record names, or for an hour, and once quiet is ended and its stage
-//! started afresh with flume's words, counted toward no bound (146, 151,
-//! 153).
+//! started again with flume's words, carrying its conversation where the
+//! account chosen reaches it and afresh otherwise, counted toward no
+//! bound (146, 151, 153, 179).
 
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Answer, Cache, HostStatus, RoomWanted};
+use flume_fakes::FakeAgent;
 use flume_seams::*;
 use std::collections::BTreeMap;
 
@@ -82,9 +84,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: no_reset_named,
         },
         Scenario {
-            name: "account pools: once quiet, an agent stopped at its usage limit is ended and its stage starts afresh on the pool's next usable account with flume's words, the move in status and the kind's bound unchanged",
-            cites: &["S55", "146", "31", "43", "112"],
+            name: "account pools: once quiet, an agent stopped at its usage limit is ended and its stage starts afresh on the pool's next usable account with flume's words where that account does not reach its conversation, the move in status with the conversation that stayed and why, and the kind's bound unchanged",
+            cites: &["S55", "146", "179", "31", "43", "112"],
             run: the_stage_moves,
+        },
+        Scenario {
+            name: "account pools: once quiet, an agent stopped at its usage limit is ended and its stage starts on the pool's next usable account resuming its conversation, the move in status with its conversation and the kind's bound unchanged",
+            cites: &["S78", "146", "179", "31", "112"],
+            run: the_stage_moves_with_its_conversation,
         },
         Scenario {
             name: "account pools: another agent working on an account read spent works on, and moves only once its own turn fails at the limit",
@@ -178,7 +185,7 @@ pub fn account_of(world: &World, id: &PlaceId, stage: &str) -> Option<(String, S
         .map(|account| (account.pool, account.name))
 }
 
-fn on(pool: &str, account: &str) -> Option<(String, String)> {
+pub fn on(pool: &str, account: &str) -> Option<(String, String)> {
     Some((pool.to_string(), account.to_string()))
 }
 
@@ -511,6 +518,7 @@ fn s56_three_units_of_one_intent(_: &()) -> Outcome {
         to: "work-2".into(),
         why: MoveWhy::Spent,
         at: world.host.now(),
+        carried: None,
     };
     let held = affinity(&world, &intent).ok_or("no affinity")?;
     ensure_eq!(
@@ -632,7 +640,7 @@ fn no_intent_named(_: &()) -> Outcome {
 /// The code agent of the fix `name`'s start `start` stops at its
 /// account's usage limit, its record naming `until`, in words this test
 /// writes.
-fn stops_at_limit(world: &World, name: &str, start: u32, until: Option<Seconds>) -> Identity {
+pub fn stops_at_limit(world: &World, name: &str, start: u32, until: Option<Seconds>) -> Identity {
     let who = World::identity("fix", name, "code", start);
     world.agent.set_spent(
         &who,
@@ -659,6 +667,38 @@ fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent>
     }
 }
 
+/// The configuration home by which the fake agent knows the account
+/// `name` (179).
+pub fn home(name: &str) -> String {
+    format!("/homes/{name}")
+}
+
+/// An account like [`account`], unbounded, whose environment names its
+/// [`home`] (179).
+pub fn account_at_home(name: &str) -> Account {
+    Account {
+        env: BTreeMap::from([(FakeAgent::HOME.to_string(), home(name))]),
+        ..account(name, None)
+    }
+}
+
+/// A fill-first pool `work` of `work-1` and `work-2`, each at its
+/// [`home`], the host's own.
+pub fn fill_first_at_homes(world: &World) {
+    pool(
+        world,
+        "work",
+        Strategy::FillFirst,
+        vec![account_at_home("work-1"), account_at_home("work-2")],
+    );
+    world.host.set_host_pool(Some("work"));
+}
+
+/// The fake agent's words where an account's configuration home does not
+/// reach a stopped start's conversation, as a profile gives them (179;
+/// core.30).
+pub const UNREACHED: &str = "the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's";
+
 /// A fill-first pool `work` of `work-1` and `work-2`, the host's own.
 fn fill_first(world: &World) {
     pool(
@@ -671,7 +711,7 @@ fn fill_first(world: &World) {
 }
 
 /// The fix `name` launched with an intent of its own, its code begun.
-fn begun_fix(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn begun_fix(world: &World, name: &str) -> Result<PlaceId, String> {
     let id = fix_in(world, None, name)?;
     ensure_eq!(
         world.stage_state(&id, "code"),
@@ -750,7 +790,13 @@ fn no_reset_named(_: &()) -> Outcome {
 
 fn the_stage_moves(_: &()) -> Outcome {
     let world = World::new();
-    fill_first(&world);
+    fill_first_at_homes(&world);
+    world.agent.carry_to(
+        &home("work-2"),
+        Carry::No {
+            why: UNREACHED.into(),
+        },
+    );
     let id = begun_fix(&world, "one")?;
     let spent_agent = stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
     world.agent.set_own_work(&spent_agent, Reading::Yes);
@@ -780,10 +826,30 @@ fn the_stage_moves(_: &()) -> Outcome {
         on("work", "work-2"),
         "the fresh start's account"
     );
-    let words = start.words.ok_or("the fresh start carries no words")?;
+    let words = start
+        .words
+        .clone()
+        .ok_or("the fresh start carries no words")?;
     ensure!(
         words.contains("usage limit") && words.contains("place"),
         "flume's words do not say why the stage started afresh: {words}"
+    );
+    ensure_eq!(
+        start.conversation,
+        Some(Conversation {
+            from: 1,
+            carried: false,
+            why: Some(UNREACHED.into()),
+        }),
+        "the fresh start's conversation"
+    );
+    ensure_eq!(
+        (
+            start.start_record.session,
+            world.agent.log.of("command").last().cloned()
+        ),
+        (None, Some(format!("command {}", start.identity))),
+        "the session the fresh start resumes"
     );
     ensure_eq!(
         held.submission.send_backs,
@@ -817,9 +883,111 @@ fn the_stage_moves(_: &()) -> Outcome {
         ("work-1", "work-2", MoveWhy::Spent, at, Cache::Lost),
         "code's move"
     );
+    ensure_eq!(
+        (
+            stage_move.moved.carried,
+            status
+                .agent
+                .as_ref()
+                .and_then(|agent| agent.conversation.clone())
+        ),
+        (
+            Some(false),
+            Some(Conversation {
+                from: 1,
+                carried: false,
+                why: Some(UNREACHED.into()),
+            })
+        ),
+        "whether code's conversation went with it, and why not"
+    );
     ensure!(
         world.held(&id).is_some_and(|held| held.ends.is_empty()),
         "an end recorded for the spent start, to be delivered"
+    );
+    Ok(())
+}
+
+fn the_stage_moves_with_its_conversation(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    world.agent.carry_to(
+        &home("work-2"),
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    );
+    let id = begun_fix(&world, "one")?;
+    let spent_agent = stops_at_limit(&world, "one", 1, Some(world.host.now() + 3600));
+    let at = world.host.now();
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.log.of("close"),
+        vec![format!("close {spent_agent}")],
+        "the agents ended"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let start = held.stages[0].start.clone().ok_or("no start")?;
+    ensure_eq!(
+        (
+            start.n,
+            start.account.map(|account| (account.pool, account.name))
+        ),
+        (2, on("work", "work-2")),
+        "the code stage's start and its account"
+    );
+    ensure_eq!(
+        (
+            start.start_record.session.as_deref(),
+            start.conversation.map(|conversation| conversation.carried)
+        ),
+        (Some("s-1"), Some(true)),
+        "the session the start resumes and whether it carries the conversation"
+    );
+    ensure_eq!(
+        world.agent.log.of("command").last().cloned(),
+        Some(format!("command {} --resume s-1", start.identity)),
+        "the start's command"
+    );
+    ensure_eq!(
+        held.submission.send_backs,
+        0,
+        "the kind's bound, counted by the place's send-backs"
+    );
+    let status = world.status(&id)?;
+    ensure!(
+        status.waiting_on.is_none(),
+        "the place waits on its caller: {:?}",
+        status.waiting_on
+    );
+    let stage_move = status
+        .moves
+        .iter()
+        .find(|moved| {
+            moved.moved.on
+                == MoveOn::Stage {
+                    stage: "code".into(),
+                }
+        })
+        .ok_or("status gives no move of code")?;
+    ensure_eq!(
+        (
+            stage_move.moved.from.as_str(),
+            stage_move.moved.to.as_str(),
+            stage_move.moved.why,
+            stage_move.moved.at,
+            stage_move.moved.carried,
+            stage_move.cache
+        ),
+        (
+            "work-1",
+            "work-2",
+            MoveWhy::Spent,
+            at,
+            Some(true),
+            Cache::Lost
+        ),
+        "code's move"
     );
     Ok(())
 }

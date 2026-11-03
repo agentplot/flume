@@ -1111,6 +1111,7 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
     let command = claude.command(
         &settings,
         None,
+        None,
         &env,
         &place,
         &who,
@@ -1901,6 +1902,7 @@ impl Agent for StandIn {
         &self,
         _settings: &Settings,
         _mode: Option<&str>,
+        _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
