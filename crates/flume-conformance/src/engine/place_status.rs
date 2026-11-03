@@ -3,8 +3,8 @@
 //! started.
 
 use super::account_pools::{
-    account, begun_fix, fill_first_at_homes, fix_in, home, host, pool, spent, stops_at_limit,
-    UNREACHED,
+    account, begun_fix, code_delivered, fill_first_at_homes, fix_in, home, host, of_the_surfaces,
+    pool, spent, stops_at_limit, two_programs, UNREACHED,
 };
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::for_every_stage;
@@ -87,6 +87,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: a stage that moved from a spent account gives its agent's account from the strategy, and the move with why, when and the cache lost",
             cites: &["56", "145", "147"],
             run: a_stage_that_moved,
+        },
+        Scenario {
+            name: "status: a place whose code started after the intent moved for one program, and whose review started on another program's account from the affinity, gives the intent's move with its program and the review's account from the affinity for its program",
+            cites: &["56", "147", "S80"],
+            run: an_intent_that_moved_for_one_program,
         },
         Scenario {
             name: "status: the host's pools give each pool's strategy and each account's agents running, bound and spent time, and no value of an account's environment",
@@ -698,6 +703,52 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             })
         ],
         "the place's moves"
+    );
+    Ok(())
+}
+
+fn an_intent_that_moved_for_one_program(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    let first = of_the_surfaces(&world, "two", "a", None)?;
+    code_delivered(&world, &first, "a")?;
+    spent(&world, "work", "agent-1", world.host.now() + 3600);
+    let id = of_the_surfaces(&world, "two", "b", None)?;
+    code_delivered(&world, &id, "b")?;
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["moves"],
+        serde_json::json!([{
+            "on": "intent",
+            "program": "agent",
+            "from": "agent-1",
+            "to": "agent-2",
+            "why": "spent",
+            "at": world.host.now(),
+            "cache": "lost",
+        }]),
+        "the place's moves in the JSON form"
+    );
+    ensure_eq!(
+        (
+            json["agent"]["stage"].as_str(),
+            json["agent"]["program"].as_str(),
+            json["agent"]["account"]["name"].as_str(),
+            json["agent"]["account"]["from"].as_str(),
+        ),
+        (
+            Some("review"),
+            Some("other"),
+            Some("other-1"),
+            Some("affinity")
+        ),
+        "the review's agent and its account in the JSON form"
+    );
+    let words = status.moves[0].words();
+    ensure!(
+        words.starts_with("the intent moved for agent from agent-1 to agent-2"),
+        "the move's words: {words}"
     );
     Ok(())
 }

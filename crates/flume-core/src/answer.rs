@@ -232,14 +232,18 @@ impl MoveStatus {
         }
     }
 
-    /// The move as a person reads it, with whether a stage's conversation
-    /// went with it where its agent stopped at its account's usage limit
-    /// (56, 179).
+    /// The move as a person reads it, an intent's for the program whose
+    /// account moved where it names one, with whether a stage's
+    /// conversation went with it where its agent stopped at its
+    /// account's usage limit (56, 147, 179).
     pub fn words(&self) -> String {
         let moved = &self.moved;
         let what = match &moved.on {
-            MoveOn::Stage { stage } => stage.clone(),
-            MoveOn::Intent { .. } => "the intent".to_string(),
+            MoveOn::Stage { stage } => format!("{stage} moved"),
+            MoveOn::Intent {
+                program: Some(program),
+            } => format!("the intent moved for {program}"),
+            MoveOn::Intent { program: None } => "the intent moved".to_string(),
         };
         let conversation = match moved.carried {
             Some(true) => ", its conversation with it",
@@ -247,7 +251,7 @@ impl MoveStatus {
             None => "",
         };
         format!(
-            "{what} moved from {} to {} at {}, {} {}{conversation}, its agents after starting without {}'s cache",
+            "{what} from {} to {} at {}, {} {}{conversation}, its agents after starting without {}'s cache",
             moved.from,
             moved.to,
             moved.at,

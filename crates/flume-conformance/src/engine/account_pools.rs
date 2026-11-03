@@ -693,7 +693,7 @@ fn of_other(name: &str) -> Account {
 /// bounded at `bound`, agent-2, other-1 and other-2, the host's own; and
 /// the repository's kinds `two`, whose code runs `agent` and whose review
 /// runs `other`, and `check`, whose one stage, review, runs `other`.
-fn two_programs(world: &World, bound: Option<u32>) {
+pub fn two_programs(world: &World, bound: Option<u32>) {
     world.resolver.bind_agent("other", world.agent.clone());
     pool(
         world,
@@ -731,7 +731,7 @@ fn two_programs(world: &World, bound: Option<u32>) {
 /// The place `name` of the kind `kind` serving the intent the-surfaces,
 /// launched with its first stage held where `held` names it, and settled
 /// once.
-fn of_the_surfaces(
+pub fn of_the_surfaces(
     world: &World,
     kind: &str,
     name: &str,
@@ -749,7 +749,7 @@ fn of_the_surfaces(
 
 /// The code of the place `name` of the kind `two` delivered, and its
 /// review started.
-fn code_delivered(world: &World, id: &PlaceId, name: &str) -> Outcome {
+pub fn code_delivered(world: &World, id: &PlaceId, name: &str) -> Outcome {
     world.commit(&format!("two/{name}"), &["fix.rs"]);
     world.settle(id);
     ensure!(
