@@ -8,9 +8,7 @@ accounts, an intent's naming the program whose account moved, an
 intent's affinity with an account for each program, and a start's record
 of what its agent runs under, held as the start's `start_record` and
 holding digests and no value; each SHALL serialize to JSON and back
-unchanged. An affinity written before SHALL read with its one account
-and its pool, and its intent's moves with no program, and SHALL never be
-written so (143 to 147, 153, 161).
+unchanged (143 to 147, 153, 161).
 
 #### Scenario: A held state with a stream, an account and a record
 
@@ -21,6 +19,14 @@ written so (143 to 147, 153, 161).
 
 - **WHEN** an affinity holding an account for `agent` and one for `other`, and an intent's move for `agent`, is written and read
 - **THEN** it reads back unchanged, and it once left the move's `from` for `agent` and never for `other` (147, 153)
+
+## ADDED Requirements
+
+### Requirement: An affinity written before reads with its one account
+
+An affinity written before SHALL read with its one account and its pool,
+and its intent's moves with no program, and SHALL never be written so
+(147, 153).
 
 #### Scenario: An affinity written before
 

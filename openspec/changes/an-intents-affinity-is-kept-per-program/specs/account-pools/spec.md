@@ -41,33 +41,9 @@ flume SHALL keep each intent's stream and, for each program its agents
 run, the account the first of them on that program started on, in the
 host's own documents. A start of an agent serving the intent SHALL take
 the account for the stage's program while usable, and otherwise go where
-the strategy chooses, the affinity for that program alone moving with it
-and never back. A start on one program SHALL leave every other
-program's account as it was and SHALL be no move of the intent. A
-document written before, holding one account, SHALL read as the
-affinity for that account's program. An affinity SHALL go an hour after
-its intent's last place is gone, and status SHALL say each move, for
-which program, and the cache lost (147, 153).
-
-#### Scenario: Two programs of one intent
-
-- **WHEN** a fill-first pool holds agent-1, agent-2, other-1 and other-2, and three places of one intent each run code on `agent` and then review on `other`; then agent-1 is spent
-- **THEN** every code starts on agent-1 and every review on other-1, the later ones from the affinity and no move recorded; then the next code starts on agent-2, the intent moving for `agent` alone, and the next review still starts on other-1 (S80)
-
-#### Scenario: A start on another program
-
-- **WHEN** an intent's account for `agent` is agent-1, at its bound, and a review on `other` starts
-- **THEN** the review starts on other-1, no move is recorded, and the intent's account for `agent` is still agent-1 (147)
-
-#### Scenario: A document written before
-
-- **WHEN** an intent's document holds one account, agent-2 of the pool `work`, and a move from agent-1 with no program, and a place of the intent starts code on `agent` and then review on `other`
-- **THEN** code starts on agent-2 from the affinity, review on the strategy's choice with no move, and the document then holds an account for `agent` and one for `other`, its move naming `agent`, and no lone account (147, 153)
-
-#### Scenario: A document written before whose account is gone
-
-- **WHEN** an intent's document holds one account that its pool no longer declares
-- **THEN** it reads with its stream and no account, and the intent's next start takes the strategy's choice (147)
+the strategy chooses, the affinity moving with it and never back. An
+affinity SHALL go an hour after its intent's last place is gone, and
+status SHALL say each move and the cache lost (147, 153).
 
 #### Scenario: Three units of one intent
 
@@ -90,6 +66,40 @@ which program, and the cache lost (147, 153).
 - **THEN** they share the intent of that repository and base, and its affinity (147)
 
 ## ADDED Requirements
+
+### Requirement: An intent moves for one program alone
+
+Where a start of an agent serving an intent goes where the strategy
+chooses, the affinity for the stage's program alone SHALL move with it,
+and status SHALL say for which program. A start on one program SHALL
+leave the intent's account for every other program as it was and SHALL
+be no move of the intent (147).
+
+#### Scenario: Two programs of one intent
+
+- **WHEN** a fill-first pool holds agent-1, agent-2, other-1 and other-2, and three places of one intent each run code on `agent` and then review on `other`; then agent-1 is spent
+- **THEN** every code starts on agent-1 and every review on other-1, the later ones from the affinity and no move recorded; then the next code starts on agent-2, the intent moving for `agent` alone, and the next review still starts on other-1 (S80)
+
+#### Scenario: A start on another program
+
+- **WHEN** an intent's account for `agent` is agent-1, at its bound, and a review on `other` starts
+- **THEN** the review starts on other-1, no move is recorded, and the intent's account for `agent` is still agent-1 (147)
+
+### Requirement: An intent's document written before reads as its account's program's
+
+An intent's document written before, holding one account, SHALL read as
+the affinity for that account's program, and with its stream alone where
+its pool no longer declares that account (147, 153).
+
+#### Scenario: A document written before
+
+- **WHEN** an intent's document holds one account, agent-2 of the pool `work`, and a move from agent-1 with no program, and a place of the intent starts code on `agent` and then review on `other`
+- **THEN** code starts on agent-2 from the affinity, review on the strategy's choice with no move, and the document then holds an account for `agent` and one for `other`, its move naming `agent`, and no lone account (147, 153)
+
+#### Scenario: A document written before whose account is gone
+
+- **WHEN** an intent's document holds one account that its pool no longer declares
+- **THEN** it reads with its stream and no account, and the intent's next start takes the strategy's choice (147)
 
 ### Requirement: A pool that holds no account of a stage's program refuses it
 
