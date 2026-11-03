@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "72410b2";
+pub const REVISION: &str = "a15d927";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -50,7 +50,7 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11, which numbers them with no gap.
-pub const SCENARIOS: u32 = 79;
+pub const SCENARIOS: u32 = 81;
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -139,9 +139,9 @@ mod tests {
                 .filter(|clause| ![100, 150].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 177 + 8 + 79);
+        assert_eq!(all().len(), 177 + 8 + 81);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        assert_eq!(REVISION, "72410b2");
+        assert_eq!(REVISION, "a15d927");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
             173, 175, 176, 177,
@@ -163,7 +163,7 @@ mod tests {
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
-            "S65", "S66", "S67", "S78", "S79",
+            "S65", "S66", "S67", "S78", "S79", "S80", "S81",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

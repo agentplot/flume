@@ -306,18 +306,84 @@ fn a_spent_time_is_seen_by_another_process_and_kept_from_other_users() {
     let intent = HostKey::Intent {
         digest: "0f1e2d".into(),
     };
-    let affinity = HostDocument::Intent(Affinity {
-        stream: "work".into(),
-        pool: "work".into(),
-        account: "work-1".into(),
-        moves: vec![],
-        gone: None,
-    });
     assert!(matches!(
-        StateDir::at(&root).write_host(&intent, None, Some(&affinity)),
+        StateDir::at(&root).write_host(&intent, None, Some(&two_programs())),
         Written::Written { .. }
     ));
     assert!(root.join("intents/0f1e2d.json").is_file());
+}
+
+/// An intent's affinity holding an account for `agent` and one for
+/// `other` (147).
+fn two_programs() -> HostDocument {
+    let kept = |account: &str| AffinityAccount {
+        pool: "work".into(),
+        account: account.into(),
+    };
+    HostDocument::Intent(Affinity {
+        stream: "work".into(),
+        accounts: [("agent", "agent-1"), ("other", "other-1")]
+            .into_iter()
+            .map(|(program, account)| (program.to_string(), kept(account)))
+            .collect(),
+        moves: vec![],
+        gone: None,
+        pool: None,
+        account: None,
+    })
+}
+
+#[test]
+fn an_intents_document_an_earlier_release_wrote() {
+    let harness = Harness::new();
+    let root = harness.scratch.path("state/flume");
+    let file = root.join("intents/0f1e2d.json");
+    std::fs::create_dir_all(file.parent().expect("the intents directory")).expect("made");
+    let before = serde_json::json!({
+        "version": 3,
+        "document": {
+            "of": "intent",
+            "stream": "work",
+            "pool": "work",
+            "account": "work-2",
+            "moves": [{
+                "on": "intent",
+                "from": "work-1",
+                "to": "work-2",
+                "why": "spent",
+                "at": 47_400,
+            }],
+            "gone": null,
+        },
+    });
+    std::fs::write(&file, before.to_string()).expect("written");
+    let intent = HostKey::Intent {
+        digest: "0f1e2d".into(),
+    };
+    let read = StateDir::at(&root)
+        .read_host(&intent)
+        .expect("the document");
+    assert_eq!(read.version, 3);
+    let HostDocument::Intent(affinity) = read.document else {
+        panic!("an intent's document read as an account's");
+    };
+    assert_eq!(affinity.pool.as_deref(), Some("work"));
+    assert_eq!(affinity.account.as_deref(), Some("work-2"));
+    assert!(affinity.accounts.is_empty());
+    assert_eq!(affinity.moves[0].on, MoveOn::Intent { program: None });
+    assert!(matches!(
+        StateDir::at(&root).write_host(&intent, Some(3), Some(&two_programs())),
+        Written::Written { .. }
+    ));
+    let text = std::fs::read_to_string(&file).expect("read");
+    let written: serde_json::Value = serde_json::from_str(&text).expect("JSON");
+    let document = &written["document"];
+    assert!(document["accounts"]["agent"].is_object(), "{text}");
+    assert!(document["accounts"]["other"].is_object(), "{text}");
+    assert!(
+        document.get("pool").is_none() && document.get("account").is_none(),
+        "{text}"
+    );
 }
 
 #[test]

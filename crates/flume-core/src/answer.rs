@@ -232,14 +232,18 @@ impl MoveStatus {
         }
     }
 
-    /// The move as a person reads it, with whether a stage's conversation
-    /// went with it where its agent stopped at its account's usage limit
-    /// (56, 179).
+    /// The move as a person reads it, an intent's for the program whose
+    /// account moved where it names one, with whether a stage's
+    /// conversation went with it where its agent stopped at its
+    /// account's usage limit (56, 147, 179).
     pub fn words(&self) -> String {
         let moved = &self.moved;
         let what = match &moved.on {
-            MoveOn::Stage { stage } => stage.clone(),
-            MoveOn::Intent => "the intent".to_string(),
+            MoveOn::Stage { stage } => format!("{stage} moved"),
+            MoveOn::Intent {
+                program: Some(program),
+            } => format!("the intent moved for {program}"),
+            MoveOn::Intent { program: None } => "the intent moved".to_string(),
         };
         let conversation = match moved.carried {
             Some(true) => ", its conversation with it",
@@ -247,7 +251,7 @@ impl MoveStatus {
             None => "",
         };
         format!(
-            "{what} moved from {} to {} at {}, {} {}{conversation}, its agents after starting without {}'s cache",
+            "{what} from {} to {} at {}, {} {}{conversation}, its agents after starting without {}'s cache",
             moved.from,
             moved.to,
             moved.at,
@@ -407,10 +411,11 @@ pub struct Queued {
 
 /// The room a stage waiting for room is short of (70, 143, 145): the
 /// host's, its own full or taken by stages that rank ahead; its stream's,
-/// whose bound its agents running have reached; its pool's, every account
-/// that runs its program spent or at its own bound, with the soonest time
-/// one stops being spent, none where none is spent; or its pool's
-/// accounts, none of which runs its program.
+/// whose bound its agents running have reached; or its pool's, every
+/// account that runs its program spent or at its own bound, with the
+/// soonest time one stops being spent, none where none is spent. A stage
+/// whose pool holds no account of its program waits on no room: it is
+/// refused (4, 32, 145).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "room", rename_all = "kebab-case")]
 pub enum RoomWanted {
@@ -422,10 +427,6 @@ pub enum RoomWanted {
     Pool {
         pool: String,
         until: Option<Seconds>,
-    },
-    Program {
-        pool: String,
-        program: String,
     },
 }
 
@@ -443,9 +444,6 @@ impl RoomWanted {
             } => format!("a usable account of the pool {pool}, the soonest spent until {until}"),
             RoomWanted::Pool { pool, until: None } => {
                 format!("a usable account of the pool {pool}, each at its own bound")
-            }
-            RoomWanted::Program { pool, program } => {
-                format!("an account of the pool {pool} that runs {program}, which none does")
             }
         }
     }

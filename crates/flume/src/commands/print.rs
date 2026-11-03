@@ -8,8 +8,8 @@ use flume_core::{
     Tidied, Woke,
 };
 use flume_seams::{
-    Act, Conversation, HoldOn, IntentKey, Made, Readiness, SubmissionRead, UncarriedStart,
-    UnsettledStart, WaitingOn, Waits, Watch,
+    AccountFrom, Act, Conversation, HoldOn, IntentKey, Made, Readiness, SubmissionRead,
+    UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
 };
 use serde_json::{json, Value};
 
@@ -404,16 +404,20 @@ fn intent_words(intent: &IntentKey) -> String {
 }
 
 /// The current agent's line: its identity, program, account and state,
-/// and its mode as written with its layer, the entry it took of a table
-/// and the value passed, where a layer gave one (56, 145, 169).
+/// the account from the intent's affinity for the agent's program or the
+/// strategy, and its mode as written with its layer, the entry it took of
+/// a table and the value passed, where a layer gave one (56, 145, 147,
+/// 169).
 fn agent_line(agent: &AgentStatus) -> String {
     let mut line = format!("  agent {} ({})", agent.identity, agent.program);
     if let Some(account) = &agent.account {
+        let from = match account.from {
+            AccountFrom::Affinity => format!("the affinity for {}", agent.program),
+            AccountFrom::Strategy => "the strategy".to_string(),
+        };
         line.push_str(&format!(
-            " on the account {} of {} (from the {})",
-            account.name,
-            account.pool,
-            word(json!(account.from))
+            " on the account {} of {} (from {from})",
+            account.name, account.pool,
         ));
     }
     line.push_str(&format!(": {}", word(json!(agent.state))));
@@ -686,6 +690,19 @@ mod tests {
             agent_line(&agent),
             "  agent flume:r:fix--one:code:2 (agent) on the account work-2 of work (from the strategy): working"
         );
+        let kept = AgentStatus {
+            program: "other".into(),
+            account: Some(AccountHeld {
+                pool: "work".into(),
+                name: "other-1".into(),
+                from: AccountFrom::Affinity,
+            }),
+            ..agent.clone()
+        };
+        assert_eq!(
+            agent_line(&kept),
+            "  agent flume:r:fix--one:code:2 (other) on the account other-1 of work (from the affinity for other): working"
+        );
         let none = AgentStatus {
             account: None,
             ..agent
@@ -921,6 +938,38 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&moved).unwrap(),
             json!({"on": "stage", "stage": "code", "from": "work-1", "to": "work-2", "why": "spent", "at": 54000, "cache": "lost"})
+        );
+    }
+
+    #[test]
+    fn an_intents_move_for_its_program_and_one_recorded_before() {
+        let moved = |program: Option<&str>| {
+            MoveStatus::of(&AccountMove {
+                on: MoveOn::Intent {
+                    program: program.map(str::to_string),
+                },
+                from: "agent-1".into(),
+                to: "agent-2".into(),
+                why: MoveWhy::Spent,
+                at: 54_000,
+                carried: None,
+            })
+        };
+        assert_eq!(
+            moved(Some("agent")).words(),
+            "the intent moved for agent from agent-1 to agent-2 at 54000, agent-1 spent, its agents after starting without agent-1's cache"
+        );
+        assert_eq!(
+            serde_json::to_value(moved(Some("agent"))).unwrap(),
+            json!({"on": "intent", "program": "agent", "from": "agent-1", "to": "agent-2", "why": "spent", "at": 54000, "cache": "lost"})
+        );
+        assert_eq!(
+            moved(None).words(),
+            "the intent moved from agent-1 to agent-2 at 54000, agent-1 spent, its agents after starting without agent-1's cache"
+        );
+        assert_eq!(
+            serde_json::to_value(moved(None)).unwrap(),
+            json!({"on": "intent", "from": "agent-1", "to": "agent-2", "why": "spent", "at": 54000, "cache": "lost"})
         );
     }
 

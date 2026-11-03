@@ -16,7 +16,11 @@
 //! queues a launch and starts the waiting ones by priority (S37), and a
 //! stage waiting for room starts at the next command of flume's once the
 //! host's configuration gives it room, status saying no watch is kept
-//! (70, 119); and
+//! (70, 119); a fix launched on a stream whose pool holds only `codex`
+//! accounts is refused with nothing made, and a change whose pool the
+//! host's configuration leaves a `codex` account alone while construct
+//! works has code refused, no command printed for it, until a retry once
+//! the configuration is mended (S81; 4, 32, 145); and
 //! change@2's code stage works a change of three task groups one fresh
 //! agent at a time, and a failed submission sends it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
@@ -654,6 +658,118 @@ fn a_stage_waiting_for_room_starts_at_the_next_command_once_the_host_gives_room(
         .map(|queued| queued["place"].clone())
         .collect();
     assert_eq!(queue, vec![json!(third)], "{host}");
+}
+
+/// The host's configuration with the `default` stream's pool, the
+/// stand-in's, holding a `codex` account alone.
+const NO_CLAUDE: &str = "[streams.default]\npool = \"stand-in\"\n\n[pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{ name = \"codex-1\", program = \"codex\" }]\n";
+
+#[test]
+fn a_pool_with_no_account_of_a_stages_program_refuses_it_at_its_launch_and_at_a_later_start() {
+    // S81, 4, 32, 145, under the printed command, every stage running
+    // `claude`: a fix launched on a stream whose pool holds only `codex`
+    // accounts is refused naming code, the pool and `claude`, with no
+    // branch and no place made. A change on the stand-in's pool runs
+    // construct, and while construct works the host's configuration leaves
+    // that pool a `codex` account alone; once construct delivers, code is
+    // refused naming the pool and `claude`, with no command printed for it
+    // and the place waiting on its caller's retry. Once the configuration
+    // is mended, a retry starts code under the stand-in's account, the
+    // intent's for `claude`.
+    let walk = Walk::new("walk-no-account");
+    walk.configure("[streams.elsewhere]\npool = \"elsewhere\"\n\n[pools.elsewhere]\nstrategy = \"fill-first\"\naccounts = [\n  { name = \"codex-1\", program = \"codex\" },\n  { name = \"codex-2\", program = \"codex\" },\n]\n");
+    let (answer, refused) = walk.flume_ran(&[
+        "launch",
+        "--kind",
+        "fix",
+        "--name",
+        "one",
+        "--brief",
+        "fix the parser",
+        "--stream",
+        "elsewhere",
+    ]);
+    assert!(refused, "the launch was taken: {answer}");
+    let reason = answer.to_string();
+    assert!(
+        reason.contains("stage code's")
+            && reason.contains("pool elsewhere")
+            && reason.contains("account of claude"),
+        "the refusal names not code, the pool and claude: {reason}"
+    );
+    assert!(!walk.has_branch("fix/one"), "the fix's branch was made");
+    assert_eq!(walk.everything()["places"], json!([]), "a place was made");
+    assert_eq!(
+        walk.repository.git(&["worktree", "list"]).lines().count(),
+        1,
+        "a worktree was made"
+    );
+
+    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    assert_eq!(
+        walk.status(&place)["agent"]["account"]["name"],
+        "stand-in-1",
+        "construct's account"
+    );
+    let dropped = walk.signal("dropped");
+    let mut acts = vec![json!({ "wait_for": dropped })];
+    acts.extend(
+        construct("add-parser")
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    );
+    let agent = walk.start_agent(&place, Value::Array(acts));
+    walk.until(&place, "construct begun", |status| {
+        stage(status, "construct")["state"] == "begun"
+    });
+    walk.configure_whole(NO_CLAUDE);
+    std::fs::write(&dropped, "").expect("the signal");
+    let ran = finish(agent);
+    assert_eq!(ran.code, 0, "{}", ran.out);
+
+    let status = walk.until(&place, "code refused", |status| {
+        stage(status, "code")["state"] == "refused"
+    });
+    assert_eq!(stage(&status, "construct")["state"], "delivered");
+    let code = stage(&status, "code");
+    let words = code["refused_setting"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no refusal given: {status}"));
+    assert!(
+        words.contains("stage code's")
+            && words.contains("pool stand-in")
+            && words.contains("account of claude"),
+        "the refusal names not code, the pool and claude: {words}"
+    );
+    assert_eq!(code["starts"], 0, "{status}");
+    assert!(status["agent"].is_null(), "a command was printed: {status}");
+    assert_eq!(
+        (
+            &status["waiting_on"]["act"],
+            &status["waiting_on"]["stage"],
+            &status["waiting_on"]["why"]
+        ),
+        (&json!("retry"), &json!("code"), &json!("refused")),
+        "{status}"
+    );
+    assert_eq!(walk.host()["queue"], json!([]), "code waits for room");
+
+    walk.configure("");
+    walk.flume(&["retry", &place]);
+    let status = walk.status(&place);
+    assert_eq!(
+        status["agent"]["account"],
+        json!({ "pool": "stand-in", "name": "stand-in-1", "from": "affinity" }),
+        "{status}"
+    );
+    let code = stage(&status, "code");
+    assert_eq!(code["starts"], 1, "{status}");
+    assert!(code["refused_setting"].is_null(), "{status}");
+    assert!(
+        walk.printed(&place).contains("claude"),
+        "code's printed command"
+    );
 }
 
 /// The three task groups of the repeating walkthrough's change, two

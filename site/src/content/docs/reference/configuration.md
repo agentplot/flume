@@ -91,7 +91,7 @@ Each account:
 | Key | Values | Meaning | Left out |
 |---|---|---|---|
 | `name` | a string | the account's name, unique in its pool | refused |
-| `program` | a string | the program it runs, such as `claude`; it takes only stages of that program | refused |
+| `program` | a string | the program it runs, such as `claude`; it takes only stages of that program, and a pool with no account of a stage's program refuses that stage | refused |
 | `env` | a table of strings | its agents' environment, over the login environment | no variable |
 | `agents` | a whole number above 0 | the bound on agents running under it at once | no bound of its own |
 
@@ -142,6 +142,14 @@ flume refuses the file, naming the key, for:
 
 A file that refuses leaves every launch and every start refused,
 naming its fault, until it is mended.
+
+A file flume reads can still refuse a stage. A pool that holds no
+account of the program a stage's layers resolve refuses that stage,
+naming the stage, the pool and the program. It refuses the stage at its
+launch, with nothing made, or at a later start, which reads the file as
+it stands then. A
+stage so refused waits for a retry
+([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)).
 
 ### `[roles."<group>/<role>"]`
 

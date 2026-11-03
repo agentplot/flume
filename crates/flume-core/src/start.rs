@@ -310,23 +310,30 @@ impl Engine {
             .pool_of(&place.stream.name)
             .and_then(|_| self.affinity(&place.intent))
             .map(|(_, affinity)| affinity);
+        let program = resolution
+            .as_ref()
+            .ok()
+            .and_then(|resolution| resolution.resolved.settings.program.clone());
+        let stage_name = &place.kind.stages[index].name;
         let (chosen, intent_moved) = match &resolution {
-            Ok(resolution) => self.choose_account(
+            Ok(_) => self.choose_account(
                 place,
-                resolution.resolved.settings.program.as_deref(),
+                stage_name,
+                program.as_deref(),
                 affinity.as_ref(),
                 queue,
                 now,
             ),
             Err(_) => (Choice::NoPool, None),
         };
-        let stage_name = &place.kind.stages[index].name;
         let env = match &chosen {
             Choice::Chose { account, .. } => self.account_env(account, stage_name),
             _ => Ok(BTreeMap::new()),
         };
         let resolution = match (&chosen, env.as_ref()) {
-            (Choice::Undeclared(reason), _) | (_, Err(reason)) => Err(reason.clone()),
+            (Choice::Undeclared(reason) | Choice::NoAccount(reason), _) | (_, Err(reason)) => {
+                Err(reason.clone())
+            }
             _ => resolution,
         };
         let env = env.unwrap_or_default();
@@ -541,9 +548,9 @@ impl Engine {
             }))
         });
         let claimed = claimed.unwrap_or(Err(Start::NoPlace));
-        if let (Ok(claim), Some(place)) = (&claimed, self.store.read(id)) {
+        if let (Ok(claim), Some(place), Some(program)) = (&claimed, self.store.read(id), &program) {
             if let Some(account) = &claim.account {
-                self.affinity_after(&place.state.place, account, intent_moved.as_ref());
+                self.affinity_after(&place.state.place, program, account, intent_moved.as_ref());
             }
         }
         claimed
