@@ -2,11 +2,11 @@
 //! history-and-host spec): the system clock, a sleep, a secret of 32
 //! random bytes, a file's write time, a command of flume's named by its
 //! process and that process's start, the bound and the agents' settings
-//! the host's configuration states, the role runs, streams and pools it
-//! names, the recipient the calling command's
-//! environment names, the host user's login environment, and the room
-//! lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75; design
-//! 6, 10). No tool is named here (core.1).
+//! the host's configuration states, the role runs, streams, pools and
+//! labels it names, its values with their layers, the recipient the
+//! calling command's environment names, the host user's login
+//! environment, and the room lock at `$XDG_STATE_HOME/flume/room.lock`
+//! (41, 70, 75; design 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
@@ -264,9 +264,8 @@ impl Host for RealHost {
         self.config.stream_for(repository, kind)
     }
 
-    /// None: the configuration's reader takes no `label` (180).
-    fn label_for(&self, _repository: &str, _kind: &str) -> Option<LabelHeld> {
-        None
+    fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld> {
+        self.config.label_for(repository, kind)
     }
 
     /// The configuration as this command read it, its managed layer and

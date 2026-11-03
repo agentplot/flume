@@ -236,7 +236,7 @@ const READER: &str = "a_child_process_reads_the_hosts_layers";
 
 /// The child's half of the layers test: the host as a command finds it,
 /// under the `XDG_CONFIG_HOME` its parent gave it, its configuration and
-/// its streams written as JSON. Run by the test below as a process of its
+/// its streams and a fix's label written as JSON. Run by the test below as a process of its
 /// own; it does nothing otherwise.
 #[test]
 fn a_child_process_reads_the_hosts_layers() {
@@ -248,6 +248,7 @@ fn a_child_process_reads_the_hosts_layers() {
             "configuration": host.configuration(),
             "bound": host.bound(),
             "streams": host.streams(),
+            "label": host.label_for("/r", "fix"),
         }),
         Err(refused) => serde_json::json!({ "refused": refused }),
     };
@@ -264,10 +265,10 @@ fn as_it_stands(path: &Path) -> (String, std::time::SystemTime) {
 
 /// `RealHost` over `config.toml` and `config.local.toml` in a scratch
 /// `XDG_CONFIG_HOME`, as a command of its own reads them: the local layer
-/// taken key by key, a pinned key passed over, an account's variables
-/// `<set>`, a local layer setting a pool not taken, and no local file;
-/// and neither file's content or write time changed by any read (32, 56,
-/// C.7, S83; core.16, core.45).
+/// taken key by key, a kind's label among it, a pinned key passed over,
+/// an account's variables `<set>`, a local layer setting a pool not
+/// taken, and no local file; and neither file's content or write time
+/// changed by any read (32, 56, 180, C.7, S83; core.16, core.45).
 #[test]
 fn the_host_reads_both_layers_and_writes_neither() {
     let scratch = Scratch::new("layers");
@@ -280,7 +281,8 @@ fn the_host_reads_both_layers_and_writes_neither() {
         "[host]\nagents = 8\npin = [\"streams.work.session\"]\n\
          [streams.work]\nagents = 6\npool = \"work\"\n\
          [pools.work]\nstrategy = \"fill-first\"\n\
-         accounts = [{ name = \"w\", program = \"agent\", env = { AGENT_HOME = \"~/.agent-w\" } }]\n",
+         accounts = [{ name = \"w\", program = \"agent\", env = { AGENT_HOME = \"~/.agent-w\" } }]\n\
+         [kinds.fix]\nlabel = \"construction\"\n",
     )
     .unwrap();
     let read = || {
@@ -312,7 +314,8 @@ fn the_host_reads_both_layers_and_writes_neither() {
 
     std::fs::write(
         &local,
-        "[streams.work]\nagents = 3\npriority = 30\nsession = \"office\"\n",
+        "[streams.work]\nagents = 3\npriority = 30\nsession = \"office\"\n\
+         [kinds.fix]\nlabel = \"operation\"\n",
     )
     .unwrap();
     let before = (as_it_stands(&managed), as_it_stands(&local));
@@ -322,6 +325,10 @@ fn the_host_reads_both_layers_and_writes_neither() {
     assert_eq!(answer["streams"]["work"]["agents"], 3);
     assert_eq!(answer["streams"]["work"]["priority"], 30);
     assert_eq!(answer["streams"]["work"]["pool"], "work");
+    assert_eq!(
+        answer["label"],
+        serde_json::json!({"name": "operation", "from": "host-kind"})
+    );
     assert_eq!(
         value(&answer, "streams.work.agents"),
         (serde_json::json!("3"), serde_json::json!("local"))
@@ -361,6 +368,7 @@ fn the_host_reads_both_layers_and_writes_neither() {
         serde_json::json!({"state": "not-taken", "keys": ["pools.work"]})
     );
     assert_eq!(answer["streams"]["work"]["agents"], 6);
+    assert_eq!(answer["label"]["name"], "construction");
     assert_eq!(
         value(&answer, "streams.work.agents"),
         (serde_json::json!("6"), serde_json::json!("managed"))

@@ -17,13 +17,15 @@
 //! each role's address, with `repository`, `kind`, `priority`, `base`,
 //! `brief` and `stream`, an address it names nothing for woken by nothing
 //! (132, C.7). Its `[streams.<stream>]` tables declare the host's streams,
-//! each with `agents`, `priority` and `pool`, and `default` stands
+//! each with `agents`, `priority`, `pool`, `session` and its labels'
+//! shares in `[streams.<stream>.labels.<label>]`, and `default` stands
 //! whether or not a table declares it; its `[pools.<pool>]` tables its
 //! pools, each with `strategy` and `accounts`, each account a `name`, a
 //! `program`, an `env` kept as written and an optional `agents`; `[host]
 //! pool` is the host's own pool; and `stream` in `[repos."<repository>"]`,
 //! `[repos."<repository>".kinds.<kind>]` and `[kinds.<kind>]` names a
-//! place's stream (143, 144, C.7).
+//! place's stream, and `label` in the last two its label (143, 144, 180,
+//! 181, C.7).
 //!
 //! The configuration has two layers (C.7; design 4): `config.toml` is the
 //! managed one, and `config.local.toml` beside it the local one, read
@@ -34,9 +36,9 @@
 //! command writes either file (core.16, core.45).
 
 use flume_seams::{
-    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LocalLayer,
-    PassedOver, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Strategy, Stream, StreamFrom,
-    StreamHeld, DEFAULT_STREAM, SET,
+    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LabelFrom,
+    LabelHeld, LocalLayer, PassedOver, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Share,
+    Strategy, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -91,6 +93,8 @@ pub struct HostConfig {
     /// The streams named for places, by repository and kind, by
     /// repository and by kind (143).
     pub streams_named: StreamsNamed,
+    /// The labels given places, by repository and kind and by kind (180).
+    pub labels_named: LabelsNamed,
     /// The host's own pool, none where it names none (144).
     pub pool: Option<String>,
     /// The pools declared, by name (144).
@@ -114,6 +118,17 @@ pub struct StreamsNamed {
     pub kind: BTreeMap<String, String>,
 }
 
+/// The labels the configuration gives places: `label` in
+/// `[repos."<repository>".kinds.<kind>]` and in `[kinds.<kind>]` (180,
+/// C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LabelsNamed {
+    /// By the repository's location and the kind's name.
+    pub repository_kind: BTreeMap<(String, String), String>,
+    /// By the kind's name.
+    pub kind: BTreeMap<String, String>,
+}
+
 impl Default for HostConfig {
     fn default() -> Self {
         HostConfig {
@@ -124,6 +139,7 @@ impl Default for HostConfig {
             roles: BTreeMap::new(),
             streams: BTreeMap::from([(DEFAULT_STREAM.to_string(), Stream::default())]),
             streams_named: StreamsNamed::default(),
+            labels_named: LabelsNamed::default(),
             pool: None,
             pools: BTreeMap::new(),
             configuration: HostConfiguration::default(),
@@ -260,6 +276,7 @@ impl HostConfig {
         if let Some(kinds) = table.get("kinds") {
             config.kinds = kinds_settings(kinds, "kinds")?;
             config.streams_named.kind = kinds_streams(kinds, "kinds")?;
+            config.labels_named.kind = kinds_labels(kinds, "kinds")?;
         }
         if let Some(given) = table.get("repos") {
             let given = given
@@ -285,6 +302,12 @@ impl HostConfig {
                         .streams_named
                         .repository_kind
                         .insert((location.clone(), kind), stream);
+                }
+                for (kind, label) in kinds_labels(kinds, &at)? {
+                    config
+                        .labels_named
+                        .repository_kind
+                        .insert((location.clone(), kind), label);
                 }
                 config.repos.insert(location, kinds_settings(kinds, &at)?);
             }
@@ -356,6 +379,26 @@ impl HostConfig {
                     .kind
                     .get(kind)
                     .map(|name| held(name, StreamFrom::HostKind))
+            })
+    }
+
+    /// The label the configuration gives `kind` in `repository`: for the
+    /// repository and kind, else the kind (180).
+    pub fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld> {
+        let named = &self.labels_named;
+        let held = |name: &String, from| LabelHeld {
+            name: name.clone(),
+            from,
+        };
+        named
+            .repository_kind
+            .get(&(repository.to_string(), kind.to_string()))
+            .map(|name| held(name, LabelFrom::HostRepositoryKind))
+            .or_else(|| {
+                named
+                    .kind
+                    .get(kind)
+                    .map(|name| held(name, LabelFrom::HostKind))
             })
     }
 
@@ -772,9 +815,81 @@ fn kinds_streams(kinds: &Value, at: &str) -> Result<BTreeMap<String, String>, St
     Ok(streams)
 }
 
+/// The `label` each kind's table of a `kinds` table gives, by the kind's
+/// name: one word of letters, digits, `-` and `_`, any other value
+/// refused naming its key (180, C.7).
+fn kinds_labels(kinds: &Value, at: &str) -> Result<BTreeMap<String, String>, String> {
+    let kinds = kinds
+        .as_table()
+        .ok_or(format!("[{at}] is not a table of kinds"))?;
+    let mut labels = BTreeMap::new();
+    for (kind, table) in kinds {
+        let at = format!("{at}.{}", quoted(kind));
+        let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
+        let Some(value) = table.get("label") else {
+            continue;
+        };
+        let label = value
+            .as_str()
+            .filter(|label| is_label(label))
+            .ok_or(format!(
+                "{at}.label is {value}, where a label is one word of letters, digits, - and _"
+            ))?;
+        labels.insert(kind.clone(), label.to_string());
+    }
+    Ok(labels)
+}
+
+/// Whether `word` is a label: one word of letters, digits, `-` and `_`
+/// (180).
+fn is_label(word: &str) -> bool {
+    !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// A stream's `labels` table: each label's share, its `reserve` and
+/// `keep_free` whole numbers from zero, zero where left out, and each
+/// other key of its table kept unknown, which refuses the stream's starts
+/// rather than the configuration (181, 182, C.7).
+fn shares_of(table: &Table, at: &str) -> Result<BTreeMap<String, Share>, String> {
+    let Some(labels) = table.get("labels") else {
+        return Ok(BTreeMap::new());
+    };
+    let labels = labels
+        .as_table()
+        .ok_or(format!("[{at}.labels] is not a table of labels"))?;
+    let mut shares = BTreeMap::new();
+    for (label, share) in labels {
+        let at = format!("{at}.labels.{}", quoted(label));
+        let share = share.as_table().ok_or(format!("[{at}] is not a table"))?;
+        let count = |name: &str| match share.get(name) {
+            None => Ok(0),
+            Some(value) => value
+                .as_integer()
+                .and_then(|count| u32::try_from(count).ok())
+                .ok_or(format!("[{at}] {name} is not a whole number from zero")),
+        };
+        shares.insert(
+            label.clone(),
+            Share {
+                reserve: count("reserve")?,
+                keep_free: count("keep_free")?,
+                unknown: share
+                    .keys()
+                    .filter(|key| !matches!(key.as_str(), "reserve" | "keep_free"))
+                    .cloned()
+                    .collect(),
+            },
+        );
+    }
+    Ok(shares)
+}
+
 /// The `streams` table: each stream with its bound, its priority, zero
-/// where it gives none, and its pool; a key a stream does not know
-/// refused naming it (143, C.7).
+/// where it gives none, its pool, its session and its labels' shares; a
+/// key a stream does not know refused naming it (107, 143, 181, C.7).
 fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String> {
     let streams = streams
         .as_table()
@@ -783,7 +898,12 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
     for (name, table) in streams {
         let at = format!("streams.{}", quoted(name));
         let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
-        only(table, &["agents", "priority", "pool"], &at, "a stream")?;
+        only(
+            table,
+            &["agents", "priority", "pool", "session", "labels"],
+            &at,
+            "a stream",
+        )?;
         let priority = match table.get("priority") {
             None => 0,
             Some(value) => value
@@ -796,7 +916,8 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 agents: bound_of(table, "agents", &at)?,
                 priority,
                 pool: text_of(table, "pool", &at)?,
-                ..Stream::default()
+                session: text_of(table, "session", &at)?,
+                labels: shares_of(table, &at)?,
             },
         );
     }
@@ -1165,7 +1286,9 @@ mod tests {
         }
     }
 
-    /// C.7's example, as the statement writes it.
+    /// C.7's example, as the statement writes it at 2c95a70, its program
+    /// `agent` (core.1), and `personal`'s `points` and `pace` left out,
+    /// which record 0025's change reads.
     const C7: &str = r#"
 [host]
 agents = 8
@@ -1174,6 +1297,13 @@ agents = 8
 agents = 5
 priority = 10
 pool = "work"
+
+[streams.work.labels.operation]
+reserve = 2
+keep_free = 1
+
+[streams.work.labels.construction]
+reserve = 2
 
 [streams.personal]
 agents = 3
@@ -1190,8 +1320,11 @@ accounts = [
 strategy = "least-busy"
 accounts = [{ name = "personal", program = "agent", env = { AGENT_HOME = "~/.agent-personal" } }]
 
-[repos."/home/user/Code/acme"]
+[repos."~/Code/acme"]
 stream = "work"
+
+[kinds.research]
+label = "inception"
 "#;
 
     #[test]
@@ -1202,7 +1335,7 @@ stream = "work"
             config.streams.keys().collect::<Vec<_>>(),
             vec!["default", "personal", "work"]
         );
-        let acme = "/home/user/Code/acme";
+        let acme = &format!("{}/Code/acme", std::env::var("HOME").expect("the home"));
         let stream = config.stream_for(acme, "fix").unwrap();
         assert_eq!(
             stream,
@@ -1242,6 +1375,234 @@ stream = "work"
         assert_eq!(config.pools["personal"].strategy, Strategy::LeastBusy);
         assert_eq!(config.stream_for("/elsewhere", "fix"), None);
         assert_eq!(config.pool_for("default"), None, "no pool for default");
+        // 180, 181: two of work's five owed to operation, one of them kept
+        // free for it, and two to construction; research's places
+        // inception's.
+        assert_eq!(
+            config.streams["work"].labels,
+            BTreeMap::from([
+                (
+                    "construction".to_string(),
+                    Share {
+                        reserve: 2,
+                        keep_free: 0,
+                        unknown: vec![],
+                    }
+                ),
+                (
+                    "operation".to_string(),
+                    Share {
+                        reserve: 2,
+                        keep_free: 1,
+                        unknown: vec![],
+                    }
+                ),
+            ])
+        );
+        assert_eq!(config.streams["personal"].labels, BTreeMap::new());
+        assert_eq!(
+            config.label_for(acme, "research"),
+            Some(LabelHeld {
+                name: "inception".into(),
+                from: LabelFrom::HostKind,
+            })
+        );
+        assert_eq!(config.label_for(acme, "fix"), None);
+        assert_eq!(
+            config.streams["work"].session, None,
+            "work's agents in the session of its name"
+        );
+        let with_points = C7.replace(
+            "pool = \"personal\"\n",
+            "pool = \"personal\"\npoints = 8\npace = { points = 13, per = \"day\" }\n",
+        );
+        let refused = HostConfig::parse(&with_points).unwrap_err();
+        assert!(
+            refused.contains("streams.personal")
+                && (refused.contains("points") || refused.contains("pace")),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn a_label_by_repository_and_kind_then_kind() {
+        // 180, S85: the repository's kind's before the kind's.
+        let config = HostConfig::parse(
+            "[kinds.research]\nlabel = \"inception\"\n\
+             [kinds.deploy]\nlabel = \"operation\"\n\
+             [repos.\"/r\".kinds.deploy]\nlabel = \"construction\"\nstream = \"work\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.label_for("/r", "deploy"),
+            Some(LabelHeld {
+                name: "construction".into(),
+                from: LabelFrom::HostRepositoryKind,
+            })
+        );
+        assert_eq!(
+            config.label_for("/s", "deploy"),
+            Some(LabelHeld {
+                name: "operation".into(),
+                from: LabelFrom::HostKind,
+            })
+        );
+        assert_eq!(
+            config.label_for("/r", "research").map(|held| held.from),
+            Some(LabelFrom::HostKind)
+        );
+        assert_eq!(config.label_for("/r", "fix"), None);
+        assert_eq!(
+            config.stream_for("/r", "deploy").map(|held| held.name),
+            Some("work".into()),
+            "a kind's table holds its label beside its stream"
+        );
+    }
+
+    #[test]
+    fn a_label_that_is_no_word_is_refused_naming_its_key() {
+        // 180: one word of letters, digits, `-` and `_`.
+        for (text, named) in [
+            ("[kinds.fix]\nlabel = \"two words\"\n", "kinds.fix.label"),
+            ("[kinds.fix]\nlabel = \"\"\n", "kinds.fix.label"),
+            ("[kinds.fix]\nlabel = \"a.b\"\n", "kinds.fix.label"),
+            ("[kinds.fix]\nlabel = 3\n", "kinds.fix.label"),
+            (
+                "[repos.\"/r\".kinds.fix]\nlabel = \"two words\"\n",
+                "repos.\"/r\".kinds.fix.label",
+            ),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(refused.contains(named), "{text}: {refused}");
+        }
+        for word in ["operation", "night-ops", "ops_2", "A1"] {
+            let text = format!("[kinds.fix]\nlabel = \"{word}\"\n");
+            assert_eq!(
+                HostConfig::parse(&text)
+                    .unwrap()
+                    .label_for("/r", "fix")
+                    .map(|held| held.name),
+                Some(word.to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn a_labels_table_holding_a_pool_is_read_with_the_pool_unknown() {
+        // 181, 182: the configuration read, the key kept for the start
+        // that reads it to refuse.
+        let config = HostConfig::parse(
+            "[streams.work]\nagents = 5\n\
+             [streams.work.labels.operation]\nreserve = 1\npool = \"ops\"\npoints = 3\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.streams["work"].labels["operation"],
+            Share {
+                reserve: 1,
+                keep_free: 0,
+                unknown: vec!["points".into(), "pool".into()],
+            }
+        );
+    }
+
+    #[test]
+    fn a_labels_share_that_is_no_count_is_refused() {
+        // 181: whole numbers from zero.
+        for (text, named) in [
+            ("[streams.work.labels.operation]\nreserve = -1\n", "reserve"),
+            (
+                "[streams.work.labels.operation]\nkeep_free = \"one\"\n",
+                "keep_free",
+            ),
+            (
+                "[streams.work.labels]\noperation = 2\n",
+                "streams.work.labels.operation",
+            ),
+            ("[streams.work]\nlabels = 2\n", "streams.work.labels"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(refused.contains(named), "{text}: {refused}");
+        }
+        let config = HostConfig::parse("[streams.work.labels.operation]\nreserve = 0\n").unwrap();
+        assert_eq!(config.streams["work"].labels["operation"], Share::default());
+    }
+
+    #[test]
+    fn a_session_in_a_streams_table_and_none_in_an_agents_table() {
+        // 32, 107, 158: a stream's session read; a kind's agents table,
+        // every stage's or one stage's, gives none as a setting.
+        let config = HostConfig::parse(
+            "[streams.work]\nsession = \"office\"\n\
+             [kinds.fix.agents]\nsession = \"y\"\nmodel = \"opus\"\n\
+             [kinds.fix.agents.stages.code]\nsession = \"z\"\n\
+             [repos.\"/r\".kinds.fix.agents]\nsession = \"y\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.streams["work"].session.as_deref(), Some("office"));
+        let fix = &config.kinds["fix"];
+        assert_eq!(fix.every_stage.session, None);
+        assert_eq!(fix.every_stage.model.as_deref(), Some("opus"));
+        assert_eq!(fix.stages["code"], Settings::default());
+        assert_eq!(config.repos["/r"]["fix"].every_stage, Settings::default());
+        let refused = HostConfig::parse("[streams.work]\nsession = 3\n").unwrap_err();
+        assert!(refused.contains("session"), "{refused}");
+    }
+
+    #[test]
+    fn labels_sessions_and_a_kinds_label_set_locally() {
+        // 107, 180, 181, C.7, S85: each a key the local layer may set, and
+        // a label's pool one it may not.
+        let config = HostConfig::layers(
+            &format!("{WORK}[streams.work.labels.operation]\nreserve = 1\n[kinds.research]\nlabel = \"inception\"\n"),
+            Some(
+                "[streams.work]\nsession = \"office\"\n\
+                 [streams.work.labels.operation]\nreserve = 3\n\
+                 [kinds.research]\nlabel = \"operation\"\n",
+            ),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let work = &config.streams["work"];
+        assert_eq!(work.session.as_deref(), Some("office"));
+        assert_eq!(work.labels["operation"].reserve, 3);
+        assert_eq!(work.agents, Some(6));
+        assert_eq!(
+            config.label_for("/r", "research").map(|held| held.name),
+            Some("operation".into())
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.labels.operation.reserve"),
+            Some(("3".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "kinds.research.label"),
+            Some(("\"operation\"".into(), ConfigLayer::Local))
+        );
+        let config = HostConfig::layers(
+            WORK,
+            Some("[streams.work.labels.operation]\nreserve = 1\npool = \"ops\"\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["streams.work.labels.operation.pool".into()],
+                fault: None,
+            }
+        );
+        let config =
+            HostConfig::layers(WORK, Some("[kinds.fix]\nlabel = \"two words\"\n")).unwrap();
+        let LocalLayer::NotTaken { keys, fault } = &config.configuration.local else {
+            panic!("a label that is no word taken");
+        };
+        assert!(keys.is_empty());
+        assert!(
+            fault
+                .as_deref()
+                .is_some_and(|fault| fault.contains("kinds.fix.label")),
+            "{fault:?}"
+        );
     }
 
     #[test]
