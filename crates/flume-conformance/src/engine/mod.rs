@@ -19,6 +19,7 @@ pub mod repeating_stages;
 pub mod restart;
 pub mod role_waking;
 pub mod running_through;
+pub mod sessions;
 pub mod settling;
 pub mod stage_runs;
 pub mod start_integrity;
@@ -53,6 +54,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(role_waking::scenarios());
     every.extend(repeating_stages::scenarios());
     every.extend(streams::scenarios());
+    every.extend(sessions::scenarios());
     every.extend(account_pools::scenarios());
     every.extend(start_integrity::scenarios());
     every.extend(carried_conversations::scenarios());

@@ -28,6 +28,9 @@ pub(crate) struct Claim {
     agent: Arc<dyn Agent>,
     /// The session name the agent carries: a role's run's address (132).
     session: Option<String>,
+    /// The terminal's session the agent opens in, none where it opens
+    /// beside the pane its settings name (107, 143).
+    opens_in: Option<SessionHeld>,
     /// The account the start runs under (144, 145).
     account: Option<AccountHeld>,
     /// The value its agent profile passes for its mode, none where no
@@ -469,6 +472,7 @@ impl Engine {
                     );
                 }
             }
+            let opens_in = queue.session_of(&held.place.stream.name, &resolution.resolved.settings);
             let secret = self.host.secret();
             let program = resolution
                 .resolved
@@ -531,7 +535,7 @@ impl Engine {
                 opening: Some(self.host.command()),
                 dialog: None,
                 conversation: conversation.clone(),
-                session: None,
+                session: opens_in.clone(),
                 label: None,
             });
             held.current = Some(index);
@@ -544,6 +548,7 @@ impl Engine {
                 env: env.clone(),
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
+                opens_in,
                 account,
                 mode: resolution.mode.clone(),
                 resume: resume.clone(),
@@ -577,6 +582,7 @@ impl Engine {
             env,
             agent,
             session,
+            opens_in,
             account: _,
             mode,
             resume,
@@ -592,9 +598,15 @@ impl Engine {
             &text,
         );
         let folder = self.store.folder(id);
-        let at = match &settings.beside {
-            Some(pane) => OpenIn::Beside { pane: pane.clone() },
-            None => OpenIn::Own,
+        let at = match (&settings.beside, opens_in) {
+            (Some(pane), _) => OpenIn::Beside { pane: pane.clone() },
+            (
+                None,
+                Some(SessionHeld {
+                    name: Some(name), ..
+                }),
+            ) => OpenIn::Session { name },
+            (None, _) => OpenIn::Own,
         };
         let opened = self.terminal.open(
             &place,

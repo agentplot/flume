@@ -131,6 +131,7 @@ impl Engine {
                 notes,
                 mode,
                 conversation: start.conversation.clone(),
+                session: start.session.clone(),
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);

@@ -8,8 +8,8 @@ use flume_core::{
     Tidied, Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, Conversation, HoldOn, IntentKey, Made, Readiness, SubmissionRead,
-    UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
+    AccountFrom, Act, Conversation, HoldOn, IntentKey, Made, Readiness, SessionFrom, SessionHeld,
+    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
 };
 use serde_json::{json, Value};
 
@@ -164,6 +164,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     }
     if let Some(agent) = &place.agent {
         lines.push(agent_line(agent));
+        lines.extend(where_line(agent));
         for (setting, given) in &agent.settings.from {
             lines.push(format!(
                 "    {setting} = {} (from {})",
@@ -441,6 +442,31 @@ fn agent_line(agent: &AgentStatus) -> String {
     line
 }
 
+/// Where the agent opened: the session with where it came from, or the
+/// pane it opened beside; none for a start written before (56, 107).
+fn where_line(agent: &AgentStatus) -> Option<String> {
+    match (&agent.session, &agent.settings.settings.beside) {
+        (Some(session), _) => Some(format!("    in {}", session_words(session))),
+        (None, Some(pane)) => Some(format!("    beside the pane {pane}")),
+        (None, None) => None,
+    }
+}
+
+/// A session with where it came from: `the session work, the stream's
+/// name`, or the terminal's own (56, 107, 143).
+fn session_words(session: &SessionHeld) -> String {
+    let Some(name) = &session.name else {
+        return "the terminal's own session".into();
+    };
+    let from = match session.from {
+        SessionFrom::Launch => "the launch's",
+        SessionFrom::Stream => "the stream's",
+        SessionFrom::StreamName => "the stream's name",
+        SessionFrom::Own => "the terminal's own",
+    };
+    format!("the session {name}, {from}")
+}
+
 /// A pool's lines: its strategy, then each account's program, agents
 /// running, bound and spent time (56, 144 to 146).
 fn pool_lines(pool: &PoolStatus) -> Vec<String> {
@@ -527,6 +553,10 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         lines.push(format!(
             "  stream {}, priority {}: {room}",
             stream.name, stream.priority
+        ));
+        lines.push(format!(
+            "    its agents open in {}",
+            session_words(&stream.session)
         ));
         for queued in &stream.queue {
             lines.push(format!("    {}", queued_line(queued)));
@@ -685,6 +715,7 @@ mod tests {
             notes: vec![],
             mode: None,
             conversation: None,
+            session: None,
         };
         assert_eq!(
             agent_line(&agent),
@@ -711,6 +742,65 @@ mod tests {
             agent_line(&none),
             "  agent flume:r:fix--one:code:2 (agent): working"
         );
+    }
+
+    #[test]
+    fn each_agents_session() {
+        let agent = |session: Option<SessionHeld>, beside: Option<&str>| AgentStatus {
+            settings: AgentSettings {
+                settings: flume_seams::Settings {
+                    beside: beside.map(str::to_string),
+                    ..flume_seams::Settings::default()
+                },
+                ..AgentSettings::default()
+            },
+            session,
+            ..in_mode(
+                "edits",
+                Layer::Launch,
+                ModeStatus {
+                    passed: "edits".into(),
+                    entry: None,
+                    read_back: true,
+                },
+            )
+        };
+        let named = |name: &str, from| {
+            Some(SessionHeld {
+                name: Some(name.into()),
+                from,
+            })
+        };
+        let own = Some(SessionHeld {
+            name: None,
+            from: SessionFrom::Own,
+        });
+        for (session, beside, line) in [
+            (
+                named("review", SessionFrom::Launch),
+                None,
+                Some("    in the session review, the launch's"),
+            ),
+            (
+                named("office", SessionFrom::Stream),
+                None,
+                Some("    in the session office, the stream's"),
+            ),
+            (
+                named("work", SessionFrom::StreamName),
+                None,
+                Some("    in the session work, the stream's name"),
+            ),
+            (own, None, Some("    in the terminal's own session")),
+            (None, Some("operator"), Some("    beside the pane operator")),
+            (None, None, None),
+        ] {
+            assert_eq!(
+                where_line(&agent(session, beside)).as_deref(),
+                line,
+                "{line:?}"
+            );
+        }
     }
 
     /// An agent at work under `mode`, as `layer` wrote it, its start's
@@ -743,6 +833,7 @@ mod tests {
             notes: vec![],
             mode: Some(status),
             conversation: None,
+            session: None,
         }
     }
 
@@ -1094,6 +1185,10 @@ mod tests {
             streams: vec![
                 StreamStatus {
                     name: "work".into(),
+                    session: SessionHeld {
+                        name: Some("office".into()),
+                        from: SessionFrom::Stream,
+                    },
                     priority: 10,
                     running: 4,
                     bound: Some(4),
@@ -1102,6 +1197,10 @@ mod tests {
                 },
                 StreamStatus {
                     name: "personal".into(),
+                    session: SessionHeld {
+                        name: Some("personal".into()),
+                        from: SessionFrom::StreamName,
+                    },
                     priority: 0,
                     running: 2,
                     bound: Some(3),
@@ -1110,6 +1209,10 @@ mod tests {
                 },
                 StreamStatus {
                     name: "default".into(),
+                    session: SessionHeld {
+                        name: None,
+                        from: SessionFrom::Own,
+                    },
                     priority: 0,
                     running: 0,
                     bound: None,
@@ -1130,10 +1233,13 @@ mod tests {
                 format!("  {w5}"),
                 format!("  {p3}"),
                 "  stream work, priority 10: 4 agents running of 4, room for 0".to_string(),
+                "    its agents open in the session office, the stream's".to_string(),
                 format!("    {w5}"),
                 "  stream personal, priority 0: 2 agents running of 3, room for 1".to_string(),
+                "    its agents open in the session personal, the stream's name".to_string(),
                 format!("    {p3}"),
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
+                "    its agents open in the terminal's own session".to_string(),
                 "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
             ]
         );

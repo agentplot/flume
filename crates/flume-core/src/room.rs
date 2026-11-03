@@ -56,14 +56,16 @@ pub(crate) struct Queue {
     pub waiting: Vec<Waiting>,
 }
 
-/// A stream's agents running, its bound and its priority among streams
-/// (143); a stream a live place runs in that the host's configuration no
-/// longer declares states no bound and ranks at zero.
-#[derive(Clone, Copy, Default)]
+/// A stream's agents running, its bound, its priority among streams and
+/// the session it names (107, 143); a stream a live place runs in that
+/// the host's configuration no longer declares states no bound, ranks at
+/// zero and names no session.
+#[derive(Clone, Default)]
 pub(crate) struct StreamRoom {
     pub running: u32,
     pub bound: Option<u32>,
     pub priority: i64,
+    pub session: Option<String>,
 }
 
 impl StreamRoom {
@@ -71,6 +73,27 @@ impl StreamRoom {
     /// bound.
     pub fn room(&self) -> Option<u32> {
         self.bound.map(|bound| bound.saturating_sub(self.running))
+    }
+
+    /// The session the agents of the stream `name` open in where their
+    /// launch names none: the one it names, else the one named by its
+    /// name, and, for the host's default stream naming none, the
+    /// terminal's own (107, 143).
+    pub fn session(&self, name: &str) -> SessionHeld {
+        match (&self.session, name) {
+            (Some(session), _) => SessionHeld {
+                name: Some(session.clone()),
+                from: SessionFrom::Stream,
+            },
+            (None, DEFAULT_STREAM) => SessionHeld {
+                name: None,
+                from: SessionFrom::Own,
+            },
+            (None, _) => SessionHeld {
+                name: Some(name.to_string()),
+                from: SessionFrom::StreamName,
+            },
+        }
     }
 }
 
@@ -106,7 +129,24 @@ impl Queue {
 
     /// The stream `name` as the queue reads it.
     pub fn stream(&self, name: &str) -> StreamRoom {
-        self.streams.get(name).copied().unwrap_or_default()
+        self.streams.get(name).cloned().unwrap_or_default()
+    }
+
+    /// Where a stage of `stream` with `settings` opens: none beside the
+    /// pane its settings name, else the session its launch names, else
+    /// its stream's as the host's configuration stands now (32, 107,
+    /// 143).
+    pub fn session_of(&self, stream: &str, settings: &Settings) -> Option<SessionHeld> {
+        if settings.beside.is_some() {
+            return None;
+        }
+        Some(match &settings.session {
+            Some(name) => SessionHeld {
+                name: Some(name.clone()),
+                from: SessionFrom::Launch,
+            },
+            None => self.stream(stream).session(stream),
+        })
     }
 
     /// The pool a stage of `stream` takes its account from, none where
@@ -223,6 +263,7 @@ impl Engine {
                         running: 0,
                         bound: stream.agents,
                         priority: stream.priority,
+                        session: stream.session,
                     },
                 )
             })
@@ -427,6 +468,7 @@ impl Engine {
             .iter()
             .map(|(name, stream)| StreamStatus {
                 name: name.clone(),
+                session: stream.session(name),
                 priority: stream.priority,
                 running: stream.running,
                 bound: stream.bound,

@@ -449,13 +449,16 @@ impl RoomWanted {
     }
 }
 
-/// A stream of the host (143): its priority among streams, its agents
-/// running, the bound it states, none where the host's alone holds it,
-/// its room, none where it states no bound, and its stages waiting for
-/// room in the order they would start (56, 70).
+/// A stream of the host (143): the session its agents open in where
+/// their launch names none, with where it came from, its priority among
+/// streams, its agents running, the bound it states, none where the
+/// host's alone holds it, its room, none where it states no bound, and
+/// its stages waiting for room in the order they would start (56, 70,
+/// 107).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
+    pub session: SessionHeld,
     pub priority: i64,
     pub running: u32,
     pub bound: Option<u32>,
@@ -589,6 +592,11 @@ pub struct AgentStatus {
     /// a path; none for any other (56, 146, 179; core.30).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
+    /// The session the agent opened in, with where it came from; none for
+    /// an agent opened beside a pane and for a start written before (56,
+    /// 107, 143).
+    #[serde(default)]
+    pub session: Option<SessionHeld>,
 }
 
 /// An agent's mode at its start: `passed`, the value its profile passed,
