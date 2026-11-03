@@ -42,5 +42,5 @@ a scratch one of the test's own.
 ## 5. Coverage and the gate
 
 - [x] 5.1 Have the suite's clause list name nothing of this change unbuilt, its constant gone, and S80 and S81 cited by this change's scenarios, as the clause-coverage spec's scenarios have them (core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 5.2 Remove `docs/architecture/_open.md`'s item on this build, now built; record 0026's item keeps what 1.3 gave it (record 0020's second amendment; core.32). True when `sluice exec main -- moon run root:format` passes.
+- [x] 5.2 Remove `docs/architecture/_open.md`'s item on this build, now built; record 0026's item keeps what 1.3 gave it (record 0020's second amendment; core.32). True when `sluice exec main -- moon run root:format` passes.
 - [ ] 5.3 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools site:prose site:build root:format root:adrs root:changes root:specs` passes.

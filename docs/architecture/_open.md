@@ -95,20 +95,6 @@ brought to the rule.
   after it. Until then the code stands against core.37, core.38,
   core.12 and core.26 as amended, and core.30's plan stage. The item
   leaves when the code is brought to them.
-- **Record 0020's second amendment is accepted and not yet built.** An
-  intent keeps an account for each program its agents run, a start
-  taking the one for its stage's program and moving no other, and a
-  stage whose pool holds no account that can run it is refused at its
-  launch or a later start rather than left waiting (record 0020's
-  second amendment, accepted by the user on 2026-11-02 on their card;
-  core.32 as amended, core.26's and core.30's details), as stated on
-  blueprints main at a15d927 (4, 32, 145, 147, S80, S81). Until it is
-  built an intent keeps one account, a start on another program takes
-  the strategy's choice or moves the intent to an account its first
-  program cannot run, and a stage whose pool holds no account of its
-  program waits for room for ever, against core.32. The change
-  `an-intents-affinity-is-kept-per-program` builds it. The item leaves
-  when the amendment is built.
 - **Record 0026 waits on its build.** Every program herdr starts runs
   under an agent profile, its own or the common one, each part of the
   agent seam built or plainly degraded (record 0026; core.1's details,
