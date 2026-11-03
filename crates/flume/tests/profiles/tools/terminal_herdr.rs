@@ -516,7 +516,7 @@ fn opened_in(
     who: &Identity,
     command: &AgentCommand,
 ) -> Pane {
-    let opened = profile.open(place, &server.folder(), command, who, None, None);
+    let opened = profile.open(place, &server.folder(), command, who, &OpenIn::Own, None);
     assert!(
         matches!(opened, Opened::Opened { .. }),
         "open gave {opened:?}"
@@ -804,7 +804,7 @@ fn s39_a_folder_trust_question_drawn_after_the_open_is_answered_at_a_settle() {
         &server.folder(),
         &server.command(&[("STAND_IN_TRUST", "after")]),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     assert!(
@@ -862,7 +862,7 @@ fn s40_the_bypass_warning_holds_the_start_with_its_lines() {
         &server.folder(),
         &server.command(&[("STAND_IN_WARNING", warning)]),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     let Opened::Held { screen } = answer else {
@@ -888,7 +888,7 @@ fn s45_a_program_that_never_comes_up_is_not_come_up_with_the_screen() {
         &server.folder(),
         &command,
         &identity(1),
-        None,
+        &OpenIn::Own,
         None,
     );
     assert!(
@@ -916,7 +916,7 @@ fn a_role_runs_pane_moved_to_another_workspace_is_reached_by_its_address() {
         &server.folder(),
         &server.command(&[]),
         &who,
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(
@@ -1191,7 +1191,7 @@ fn a_program_that_runs_another_in_its_place_is_refused_naming_it() {
         &server.folder(),
         &command,
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     let other = server
@@ -1226,7 +1226,7 @@ fn a_herdr_name_taken_refuses_the_open() {
         &server.folder(),
         &server.command(&[]),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     assert!(
@@ -1435,7 +1435,9 @@ fn a_conversation_opens_beside_a_named_pane() {
             &server.folder(),
             &server.command(&[]),
             &who,
-            Some(named),
+            &OpenIn::Beside {
+                pane: named.to_string(),
+            },
             None,
         );
         assert!(
@@ -1463,7 +1465,9 @@ fn a_conversation_opens_beside_a_named_pane() {
         &server.folder(),
         &server.command(&[]),
         &identity(4),
-        Some("nobody"),
+        &OpenIn::Beside {
+            pane: "nobody".into(),
+        },
         None,
     );
     assert!(
@@ -1704,7 +1708,8 @@ fn opened_once_let_go(
     let place = server.place("fix--one");
     let folder = server.folder();
     std::thread::scope(|scope| {
-        let opening = scope.spawn(|| profile.open(&place, &folder, command, who, None, None));
+        let opening =
+            scope.spawn(|| profile.open(&place, &folder, command, who, &OpenIn::Own, None));
         server.within(
             "open made no pane whose held shell shows what it says",
             || {
@@ -1833,7 +1838,7 @@ fn a_shell_never_at_its_prompt_is_not_come_up_and_never_refused() {
         &server.folder(),
         &command,
         &identity(1),
-        None,
+        &OpenIn::Own,
         None,
     );
     let took = began.elapsed();

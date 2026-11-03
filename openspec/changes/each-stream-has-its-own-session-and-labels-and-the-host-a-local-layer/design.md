@@ -212,9 +212,10 @@ where it stands (138).
 
 `Engine::bases` (`clues.rs`) gives a base once for each workspace
 `shown_at`'s `bases` names, each with the base's one count, and once
-with none where it names none. The herdr plugin's watch already
-refreshes each entry whose `shown_at` is on its own server, so it
-refreshes each session's workspace with no change.
+with none where it names none. A place's clues leave `bases` out, as
+they leave `base`. The herdr plugin's watch already refreshes each
+entry whose `shown_at` is on its own server, so it refreshes each
+session's workspace with no change.
 
 A test's profile reaches named sessions under a scratch home, never
 the host's. `Herdr::with_session_home(path)` runs every herdr call and
@@ -228,10 +229,11 @@ test reads which variables those are from the pinned release
 The printed command takes `at` and prints as before: a session names
 nothing there. Status still gives the agent's session as resolved.
 
-The fake terminal logs each open with where it was asked, `open
-<identity> in session work`, `in own`, `beside operator`, and models a
-workspace per session and base, so `shown_at` gives each base's
-workspaces.
+The fake terminal logs each open with where it was asked, on a line
+of its own after the open's, `at <identity> in session work`, `in
+own`, `beside operator`, so every scenario reading the open's line
+reads it as before, and models a workspace per session and base, so
+`shown_at` gives each base's workspaces.
 
 The fake host scripts each stream's session and labels' shares, the
 labels the configuration gives kinds, and the configuration's values
