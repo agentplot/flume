@@ -13,7 +13,7 @@ waiting for one, carrying the agent's conversation where its program
 can carry it there and afresh otherwise, with flume's own words; the
 start SHALL count toward no bound of the kind's and wait on no caller;
 agents still running on that account SHALL not be ended for it (31,
-112, 146, 175).
+112, 146, 179).
 
 #### Scenario: The stage moves
 
@@ -23,7 +23,7 @@ agents still running on that account SHALL not be ended for it (31,
 #### Scenario: The stage moves with its conversation
 
 - **WHEN** a code agent under work-1 stops at its usage limit, and work-2 is usable and reaches its conversation
-- **THEN** once quiet the agent is ended, code starts under work-2 resuming that conversation, status says code moved from work-1 to work-2 with its conversation and without work-1's cache, and the kind's bound is unchanged (S76)
+- **THEN** once quiet the agent is ended, code starts under work-2 resuming that conversation, status says code moved from work-1 to work-2 with its conversation and without work-1's cache, and the kind's bound is unchanged (S78)
 
 #### Scenario: Another agent on the spent account
 

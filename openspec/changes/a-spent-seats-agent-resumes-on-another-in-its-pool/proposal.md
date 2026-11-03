@@ -15,14 +15,14 @@ go on where it stopped. Record 0020's amendment, accepted by the user the same d
 decides how. The start after a spent agent resumes that agent's own
 conversation on the account the pool chooses, where its program can
 carry it there, and starts afresh otherwise, status saying which. The
-statement's amendment is on blueprints' branch
-`design/flume-a-spent-seats-agent-resumes` at ec16d03 (30, 56, 88, 146,
-161, 171, 175, C.4, S55, S76, S77). The user reads this design before
-any code, and the change is built once they accept the amendment.
+statement's amendment is on blueprints main at 72410b2 (30, 56, 88,
+146, 161, 171, 179, C.4, S55, S78, S79). The user reads this design
+before any code, and the change is built once they accept the
+amendment.
 
 ## What Changes
 
-- **carry, a part of the agent seam (175).** Given the start whose
+- **carry, a part of the agent seam (179).** Given the start whose
   agent stopped at its account's limit and the environment of the
   account chosen for the next start, a profile answers whether its
   program can carry that agent's conversation there, with the session
@@ -53,7 +53,7 @@ any code, and the change is built once they accept the amendment.
   agent from ever reading quiet (31, 91, C.4).
 - **A carried start that does not begin.** Never begun, or begun in
   another session, it is not delivered. Its agent is ended once quiet
-  and the stage starts afresh at once, counting no bound (146, S77).
+  and the stage starts afresh at once, counting no bound (146, S79).
 - **Status.** The agent says whether it carries the conversation of
   the stage's start before it, or why not. A stage's move says whether
   its conversation went with it. No configuration home's path is given
@@ -89,15 +89,13 @@ any code, and the change is built once they accept the amendment.
   types that hold a carried start.
 - `seam-fakes`: the fake agent scripts carry and a carried start's
   session.
-- `clause-coverage`: the suite's list at the revision that states 175,
-  S76 and S77.
+- `clause-coverage`: the suite's list at the revision that states 179,
+  S78 and S79.
 
 ## Impact
 
-- agentplot/blueprints: the statement's amendment at ec16d03 on the
-  branch `design/flume-a-spent-seats-agent-resumes`, accepted with the
-  record. The build reads it from blueprints main once it lands there
-  (core.19).
+- agentplot/blueprints: the statement's amendment on main at 72410b2,
+  accepted with the record, which the build reads (core.19).
   Nothing in weir changes, and no kind gains a field (core.4).
 - `crates/flume-seams`: `Carry`, `Agent::carry`, `Agent::command`'s
   `resume`, `StartRecord::session`, `Unsettled::session`,
@@ -112,7 +110,7 @@ any code, and the change is built once they accept the amendment.
   status; the stand-in; the walkthroughs, the `check-tools` fragments
   test and one live walkthrough.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake agent's
-  carry, the seam's and the engine's scenarios citing 175, S76 and S77,
+  carry, the seam's and the engine's scenarios citing 179, S78 and S79,
   and the clause list.
 - `plugins/claude`: the hooks' tests of the session's comparison.
 - `site/`: the agent-settings and Claude Code guides and the state

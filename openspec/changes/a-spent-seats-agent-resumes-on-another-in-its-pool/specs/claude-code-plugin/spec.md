@@ -6,12 +6,12 @@ Where the start's record names the session it resumes, the SessionStart
 hook SHALL compare its input's `session_id` with it before it acks; on
 a difference it SHALL ack nothing, record that the agent came up in
 another session, naming none, start a settle in the background and exit
-0 (35, 121, 161, 175, C.4).
+0 (35, 121, 161, 179, C.4).
 
 #### Scenario: A carried start in another session
 
 - **WHEN** the hook runs for a start whose record names the session `s-1`, its input naming `s-2`
-- **THEN** no started ack is written, the agent's record says it came up in another session and names neither, a settle of the place is started, and the hook exits 0 (161, 175)
+- **THEN** no started ack is written, the agent's record says it came up in another session and names neither, a settle of the place is started, and the hook exits 0 (161, 179)
 
 #### Scenario: A start that resumes nothing
 
@@ -23,14 +23,14 @@ another session, naming none, start a settle in the background and exit
 The started ack SHALL record the length of the session's transcript
 when the start's first ack came, none written reading as 0, and a later
 SessionStart of the start, a compaction's or a clear's, SHALL keep the
-length the first recorded (91, 175, C.4).
+length the first recorded (91, 179, C.4).
 
 #### Scenario: A carried start's length
 
 - **WHEN** the hook acks a carried start whose transcript holds 4,096 bytes
-- **THEN** the ack records 4,096 (175)
+- **THEN** the ack records 4,096 (179)
 
 #### Scenario: A compaction after the ack
 
 - **WHEN** a start acked at a length of 4,096 compacts, and SessionStart runs again with `source` `compact`
-- **THEN** the ack still records 4,096 (91, 175)
+- **THEN** the ack still records 4,096 (91, 179)

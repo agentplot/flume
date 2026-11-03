@@ -29,12 +29,12 @@ stage's limit, or when no sending of its prompt is received.
 `unsettled.rs` ends an agent begun without its settings once quiet and
 starts its stage afresh.
 
-Record 0020's amendment, accepted by the user on 2026-11-02, is stated at blueprints
-ec16d03 on the branch `design/flume-a-spent-seats-agent-resumes`. It
-amends 30, 56, 88, 146, 161 and 171, C.4's command and started rows,
-its paragraph on accounts and its common profile's table, and S55, and
-adds 175, C.4's carry row, S76 and S77. The build reads the statement
-from blueprints main once it lands there (core.19).
+Record 0020's amendment, accepted by the user on 2026-11-02, is stated on
+blueprints main at 72410b2. It amends 30, 56, 88, 146, 161 and 171,
+C.4's command and started rows, its paragraph on accounts and its
+common profile's table, and S55, and adds 179, C.4's carry row, S78 and
+S79, after the statechart kinds' 175 to 178, S76 and S77 (records 0028
+and 0029). The build reads the statement there (core.19).
 
 What the pinned Claude Code, 2.1.296, does, read from the program
 `devenv.nix` pins:
@@ -74,14 +74,14 @@ Where flume has no rule, the kit standard's code profile binds
 
 - An agent stopped at its account's usage limit goes on with its own
   conversation on the account its pool chooses, where its program can
-  carry it there (146, 175).
+  carry it there (146, 179).
 - flume reads whether the host made a conversation reachable from the
   chosen account, and changes nothing of any account (C.4; core.32).
 - A carried start is a start like any other: its own identity, secret
   and record, taken only on its own word (30, 35, 161; core.10).
 - Where a conversation cannot be carried, or its start does not begin,
   the stage starts afresh as today, with no caller's word and no bound
-  counted, and status says why (112, 146, S55, S77).
+  counted, and status says why (112, 146, S55, S79).
 
 **Non-Goals:**
 
@@ -119,7 +119,7 @@ the claim reads it, each value read against the login environment
 
 `Agent::command` gains `resume: Option<&str>`, the session the start
 resumes, after `mode`. A profile that answers no `Yes` is never given
-one. Its doc says so (88, 175).
+one. Its doc says so (88, 179).
 
 `StartRecord` gains `session: Option<String>`, the session the start
 resumes, skipped where none and read with a default, so held state
@@ -301,10 +301,10 @@ acts.
 
 - The seam's scenarios in `crates/flume-conformance/src/seams/agent.rs`
   take a profile that offers no carry, and the fake's scripted carry
-  (175).
+  (179).
 - The engine's scenarios in a new
   `crates/flume-conformance/src/engine/carried_conversations.rs` hold
-  the carried-conversations spec's scenarios, S76 and S77 among them.
+  the carried-conversations spec's scenarios, S78 and S79 among them.
   The S55 scenario in `account_pools.rs` gains the conversation that
   stayed and why.
 - `crates/flume/tests/profiles/agent_claude.rs` takes Claude Code's
@@ -324,7 +324,7 @@ acts.
   code agent stops at the limit on a pool whose second account's
   `projects` is a link to the first's. The second start's command
   resumes the first's session, its prompt is the carry words, status
-  says carried, and the place lands (S76). The existing spent
+  says carried, and the place lands (S78). The existing spent
   walkthrough asserts the conversation stayed and why (S55).
 - `crates/flume/tests/profiles/live/walkthroughs.rs` gains a fix under
   herdr with the pinned Claude Code over two scratch configuration

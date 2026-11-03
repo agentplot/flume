@@ -4,12 +4,12 @@
 
 Where a start carries a conversation, the Claude Code profile's command
 SHALL add `--resume` with the session the start resumes, and SHALL add
-neither where the start carries none (88, 175, C.4).
+neither where the start carries none (88, 179, C.4).
 
 #### Scenario: The command of a carried start
 
 - **WHEN** the profile gives the command for a start resuming the session `s-1`, and for a start resuming none
-- **THEN** the first holds `--resume s-1` beside `--plugin-dir`, and the second holds no `--resume` (88, 175)
+- **THEN** the first holds `--resume s-1` beside `--plugin-dir`, and the second holds no `--resume` (88, 179)
 
 ### Requirement: Each start reads only its own part of its transcript
 

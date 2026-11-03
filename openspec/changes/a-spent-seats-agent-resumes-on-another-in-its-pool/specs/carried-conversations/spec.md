@@ -3,7 +3,7 @@
 An agent stopped at its account's usage limit goes on with its own
 conversation on the account its pool chooses, where its program can
 carry it there, and its stage starts afresh otherwise, status saying
-which (146, 175).
+which (146, 179).
 
 ## ADDED Requirements
 
@@ -13,12 +13,12 @@ Where an agent stopped at its account's usage limit, the stage's next
 start SHALL carry that agent's own conversation where its profile
 answers that its program can carry it to the account chosen for that
 start, read under the room lock after the account is chosen (145, 146,
-175).
+179).
 
 #### Scenario: A conversation carried to the pool's other account
 
 - **WHEN** a conversation's agent under work-1 stops at work-1's usage limit, and the fake agent answers that work-2, the account chosen, can carry its conversation
-- **THEN** once quiet the agent is ended, and the stage starts under work-2 resuming that conversation, with no caller's word and no bound of the kind's counted (S76)
+- **THEN** once quiet the agent is ended, and the stage starts under work-2 resuming that conversation, with no caller's word and no bound of the kind's counted (S78)
 
 #### Scenario: A carried start waits for a usable account
 
@@ -28,7 +28,7 @@ start, read under the room lock after the account is chosen (145, 146,
 #### Scenario: A pool of one account
 
 - **WHEN** a pool's only account is spent until 15:00 and its agent's stage waits for it
-- **THEN** the start after 15:00 takes the same account and carries the conversation (146, 175)
+- **THEN** the start after 15:00 takes the same account and carries the conversation (146, 179)
 
 ### Requirement: Only the start after a spent agent carries a conversation
 
@@ -64,7 +64,7 @@ way to stop short, with nothing of the stage's prompt (28, 146).
 Where the profile answers that its program cannot carry the
 conversation to the account chosen, or offers no carry, the stage SHALL
 start afresh with flume's words, as before, and status SHALL say why the
-conversation stayed, naming any variable by its name alone (146, 175;
+conversation stayed, naming any variable by its name alone (146, 179;
 core.30).
 
 #### Scenario: Accounts that share nothing
@@ -87,12 +87,12 @@ bound and waiting on no caller, status saying why (35, 112, 146, 161).
 #### Scenario: No such conversation
 
 - **WHEN** a carried code start's program finds no such conversation and ends before it says it started
-- **THEN** no end is delivered, code starts afresh at once with flume's words, status says the conversation could not be carried and why, and the kind's bound is not counted (S77)
+- **THEN** no end is delivered, code starts afresh at once with flume's words, status says the conversation could not be carried and why, and the kind's bound is not counted (S79)
 
 #### Scenario: Another session
 
 - **WHEN** a carried start's agent says it started in another session than its record names
-- **THEN** its started ack is not taken, its agent is ended once quiet, and the stage starts afresh carrying nothing (161, 175)
+- **THEN** its started ack is not taken, its agent is ended once quiet, and the stage starts afresh carrying nothing (161, 179)
 
 #### Scenario: The fresh start after it begins otherwise
 
@@ -103,7 +103,7 @@ bound and waiting on no caller, status saying why (35, 112, 146, 161).
 
 flume SHALL copy, link and write nothing in any account's configuration
 home, and SHALL only read whether the host made the conversation
-reachable from the account chosen (146, 175, C.4; core.32).
+reachable from the account chosen (146, 179, C.4; core.32).
 
 #### Scenario: Two scratch configuration homes
 
@@ -116,19 +116,19 @@ The Claude Code profile SHALL answer that it can carry where the
 stopped start's transcript, as its started ack named it, is the same
 file by device and inode as the chosen account's
 `<home>/projects/<folder>/<file>`, `<home>` its `CLAUDE_CONFIG_DIR`, else
-`~/.claude`, and resume it by `--resume <session>` (175, C.4).
+`~/.claude`, and resume it by `--resume <session>` (179, C.4).
 
 #### Scenario: The second account's projects a link to the first's
 
 - **WHEN** the stopped start's transcript is in work-1's home, and work-2's `projects` is a symbolic link to work-1's
-- **THEN** carry answers yes with the ack's session, and the next start's command holds `--resume` and that session (175, C.4)
+- **THEN** carry answers yes with the ack's session, and the next start's command holds `--resume` and that session (179, C.4)
 
 #### Scenario: Two homes of their own
 
 - **WHEN** work-2's `projects` is a folder of its own holding no such transcript
-- **THEN** carry answers no, naming `CLAUDE_CONFIG_DIR` and no path (175; core.30)
+- **THEN** carry answers no, naming `CLAUDE_CONFIG_DIR` and no path (179; core.30)
 
 #### Scenario: A start that never said it started
 
 - **WHEN** the stopped start has no started ack
-- **THEN** carry answers no, saying its conversation is not known (175)
+- **THEN** carry answers no, saying its conversation is not known (179)
