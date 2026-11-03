@@ -805,6 +805,95 @@ fn agent_settings_at_the_launch() {
 }
 
 #[test]
+fn a_session_for_every_stage_and_for_one_at_the_launch() {
+    // 7, 32, 107: `--agent session=` for every stage and `verify.session=`
+    // for one, each kept at the launch's layer, and each agent given its
+    // session from the launch.
+    let host = Host::new("agent-session");
+    let repository = repository("agent-session", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "session=review",
+            "--agent",
+            "verify.session=late",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "change--one");
+    let held = held_of(&host, &place).state.place;
+    assert_eq!(held.every_stage.session.as_deref(), Some("review"));
+    assert_eq!(held.settings["verify"].session.as_deref(), Some("late"));
+    for (stage, session) in [
+        ("construct", "review"),
+        ("code", "review"),
+        ("verify", "late"),
+    ] {
+        let agent = current_agent(&host, &repository.dir, &place);
+        assert_eq!(agent["stage"], stage, "{agent}");
+        assert_eq!(agent["settings"]["session"], session, "{agent}");
+        assert_eq!(
+            agent["session"],
+            serde_json::json!({"name": session, "from": "launch"}),
+            "{agent}"
+        );
+        if stage != "verify" {
+            deliver(&host, &repository.dir, &place, stage);
+        }
+    }
+}
+
+#[test]
+fn the_settings_agent_gives_are_named_in_its_refusal() {
+    // 7, 32: a field no setting names is refused, the words naming
+    // session among the settings `--agent` gives, and nothing launched.
+    let host = Host::new("agent-refused");
+    let repository = repository("agent-refused", None);
+    let kinds = kinds_file(&host, false);
+    let refused = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "fix",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "colour=blue",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(refused.code, 1, "{}", refused.text);
+    assert!(
+        refused.text.contains("colour") && refused.text.contains("session"),
+        "{}",
+        refused.text
+    );
+    assert!(!Path::new(&host.place_of(&repository, "fix--one")).exists());
+    let help = host.flume(&repository.dir, &["launch", "--help"], &[]);
+    assert_eq!(help.code, 0, "{}", help.text);
+    assert!(
+        help.text.contains("session"),
+        "--help names no session: {}",
+        help.text
+    );
+}
+
+#[test]
 fn a_mode_and_a_table_at_the_launch() {
     // 7, 32, 162, 169: one of the four for every stage and a table of
     // programs for one, kept as the launch gave them in the place's held
