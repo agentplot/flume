@@ -1,4 +1,4 @@
-//! Carried conversations (146, 175): where an agent stopped at its
+//! Carried conversations (146, 179): where an agent stopped at its
 //! account's usage limit, the stage's next start carries that agent's
 //! own conversation where the agent profile answers, under the room lock
 //! once an account is chosen, that its program can carry it there; its
@@ -19,17 +19,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
             name: "carried conversations: once quiet, an agent stopped at work-1's usage limit is ended and its stage starts under work-2 resuming its conversation, with no caller's word and no bound of the kind's counted",
-            cites: &["S76", "146", "175", "112"],
+            cites: &["S78", "146", "179", "112"],
             run: s76_carried_to_the_pools_other_account,
         },
         Scenario {
             name: "carried conversations: a stage whose agent stopped at its limit waits while no account of its pool is usable, and the start that takes an account once the reset passes carries the conversation",
-            cites: &["145", "146", "175"],
+            cites: &["145", "146", "179"],
             run: a_carried_start_waits_for_a_usable_account,
         },
         Scenario {
             name: "carried conversations: a pool's only account spent until its reset, the start after it takes the same account and carries the conversation",
-            cites: &["146", "175"],
+            cites: &["146", "179"],
             run: a_pool_of_one_account,
         },
         Scenario {
@@ -39,32 +39,32 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "carried conversations: once a carried start delivers, the next stage's agent resumes no conversation",
-            cites: &["30", "175"],
+            cites: &["30", "179"],
             run: the_next_stage_carries_nothing,
         },
         Scenario {
             name: "carried conversations: a carried start's prompt is flume's words and the way to stop short, holding nothing of the stage's template",
-            cites: &["28", "146", "175"],
+            cites: &["28", "146", "179"],
             run: the_prompt_of_a_carried_start,
         },
         Scenario {
             name: "carried conversations: where the profile answers that work-2 does not reach the conversation, the stage starts afresh under work-2 with flume's words, saying why by the variable's name alone",
-            cites: &["S55", "146", "175"],
+            cites: &["S55", "146", "179"],
             run: accounts_that_share_nothing,
         },
         Scenario {
             name: "carried conversations: under a profile that offers no carry the stage starts afresh, saying its agent profile carries no conversation",
-            cites: &["146", "171", "175"],
+            cites: &["146", "179"],
             run: a_profile_that_carries_nothing,
         },
         Scenario {
             name: "carried conversations: a carried start whose program finds no such conversation and ends before it says it started delivers no end, and code starts afresh at once with flume's words, saying why and counting no bound",
-            cites: &["S77", "146", "175", "35", "112"],
+            cites: &["S79", "146", "179", "35", "112"],
             run: s77_no_such_conversation,
         },
         Scenario {
             name: "carried conversations: a carried start whose agent says it started in another session is not taken, is ended once quiet, and the stage starts afresh carrying nothing",
-            cites: &["161", "175", "146"],
+            cites: &["161", "179", "146"],
             run: another_session,
         },
         Scenario {
@@ -74,12 +74,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "carried conversations: a carried start that does not say it started by the stage's limit, or does not receive its prompt, is sent nothing more, is ended once quiet and the stage starts afresh, saying which",
-            cites: &["35", "38", "146", "175"],
+            cites: &["35", "38", "146", "179"],
             run: by_the_limit_and_not_received,
         },
         Scenario {
             name: "seam fakes: the fake agent scripted to end its carried start before its word: the core starts the stage afresh carrying nothing, the fake's log showing the fresh start's command with no session",
-            cites: &["S77", "146", "106"],
+            cites: &["S79", "146", "106"],
             run: a_scripted_carried_start_that_ends_first,
         },
     ]

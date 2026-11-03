@@ -65,17 +65,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "status: a place whose code start 2 carries start 1's conversation under work-2 gives the agent's conversation from start 1, carried, and code's move from work-1 to work-2 carried, in the JSON and the person's form",
-            cites: &["56", "146", "S76"],
+            cites: &["56", "146", "S78"],
             run: a_carried_agent,
         },
         Scenario {
             name: "status: a place whose code start 2 started afresh because work-2's CLAUDE_CONFIG_DIR does not reach start 1's conversation gives the agent's conversation from start 1, not carried, and why by the variable's name and no path, and the move not carried",
-            cites: &["56", "S55", "175"],
+            cites: &["56", "S55", "179"],
             run: a_conversation_that_stayed,
         },
         Scenario {
             name: "status: a place whose carried start 2 ended before it said it started and whose start 3 started afresh lists start 2 carried and not begun with why, and start 3's agent from start 1, not carried, and why",
-            cites: &["56", "S77", "146"],
+            cites: &["56", "S79", "146"],
             run: a_carried_start_that_did_not_begin,
         },
         Scenario {

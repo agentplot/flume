@@ -11,7 +11,7 @@
 //! record names, or for an hour, and once quiet is ended and its stage
 //! started again with flume's words, carrying its conversation where the
 //! account chosen reaches it and afresh otherwise, counted toward no
-//! bound (146, 151, 153, 175).
+//! bound (146, 151, 153, 179).
 
 use super::settling::deliver_fix;
 use super::world::*;
@@ -85,12 +85,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "account pools: once quiet, an agent stopped at its usage limit is ended and its stage starts afresh on the pool's next usable account with flume's words where that account does not reach its conversation, the move in status with the conversation that stayed and why, and the kind's bound unchanged",
-            cites: &["S55", "146", "175", "31", "43", "112"],
+            cites: &["S55", "146", "179", "31", "43", "112"],
             run: the_stage_moves,
         },
         Scenario {
             name: "account pools: once quiet, an agent stopped at its usage limit is ended and its stage starts on the pool's next usable account resuming its conversation, the move in status with its conversation and the kind's bound unchanged",
-            cites: &["S76", "146", "175", "31", "112"],
+            cites: &["S78", "146", "179", "31", "112"],
             run: the_stage_moves_with_its_conversation,
         },
         Scenario {
@@ -668,13 +668,13 @@ fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent>
 }
 
 /// The configuration home by which the fake agent knows the account
-/// `name` (175).
+/// `name` (179).
 pub fn home(name: &str) -> String {
     format!("/homes/{name}")
 }
 
 /// An account like [`account`], unbounded, whose environment names its
-/// [`home`] (175).
+/// [`home`] (179).
 pub fn account_at_home(name: &str) -> Account {
     Account {
         env: BTreeMap::from([(FakeAgent::HOME.to_string(), home(name))]),
@@ -695,7 +695,7 @@ pub fn fill_first_at_homes(world: &World) {
 }
 
 /// The fake agent's words where an account's configuration home does not
-/// reach a stopped start's conversation, as a profile gives them (175;
+/// reach a stopped start's conversation, as a profile gives them (179;
 /// core.30).
 pub const UNREACHED: &str = "the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's";
 

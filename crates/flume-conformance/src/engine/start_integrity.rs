@@ -104,17 +104,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "start integrity: a start that carries the conversation of the session s-1 records s-1, and a start of the place that carries none records no session",
-            cites: &["161", "175", "146"],
+            cites: &["161", "179", "146"],
             run: the_session_recorded,
         },
         Scenario {
             name: "start integrity: an agent whose record names the session s-1 and whose word names s-2, every variable as recorded, is not taken: started reads no and the start reads begun without its settings in another conversation, naming neither session",
-            cites: &["35", "135", "161", "175"],
+            cites: &["35", "135", "161", "179"],
             run: another_session,
         },
         Scenario {
             name: "start integrity: an agent whose record names the session s-1 and whose word names s-1, every variable as recorded, is taken and sent its prompt",
-            cites: &["35", "37", "175"],
+            cites: &["35", "37", "179"],
             run: the_session_resumed,
         },
     ]
@@ -934,7 +934,7 @@ fn a_scripted_start_in_another_mode(_: &()) -> Outcome {
 /// The fix `one`'s code begun under work-1, its agent stopped at its
 /// usage limit and its stage started on work-2, which the fake agent
 /// carries the conversation to with the session `s-1`; its carried
-/// agent's word names `session` (161, 175).
+/// agent's word names `session` (161, 179).
 fn carried_in(world: &World, session: &str) -> Result<PlaceId, String> {
     fill_first_at_homes(world);
     world.agent.carry_to(

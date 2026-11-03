@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151, 161, 162, 169, 175).
+//! 135, 151, 161, 162, 169, 179).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -61,13 +61,13 @@ pub trait AgentHarness {
     /// The accounts the profile's carry is read against for `earlier`, a
     /// start the harness started whose agent stopped at its account's
     /// usage limit, as the program's release has them or the harness
-    /// scripted them; none where the profile offers no carry (175).
+    /// scripted them; none where the profile offers no carry (179).
     fn carry_accounts(&self, earlier: &Identity) -> Option<CarryAccounts>;
 }
 
 /// The accounts a profile's carry is read against: one whose environment
 /// reaches a stopped start's conversation, with the session it resumes
-/// there, and one whose environment reaches none of it (175).
+/// there, and one whose environment reaches none of it (179).
 #[derive(Clone, Debug, Default)]
 pub struct CarryAccounts {
     pub reaches: BTreeMap<String, String>,
@@ -200,12 +200,12 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
         },
         Scenario {
             name: "agent: carry is not offered by a profile that offers none, for any start and account",
-            cites: &["175"],
+            cites: &["179"],
             run: carry_not_offered::<H>,
         },
         Scenario {
             name: "agent: carry answers yes with the session to an account that reaches a stopped start's conversation and no, naming no value, to one that does not, and the command resumes the session it is given",
-            cites: &["175", "88", "128"],
+            cites: &["179", "88", "128"],
             run: carry_to_the_account_that_reaches_it::<H>,
         },
     ]

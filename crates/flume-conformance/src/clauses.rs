@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "5caff76";
+pub const REVISION: &str = "72410b2";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -18,6 +18,7 @@ pub fn part_a() -> Vec<u32> {
         .chain(154..=159)
         .chain(161..=163)
         .chain(165..=173)
+        .chain(175..=177)
         .collect()
 }
 
@@ -31,7 +32,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(133..=136)
         .chain([138, 139])
         .chain(151..=153)
-        .chain([160, 164, 174])
+        .chain([160, 164, 174, 178, 179])
         .collect()
 }
 
@@ -49,7 +50,7 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11, which numbers them with no gap.
-pub const SCENARIOS: u32 = 75;
+pub const SCENARIOS: u32 = 79;
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -68,6 +69,11 @@ pub const POINTS: &str = "record 0025's change, points, built after the mode";
 /// The change that builds record 0026's common profile and the degraded
 /// parts of the agent seam.
 pub const PROFILES: &str = "record 0026's change, every program the terminal starts, once accepted";
+
+/// The change that builds records 0028 and 0029: statechart kinds, run
+/// on the family's engine moved into weir.
+pub const STATECHART: &str =
+    "records 0028 and 0029's change, statechart kinds on the family's engine, after crew's rewrite";
 
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
@@ -98,11 +104,16 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| clause.to_string())
         .chain((71..=75).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, PROFILES));
+    let statechart = (175..=178)
+        .map(|clause| clause.to_string())
+        .chain((76..=77).map(|scenario| format!("S{scenario}")))
+        .map(|clause| (clause, STATECHART));
     standing
         .chain(packages)
         .chain(plan)
         .chain(points)
         .chain(profiles)
+        .chain(statechart)
         .collect()
 }
 
@@ -114,8 +125,8 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9);
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 3);
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5);
         for gap in [100, 150] {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
         }
@@ -124,35 +135,35 @@ mod tests {
         every.sort();
         assert_eq!(
             every,
-            (1..=174)
+            (1..=179)
                 .filter(|clause| ![100, 150].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 172 + 8 + 75);
+        assert_eq!(all().len(), 177 + 8 + 79);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        assert_eq!(REVISION, "5caff76");
+        assert_eq!(REVISION, "72410b2");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
-            173,
+            173, 175, 176, 177,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [
-            126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174,
+            126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_and_0026s() {
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_and_0029s() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10);
+        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
-            "161", "162", "169", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64", "S65",
-            "S66", "S67",
+            "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
+            "S65", "S66", "S67", "S78", "S79",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

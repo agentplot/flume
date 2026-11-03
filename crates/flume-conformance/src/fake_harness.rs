@@ -253,13 +253,13 @@ pub struct FakeAgentHarness {
     pub terminal: Arc<FakeTerminal>,
     pub agent: FakeAgent,
     /// Whether the harness scripts the fake to carry a conversation, or
-    /// leaves it carrying none, as a profile that offers no carry (175).
+    /// leaves it carrying none, as a profile that offers no carry (179).
     carries: bool,
 }
 
 impl FakeAgentHarness {
     /// The fake left carrying no conversation, as a profile that keeps the
-    /// seam's default (175).
+    /// seam's default (179).
     pub fn carrying_none() -> Self {
         FakeAgentHarness {
             carries: false,
@@ -400,7 +400,7 @@ impl AgentHarness for FakeAgentHarness {
 
     /// The fake scripted to carry to one account's home with the session
     /// `s-1`, and to answer no to another's with words naming its
-    /// variable; none where the harness leaves it carrying none (175).
+    /// variable; none where the harness leaves it carrying none (179).
     fn carry_accounts(&self, _earlier: &Identity) -> Option<CarryAccounts> {
         if !self.carries {
             return None;
