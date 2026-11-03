@@ -134,3 +134,33 @@ brought to the rule.
   so its gate runs the herdr profile's tests, which open a pseudo-terminal
   that sluice 0.56.0's sandbox refuses (sluice #289 allows it). The item
   leaves when the strings say `<group>/<role>`.
+- **Records 0031, 0032 and 0033 wait on their build.** A session per
+  stream (record 0031; core.44), the host's configuration in a managed
+  layer and a local one over it (record 0032; core.45), and labels
+  sharing a stream's agents by reserves and slots kept free (record
+  0033; core.26 as amended, core.46) are stated on agentplot/blueprints
+  main at 7367604, 4b4c5e0 and 2c95a70 (32, 70, 107, 143, 180 to 182,
+  C.5, C.7, S82 to S85), and proposed until the user accepts them on
+  their review of the change
+  `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`.
+  Until it is built every place's agents open in flume's own session,
+  the host's configuration is `config.toml` alone, and a stream has no
+  labels, against core.44, core.45, core.46 and core.26. The item
+  leaves when the code is brought to them.
+- **weir's format holds no simple kind's `label`.** C.2 of flume's
+  statement puts a kind's `label` in its table (180), but weir's
+  statement names no `label` for a simple kind (weir 52, C.4), and
+  weir-kinds at the revision `Cargo.toml` pins reads none. weir 94
+  gives a statechart kind's `label` another meaning, the words a person
+  reads for the kind, so one key would mean two things across the two
+  formats. flume reads a kind's fields only through weir's crate
+  (core.4), so until the user rules the field's name and weir states
+  and reads it, a kind's own label is read as none and only the host's
+  configuration gives a place its label (record 0033). The item leaves
+  when weir-kinds reads a simple kind's label and flume's pin moves.
+- **Clause 183 is not built.** An MCP server the host's configuration
+  gives its agents may name the labels whose places may have it, and
+  how a host's servers reach an agent is section 10's question, not
+  decided (record 0033). Until the user decides it and the statement
+  states it, no server's `labels` is read, and the suite names 183
+  unbuilt. The item leaves when the question is answered and 183 built.
