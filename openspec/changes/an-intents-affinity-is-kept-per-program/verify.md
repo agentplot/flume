@@ -1,66 +1,42 @@
 # Verify: an-intents-affinity-is-kept-per-program
 
 Checked on 2026-11-02 at `change/an-intents-affinity-is-kept-per-program`
-d253e50. The branch was cut from main at f9a51c2 (#86), and main's
-head, local and on `origin`, is still f9a51c2, so no merge was needed.
-The check covers this change's proposal, design, five specs and tasks.
+050ad0c. The branch was cut from main at f9a51c2 (#86), and main's
+head on `origin` is still f9a51c2, so no merge was needed. The check
+covers this change's proposal, design, five specs and tasks.
 
-**The work falls short, and the change is not archived.** Every task
-is ticked, and every requirement is built. Every one of the specs' 27
-scenarios has a test, and the gate passes at d253e50 against main at f9a51c2. But the archive this stage
-delivers fails the gate. Once synced, two of the change's requirements
-are longer than openspec's strict check allows, so `root:specs`, a
-`check-fast` task every branch requires, fails on the archive commit
-(F1). The change goes back to its code stage to shorten or split them.
-
-## What fails
-
-- **F1. Two synced requirements fail `root:specs`.**
-  `openspec archive an-intents-affinity-is-kept-per-program --yes` ran
-  over a copy of `openspec/` at d253e50. It syncs the five specs. But
-  `openspec validate --specs --strict`, which is `root:specs`, then
-  passes only 32 of 34. Two specs fail on openspec's warning
-  "Requirement text is very long (>500 characters)", which `--strict`
-  reads as an error:
-  - `account-pools`, requirements[4], "An intent keeps an account per
-    program": about 740 characters as the change's MODIFIED block
-    writes it.
-  - `seam-contracts`, requirements[13], "The types of streams, pools
-    and a start's record": about 590 characters, its last sentence on
-    an affinity written before taking it over.
-
-  The same check over main's `openspec/specs/` at f9a51c2 passes 34 of
-  34, and none of main's requirements is over 500 characters. So the
-  archive commit would fail the gate's `check-fast` layer on this
-  branch and on main.
-
-  The change's own check misses this. `openspec validate
-  an-intents-affinity-is-kept-per-program --strict`, as `root:changes`
-  runs it, passes with no warning: openspec 1.14.3 does not measure a
-  delta's requirement text. So task 5.3 passes as written. It does not
-  check the specs as the archive leaves them.
-
-  Each requirement needs to be 500 characters or fewer, with its
-  meaning kept. One way is to move part of each into a requirement of
-  its own, an ADDED block whose scenarios move with it. For
-  account-pools, that part could be what a document written before
-  reads as. For seam-contracts, it could be the affinity written
-  before. Then run the trial archive and its strict check again before
-  the stage that archives.
+**The work holds, and the change is archived.** Every task is ticked,
+and every requirement is built. Each of the specs' 27 scenarios is held
+by a test. The gate passes at 050ad0c against main at f9a51c2,
+all 22 of its tasks run and none replayed. A trial archive over a copy of `openspec/` leaves
+`openspec validate --specs --strict`, which is `root:specs`, passing 34
+of 34. No synced requirement is over 450 characters, and every scenario
+main holds is kept.
 
 ## Tasks
 
-All 17 tasks of the five groups are ticked, `[x]`, and none is open.
+All 18 tasks of the five groups are ticked, `[x]`, and none is open.
 The gate run below backs each group's closing task (1.4, 2.5, 3.3, 4.2,
-5.3), each of which names only the checks it ran. None of them names
-the check F1 fails, which only the archived specs can fail.
+5.3). Task 5.4 split account-pools' "An intent keeps an account per
+program" and seam-contracts' "The types of streams, pools and a start's
+record" under the strict check's 500 characters, and the trial archive
+below backs it.
+
+Every sentence of the two requirements is kept, in its modified block
+or in one of three ADDED requirements:
+
+- account-pools' "An intent moves for one program alone", with S80's
+  scenario and the start on another program's;
+- account-pools' "An intent's document written before reads as its
+  account's program's", with its two scenarios;
+- seam-contracts' "An affinity written before reads with its one
+  account", with its scenario.
 
 ## Checks
 
-- **The gate.** `sluice exec main` at d253e50, with the worktree
-  clean, ran the checks d253e50 affects against main at f9a51c2. It
-  passed all 22 `#check-fast` and `#check-tools` tasks, none replayed,
-  and recorded their results for d253e50:
+- **The gate.** `sluice exec main` at 050ad0c ran the checks 050ad0c
+  affects against main at f9a51c2. It passed all 22 `#check-fast` and
+  `#check-tools` tasks, and replayed none:
   - `seams`, `core`, `conformance` and `flume`: format, lint and test;
   - `fakes`: lint and test;
   - `conformance:coverage`;
@@ -71,15 +47,20 @@ the check F1 fails, which only the archived specs can fail.
   - `site:prose` and `site:build`;
   - `root:format`, `root:changes` and `root:adrs`.
 
-  `root:specs` was not among them. Task 5.3 names it, but the branch
-  changes nothing under `openspec/specs/`, so the gate does not count
-  it as affected. Run by hand at d253e50, it passes 34 of 34 over
-  main's specs. It is the check F1 fails once the archive changes those
-  specs.
-- **The archive.** The trial archive is F1. It writes the five specs
-  and renames account-pools' "An intent keeps to its account" to "An
-  intent keeps an account per program", with no error. Only the length
-  check fails.
+  sluice did not record these passes for 050ad0c, because by the end
+  of the run the worktree held this report and `_open.md`'s new item.
+  `root:specs` was not among the tasks, since 050ad0c changes nothing
+  under `openspec/specs/`. The trial archive below runs it over the
+  specs as the archive leaves them.
+- **The archive.** `openspec archive an-intents-affinity-is-kept-per-program --yes`
+  (openspec 1.14.3) over a copy of `openspec/` at 050ad0c syncs the
+  five specs with no error. It adds 4 requirements, modifies 7 and
+  renames 1: account-pools' "An intent keeps to its account" becomes
+  "An intent keeps an account per program". The strict check over the
+  specs it leaves passes 34 of 34. Every scenario heading main's five
+  specs hold is in the synced specs. The counts go from 16 to 23 in
+  account-pools, 22 to 23 in place-status, 31 to 33 in seam-contracts,
+  10 to 11 in store-profile, and stay 5 in clause-coverage.
 - **The statement.** The clause list reads a15d927, the revision of
   agentplot/blueprints main that states S80 and S81. Part A and Part B
   are as the clause-coverage spec gives them, with S1 to S81. The
@@ -91,11 +72,11 @@ the check F1 fails, which only the archived specs can fail.
 
 ## Requirements and scenarios
 
-Each test named below exists under its name at d253e50. I matched each
-one to its scenario and read its assertions against the scenario's
-WHEN and THEN.
-Every test named here passes in the gate run above. The engine's
-scenarios run inside `conformance:test`'s suite and `core:test`.
+Each test named below exists under its name at 050ad0c. I read each
+one's assertions against its scenario's WHEN and THEN. The code and
+tests are as they stood at d253e50. Every commit since then touches
+only this change's directory. The engine's scenarios run inside
+`conformance:test`'s suite and `core:test`.
 
 Short names: AP is `crates/flume-conformance/src/engine/account_pools.rs`,
 PS `engine/place_status.rs`, SS `crates/flume-conformance/src/seams/store.rs`,
@@ -104,16 +85,18 @@ RT `crates/flume-seams/src/round_trip.rs`, SD
 `crates/flume/src/commands/print.rs`, and WT
 `crates/flume/tests/profiles/tools/walkthroughs.rs`.
 
-| Spec | Scenarios | Tests | Met |
-|---|---|---|---|
-| account-pools | 15 | AP `s54_fill_first_and_least_busy`, `two_starts_and_one_accounts_last_room`, `an_account_for_another_program` (a pool of an `agent` account and an `other` one, the stage of `other` on the second), `nothing_usable`; `s80_two_programs_of_one_intent`, `a_start_on_another_program`, `a_document_written_before`, `a_document_written_before_whose_account_is_gone`, `s56_three_units_of_one_intent`, `never_back`, `dropped_an_hour_after_the_last_place`, `no_intent_named`; `a_launch_on_a_pool_of_another_programs_accounts`, `s81_a_pool_with_no_account_of_the_stages_program`, `a_stage_waiting_when_its_account_is_dropped`; WT `a_pool_with_no_account_of_a_stages_program_refuses_it_at_its_launch_and_at_a_later_start` | yes (F1) |
-| place-status | 3 | PS `a_stage_that_moved` (its intent's move now naming `agent`), `an_intent_that_moved_for_one_program` (JSON form); PR `an_agents_account` ("from the affinity for other"), `an_intents_move_for_its_program_and_one_recorded_before`; the start without its settings as before, `start_integrity.rs`'s `a_variable_missing` and the scenarios beside it | yes |
-| seam-contracts | 3 | RT `a_held_state_with_a_stream_an_account_and_a_record` (its intent's move naming `agent`), `an_affinity_of_two_programs`, `an_affinity_written_before`; SS `the_hosts_own_documents` | yes (F1) |
-| store-profile | 3 | SD `two_processes_record_one_account_spent`, `a_spent_time_is_seen_by_another_process_and_kept_from_other_users`, `an_intents_document_an_earlier_release_wrote` | yes |
-| clause-coverage | 3 | `clauses.rs`'s `the_clauses_listed` and its unbuilt list; `coverage.rs`'s `a_clause_left_out_is_named`; `conformance:coverage` | yes |
-
-The specs marked F1 are met by the code. F1 is about how their
-requirement text is written, not about what the code does.
+| Spec | Requirement | Scenarios | Tests | Met |
+|---|---|---|---|---|
+| account-pools | An account is chosen under the room lock | 4 | AP `s54_fill_first_and_least_busy`, `two_starts_and_one_accounts_last_room`, `an_account_for_another_program` (a pool of an `agent` account and an `other` one, the stage of `other` on the second), `nothing_usable` | yes |
+| account-pools | An intent keeps an account per program | 4 | AP `s56_three_units_of_one_intent`, `never_back`, `dropped_an_hour_after_the_last_place`, `no_intent_named`, each reading the affinity's account for `agent` | yes |
+| account-pools | An intent moves for one program alone | 2 | AP `s80_two_programs_of_one_intent`, `a_start_on_another_program` | yes |
+| account-pools | An intent's document written before reads as its account's program's | 2 | AP `a_document_written_before`, `a_document_written_before_whose_account_is_gone` | yes |
+| account-pools | A pool that holds no account of a stage's program refuses it | 3 | AP `a_launch_on_a_pool_of_another_programs_accounts`, `s81_a_pool_with_no_account_of_the_stages_program`, `a_stage_waiting_when_its_account_is_dropped`; WT `a_pool_with_no_account_of_a_stages_program_refuses_it_at_its_launch_and_at_a_later_start` | yes |
+| place-status | Status gives a place's stream, intent, account and moves | 3 | PS `a_stage_that_moved` (its intent's move now naming `agent`), `an_intent_that_moved_for_one_program` (JSON form); PR `an_agents_account` ("from the affinity for other"), `an_intents_move_for_its_program_and_one_recorded_before`; the start without its settings as before, `start_integrity.rs`'s `a_variable_missing` and the scenarios beside it | yes |
+| seam-contracts | The types of streams, pools and a start's record | 2 | RT `a_held_state_with_a_stream_an_account_and_a_record` (its intent's move naming `agent`), `an_affinity_of_two_programs`; SS `the_hosts_own_documents` | yes |
+| seam-contracts | An affinity written before reads with its one account | 1 | RT `an_affinity_written_before` | yes |
+| store-profile | The host's own documents | 3 | SD `two_processes_record_one_account_spent`, `a_spent_time_is_seen_by_another_process_and_kept_from_other_users`, `an_intents_document_an_earlier_release_wrote` | yes |
+| clause-coverage | The suite knows the statement's clauses; A clause cited by nothing fails the suite | 3 | `clauses.rs`'s `the_clauses_listed` and its unbuilt list; `coverage.rs`'s `a_clause_left_out_is_named`; `conformance:coverage` | yes |
 
 ## Design and rules
 
@@ -124,19 +107,17 @@ requirement text is written, not about what the code does.
   skipped where none.
 - **Decision 2.** `Engine::affinity` folds a document written before
   through `folded`. It finds the account's program in the pool the
-  host's configuration declares now, keeps it unless that program's
-  entry stands, and gives the program to each intent move that names
-  none. It drops the account where the pool no longer declares it.
-  `write_affinity` compares the folded document with what `change`
-  makes, so a start that changes nothing writes nothing (core.17). The
-  next change writes the new shape.
+  host's configuration declares now and keeps it unless that program's
+  entry stands. It gives the program to each intent move that names
+  none, and drops the account where the pool no longer declares it.
+  The next change writes the new shape.
 - **Decision 3.** `choose_account` takes the account for the stage's
   program in the stage's pool. It records the intent's move, naming the
   program, only where that account is spent or full and the affinity
   for that program never left the account chosen. `affinity_after`
-  writes the first account on a program, a move of that program's
-  entry, and nothing of another program's. `claim` passes the program
-  it resolved to both.
+  writes the first account on a program and a move of that program's
+  entry, and leaves every other program's entry. `claim` passes the
+  program it resolved to both.
 - **Decisions 4 and 5.** `Choice::NoAccount` and `no_account`'s words,
   which name the stage, the pool and the program, are shared by the
   claim and the launch. The claim refuses as it refuses
@@ -153,33 +134,25 @@ requirement text is written, not about what the code does.
   no program reads as before.
 - **Decision 7.** Record 0020's second amendment reads accepted by the
   user on 2026-11-02, on their Pending You card req_f861af4d, "Fix
-  both". It gives the deciders, the sources, both sets of options, why
-  the others were not taken, and the consequences. The status line
-  names both amendments, and nothing the decision or the carry's
-  amendment wrote is changed. core.32's rule and details, and core.26's
-  and core.30's details, are amended as design 7 says. The site's
-  `rules.md` gives core.32's rule word for word as `core.md` does.
-  `_open.md` holds no item on this build, which 5.2 removed. Record
-  0026's item gives its build of 173 the halves of 145 and 147 and
-  S80's walkthrough.
-- **Decision 9 and core.35.** The guide's "A pool that cannot run a
-  stage" and "An intent keeps an account per program", the state
-  reference's `accounts`, `program` and queue, and the configuration
-  reference's account `program` say what the design says. Every link
-  to the old anchor follows the new one, and none of the words core.35
-  rules out is in the site's diff.
+  both". It has its context, options, outcome, why not the others and
+  consequences, and the status line names both amendments. core.32's
+  rule and details, and core.26's and core.30's details, are amended as
+  design 7 says. The site's `rules.md` gives core.32's rule word for
+  word as `core.md` does. `_open.md` holds no item on this build, which
+  5.2 removed. Record 0026's item gives its build of 173 the halves of
+  145 and 147 and S80's walkthrough.
+- **Decision 9 and core.35.** The guide, the state reference and the
+  configuration reference say what the design says. None of the words
+  core.35 rules out is in the site's diff.
 - **core.1.** The core and the suite name no program. The engine's
   scenarios use the fake's `agent` and `other`. Only the walkthroughs
   under `tests/profiles/` name `claude` and `codex`.
 
 ## Outside the change
 
-- **`root:changes` does not catch a requirement too long to archive.**
-  The `changes` task's comment in `moon.yml` says a change's strict
-  validation fails "a requirement archive would refuse" in the change's
-  own checks, not first at its merge. openspec 1.14.3 does not measure
-  a delta's requirement text, so a change can pass `root:changes`, and
-  every check its tasks name, and still fail `root:specs` once archived,
-  as F1 shows. A later change to the gate could add a trial archive of
-  each open change, with the strict check over its result, as a task.
-  This bears on every change, not only this one.
+- **`root:changes` passes a requirement too long to archive.**
+  openspec 1.14.3 measures no delta's requirement text. So a change can
+  pass `root:changes`, and every check its tasks name, and still fail
+  `root:specs` once archived. This change's task 5.4 fixed that for its
+  own specs. The gap bears on every change, and `docs/architecture/_open.md`
+  now holds it as an item.
