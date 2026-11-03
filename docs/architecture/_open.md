@@ -154,3 +154,17 @@ brought to the rule.
   runs the strict check over the specs it leaves would find it at the
   change (core.21). The item leaves when the gate checks each open
   change's specs as its archive leaves them.
+- **A stage retried while the submission is open is sent back over its
+  agent.** A retry naming a stage is taken while the place's
+  submission is made and undecided, and leaves it open in the merge
+  queue; the stage starts with the caller's words. When that
+  submission then fails or conflicts, the fix round sets the stages
+  from the kind's fix-round stage not reached while the retried
+  stage's agent is live, and its start is refused for that agent: the
+  place is left with a live agent in a stage not reached, waiting on
+  nobody, as on deneb on 2026-11-03 by another path (75, 112, 131;
+  core.10, core.27). Whether such a retry is refused, as a hold on an
+  undecided submission is (130), or the outcome waits for the agent's
+  end, or the retry supersedes the submission, is the operator's to
+  rule in the statement (core.19). The item leaves when it is ruled
+  and built.
