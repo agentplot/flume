@@ -24,16 +24,52 @@
 //! pool` is the host's own pool; and `stream` in `[repos."<repository>"]`,
 //! `[repos."<repository>".kinds.<kind>]` and `[kinds.<kind>]` names a
 //! place's stream (143, 144, C.7).
+//!
+//! The configuration has two layers (C.7; design 4): `config.toml` is the
+//! managed one, and `config.local.toml` beside it the local one, read
+//! over it key by key, each key of [`LOCAL_KEYS`] it sets replacing the
+//! managed one's whole. A local file setting any other key, or at fault,
+//! is not taken at all, the managed layer read alone; a key `[host] pin`
+//! holds is passed over. The reading keeps each value with its layer. No
+//! command writes either file (core.16, core.45).
 
 use flume_seams::{
-    is_address, Account, KindSettings, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Strategy,
-    Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
+    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LocalLayer,
+    PassedOver, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Strategy, Stream, StreamFrom,
+    StreamHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use toml::{Table, Value};
 
-/// The host's configuration as its file states it.
+/// The keys the local layer may set, each a path of segments, `*` any one
+/// name: a stream's `agents`, `priority`, `points`, `pace` and `session`,
+/// a label's `reserve` and `keep_free`, the `stream` a repository, a
+/// repository's kind or a kind is given, the `label` a repository's kind
+/// or a kind is given, and a kind's agents table, every stage's and one
+/// stage's (32, 107, 143, 166, 167, 180, 181, C.7). Each is one unit, its
+/// value taken whole. A change that gives the local layer another key
+/// adds it here.
+pub const LOCAL_KEYS: &[&[&str]] = &[
+    &["streams", "*", "agents"],
+    &["streams", "*", "priority"],
+    &["streams", "*", "points"],
+    &["streams", "*", "pace"],
+    &["streams", "*", "session"],
+    &["streams", "*", "labels", "*", "reserve"],
+    &["streams", "*", "labels", "*", "keep_free"],
+    &["repos", "*", "stream"],
+    &["repos", "*", "kinds", "*", "stream"],
+    &["kinds", "*", "stream"],
+    &["repos", "*", "kinds", "*", "label"],
+    &["kinds", "*", "label"],
+    &["kinds", "*", "agents", "*"],
+    &["kinds", "*", "agents", "stages", "*", "*"],
+    &["repos", "*", "kinds", "*", "agents", "*"],
+    &["repos", "*", "kinds", "*", "agents", "stages", "*", "*"],
+];
+
+/// The host's configuration as its layers state it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HostConfig {
     /// The bound on agents running, every caller's counted together;
@@ -59,6 +95,10 @@ pub struct HostConfig {
     pub pool: Option<String>,
     /// The pools declared, by name (144).
     pub pools: BTreeMap<String, Pool>,
+    /// Every value with its layer, whether the local layer was taken, and
+    /// each local key passed over with its pin; none of it where only one
+    /// table was read (C.7).
+    pub configuration: HostConfiguration,
 }
 
 /// The streams the configuration names for places: `stream` in
@@ -86,27 +126,136 @@ impl Default for HostConfig {
             streams_named: StreamsNamed::default(),
             pool: None,
             pools: BTreeMap::new(),
+            configuration: HostConfiguration::default(),
         }
     }
 }
 
 impl HostConfig {
-    /// The configuration in `path`: none of it where there is no file,
-    /// and the file's fault named where it is not one.
+    /// The configuration in `path`, the managed layer with no local one:
+    /// none of it where there is no file, and the file's fault named where
+    /// it is not one.
     pub fn read(path: &Path) -> Result<HostConfig, String> {
-        let text = match std::fs::read_to_string(path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(HostConfig::default())
-            }
-            Err(error) => return Err(format!("{}: {error}", path.display())),
-        };
-        HostConfig::parse(&text).map_err(|fault| format!("{}: {fault}", path.display()))
+        let managed = text_in(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        HostConfig::layers(&managed.unwrap_or_default(), None)
+            .map_err(|fault| format!("{}: {fault}", path.display()))
     }
 
-    /// The configuration `text` states.
+    /// The configuration of the managed layer in `managed` and the local
+    /// layer in `local` beside it: a managed file's fault refuses it,
+    /// naming the file, and a local file that cannot be read is not taken
+    /// (C.7; design 4).
+    pub fn read_layers(managed: &Path, local: &Path) -> Result<HostConfig, String> {
+        let text = text_in(managed).map_err(|error| format!("{}: {error}", managed.display()))?;
+        let managed_text = text.unwrap_or_default();
+        let config = match text_in(local) {
+            Ok(local) => HostConfig::layers(&managed_text, local.as_deref()),
+            Err(fault) => HostConfig::layers(&managed_text, None)
+                .map(|config| config.local_not_taken(vec![], Some(fault))),
+        };
+        config.map_err(|fault| format!("{}: {fault}", managed.display()))
+    }
+
+    /// The configuration the managed layer's `managed` and the local
+    /// layer's `local` state, none where there is no local file (C.7;
+    /// design 4). The local layer's units are each key of [`LOCAL_KEYS`]
+    /// it sets; one that `[host] pin` holds is passed over, and the rest
+    /// replace the managed layer's whole, a repository's table found by
+    /// its location as a key with `~` reads it. A local layer that sets
+    /// any other key, is no TOML, or whose units the reader refuses where
+    /// the managed layer alone reads, is not taken at all. A fault of the
+    /// managed layer, a pin of nothing the local layer may set among it,
+    /// refuses the configuration.
+    pub fn layers(managed: &str, local: Option<&str>) -> Result<HostConfig, String> {
+        let managed: Table = managed.parse().map_err(|error| format!("{error}"))?;
+        let alone = HostConfig::from_table(&managed)?.with_layers(
+            &managed,
+            LocalLayer::NoFile,
+            &[],
+            vec![],
+        );
+        let Some(local) = local else {
+            return Ok(alone);
+        };
+        let local_table: Table = match local.parse() {
+            Ok(table) => table,
+            Err(error) => return Ok(alone.local_not_taken(vec![], Some(toml_fault(local, &error)))),
+        };
+        let found = LocalUnits::of(&local_table);
+        if !found.keys.is_empty() || found.fault.is_some() {
+            return Ok(alone.local_not_taken(found.keys, found.fault));
+        }
+        let pins = pins_of(&managed)?;
+        let mut merged = managed.clone();
+        let mut taken = vec![];
+        let mut passed_over = vec![];
+        for (path, value) in found.units {
+            let read = as_read(&path);
+            match pins.iter().find(|(_, pin)| read.starts_with(pin)) {
+                Some((pin, _)) => passed_over.push(PassedOver {
+                    key: dotted(&path),
+                    pin: pin.clone(),
+                }),
+                None => {
+                    set_at(&mut merged, &path, value);
+                    taken.push(read);
+                }
+            }
+        }
+        match HostConfig::from_table(&merged) {
+            Ok(config) => Ok(config.with_layers(&merged, LocalLayer::Taken, &taken, passed_over)),
+            Err(fault) => Ok(alone.local_not_taken(vec![], Some(fault))),
+        }
+    }
+
+    /// This configuration, read from the managed layer alone, with its
+    /// local layer not taken for `keys` or `fault` (C.7).
+    fn local_not_taken(mut self, keys: Vec<String>, fault: Option<String>) -> HostConfig {
+        self.configuration.local = LocalLayer::NotTaken { keys, fault };
+        self
+    }
+
+    /// This configuration with every value of `table`, the one it was
+    /// read from, each local where it lies at or under a unit of `taken`,
+    /// the local layer's state and the keys passed over (C.7).
+    fn with_layers(
+        self,
+        table: &Table,
+        local: LocalLayer,
+        taken: &[Vec<String>],
+        passed_over: Vec<PassedOver>,
+    ) -> HostConfig {
+        let mut values = vec![];
+        for (name, value) in table {
+            let at = Leaf {
+                path: vec![name.clone()],
+                key: quoted(name),
+                listed: true,
+                secret: false,
+            };
+            values_of(value, at, taken, &mut values);
+        }
+        HostConfig {
+            configuration: HostConfiguration {
+                local,
+                values,
+                passed_over,
+            },
+            ..self
+        }
+    }
+
+    /// The configuration `text` states, read as one table, with no layer
+    /// kept.
     pub fn parse(text: &str) -> Result<HostConfig, String> {
         let table: toml::Table = text.parse().map_err(|error| format!("{error}"))?;
+        HostConfig::from_table(&table)
+    }
+
+    /// The configuration `table` states, its pins checked and no layer
+    /// kept.
+    fn from_table(table: &Table) -> Result<HostConfig, String> {
+        pins_of(table)?;
         let mut config = HostConfig::default();
         if let Some(kinds) = table.get("kinds") {
             config.kinds = kinds_settings(kinds, "kinds")?;
@@ -224,9 +373,291 @@ impl HostConfig {
             .or_else(|| self.pool.as_ref().map(|name| named(name, PoolFrom::Host)))
     }
 
-    /// The host's configuration, `$XDG_CONFIG_HOME/flume/config.toml`.
+    /// The host's configuration, `$XDG_CONFIG_HOME/flume/config.toml` and
+    /// `config.local.toml` over it (C.7).
     pub fn of_host() -> Result<HostConfig, String> {
-        HostConfig::read(&config_file()?)
+        HostConfig::read_layers(&config_file()?, &local_config_file()?)
+    }
+}
+
+/// A file's text, none where there is no file.
+fn text_in(path: &Path) -> Result<Option<String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("{error}")),
+    }
+}
+
+/// A file's fault as TOML gives it, on one line, with the line of the
+/// file it lies at.
+fn toml_fault(text: &str, error: &toml::de::Error) -> String {
+    let message = error.message().trim_end();
+    match error.span() {
+        Some(span) => {
+            let line = text[..span.start.min(text.len())].matches('\n').count() + 1;
+            format!("{message} at line {line}")
+        }
+        None => message.to_string(),
+    }
+}
+
+/// Whether `path` matches the first segments of `key`, `*` matching any
+/// one name.
+fn begins(key: &[&str], path: &[String]) -> bool {
+    path.len() <= key.len()
+        && path
+            .iter()
+            .zip(key)
+            .all(|(segment, word)| *word == "*" || segment == word)
+}
+
+/// Whether `path` is a key of [`LOCAL_KEYS`].
+fn is_local_key(path: &[String]) -> bool {
+    LOCAL_KEYS
+        .iter()
+        .any(|key| key.len() == path.len() && begins(key, path))
+}
+
+/// Whether `path` is a table holding some key of [`LOCAL_KEYS`].
+fn leads_to_local_key(path: &[String]) -> bool {
+    LOCAL_KEYS
+        .iter()
+        .any(|key| key.len() > path.len() && begins(key, path))
+}
+
+/// Whether the value `value` at `path` is one unit of the local layer's:
+/// a key of [`LOCAL_KEYS`], unless it is a table holding a longer one,
+/// as a kind's `agents.stages` does.
+fn is_unit(path: &[String], value: &Value) -> bool {
+    is_local_key(path) && !(value.is_table() && leads_to_local_key(path))
+}
+
+/// `path` with the repository segment after `repos` read as a
+/// repository's key is, its leading `~` the home, so two spellings of
+/// one repository compare equal.
+fn as_read(path: &[String]) -> Vec<String> {
+    let mut read = path.to_vec();
+    if read.first().is_some_and(|first| first == "repos") {
+        if let Some(repository) = read.get_mut(1) {
+            *repository = home(repository);
+        }
+    }
+    read
+}
+
+/// `path` as a dotted key in TOML's spelling.
+fn dotted(path: &[String]) -> String {
+    path.iter()
+        .map(|segment| quoted(segment))
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+/// What a local layer's table holds: each unit it sets, by its path, in
+/// order; each key it may not set, named once; and its fault, a table of
+/// the list's that is no table (C.7).
+#[derive(Default)]
+struct LocalUnits {
+    units: Vec<(Vec<String>, Value)>,
+    keys: Vec<String>,
+    fault: Option<String>,
+}
+
+impl LocalUnits {
+    /// The units, keys and fault of the local layer's `table`.
+    fn of(table: &Table) -> LocalUnits {
+        let mut found = LocalUnits::default();
+        found.walk(table, &mut vec![]);
+        found
+    }
+
+    /// Walks `table` at `path`, each table holding a key of the list
+    /// walked further, and each top table, so a key it may not set is
+    /// named by two segments.
+    fn walk(&mut self, table: &Table, path: &mut Vec<String>) {
+        for (name, value) in table {
+            path.push(name.clone());
+            match value {
+                Value::Table(inner) if path.len() < 2 || leads_to_local_key(path) => {
+                    self.walk(inner, path)
+                }
+                _ if is_local_key(path) => self.units.push((path.clone(), value.clone())),
+                _ if leads_to_local_key(path) => {
+                    self.fault
+                        .get_or_insert_with(|| format!("[{}] is not a table", dotted(path)));
+                }
+                _ => {
+                    let key = dotted(named_by(path));
+                    if !self.keys.contains(&key) {
+                        self.keys.push(key);
+                    }
+                }
+            }
+            path.pop();
+        }
+    }
+}
+
+/// The part of `path`, a key the local layer may not set, that names it:
+/// the shortest that leads to no key of [`LOCAL_KEYS`], and at least two
+/// segments where it has two, so everything in `[pools.work]` is named
+/// `pools.work` and a stream's `pool` `streams.work.pool` (C.7).
+fn named_by(path: &[String]) -> &[String] {
+    let shortest = (1..=path.len())
+        .find(|n| {
+            let part = &path[..*n];
+            !is_local_key(part) && !leads_to_local_key(part)
+        })
+        .unwrap_or(path.len());
+    &path[..shortest.max(2).min(path.len())]
+}
+
+/// The managed layer's pins, `[host] pin`, each by its words as written
+/// and its path as read, a repository's `~` the home: each a dotted key
+/// in TOML's spelling, read by parsing `<pin> = 0` as a document, naming
+/// a key of [`LOCAL_KEYS`] or a table holding some; any other refused
+/// naming it (C.7).
+fn pins_of(table: &Table) -> Result<Vec<(String, Vec<String>)>, String> {
+    let Some(given) = table
+        .get("host")
+        .and_then(Value::as_table)
+        .and_then(|host| host.get("pin"))
+    else {
+        return Ok(vec![]);
+    };
+    let given = given
+        .as_array()
+        .ok_or("[host] pin is not a list of dotted keys".to_string())?;
+    let mut pins = vec![];
+    for pin in given {
+        let pin = pin
+            .as_str()
+            .ok_or(format!("[host] pin holds {pin}, which is not a dotted key"))?;
+        let path = key_path(pin).ok_or(format!(
+            "[host] pin holds {pin:?}, which is not a dotted key"
+        ))?;
+        if !is_local_key(&path) && !leads_to_local_key(&path) {
+            return Err(format!(
+                "[host] pin holds {pin:?}, which names nothing the local layer may set"
+            ));
+        }
+        pins.push((pin.to_string(), as_read(&path)));
+    }
+    Ok(pins)
+}
+
+/// The path the dotted key `key` names in TOML's spelling, read by parsing
+/// `<key> = 0` as a document; none where that is not one key.
+fn key_path(key: &str) -> Option<Vec<String>> {
+    let mut table: Table = format!("{key} = 0").parse().ok()?;
+    let mut path = vec![];
+    loop {
+        if table.len() != 1 {
+            return None;
+        }
+        let (name, value) = table.into_iter().next()?;
+        path.push(name);
+        match value {
+            Value::Table(inner) => table = inner,
+            Value::Integer(0) => return Some(path),
+            _ => return None,
+        }
+    }
+}
+
+/// Sets `value` at `path` in `table`, replacing what stands there whole,
+/// each table on the way made where there is none; a repository's table
+/// is the one whose key reads as the same location, `~` the home, where
+/// the table has one.
+fn set_at(table: &mut Table, path: &[String], value: Value) {
+    let mut table = table;
+    for (n, segment) in path.iter().enumerate() {
+        let segment = if n == 1 && path[0] == "repos" {
+            let location = home(segment);
+            table
+                .keys()
+                .find(|key| home(key) == location)
+                .cloned()
+                .unwrap_or_else(|| segment.clone())
+        } else {
+            segment.clone()
+        };
+        if n + 1 == path.len() {
+            table.insert(segment, value);
+            return;
+        }
+        let entry = table
+            .entry(segment)
+            .or_insert_with(|| Value::Table(Table::new()));
+        if !entry.is_table() {
+            *entry = Value::Table(Table::new());
+        }
+        table = entry.as_table_mut().expect("a table was made");
+    }
+}
+
+/// Where a value of the configuration lies: its path, its dotted key as
+/// TOML writes it, whether it lies in no array, so its path may be a key
+/// of [`LOCAL_KEYS`], and whether it lies in an `env` table.
+struct Leaf {
+    path: Vec<String>,
+    key: String,
+    listed: bool,
+    secret: bool,
+}
+
+/// Every value `value` at `at` holds, pushed onto `values` by its dotted
+/// key: a unit of [`LOCAL_KEYS`] whole, an array of tables by index
+/// (`pools.work.accounts[0].name`), an `env` table's values as `<set>`
+/// and never as written, and every other leaf as TOML writes it; each
+/// local where it lies at or under a unit of `taken`, else managed (C.7;
+/// core.30).
+fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<ConfigValue>) {
+    let layer = if at.listed && taken.iter().any(|unit| as_read(&at.path).starts_with(unit)) {
+        ConfigLayer::Local
+    } else {
+        ConfigLayer::Managed
+    };
+    let mut push = |value: String| {
+        values.push(ConfigValue {
+            key: at.key.clone(),
+            value,
+            layer,
+        })
+    };
+    let env = at.path.last().is_some_and(|name| name == "env");
+    match value {
+        Value::Table(table) if at.secret || env || !(at.listed && is_unit(&at.path, value)) => {
+            for (name, inner) in table {
+                let mut path = at.path.clone();
+                path.push(name.clone());
+                let inner_at = Leaf {
+                    path,
+                    key: format!("{}.{}", at.key, quoted(name)),
+                    listed: at.listed,
+                    secret: at.secret || env,
+                };
+                values_of(inner, inner_at, taken, values);
+            }
+        }
+        _ if at.secret || env => push(SET.to_string()),
+        Value::Array(items)
+            if !items.is_empty()
+                && items.iter().all(Value::is_table)
+                && !(at.listed && is_unit(&at.path, value)) =>
+        {
+            for (n, item) in items.iter().enumerate() {
+                let item_at = Leaf {
+                    path: at.path.clone(),
+                    key: format!("{}[{n}]", at.key),
+                    listed: false,
+                    secret: at.secret,
+                };
+                values_of(item, item_at, taken, values);
+            }
+        }
+        _ => push(value.to_string()),
     }
 }
 
@@ -552,6 +983,12 @@ pub fn flume_data() -> Result<PathBuf, String> {
 /// The host's configuration file, `$XDG_CONFIG_HOME/flume/config.toml`.
 pub fn config_file() -> Result<PathBuf, String> {
     xdg("XDG_CONFIG_HOME", ".config").map(|dir| dir.join("flume").join("config.toml"))
+}
+
+/// The host's local layer, `$XDG_CONFIG_HOME/flume/config.local.toml`
+/// (C.7).
+pub fn local_config_file() -> Result<PathBuf, String> {
+    config_file().map(|file| file.with_file_name("config.local.toml"))
 }
 
 #[cfg(test)]
@@ -1003,5 +1440,426 @@ stream = "work"
     fn a_bound_that_is_no_count_is_refused() {
         assert!(HostConfig::parse("[host]\nagents = -1\n").is_err());
         assert!(HostConfig::parse("[host]\nagents = \"two\"\n").is_err());
+    }
+
+    /// A managed layer giving `work` six agents and the pool `work`.
+    const WORK: &str = "[streams.work]\nagents = 6\npool = \"work\"\n\
+         [pools.work]\nstrategy = \"fill-first\"\n\
+         accounts = [{ name = \"w\", program = \"agent\", env = { AGENT_HOME = \"~/.agent-w\" } }]\n";
+
+    /// The configuration's value at `key`, with its layer.
+    fn value_at(config: &HostConfig, key: &str) -> Option<(String, ConfigLayer)> {
+        config
+            .configuration
+            .values
+            .iter()
+            .find(|value| value.key == key)
+            .map(|value| (value.value.clone(), value.layer))
+    }
+
+    #[test]
+    fn a_streams_bound_and_priority_set_locally() {
+        // C.7, S83: the local layer's three agents and priority 30 over
+        // the managed layer's six, the pool the managed layer's.
+        let config =
+            HostConfig::layers(WORK, Some("[streams.work]\nagents = 3\npriority = 30\n")).unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let work = &config.streams["work"];
+        assert_eq!(
+            (work.agents, work.priority, work.pool.as_deref()),
+            (Some(3), 30, Some("work"))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.agents"),
+            Some(("3".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.priority"),
+            Some(("30".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.pool"),
+            Some(("\"work\"".into(), ConfigLayer::Managed))
+        );
+        assert_eq!(config.configuration.passed_over, vec![]);
+    }
+
+    #[test]
+    fn a_kinds_settings_key_by_key() {
+        // 32, C.7: the local model, the managed instructions.
+        let config = HostConfig::layers(
+            "[kinds.change.agents]\nmodel = \"opus\"\ninstructions = \"be brief\"\n",
+            Some("[kinds.change.agents]\nmodel = \"sonnet\"\n"),
+        )
+        .unwrap();
+        let change = &config.kinds["change"].every_stage;
+        assert_eq!(change.model.as_deref(), Some("sonnet"));
+        assert_eq!(change.instructions.as_deref(), Some("be brief"));
+        assert_eq!(
+            value_at(&config, "kinds.change.agents.model"),
+            Some(("\"sonnet\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "kinds.change.agents.instructions"),
+            Some(("\"be brief\"".into(), ConfigLayer::Managed))
+        );
+    }
+
+    #[test]
+    fn one_stages_settings_and_a_mode_each_taken_whole() {
+        // 32, C.7; core.30: a stage's model under `stages`, and a mode's
+        // table of programs one unit, replacing the managed one whole.
+        let config = HostConfig::layers(
+            "[kinds.fix.agents]\nmode = { agent = \"careful\", other = \"wide\" }\n\
+             [kinds.fix.agents.stages.code]\nmodel = \"opus\"\ninstructions = \"test first\"\n",
+            Some(
+                "[kinds.fix.agents]\nmode = { agent = \"edits\" }\n\
+                 [kinds.fix.agents.stages.code]\nmodel = \"sonnet\"\n",
+            ),
+        )
+        .unwrap();
+        let fix = &config.kinds["fix"];
+        assert_eq!(
+            fix.every_stage.mode,
+            Some(ModeSetting::Programs(BTreeMap::from([(
+                "agent".to_string(),
+                "edits".to_string()
+            )]))),
+            "the managed table's other program goes with it"
+        );
+        assert_eq!(fix.stages["code"].model.as_deref(), Some("sonnet"));
+        assert_eq!(
+            fix.stages["code"].instructions.as_deref(),
+            Some("test first")
+        );
+        assert_eq!(
+            value_at(&config, "kinds.fix.agents.mode"),
+            Some(("{ agent = \"edits\" }".into(), ConfigLayer::Local)),
+            "a unit given whole"
+        );
+        assert_eq!(
+            value_at(&config, "kinds.fix.agents.stages.code.instructions"),
+            Some(("\"test first\"".into(), ConfigLayer::Managed))
+        );
+    }
+
+    #[test]
+    fn no_local_file() {
+        // C.7: the managed layer alone, every value its own.
+        let config = HostConfig::layers(WORK, None).unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::NoFile);
+        assert_eq!(config.streams["work"].agents, Some(6));
+        assert!(!config.configuration.values.is_empty());
+        assert!(config
+            .configuration
+            .values
+            .iter()
+            .all(|value| value.layer == ConfigLayer::Managed));
+    }
+
+    #[test]
+    fn every_value_as_toml_writes_it_and_no_variables() {
+        // 56, C.7; core.30: an array of tables by index, an account's
+        // variables `<set>`, a pin's list as written.
+        let config = HostConfig::layers(
+            &format!("[host]\nagents = 8\npin = [\"streams.work.agents\"]\n{WORK}"),
+            None,
+        )
+        .unwrap();
+        let values: Vec<(&str, &str)> = config
+            .configuration
+            .values
+            .iter()
+            .map(|value| (value.key.as_str(), value.value.as_str()))
+            .collect();
+        for value in [
+            ("host.agents", "8"),
+            ("host.pin", "[\"streams.work.agents\"]"),
+            ("streams.work.agents", "6"),
+            ("pools.work.strategy", "\"fill-first\""),
+            ("pools.work.accounts[0].name", "\"w\""),
+            ("pools.work.accounts[0].program", "\"agent\""),
+            ("pools.work.accounts[0].env.AGENT_HOME", SET),
+        ] {
+            assert!(values.contains(&value), "{value:?} in {values:?}");
+        }
+        assert!(
+            !values.iter().any(|(_, value)| value.contains(".agent-w")),
+            "a variable's value in {values:?}"
+        );
+    }
+
+    #[test]
+    fn a_local_file_that_sets_a_pool() {
+        // C.7, S83: no key of it taken, its pool named.
+        let config = HostConfig::layers(
+            WORK,
+            Some(
+                "[streams.work]\nagents = 3\n\
+                 [pools.work]\nstrategy = \"least-busy\"\n\
+                 accounts = [{ name = \"local\", program = \"agent\" }]\n",
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["pools.work".into()],
+                fault: None,
+            }
+        );
+        assert_eq!(config.streams["work"].agents, Some(6));
+        assert_eq!(config.pools["work"].strategy, Strategy::FillFirst);
+        assert!(config
+            .configuration
+            .values
+            .iter()
+            .all(|value| value.layer == ConfigLayer::Managed));
+    }
+
+    #[test]
+    fn a_streams_pool_set_locally() {
+        // C.7: a stream's pool is the managed layer's alone.
+        let config =
+            HostConfig::layers(WORK, Some("[streams.work]\npool = \"personal\"\n")).unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["streams.work.pool".into()],
+                fault: None,
+            }
+        );
+        assert_eq!(config.streams["work"].pool.as_deref(), Some("work"));
+    }
+
+    #[test]
+    fn each_key_the_local_layer_may_not_set_named_once() {
+        // C.7: by the shortest part of its path that leads to no key the
+        // local layer may set, and at least two segments.
+        let config = HostConfig::layers(
+            "",
+            Some(
+                "[pools.work]\nstrategy = \"fill-first\"\naccounts = [{ name = \"w\", program = \"agent\" }]\n\
+                 [host]\nagents = 2\n\
+                 [roles.\"a/b\"]\nrepository = \"/r\"\nkind = \"planner\"\n\
+                 [streams.work]\nagents = 3\npool = \"x\"\n",
+            ),
+        )
+        .unwrap();
+        let LocalLayer::NotTaken { mut keys, fault } = config.configuration.local else {
+            panic!("the local layer taken");
+        };
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                "host.agents",
+                "pools.work",
+                "roles.\"a/b\"",
+                "streams.work.pool"
+            ]
+        );
+        assert_eq!(fault, None);
+        assert_eq!(config.streams["default"], Stream::default());
+        assert!(!config.streams.contains_key("work"), "no key of it taken");
+    }
+
+    #[test]
+    fn a_local_file_at_fault() {
+        // C.7: not TOML, or a value its key refuses, and the managed
+        // layer read alone.
+        for (local, named) in [
+            ("[streams.work\nagents = 3\n", "line 1"),
+            ("[streams.work]\nagents = \"three\"\n", "agents"),
+            ("streams = 3\n", "[streams] is not a table"),
+        ] {
+            let config = HostConfig::layers(WORK, Some(local)).unwrap();
+            let LocalLayer::NotTaken { keys, fault } = &config.configuration.local else {
+                panic!("{local}: {:?}", config.configuration.local);
+            };
+            assert!(keys.is_empty(), "{local}: {keys:?}");
+            let fault = fault.as_deref().unwrap_or_default();
+            assert!(fault.contains(named), "{local}: {fault}");
+            assert_eq!(config.streams["work"].agents, Some(6), "{local}");
+            assert!(
+                !fault.contains('\n'),
+                "{local}: the fault on one line: {fault}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stream_only_the_local_layer_names() {
+        // 143, 144, C.7: declared by the local layer with no pool, so its
+        // places take the host's.
+        let config = HostConfig::layers(
+            "[host]\npool = \"personal\"\n\
+             [pools.personal]\nstrategy = \"least-busy\"\naccounts = [{ name = \"p\", program = \"agent\" }]\n",
+            Some("[streams.nightly]\nagents = 1\n[kinds.chore]\nstream = \"nightly\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        assert_eq!(config.streams["nightly"].agents, Some(1));
+        assert_eq!(
+            config.stream_for("/r", "chore"),
+            Some(StreamHeld {
+                name: "nightly".into(),
+                from: StreamFrom::HostKind,
+            })
+        );
+        assert_eq!(
+            config.pool_for("nightly"),
+            Some(PoolNamed {
+                name: "personal".into(),
+                from: PoolFrom::Host,
+            })
+        );
+        assert_eq!(
+            value_at(&config, "streams.nightly.agents"),
+            Some(("1".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "host.pool"),
+            Some(("\"personal\"".into(), ConfigLayer::Managed))
+        );
+    }
+
+    #[test]
+    fn one_key_pinned() {
+        // C.7, S83: the priority taken, the agents passed over and named
+        // with their pin.
+        let config = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work.agents\"]\n{WORK}"),
+            Some("[streams.work]\nagents = 3\npriority = 30\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let work = &config.streams["work"];
+        assert_eq!((work.agents, work.priority), (Some(6), 30));
+        assert_eq!(
+            config.configuration.passed_over,
+            vec![PassedOver {
+                key: "streams.work.agents".into(),
+                pin: "streams.work.agents".into(),
+            }]
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.agents"),
+            Some(("6".into(), ConfigLayer::Managed))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.priority"),
+            Some(("30".into(), ConfigLayer::Local))
+        );
+    }
+
+    #[test]
+    fn a_table_pinned() {
+        // C.7: both of work's keys passed over, the fix's stream taken.
+        let config = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work\"]\n{WORK}"),
+            Some("[streams.work]\nagents = 3\nsession = \"office\"\n[kinds.fix]\nstream = \"work\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let mut passed: Vec<(String, String)> = config
+            .configuration
+            .passed_over
+            .iter()
+            .map(|over| (over.key.clone(), over.pin.clone()))
+            .collect();
+        passed.sort();
+        assert_eq!(
+            passed,
+            vec![
+                ("streams.work.agents".into(), "streams.work".into()),
+                ("streams.work.session".into(), "streams.work".into()),
+            ]
+        );
+        assert_eq!(config.streams["work"].agents, Some(6));
+        assert_eq!(config.streams["work"].session, None);
+        assert_eq!(
+            config.stream_for("/r", "fix").map(|held| held.name),
+            Some("work".into())
+        );
+    }
+
+    #[test]
+    fn a_pin_of_nothing_the_local_layer_sets() {
+        // C.7: refused naming the pin, as any fault of the managed layer
+        // is, whether or not there is a local file.
+        for pin in [
+            "\"pools.work\"",
+            "\"host.agents\"",
+            "\"streams.work.pool\"",
+            "\"streams.work.agents.more\"",
+            "\"no key\"",
+            "3",
+        ] {
+            let managed = format!("[host]\npin = [{pin}]\n{WORK}");
+            for local in [None, Some("[streams.work]\nagents = 3\n")] {
+                let refused = HostConfig::layers(&managed, local).unwrap_err();
+                assert!(
+                    refused.contains("[host] pin") && refused.contains(pin.trim_matches('"')),
+                    "{pin}: {refused}"
+                );
+            }
+        }
+        for pin in [
+            "\"streams\"",
+            "\"kinds.fix.agents\"",
+            "'repos.\"/r\".stream'",
+        ] {
+            let managed = format!("[host]\npin = [{pin}]\n");
+            assert!(HostConfig::layers(&managed, None).is_ok(), "{pin}");
+        }
+    }
+
+    #[test]
+    fn a_pin_of_a_repositorys_key_with_the_home_or_tilde() {
+        // C.7: a repository's key in a pin, in the local layer and in the
+        // managed one each read with its `~` the home.
+        let home = std::env::var("HOME").expect("the home");
+        let at_home = format!("{home}/Code/acme");
+        for (pinned, local) in [
+            ("~/Code/acme", at_home.as_str()),
+            (at_home.as_str(), "~/Code/acme"),
+        ] {
+            let config = HostConfig::layers(
+                &format!(
+                    "[host]\npin = ['repos.\"{pinned}\".stream']\n\
+                     [repos.\"~/Code/acme\"]\nstream = \"work\"\n"
+                ),
+                Some(&format!(
+                    "[repos.\"{local}\"]\nstream = \"personal\"\n\
+                     [repos.\"{local}\".kinds.fix]\nstream = \"nightly\"\n"
+                )),
+            )
+            .unwrap();
+            assert_eq!(
+                config.configuration.passed_over,
+                vec![PassedOver {
+                    key: format!("repos.\"{local}\".stream"),
+                    pin: format!("repos.\"{pinned}\".stream"),
+                }],
+                "{pinned} pinning {local}"
+            );
+            assert_eq!(
+                config.stream_for(&at_home, "chore").map(|held| held.name),
+                Some("work".into())
+            );
+            assert_eq!(
+                config.stream_for(&at_home, "fix"),
+                Some(StreamHeld {
+                    name: "nightly".into(),
+                    from: StreamFrom::HostRepositoryKind,
+                }),
+                "the local kind's stream set into the managed repository's table"
+            );
+            assert_eq!(
+                value_at(&config, "repos.\"~/Code/acme\".kinds.fix.stream"),
+                Some(("\"nightly\"".into(), ConfigLayer::Local))
+            );
+        }
     }
 }

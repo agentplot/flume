@@ -75,8 +75,8 @@ impl RealHost {
     }
 
     /// The host as this command finds it: `$XDG_STATE_HOME/flume`, the
-    /// configuration in `$XDG_CONFIG_HOME/flume/config.toml`, and
-    /// `$FLUME_RECIPIENT`.
+    /// configuration in `$XDG_CONFIG_HOME/flume/config.toml` and
+    /// `config.local.toml` over it, and `$FLUME_RECIPIENT`.
     pub fn of_host() -> Result<RealHost, String> {
         Ok(RealHost::new(
             config::flume_state()?,
@@ -269,10 +269,10 @@ impl Host for RealHost {
         None
     }
 
-    /// No local layer and no value: the configuration's reader keeps
-    /// neither (C.7).
+    /// The configuration as this command read it, its managed layer and
+    /// its local one over it, every value with its layer (56, C.7).
     fn configuration(&self) -> HostConfiguration {
-        HostConfiguration::default()
+        self.config.configuration.clone()
     }
 
     fn pool_for(&self, stream: &str) -> Option<PoolNamed> {

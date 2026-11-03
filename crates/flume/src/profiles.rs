@@ -335,7 +335,8 @@ pub fn terminal(
 
 /// The core over the profiles built in, for one command on this host:
 /// flume's state in `$XDG_STATE_HOME/flume`, the host's configuration in
-/// `$XDG_CONFIG_HOME/flume/config.toml`, and the recipient
+/// `$XDG_CONFIG_HOME/flume/config.toml` and `config.local.toml` over it,
+/// and the recipient
 /// `$FLUME_RECIPIENT` names; a configuration that cannot be read is
 /// refused, naming its fault (C.7; design 16).
 pub fn core() -> Result<Engine, String> {
