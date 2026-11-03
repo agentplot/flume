@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "72410b2";
+pub const REVISION: &str = "a15d927";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -50,7 +50,7 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11, which numbers them with no gap.
-pub const SCENARIOS: u32 = 79;
+pub const SCENARIOS: u32 = 81;
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -69,6 +69,11 @@ pub const POINTS: &str = "record 0025's change, points, built after the mode";
 /// The change that builds record 0026's common profile and the degraded
 /// parts of the agent seam.
 pub const PROFILES: &str = "record 0026's change, every program the terminal starts, once accepted";
+
+/// The change that builds record 0020's second amendment: an intent's
+/// account per program, and a pool that cannot run a stage refusing it.
+pub const PER_PROGRAM: &str =
+    "an-intents-affinity-is-kept-per-program, record 0020's second amendment";
 
 /// The change that builds records 0028 and 0029: statechart kinds, run
 /// on the family's engine moved into weir.
@@ -108,12 +113,16 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| clause.to_string())
         .chain((76..=77).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STATECHART));
+    let per_program = (80..=81)
+        .map(|scenario| format!("S{scenario}"))
+        .map(|clause| (clause, PER_PROGRAM));
     standing
         .chain(packages)
         .chain(plan)
         .chain(points)
         .chain(profiles)
         .chain(statechart)
+        .chain(per_program)
         .collect()
 }
 
@@ -139,9 +148,9 @@ mod tests {
                 .filter(|clause| ![100, 150].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 177 + 8 + 79);
+        assert_eq!(all().len(), 177 + 8 + 81);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        assert_eq!(REVISION, "72410b2");
+        assert_eq!(REVISION, "a15d927");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
             173, 175, 176, 177,
@@ -158,7 +167,7 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_and_0029s() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6);
+        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 2);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
