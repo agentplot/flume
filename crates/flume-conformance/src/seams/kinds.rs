@@ -33,6 +33,7 @@ pub fn bump(agents: usize) -> Kind {
         starts_unready: false,
         lands: true,
         agents: KindSettings::default(),
+        label: None,
         stages: vec![Stage {
             name: "code".into(),
             prompt: "{{brief}}\n\n{{needs}}".into(),

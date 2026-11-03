@@ -14,7 +14,8 @@ pub mod process;
 
 use config::HostConfig;
 use flume_seams::{
-    Host, HostSettings, Pool, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Stream, StreamHeld,
+    Host, HostConfiguration, HostSettings, LabelHeld, Pool, PoolNamed, RoleRun, RoomGuard, Seconds,
+    Secret, Stream, StreamHeld,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -261,6 +262,17 @@ impl Host for RealHost {
 
     fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld> {
         self.config.stream_for(repository, kind)
+    }
+
+    /// None: the configuration's reader takes no `label` (180).
+    fn label_for(&self, _repository: &str, _kind: &str) -> Option<LabelHeld> {
+        None
+    }
+
+    /// No local layer and no value: the configuration's reader keeps
+    /// neither (C.7).
+    fn configuration(&self) -> HostConfiguration {
+        HostConfiguration::default()
     }
 
     fn pool_for(&self, stream: &str) -> Option<PoolNamed> {

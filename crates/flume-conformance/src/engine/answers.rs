@@ -81,6 +81,7 @@ fn settings() -> Settings {
             ("agent".into(), "careful".into()),
             ("other".into(), "edits".into()),
         ]))),
+        session: None,
     }
 }
 
@@ -356,6 +357,7 @@ fn place_status() -> PlaceStatus {
                 place: Some("tab w1:t2".into()),
                 agent: Some("pane w1:p3".into()),
                 base: None,
+                bases: vec![],
             },
         }),
     }

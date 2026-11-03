@@ -282,6 +282,7 @@ fn a_streams_part_of_status(_: &()) -> Outcome {
             agents: Some(4),
             priority: 10,
             pool: None,
+            ..Stream::default()
         }),
     );
     let mut places = vec![];

@@ -321,6 +321,8 @@ fn map_kind(
             .enumerate()
             .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), prompt, problems))
             .collect(),
+        // weir-kinds reads no label of a simple kind (180; core.4).
+        label: None,
     }
 }
 
@@ -439,5 +441,7 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
         instructions,
         beside,
         mode,
+        // A kind names nothing a host owns, a session among it (158).
+        session: None,
     }
 }

@@ -22,6 +22,11 @@ pub struct Kind {
     #[serde(default)]
     pub agents: KindSettings,
     pub stages: Vec<Stage>,
+    /// The label its declaration gives its places, which the host's
+    /// configuration may give another; none where it gives none, and in
+    /// a kind read before (180, C.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 /// One step of a kind (23), as declared: every agent and every
@@ -95,6 +100,11 @@ pub struct Settings {
     /// before (162, 169).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<ModeSetting>,
+    /// The terminal session the agent opens in, named by the launch's
+    /// settings alone; none where they name none, and in settings written
+    /// before (32, 107).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
 }
 
 /// flume's four modes, which mean the same on every program (169).
@@ -264,6 +274,7 @@ impl Settings {
                 .or_else(|| self.instructions.clone()),
             beside: over.beside.clone().or_else(|| self.beside.clone()),
             mode: over.mode.clone().or_else(|| self.mode.clone()),
+            session: over.session.clone().or_else(|| self.session.clone()),
         }
     }
 }

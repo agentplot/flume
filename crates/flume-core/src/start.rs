@@ -531,6 +531,8 @@ impl Engine {
                 opening: Some(self.host.command()),
                 dialog: None,
                 conversation: conversation.clone(),
+                session: None,
+                label: None,
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
@@ -590,12 +592,16 @@ impl Engine {
             &text,
         );
         let folder = self.store.folder(id);
+        let at = match &settings.beside {
+            Some(pane) => OpenIn::Beside { pane: pane.clone() },
+            None => OpenIn::Own,
+        };
         let opened = self.terminal.open(
             &place,
             &folder,
             &command,
             &identity,
-            settings.beside.as_deref(),
+            &at,
             session.as_deref(),
         );
         self.with_start(id, &identity, |start, _| {

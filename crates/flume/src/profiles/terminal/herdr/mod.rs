@@ -74,8 +74,8 @@
 
 use crate::host::process::{executable, program_path};
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, FolderTrust, Identity, Opened, PlaceRef, Sent, Shown,
-    ShownAt, Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Closed, Clues, FolderTrust, Identity, OpenIn, Opened, PlaceRef, Sent,
+    Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -1456,9 +1456,18 @@ impl Terminal for Herdr {
         folder: &str,
         command: &AgentCommand,
         identity: &Identity,
-        beside: Option<&str>,
+        at: &OpenIn,
         session: Option<&str>,
     ) -> Opened {
+        let beside = match at {
+            OpenIn::Beside { pane } => Some(pane.as_str()),
+            OpenIn::Own => None,
+            OpenIn::Session { name } => {
+                return Opened::Refused {
+                    reason: format!("this herdr profile opens no agent in the session {name}"),
+                }
+            }
+        };
         if self.state(identity) != AgentState::Stopped {
             return Opened::Refused {
                 reason: format!("an agent is live under {identity}"),
@@ -1966,6 +1975,7 @@ impl Terminal for Herdr {
             base: self
                 .workspace(place)
                 .map(|(workspace, socket)| named(&workspace, &socket)),
+            bases: vec![],
         }
     }
 
@@ -2072,6 +2082,7 @@ mod tests {
                 place: Some("herdr:w1:t2@/run/h.sock".into()),
                 agent: Some("herdr:w1:p3@/run/h.sock".into()),
                 base: Some("herdr:w1@/run/h.sock".into()),
+                bases: vec![],
             }
         );
         let _ = fs::remove_dir_all(records);

@@ -55,6 +55,7 @@ impl Engine {
             .terminal
             .shown_at(&held.place.place_ref(), clues.agent.as_ref());
         shown_at.base = None;
+        shown_at.bases.clear();
         Some(PlaceClues {
             title: format!("{} · {}", clues.stage, clues.state),
             display_agent: held.place.short(),

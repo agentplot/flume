@@ -153,7 +153,7 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     agent.set_own_work(&who, Reading::Unknown);
@@ -229,7 +229,7 @@ fn the_agents_record_is_read_in_its_folder_alone() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     agent.keep_record_in(&who, "/state/fix--one");
@@ -297,7 +297,7 @@ fn the_agents_modes_are_scripted() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
         command
     };
     let who = identity("code", 1);
@@ -394,7 +394,7 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let who = identity("code", 1);
     opened(&who);
@@ -567,7 +567,7 @@ fn the_agents_word_names_the_session_it_resumes() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let carried = identity("code", 2);
     opened(&carried, Some("s-1"));
@@ -618,7 +618,7 @@ fn a_carried_start_scripted_to_end_before_its_word() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let carried = identity("code", 2);
     opened(&carried, Some("s-1"));
@@ -654,7 +654,7 @@ fn the_terminals_states_follow_the_fake_clock() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     terminal.schedule(&who, host.now() + 240, AgentState::Waiting);
@@ -1080,7 +1080,7 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(matches!(opened, Opened::Opened { .. }));
@@ -1095,7 +1095,7 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         "/state/fix--one",
         &AgentCommand::default(),
         &identity("code", 2),
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(matches!(second, Opened::Refused { .. }), "{second:?}");
@@ -1142,6 +1142,7 @@ fn a_streams_pool_and_the_hosts() {
             agents: Some(5),
             priority: 10,
             pool: Some("work".into()),
+            ..Stream::default()
         }),
     );
     host.set_stream("personal", Some(Stream::default()));

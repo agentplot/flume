@@ -332,6 +332,7 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
         starts_unready: false,
         lands: false,
         agents: KindSettings::default(),
+        label: None,
         stages: stages
             .iter()
             .map(|name| Stage {
