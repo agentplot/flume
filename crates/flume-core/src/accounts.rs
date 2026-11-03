@@ -66,10 +66,15 @@ impl PoolRoom {
             .filter(move |room| room.account.program == program)
     }
 
+    /// Whether the pool holds an account that runs `program`, spent, full
+    /// or neither (145).
+    pub fn runs(&self, program: &str) -> bool {
+        self.running_program(program).next().is_some()
+    }
+
     /// Whether a start of `program` may take an account of the pool.
     pub fn usable(&self, program: &str) -> Usable {
-        let mut of_program = self.running_program(program).peekable();
-        if of_program.peek().is_none() {
+        if !self.runs(program) {
             return Usable::NoProgram;
         }
         if self.accounts.iter().any(|room| room.usable(program)) {
@@ -121,20 +126,35 @@ pub(crate) enum Choice {
     Wait,
     /// The pool named is not declared, naming it.
     Undeclared(String),
+    /// The pool holds no account that runs the stage's program, in
+    /// [`no_account`]'s words: the stage is refused, since no room the pool
+    /// gives could start it (4, 32, 145).
+    NoAccount(String),
+}
+
+/// Why a stage whose agent runs `program` cannot start on the pool `pool`,
+/// which holds no account of that program: the words a launch and a start
+/// refuse it in (4, 32, 145).
+pub(crate) fn no_account(stage: &str, pool: &str, program: &str) -> String {
+    format!(
+        "the stage {stage}'s agent runs {program}, and the pool {pool} holds no account of {program}, so no room it gives could start it (145)"
+    )
 }
 
 impl Engine {
-    /// The account a start of `place`'s stage whose agent runs `program`
-    /// takes: the intent's affinity's for `program` while it is usable,
-    /// else the strategy's choice over its pool's usable accounts, in
-    /// order; and, where the strategy chose because the affinity's account
-    /// for `program` was spent or full, the intent's move to it for
+    /// The account a start of `place`'s stage `stage` whose agent runs
+    /// `program` takes: the intent's affinity's for `program` while it is
+    /// usable, else the strategy's choice over its pool's usable accounts,
+    /// in order; and, where the strategy chose because the affinity's
+    /// account for `program` was spent or full, the intent's move to it for
     /// `program`, unless it is an account the affinity for `program` once
-    /// left. A program the affinity keeps no account for moves nothing
-    /// (144, 145, 147; core.32).
+    /// left. A program the affinity keeps no account for moves nothing, and
+    /// a pool that holds no account of `program` refuses the stage (4, 32,
+    /// 144, 145, 147; core.32).
     pub(crate) fn choose_account(
         &self,
         place: &PlaceRecord,
+        stage: &str,
         program: Option<&str>,
         affinity: Option<&Affinity>,
         queue: &Queue,
@@ -155,6 +175,9 @@ impl Engine {
         let Some(program) = program else {
             return (Choice::Wait, None);
         };
+        if let Usable::NoProgram = room.usable(program) {
+            return (Choice::NoAccount(no_account(stage, pool, program)), None);
+        }
         let kept = affinity
             .and_then(|affinity| affinity.accounts.get(program))
             .filter(|kept| kept.pool == pool)
@@ -232,6 +255,35 @@ impl Engine {
             affinity.gone = None;
             Some(affinity)
         });
+    }
+}
+
+impl Engine {
+    /// Refuses a launch's stage `stage` of a place in `stream` whose agent
+    /// runs `program` where the pool the host's configuration names for
+    /// the stream, as it stands now, declares no account of that program;
+    /// a stream with no pool, or with one the host does not declare, is
+    /// refused nothing here (4, 32, 145; core.8, core.30).
+    pub(crate) fn pool_runs(
+        &self,
+        stream: &str,
+        stage: &str,
+        program: Option<&str>,
+    ) -> Result<(), String> {
+        let (Some(named), Some(program)) = (self.host.pool_for(stream), program) else {
+            return Ok(());
+        };
+        let Some(pool) = self.host.pool(&named.name) else {
+            return Ok(());
+        };
+        if pool
+            .accounts
+            .iter()
+            .any(|account| account.program == program)
+        {
+            return Ok(());
+        }
+        Err(no_account(stage, &named.name, program))
     }
 }
 

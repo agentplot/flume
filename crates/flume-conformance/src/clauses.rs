@@ -113,16 +113,12 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| clause.to_string())
         .chain((76..=77).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STATECHART));
-    let per_program = ["S81".to_string()]
-        .into_iter()
-        .map(|clause| (clause, PER_PROGRAM));
     standing
         .chain(packages)
         .chain(plan)
         .chain(points)
         .chain(profiles)
         .chain(statechart)
-        .chain(per_program)
         .collect()
 }
 
@@ -167,12 +163,12 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_and_0029s() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1);
+        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
-            "S65", "S66", "S67", "S78", "S79", "S80",
+            "S65", "S66", "S67", "S78", "S79", "S80", "S81",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

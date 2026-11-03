@@ -3,7 +3,9 @@
 //! is chosen under the room lock, the strategy's over the pool's usable
 //! accounts in order, usable meaning not spent, under its own bound and
 //! running the stage's program; with none usable the stage waits for
-//! room, its want naming the pool. An intent keeps an account for each
+//! room, its want naming the pool, while the pool holds an account of its
+//! program, and is refused at its launch or a later start where the pool
+//! holds none (4, 32). An intent keeps an account for each
 //! program its agents run while it is usable, its affinity for that
 //! program alone moving where the strategy goes when that account is
 //! spent or full and never back, a document written before read as its
@@ -18,7 +20,7 @@
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, Cache, HostStatus, Retry, RoomWanted};
+use flume_core::{Act, Answer, Cache, HostStatus, Retry, RoomWanted, Waits};
 use flume_fakes::FakeAgent;
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -46,9 +48,24 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: two_starts_and_one_accounts_last_room,
         },
         Scenario {
-            name: "account pools: a stage whose program no account of its pool runs waits for room, status naming the pool and the program",
-            cites: &["144", "145", "56"],
+            name: "account pools: a stage whose program its pool's first account does not run starts on the account of its program after it",
+            cites: &["144", "145"],
             run: an_account_for_another_program,
+        },
+        Scenario {
+            name: "account pools: a launch whose review runs a program no account of its stream's pool runs is refused naming review, the pool and the program, and nothing is made",
+            cites: &["S81", "4", "145"],
+            run: a_launch_on_a_pool_of_another_programs_accounts,
+        },
+        Scenario {
+            name: "account pools: once the host's configuration drops a pool's only account of review's program while code works, review is refused once code delivers, no agent opened and the place waiting on its caller's retry, and a retry once the pool holds it again starts review on it",
+            cites: &["S81", "32", "145", "27"],
+            run: s81_a_pool_with_no_account_of_the_stages_program,
+        },
+        Scenario {
+            name: "account pools: a stage waiting for room on its program's only account, spent, on a host at its bound, is refused at the next settle once the host's configuration drops that account, and no agent is opened",
+            cites: &["32", "145", "70"],
+            run: a_stage_waiting_when_its_account_is_dropped,
         },
         Scenario {
             name: "account pools: a stage whose pool's accounts are all spent waits for room, status giving the pool's soonest reset",
@@ -362,7 +379,7 @@ fn an_account_for_another_program(_: &()) -> Outcome {
         &world,
         "work",
         Strategy::FillFirst,
-        vec![account("work-1", None)],
+        vec![account("work-1", None), of_other("work-2")],
     );
     world.host.set_host_pool(Some("work"));
     let mut settings = BTreeMap::new();
@@ -379,26 +396,179 @@ fn an_account_for_another_program(_: &()) -> Outcome {
     }))?;
     let id = World::id("fix", "other");
     world.settle(&id);
+    ensure!(
+        world
+            .stage_state(&id, "code")
+            .is_some_and(StageState::running),
+        "the stage of another program did not start: {:?}",
+        world.stage_state(&id, "code")
+    );
     ensure_eq!(
-        world.stage_state(&id, "code"),
-        Some(StageState::WaitingForRoom),
-        "the stage of another program"
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the account of its program"
+    );
+    Ok(())
+}
+
+/// The refusal names the stage `stage`, the pool `work` and the program
+/// `program`.
+fn names_the_pool(refusal: &str, stage: &str, program: &str) -> Outcome {
+    ensure!(
+        refusal.contains(&format!("stage {stage}'s"))
+            && refusal.contains("pool work")
+            && refusal.contains(&format!("account of {program}")),
+        "the refusal does not name {stage}, the pool and {program}: {refusal}"
+    );
+    Ok(())
+}
+
+fn a_launch_on_a_pool_of_another_programs_accounts(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("agent-1", None), account("agent-2", None)],
+    );
+    let reason = refused(&world.engine.launch(&Launch {
+        intent: Some("the-surfaces".into()),
+        ..launch("two", "a", Some("x"))
+    }))?;
+    names_the_pool(&reason, "review", "other")?;
+    ensure_eq!(world.place.log.count("make"), 0, "places made");
+    ensure!(
+        world.held(&World::id("two", "a")).is_none(),
+        "held state written"
     );
     ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
-    let host = host(&world)?;
+    Ok(())
+}
+
+fn s81_a_pool_with_no_account_of_the_stages_program(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    let with_other = vec![account("agent-1", None), of_other("other-1")];
+    pool(&world, "work", Strategy::FillFirst, with_other.clone());
+    let id = of_the_surfaces(&world, "two", "a", None)?;
     ensure_eq!(
-        host.queue.first().map(|queued| queued.wants.clone()),
-        Some(RoomWanted::Program {
-            pool: "work".into(),
-            program: "other".into()
-        }),
-        "what the stage waits on"
+        chosen(&world, &id, "code"),
+        by("agent-1", AccountFrom::Strategy),
+        "the code"
     );
-    let words = host.queue[0].wants.words();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("agent-1", None)],
+    );
+    world.terminal.log.clear();
+    world.commit("two/a", &["fix.rs"]);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "review"),
+        Some(StageState::Refused),
+        "the review once code delivered"
+    );
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    let status = world.status(&id)?;
+    let refusal = status.stages[1]
+        .refused_setting
+        .clone()
+        .ok_or("no refusal given")?;
+    names_the_pool(&refusal, "review", "other")?;
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage.as_deref(), waiting.why),
+        (Act::Retry, Some("review"), Waits::Refused),
+        "the move the place waits on"
+    );
+    ensure_eq!(
+        waiting.words.as_deref(),
+        Some(refusal.as_str()),
+        "the words"
+    );
     ensure!(
-        words.contains("work") && words.contains("other"),
-        "the want's words do not name the pool and the program: {words}"
+        host(&world)?.queue.is_empty(),
+        "the refused review is in the queue"
     );
+    let retried = refused(
+        &world
+            .engine()
+            .retry(&id, Retry::Stage("review".into()), None, false),
+    )?;
+    names_the_pool(&retried, "review", "other")?;
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    pool(&world, "work", Strategy::FillFirst, with_other);
+    let answer = world
+        .engine()
+        .retry(&id, Retry::Stage("review".into()), None, false);
+    ensure!(answer.refusal().is_none(), "the retry: {answer:?}");
+    ensure_eq!(
+        chosen(&world, &id, "review"),
+        by("other-1", AccountFrom::Strategy),
+        "the review once the pool holds other-1 again"
+    );
+    ensure_eq!(
+        world.status(&id)?.stages[1].refused_setting,
+        None,
+        "the refusal after the start"
+    );
+    Ok(())
+}
+
+fn a_stage_waiting_when_its_account_is_dropped(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("agent-1", None), of_other("other-1")],
+    );
+    world.host.set_bound(Some(1));
+    spent(&world, "work", "other-1", world.host.now() + 3600);
+    let id = of_the_surfaces(&world, "two", "a", None)?;
+    world.commit("two/a", &["fix.rs"]);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "review"),
+        Some(StageState::WaitingForRoom),
+        "the review on a spent other-1"
+    );
+    let busy = fix_in(&world, None, "busy")?;
+    ensure!(
+        world
+            .stage_state(&busy, "code")
+            .is_some_and(StageState::running),
+        "the fix holding the host's room did not start"
+    );
+    let host_now = host(&world)?;
+    ensure_eq!(
+        (host_now.running, host_now.room),
+        (1, Some(0)),
+        "the host at its bound"
+    );
+    world.terminal.log.clear();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account("agent-1", None)],
+    );
+    world.engine().settle(None);
+    ensure_eq!(
+        world.stage_state(&id, "review"),
+        Some(StageState::Refused),
+        "the review once other-1 is dropped"
+    );
+    let refusal = world.status(&id)?.stages[1]
+        .refused_setting
+        .clone()
+        .ok_or("no refusal given")?;
+    names_the_pool(&refusal, "review", "other")?;
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
     Ok(())
 }
 

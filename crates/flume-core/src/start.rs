@@ -314,17 +314,26 @@ impl Engine {
             .as_ref()
             .ok()
             .and_then(|resolution| resolution.resolved.settings.program.clone());
+        let stage_name = &place.kind.stages[index].name;
         let (chosen, intent_moved) = match &resolution {
-            Ok(_) => self.choose_account(place, program.as_deref(), affinity.as_ref(), queue, now),
+            Ok(_) => self.choose_account(
+                place,
+                stage_name,
+                program.as_deref(),
+                affinity.as_ref(),
+                queue,
+                now,
+            ),
             Err(_) => (Choice::NoPool, None),
         };
-        let stage_name = &place.kind.stages[index].name;
         let env = match &chosen {
             Choice::Chose { account, .. } => self.account_env(account, stage_name),
             _ => Ok(BTreeMap::new()),
         };
         let resolution = match (&chosen, env.as_ref()) {
-            (Choice::Undeclared(reason), _) | (_, Err(reason)) => Err(reason.clone()),
+            (Choice::Undeclared(reason) | Choice::NoAccount(reason), _) | (_, Err(reason)) => {
+                Err(reason.clone())
+            }
             _ => resolution,
         };
         let env = env.unwrap_or_default();
