@@ -249,9 +249,9 @@ fn text(content: &Value) -> Option<String> {
     }
 }
 
-/// Whether the transcript at `path` holds a Bash call running `sleep`
-/// whose result it does not hold yet: the agent waits in its sleep.
-fn sleeping(path: &str) -> bool {
+/// The id of a foreground Bash call running `step.sh` whose result the
+/// transcript at `path` does not hold yet: the agent waits in its step.
+fn stepping(path: &str) -> Option<String> {
     let records = records(path);
     let blocks = || {
         records
@@ -261,15 +261,17 @@ fn sleeping(path: &str) -> bool {
     };
     blocks()
         .filter(|block| block["type"] == "tool_use" && block["name"] == "Bash")
+        .filter(|call| call["input"]["run_in_background"] != true)
         .filter(|call| {
             call["input"]["command"]
                 .as_str()
-                .is_some_and(|line| line.contains("sleep"))
+                .is_some_and(|line| line.contains("step.sh"))
         })
-        .any(|call| {
+        .find(|call| {
             !blocks()
                 .any(|block| block["type"] == "tool_result" && block["tool_use_id"] == call["id"])
         })
+        .and_then(|call| call["id"].as_str().map(str::to_string))
 }
 
 #[test]
@@ -277,29 +279,35 @@ fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
     // S78, 146, 161, 179, C.4: on a fill-first pool of two accounts signed
     // in by the test account's token, each with a scratch configuration
     // home, the second's `projects` a link to the first's, the fix's code
-    // agent starts under the first and, in its first turn, waits on a
-    // foreground sleep. No test account reaches its limit on demand, so
-    // the test ends that turn as a usage limit ends one: it runs the
-    // plugin's StopFailure hook for that start with the input 2.1.296
-    // builds for a session limit, and interrupts the turn, which runs no
-    // Stop hook, as a turn the API failed runs none. Once the agent is
-    // quiet flume ends it and starts code under the second account,
-    // resuming the first's session: the carried agent says it started in
-    // that session, its prompt is flume's carry words alone, status gives
-    // the conversation carried and the move with it, and the agent goes on
-    // in the first's transcript from what the brief asked, which its
-    // prompt does not hold, and the place lands.
+    // agent starts under the first and, in its first turn, waits a minute
+    // in one foreground call on the repository's `step.sh`, since the
+    // pinned release refuses a bare `sleep` there. No test account reaches
+    // its limit on demand, so the test ends that turn while the call runs
+    // as a usage limit ends one: it runs the plugin's StopFailure hook for
+    // that start with the input 2.1.296 builds for a session limit, and
+    // interrupts the turn, which runs no Stop hook, as a turn the API
+    // failed runs none. Once the agent is quiet flume ends it and starts
+    // code under the second account, resuming the first's session: the
+    // carried agent says it started in that session, its prompt is flume's
+    // carry words alone, status gives the conversation carried and the
+    // move with it, and the agent goes on in the first's transcript from
+    // what the brief asked, which its prompt does not hold, and the place
+    // lands.
     let live = Live::sharing_projects("live-carry");
     let place = live.walk.launch(
         "fix",
         "one",
         &[
             "--brief",
-            "Do this in two steps, in order. First run `sleep 60` with the Bash tool in the foreground, never in the background, and wait for it to end. Only then create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
+            "Do this in two steps, in order. First run `sh step.sh` with the Bash tool in the foreground, never in the background: it takes about a minute, so wait for it to end. Only then create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
         ],
     );
-    let status = live.until(&place, "its code agent started", 5, |status| {
-        status["agent"]["started"] == "yes"
+    // Settled until code has begun, its prompt received: the launch sends
+    // the prompt only where the agent said it started by the time herdr
+    // read it ready, and a settle that read no started ack leaves it to
+    // the next, which no watch makes here (35, 38, 119).
+    let status = live.until(&place, "its code stage begun", 5, |status| {
+        status["agent"]["started"] == "yes" && stage(status, "code")["state"] == "begun"
     });
     assert_eq!(
         status["agent"]["account"]["name"], "test-account",
@@ -310,11 +318,24 @@ fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
     let started = Record::at(&folder, &first.identity)
         .started()
         .expect("the first start's started ack");
+    // The agent is in its step once one call to it still runs ten seconds
+    // after it was first read: a call the program refused, or put in the
+    // background, is answered at once.
     let began = Instant::now();
-    while !sleeping(&started.transcript_path) {
+    let mut seen: Option<(String, Instant)> = None;
+    loop {
+        let call = stepping(&started.transcript_path);
+        match &seen {
+            Some((was, at)) if call.as_ref() == Some(was) => {
+                if at.elapsed() >= Duration::from_secs(10) {
+                    break;
+                }
+            }
+            _ => seen = call.map(|call| (call, Instant::now())),
+        }
         assert!(
             began.elapsed() < Duration::from_secs(300),
-            "the code agent never came to its sleep: {}",
+            "the code agent never came to its step: {}",
             live.walk.status(&place)
         );
         std::thread::sleep(Duration::from_secs(1));
