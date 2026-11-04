@@ -47,6 +47,23 @@ brought to the rule.
   inbox's outcome alone, and of C.6's table of what the profile reads,
   which names `from.worktree` alone; they say so once the operator
   rules the change (core.19). The item leaves when it lands.
+- **A branch the merge queue cannot read is passed over.** On deneb,
+  2026-11-04, a place's submission under test on main read
+  `could_not_read`, since sluice 0.57.1 refused `sluice status` of
+  another branch whose policy declares `[[checkout.cache]]`, and the
+  profile failed the whole read on it. read-submission now passes over
+  each branch whose status sluice refuses, and the inbox each branch
+  sluice's `inbox --json` names in its `unread` and each decided record
+  the profile cannot read, as sluice's own clause 26 refuses a branch
+  alone: each is kept with sluice's words, named in status, and decides
+  nothing of the other branches. Where the branch passed over is the
+  place's base, the one branch flume submits it to (15), its own
+  submission reads as not read, and nothing is acted on or removed for
+  it (68). No clause says a branch is passed over: the code stands ahead
+  of 99 and 133, which answer the read or the inbox whole or that the
+  merge queue could not be read, and of C.6's rows for both; they say so
+  once the operator rules the change (core.19). The item leaves when it
+  lands.
 - **A dialog before the prompt waits on a person, and a retry leaves
   an agent whose stage began.** On deneb, 2026-10-31, a conversation's
   Claude Code stopped at its dialog approving a repository's MCP
