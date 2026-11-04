@@ -26,11 +26,19 @@
 //! `tested.on`, never parsed from the notice; a record with no notice
 //! says its state, and a conflict's files and the entries its
 //! `conflict.with` names; one found in conflict before any test names the
-//! base's current revision (112, 133). read-submission reads `sluice
-//! status <base> --all --json` for each branch `sluice overview --json`
-//! names, the newest entry submitted from the branch, by a worktree on
-//! it or from a pull request opened from it, a conflict's base revision
-//! its `tested.on` where it holds one (99, 101). step is
+//! base's current revision (112, 133). Where sluice could not read a
+//! branch's records it answers the others' outcomes with that branch in
+//! its `unread`, exiting as a failure: the inbox passes that branch over
+//! with its words, whose outcomes sluice leaves pending, and a decided
+//! record the profile cannot read is passed over the same way, by its
+//! branch, rather than dropped unsaid (133). read-submission reads
+//! `sluice status <base> --all --json` for each branch `sluice overview
+//! --json` names, the newest entry submitted from the branch, by a
+//! worktree on it or from a pull request opened from it, a conflict's
+//! base revision its `tested.on` where it holds one; a branch whose
+//! status sluice refuses, as it refuses one whose policy it no longer
+//! reads, is passed over with sluice's words, and every other branch is
+//! read still (99, 101). step is
 //! `sluice step <base>`, which takes in the base's pull requests before
 //! its round, and beside a live `sluice run` finds the branch's lock held
 //! and does nothing, so no liveness is read (124, 125). The base lives at `<remote>/<base>` after one fetch where
@@ -43,8 +51,8 @@
 use crate::git::Git;
 use crate::shell;
 use flume_seams::{
-    BaseRevision, Inbox, MergeQueue, PlaceRef, Revision, Stepped, Submission, SubmissionOutcome,
-    SubmissionRead, SubmissionState, Submitted,
+    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, Revision, Stepped,
+    Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -243,6 +251,24 @@ fn submitted_from(record: &Value, branch: &str) -> bool {
     let from = record.get("from");
     let by = |key| from.and_then(|from| text(from, key));
     by("worktree").as_deref() == Some(branch) || by("head").as_deref() == Some(branch)
+}
+
+/// Each branch an answer of sluice's names in its `unread`, as `sluice
+/// inbox --json` names a branch whose records it could not read, with
+/// sluice's words.
+fn unread(answer: &Value) -> Vec<PassedOver> {
+    answer
+        .get("unread")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|unread| {
+            Some(PassedOver {
+                branch: text(unread, "branch")?,
+                words: format!("sluice inbox: {}", text(unread, "error")?),
+            })
+        })
+        .collect()
 }
 
 /// The files a conflict record contests.
@@ -523,39 +549,63 @@ impl MergeQueue for Sluice {
             Ok(output) => output,
             Err(reason) => return Inbox::CouldNotRead { reason },
         };
-        let records = serde_json::from_str::<Value>(stdout.trim())
-            .ok()
+        let answer = serde_json::from_str::<Value>(stdout.trim()).ok();
+        let records = answer
+            .as_ref()
             .and_then(|answer| answer.get("outcomes").and_then(Value::as_array).cloned());
-        let Some(records) = records.filter(|records| success || !records.is_empty()) else {
+        let mut passed_over = answer.as_ref().map(unread).unwrap_or_default();
+        // sluice exits as a failure where it passed a branch over, having
+        // answered every other branch's outcomes and marked them delivered.
+        let Some(records) =
+            records.filter(|records| success || !records.is_empty() || !passed_over.is_empty())
+        else {
             return Inbox::CouldNotRead {
                 reason: words(&args, &stdout, &stderr),
             };
         };
-        let outcomes = records
-            .iter()
-            .filter(|record| {
-                matches!(
-                    text(record, "state").as_deref(),
-                    Some("landed" | "failed" | "conflict")
-                )
-            })
-            .filter_map(|record| self.outcome(record, place).ok())
-            .collect();
-        Inbox::Outcomes { outcomes }
+        let mut outcomes = vec![];
+        for record in records.iter().filter(|record| {
+            matches!(
+                text(record, "state").as_deref(),
+                Some("landed" | "failed" | "conflict")
+            )
+        }) {
+            match self.outcome(record, place) {
+                Ok(outcome) => outcomes.push(outcome),
+                Err(reason) => passed_over.push(PassedOver {
+                    branch: text(record, "branch").unwrap_or_default(),
+                    words: match id(record) {
+                        Some(id) => format!("#{id}: {reason}"),
+                        None => reason,
+                    },
+                }),
+            }
+        }
+        Inbox::Outcomes {
+            outcomes,
+            passed_over,
+        }
     }
 
-    fn read_submission(&self, repository: &str, branch: &str) -> SubmissionRead {
+    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross {
         let git = Git::at(repository);
         let dir = git.path();
         let bases = match self.branches(dir) {
             Ok(bases) => bases,
-            Err(reason) => return SubmissionRead::CouldNotRead { reason },
+            Err(reason) => return SubmissionRead::CouldNotRead { reason }.into(),
         };
         let mut newest: Option<(u64, Value)> = None;
+        let mut passed_over = vec![];
         for base in bases {
             let status = match self.json(dir, &["status", &base, "--all", "--json"]) {
                 Ok(status) => status,
-                Err(reason) => return SubmissionRead::CouldNotRead { reason },
+                Err(words) => {
+                    passed_over.push(PassedOver {
+                        branch: base,
+                        words,
+                    });
+                    continue;
+                }
             };
             for record in status
                 .get("submissions")
@@ -571,24 +621,25 @@ impl MergeQueue for Sluice {
                 }
             }
         }
-        let Some((_, record)) = newest else {
-            return SubmissionRead::None;
-        };
-        match (id(&record), state(&record)) {
-            (Some(id), Ok(state)) => SubmissionRead::Found {
-                submission: Submission {
-                    id,
-                    branch: branch.into(),
-                    target: text(&record, "branch").unwrap_or_default(),
-                    state,
-                    request: request(&record),
+        let read = match newest.map(|(_, record)| record) {
+            None => SubmissionRead::None,
+            Some(record) => match (id(&record), state(&record)) {
+                (Some(id), Ok(state)) => SubmissionRead::Found {
+                    submission: Submission {
+                        id,
+                        branch: branch.into(),
+                        target: text(&record, "branch").unwrap_or_default(),
+                        state,
+                        request: request(&record),
+                    },
                 },
+                (None, _) => SubmissionRead::CouldNotRead {
+                    reason: format!("sluice gave a submission with no id: {record}"),
+                },
+                (_, Err(reason)) => SubmissionRead::CouldNotRead { reason },
             },
-            (None, _) => SubmissionRead::CouldNotRead {
-                reason: format!("sluice gave a submission with no id: {record}"),
-            },
-            (_, Err(reason)) => SubmissionRead::CouldNotRead { reason },
-        }
+        };
+        ReadAcross { read, passed_over }
     }
 
     fn step(&self, repository: &str, base: &str) -> Stepped {

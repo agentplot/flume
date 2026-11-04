@@ -682,7 +682,7 @@ fn submitted(answer: Submitted) -> Submission {
 
 fn outcomes(answer: Inbox) -> Vec<SubmissionOutcome> {
     match answer {
-        Inbox::Outcomes { outcomes } => outcomes,
+        Inbox::Outcomes { outcomes, .. } => outcomes,
         other => panic!("the inbox answered {other:?}"),
     }
 }
@@ -750,7 +750,7 @@ fn the_merge_queues_outcomes_are_planned() {
         "a withdrawal is never in the inbox"
     );
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::Found {
             submission: Submission {
                 state: SubmissionState::Withdrawn,
@@ -781,7 +781,7 @@ fn the_merge_queues_outcomes_are_planned() {
         Stepped::CouldNotRead { .. }
     ));
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::CouldNotRead { .. }
     ));
     queue.set_base(
@@ -825,7 +825,7 @@ fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
         }
     );
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::Found { submission: found } if found == submission
     ));
     queue.step("/r", "main");
@@ -854,11 +854,14 @@ fn a_request_is_an_entry_only_once_taken_in_and_its_outcome_goes_to_the_request(
             request: "1".into()
         }
     );
-    assert_eq!(queue.read_submission("/r", "fix/one"), SubmissionRead::None);
+    assert_eq!(
+        queue.read_submission("/r", "fix/one"),
+        SubmissionRead::None.into()
+    );
     queue.step("/r", "main");
     assert_eq!(
         queue.read_submission("/r", "fix/one"),
-        SubmissionRead::None,
+        SubmissionRead::None.into(),
         "a round takes no request in"
     );
     let entry = queue.take_in("/r", "fix/one").expect("the request");
@@ -882,7 +885,7 @@ fn a_request_is_an_entry_only_once_taken_in_and_its_outcome_goes_to_the_request(
     queue.take_in("/r", "fix/one").expect("the request again");
     queue.step("/r", "main");
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::Found { submission }
             if matches!(submission.state, SubmissionState::Landed { .. })
                 && submission.request.as_deref() == Some("1")
