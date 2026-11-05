@@ -7,9 +7,12 @@
 //! and its stage started afresh under the settings resolved then, counted
 //! toward no bound of the kind's and waiting on no caller (31, 112). A
 //! fresh start whose agent begins so again is never begun, its end naming
-//! the same.
+//! the same. A start that carried its stage's conversation and began so
+//! is followed by a fresh start after the one whose agent stopped at its
+//! account's usage limit, carrying nothing (146, 179).
 
 use crate::start::{StartReason, Starts};
+use crate::uncarried::{after_uncarried, carries};
 use crate::{Engine, Step};
 use flume_seams::*;
 
@@ -19,7 +22,10 @@ impl Engine {
     /// quiet, the agent ended and, where the stage's start before it
     /// began so too, the start never begun with its end naming how,
     /// else the stage started afresh with [`StartReason::Unsettled`]'s
-    /// words; true when the stage moved (31, 35, 37, 43, 112, 161).
+    /// words, or, where the start carried its stage's conversation, with
+    /// [`StartReason::Spent`]'s after the start whose agent stopped,
+    /// carrying nothing; true when the stage moved (31, 35, 37, 43, 112,
+    /// 146, 161, 179).
     pub(crate) fn read_unsettled(
         &self,
         id: &PlaceId,
@@ -77,7 +83,15 @@ impl Engine {
             );
             return true;
         }
-        let words = StartReason::Unsettled.words();
+        let (words, carry) = if carries(start) {
+            let why = format!(
+                "the start that carried its conversation began {}",
+                unsettled.words()
+            );
+            (StartReason::Spent.words(), after_uncarried(start, why))
+        } else {
+            (StartReason::Unsettled.words(), None)
+        };
         {
             let _room = self.host.room();
             let order = self.queue().next_order();
@@ -95,6 +109,7 @@ impl Engine {
                 stage.room = Some(RoomWait {
                     order,
                     words: Some(words.clone()),
+                    carry: carry.clone(),
                 });
                 Step::Write(())
             });

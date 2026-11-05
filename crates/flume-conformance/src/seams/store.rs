@@ -3,6 +3,7 @@
 use crate::scenario::sample_held;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 pub trait StoreHarness {
@@ -240,10 +241,26 @@ fn the_hosts_own_documents<H: StoreHarness>(harness: &H) -> Outcome {
     );
     let affinity = HostDocument::Intent(Affinity {
         stream: "work".into(),
-        pool: "work".into(),
-        account: "work-1".into(),
+        accounts: BTreeMap::from([
+            (
+                "agent".into(),
+                AffinityAccount {
+                    pool: "work".into(),
+                    account: "agent-1".into(),
+                },
+            ),
+            (
+                "other".into(),
+                AffinityAccount {
+                    pool: "work".into(),
+                    account: "other-1".into(),
+                },
+            ),
+        ]),
         moves: vec![],
         gone: None,
+        pool: None,
+        account: None,
     });
     let version = written(harness.seam().write_host(&intent, None, Some(&affinity)))?;
     ensure_eq!(

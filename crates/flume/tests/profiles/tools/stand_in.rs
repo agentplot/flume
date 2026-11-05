@@ -5,7 +5,8 @@
 //! the pinned Claude Code writes one, a push it tries is refused by the
 //! guard, and its stop starts the settle that moves the place on to the
 //! next stage once its session ended, with no settle of the test's (35,
-//! 89, 108, 116, 121, S29).
+//! 89, 108, 116, 121, S29). A session it is told to resume and finds no
+//! transcript of ends it as the pinned Claude Code ends (design 8; C.4).
 
 use super::walk::*;
 use serde_json::{json, Value};
@@ -152,5 +153,30 @@ fn the_stand_in_drives_one_stage() {
     assert_eq!(
         status["agent"]["started"], "no",
         "the next stage's agent: {status}"
+    );
+}
+
+#[test]
+fn the_stand_in_refuses_a_session_it_finds_no_transcript_of() {
+    // Design 8, C.4: `--resume <session>` where its home's `projects`
+    // holds no transcript of the session ends the stand-in as the pinned
+    // Claude Code ends, with its words and exit status 1, before any hook
+    // and with no session begun or transcript written.
+    let walk = Walk::new("stand-in-resume");
+    let output = walk
+        .command(env!("CARGO_BIN_EXE_flume-stand-in"), &walk.repository.dir)
+        .env("CLAUDE_CONFIG_DIR", walk.account())
+        .args(["--resume", "no-such-session", "the prompt"])
+        .output()
+        .expect("the stand-in runs");
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "No conversation found with session ID: no-such-session\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert!(
+        !walk.account().join("projects").exists(),
+        "a transcript written"
     );
 }

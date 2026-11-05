@@ -267,7 +267,10 @@ impl Engine {
             }
         }
         let before = match (&merge_queue, kind.lands) {
-            (Some(queue), true) => match queue.read_submission(repository, &branch) {
+            (Some(queue), true) => match crate::submit::on_base(
+                &launch.base,
+                queue.read_submission(repository, &branch),
+            ) {
                 SubmissionRead::Found { submission } => Some(submission.id),
                 SubmissionRead::None | SubmissionRead::CouldNotRead { .. } => None,
             },
@@ -341,12 +344,21 @@ impl Engine {
             unwoken: Default::default(),
             moves: vec![],
             unsettled: vec![],
+            uncarried: vec![],
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
         };
-        for stage in &kind.stages {
-            self.resolution(&held.place, stage)?;
+        let programs = kind
+            .stages
+            .iter()
+            .map(|stage| {
+                self.resolution(&held.place, stage)
+                    .map(|resolution| resolution.resolved.settings.program)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for (stage, program) in kind.stages.iter().zip(&programs) {
+            self.pool_runs(&held.place.stream.name, &stage.name, program.as_deref())?;
         }
         if self.create(&held).is_none() {
             return Err(format!("the place {id} already stands"));

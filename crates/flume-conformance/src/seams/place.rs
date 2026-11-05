@@ -28,6 +28,12 @@ pub trait PlaceHarness {
     /// The repository's readiness: each step, passing or failing.
     fn readiness(&self, repository: &str, steps: &[(&str, bool)]);
 
+    /// The repository pins the versions of tools a step of its readiness
+    /// runs, and nothing on the host has installed them, as in a fresh
+    /// clone: what its readiness then runs; none where the profile reads
+    /// no pins.
+    fn pinned(&self, repository: &str) -> Option<Pinned>;
+
     /// A file in the place neither committed nor ignored.
     fn untracked(&self, place: &PlaceRef, file: &str);
 
@@ -36,6 +42,16 @@ pub trait PlaceHarness {
 
     /// The base takes `commit`'s change by a commit of its own.
     fn apply_to_base(&self, repository: &str, base: &str, commit: &Revision);
+}
+
+/// A readiness over tools a repository pins that nothing installed.
+pub struct Pinned {
+    /// Each step it runs, in order.
+    pub steps: Vec<String>,
+    /// The step among them that installs the pins.
+    pub install: String,
+    /// What the install says it installed.
+    pub said: String,
 }
 
 /// The location the seam gives the place `fix--<name>` of `repository`.
@@ -94,6 +110,11 @@ pub fn scenarios<H: PlaceHarness>() -> Vec<Scenario<H>> {
             name: "place: ready runs each step in order, stopping at the first that fails",
             cites: &["79", "11", "12"],
             run: ready_stops_at_the_first_failure::<H>,
+        },
+        Scenario {
+            name: "place: ready installs what the repository pins, a step of its own with its words, before the step that runs it",
+            cites: &["79", "11", "12"],
+            run: ready_installs_the_pins::<H>,
         },
         Scenario {
             name: "place: read gives the branch, the head and what the place holds",
@@ -218,6 +239,42 @@ fn ready_stops_at_the_first_failure<H: PlaceHarness>(harness: &H) -> Outcome {
     ensure!(
         readiness.failed().is_some_and(|step| step.step == "setup"),
         "the failed step is not named"
+    );
+    Ok(())
+}
+
+fn ready_installs_the_pins<H: PlaceHarness>(harness: &H) -> Outcome {
+    let (repository, _, _) = harness.repository();
+    let Some(pinned) = harness.pinned(&repository) else {
+        return Ok(());
+    };
+    let (place, revision) = made(harness, "pinned")?;
+    let readiness = harness.seam().ready(&place, &revision);
+    let steps: Vec<(&str, bool)> = readiness
+        .steps
+        .iter()
+        .map(|step| (step.step.as_str(), step.passed))
+        .collect();
+    let due: Vec<(&str, bool)> = pinned
+        .steps
+        .iter()
+        .map(|step| (step.as_str(), true))
+        .collect();
+    ensure_eq!(steps, due, "the steps run");
+    let install = readiness
+        .steps
+        .iter()
+        .position(|step| step.step == pinned.install);
+    ensure!(
+        install.is_some_and(|at| at + 1 < readiness.steps.len()),
+        "no step after the install {:?} ran: {steps:?}",
+        pinned.install
+    );
+    let words = install.map(|at| readiness.steps[at].words.as_str());
+    ensure!(
+        words.is_some_and(|words| words.contains(&pinned.said)),
+        "the install's words {words:?} do not say {:?}",
+        pinned.said
     );
     Ok(())
 }

@@ -19,9 +19,13 @@
 //! never begun while the dialog shows (34, 35). A stage read never begun
 //! whose agent is still live and then says it started, or received its
 //! prompt, goes on as begun: its start is the stage's after all (35,
-//! 38).
+//! 38). A start that carries its stage's conversation and would be read
+//! never begun, at its agent's stop, at the stage's limit or on a prompt
+//! not received, is read as a carried start that did not begin, its agent
+//! sent nothing more, and its stage starts afresh (146, 179).
 
 use crate::start::Starts;
+use crate::uncarried::{carries, uncarried, ENDED_FIRST, NOT_BY_THE_LIMIT, NOT_RECEIVED};
 use crate::{Engine, Step, POLL, QUIET_LIMIT, RECEIVED_WITHIN};
 use flume_seams::*;
 
@@ -68,6 +72,11 @@ impl Engine {
             let identity = &start.identity;
             let prompt = &start.prompt;
             let folder = self.store.folder(id);
+            // A carried start read as not begun is sent nothing more: it
+            // is ended once quiet and its stage started afresh (146).
+            if let Some(words) = uncarried(&held, &start) {
+                return self.read_uncarried(id, index, &start, words) || sent;
+            }
             // An agent begun without its settings is sent no prompt, or
             // none again where its word came at its start's first prompt,
             // which it then did not take: it is ended once quiet and its
@@ -106,6 +115,14 @@ impl Engine {
                     .unwrap_or(QUIET_LIMIT);
                 let waited = self.host.now().saturating_sub(start.started_at);
                 if stopped || (!dialog && waited >= limit) {
+                    if carries(&start) {
+                        let words = if stopped {
+                            ENDED_FIRST
+                        } else {
+                            NOT_BY_THE_LIMIT
+                        };
+                        return self.read_uncarried(id, index, &start, words) || sent;
+                    }
                     self.never_begun(id, &held, &start, stopped);
                     return true;
                 }
@@ -153,6 +170,9 @@ impl Engine {
                 if prompt.carried || prompt.sendings.len() >= 2 {
                     if dialog {
                         return sent;
+                    }
+                    if carries(&start) {
+                        return self.read_uncarried(id, index, &start, NOT_RECEIVED) || sent;
                     }
                     self.never_begun(id, &held, &start, false);
                     return true;

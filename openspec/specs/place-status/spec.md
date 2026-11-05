@@ -134,15 +134,21 @@ notes; the person's form SHALL print it as `code 3/7` (56, 58, 142).
 
 Status SHALL give a place's stream and intent, each with where it came
 from, its current agent's account with whether it came from the
-affinity or the strategy, each move of a stage or the intent between
-accounts with from, to, why, when and that the cache was lost, and each
-start that began without its settings, naming its variables alone (56,
-143, 145 to 147, 161).
+intent's affinity for the agent's program or the strategy, each move of
+a stage or the intent between accounts with from, to, why, when and
+that the cache was lost, an intent's naming the program whose account
+moved, and each start that began without its settings, naming its
+variables alone (56, 143, 145 to 147, 161).
 
 #### Scenario: A stage that moved
 
 - **WHEN** status is asked of a place whose code stage moved from work-1 to work-2 when work-1 was spent
 - **THEN** the agent's account reads work-2 from the strategy, and the place's moves give code, work-1, work-2, spent, when, and the cache lost, in the JSON and the person's form (56, 146)
+
+#### Scenario: An intent that moved for one program
+
+- **WHEN** status is asked of a place whose code started on agent-2 after the intent moved for `agent` from agent-1, spent, and whose review started on other-1 from the affinity
+- **THEN** the place's moves give the intent's move with the program `agent`, and the person's form reads that the intent moved for `agent` from agent-1 to agent-2; the review's agent reads other-1 from the affinity, and its line says from the affinity for `other` (56, 147, S80)
 
 #### Scenario: A start without its settings
 
@@ -189,3 +195,27 @@ form and the person's (56, 161, 162, 169).
 
 - **WHEN** status is asked of a place whose code start began in `ask-each` where its record named `all`
 - **THEN** it names the start, the mode asked `all` and the mode begun `ask-each`, and no variable (56, 161)
+
+### Requirement: Status gives a start's conversation
+
+Status SHALL give, with the current agent of a start after a spent one,
+the stopped start's number and whether the agent carries its
+conversation or, where it does not, why; with a stage's move, whether
+its conversation went with it; and each carried start that did not
+begin, with why; and never a configuration home's path (56, 146, 179;
+core.30).
+
+#### Scenario: A carried agent
+
+- **WHEN** status is asked of a place whose code start 2 carries the conversation of start 1 under work-2
+- **THEN** the agent's conversation gives start 1 and carried, and the move of code from work-1 to work-2 gives carried, in the JSON and the person's form (56, 146, S78)
+
+#### Scenario: A conversation that stayed
+
+- **WHEN** status is asked of a place whose code start 2 started afresh because work-2's `CLAUDE_CONFIG_DIR` does not reach start 1's conversation
+- **THEN** the agent's conversation gives start 1, not carried, and why, naming `CLAUDE_CONFIG_DIR` and no path, and the move gives not carried (56, S55; core.30)
+
+#### Scenario: A carried start that did not begin
+
+- **WHEN** status is asked of a place whose carried start 2 ended before it said it started and whose start 3 started afresh
+- **THEN** the place lists start 2 as carried and not begun with why, and the agent of start 3 gives start 1, not carried, and why (56, S79)

@@ -26,11 +26,19 @@
 //! `tested.on`, never parsed from the notice; a record with no notice
 //! says its state, and a conflict's files and the entries its
 //! `conflict.with` names; one found in conflict before any test names the
-//! base's current revision (112, 133). read-submission reads `sluice
-//! status <base> --all --json` for each branch `sluice overview --json`
-//! names, the newest entry submitted from the branch, by a worktree on
-//! it or from a pull request opened from it, a conflict's base revision
-//! its `tested.on` where it holds one (99, 101). step is
+//! base's current revision (112, 133). Where sluice could not read a
+//! branch's records it answers the others' outcomes with that branch in
+//! its `unread`, exiting as a failure: the inbox passes that branch over
+//! with its words, whose outcomes sluice leaves pending, and a decided
+//! record the profile cannot read is passed over the same way, by its
+//! branch, rather than dropped unsaid (133). read-submission reads
+//! `sluice status <base> --all --json` for each branch `sluice overview
+//! --json` names, the newest entry submitted from the branch, by a
+//! worktree on it or from a pull request opened from it, a conflict's
+//! base revision its `tested.on` where it holds one; a branch whose
+//! status sluice refuses, as it refuses one whose policy it no longer
+//! reads, is passed over with sluice's words, and every other branch is
+//! read still (99, 101). step is
 //! `sluice step <base>`, which takes in the base's pull requests before
 //! its round, and beside a live `sluice run` finds the branch's lock held
 //! and does nothing, so no liveness is read (124, 125). The base lives at `<remote>/<base>` after one fetch where
@@ -38,13 +46,18 @@
 //! otherwise (9, 126, C.1). What the same policy at the base's revision
 //! says of a place, its toolchain, its runner's setup, its teardown and
 //! the base's remote, is read for the resolver to hand the place profile
-//! (C.1, C.6, core.3).
+//! (C.1, C.6, core.3). Under the moon runner, as sluice's moon runner
+//! does before any moon command, where the same revision holds a
+//! `.prototools` the place cut from it has the versions it pins installed
+//! by `proto install --config-mode upwards` under the toolchain, a step of
+//! its own before moon's setup, since a toolchain may activate proto's
+//! pins and install none (11, 20, 79).
 
 use crate::git::Git;
 use crate::shell;
 use flume_seams::{
-    BaseRevision, Inbox, MergeQueue, PlaceRef, Revision, Stepped, Submission, SubmissionOutcome,
-    SubmissionRead, SubmissionState, Submitted,
+    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, Revision, Stepped,
+    Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -245,6 +258,24 @@ fn submitted_from(record: &Value, branch: &str) -> bool {
     by("worktree").as_deref() == Some(branch) || by("head").as_deref() == Some(branch)
 }
 
+/// Each branch an answer of sluice's names in its `unread`, as `sluice
+/// inbox --json` names a branch whose records it could not read, with
+/// sluice's words.
+fn unread(answer: &Value) -> Vec<PassedOver> {
+    answer
+        .get("unread")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|unread| {
+            Some(PassedOver {
+                branch: text(unread, "branch")?,
+                words: format!("sluice inbox: {}", text(unread, "error")?),
+            })
+        })
+        .collect()
+}
+
 /// The files a conflict record contests.
 fn contested(record: &Value) -> Vec<String> {
     record
@@ -358,6 +389,11 @@ fn branch_table<'a>(policy: &'a toml::Table, base: &str) -> Option<&'a toml::Tab
 /// The policy at the base's revision: the local base's, else a remote's
 /// tracking copy's; none where neither holds one.
 fn policy(repository: &str, base: &str) -> Result<Option<toml::Table>, String> {
+    Ok(policy_at(repository, base)?.map(|(_, policy)| policy))
+}
+
+/// The policy at the base's revision, with the revision it was read at.
+fn policy_at(repository: &str, base: &str) -> Result<Option<(String, toml::Table)>, String> {
     let git = Git::at(repository);
     let mut revisions = vec![format!("refs/heads/{base}")];
     revisions.extend(
@@ -372,7 +408,7 @@ fn policy(repository: &str, base: &str) -> Result<Option<toml::Table>, String> {
         if let Some(text) = git.file(&revision, POLICY)? {
             return text
                 .parse::<toml::Table>()
-                .map(Some)
+                .map(|policy| Some((revision.clone(), policy)))
                 .map_err(|error| format!("{POLICY} at {revision}: {error}"));
         }
     }
@@ -402,16 +438,23 @@ fn line(value: &toml::Value) -> Option<String> {
     }
 }
 
+/// The file a place pins its tools' versions in, which proto reads.
+pub const PINS: &str = ".prototools";
+
 /// What the policy says of a place where sluice is the merge queue, for
 /// the resolver to hand the place profile, which no profile calls
-/// (core.2): the toolchain, then the runner's setup, that ready a place
-/// as sluice readies its own; `sluice release`, its teardown; and the
-/// remote the base lands on (C.1, C.6, core.3).
+/// (core.2): the toolchain, then the install of what the base pins and
+/// the runner's setup, that ready a place as sluice readies its own;
+/// `sluice release`, its teardown; and the remote the base lands on (C.1,
+/// C.6, core.3).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ForPlace {
     /// The shell line whose output is the environment the steps after it
     /// run under.
     pub toolchain: Option<String>,
+    /// The install of the versions the base's revision pins in [`PINS`],
+    /// as a shell line; none where it pins none.
+    pub install: Option<String>,
     /// The runner's setup, as a shell line.
     pub setup: Option<String>,
     /// The teardown, as a shell line.
@@ -419,18 +462,23 @@ pub struct ForPlace {
     pub base_remote: Option<String>,
 }
 
-/// What the policy at the base's revision says of a place.
+/// What the policy at the base's revision says of a place, and whether
+/// the same revision pins its tools in [`PINS`], which the place cut from
+/// it holds (20).
 pub fn for_place(repository: &str, base: &str) -> Result<ForPlace, String> {
-    let policy = policy(repository, base)?.unwrap_or_default();
+    let (revision, policy) = policy_at(repository, base)?.unwrap_or_default();
     let tests = policy.get("tests").and_then(toml::Value::as_table);
-    let runner = tests
+    let moon = tests
         .and_then(|tests| tests.get("runner"))
-        .and_then(toml::Value::as_str);
+        .and_then(toml::Value::as_str)
+        == Some("moon");
+    let pins = moon && Git::at(repository).file(&revision, PINS)?.is_some();
     Ok(ForPlace {
         toolchain: tests
             .and_then(|tests| tests.get("toolchain"))
             .and_then(line),
-        setup: (runner == Some("moon")).then(|| "moon setup".to_string()),
+        install: pins.then(|| "proto install --config-mode upwards".to_string()),
+        setup: moon.then(|| "moon setup".to_string()),
         teardown: "sluice release".into(),
         base_remote: branch_table(&policy, base)
             .and_then(|table| table.get("remote"))
@@ -523,39 +571,63 @@ impl MergeQueue for Sluice {
             Ok(output) => output,
             Err(reason) => return Inbox::CouldNotRead { reason },
         };
-        let records = serde_json::from_str::<Value>(stdout.trim())
-            .ok()
+        let answer = serde_json::from_str::<Value>(stdout.trim()).ok();
+        let records = answer
+            .as_ref()
             .and_then(|answer| answer.get("outcomes").and_then(Value::as_array).cloned());
-        let Some(records) = records.filter(|records| success || !records.is_empty()) else {
+        let mut passed_over = answer.as_ref().map(unread).unwrap_or_default();
+        // sluice exits as a failure where it passed a branch over, having
+        // answered every other branch's outcomes and marked them delivered.
+        let Some(records) =
+            records.filter(|records| success || !records.is_empty() || !passed_over.is_empty())
+        else {
             return Inbox::CouldNotRead {
                 reason: words(&args, &stdout, &stderr),
             };
         };
-        let outcomes = records
-            .iter()
-            .filter(|record| {
-                matches!(
-                    text(record, "state").as_deref(),
-                    Some("landed" | "failed" | "conflict")
-                )
-            })
-            .filter_map(|record| self.outcome(record, place).ok())
-            .collect();
-        Inbox::Outcomes { outcomes }
+        let mut outcomes = vec![];
+        for record in records.iter().filter(|record| {
+            matches!(
+                text(record, "state").as_deref(),
+                Some("landed" | "failed" | "conflict")
+            )
+        }) {
+            match self.outcome(record, place) {
+                Ok(outcome) => outcomes.push(outcome),
+                Err(reason) => passed_over.push(PassedOver {
+                    branch: text(record, "branch").unwrap_or_default(),
+                    words: match id(record) {
+                        Some(id) => format!("#{id}: {reason}"),
+                        None => reason,
+                    },
+                }),
+            }
+        }
+        Inbox::Outcomes {
+            outcomes,
+            passed_over,
+        }
     }
 
-    fn read_submission(&self, repository: &str, branch: &str) -> SubmissionRead {
+    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross {
         let git = Git::at(repository);
         let dir = git.path();
         let bases = match self.branches(dir) {
             Ok(bases) => bases,
-            Err(reason) => return SubmissionRead::CouldNotRead { reason },
+            Err(reason) => return SubmissionRead::CouldNotRead { reason }.into(),
         };
         let mut newest: Option<(u64, Value)> = None;
+        let mut passed_over = vec![];
         for base in bases {
             let status = match self.json(dir, &["status", &base, "--all", "--json"]) {
                 Ok(status) => status,
-                Err(reason) => return SubmissionRead::CouldNotRead { reason },
+                Err(words) => {
+                    passed_over.push(PassedOver {
+                        branch: base,
+                        words,
+                    });
+                    continue;
+                }
             };
             for record in status
                 .get("submissions")
@@ -571,24 +643,25 @@ impl MergeQueue for Sluice {
                 }
             }
         }
-        let Some((_, record)) = newest else {
-            return SubmissionRead::None;
-        };
-        match (id(&record), state(&record)) {
-            (Some(id), Ok(state)) => SubmissionRead::Found {
-                submission: Submission {
-                    id,
-                    branch: branch.into(),
-                    target: text(&record, "branch").unwrap_or_default(),
-                    state,
-                    request: request(&record),
+        let read = match newest.map(|(_, record)| record) {
+            None => SubmissionRead::None,
+            Some(record) => match (id(&record), state(&record)) {
+                (Some(id), Ok(state)) => SubmissionRead::Found {
+                    submission: Submission {
+                        id,
+                        branch: branch.into(),
+                        target: text(&record, "branch").unwrap_or_default(),
+                        state,
+                        request: request(&record),
+                    },
                 },
+                (None, _) => SubmissionRead::CouldNotRead {
+                    reason: format!("sluice gave a submission with no id: {record}"),
+                },
+                (_, Err(reason)) => SubmissionRead::CouldNotRead { reason },
             },
-            (None, _) => SubmissionRead::CouldNotRead {
-                reason: format!("sluice gave a submission with no id: {record}"),
-            },
-            (_, Err(reason)) => SubmissionRead::CouldNotRead { reason },
-        }
+        };
+        ReadAcross { read, passed_over }
     }
 
     fn step(&self, repository: &str, base: &str) -> Stepped {

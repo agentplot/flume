@@ -132,10 +132,25 @@ impl Queue {
         }
     }
 
+    /// Whether a stage of `stream` whose agent runs `program` can start on
+    /// its pool as the host's configuration declares it now: the pool
+    /// holds an account of that program, spent, full or neither; a stream
+    /// with no pool, a pool the host does not declare, or no program, can
+    /// (145).
+    pub fn runs(&self, stream: &str, program: Option<&str>) -> bool {
+        let pool = self.pool_of(stream).and_then(|pool| self.pools.get(pool));
+        match (pool, program) {
+            (Some(pool), Some(program)) => pool.runs(program),
+            _ => true,
+        }
+    }
+
     /// The room a stage of `stream` whose agent runs `program` is short
     /// of now, none where the host and the stream have room and an
     /// account of its pool is usable: its stream's bound first, then its
-    /// pool's accounts, then the host's (70, 143, 145).
+    /// pool's accounts, then the host's (70, 143, 145). A pool that holds
+    /// no account of `program` gives no want: no room could start the
+    /// stage, and its claim refuses it (4, 32).
     pub fn wants(&self, stream: &str, program: Option<&str>) -> Option<RoomWanted> {
         let of = self.stream(stream);
         if let (Some(0), Some(bound)) = (of.room(), of.bound) {
@@ -145,20 +160,12 @@ impl Queue {
             });
         }
         if let (Some(pool), Some(program)) = (self.pool_of(stream), program) {
-            match self.pools.get(pool).map(|room| room.usable(program)) {
-                Some(Usable::NoProgram) => {
-                    return Some(RoomWanted::Program {
-                        pool: pool.to_string(),
-                        program: program.to_string(),
-                    })
-                }
-                Some(Usable::None(until)) => {
-                    return Some(RoomWanted::Pool {
-                        pool: pool.to_string(),
-                        until,
-                    })
-                }
-                Some(Usable::Some) | None => {}
+            if let Some(Usable::None(until)) = self.pools.get(pool).map(|room| room.usable(program))
+            {
+                return Some(RoomWanted::Pool {
+                    pool: pool.to_string(),
+                    until,
+                });
             }
         }
         (self.room() == Some(0)).then_some(RoomWanted::Host)
@@ -168,7 +175,8 @@ impl Queue {
     /// at `priority` due to start waits: the host or its stream is full,
     /// its pool has no usable account, or a stage of another place waits
     /// that ranks as high, its stream's priority then its place's, and
-    /// could start now (70, 143, 145; core.26).
+    /// could start now, its pool holding an account of its program (70,
+    /// 143, 145; core.26).
     pub fn must_wait(
         &self,
         place: &PlaceId,
@@ -183,6 +191,7 @@ impl Queue {
         self.waiting.iter().any(|waiting| {
             &waiting.place != place
                 && waiting.rank() >= rank
+                && self.runs(&waiting.stream, waiting.program.as_deref())
                 && self
                     .wants(&waiting.stream, waiting.program.as_deref())
                     .is_none()
@@ -339,7 +348,9 @@ impl Engine {
     /// stream has no room or whose pool has no usable account and holding
     /// none of the host's for it, each
     /// written live under the room lock and opened after it is released;
-    /// ends no agent (31, 46, 70, 143; core.26).
+    /// ends no agent (31, 46, 70, 143; core.26). Ahead of the host's room,
+    /// each stage waiting whose pool holds no account of its program is
+    /// claimed, which refuses it, whatever room the host has (4, 32, 145).
     pub(crate) fn start_waiting(&self) {
         let any = self.store.read_every().iter().any(|read| {
             read.state
@@ -353,17 +364,21 @@ impl Engine {
         let claims: Vec<_> = {
             let _room = self.host.room();
             let mut queue = self.queue();
-            let waiting = std::mem::take(&mut queue.waiting);
+            let (runs, refused): (Vec<_>, Vec<_>) = std::mem::take(&mut queue.waiting)
+                .into_iter()
+                .partition(|waiting| queue.runs(&waiting.stream, waiting.program.as_deref()));
             let mut claims = vec![];
-            for waiting in waiting {
-                if queue.room() == Some(0) {
-                    break;
-                }
-                if queue
-                    .wants(&waiting.stream, waiting.program.as_deref())
-                    .is_some()
-                {
-                    continue;
+            for waiting in refused.into_iter().chain(runs) {
+                if queue.runs(&waiting.stream, waiting.program.as_deref()) {
+                    if queue.room() == Some(0) {
+                        break;
+                    }
+                    if queue
+                        .wants(&waiting.stream, waiting.program.as_deref())
+                        .is_some()
+                    {
+                        continue;
+                    }
                 }
                 if let Ok(claim) = self.claim(
                     &waiting.place,

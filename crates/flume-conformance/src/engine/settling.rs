@@ -88,6 +88,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: an_unreadable_inbox,
         },
         Scenario {
+            name: "submit: a branch the merge queue cannot read is passed over, named in status with its words, and a place's submission released on its base is still found, followed and landed",
+            cites: &["99", "133", "111", "124", "47", "49", "56", "58", "63"],
+            run: a_branch_passed_over,
+        },
+        Scenario {
+            name: "submit: a place whose base the merge queue cannot read reads its own submission unread and acts on nothing until the base reads again",
+            cites: &["99", "133", "15", "68", "56", "124"],
+            run: its_base_passed_over,
+        },
+        Scenario {
             name: "submit: a place gone back as often as its kind allows waits for its caller",
             cites: &["112", "23"],
             run: the_count_reached,
@@ -725,6 +735,91 @@ fn an_unreadable_inbox(_: &()) -> Outcome {
         None,
         "the inbox's reason, once read"
     );
+    Ok(())
+}
+
+/// The words the merge queue refused a branch with on deneb, 2026-11-04.
+const REFUSED: &str =
+    "bolt/a-run-compiles-through-a-shared-cache's policy at 4f6fe55f: [checkout] declares a cache";
+
+fn a_branch_passed_over(_: &()) -> Outcome {
+    let world = World::new();
+    let mut fix = launch("fix", "one", Some("x"));
+    fix.hold_submission = true;
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    world.commit("fix/one", &["fix.rs"]);
+    world.settle(&id);
+    let other = "bolt/a-run-compiles-through-a-shared-cache";
+    world.queue.refuse_branch(REPOSITORY, other, REFUSED);
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let released = world
+        .engine
+        .retry(&id, flume_core::Retry::Submission, None, false);
+    if let Some(reason) = released.refusal() {
+        return Err(format!("the submission's retry was refused: {reason}"));
+    }
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    let status = world.status(&id)?;
+    let read = status.submission.map(|submission| submission.read);
+    ensure!(
+        matches!(&read, Some(SubmissionRead::Found { submission }) if submission.state.open()),
+        "the place's submission past {other} read {read:?}"
+    );
+    ensure_eq!(
+        status
+            .cannot_read
+            .iter()
+            .filter(|what| what.contains(other) && what.contains(REFUSED))
+            .count(),
+        2,
+        format!(
+            "the branch passed over, by read-submission and the inbox, in {:?}",
+            status.cannot_read
+        )
+    );
+    world.queue.decide(REPOSITORY, "fix/one", Plan::Land);
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure!(world.held(&id).is_none(), "the landed place is kept");
+    ensure!(!world.place.exists(&id.0), "the landed place stands");
+    Ok(())
+}
+
+fn its_base_passed_over(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let id = fix_begun(&world, "one")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    world.queue.decide(REPOSITORY, "fix/one", Plan::Land);
+    world.queue.refuse_branch(REPOSITORY, "main", REFUSED);
+    world.queue.log.clear();
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("step"), 0, "steps of an unread base");
+    let held = world.held(&id).ok_or("the place is gone")?;
+    ensure_eq!(held.phase, Phase::Live, "the place");
+    let status = world.status(&id)?;
+    let read = status.submission.map(|submission| submission.read);
+    ensure!(
+        matches!(&read, Some(SubmissionRead::CouldNotRead { reason }) if reason.contains(REFUSED)),
+        "the place's submission on its unread base read {read:?}"
+    );
+    ensure!(
+        status
+            .cannot_read
+            .iter()
+            .any(|what| what.contains("main") && what.contains(REFUSED)),
+        "status names not the base passed over: {:?}",
+        status.cannot_read
+    );
+    world.queue.read_branch(REPOSITORY, "main");
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 0, "submissions made anew");
+    ensure!(world.held(&id).is_none(), "the landed place is kept");
     Ok(())
 }
 

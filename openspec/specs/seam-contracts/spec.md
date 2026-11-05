@@ -235,14 +235,21 @@ process on the host (102 to 104, 153).
 
 The seams SHALL pass one type each for a stream, a pool, its strategy
 and its accounts, an account chosen and where from, a move between
-accounts, and a start's record of what its agent runs under, held as
-the start's `start_record` and holding digests and no value; each SHALL
-serialize to JSON and back unchanged (143 to 147, 161).
+accounts, an intent's naming the program whose account moved, an
+intent's affinity with an account for each program, and a start's record
+of what its agent runs under, held as the start's `start_record` and
+holding digests and no value; each SHALL serialize to JSON and back
+unchanged (143 to 147, 153, 161).
 
 #### Scenario: A held state with a stream, an account and a record
 
 - **WHEN** a held state whose place has a stream with `from`, an intent, and a start with an account and a start's record is written and read
 - **THEN** it reads back unchanged, and the record holds each variable's digest and no value (143 to 147, 161)
+
+#### Scenario: An affinity of two programs
+
+- **WHEN** an affinity holding an account for `agent` and one for `other`, and an intent's move for `agent`, is written and read
+- **THEN** it reads back unchanged, and it once left the move's `from` for `agent` and never for `other` (147, 153)
 
 ### Requirement: The agent seam maps a mode and says whether it reads one back
 
@@ -284,3 +291,50 @@ word that is not one of the four SHALL be refused naming it (161, 162,
 
 - **WHEN** a mode is read from the JSON word `"auto"`
 - **THEN** it is refused naming `auto` and saying a program's own value goes under its program's name (169)
+
+### Requirement: The agent seam carries a conversation or says why not
+
+The agent seam SHALL answer, given the start whose agent stopped at its
+account's usage limit and the chosen account's environment, whether its
+program can carry that agent's conversation there, with the session to
+resume, or why not, or that it offers no carry, the default; and its
+command SHALL take the session a start resumes (88, 179).
+
+#### Scenario: A profile that offers no carry
+
+- **WHEN** the seam's scenarios run against a profile that implements no carry
+- **THEN** carry answers that it is not offered, for any start and account (179)
+
+#### Scenario: The fake's carry over the seam's scenarios
+
+- **WHEN** the seam's scenarios run against the fake agent scripted to carry to one account and not to another
+- **THEN** carry answers yes with the scripted session for the first, and no with the scripted words for the second (179)
+
+### Requirement: The types of a carried start
+
+The seams SHALL pass one type each for a stage's wait after a spent
+agent, a start's conversation, a start carried that did not begin, the
+session in a start's record and an unsettled start's other session;
+each SHALL serialize to JSON and back unchanged, and held state written
+before them SHALL read with none (146, 161, 179).
+
+#### Scenario: A held state with a carried start
+
+- **WHEN** a held state whose stage waits after a spent agent, whose start carries a conversation with its record's session, whose move says carried and which lists a start carried that did not begin is written and read
+- **THEN** it reads back unchanged (146, 161, 179)
+
+#### Scenario: A held state written before
+
+- **WHEN** a held state written before this change is read
+- **THEN** it reads with no wait after a spent agent, no conversation, no session and no start carried that did not begin (146)
+
+### Requirement: An affinity written before reads with its one account
+
+An affinity written before SHALL read with its one account and its pool,
+and its intent's moves with no program, and SHALL never be written so
+(147, 153).
+
+#### Scenario: An affinity written before
+
+- **WHEN** the JSON of an affinity with one `pool` and `account` and an intent's move with no program is read, and written again
+- **THEN** it reads with that pool and account, no account for any program and the move with no program, and is written with no `pool` or `account` key once they are taken away (147, 153)

@@ -39,12 +39,13 @@ fail() {
   failures=$((failures + 1))
 }
 
-# The hook for event $1 with the fixture $2, the transcript and the place
-# filled in, in the environment the rest of the words set.
+# The hook for event $1 with the fixture $2, the transcript ($transcript,
+# else the scratch's own) and the place filled in, in the environment the
+# rest of the words set.
 hook() {
   local event=$1 fixture=$2
   shift 2
-  sed -e "s#__TRANSCRIPT__#$scratch/transcript.jsonl#" -e "s#__CWD__#${place:-$scratch}#" \
+  sed -e "s#__TRANSCRIPT__#${transcript:-$scratch/transcript.jsonl}#" -e "s#__CWD__#${place:-$scratch}#" \
     "$fixtures/$fixture" | env "$@" "$flume" hook "$event"
 }
 
@@ -258,6 +259,67 @@ received=$(find "$XDG_STATE_HOME" -path "*fix--three*" -name received | head -n 
 word_file=$(find "$XDG_STATE_HOME" -path "*fix--three*" -name unsettled.json | head -n 1)
 jq -e '.mode == {"asked": "bypassPermissions", "began": "manual"} and .different == [] and .missing == [] and .program == false' \
   "${word_file:-/dev/null}" >/dev/null || fail "the record does not name both modes: $(cat "${word_file:-/dev/null}")"
+
+# A carried start in another session: a pool of two accounts whose homes
+# share one projects folder by a link. The fix's code agent under carry-1
+# takes its prompt in the fixtures' session, its transcript in carry-1's
+# home; its turn fails at the session limit and its session ends, and a
+# settle reads it spent and starts the stage under carry-2, resuming that
+# session. That start's SessionStart names another session: no started
+# ack, and the agent's record says it came up in another session, naming
+# neither (161, 179).
+mkdir -p "$scratch/home-1/projects/place" "$scratch/home-2"
+ln -s "$scratch/home-1/projects" "$scratch/home-2/projects"
+cat >"$XDG_CONFIG_HOME/flume/config.toml" <<TOML
+[host]
+pool = "carry"
+
+[pools.carry]
+strategy = "fill-first"
+accounts = [
+  { name = "carry-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "$scratch/home-1" } },
+  { name = "carry-2", program = "claude", env = { CLAUDE_CONFIG_DIR = "$scratch/home-2" } },
+]
+TOML
+(cd "$repo" && "$flume" launch --kind fix --name four --brief "fix the writer" \
+  --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch on a pool of two"
+place=$(located fix--four)
+printed=$(status | jq -r '.agent.printed')
+envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
+four=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"
+FLUME_PLACE="$(word FLUME_PLACE)" FLUME_STAGE="$(word FLUME_STAGE)"
+CLAUDE_PLUGIN_ROOT="$plugin" PATH="$hookpath" CLAUDE_CONFIG_DIR="$scratch/home-1")
+resumed=$scratch/home-1/projects/place/4e3c05c8-51c4-4449-8577-4f7038e394bf.jsonl
+cp "$fixtures/transcript.jsonl" "$resumed"
+transcript=$resumed hook session-start session-start.json "${four[@]}" >/dev/null
+[ "$(status | jq -r .agent.started)" = yes ] || fail "the first start under carry-1 was not acked"
+prompt=$(cd "$repo" && "$flume" prompt "$place" code --json | jq -r .prompt.text)
+jq -c --arg prompt "$prompt" --arg transcript "$resumed" --arg cwd "$place" \
+  '.prompt = $prompt | .transcript_path = $transcript | .cwd = $cwd' \
+  "$fixtures/user-prompt-submit.json" | env "${four[@]}" "$flume" hook user-prompt-submit
+transcript=$resumed hook stop-failure stop-failure-limit.json "${four[@]}" >/dev/null
+transcript=$resumed hook session-end session-end.json "${four[@]}" >/dev/null
+(cd "$repo" && "$flume" settle "$place" >/dev/null) || fail "the settle of the spent start"
+[ "$(status | jq -c .agent.conversation)" = '{"from":1,"carried":true}' ] ||
+  fail "the start after the spent one does not carry its conversation: $(status | jq -c .agent)"
+printed=$(status | jq -r '.agent.printed')
+case $printed in
+*"--resume 4e3c05c8-51c4-4449-8577-4f7038e394bf"*) ;;
+*) fail "the carried start's command resumes no session: $printed" ;;
+esac
+envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
+carried=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"
+FLUME_PLACE="$(word FLUME_PLACE)" FLUME_STAGE="$(word FLUME_STAGE)"
+CLAUDE_PLUGIN_ROOT="$plugin" PATH="$hookpath" CLAUDE_CONFIG_DIR="$scratch/home-2")
+other=$scratch/home-2/projects/place/9b1f6a2e-0c4d-4e8f-a1b2-c3d4e5f60718.jsonl
+cp "$fixtures/transcript.jsonl" "$other"
+transcript=$other hook session-start session-start-another-session.json "${carried[@]}" >/dev/null ||
+  fail "session-start exited non-zero"
+[ "$(status | jq -r .agent.started)" = no ] || fail "the ack was taken in another session"
+word_file=$(find "$XDG_STATE_HOME" -path "*fix--four*" -name unsettled.json | head -n 1)
+jq -e '.session == true and .different == [] and .missing == [] and .program == false' \
+  "${word_file:-/dev/null}" >/dev/null || fail "the record does not say another session: $(cat "${word_file:-/dev/null}")"
+grep -q 4e3c05c8-51c4-4449-8577-4f7038e394bf "${word_file:-/dev/null}" && fail "the record names the resumed session"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures of the plugin's hook checks failed" >&2
