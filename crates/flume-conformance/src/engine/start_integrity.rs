@@ -138,6 +138,7 @@ fn work_pool(world: &World, env: &[(&str, &str)]) {
                 .map(|(name, value)| (name.to_string(), value.to_string()))
                 .collect(),
             agents: None,
+            usage: None,
         }],
     );
     world.host.set_host_pool(Some("work"));

@@ -262,6 +262,7 @@ impl MoveStatus {
             moved.from,
             match moved.why {
                 MoveWhy::Spent => "spent",
+                MoveWhy::Threshold => "past its threshold",
                 MoveWhy::Full => "at its bound",
             },
             moved.from

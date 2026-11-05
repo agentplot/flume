@@ -152,12 +152,20 @@ pub fn account(name: &str, agents: Option<u32>) -> Account {
         program: "agent".into(),
         env: BTreeMap::new(),
         agents,
+        usage: None,
     }
 }
 
 /// The host declares `name` with `accounts` under `strategy`.
 pub fn pool(world: &World, name: &str, strategy: Strategy, accounts: Vec<Account>) {
-    world.host.set_pool(name, Some(Pool { strategy, accounts }));
+    world.host.set_pool(
+        name,
+        Some(Pool {
+            strategy,
+            threshold: None,
+            accounts,
+        }),
+    );
 }
 
 /// The host declares the stream `name` taking its accounts from `pool`.
@@ -723,6 +731,8 @@ fn s56_three_units_of_one_intent(_: &()) -> Outcome {
         why: MoveWhy::Spent,
         at: world.host.now(),
         carried: None,
+        window: None,
+        until: None,
     };
     let held = affinity(&world, &intent).ok_or("no affinity")?;
     ensure_eq!(
@@ -1001,6 +1011,8 @@ fn s80_two_programs_of_one_intent(_: &()) -> Outcome {
         why: MoveWhy::Spent,
         at: world.host.now(),
         carried: None,
+        window: None,
+        until: None,
     };
     ensure_eq!(
         world.held(&next).map(|held| held.moves),
@@ -1102,6 +1114,8 @@ fn a_document_written_before(_: &()) -> Outcome {
         why: MoveWhy::Spent,
         at: world.host.now(),
         carried: None,
+        window: None,
+        until: None,
     };
     written_before(
         &world,

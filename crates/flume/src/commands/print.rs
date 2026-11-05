@@ -1083,6 +1083,8 @@ mod tests {
                 why: MoveWhy::Spent,
                 at: 54_000,
                 carried: Some(carried),
+                window: None,
+                until: None,
             })
         };
         assert_eq!(
@@ -1110,6 +1112,8 @@ mod tests {
             why: MoveWhy::Spent,
             at: 54_000,
             carried: None,
+            window: None,
+            until: None,
         });
         assert_eq!(
             moved.words(),
@@ -1133,6 +1137,8 @@ mod tests {
                 why: MoveWhy::Spent,
                 at: 54_000,
                 carried: None,
+                window: None,
+                until: None,
             })
         };
         assert_eq!(

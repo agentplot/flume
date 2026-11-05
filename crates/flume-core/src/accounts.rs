@@ -89,12 +89,13 @@ impl PoolRoom {
 
     /// The account the strategy chooses for a start of `program`: under
     /// fill-first the first usable in order, under least-busy the usable
-    /// one with fewest of flume's agents, equals in order (145).
+    /// one with fewest of flume's agents, equals in order; under most-left,
+    /// with no account's reading read, as least-busy (145, 184).
     pub fn strategy(&self, program: &str) -> Option<&AccountRoom> {
         let mut usable = self.accounts.iter().filter(|room| room.usable(program));
         match self.strategy {
             Strategy::FillFirst => usable.next(),
-            Strategy::LeastBusy => {
+            Strategy::LeastBusy | Strategy::MostLeft => {
                 usable.fold(None, |least: Option<&AccountRoom>, room| match least {
                     Some(least) if least.running <= room.running => Some(least),
                     _ => Some(room),
@@ -207,6 +208,8 @@ impl Engine {
                 why,
                 at: now,
                 carried: None,
+                window: None,
+                until: None,
             })
         });
         (chose(chosen, AccountFrom::Strategy), moved)
@@ -318,6 +321,8 @@ impl Engine {
             why,
             at: now,
             carried,
+            window: None,
+            until: None,
         })
     }
 }

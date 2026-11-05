@@ -329,6 +329,8 @@ fn held() -> HeldState {
                 why: MoveWhy::Spent,
                 at: 110,
                 carried: Some(true),
+                window: None,
+                until: None,
             },
             AccountMove {
                 on: MoveOn::Intent {
@@ -339,6 +341,8 @@ fn held() -> HeldState {
                 why: MoveWhy::Full,
                 at: 110,
                 carried: None,
+                window: None,
+                until: None,
             },
         ],
         unsettled: vec![UnsettledStart {
@@ -1384,18 +1388,21 @@ fn streams_and_pools_as_the_configuration_names_them() {
     round_trips(Stream::default());
     let pool = Pool {
         strategy: Strategy::FillFirst,
+        threshold: None,
         accounts: vec![
             Account {
                 name: "work-1".into(),
                 program: "agent".into(),
                 env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-1".into())]),
                 agents: Some(4),
+                usage: None,
             },
             Account {
                 name: "work-2".into(),
                 program: "agent".into(),
                 env: BTreeMap::new(),
                 agents: None,
+                usage: None,
             },
         ],
     };
@@ -1437,6 +1444,97 @@ fn streams_and_pools_as_the_configuration_names_them() {
             from,
         });
     }
+}
+
+/// The seam-contracts spec's scenario "A pool and a reading" (184, 185).
+#[test]
+fn a_pool_and_a_reading() {
+    let pool = Pool {
+        strategy: Strategy::MostLeft,
+        threshold: Some(85),
+        accounts: vec![Account {
+            name: "work-1".into(),
+            program: "agent".into(),
+            env: BTreeMap::new(),
+            agents: None,
+            usage: Some("~/.local/state/usage/work-1.json".into()),
+        }],
+    };
+    round_trips(pool.clone());
+    let json = serde_json::to_value(&pool).unwrap();
+    assert_eq!(json["strategy"], serde_json::json!("most-left"));
+    assert_eq!(json["threshold"], serde_json::json!(85));
+    assert_eq!(
+        json["accounts"][0]["usage"],
+        serde_json::json!("~/.local/state/usage/work-1.json")
+    );
+    assert_eq!(Strategy::MostLeft.name(), "most-left");
+    let usage = Usage {
+        read_at: 1_000,
+        windows: vec![
+            Window {
+                name: "5-hour".into(),
+                used: 4_200,
+                resets_at: Some(12_000),
+            },
+            Window {
+                name: "7-day".into(),
+                used: 7_150,
+                resets_at: None,
+            },
+        ],
+    };
+    round_trips(usage.clone());
+    let json = serde_json::to_value(&usage).unwrap();
+    assert!(json["windows"][1].get("resets_at").is_none());
+    let unstated = serde_json::to_value(Pool {
+        threshold: None,
+        accounts: vec![Account {
+            usage: None,
+            ..pool.accounts[0].clone()
+        }],
+        ..pool
+    })
+    .unwrap();
+    assert!(unstated.get("threshold").is_none());
+    assert!(unstated["accounts"][0].get("usage").is_none());
+}
+
+/// The seam-contracts spec's scenario "A move past a threshold" (147,
+/// 185).
+#[test]
+fn a_move_past_a_threshold() {
+    let moved = AccountMove {
+        on: MoveOn::Intent {
+            program: Some("agent".into()),
+        },
+        from: "work-1".into(),
+        to: "work-2".into(),
+        why: MoveWhy::Threshold,
+        at: 50_400,
+        carried: None,
+        window: Some("5-hour".into()),
+        until: Some(61_200),
+    };
+    round_trips(moved.clone());
+    let json = serde_json::to_value(&moved).unwrap();
+    assert_eq!(json["why"], serde_json::json!("threshold"));
+    assert_eq!(json["window"], serde_json::json!("5-hour"));
+    assert_eq!(json["until"], serde_json::json!(61_200));
+    assert_eq!(MoveWhy::Threshold.name(), "threshold");
+    let before: AccountMove = serde_json::from_value(serde_json::json!({
+        "on": "intent",
+        "program": "agent",
+        "from": "work-1",
+        "to": "work-2",
+        "why": "spent",
+        "at": 47_400,
+    }))
+    .expect("read");
+    assert_eq!(before.window, None);
+    assert_eq!(before.until, None);
+    let written = serde_json::to_value(&before).unwrap();
+    assert!(written.get("window").is_none() && written.get("until").is_none());
 }
 
 #[test]
@@ -1542,6 +1640,8 @@ fn two_programs() -> Affinity {
             why: MoveWhy::Spent,
             at: 47_400,
             carried: None,
+            window: None,
+            until: None,
         }],
         gone: Some(50_000),
         pool: None,

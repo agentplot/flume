@@ -977,10 +977,18 @@ fn pools_declared(pools: &Value) -> Result<BTreeMap<String, Pool>, String> {
                     .ok_or(format!("[{at}] names no program"))?,
                 env: env_of(account, &at)?,
                 agents: bound_of(account, "agents", &at)?,
+                usage: None,
                 name,
             });
         }
-        declared.insert(name.clone(), Pool { strategy, accounts });
+        declared.insert(
+            name.clone(),
+            Pool {
+                strategy,
+                threshold: None,
+                accounts,
+            },
+        );
     }
     Ok(declared)
 }
@@ -1362,12 +1370,14 @@ label = "inception"
                     program: "agent".into(),
                     env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-1".into())]),
                     agents: Some(4),
+                    usage: None,
                 },
                 Account {
                     name: "work-2".into(),
                     program: "agent".into(),
                     env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-2".into())]),
                     agents: None,
+                    usage: None,
                 },
             ],
             "in order, each env kept as written"

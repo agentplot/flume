@@ -15,7 +15,7 @@ pub mod process;
 use config::HostConfig;
 use flume_seams::{
     Host, HostConfiguration, HostSettings, LabelHeld, Pool, PoolNamed, RoleRun, RoomGuard, Seconds,
-    Secret, Stream, StreamHeld,
+    Secret, Stream, StreamHeld, Usage,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -280,6 +280,10 @@ impl Host for RealHost {
 
     fn pool(&self, name: &str) -> Option<Pool> {
         self.config.pools.get(name).cloned()
+    }
+
+    fn usage(&self, _path: &str) -> Result<Usage, String> {
+        Err("this host reads no reading".to_string())
     }
 
     fn login(&self, name: &str) -> Option<String> {

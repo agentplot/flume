@@ -689,6 +689,8 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             why: MoveWhy::Spent,
             at,
             carried: None,
+            window: None,
+            until: None,
         },
         cache: Cache::Lost,
     };

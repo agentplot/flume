@@ -2,7 +2,7 @@ use crate::{lock, Log};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, KindSettings, LabelFrom,
     LabelHeld, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Share, Stream,
-    StreamFrom, StreamHeld, DEFAULT_STREAM,
+    StreamFrom, StreamHeld, Usage, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -400,6 +400,11 @@ impl Host for FakeHost {
     fn pool(&self, name: &str) -> Option<Pool> {
         self.log.push(format!("pool {name}"));
         lock(&self.state).pools.get(name).cloned()
+    }
+
+    fn usage(&self, path: &str) -> Result<Usage, String> {
+        self.log.push(format!("usage {path}"));
+        Err("the file is missing".to_string())
     }
 
     fn settings(&self, repository: &str, kind: &str) -> HostSettings {

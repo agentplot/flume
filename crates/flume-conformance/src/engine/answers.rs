@@ -282,6 +282,8 @@ fn place_status() -> PlaceStatus {
             why: MoveWhy::Spent,
             at: 110,
             carried: Some(false),
+            window: None,
+            until: None,
         })],
         unsettled: vec![UnsettledStart {
             stage: "code".into(),
