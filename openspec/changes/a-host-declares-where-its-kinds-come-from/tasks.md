@@ -35,7 +35,7 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 2. weir-kinds' pin
 
-- [ ] 2.1 Move the `weir-kinds` pin in `Cargo.toml`, with `Cargo.lock`, to the revision of agentplot/weir's main that reads an identity, a package with its content hash, and a lock, and writes a lock (*What this change rests on* 1; weir 88 to 93, C.4). Move nothing else. Where weir's main holds no such revision, the build cannot go on: stop short naming it (core.4, core.22). True when `sluice exec main -- moon run seams:test core:test fakes:test conformance:test flume:lint flume:test` passes with every existing test unchanged.
+- [x] 2.1 Move the `weir-kinds` pin in `Cargo.toml`, with `Cargo.lock`, to the revision of agentplot/weir's main that reads an identity, a package with its content hash, and a lock, and writes a lock (*What this change rests on* 1; weir 88 to 93, C.4). Move nothing else. Where weir's main holds no such revision, the build cannot go on: stop short naming it (core.4, core.22). True when `sluice exec main -- moon run seams:test core:test fakes:test conformance:test flume:lint flume:test` passes with every existing test unchanged.
 
 ## 3. The seams and the fakes
 
