@@ -79,7 +79,10 @@ pub const PLAN: &str = "record 0024's plan stage's change, built after the mode"
 pub const POINTS: &str = "record 0025's change, points, built after the mode";
 
 /// The change that builds record 0026's common profile and the degraded
-/// parts of the agent seam.
+/// parts of the agent seam. With 173 it carries the own-settings spec's
+/// scenario "A pool of two programs": an account of a pool usable for a
+/// stage whose layers name no program only where its program's profile
+/// takes the stage's own settings for it (record 0040).
 pub const PROFILES: &str = "record 0026's change, every program the terminal starts, once accepted";
 
 /// The change that builds records 0028 and 0029: statechart kinds, run

@@ -185,8 +185,8 @@ host's `[repos."<repository>"]` table (32, 191, C.2, C.7).
   out, refuses those written, checks for credentials and folds own
   settings key by key; `settings.rs` folds eight layers; `launch.rs`
   and `start.rs` refuse, write the command's files and pass them;
-  `accounts.rs` reads an account usable only where its program takes
-  what is given; `status.rs` gives them.
+  `status.rs` gives them. An account usable only where its program
+  takes what is given is record 0026's change's, with the rest of 173.
 - `crates/flume`: a new `own.rs` reading an agents table's `programs`
   and its files; the host's configuration with
   `[repos."<repository>".agents]`, the kinds profile's agents tables and

@@ -138,7 +138,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: keys for a profile that keeps the seam's default refuse the launch naming the program, the key and the layer",
-            cites: &["4", "170"],
+            cites: &["4", "88"],
             run: a_profile_that_keeps_the_seams_default,
         },
         Scenario {

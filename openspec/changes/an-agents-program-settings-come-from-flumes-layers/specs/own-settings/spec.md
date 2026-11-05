@@ -302,14 +302,3 @@ named file to its program as it stands (191; core.30).
 
 - **WHEN** the host's `[agents.programs.agent]` names a file and the fake takes own settings by a file
 - **THEN** the fake's command lists its own file under the start's folder and names no path of the host's file (191)
-
-### Requirement: An account is usable only where its program takes what is given
-
-Where no layer names a stage's program, an account of its pool SHALL
-be usable for the stage only where its program's profile takes the
-stage's own settings for that program (144, 173, 191).
-
-#### Scenario: A pool of two programs
-
-- **WHEN** a stage's layers name no program, its pool holds an `other` account and then an `agent` account, fill-first, the host gives `[agents.programs.other.settings] line`, and `other`'s profile takes no own settings
-- **THEN** the stage starts on the `agent` account, and status says the account came from the strategy (145, 173)

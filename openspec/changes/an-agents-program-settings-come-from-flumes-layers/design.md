@@ -643,10 +643,18 @@ The agent seam gains the part **own settings** (192):
 
 `Engine::resolution` asks `Agent::own` once the program is bound and
 the mode mapped, where the agent's resolved keys are not empty, and
-refuses in design 13's words. An account of a pool is usable for a
-stage whose layers name no program only where its program's profile
-takes the stage's keys for it (173; record 0026), so a pool of two
-programs starts the stage on the one that can.
+refuses in design 13's words.
+
+An account of a pool is usable for a stage whose layers name no
+program only where its program's profile takes the stage's keys for it
+(173), so a pool of two programs starts the stage on the one that can.
+Record 0026's change builds that with the rest of 173, an account's
+program naming the stage's where there is a pool, and carries its
+scenario, "A pool of two programs": until then flume's default layer
+names a program for every stage, so no stage here has layers naming
+none, and the clause list names 173 unbuilt by that change
+(`clauses::PROFILES`). Its filter is the account's program's
+`Resolved::own_for` refused by nothing (`settings::own_refused`).
 
 The start's record names no own settings and compares none: no
 release reads them back, so `Agent::own_read_back` is not added, and
