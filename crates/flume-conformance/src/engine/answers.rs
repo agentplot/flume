@@ -23,6 +23,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_field_removed,
         },
         Scenario {
+            name: "answers: a status written before the host gave its terminal's setup reads with none",
+            cites: &["61", "122"],
+            run: a_status_before_terminal_setup,
+        },
+        Scenario {
             name: "answers: a refusal is an answer of the same form",
             cites: &["2", "61"],
             run: a_refusal_is_an_answer,
@@ -384,6 +389,21 @@ fn place_status() -> PlaceStatus {
                 bases: vec![],
             },
         }),
+        line: line(),
+    }
+}
+
+/// A place's line, every part present.
+fn line() -> PlaceLine {
+    PlaceLine {
+        name: "fix--one".into(),
+        kind: "fix@1".into(),
+        stage: Some("code".into()),
+        run: Some(2),
+        tasks: Some("1/3".into()),
+        state: "working".into(),
+        full: "fix--one · fix@1 · code · run 2 · tasks 1/3 · working".into(),
+        short: "code · run 2 · tasks 1/3 · working".into(),
     }
 }
 
@@ -500,6 +520,7 @@ fn host_status() -> HostStatus {
             line: "1 running · 0 asking · 1 waiting on caller · 0 stalled".into(),
             shown_at: Some("workspace w1".into()),
         }],
+        terminal_setup: vec![crate::fake_harness::SETUP.into()],
         configuration: HostConfiguration {
             local: LocalLayer::Taken,
             values: vec![ConfigValue {
@@ -625,6 +646,12 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                 place: place_status(),
             },
         ),
+        (
+            "lines",
+            Answer::Lines {
+                lines: vec![line()],
+            },
+        ),
     ]
 }
 
@@ -658,6 +685,23 @@ fn a_field_removed(_: &()) -> Outcome {
         vec!["the answer launched lacks its field launched.place.branch".to_string()],
         "the fields missed"
     );
+    Ok(())
+}
+
+fn a_status_before_terminal_setup(_: &()) -> Outcome {
+    let (_, answer) = full().remove(0);
+    let mut json: Value =
+        serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+    json["status"]["host"]
+        .as_object_mut()
+        .ok_or("no host")?
+        .remove("terminal_setup")
+        .ok_or("no terminal_setup")?;
+    let back: Answer = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    let Answer::Status { host, .. } = back else {
+        return Err(format!("read back as {back:?}"));
+    };
+    ensure_eq!(host.terminal_setup, Vec::<String>::new(), "the setup read");
     Ok(())
 }
 
@@ -782,6 +826,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.pools[].name",
             "status.host.pools[].strategy",
             "status.host.pools[].threshold",
+            "status.host.terminal_setup",
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",
@@ -830,6 +875,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].clues.stage",
             "status.places[].clues.state",
             "status.places[].clues.title",
+            "status.places[].line",
+            "status.places[].line.full",
+            "status.places[].line.kind",
+            "status.places[].line.name",
+            "status.places[].line.run",
+            "status.places[].line.short",
+            "status.places[].line.stage",
+            "status.places[].line.state",
+            "status.places[].line.tasks",
             "status.places[].current",
             "status.places[].declared",
             "status.places[].delivered",
@@ -1032,6 +1086,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.clues.stage",
             "launched.place.clues.state",
             "launched.place.clues.title",
+            "launched.place.line",
+            "launched.place.line.full",
+            "launched.place.line.kind",
+            "launched.place.line.name",
+            "launched.place.line.run",
+            "launched.place.line.short",
+            "launched.place.line.stage",
+            "launched.place.line.state",
+            "launched.place.line.tasks",
             "launched.place.current",
             "launched.place.declared",
             "launched.place.delivered",
@@ -1234,6 +1297,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.clues.stage",
             "acted.status.clues.state",
             "acted.status.clues.title",
+            "acted.status.line",
+            "acted.status.line.full",
+            "acted.status.line.kind",
+            "acted.status.line.name",
+            "acted.status.line.run",
+            "acted.status.line.short",
+            "acted.status.line.stage",
+            "acted.status.line.state",
+            "acted.status.line.tasks",
             "acted.status.current",
             "acted.status.declared",
             "acted.status.delivered",
@@ -1541,6 +1613,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.clues.stage",
             "woken.place.clues.state",
             "woken.place.clues.title",
+            "woken.place.line",
+            "woken.place.line.full",
+            "woken.place.line.kind",
+            "woken.place.line.name",
+            "woken.place.line.run",
+            "woken.place.line.short",
+            "woken.place.line.stage",
+            "woken.place.line.state",
+            "woken.place.line.tasks",
             "woken.place.current",
             "woken.place.declared",
             "woken.place.delivered",
@@ -1684,6 +1765,21 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waiting_on.why",
             "woken.place.waiting_on.words",
             "woken.woke",
+        ],
+    ),
+    (
+        "lines",
+        &[
+            "lines",
+            "lines.lines",
+            "lines.lines[].full",
+            "lines.lines[].kind",
+            "lines.lines[].name",
+            "lines.lines[].run",
+            "lines.lines[].short",
+            "lines.lines[].stage",
+            "lines.lines[].state",
+            "lines.lines[].tasks",
         ],
     ),
 ];

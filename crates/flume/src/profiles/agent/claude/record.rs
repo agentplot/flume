@@ -7,7 +7,8 @@
 //! names the length the session's transcript held when it was first
 //! written, from which every reading of the start's transcript reads, so
 //! a start that carries a conversation reads none of its earlier agent's
-//! records as its own (31, 179).
+//! records as its own (31, 179). Beside them, the command writes the
+//! standing prompt the start carries (148, C.4).
 
 use flume_seams::Identity;
 use serde::{Deserialize, Serialize};
@@ -159,6 +160,17 @@ impl Record {
     pub fn set_unsettled(&self, unsettled: &Unsettled) -> std::io::Result<()> {
         let text = serde_json::to_string_pretty(unsettled).expect("the word as JSON");
         self.write("unsettled.json", &text)
+    }
+
+    /// The file holding the standing prompt the start carries, which its
+    /// command names (148, C.4).
+    pub fn standing_prompt(&self) -> PathBuf {
+        self.file("standing-prompt.md")
+    }
+
+    /// The standing prompt written to its file as given.
+    pub fn set_standing_prompt(&self, text: &str) -> std::io::Result<()> {
+        self.write("standing-prompt.md", text)
     }
 
     /// The session's transcript and the length the start's own part of it

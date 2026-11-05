@@ -17,7 +17,7 @@ account with what chose it.
 |---|---|
 | `program` | the agent program: `claude`, or a path to Claude Code |
 | `model` | the model, passed as `--model` |
-| `instructions` | text appended to the agent's system prompt, passed as `--append-system-prompt` |
+| `instructions` | text appended to the agent's system prompt, written to a file of the start's own and passed as `--append-system-prompt-file`, so it may hold newlines |
 | `beside` | a pane the agent's pane opens beside, under herdr |
 | `mode` | how far the agent may act in its place without asking a person: one of flume's four modes, or a table of programs ([the mode](#the-mode)) |
 

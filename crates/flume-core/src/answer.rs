@@ -66,6 +66,10 @@ pub enum Answer {
         woke: Woke,
         place: PlaceStatus,
     },
+    /// Each place's line asked alone, of the place named or of every
+    /// place on the host, read from its held state, the change at its
+    /// head and its live agent's asking mark alone (56, 57, 58).
+    Lines { lines: Vec<PlaceLine> },
 }
 
 /// What a wake of a role's address came to (132): its run launched by
@@ -216,6 +220,29 @@ pub struct PlaceStatus {
     /// terminal shows them (139).
     #[serde(default)]
     pub clues: Option<PlaceClues>,
+    /// The place's one line, made from the facts above, the same as the
+    /// line asked alone (56, 60; S14).
+    #[serde(default)]
+    pub line: PlaceLine,
+}
+
+/// A place's one line and its parts (56, 142): `<kind>--<name>`,
+/// `<kind>@<version>`, its current stage with a repeating stage's group,
+/// how many times that stage started, its change's tasks ticked at the
+/// head, and its state in words; `full` joins them by ` · `, a part it
+/// has none of left out, and `short` is `full` less its name and kind.
+/// A full line asked for a session that is not the current stage's live
+/// agent ends saying so; a short one never does (35, 140).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceLine {
+    pub name: String,
+    pub kind: String,
+    pub stage: Option<String>,
+    pub run: Option<u32>,
+    pub tasks: Option<String>,
+    pub state: String,
+    pub full: String,
+    pub short: String,
 }
 
 /// A move between accounts as status gives it: what moved, from, to,
@@ -331,6 +358,11 @@ pub struct HostStatus {
     /// its places show gives and where the terminal shows it (139).
     #[serde(default)]
     pub bases: Vec<BaseClues>,
+    /// What the terminal's own configuration lacks for flume's plugin,
+    /// each in the terminal profile's words; none where it lacks nothing
+    /// (72, 122).
+    #[serde(default)]
+    pub terminal_setup: Vec<String>,
     /// The host's configuration as it stands: whether its local layer was
     /// taken, every value with its layer, an account's variables by name
     /// and `<set>`, and each local key passed over with its pin (56, C.7;
@@ -356,6 +388,7 @@ impl Default for HostStatus {
             addresses: vec![],
             watch: Watch::None,
             bases: vec![],
+            terminal_setup: vec![],
             configuration: HostConfiguration::default(),
         }
     }

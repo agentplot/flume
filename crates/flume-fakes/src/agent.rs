@@ -376,6 +376,7 @@ impl FakeAgent {
 impl Agent for FakeAgent {
     fn command(
         &self,
+        _folder: &str,
         settings: &Settings,
         mode: Option<&str>,
         resume: Option<&str>,

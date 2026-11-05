@@ -225,6 +225,17 @@ let
     '';
   };
 
+  # TypeScript, which plugin-claude:typecheck types the Claude Code
+  # plugin's module and its tests with, against the engine types the pinned
+  # Claude Code writes, which ask for 5.4 or later: nixpkgs' as devenv.lock
+  # gives it, its version named here so a lock that moves it fails to
+  # evaluate rather than typing the module with another (core.22).
+  typescriptVersion = "7.0.2";
+  typescript =
+    assert lib.assertMsg (pkgs.typescript.version == typescriptVersion)
+      "devenv.lock's nixpkgs gives TypeScript ${pkgs.typescript.version}, devenv.nix pins ${typescriptVersion}";
+    pkgs.typescript;
+
   # OpenSpec, which root:specs and root:changes validate with and the
   # change profile reads other schemas through: sluice's release, built as
   # nixpkgs builds its older one. Bump the version, then each hash from
@@ -340,6 +351,7 @@ in
     proto
     vale
     claude
+    typescript
     openspec
     herdr
     sluice

@@ -58,8 +58,11 @@
 //! watch of it has renewed its lease within the lease's term, a minute,
 //! the profile answers its bound, thirty seconds, and no watch
 //! otherwise, reading the lease and starting nothing (119, 122; design
-//! 10). The session a command runs in is `herdr:<pane>@<socket>`, its
-//! pane on its server (7).
+//! 10). setup is what the watch wrote herdr's configuration lacks for the
+//! plugin, `setup.json` beside each fresh lease, its words in order and
+//! once each, read from the files alone (122; design 8). The session a
+//! command runs in is `herdr:<pane>@<socket>`, its pane on its server
+//! (7).
 //!
 //! A recipient's session is reached by its name (43, 132; records 0016,
 //! 0018): `herdr:<pane>@<socket>` by that pane on that server, its id
@@ -354,26 +357,41 @@ impl Herdr {
     }
 
     /// Whether a watch of flume's herdr plugin, on any herdr server, has
-    /// renewed its lease within the lease's term: the lease's first line
-    /// is the watch's pid and when it last renewed, in seconds since the
-    /// epoch (design 10).
+    /// renewed its lease within the lease's term (design 10).
     pub fn watch_kept(&self) -> bool {
+        !self.watched_servers().is_empty()
+    }
+
+    /// The state directory of each herdr server whose watch of flume's
+    /// herdr plugin renewed its lease within the lease's term, in the
+    /// order of their names: the lease's first line is the watch's pid
+    /// and when it last renewed, in seconds since the epoch (design 10).
+    fn watched_servers(&self) -> Vec<PathBuf> {
         let Some(plugin) = &self.plugin else {
-            return false;
+            return vec![];
         };
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_secs());
-        fs::read_dir(plugin.join("servers"))
+        let mut servers: Vec<PathBuf> = fs::read_dir(plugin.join("servers"))
             .into_iter()
             .flatten()
             .filter_map(Result::ok)
-            .filter_map(|server| fs::read_to_string(server.path().join("watch.lease")).ok())
-            .filter_map(|lease| {
-                let first = lease.lines().next()?.to_string();
-                first.split_whitespace().nth(1)?.parse::<u64>().ok()
+            .map(|server| server.path())
+            .filter(|server| {
+                fs::read_to_string(server.join("watch.lease"))
+                    .ok()
+                    .and_then(|lease| {
+                        let first = lease.lines().next()?.to_string();
+                        first.split_whitespace().nth(1)?.parse::<u64>().ok()
+                    })
+                    .is_some_and(|renewed| {
+                        renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs()
+                    })
             })
-            .any(|renewed| renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs())
+            .collect();
+        servers.sort();
+        servers
     }
 
     /// Exactly `variables` for the host user's login environment, in
@@ -2175,6 +2193,21 @@ impl Terminal for Herdr {
         }
     }
 
+    fn setup(&self) -> Vec<String> {
+        let mut setup: Vec<String> = Vec::new();
+        for server in self.watched_servers() {
+            let Some(Value::Array(lacking)) = read_json(&server.join("setup.json")) else {
+                continue;
+            };
+            for words in lacking.iter().filter_map(Value::as_str) {
+                if !words.trim().is_empty() && !setup.iter().any(|said| said == words) {
+                    setup.push(words.to_string());
+                }
+            }
+        }
+        setup
+    }
+
     fn session(&self) -> Option<String> {
         self.caller.as_ref().map(Pane::session)
     }
@@ -2366,5 +2399,106 @@ mod tests {
             herdr.shown_at(&place(), Some(&identity())),
             ShownAt::default()
         );
+    }
+
+    /// The profile over a scratch state directory of flume's herdr
+    /// plugin, its herdr a script that marks it was run; and the plugin's
+    /// directory and that mark.
+    fn over_plugin(name: &str) -> (Herdr, PathBuf, PathBuf) {
+        let scratch =
+            std::env::temp_dir().join(format!("flume-herdr-plugin-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&scratch);
+        fs::create_dir_all(&scratch).unwrap();
+        let program = scratch.join("herdr");
+        let ran = scratch.join("ran");
+        fs::write(
+            &program,
+            format!("#!/bin/sh\necho \"$@\" >> '{}'\n", ran.display()),
+        )
+        .unwrap();
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        let plugin = scratch.join("plugin");
+        let herdr = Herdr {
+            program,
+            ..Herdr::new(
+                Server::Socket("/run/h.sock".into()),
+                scratch.join("records"),
+            )
+            .with_plugin(Some(plugin.clone()))
+        };
+        (herdr, plugin, ran)
+    }
+
+    /// A server of the plugin's whose watch last renewed its lease `ago`
+    /// seconds since, and wrote `lacking` into its setup.json.
+    fn server(plugin: &Path, name: &str, ago: u64, lacking: &[&str]) {
+        let server = plugin.join("servers").join(name);
+        fs::create_dir_all(&server).unwrap();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        fs::write(
+            server.join("watch.lease"),
+            format!("4242 {}\n/plugin\n0.0.0\n77\n", now - ago),
+        )
+        .unwrap();
+        write_json(&server.join("setup.json"), &json!(lacking)).unwrap();
+    }
+
+    const KEY: &str = "herdr's configuration, /h/config.toml, binds no key to flume's places";
+    const ROWS: &str =
+        "herdr's configuration, /h/config.toml, shows no row of flume's in the sidebar";
+
+    #[test]
+    fn setup_is_a_fresh_leases_words_alone() {
+        // 122, C.5, design 8: one server's watch keeps a fresh lease and
+        // says the popup's key is missing; another's lease is stale, its
+        // words of the rows no longer what a watch reads. The profile
+        // gives the first's words alone and runs no herdr command.
+        let (herdr, plugin, ran) = over_plugin("fresh-stale");
+        server(&plugin, "1111", 5, &[KEY]);
+        server(&plugin, "2222", 120, &[ROWS]);
+        assert_eq!(herdr.setup(), vec![KEY.to_string()]);
+        assert!(!ran.exists(), "a herdr command was run");
+    }
+
+    #[test]
+    fn setup_gives_each_servers_words_in_order_and_once() {
+        // 122, design 8: two watches read one configuration file, and a
+        // third another; each of their words is given once, in the order
+        // of their servers.
+        let (herdr, plugin, ran) = over_plugin("in-order");
+        server(&plugin, "1111", 5, &[KEY, ROWS]);
+        server(&plugin, "2222", 5, &[KEY, ROWS]);
+        server(
+            &plugin,
+            "3333",
+            5,
+            &["herdr's configuration, /other.toml, binds no key"],
+        );
+        assert_eq!(
+            herdr.setup(),
+            vec![
+                KEY.to_string(),
+                ROWS.to_string(),
+                "herdr's configuration, /other.toml, binds no key".to_string(),
+            ]
+        );
+        assert!(!ran.exists(), "a herdr command was run");
+    }
+
+    #[test]
+    fn setup_is_none_beside_no_lease_or_nothing_lacking() {
+        // 122, design 8: no plugin's state, a fresh lease beside an empty
+        // array, and one beside no setup.json, as a watch of an earlier
+        // plugin keeps, each give none.
+        let (herdr, plugin, ran) = over_plugin("none");
+        assert_eq!(herdr.setup(), Vec::<String>::new());
+        server(&plugin, "1111", 5, &[]);
+        server(&plugin, "2222", 5, &[KEY]);
+        fs::remove_file(plugin.join("servers/2222/setup.json")).unwrap();
+        assert_eq!(herdr.setup(), Vec::<String>::new());
+        assert!(!ran.exists(), "a herdr command was run");
     }
 }

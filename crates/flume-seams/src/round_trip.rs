@@ -1185,6 +1185,7 @@ struct Bare;
 impl Agent for Bare {
     fn command(
         &self,
+        _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
         _resume: Option<&str>,

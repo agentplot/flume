@@ -29,20 +29,27 @@ herdr.
   that crashed, hung or was killed is read within the bound. While the
   watch runs, flume's commands leave the settling to it; once it stops,
   each command settles every place first, as flume does with no watch.
-  It runs nothing of flume's but `flume settle` and `flume status`.
+  It runs nothing of flume's but `flume settle` and `flume status`. At
+  its start and after each settle it reads herdr's configuration file
+  and writes down what it lacks for the plugin, the popup's key or the
+  sidebar's rows, which `flume status` gives under the watch's line. It
+  logs the same once at its start, and tells no one.
 - **Display clues.** After each settle it gives each agent's pane the
   title `<stage> · <state>` and the name `<kind>--<name>`, and each
   base's workspace a count of its places: running, asking, waiting on
   their caller and stalled. They show what flume's status says, and
   nothing flume decides reads them back.
-- **A row on each agent's sidebar entry**, the `$flume` token: the
-  kind, the stage, its state, the change's tasks ticked, the
-  submission, and whether the place waits on you or is stalled, as in
-  `change · code · working · 2/5`.
+- **A row on each agent's sidebar entry**, the `$flume` token: its
+  place's line, the words flume's status line gives, less the place's
+  name and kind: the stage with its group, how many times it started,
+  the change's tasks ticked and the place's state, as in
+  `code 1/2 · run 1 · tasks 2/5 · working`.
 - **The count on each workspace's row**, the `$flume` token of the
   workspace: `1 running · 0 asking · 1 waiting on caller · 0 stalled`.
-- **The popup** (`agentplot.flume.places`): every place in flight with
-  its row, the chosen one marked `▶`. Each key acts at once, with no
+- **The popup** (`agentplot.flume.places`): every place in flight, each
+  its number and its line, as in
+  `▶ 1  fix--one · fix@1 · code · run 1 · working`, with its location
+  beneath, the chosen one marked `▶`. Each key acts at once, with no
   Enter: the arrow keys or `j` and `k` move the choice, and `1` to `9`
   choose the place so numbered. `o` opens the chosen place's tab, `t`
   tells its agent the words you type, `s` stops its agent and `r`
@@ -54,17 +61,31 @@ herdr.
 
 ## Setting it up
 
-The plugin changes none of herdr's configuration. Add the key and the
-sidebar rows to herdr's `config.toml` yourself, or to whatever
-generates it:
+The plugin changes none of herdr's configuration. Add the popup's key
+and the sidebar's rows to herdr's `config.toml` yourself, or to
+whatever generates it: the file `HERDR_CONFIG_PATH` names, else
+`$XDG_CONFIG_HOME/herdr/config.toml`, else
+`~/.config/herdr/config.toml`. Until it holds both, `flume status`
+says what it lacks under the line naming the watch.
+
+### The popup's key
+
+herdr's plugins declare no keys: a key reaches the popup only through
+an entry of your own. Add this one, or bind another key the same way:
 
 ```toml
 [[keys.command]]
 key = "prefix+f"
 type = "plugin_action"
 command = "agentplot.flume.places"
-description = "flume: the places in flight"
+description = "flume: places in flight"
+```
 
+`prefix+f` is free among herdr's own keys.
+
+### The sidebar's rows
+
+```toml
 [ui.sidebar.agents]
 rows = [
   ["state_icon", "machine", "workspace", "tab"],
@@ -87,4 +108,6 @@ own, add only the `$flume` entries.
 Under herdr's state directory for the plugin,
 `$XDG_STATE_HOME/herdr/plugins/agentplot.flume`, one directory per
 herdr server: the watch's lease, the status it last wrote and its log,
-`watch.log`. flume reads the lease to know the watch runs.
+`watch.log`, and what herdr's configuration lacks, `setup.json`. flume
+reads the lease to know the watch runs, and `setup.json` beside a lease
+that is fresh to say what herdr's configuration lacks.

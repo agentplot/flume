@@ -823,6 +823,7 @@ impl Engine {
             addresses: self.addresses(),
             watch: self.terminal.watch(),
             bases: self.bases(),
+            terminal_setup: self.terminal.setup(),
             configuration: self.host.configuration(),
         }
     }
