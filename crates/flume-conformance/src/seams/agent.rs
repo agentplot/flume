@@ -96,6 +96,7 @@ fn identity(stage: &str) -> Identity {
 fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
     let who = identity(stage);
     let command = harness.seam().command(
+        &harness.folder(),
         &Settings::default(),
         None,
         None,
@@ -284,6 +285,7 @@ fn carry_to_the_account_that_reaches_it<H: AgentHarness>(harness: &H) -> Outcome
     };
     let command = |resume: Option<&str>| {
         harness.seam().command(
+            &harness.folder(),
             &Settings::default(),
             None,
             resume,
@@ -358,6 +360,7 @@ fn the_command_passes_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
     let who = identity("code");
     let command = |mode: Option<&str>| {
         harness.seam().command(
+            &harness.folder(),
             &Settings::default(),
             mode,
             None,
@@ -396,6 +399,7 @@ fn started_without_names_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
     let who = identity("code");
     let folder = harness.folder();
     let command = harness.seam().command(
+        &harness.folder(),
         &Settings::default(),
         Some(asked),
         None,
@@ -571,6 +575,7 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
         "/scratch/agent-work-1".to_string(),
     )]);
     let command = harness.seam().command(
+        &harness.folder(),
         &settings,
         None,
         None,

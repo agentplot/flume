@@ -25,7 +25,9 @@
 //! sending its agent's prompt with no settle, a dialog that holds a start
 //! waiting on a person, and an agent that began after its start was read
 //! never begun, which a retry leaves be; a nix-wrapped Claude Code
-//! started from the agent profile, a role run's pane reached by its
+//! started from the agent profile, instructions of many lines that herdr
+//! refuses as an argument started from the agent profile by a file, a
+//! role run's pane reached by its
 //! address after a move, and a recipient on another server reached
 //! through its own socket. Under a scratch home of herdr's named
 //! sessions: two streams' sessions (S82), a session name herdr refuses, a
@@ -1127,6 +1129,7 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
     let place = server.place("fix--one");
     let who = identity(1);
     let command = claude.command(
+        &server.folder(),
         &settings,
         None,
         None,
@@ -1152,6 +1155,83 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
     assert!(
         !listed["pane"]["agent"].is_null(),
         "herdr lists no agent in the pane: {listed}"
+    );
+}
+
+/// Instructions of many lines, as a host's that holds a whole document
+/// (deneb, 2026-11-05): as an argument herdr refuses them as
+/// `invalid_agent_argument`, a newline or a tab being a control
+/// character, and the refused start leaves no pane; from the agent
+/// profile they go by a file of the start's own, which the agent starts
+/// naming and which holds them whole (148, C.4, C.5; record 0038).
+#[test]
+fn instructions_of_many_lines_start_under_herdr_by_the_agent_profiles_file() {
+    use flume::profiles::agent::claude::{Claude, STANDING_PROMPT_FLAG};
+    let server = TestServer::start("herdr-lines");
+    let profile = server.profile();
+    let instructions =
+        "## Capture\n\n- **What counts.** A decision the person makes.\n\t- and its record\n";
+    let refused = identity(1);
+    let mut command = server.command(&[]);
+    command.args = vec!["--append-system-prompt".into(), instructions.into()];
+    let answer = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &command,
+        &refused,
+        &OpenIn::Own,
+        None,
+    );
+    assert!(
+        matches!(&answer, Opened::Refused { reason } if reason.contains("invalid_agent_argument")),
+        "instructions of many lines as an argument gave {answer:?}"
+    );
+    assert_eq!(
+        profile.pane(&refused),
+        None,
+        "the refused start's pane kept"
+    );
+    assert!(
+        !server.tabs().contains(&"fix--one".to_string()),
+        "the refused start's pane stands"
+    );
+
+    let claude = Claude::new(
+        &server.scratch.path("data"),
+        &server.scratch.path("bin/flume"),
+    );
+    let stand_in = server.command(&[]);
+    let settings = Settings {
+        program: Some(stand_in.program.clone()),
+        instructions: Some(instructions.into()),
+        ..Settings::default()
+    };
+    let who = identity(2);
+    let command = claude.command(
+        &server.folder(),
+        &settings,
+        None,
+        None,
+        &stand_in.env,
+        &server.place("fix--one"),
+        &who,
+        &Secret("s".into()),
+        "go",
+    );
+    let pane = opened(&server, &profile, &who, &command);
+    let argv = fs::read(server.scratch.path("log").join(&pane.id).join("argv"))
+        .expect("the arguments the agent started with");
+    let argv = String::from_utf8_lossy(&argv).into_owned();
+    let words: Vec<&str> = argv.split_terminator('\0').collect();
+    let file = words
+        .iter()
+        .position(|word| *word == STANDING_PROMPT_FLAG)
+        .and_then(|at| words.get(at + 1))
+        .unwrap_or_else(|| panic!("the agent started with no standing prompt's file: {words:?}"));
+    assert_eq!(
+        fs::read_to_string(file).expect("the standing prompt's file"),
+        instructions,
+        "the instructions the file holds"
     );
 }
 
@@ -1923,6 +2003,7 @@ impl StandIn {
 impl Agent for StandIn {
     fn command(
         &self,
+        _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
         _resume: Option<&str>,
