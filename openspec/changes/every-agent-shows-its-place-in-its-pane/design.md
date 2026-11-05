@@ -22,19 +22,20 @@ Claude Code's plugin is written by the Claude Code profile once per
 version of flume under `$XDG_DATA_HOME/flume/plugins/claude/` from
 `plugins/claude` (`PLUGIN` in `crates/flume/src/profiles/agent/claude/mod.rs`),
 its hooks naming the binary by its absolute path, and loaded by
-`--plugin-dir`. Two facts of the pinned 2.1.296 decide how a status
-line reaches the agent:
-
-- a plugin's `settings.json` is read through a schema of two keys,
-  `["agent","subagentStatusLine"]`, so a plugin cannot set a session's
-  `statusLine`;
-- `--settings <file-or-json>` loads settings as the `flagSettings`
-  source, which the release orders after `userSettings`,
-  `projectSettings` and `localSettings` and before `policySettings`
-  (`return["userSettings","projectSettings","localSettings","flagSettings","policySettings"]`).
-  Its `statusLine` is `{type: "command", command, padding?,
-  refreshInterval?}`: the command is run at each update of the session,
-  and again every `refreshInterval` seconds where one is given.
+`--plugin-dir`. The pinned 2.1.296 gives a plugin's hooks module a
+status line of its own: `$.ui.status(text)` "pins `text` as this
+plugin's status line under the prompt, beside the engine's own pinned
+notices, until the next call replaces it", one per plugin, `undefined`
+removing it. sluice's board plugin, `plugins/sluice-board` in
+agentplot/sluice, draws its status line so at the same pinned release:
+a module named in its `hooks/hooks.json` (`{"modules":
+["./register.tsx"]}`), registered on `session.start` and `tool.call`,
+redrawn by `$.clock.every`, running commands by `$.process.run` and
+reading the session's environment by `$.env.get`, typed against the
+engine types the pinned Claude Code writes and tested by the pinned
+engine's `plugin test`. The session's own `statusLine`, the user's or
+the repository's, stays the session's: a plugin's `settings.json` takes
+only `["agent","subagentStatusLine"]`.
 
 herdr 0.9.5's manifest action (`PluginManifestAction`) holds `id`,
 `title`, `description`, `contexts`, `command` and `platforms`. A key
@@ -48,15 +49,16 @@ configuration is generated, as the user's is, lost it there.
 
 The rules this design relies on are core.1 and core.2 (only the Claude
 Code profile names `claude`, its settings or its status line; only the
-herdr profile and the plugin name herdr), core.13 (nothing the status
-line starts outlives its run), core.14 (one core makes the line, every
+herdr profile and the plugin name herdr), core.13 (the plugin's clock
+runs in the agent program's own process and ends with its session, each
+tick one command that reads), core.14 (one core makes the line, every
 surface copies it, and the JSON form only gains fields), core.15 (the
 line's tasks are read at the head when asked and kept by nothing),
-core.16 (nothing is written by a status line or by `--line`), core.22
-and core.39 (the profile's reading of Claude Code's settings is flume's
-code, pinned to the release), core.29 (the herdr entry is checked
-against the pinned herdr), core.30 (`--settings` carries no setting of
-the six layers), core.35 (the site's and the READMEs' voice), and
+core.16 (nothing is written by the status line or by `--line`), core.22
+and core.39 (the module's reading of Claude Code's engine is flume's
+code, typed and tested against the pinned release), core.29 (the herdr entry is checked
+against the pinned herdr), core.30 (the command flume starts an agent with gains
+nothing, so no setting of the six layers moves), core.35 (the site's and the READMEs' voice), and
 clause 72 with core.24 and core.25 (flume tells no person anything by
 itself: what herdr's configuration lacks is said in status when asked,
 never pushed). The one rules page is `docs/architecture/core.md`; no
@@ -75,8 +77,9 @@ kit:testing.5).
 - The read behind it is cheap enough for every render: held state, the
   change at one head, and the agent's own record, with no call to the
   terminal or the merge queue (57, 58).
-- A status line the user or the repository set is kept, beneath
-  flume's, with no step of theirs.
+- A status line the user or the repository set stays the session's
+  own, and another plugin's pinned line stays beside flume's, with no
+  step of theirs.
 - A host with no key for the popup is told the entry it needs, by the
   READMEs, the site and `flume status`, while the plugin changes none of
   herdr's configuration and tells no person by itself (72, 122).
@@ -91,7 +94,7 @@ kit:testing.5).
 - A key declared by the plugin, which herdr 0.9.5 cannot take, or any
   write to herdr's configuration.
 - A switch to turn flume's status line off. Nothing asks for one; the
-  session's own status line keeps its place beneath flume's.
+  session's own status line keeps its place.
 
 ## Decisions
 
@@ -195,91 +198,80 @@ it (61; core.14). The person's form prints a place's `full` under its
 heading. The conformance suite's field list gains `line` and its
 fields.
 
-### 4. The status line reaches the agent by `--settings`
+### 4. The plugin pins the line under the prompt
 
-The Claude Code profile's `command` passes, after `--plugin-dir`,
-`--settings` with one JSON string:
+flume's Claude Code plugin pins the place's line as its own status line
+with `$.ui.status`, from a hooks module, as sluice's board plugin pins
+sluice's. The user chose this on 2026-11-05 in the Plannotator Inbox:
+"As sluice-board does: flume's plugin pins its line with `$.ui.status`
+from a hooks module". The command flume starts an agent with is as it
+was, so no setting of the six layers moves (32; core.30), and flume
+never runs the session's own `statusLine`.
 
-```json
-{"statusLine":{"type":"command","command":"'<flume>' hook status-line","refreshInterval":10}}
-```
+`plugins/claude` gains one module, `hooks/line.ts`, named among the
+plugin's modules as the pinned 2.1.296 reads them, beside the command
+hooks the plugin already gives. It registers on `session.start`, after
+each `tool.call` and at each turn's end, and, once the session has
+started, every ten seconds by `$.clock.every`, so a hold, a stall or a
+stop-short shows while the session is idle. At each:
 
-`<flume>` is the binary's absolute path, as the written plugin's hooks
-name it, quoted for the shell. It is a JSON string rather than a file,
-so a start writes nothing more and the printed command carries it
-whole. `refreshInterval` re-runs the line every ten seconds while the
-session is idle, so a hold, a stall or a stop-short shows without a
-message. Ten seconds is under the watch's bound of thirty and well over
-the line's cost. The JSON holds no setting of the six layers (32;
-core.30), and the program's own configuration still decides every
-other setting. A `statusLine` in the host's managed settings comes after
-the flag in the release's order and wins; flume's line is not shown
-there.
+1. Where the session's environment, read by `$.env.get`, names no
+   `FLUME_PLACE` or no `FLUME_AGENT`, flume did not start it: the module
+   pins nothing, runs nothing and registers no clock.
+2. Otherwise it runs `<flume> hook status-line` by `$.process.run` in
+   the session's folder and pins the first line it prints with
+   `$.ui.status`, or removes its line where it prints nothing. A run
+   that fails changes nothing pinned.
 
-The JSON, the hook of design 5 and the `fragments()` of design 6 live
-in `claude/status_line.rs`, flume's own code (core.39).
+`<flume>` is the binary by the absolute path the written plugin's
+hooks name, written into the module as the profile writes the hooks.
+Ten seconds is under the watch's bound of thirty and well over the
+line's cost. The clock runs in the agent program's own process and ends
+with its session, and each tick is one command of flume's that reads
+and ends, as the herdr plugin's watch on herdr's server runs `flume
+settle` (core.13). Nothing of flume's runs between ticks.
+
+The module, its engine types and its tests are flume's own code
+(core.39). `plugin-claude` gains the tasks sluice's board has:
+`engine-types`, checking the vendored engine types against those the
+pinned Claude Code writes; `typecheck`, the module and its tests by
+the TypeScript `devenv.nix` pins (core.22); and the module's tests,
+run by the pinned engine's `plugin test`.
 
 ### 5. `flume hook status-line`
 
 `flume hook <event>` already dispatches to the agent profile
 (`crate::profiles::hook`), so the commands name no program (core.1).
-`status-line` is one more of its events, in `claude/status_line.rs`. It
-reads 2.1.296's status line input on standard input, passes it on
-unread, and exits 0 whatever happens:
+`status-line` is one more of its events, in
+`crates/flume/src/profiles/agent/claude/status_line.rs`. It reads
+nothing on standard input and exits 0 whatever happens:
 
-1. Where `FLUME_STATUS_LINE` is set, it was run beneath flume's own
-   line (step 3). It prints nothing.
-2. In a session flume started, `FLUME_PLACE` and `FLUME_AGENT` set, it
-   prints `Engine::line` for the place `FLUME_PLACE` names with the
+1. In a session flume started, `FLUME_PLACE` and `FLUME_AGENT` set,
+   it prints `Engine::line` for the place `FLUME_PLACE` names with the
    identity `FLUME_AGENT` names: `full`, one line. A place the core
-   cannot read prints nothing of flume's. The words come from the core
-   alone (core.14).
-3. Then, in that session only, it runs the session's own status line.
-   That is the `statusLine` of type `command` given by the last of the
-   release's sources below the flag: `$CLAUDE_CONFIG_DIR/settings.json`,
-   or `~/.claude/settings.json` where `CLAUDE_CONFIG_DIR` is unset; then
-   `<place>/.claude/settings.json`; then
-   `<place>/.claude/settings.local.json`. A `statusLine` whose command
-   is flume's own `hook status-line` is passed over. It runs the command
-   as the release runs a status line's command, with the same input on
-   standard input, in the place, with `FLUME_STATUS_LINE=1`, under a
-   bound of two seconds. It prints what it writes, beneath flume's
-   line. A command that fails, writes nothing or passes the bound adds
-   nothing, and one past the bound is killed with every process it
-   started, so nothing outlives the hook (core.13).
-4. Outside a session flume started it prints nothing and runs nothing.
-   flume set no status line there, so this only happens when a person's
-   own command calls it, and their own line stands.
+   cannot read prints nothing. The words come from the core alone
+   (core.14).
+2. Outside a session flume started it prints nothing and runs nothing.
 
 It writes nothing under flume's state, the place or the account's
-configuration, settles nothing and starts no agent (57; core.16). A
-person's own status line that already calls `flume hook status-line`
-gets nothing from that call, by step 1, so flume's line shows once.
+configuration, settles nothing and starts no agent (57; core.16).
 
-### 6. The release's facts, pinned and stood in
+### 6. The release's facts, pinned
 
-`status_line::fragments()` lists what the hook and the command rest on,
-each byte for byte as 2.1.296 holds it, and
-`crates/flume/tests/profiles/tools/claude_words.rs` requires each to
-stand in the pinned program (C.4; core.22):
+The module rests on the pinned 2.1.296's engine: `$.ui.status`,
+`$.clock.every`, `$.process.run`, `$.env.get`, the `session.start`,
+`tool.call` and turn-end events, and the `modules` a plugin's
+`hooks/hooks.json` names. `plugins/claude/engine-types/` holds the
+engine types the pinned Claude Code writes, checked against them by
+`plugin-claude:engine-types` as sluice's board checks its own, and the
+module is typed against them, so a release that moves one fails the
+gate naming it (C.4; core.22, core.39).
 
-- the plugin settings' two keys, `["agent","subagentStatusLine"]`, the
-  reason the line is passed by `--settings`;
-- `--settings <file-or-json>`'s option and its words;
-- the `statusLine` schema with `refreshInterval`;
-- the order of the settings' sources, flag over local over project over
-  user;
-- how the release runs a status line's command and hands it its input,
-  as design 5 step 3 runs the session's own.
-
-The stand-in for Claude Code (`crates/flume/tests/profiles/stand-in/claude.rs`)
-reads `--settings`, as a JSON string or a file. It takes the session's
-`statusLine` from the flag, else the local, project and user settings
-in the release's order. It runs its command as the release does, with
-a status line input in the release's shape on standard input: at the
-session's start, after each act, and at the turn's end. It appends each
-run's output, as one block, to the file `STAND_IN_STATUS_LINES` names.
-Its doc comment names this beside its acts.
+The stand-in for Claude Code runs no module. Under the printed command,
+the walkthroughs run `flume hook status-line` in a code agent's
+environment, as the module runs it, and compare its line with `flume
+status <place> --line`; the live walkthrough reads the line the pinned
+Claude Code pins in the agent's pane.
 
 ### 7. The popup and the sidebar show the line
 
@@ -360,12 +352,12 @@ no file. Until one lands, the code stands ahead of the statement
   reads only what it holds."
 - **The agent's status line, under B.4 and in C.4.** A part of the
   agent seam: "status line: the program shows the place's line in the
-  agent's own pane, asking the core whenever it draws the pane, above
-  the status line its own configuration gives; or the part is degraded
-  and shows none (171)." For Claude Code, the command row gains
-  `--settings` with `statusLine` naming `flume hook status-line` and a
-  refresh of ten seconds. A status-line row says what design 5 does,
-  and the givens' Claude Code plugin names its status line.
+  agent's own pane, asking the core at the session's events and on a
+  bound, beside the status line its own configuration gives; or the
+  part is degraded and shows none (171)." For Claude Code, a status-line
+  row says what designs 4 and 5 do: the plugin's hooks module pins the
+  line with `$.ui.status`, redrawn at the session's events and every
+  ten seconds. The givens' Claude Code plugin names its module.
 - **What the watch says it lacks, in 122 and C.5.** "watch: ..., with
   what the terminal's own configuration lacks for flume's plugin there,
   which status gives when asked (72)." C.5's watch row names the popup's
@@ -379,17 +371,19 @@ part of its own, the line's words in the sidebar and the popup, and the
 status line. On the site, `guides/places-and-herdr.mdx` and
 `install.mdx` give the entry plainly, apart from the rows, and say
 `flume status` names what herdr's configuration lacks.
-`guides/claude-code.mdx` gives the status line: what it shows, that it
-reads no terminal and settles nothing, that the session's own status
-line stays beneath it, and that managed settings win over it.
+`guides/claude-code.mdx` gives the status line: what it shows, that
+flume's plugin pins it under the prompt, that it reads no terminal and
+settles nothing, and that the session's own status line and other
+plugins' lines stay beside it.
 `reference/commands.md` gives `flume status --line` and `flume hook
 status-line`. `reference/state.md` gives status's `line` and
 `host.terminal_setup`. All of it speaks to any host's operator (core.35).
 
 ## Risks / Trade-offs
 
-- **A slow status line of the user's own** delays the render by up to
-  the two-second bound. Past it, flume's line shows alone.
+- **A tick every ten seconds per session** runs one `flume hook
+  status-line`: a host with twenty agents runs two reads a second, each
+  of one place's held state and change.
 - **The words of a submission lag the merge queue** by up to a settle,
   since the line reads flume's own record (design 2). Status's
   `submission` gives the merge queue's at once.
@@ -397,5 +391,6 @@ status-line`. `reference/state.md` gives status's `line` and
   table, or read a key bound in a file herdr does not load. Then
   `flume status` gives a note the host does not need, or omits one,
   and decides nothing.
-- **Managed settings** that set a status line hide flume's. The site
-  says so.
+- **A release that moves the engine** fails `plugin-claude`'s
+  `engine-types` and `typecheck` at the gate, before an agent shows
+  no line.
