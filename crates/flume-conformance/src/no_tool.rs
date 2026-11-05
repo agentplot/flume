@@ -1,10 +1,10 @@
 //! No module outside a profile names a worktree tool, a change tool, an
-//! agent program, a terminal or a merge queue (core.1).
+//! agent program, a terminal, a window program or a merge queue (core.1).
 
 use std::path::{Path, PathBuf};
 
 /// The tools' names, spelled in pieces so this file names none of them.
-pub fn words() -> [String; 6] {
+pub fn words() -> [String; 8] {
     [
         ["w", "t"].concat(),
         ["work", "trunk"].concat(),
@@ -12,6 +12,8 @@ pub fn words() -> [String; 6] {
         ["cla", "ude"].concat(),
         ["her", "dr"].concat(),
         ["slu", "ice"].concat(),
+        ["ghost", "ty"].concat(),
+        ["osa", "script"].concat(),
     ]
 }
 

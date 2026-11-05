@@ -1,4 +1,5 @@
-//! Every seam's scenarios, run against its fake.
+//! Each of the eight seams' scenarios, and git's history's, run against
+//! its fake (One interface per seam).
 
 use flume_conformance::fake_harness::*;
 use flume_conformance::scenario::pass_all;
@@ -37,6 +38,11 @@ fn the_fake_terminal_passes_the_terminal_scenarios() {
     pass_all("terminal", &terminal::scenarios(), || {
         FakeTerminalHarness::new(false)
     });
+}
+
+#[test]
+fn the_fake_window_passes_the_window_scenarios() {
+    pass_all("window", &window::scenarios(), FakeWindowHarness::default);
 }
 
 #[test]

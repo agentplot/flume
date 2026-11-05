@@ -26,6 +26,7 @@ pub mod settling;
 pub mod stage_runs;
 pub mod start_integrity;
 pub mod starts;
+pub mod stream_terminals;
 pub mod streams;
 pub mod tidying;
 pub mod world;
@@ -62,5 +63,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(account_pools::scenarios());
     every.extend(start_integrity::scenarios());
     every.extend(carried_conversations::scenarios());
+    every.extend(stream_terminals::scenarios());
     every
 }

@@ -727,6 +727,21 @@ impl TerminalHarness for Harness {
         }
         .session()
     }
+
+    /// herdr's attach is not yet built, and refuses both views (187).
+    fn views(&self) -> Vec<View> {
+        vec![]
+    }
+
+    /// The stream's session, named by one letter as the sessions' tests
+    /// name theirs.
+    fn parts(&self) -> Vec<Option<String>> {
+        vec![Some("w".into())]
+    }
+
+    fn refuse_attach(&self, _view: View) -> bool {
+        false
+    }
 }
 
 impl Harness {

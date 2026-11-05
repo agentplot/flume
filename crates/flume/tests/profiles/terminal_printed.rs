@@ -109,6 +109,20 @@ impl TerminalHarness for Harness {
     fn no_session(&self) -> String {
         "ops".into()
     }
+
+    /// The printed command holds no session a person can be shown, and
+    /// refuses both views (187).
+    fn views(&self) -> Vec<View> {
+        vec![]
+    }
+
+    fn parts(&self) -> Vec<Option<String>> {
+        vec![Some("work".into()), None]
+    }
+
+    fn refuse_attach(&self, _view: View) -> bool {
+        false
+    }
 }
 
 #[test]
