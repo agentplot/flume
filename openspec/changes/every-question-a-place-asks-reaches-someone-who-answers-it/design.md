@@ -19,44 +19,52 @@ and built it: its change `roles-run-as-flume-kinds` (archived
 2026-10-31 on `teamless/deneb`, records 0047 to 0052). Each main-level
 role, the design agent, the planner, ops, the reviewer and the
 operator, is a Flume kind in crew's release, run at the role's address
-`<label>/<role>` whenever something is pending for it. No partition
-has moved a role onto its kind yet. This design takes that as its base
-and finishes it across the family, so that every question reaches the
-role it is for and, past a bound, the partition's door:
+whenever something is pending for it. No partition has moved a role
+onto its kind yet. This design takes that as its base and finishes it
+across the family, so that every question reaches the role it is for
+and, past a bound, the stream's door:
 
-1. **crew declares its roles once, and every main-level role answers as
+1. **An address is a role of a stream.** `madswan/ops` is the role
+   `ops` of the stream `madswan`, a stream the host declares (143). A
+   role's run runs in its address's stream. A question names a role of
+   its own stream by the role alone, `ops`, and any other stream's role
+   by its whole address. The stream bounds where a place's agents run,
+   never whom they may ask.
+2. **crew declares its roles once, and every main-level role answers as
    a Flume kind at its own address.** crew is a source of the host's
    kinds (191). Its source's declaration names, beside its packages,
    the file in which crew declares its roles, which crew writes from its
-   own partitions: every address with what its run is launched with. Ten
-   partitions' planners are ten addresses of one package,
-   `crew/crew-planner`. flume reads the roles from crew, and the host's
-   configuration holds no entry for a role. flume launches a role's run
-   on an end pending for its address or a carrier's `flume wake`, names
-   it per address, and declares it done once its turn delivers. The
-   runner carries crew's own events to flume by `flume wake`.
-2. **A question goes to the role whose it is.** A place's owner is the
+   own partitions: every address with what its run is launched with.
+   Ten partitions' planners are ten addresses of one package,
+   `crew/crew-planner`, one in each partition's stream. flume reads the
+   roles from crew, and the host's configuration holds no entry for a
+   role. flume launches a role's run on an end pending for its address
+   or a carrier's `flume wake`, names it per address, and declares it
+   done once its turn delivers. The runner carries crew's own events to
+   flume by `flume wake`.
+3. **A question goes to the role whose it is.** A place's owner is the
    role the launch names: the planner for a bolt's work, ops for a fix of
    main, a role for its own landing work. The asking agent may address
-   its question to another role of the same partition instead,
-   `flume needs --to madswan/ops`. flume lists those roles, with what
-   each answers in crew's words, in every stage's prompt. A role that
-   takes a question not its own passes it on.
-3. **The door stands behind every stall.** crew declares each
-   partition's operator, its door, to stand behind the partition's
-   stream. A place waiting under nobody's words past its stall bound is
-   delivered stalled to its owner, to the role its question named, and
-   to the door. A role that is on a question says so with a hold on it,
-   whose bound, once passed, stalls the place again. A launch from a
-   shell takes its stream's door as its recipient.
-4. **An answer is taken once.** Every end has a key. A retry that names
+   its question to another role instead, `flume needs --to ops` for its
+   own stream's, `flume needs --to swancloud/ops` for another's. flume
+   lists the roles, with what each answers in its source's words, in
+   every stage's prompt. A role that takes a question not its own passes
+   it on.
+4. **The door stands behind every stall.** crew declares each stream's
+   operator, its door, to stand behind the stream. A place waiting under
+   nobody's words past its stall bound is delivered stalled to its
+   owner, to the role its question named, and to the door of its own
+   stream. A role that is on a question says so with a hold on it, whose
+   bound, once passed, stalls the place again. A launch from a shell
+   takes its stream's door as its recipient.
+5. **An answer is taken once.** Every end has a key. A retry that names
    the key of the stop-short it answers is refused once the place no
    longer waits on it.
-5. **A restarted recipient sees what waits on it.** The inbox gives
+6. **A restarted recipient sees what waits on it.** The inbox gives
    every place waiting on its recipient. flume's plugin gives it to a
    person's session at its start, and every role's run collects it at
    its start. A notice names the place, its brief and the end's key.
-6. **A question that is the user's becomes one card**, made by the
+7. **A question that is the user's becomes one card**, made by the
    role whose question it is, or by the door at a stall, in its own
    name, keyed by the place and the end. The card's answer comes back
    through crew's follower and the runner's `flume wake` to that role's
@@ -65,17 +73,17 @@ role it is for and, past a bound, the partition's door:
 What remains of the host is crew declared as a source, the lock of
 crew's kinds, and its streams with their room. Each is the host's own:
 which tools run under its accounts, the content it trusts, and how much
-of its machine each partition gets (decision 1).
+of its machine each stream gets (decision 2).
 
 `flume serve`, a session serving an address, is left out. Once roles
 run as kinds, only a standing role would need it, and standing roles
-are what each move retires (decision 10.5).
+are what each move retires (decision 11.5).
 
 sluice's statement needs no amendment. crew's roles file, rules,
 briefs and `crew answer`, and Boomdrive's role offers and retry, change
-with this in their own repositories (decision 11). Moving each
+with this in their own repositories (decision 12). Moving each
 partition's roles onto their kinds is a step of its own, in an order the
-user approves (decision 12).
+user approves (decision 13).
 
 ## Context
 
@@ -104,6 +112,28 @@ stalled, for 0.6, 1.4 and 14.2 hours.
   names, else `$FLUME_RECIPIENT`, else the terminal's session, else
   none (7, 8; `launch.rs`, `make_place`). A role's run gets no
   recipient of its own.
+- **Addresses.** Clause 132: "A recipient may be named by a role's
+  address, `<partition>/<role>`, rather than by a session." C.7 keys
+  the host's `[roles]` table by it. No clause says what a partition is:
+  the word is in 132 and C.7 alone. The site calls the first part a
+  group, `<group>/<role>` (`guides/roles-and-wake.md`). In the code
+  (`flume-seams/src/host.rs`, `is_address`, `role_of`; `wake.rs`):
+  - any recipient of the form `<word>/<word>` is an address, and every
+    other name a session's;
+  - `Host::role` looks the whole address up in `[roles]`, and `role_of`
+    takes the part after `/` to name the run `<kind>--<role>`;
+  - the part before `/` is read by nothing;
+  - the run's agent takes the whole address as its session's name, so
+    its `flume inbox` collects for it;
+  - `flume wake <address>` launches the run, refusing a name of any
+    other form, and `flume launch --recipient <address>` names one;
+  - status lists each address an end stands pending for, with why its
+    run was not woken.
+
+  So an address is a name a caller makes up and a host's configuration
+  repeats as a key. flume checks its form and nothing else, and its
+  first part names nothing flume knows, beside the streams that already
+  divide a host's work (143).
 - **Delivery.** The settle records each end once, by its key, and sends
   each recipient a one-line notice through the terminal: `flume:
   <kind>--<name> <what ended>; read: flume status <kind>--<name>`.
@@ -114,16 +144,13 @@ stalled, for 0.6, 1.4 and 14.2 hours.
 - **The wait and the inbox.** `flume wait` answers by place, and
   `flume inbox` collects and marks every end pending for a recipient
   (`wait.rs`).
-- **Waking a role.** A settle that finds an end pending for
-  `<partition>/<role>` with no run standing launches the kind the
-  host's `[roles]` table names for it, and a carrier may ask for the
-  same by `flume wake`. The run is named by the role alone,
-  `<kind>--<role>` (`wake.rs`; `flume-seams/src/host.rs`, `role_of`,
-  `Host::role`). The table gives the run's repository, kind, priority,
-  base, brief and stream, and nothing of its agents' settings or its
-  intent. A run's kind lands nothing, so once its stage delivers it
-  waits on a caller's `flume done` that nothing gives (114): a run never
-  ends of itself.
+- **Waking a role.** A settle that finds an end pending for an address
+  with no run standing launches the kind the host's `[roles]` table
+  names for it, and a carrier may ask for the same by `flume wake`. The
+  table gives the run's repository, kind, priority, base, brief and
+  stream, and nothing of its agents' settings or its intent. A run's
+  kind lands nothing, so once its stage delivers it waits on a caller's
+  `flume done` that nothing gives (114): a run never ends of itself.
 - **Sources.** Record 0040, accepted on 2026-11-05 and stated on
   blueprints' main at ff616eb, has the host declare each source of its
   kinds from outside in a file of its own, `sources/<source>.toml` of
@@ -132,6 +159,11 @@ stalled, for 0.6, 1.4 and 14.2 hours.
   `crew/crew-planner`, and it runs only as a lock records it (154, 155).
   The change that builds it, `a-host-declares-where-its-kinds-come-from`,
   is in flight.
+- **Streams.** A host declares its streams, each by its name, with its
+  bound, priority, pool and terminal, and every place runs in exactly
+  one (143, 190). A kind's label, such as `planning`, is a share of its
+  stream's agents, and a stream may reserve agents for a label (180,
+  181).
 - **The stall.** A place waiting on its caller under no hold's words
   for its stall bound, five minutes unless the launch sets one, is
   stalled. The stall is an end, delivered once to each recipient
@@ -160,7 +192,8 @@ deneb runs).
   `lib/crew-teams.nix` writes the file on each host, and crew never
   does (`plugin/lib/crew.py`, `TEAMS`, `load`). The file on deneb names
   every partition every host runs, wldn's among them, whose main level
-  runs on chuck-herdr-alpha.
+  runs on chuck-herdr-alpha. Every address crew writes is
+  `<label>/<role>`.
 - **The roles as they run.** Every partition's `flume` names each of
   the five roles `false`. `crew main up` starts the design agent, the
   planner, ops and the operator as standing Claude Code sessions in
@@ -294,50 +327,57 @@ no `sources/`. The user ruled on 2026-11-05 that planning is a label of
 each partition's work stream and not a stream of its own, and that each
 partition's stream opens in the herdr session of its own name:
 `madswan`, `swancloud`, and `agentplot`, now a partition of its own.
+Each partition then runs its work in exactly one stream, which bears
+its label.
 
 ### Where it breaks
 
 1. **No recipient.** Clause 7 lets a launch have none, and on deneb that
    is most of them. Nothing but a poller sees their ends, and a poller
    that is down sees nothing.
-2. **No role runs at its address.** Every role stands, so the address
+2. **An address names nothing flume knows.** Its first part is a
+   partition, which no clause defines and no code reads, beside the
+   streams that already divide a host's work. The statement calls it a
+   partition, the site a group, and crew fills it with a partition's
+   label.
+3. **No role runs at its address.** Every role stands, so the address
    crew's places name wakes nothing, and a standing role sees a question
    only on its board.
-3. **Two designs of waking a role.** flume's `[roles]` wake and the
+4. **Two designs of waking a role.** flume's `[roles]` wake and the
    runner's role offers do one thing. crew chose the runner for a defect
    of flume's: two partitions' runs of one role share a name. And
    flume's run of a role never ends of itself.
-4. **A role declared on every host.** flume reads a role's run from the
+5. **A role declared on every host.** flume reads a role's run from the
    host's own configuration, one entry per address. A host of crew's
    would repeat every partition's every role, though all of it is
    crew's, written by crew from its partitions into its role record
    already.
-5. **One door for every question.** Every place crew launches names the
+6. **One door for every question.** Every place crew launches names the
    planner, so a question about a live system or the design goes
    through the planner, and a question about the orchestrator's work has
    no role at all.
-6. **No bound.** A question delivered to a recipient that does not act,
+7. **No bound.** A question delivered to a recipient that does not act,
    or pending for one that is gone, waits for ever. The stall is said to
    the same recipients who did not answer.
-7. **A restarted recipient.** The notice is one line, which a new agent
+8. **A restarted recipient.** The notice is one line, which a new agent
    in the pane cannot place. An end delivered just before the restart is
    gone from the inbox. flume's plugin gives a caller's session nothing
    at its start.
-8. **Answered twice, or too late.** A retry names no question. Two
+9. **Answered twice, or too late.** A retry names no question. Two
    answerers each restart the stage, and an answer that comes after the
    place moved on starts the stage again over later work.
-9. **The user's card.** Each answerer makes its card by hand under a key
-   of its own. Nothing ties the card to the question, so a second reader
-   asks again, and nothing withdraws a card whose question was answered
-   some other way.
+10. **The user's card.** Each answerer makes its card by hand under a
+    key of its own. Nothing ties the card to the question, so a second
+    reader asks again, and nothing withdraws a card whose question was
+    answered some other way.
 
 ### Rules and records relied on
 
-- **flume's statement** (agentplot/blueprints ff616eb). 7, 8, 28, 41,
-  42, 43, 49, 56, 62, 69, 70, 72, 114, 130, 132, 143, 154, 155, 158, 180,
-  181, 190, 191 and 192. 69 says flume does the same for every caller.
-  72 says flume tells no person anything by itself. 120 says it runs no
-  process of its own.
+- **flume's statement** (agentplot/blueprints ff616eb). Section 3's
+  recipient and stream; 7, 8, 28, 41, 42, 43, 49, 56, 62, 69, 70, 72,
+  114, 130, 132, 143, 154, 155, 158, 180, 181, 190, 191 and 192. 69 says
+  flume does the same for every caller. 72 says flume tells no person
+  anything by itself. 120 says it runs no process of its own.
 - **flume's records.**
   - 0009: an end is delivered once inside the settle, a wait is by
     place, and a caller's start collects.
@@ -357,7 +397,8 @@ partition's stream opens in the herdr session of its own name:
   a question), core.13 (no process of flume's own), core.24, core.25,
   core.27 and core.28 (holds, delivery, the kind running through, and
   roles), core.30 (an agent's settings from their layers, and a location
-  on the host the managed layer's).
+  on the host the managed layer's), core.35 (no partition on a page or
+  in a command's help, output or refusal).
 - **crew's rules and records.** roles.5 (crew builds no mechanism its
   tools hold), roles.6 (records are the truth, a session's start
   collects), roles.7 (flume wakes a role), roles.9 (the runner turns
@@ -372,15 +413,17 @@ partition's stream opens in the herdr session of its own name:
 
 **Goals:**
 
+- An address names what flume knows: a role, and the stream it answers
+  in.
 - Every main-level role answers as a Flume kind at its own address, and
-  a question reaches the role it is for.
+  a question reaches the role it is for, in any stream.
 - A role is declared once, by the tool whose role it is, for every
-  partition and host it runs on. No host's configuration holds an entry
+  stream and host it runs on. No host's configuration holds an entry
   for a role.
 - Every question a place asks reaches a recipient whose run is woken
   for it, or one that collects it, whatever launched the place.
 - A question that no role takes up within the place's stall bound
-  reaches the partition's door.
+  reaches its stream's door.
 - A question is answered once. A second answer, or a late one, starts
   nothing.
 - A recipient that restarted sees every question still waiting on it,
@@ -395,6 +438,8 @@ partition's stream opens in the herdr session of its own name:
 - flume deciding which role a question is for, which questions are a
   person's, or telling a person anything itself (69, 72). The asking
   agent, the role and the door decide.
+- A question kept to its place's stream. The stream bounds the room a
+  place's agents take, and nothing of whom they ask.
 - flume reading crew's own records or teams file. crew writes its roles
   in flume's form.
 - A person's queue, Pending You, the Plannotator Inbox or any other,
@@ -404,19 +449,100 @@ partition's stream opens in the herdr session of its own name:
   the answer as its words, the question before it (42, 49). The open
   session within the hour is the other change's.
 - A session standing in for a role's address. Standing roles leave as
-  their partitions move them (decision 10.5).
+  their partitions move them (decision 11.5).
 - sluice's own outcomes, which are not questions. They stay sluice's
-  (decision 11.2; Found beside).
+  (decision 12.2; Found beside).
 - Building any of it before the user has read this design.
 
 ## Decisions
 
-### 1. crew declares its roles once, and every main-level role answers as a Flume kind at its own address
+### 1. An address is a role of a stream
+
+The user, 2026-11-05, of `<partition>/<role>`: "Do we need the
+partition part of the address? We're already going to use streams to
+partition where agents run. I guess I was just assuming that
+communication had to stay within a stream but we actually probably
+don't want that. I feel like we just invented this address thing as
+well and it's a little weak."
+
+**What an address is in flume's statement today.** 132 gives it as
+`<partition>/<role>`, a recipient named in place of a session. A
+settle that finds an end pending for it with no run standing, or a
+carrier's `flume wake <address>`, launches the run the host's `[roles]`
+table names for it (C.7), and the run's agent takes the address as its
+session's name. That much is built: `is_address`, `flume wake`,
+`--recipient <address>`, a run's inbox collecting for its address, and
+status's list of addresses with ends pending. Nothing defines a
+partition. flume reads the address as a key of the host's table, takes
+the run's name from the part after the slash, and reads the part before
+it for nothing.
+
+**What this design makes of it.** An address is `<stream>/<role>`: the
+role a source of the host declares (decision 2) for a stream the host
+declares (143). `madswan/ops` is ops of the stream `madswan`.
+
+- **The stream is the one flume already has.** The host declares it,
+  with its room, pool and terminal, and every place runs in one. Since
+  planning is a label of a stream's work (180; the user's ruling of
+  2026-11-05), each of crew's partitions runs its work in exactly one
+  stream, and the partition's roles are that stream's: crew writes
+  `<stream>/<role>` for each. On deneb each stream bears its partition's
+  label, so `madswan/planner`, the address the runner's places already
+  name, keeps its letters and names the role `planner` of the stream
+  `madswan`.
+- **A role's run runs in its address's stream**, under its kind's
+  label, so its room, pool and terminal are that stream's (143, 180,
+  190). A source names no other stream for it.
+- **An address's stream is one the host declares.** An address whose
+  stream the host does not declare is an address of this host only
+  where its source declares it carried, its run on another host
+  (decision 11.4). Otherwise its entry declares nothing, and status
+  names it and the stream (4, 143).
+- **A bare role names its role in the asking place's stream.** `flume
+  needs --to ops` from a place in `madswan` is `madswan/ops`. A bare
+  name is read as a role only where nothing but a role can be meant, a
+  stop-short's `--to`. A recipient a launch names, and a wake, write an
+  address whole, since a session's name is a bare word too (7), and a
+  carrier has no place whose stream would complete it.
+- **A question may go to any stream's role.** `flume needs --to
+  swancloud/ops` from a place in `madswan` reaches swancloud's ops,
+  whose run runs in `swancloud`. A launch may name any stream's role as
+  its recipient. The stream bounds where a place's agents run and how
+  many, never whom they ask.
+- **The rest of 132 stands as built.** An address is a recipient that a
+  launch, a stop-short or a carrier names; `flume wake <address>` wakes
+  it; its run's agent takes it as its session's name and collects for
+  it; status lists the addresses with ends pending. The form a name
+  takes, two words joined by a slash, is the same.
+
+`flume wake`'s help and refusal, which say `<partition>/<role>`, then
+say `<stream>/<role>`, which core.35 asks of a command's words.
+
+Rejected:
+
+- **A partition beside the stream**, 132 as stated. A second division of
+  the host's work, which flume cannot check, beside the one it holds.
+  Every host's keys and every source's addresses would repeat it.
+- **The role alone, always in the place's stream.** No question could
+  reach another stream's role, and a carrier's wake and a launch's
+  recipient have no place whose stream would complete it.
+- **A role and a stream given apart**, `--to ops --stream swancloud`.
+  The same name in two flags, where a launch's recipients are one name
+  each, and a wake or a status line would need the pair too.
+- **A role for the whole host**, `ops`, one per host. Two streams' ops
+  would be one run, which the user refused for the planner: "an agent
+  might need something from ops separately from the planner or the
+  designer", of each partition's own.
+- **A bare role as a launch's recipient**, meaning the launch's stream.
+  A launch's bare name is a session's (7), so `--recipient planner`
+  could be either.
+
+### 2. crew declares its roles once, and every main-level role answers as a Flume kind at its own address
 
 crew's change `roles-run-as-flume-kinds`, as built on `teamless/deneb`,
 is the base. Its five kinds, its turn (`crew role start`, act,
 `crew role end`), its asks and its `crew role open` stand as crew built
-them. Each role answers at its address, `<label>/<role>`:
+them. Each role answers at its address in its partition's stream:
 `madswan/design`, `madswan/planner`, `madswan/ops`, `madswan/reviewer`
 and `madswan/operator`. On it, this design sets six things.
 
@@ -434,17 +560,16 @@ roles     = "~/.local/state/crew/flume/roles.toml"  # crew writes it
 
 crew writes the roles file whole, from its own partitions, as it writes
 its role record today: at `crew main up` and beside each ask. It holds
-an entry for each address of each partition, in flume's form:
+an entry for each address of each partition's stream, in flume's form:
 
 ```toml
 [roles."madswan/operator"]
 kind = "crew-operator"                 # one of crew's own kinds
 repository = "/…/repositories/afterthought/blueprints"
-stream = "madswan"                     # the partition's stream
 name = "madswan"
 intent = "madswan-operator"
-answers = "Whatever reaches the partition from outside it, and a question no role took up."
-answerer = true                        # stands behind the madswan stream
+answers = "Whatever reaches the stream's work from outside it, and a question no role took up."
+answerer = true                        # stands behind the stream madswan
 
 [roles."madswan/operator".agents]
 model = "opus"
@@ -452,20 +577,19 @@ model = "opus"
 [roles."madswan/ops"]
 kind = "crew-ops"
 repository = "/…/repositories/afterthought/blueprints"
-stream = "madswan"
 name = "madswan"
 intent = "madswan-ops"
 answers = "A live system: what is deployed, a credential, a host's tools, a deploy, a landing that failed, main red."
 
 [roles."wldn/planner"]
-carried = true                         # wldn's main level runs on another host
+carried = true                         # wldn's stream runs on another host
 answers = "The work's scope: work outside a bolt's goal, which bolt a finding belongs in, the order of work."
 ```
 
-Ten partitions are ten addresses of each role, every one run by the
-same package, `crew/crew-<role>`, which the host locks once. A role's
-kind is one of its source's own, named by its name, its version the
-locks' (154, 155). flume reads every source's roles as they stand at
+Ten partitions' streams hold ten addresses of each role, every one run
+by the same package, `crew/crew-<role>`, which the host locks once. A
+role's kind is one of its source's own, named by its name, its version
+the locks' (154, 155). flume reads every source's roles as they stand at
 each launch, wake, start, stall and status, and writes nothing in them
 (191).
 
@@ -474,14 +598,14 @@ a place. Every fact of that launch is crew's but the room it runs in:
 
 | what a role's run is launched with | whose | why |
 |---|---|---|
-| its kind | crew's: a package of its release, the same for every partition | 157 |
+| its kind | crew's: a package of its release, the same for every stream | 157 |
 | its repository, by its location on this host, and its base | crew's: the partition's first blueprints repository, where its runner keeps it | 9, 132 |
-| its stream | crew's to name: its partition's | the user's ruling of 2026-11-05 |
+| its stream | its address's, which crew writes for the partition's stream | decision 1 |
 | its label, `planning` | crew's kinds, which declare it | 180 |
 | its name, intent, priority, points and brief | crew's, as any caller's launch gives them | 7, 70, 147, 165 |
 | its agents' settings, the model among them | crew's role definitions, as a launch's settings | 7, 32 |
-| what it answers, and whether it stands behind its stream | crew's briefs: the operator is the partition's door | decisions 2, 5 |
-| that it runs on another host | crew's: the partition's `machine` | decision 10.4 |
+| what it answers, and whether it stands behind its stream | crew's briefs: the operator is the door | decisions 3, 6 |
+| that it runs on another host | crew's: the partition's `machine` | decision 11.4 |
 | the content of its kind, trusted | the host's lock | 155 |
 | its stream's bound, pool and accounts | the host's | 143, 144 |
 
@@ -494,36 +618,36 @@ crew's:
    on its machine, and because a location on the host is the managed
    layer's (191, C.7; core.30). A tool that could declare itself would
    run its roles on any host it reached. It is one file for crew, the
-   same on every host but for its paths, and names no partition and no
+   same on every host but for its paths, and names no stream and no
    role.
 2. **The lock of crew's kinds** (155): the host's trust in the content
    that will drive agents with its accounts, each version recorded once
-   for every partition's runs (core.34).
-3. **Its streams**: each partition's stream it runs, `madswan`,
-   `swancloud` and `agentplot` on deneb, with its bound, pool, priority
-   and terminal (143, 190), and the `planning` label's reserve in each
-   (181). They are the host's because they are its agents and its
-   accounts. crew says which stream a role's run takes, the host how much
-   room that stream has, and a stream the host does not declare refuses
-   the wake naming it (143). A host declares its streams for every place
-   it runs, roles or not.
+   for every stream's runs (core.34).
+3. **Its streams**: each stream it runs, `madswan`, `swancloud` and
+   `agentplot` on deneb, with its bound, pool, priority and terminal
+   (143, 190), and the `planning` label's reserve in each (181). They
+   are the host's because they are its agents and its accounts. crew's
+   addresses say which stream a role answers in, the host how much room
+   that stream has, and an address whose stream the host does not
+   declare wakes nothing (decision 1). A host declares its streams for
+   every place it runs, roles or not.
 
 Nothing else. The host's configuration has no `[roles]` table and no
-answerer. Who stands behind a partition's stream is crew's to say,
-since the door is the partition's operator.
+answerer. Who stands behind a stream is crew's to say, since the door
+is the partition's operator.
 
 **flume launches a role's run.** A settle that finds an end pending for
 an address with no run standing, or a carrier's `flume wake <address>`,
-launches the run its source declares for the address (132). The runner
-launches no role's run. It carries crew's own events, an ask in crew's
-records and a place on another host waiting on the role, by `flume wake
-<address>` on the role's host (the user's ruling of 2026-11-05). crew's
-follower writes a card's answer as an ask, as it does, and the runner
-wakes the role for it.
+launches the run its source declares for the address, in the address's
+stream (132). The runner launches no role's run. It carries crew's own
+events, an ask in crew's records and a place on another host waiting on
+the role, by `flume wake <address>` on the role's host (the user's
+ruling of 2026-11-05). crew's follower writes a card's answer as an
+ask, as it does, and the runner wakes the role for it.
 
 **A run is named per address.** An entry's `name` names the run's
-place, and flume names it `<partition>-<role>` where the entry names
-none. crew gives the label, so madswan's planner runs as
+place, and flume names it `<stream>-<role>` where the entry names none.
+crew gives the stream's name, so madswan's planner runs as
 `crew-planner--madswan`, the place crew's `FLUME_PLACE` reading takes,
 and swancloud's as `crew-planner--swancloud`. A run an earlier flume
 named by the role alone is found by its role field, which the run's
@@ -539,7 +663,7 @@ R3, done where the run is launched.
 **A run's own stall goes to the door.** A role's run has no recipient.
 Where it waits on its caller, lost, never begun or stopped short, its
 stall goes to the answerer behind its stream, and never to its own
-address, so the door learns that a role cannot run (decision 5).
+address, so the door learns that a role cannot run (decision 6).
 
 **A fault stays its own.** As a source's fault refuses only the launches
 naming it (191):
@@ -548,12 +672,13 @@ naming it (191):
   it and why;
 - an entry that cannot be read declares nothing for its address, and
   status names the address and the key: one that names a kind not its
-  source's, an `env`, a pool or an account, that gives `carried` beside
-  a run's keys, or that stands behind no stream it names;
+  source's, an `env`, a pool, an account or a `stream`, whose address
+  names a stream the host does not declare and is not carried, or that
+  gives `carried` beside a run's keys or `answerer`;
 - an address two entries declare, of one source or two, and two
   addresses whose runs would be one place, of one repository, kind and
   name, are declared by neither, and status names both;
-- an address declared by nothing wakes nothing, as decision 4 has it.
+- an address declared by nothing wakes nothing, as decision 5 has it.
 
 So a source a program dropped in never stops the host's other work,
 and a role crew declared wrong never wakes as another's.
@@ -562,13 +687,13 @@ Rejected:
 
 - **The roles in the host's configuration**, a `[roles]` entry per
   address, as 132 and C.7 have them on main. Every host repeats every
-  partition's every role, and whoever writes the host's configuration
+  stream's every role, and whoever writes the host's configuration
   renders crew's partitions into it. The user, 2026-11-05: "No these
   shouldn't be repeated over and over again for each host. God damn it,
   they are an artifact of crew". The table leaves C.7.
 - **The roles in crew's package.** A package is one kind at one
   version, the same on every host (157). The addresses are crew's
-  partitions, and which host runs each one's main level.
+  partitions' streams, and which host runs each one's main level.
 - **flume reads crew's role record or teams file.** flume would read a
   caller's own formats, `roles.rec` on a branch of a partition's state
   repository or the teams file, and every other tool with roles would
@@ -576,18 +701,18 @@ Rejected:
 - **A seam for roles, with a profile of crew's.** A seam serves the
   tools flume integrates with in each of its parts (core.2). This would
   be one for one caller, and crew's format in flume's code.
-- **A partition template flume fills**, one entry per role with the
-  partitions listed, flume making the addresses. Partitions differ in
-  their models and in which roles have moved, and crew writes the file
-  by program, so a flat entry per address costs nothing.
+- **A template flume fills**, one entry per role with the streams
+  listed, flume making the addresses. Partitions differ in their models
+  and in which roles have moved, and crew writes the file by program,
+  so a flat entry per address costs nothing.
 - **The runner as the launcher**, crew's Decision 1. Two launchers of
   one thing, and a question's wake waits on the runner's pass. The user
   ruled flume the launcher on 2026-11-05.
 - **A session that serves an address**, so standing roles are reached
   by their addresses. It only bridges the roles that have not moved
-  (decision 10.5).
+  (decision 11.5).
 
-### 2. Which needs are whose
+### 3. Which needs are whose
 
 From crew's briefs, a need is the role's whose work it is:
 
@@ -598,12 +723,16 @@ From crew's briefs, a need is the role's whose work it is:
 | A live system: a reading of what is deployed, a credential, a host's tools, a deploy, a landing that failed, main red | main-level ops | design.md, "from `{{MAIN_OPS}}` for a live system"; main-ops.md, a fix of main |
 | A choice that is the user's alone: their name, money, plans, anything public or hard to undo | the user, on one card made by the role whose subject it is | design.md, *Decision records*; capture's rule |
 | None of these, or the agent cannot tell | the place's owner, the role its launch names | — |
-| A question that no role took up within the bound | the operator, the partition's door | operator.md, "the partition's door", "make sure the user sees a wait that has none" |
+| A question that no role took up within the bound | the operator, the door of the place's stream | operator.md, "the partition's door", "make sure the user sees a wait that has none" |
+
+The table holds in every stream. Which stream's role a need is for is
+the asking agent's to tell: a question about swancloud's deployed queue
+is swancloud's ops's, whichever stream the asking place runs in.
 
 The reviewer is asked nothing: it reads one batch and writes one file.
 crew's roles file gives it no `answers`, so no prompt lists it.
 
-### 3. Who picks
+### 4. Who picks
 
 Four could pick the role a question goes to.
 
@@ -613,8 +742,9 @@ Four could pick the role a question goes to.
   question a stage will ask.
 - **The asking agent.** It alone knows what it needs. It holds the
   change, the rules and the brief, and can tell a design decision from a
-  reading of a live system from a scope question. It does not know the
-  partition's roles unless it is told them, and it may pick wrong.
+  reading of a live system from a scope question, and which stream's
+  system it is about. It does not know the host's roles unless it is
+  told them, and it may pick wrong.
 - **The kind.** A kind names nothing a host owns, an address among them
   (core.4, core.34, 158). Its stage cannot know its question in advance.
 - **A door, crew's operator, for every question.** It routes by the same
@@ -624,29 +754,32 @@ Four could pick the role a question goes to.
 The design takes three of them, each where it knows most:
 
 - **The launch names the owner.** A place's recipients are its owner, the
-  role its launch names, or the door where it names none (decision 4).
+  role its launch names, or the door of its stream where it names none
+  (decision 5).
 - **The asking agent may address one question to another role**:
-  `flume needs [--found] --to <address> "<words>"`. The stop-short part
-  of every stage's prompt lists each address the agent may name, with
-  the words its source gives for what it answers: every address a source
-  declares with `answers`, a run's or a carried one's (decision 10.4),
-  in the partition of the place's recipients, else of the answerer
-  behind its stream. The stop-short's end goes to that address alone,
-  and not to the place's recipients. A name outside the list is refused,
-  naming the list, so the agent can ask again. With no `--to`, the end
-  goes to the place's recipients. The list is read from the sources at
-  each start, and comes after every part of the prompt that a stage's
-  repetitions share (core.31).
+  `flume needs [--found] --to <role or address> "<words>"`. The
+  stop-short part of every stage's prompt lists each address the agent
+  may name, with the words its source gives for what it answers: every
+  address a source declares with `answers`, a run's or a carried one's
+  (decision 11.4), but the place's own role's where the place is a
+  role's run. The place's own stream's roles come first, each by the
+  role alone; every other stream's follow, each by its whole address.
+  The stop-short's end goes to that address alone, and not to the
+  place's recipients. A name outside the list is refused, naming the
+  list, so the agent can ask again. With no `--to`, the end goes to the
+  place's recipients. The list is read from the sources at each start,
+  and comes after every part of the prompt that a stage's repetitions
+  share (core.31).
 - **A role that takes a question not its own passes it.** It tells the
   role whose it is, by `crew tell`, which is an ask for a role that runs
   as its kind, with the place, the key and the words, and holds the
-  waiting move, "passed to madswan/design", with a bound (decision 6).
-- **The door stands behind every stall**, the last to pick (decision 5).
+  waiting move, "passed to madswan/design", with a bound (decision 7).
+- **The door stands behind every stall**, the last to pick (decision 6).
 
 So "an agent might need something from ops separately from the planner
-or the designer" (the user, 2026-11-05) is `flume needs --to
-madswan/ops`. A wrong pick costs one pass, which the door would cost on
-every question.
+or the designer" (the user, 2026-11-05) is `flume needs --to ops`, and
+a need of another stream's ops is `flume needs --to swancloud/ops`. A
+wrong pick costs one pass, which the door would cost on every question.
 
 A role still standing is not in the list, since crew declares no run
 for it. An agent whose question is a standing role's asks the owner,
@@ -656,32 +789,36 @@ Rejected:
 
 - **Every question to the door first.** Two runs and a hop for each
   question, where most are the owner's.
-- **Every question to every role of the partition**, the first to answer
+- **Every question to every role of the stream**, the first to answer
   taking it by its key. Every role woken for every question, and a
   question about a live system read by the design agent.
 - **flume reading the words to choose a role.** flume would judge a
   question, which 69 leaves to its callers.
+- **Only the place's own stream's roles in the list.** The user:
+  "communication had to stay within a stream but we actually probably
+  don't want that". An agent that needs another stream's system would
+  have to go through its owner.
 
-### 4. Who answers each kind of launch
+### 5. Who answers each kind of launch
 
 A place's recipients are resolved at its launch, the first of these
 that gives any:
 
 1. the recipients the launch names, `--recipient`, one or several, each
-   a session's name or a role's address;
+   a session's name or a role's whole address, of any stream;
 2. `$FLUME_RECIPIENT` in the launching command's environment;
 3. the session the launching command runs in, as the terminal names it
    (190);
 4. the answerer behind the place's stream, the role a source declares to
-   stand behind it (decision 5).
+   stand behind it (decision 6).
 
 | how the place was launched | its recipients | the roles its agent may address | behind every stall |
 |---|---|---|---|
-| a shell or a script with no session, naming none, the orchestrator's among them | its stream's door, `agentplot/operator` for the `agentplot` stream | `agentplot/design`, `agentplot/planner`, `agentplot/ops`, each that runs as its kind | the door is the recipient |
-| a herdr pane, by `/launch` or a person's command | that pane's session | the roles of the door's partition | the stream's door |
-| the runner, for crew's work | the role crew names: `<label>/planner` for a bolt's work, `<label>/ops` for a fix of main, a role for its own landing work | the partition's roles | the stream's door |
-| any launch naming a role's address | that address: its run's pane, its run woken where none is live | the partition's roles | the stream's door |
-| a role's run, launched by flume | none | none | its stream's door, never the run's own address |
+| a shell or a script with no session, naming none, the orchestrator's among them | its stream's door, `agentplot/operator` for the `agentplot` stream | its own stream's roles by name, `design`, `planner`, `ops`, each that runs as its kind; every other stream's by its address | the door is the recipient |
+| a herdr pane, by `/launch` or a person's command | that pane's session | the same | its stream's door |
+| the runner, for crew's work | the role crew names: `<stream>/planner` for a bolt's work, `<stream>/ops` for a fix of main, a role for its own landing work | the same | its stream's door |
+| any launch naming a role's address | that address: its run's pane, its run woken where none is live | the same | its stream's door |
+| a role's run, launched by flume | none | the same, but its own address | its stream's door, never the run's own address |
 
 A launch is refused, making nothing (4; core.8):
 
@@ -703,23 +840,24 @@ read at each stall.
 The orchestrator strips herdr's variables so that its places are not
 its pane's. Its launches run in the `agentplot` stream and take that
 stream's door, and their agents address agentplot's design agent,
-planner or ops by `--to`. It needs no script to poll status.
+planner or ops by name, or another stream's by its address. It needs
+no script to poll status.
 
-### 5. The bound: a stall reaches the owner, the asked role and the door
+### 6. The bound: a stall reaches the owner, the asked role and the door
 
-A role a source declares may stand behind the stream its run runs in,
-`answerer = true` beside its `stream`: it is that stream's answerer.
-crew declares each partition's operator to stand behind the partition's
-stream, so `madswan/operator` stands behind `madswan`, `swancloud/operator`
-behind `swancloud`, and `agentplot/operator` behind `agentplot`. One role
+A role a source declares may stand behind its address's stream,
+`answerer = true`: it is that stream's answerer. crew declares each
+partition's operator to stand behind the partition's stream, so
+`madswan/operator` stands behind `madswan`, `swancloud/operator` behind
+`swancloud`, and `agentplot/operator` behind `agentplot`. One role
 stands behind a stream at most: where two do, of one source or two, the
 stream has none, status names both, and a launch that would take it is
 refused naming both. A stream no role stands behind has none: a launch
 there names its recipient or runs in a session, names no address that
-wakes nothing, and its stalls go to the place's recipients alone. The
-answerer is read from the sources as they stand when asked, at each
-launch and at each stall, and never kept, as the stream and the pool
-are (143).
+wakes nothing, and its stalls go to the place's recipients and the role
+its stop-short named. The answerer is read from the sources as they
+stand when asked, at each launch and at each stall, and never kept, as
+the stream and the pool are (143).
 
 The place's stall bound, five minutes unless the launch sets another
 (130), is the one bound. Once a place has waited on its caller that
@@ -727,16 +865,21 @@ long under no hold's words, it is stalled, and its stall is delivered
 once to each of these:
 
 - each recipient of the place, its owner;
-- the role the stop-short it waits on named by `--to`;
-- the answerer behind its stream, unless it is one of those, and never a
-  role's run's own address.
+- the role the stop-short it waits on named by `--to`, of whichever
+  stream;
+- the answerer behind the place's own stream, unless it is one of
+  those, and never a role's run's own address.
+
+The door is the asking place's stream's, whichever stream's role the
+question named: the door stands behind the places of its stream, and a
+question asked of another stream's role is still its place's work.
 
 The stall carries the move the place waits on, and where that move
-answers a stop-short, the stop-short's words, whether it needs an answer
-or found work, its key and whom it named, and the words of a hold that
-lapsed. A reader who never saw the place has the question whole. It is
-delivered as any end is: into its run's pane, or pending and waking the
-run (43, 132).
+answers a stop-short, the stop-short's words, whether it needs an
+answer or found work, its key and whom it named, and the words of a
+hold that lapsed. A reader who never saw the place has the question
+whole. It is delivered as any end is: into its run's pane, or pending
+and waking the run (43, 132).
 
 A hold's bound passing stalls the place again, a new stall with a key
 of its own, delivered to the same three. So a question is never left
@@ -748,7 +891,7 @@ its hold's bound.
 
 | what happened | what the bound does |
 |---|---|
-| The role's run was never launched or never began: no account, no room in its pool, its kind unlocked, a refusal | Its ends stay pending, and status says why the run was not woken. At the stall the owner and the door have the question. |
+| The role's run was never launched or never began: no account, no room in its stream, its kind unlocked, a refusal | Its ends stay pending, and status says why the run was not woken. At the stall the owner and the door have the question. |
 | The run took the question and its turn ended with neither an answer nor a hold | At the stall the owner and the door have it. |
 | The run held it and let the hold lie | At the hold's bound the place stalls again, to the owner, the asked role and the door, with the hold's words. |
 | The role still stands, and crew declares no run for its address | The end stays pending. At the stall the door has it, and carries it to the standing role as crew does today, or to the user. |
@@ -762,9 +905,9 @@ deneb when the build lands reach the door at once.
 Rejected:
 
 - **An answerer in the host's configuration**, `[host] answerer` and a
-  stream's own. The door behind a partition's stream is the partition's
-  operator, which is crew's to say, and a host would repeat it for every
-  partition it runs.
+  stream's own. The door behind a stream is the partition's operator,
+  which is crew's to say, and a host would repeat it for every stream
+  it runs.
 - **A second bound for the door, longer than the stall.** Another knob
   on every host, and the stall already says the place waits on its
   caller with nobody's words. A launch that wants more room gives
@@ -774,11 +917,14 @@ Rejected:
   asking about.
 - **Every end to the door at once.** Two answerers from the first
   minute, and the role whose question it is loses its turn.
+- **The asked role's stream's door too.** Two doors for one question,
+  each able to card the user, where the asking place's door already
+  stands behind it.
 - **A chain of answerers ordered by flume.** flume would order roles,
   which is the sources' and the kinds' to decide. The owner, the asked
   role and one door, with holds that lapse, are enough.
 
-### 6. A hold on the waiting move
+### 7. A hold on the waiting move
 
 A caller may hold the move the place waits on, with words saying who
 makes it and how, and an optional bound:
@@ -798,7 +944,7 @@ its bound. A retry naming the stage or the submission ends it, as the
 move made (47, 49). A drop ends it with the place. Where the hold gives
 a bound, the settle that reads the bound passed lapses the hold: status
 says it lapsed and when, and the place stalls at once, its stall
-delivered as decision 5 has it. Where it gives none, it stands until the
+delivered as decision 6 has it. Where it gives none, it stands until the
 move is made, as every hold does. It is refused, naming why, on a place
 that waits on no move of its caller's.
 
@@ -811,7 +957,7 @@ Rejected:
   a role's run that collects a question has not yet said it will
   answer it.
 
-### 7. An answer is taken once, by its key
+### 8. An answer is taken once, by its key
 
 Every end already has a key in held state, by which the settle records
 it once (`EndOf::key`). This change gives it to callers as one token:
@@ -841,7 +987,7 @@ session or a fresh agent. A tell carries no key: it is no answer (55),
 until the open-session change makes a tell within the hour one, and
 then it takes `--answers` too.
 
-### 8. What a restarted recipient sees
+### 9. What a restarted recipient sees
 
 **The inbox gives what waits on it.** `flume inbox`'s answer keeps its
 `ends`, every end pending for the recipient, each delivered by the
@@ -850,10 +996,11 @@ caller and that this recipient is a recipient of, was named by the
 stop-short it waits on, or was given a stall of as the answerer. Each is
 given with:
 
-- the place, its kind, its name and the first line of its brief;
+- the place, its kind, its name, its stream and the first line of its
+  brief;
 - the move it waits on, and since when;
 - where the move answers a stop-short, its words, whether it needs an
-  answer or found work, its key and whom it named;
+  answer or found work, its key and the address it named;
 - a hold on the move, with its words, since when and its bound.
 
 `waiting` delivers and marks nothing (43; core.25), so a recipient that
@@ -862,10 +1009,11 @@ collected a question, then restarted, still finds it.
 **A role's run** collects at its start: `crew role start` for crew's
 asks, then `flume inbox --json` for its address, which takes the role
 from `FLUME_PLACE` (132). Every question waiting on the role is in it,
-with its key, however many runs came and went.
+with its key, whichever stream asked it, however many runs came and
+went.
 
 **A person's session.** flume's Claude Code plugin's SessionStart hook,
-in a session flume did not start, now acts:
+in a session flume did not start, acts:
 
 1. It runs `flume inbox` as the session the terminal names, never as an
    address, so a person's session never takes a role's ends. Under the
@@ -903,7 +1051,7 @@ Rejected:
 - **A notice holding the question's words.** Words are many lines, and
   a notice is typed into a pane (core.11).
 
-### 9. The answering run's protocol, and the user's one card
+### 10. The answering run's protocol, and the user's one card
 
 flume's part ends at the role: it reaches the role, gives it the
 question with its key, takes the hold that says the role is on it, and
@@ -919,9 +1067,9 @@ and briefs, and for any source's own answering kind:
 3. **Answer what is its own**: `crew answer <work or place> --answers
    <key> "<answer>"`, which the runner carries as `flume retry …
    --answers <key>`.
-4. **Pass what is another role's**: `crew tell <label>-<role>` with the
-   place, the key and the words, and hold "passed to <address>" with a
-   bound.
+4. **Pass what is another role's**, of its own stream or another's:
+   `crew tell <stream>-<role>` with the place, the key and the words,
+   and hold "passed to <address>" with a bound.
 5. **Card what is the user's.**
    - **Hold first**: "asked the user on card <id>", with a bound, so a
      second reader sees the question taken before the card exists.
@@ -942,7 +1090,7 @@ and briefs, and for any source's own answering kind:
 7. **The door, on a stall.** The operator's run reads the stall's words
    and any lapsed hold:
    - nobody had the question: it passes it once to the role whose it is,
-     by decision 2's table, and holds with a bound;
+     by decision 3's table, of whichever stream, and holds with a bound;
    - a role had it and its hold lapsed, or the question is the user's:
      it puts it to the user on one card under the same key, or, where
      the hold names a card the user has not answered, holds again naming
@@ -971,45 +1119,50 @@ Rejected:
 - **The card made by whoever first reads the question, with no hold.**
   That is today's orchestrator, and two readers make two cards.
 
-### 10. What a role's run needs from flume, crew and the runner
+### 11. What a role's run needs from flume, crew and the runner
 
-#### 10.1 From flume
+#### 11.1 From flume
 
+- **Addresses on streams**: `<stream>/<role>`, its stream one the host
+  declares or its address carried; a bare role in `--to` read as the
+  asking place's stream's; `flume wake`'s help and refusal naming
+  `<stream>/<role>` (decision 1).
 - **Roles read from their source**: a source's declaration's `roles`,
   the file the source writes, read as it stands, each entry's kind one
   of the source's own and locked, and a fault confined to its file, its
-  entry or its address (decision 1). The host's `[roles]` table leaves
+  entry or its address (decision 2). The host's `[roles]` table leaves
   the configuration.
-- **Whole-address names**: an entry's `name`, else `<partition>-<role>`,
-  and two addresses making one place declared by neither (decision 1).
+- **Whole-address names**: an entry's `name`, else `<stream>-<role>`,
+  and two addresses making one place declared by neither (decision 2).
 - **flume as the launcher**: an entry's `intent` and `agents` beside the
-  keys of 132, the run's settings standing as a launch's in their layers
-  (decision 1).
-- **A run over at its delivery**, done and tidied by flume (decision 1).
-- **The answerer**: a role standing behind its stream, read from the
-  sources at each launch and each stall (decision 5).
+  keys of 132, the run launched in its address's stream, its settings
+  standing as a launch's in their layers (decision 2).
+- **A run over at its delivery**, done and tidied by flume (decision 2).
+- **The answerer**: a role standing behind its address's stream, read
+  from the sources at each launch and each stall (decision 6).
 - **The bound**: the stall to the owner, the asked role and the door, a
   run's own stall to the door, the hold on the waiting move with a bound
-  that lapses (decisions 5, 6).
-- **The answer's key**: `--answers <key>`, taken once (decision 7).
-- **Routing**: `flume needs --to <address>`, and the roles listed in the
-  stop-short part of every prompt with their sources' `answers`
-  (decision 3).
+  that lapses (decisions 6, 7).
+- **The answer's key**: `--answers <key>`, taken once (decision 8).
+- **Routing**: `flume needs --to <role or address>`, and the roles
+  listed in the stop-short part of every prompt with their sources'
+  `answers`, the place's own stream's by name and every other's whole
+  (decision 4).
 - **What waits**: the inbox's `waiting`, the notice's brief and key, the
-  plugin's SessionStart for a person's session (decision 8).
+  plugin's SessionStart for a person's session (decision 9).
 - **A carrier's wake**: `flume wake <address>`, as built (132).
 
-#### 10.2 From crew
+#### 11.2 From crew
 
 - **Its roles, declared once.** crew writes its roles file from its
   partitions, whole, beside it and renamed over it, at `crew main up`
   and beside each ask, as it writes `roles.rec`:
-  - each address of a role that runs as its kind on this host, with its
-    run: its kind, the partition's first blueprints repository where the
-    runner keeps it on this host, the partition's stream, the label as
-    its name, `<label>-<role>` as its intent, its model in `agents`, and
-    its `answers` from its brief;
-  - each partition's operator standing behind the partition's stream;
+  - each address `<stream>/<role>` of a role that runs as its kind on
+    this host, the stream the partition's: its kind, the partition's
+    first blueprints repository where the runner keeps it on this host,
+    the stream's name as its name, `<stream>-<role>` as its intent, its
+    model in `agents`, and its `answers` from its brief;
+  - each partition's operator standing behind its stream;
   - each address of a role whose partition's main level runs on another
     host, `carried`, with its `answers`;
   - no entry for a role that still stands, and no `answers` for the
@@ -1018,25 +1171,27 @@ Rejected:
   its release's kinds directory as record 0040 has them, each declaring
   the label `planning` (180). The host locks them by `flume kinds lock
   --host` (155).
-- **Each role's stream is its partition's.** The teams file's `flume`
-  then says, for each role, only whether it runs as its kind. A role
-  moves on the user's word (decision 12).
+- **Each partition's one stream.** The teams file's `flume` names the
+  partition's stream once, and says for each role only whether it runs
+  as its kind. A role moves on the user's word (decision 13).
 - **The turn** (`plugin/flume/turn.md`): collect flume's inbox after
-  `crew role start`, and follow decision 9's protocol.
+  `crew role start`, and follow decision 10's protocol.
 - **`crew answer`** carries the key as `Answers:`, takes a place on the
   host that crew did not launch by its place's name, and is open to the
   operator beside the planner, the design agent and ops.
-- **The briefs**: each role's part of decision 2's table and decision
-  9's protocol; the operator's, the door behind every stall, which may
-  put a stalled question to the user on one card.
+- **The briefs**: each role's part of decision 3's table and decision
+  10's protocol, a question of another stream's system addressed to
+  that stream's role; the operator's, the door behind every stall of
+  its stream, which may put a stalled question to the user on one card.
 - **The records and rules**: roles.7 holds again as written, since flume
   wakes a role. The change `roles-run-as-flume-kinds` Decisions 1, 3 and
   6, and its departure from roles.7, give way. Record 0049 part 1 holds,
   its role addresses declared by crew's own roles file rather than the
-  host's `[roles]`, and the runner carrying crew's events by `flume wake`
-  where it named Pending You's wake mod.
+  host's `[roles]`, each the role of its partition's stream, and the
+  runner carrying crew's events by `flume wake` where it named Pending
+  You's wake mod.
 
-#### 10.3 From the runner
+#### 11.3 From the runner
 
 - **Role offers become wakes.** For each role whose record names its
   host, while crew's records hold an ask pending for the role, or a
@@ -1052,21 +1207,23 @@ Rejected:
   `swancloud.boomdrive`, which keeps it running. An answer of crew's and
   a card's answer reach flume at its next pass.
 
-#### 10.4 An address on another host
+#### 11.4 An address on another host
 
 crew's records carry a place's question across hosts: a place on one
 host waiting on a role whose main level runs on another is read from
-that host's runner's records (crew's Decision 5). crew's roles file on
-the place's host declares the address carried: `carried = true`, with
-its `answers`, and no run's keys. flume launches nothing for it, takes
-launches naming it, lists it for `--to`, and keeps its ends pending for
-the tool that carries them. The role's host's runner wakes the run there,
-and the run answers by `crew answer`, which the place's host's runner
-carries to `flume retry`. Status says the address is carried. On deneb,
-crew's file carries wldn's roles, whose main level runs on
+that host's runner's records (crew's Decision 5). Its address names a
+stream of that other host, which the place's host does not declare.
+crew's roles file on the place's host declares the address carried:
+`carried = true`, with its `answers`, and no run's keys and no
+`answerer`. flume launches nothing for it, takes launches naming it,
+lists it for `--to` by its whole address, and keeps its ends pending for
+the tool that carries them. The role's host's runner wakes the run
+there, and the run answers by `crew answer`, which the place's host's
+runner carries to `flume retry`. Status says the address is carried. On
+deneb, crew's file carries wldn's roles, whose stream runs on
 chuck-herdr-alpha.
 
-#### 10.5 `flume serve`: no purpose left
+#### 11.5 `flume serve`: no purpose left
 
 `flume serve <address>` would have a session take an address's ends
 while it is live. Once roles run as kinds, nothing needs it:
@@ -1076,7 +1233,7 @@ while it is live. Once roles run as kinds, nothing needs it:
   conversation until they are done (crew's Decision 13). Its pane is the
   run's, reached by the address as any run's.
 - **A person's own session** is reached as a session, and collects at
-  its start (decision 8).
+  its start (decision 9).
 - **A standing role** is the one thing serving would reach, and standing
   roles are what each partition's moves retire. Until a role moves, its
   questions reach the door at their stall, and the door carries them to
@@ -1084,13 +1241,14 @@ while it is live. Once roles run as kinds, nothing needs it:
 
 So serving is a stop-gap for the time between moves, and is left out.
 
-#### 10.6 One owner for each part
+#### 11.6 One owner for each part
 
 | part | owner | the others |
 |---|---|---|
+| A stream, which an address names | the host (143) | a source writes its addresses on the host's streams; flume checks each is declared |
 | Which roles answer, and what each run is launched with | the source whose roles they are, crew for its partitions (193) | the host declares the source, locks its kinds and declares its streams (143, 155, 191); flume reads |
-| A place's recipients, and the answerer behind its stream | flume resolves them (7, 193) | crew declares each partition's door; the runner passes crew's recipients unchanged (Boomdrive core.15) |
-| Which role a question is for | the asking agent, else the place's owner | flume lists the roles; the role passes what is not its own |
+| A place's recipients, and the answerer behind its stream | flume resolves them (7, 193) | crew declares each stream's door; the runner passes crew's recipients unchanged (Boomdrive core.15) |
+| Which role a question is for, of which stream | the asking agent, else the place's owner | flume lists the roles; the role passes what is not its own |
 | Delivering an end, and keeping it pending | flume (43) | the runner's copy of status is a view for crew's board and its cross-host records, never a delivery; sluice's outcome for a place reaches flume at its settle (C.6) |
 | Launching a role's run, and ending it at its delivery | flume (132) | the runner and crew's follower carry crew's events to it by `flume wake` |
 | The bound | flume (130, 193) | a role says it is on a question by a hold |
@@ -1099,15 +1257,19 @@ So serving is a stop-gap for the time between moves, and is left out.
 | Carrying a card's answer to a run | crew's follower, as an ask, and the runner's wake | — |
 | Taking an answer once | flume (42, 49) | `crew answer` and the runner carry the key |
 
-### 11. The statements' amendments, for the user to approve
+### 12. The statements' amendments, for the user to approve
 
-#### 11.1 flume's statement (agentplot/blueprints, `design/flume/requirements.md`, at ff616eb)
+#### 12.1 flume's statement (agentplot/blueprints, `design/flume/requirements.md`, at ff616eb)
 
 **Section 3.**
 
 - Replace **recipient** with: "whoever an end of a place goes to: a
   caller's session, or a role's address, the answerer behind its stream
   among them (43, 132, 193)."
+- Add **address**: "of a role, `<stream>/<role>`: the role a source of
+  the host declares for a stream (193), which a launch, a stop-short or
+  a carrier names in place of a session; a stop-short names its own
+  stream's role by the role alone (41, 132)."
 - Add **answerer**: "of a stream, the role a source of the host declares
   to stand behind the places that run there: the recipient of a launch
   that names none and runs in no session, and a recipient of every stall
@@ -1130,7 +1292,9 @@ naming the address (132)."
 session that launched it, as the terminal it runs in names it, or none
 where no terminal names one (190)." with: "A launch that names no
 recipient has the session that launched it, as the terminal it runs in
-names it (190), else the answerer behind the place's stream (193)."
+names it (190), else the answerer behind the place's stream (193). A
+recipient a launch names is a session's name, or a role's address
+written whole (132)."
 
 **Clause 8.** Replace "Its recipients are fixed at its launch." with:
 "Its recipients are fixed at its launch; the answerer behind its
@@ -1138,15 +1302,16 @@ stream, as the sources declare it when a stall is read, is delivered
 its stalls besides (130, 193)."
 
 **Clause 28.** After "filled in for the place and the stage", add: ",
-with each role's address its words may be for and the words its source
+with each role's address its words may be for, its own stream's by the
+role alone and every other stream's whole, and the words its source
 gives for what that role answers (41, 193)".
 
 **Clause 41.** After "(131).", add: "It may name the role its words are
-for: an address a source of the host declares with words of what it
-answers, in the partition of the place's recipients, else of the
-answerer behind its stream (132, 193). The stop-short's end then goes to
-that address and not to the place's recipients. A name outside those is
-refused, naming them."
+for: the address of a role a source of the host declares with words of
+what it answers, of any stream, or the role alone for a role of the
+place's own stream (132, 193). The stop-short's end then goes to that
+address and not to the place's recipients. A name that is none of those
+is refused, naming them."
 
 **Clause 42.** After "and the fresh agent's prompt carries the question
 with the answer.", add: "An answer may name the stop-short's key, and
@@ -1178,10 +1343,10 @@ waits on that stop-short (42)."
 **Clause 56.**
 
 - After "the words of a stop-short, and whether it needs an answer or
-  found work, or of a failed submission;", add: "the role a stop-short
-  named; each end's key, and for a stop-short answered, its answer with
-  who gave it and when; the place's recipients, each with where it came
-  from;".
+  found work, or of a failed submission;", add: "the role's address a
+  stop-short named; each end's key, and for a stop-short answered, its
+  answer with who gave it and when; the place's recipients, each with
+  where it came from;".
 - After "a hold's words", add: ", a hold on the waiting move with its
   bound or that it lapsed,".
 - After "for the host and for each of its streams,", add: "its answerer
@@ -1205,48 +1370,54 @@ waits on that stop-short (42)."
 - Replace "and each recipient of the place is delivered once that it is
   stalled and which move is theirs (43)." with: "and each recipient of
   the place, the role a stop-short it waits on named (41), and the
-  answerer behind its stream where it is none of them, is delivered once
-  that it is stalled, which move is theirs, and the words, key and
-  addressee of the stop-short it waits on (43, 193). A hold on the
-  waiting move whose bound passed is no hold from then, and the place
-  stalls again."
+  answerer behind the place's own stream where it is none of them, is
+  delivered once that it is stalled, which move is theirs, and the
+  words, key and addressee of the stop-short it waits on (43, 193). A
+  hold on the waiting move whose bound passed is no hold from then, and
+  the place stalls again."
 - Replace "and flume watches none and ends no hold itself (70, 72)."
   with: "and flume watches none and ends no hold itself, but lapses a
   hold on the waiting move once its bound passes (70, 72)."
 
 **Clause 132.**
 
-- Replace "A run of the role is a place of the kind the host's
-  configuration names for the address (C.7), named by the role, so at
-  most one run of an address is live at once (3)" with: "A run of the
-  role is a place of the kind the source that declares the address
-  names for it (193), named as the source names it for the address,
-  else by its partition and its role, so at most one run of an address
-  is live at once (3) and two partitions' runs of one role are two
-  places".
+- Replace "A recipient may be named by a role's address,
+  `<partition>/<role>`, rather than by a session. A run of the role is a
+  place of the kind the host's configuration names for the address
+  (C.7), named by the role, so at most one run of an address is live at
+  once (3)" with: "A recipient may be named by a role's address,
+  `<stream>/<role>`, the role a source of the host declares for a stream
+  the host declares (143, 193), rather than by a session; an address of
+  any stream may be named from a place of any other. A run of the role
+  is a place of the kind its source names for the address, in the
+  address's stream, named as the source names it for the address, else
+  by its stream and its role, so at most one run of an address is live
+  at once (3) and two streams' runs of one role are two places".
 - After "and its agent takes the address as its session's name.", add:
-  "Its repository, base, stream, priority, intent, points, brief and
-  settings are those its source declares for the address, as a launch's
-  are (7, 32). A run is over once its last stage delivers: flume
-  declares it done at the settle that reads the delivery, with no
-  caller's word, and tidies it (114), so an end that comes later wakes
-  another run. A run's own stall goes to the answerer behind its stream
-  and never to its own address (130, 193)."
+  "Its repository, base, priority, intent, points, brief and settings
+  are those its source declares for the address, as a launch's are (7,
+  32). A run is over once its last stage delivers: flume declares it
+  done at the settle that reads the delivery, with no caller's word, and
+  tidies it (114), so an end that comes later wakes another run. A
+  run's own stall goes to the answerer behind its stream and never to
+  its own address (130, 193)."
 - In "flume launches the address's kind at the priority the
   configuration gives it", replace "the configuration gives it" with
   "its source declares".
 - Replace "An address the configuration names no kind for is woken by
   nothing, and status says the ends pending for it." with: "An address
-  no source declares, or two declare, is woken by nothing. Where its
-  source declares it carried, its run is on another host, and its ends
-  stay pending for the tool that carries them there. Otherwise a launch
-  naming it is taken only where an answerer stands behind the place's
-  stream (4, 193). Status says the ends pending for each address, and
-  whether it is woken, carried or wakes nothing."
+  no source declares, or two declare, is woken by nothing, and so is one
+  whose stream the host does not declare. Where its source declares it
+  carried, its run is on another host, its stream that host's, and its
+  ends stay pending for the tool that carries them there. Otherwise a
+  launch naming it is taken only where an answerer stands behind the
+  place's stream (4, 193). Status says the ends pending for each
+  address, and whether it is woken, carried or wakes nothing."
 
 **Clause 143.** Replace "the host's bound and the runs it wakes for
 roles (132) are the host's alone" with: "the host's bound is the host's
-alone, the runs it wakes for roles are its sources' (132, 193)".
+alone, and the runs it wakes for roles are its sources', each in the
+stream its address names (132, 193)".
 
 **Clause 191.**
 
@@ -1270,30 +1441,33 @@ with the run it names or that it is carried; or that either could not
 be read".
 
 **New clause 193**, in A.12 after 132: "A source the host declares
-(191) may declare the roles it answers, each by its address, with the
-kind of its own its run is launched as and what the run is launched
-with (132), or that its run is on another host, and the words of what
-the role answers, which a stage's prompt gives (28). The host declares
-the source and its streams and locks its kinds, and nothing of its
-roles: a role is declared once, by the source whose kinds run it, for
-every partition it answers. A role a source declares may stand behind
-the stream its run runs in: it is that stream's answerer. A launch that
-names no recipient and runs in no session has the answerer behind its
-stream as its recipient (7), and every stall of a place is delivered to
-that answerer besides the place's recipients and the role its
-stop-short named (130), so a question that no one collects or answers
-within the place's stall bound reaches a run woken to answer it. An
-address two sources declare, or a stream two roles stand behind, is
-declared by neither, and a launch that would take it is refused naming
-both (4); a declaration that cannot be read declares nothing, and status
-names it and why (56). flume decides nothing in this: which roles a
-source declares, which stands behind a stream, what its kind does,
-which questions its run answers itself, passes to another role or
-carries to a person, and how, are the source's and the run's (69, 72).
-A stream no role stands behind has no answerer: a launch there names
-its recipient or runs in a session and names no address that wakes
-nothing (4), and its stalls go to the place's recipients and the role a
-stop-short named."
+(191) may declare the roles it answers, each at its address,
+`<stream>/<role>`, the role of a stream the host declares (143): with
+the kind of its own its run is launched as and what the run is launched
+with (132), or that the role's run is on another host, its stream that
+host's; and the words of what the role answers, which a stage's prompt
+gives (28). The host declares the source and its streams and locks its
+kinds, and nothing of its roles: a role is declared once, by the source
+whose kinds run it, at an address for each stream it answers in. A role
+a source declares may stand behind its address's stream: it is that
+stream's answerer. A launch that names no recipient and runs in no
+session has the answerer behind its stream as its recipient (7), and
+every stall of a place is delivered to that answerer besides the
+place's recipients and the role its stop-short named (130), so a
+question that no one collects or answers within the place's stall bound
+reaches a run woken to answer it. An address two sources declare, or a
+stream two roles stand behind, is declared by neither, and a launch
+that would take it is refused naming both (4); a declaration that
+cannot be read, and an address whose stream the host does not declare
+where its run is not on another host, declare nothing, and status names
+each and why (56). flume decides nothing in this: which roles a source
+declares, which stands behind a stream, what its kind does, which
+questions its run answers itself, passes to another role of any stream
+or carries to a person, and how, are the source's and the run's (69,
+72). A stream no role stands behind has no answerer: a launch there
+names its recipient or runs in a session and names no address that
+wakes nothing (4), and its stalls go to the place's recipients and the
+role a stop-short named."
 
 **C.4**, after the hooks' table: "In a session flume did not start, the
 plugin's SessionStart hook runs `flume inbox` as the session the
@@ -1309,22 +1483,23 @@ is named; it never holds up the start (43)."
   may give `roles`, an absolute path or one under `~`: the file the
   source's own tool writes whole, beside it and renamed over it, which
   flume reads as it stands and never writes. It holds
-  `[roles."<partition>/<role>"]` with `kind`, a name of the source's own
+  `[roles."<stream>/<role>"]` with `kind`, a name of the source's own
   kinds, its version the locks' (154, 155); `repository`, by its
   location on the host as a launch names it; `priority`; `base`, the
   repository's default branch where it names none; and an optional
-  `brief`, `stream`, `points`, `name`, the run's place's name,
-  `<partition>-<role>` where it gives none; `intent`; `answers`, the
-  words of what the role answers that a stage's prompt gives (28);
-  `answerer = true`, beside a `stream`, where the role stands behind that
-  stream; and under `[roles."<partition>/<role>".agents]`, the run's
-  settings as a launch's (7); or `carried = true`, with an optional
-  `answers` and nothing else, for an address whose run is on another
-  host. An entry that names a kind not its source's, an `env`, a pool or
-  an account, or that mixes `carried` with a run's keys, declares
-  nothing for its address, and status names it. A configuration that
-  gives a `[roles]` table is unreadable, naming it and that a source
-  declares a role."
+  `brief`, `points`, `name`, the run's place's name, `<stream>-<role>`
+  where it gives none; `intent`; `answers`, the words of what the role
+  answers that a stage's prompt gives (28); `answerer = true`, where
+  the role stands behind its address's stream; and under
+  `[roles."<stream>/<role>".agents]`, the run's settings as a launch's
+  (7); or `carried = true`, with an optional `answers` and nothing else,
+  for an address whose run is on another host. The run is launched in
+  its address's stream. An entry that names a kind not its source's, an
+  `env`, a pool, an account or a `stream`, whose address names a stream
+  the host does not declare and that is not carried, or that mixes
+  `carried` with a run's keys or `answerer`, declares nothing for its
+  address, and status names it. A configuration that gives a `[roles]`
+  table is unreadable, naming it and that a source declares a role."
 - In the sources bullet, replace "Each gives `kinds_dir`, an absolute
   path or one under `~`: the directory holding the source's packages,
   each at `<name>@<version>/` with its `kind.toml` at its root (157,
@@ -1341,11 +1516,12 @@ add: "`hold`, `wait`, `inbox` and `wake` for its callers;".
 
 - Replace "it names each place's recipient by a role's address, so a
   role with no live run is woken to collect an end (132)" with: "it is a
-  source of the host's that declares its roles once, each partition's
-  role at its own address running crew's one kind for it, and names each
-  place's recipient by the address of the role the work is for, so a
-  role with no live run is woken to collect an end, and each partition's
-  operator stands behind its stream (132, 193)".
+  source of the host's that declares its roles once, each of a
+  partition's roles at its address in the partition's stream, running
+  crew's one kind for it, and names each place's recipient by the
+  address of the role the work is for, so a role with no live run is
+  woken to collect an end, and each partition's operator stands behind
+  its stream (132, 193)".
 - Replace "its word to a place is a retry answering a stop-short that
   asked" with: "its word to a place is a retry answering a stop-short
   that asked, naming its key (42)".
@@ -1354,51 +1530,57 @@ add: "`hold`, `wait`, `inbox` and `wake` for its callers;".
 0040's, so the fourth is S98.
 
 - **S92.** A script with no terminal session launches a change in the
-  stream `work`, naming no recipient, on a host whose source `acme`
-  declares runs for `acme/operator`, standing behind `work`,
-  `acme/planner` and `acme/ops`, each with its words. The place's
-  recipient is `acme/operator`. Its construct needs a reading of a
-  deployed queue's settings, and stops short naming `acme/ops`, one of
-  the three its prompt listed. The settle wakes `acme/ops`, whose run
-  collects the question with its key and the place's brief, holds the
-  waiting move, reads the settings and retries construct naming the key.
-  The fresh agent's prompt carries the question with the answer. A
-  retry naming the same key from a person's pane a minute later is
-  refused, naming ops's answer and when. `acme/operator` was woken for
-  none of it (7, 28, 41, 42, 43, 49, 130, 132, 193).
-- **S93.** The operator launches a change from a herdr pane on that
-  host. Its construct stops short needing an answer, naming no role.
-  The notice is delivered into the pane, naming the place, its brief's
-  first line and the end's key. The pane's agent is restarted before it
-  acts. At its start, flume's plugin gives the new agent the place
-  waiting on it, with the question and the key. The agent does nothing
-  with it. Five minutes after the stop-short the place is stalled. The
-  stall, with the question and its key, is delivered to the pane and to
-  `acme/operator`, whose run is woken (43, 130, 193, C.4).
-- **S94.** A place's construct stops short naming `acme/design`. The
-  design run takes it, holds the waiting move "passed to the user on
-  card req_1" for a day, and puts it to the user on one card keyed by
-  the place and the end. A second design run, woken by another end,
-  reads the same question, sees the hold, and makes no card. The day
-  passes with no answer. The hold lapses, and the place's stall is
-  delivered to its owner `acme/planner`, to `acme/design` and to
-  `acme/operator`, naming the lapsed hold's words. The operator's run
-  holds again naming the card, and makes none (41, 130, 193).
-- **S98.** A host declares one source, `acme`, holding the package
-  `acme/turn@1`, which the host's lock records, and naming the file
-  where acme declares its roles. acme's file declares `east/planner`
-  and `west/planner`, each running `turn` in one repository, named
-  `east` and `west`, in the streams `east` and `west`, and carries
-  `north/planner`. The host's configuration names no role. Ends come at
-  once for `east/planner` and `west/planner`. Two places are launched,
-  `turn--east` and `turn--west`, each in its own stream, and each run
-  collects its own address's ends. Each run's turn delivers, and flume
-  declares it done and tidies it with no caller's word. The next end for
-  `east/planner` launches a new run. A launch naming `north/planner` is
-  taken, and its end stays pending, status naming the address carried
-  (3, 114, 132, 155, 191, 193).
+  stream `east`, naming no recipient, on a host whose source `acme`
+  declares runs for `east/operator`, standing behind `east`,
+  `east/planner` and `east/ops`, each with its words. The place's
+  recipient is `east/operator`. Its construct needs a reading of a
+  deployed queue's settings, and stops short naming `ops`, which its
+  prompt listed among its own stream's roles. The settle wakes
+  `east/ops`, whose run collects the question with its key and the
+  place's brief, holds the waiting move, reads the settings and retries
+  construct naming the key. The fresh agent's prompt carries the
+  question with the answer. A retry naming the same key from a person's
+  pane a minute later is refused, naming ops's answer and when.
+  `east/operator` was woken for none of it (7, 28, 41, 42, 43, 49, 130,
+  132, 193).
+- **S93.** The operator launches a change in `east` from a herdr pane
+  on that host. Its construct stops short needing an answer, naming no
+  role. The notice is delivered into the pane, naming the place, its
+  brief's first line and the end's key. The pane's agent is restarted
+  before it acts. At its start, flume's plugin gives the new agent the
+  place waiting on it, with the question and the key. The agent does
+  nothing with it. Five minutes after the stop-short the place is
+  stalled. The stall, with the question and its key, is delivered to
+  the pane and to `east/operator`, whose run is woken (43, 130, 193,
+  C.4).
+- **S94.** A place in `east`, whose recipient is `east/planner`, stops
+  short naming `west/design`, a role of another stream, which its
+  prompt listed by its address. The run of `west/design`, in `west`,
+  takes it, holds the waiting move "asked the user on card req_1" for a
+  day, and puts it to the user on one card keyed by the place and the
+  end. A second run of `west/design`, woken by another end, reads the
+  same question, sees the hold, and makes no card. The day passes with
+  no answer. The hold lapses, and the place's stall is delivered to its
+  owner `east/planner`, to `west/design` and to `east/operator`, the
+  door of the place's own stream, naming the lapsed hold's words. The
+  operator's run holds again naming the card, and makes none (41, 130,
+  132, 193).
+- **S98.** A host declares the streams `east` and `west` and one
+  source, `acme`, holding the package `acme/turn@1`, which the host's
+  lock records, and naming the file where acme declares its roles.
+  acme's file declares `east/planner` and `west/planner`, each running
+  `turn` in one repository, named `east` and `west`, and carries
+  `north/planner`, whose stream the host does not declare. The host's
+  configuration names no role. Ends come at once for `east/planner` and
+  `west/planner`. Two places are launched, `turn--east` in the stream
+  `east` and `turn--west` in `west`, and each run collects its own
+  address's ends. Each run's turn delivers, and flume declares it done
+  and tidies it with no caller's word. The next end for `east/planner`
+  launches a new run. A launch naming `north/planner` is taken, and its
+  end stays pending, status naming the address carried (3, 114, 132,
+  143, 155, 191, 193).
 
-#### 11.2 sluice's statement (`design/sluice/requirements.md`)
+#### 12.2 sluice's statement (`design/sluice/requirements.md`)
 
 None. A place's question never travels through sluice. A submission's
 outcome for a place reaches flume at its settle (C.6), and flume carries
@@ -1408,49 +1590,54 @@ flume for a session's start (51, 135). Where sluice's carrying differs
 from flume's, a push never made again and a push into an asking pane,
 is Found beside.
 
-#### 11.3 crew (afterthought/crew: records and rules, crew has no statement)
+#### 12.3 crew (afterthought/crew: records and rules, crew has no statement)
 
 - **roles.6**: after "a session's start collecting what is pending for
   it", add: "and reading what still waits on it, by each tool's inbox".
 - **roles.7** stands as written: "a role with no live run is woken by
   Flume, never by a process of crew's". Its details gain: "Not ruled
   out: crew declaring its roles to Flume in its own roles file, which
-  the host names as crew's source; the runner carrying crew's events to
-  flume by `flume wake <address>`; a place's agent addressing its
-  question to the role whose it is, `flume needs --to <label>/<role>`."
+  the host names as crew's source, each at its address in its
+  partition's stream; the runner carrying crew's events to flume by
+  `flume wake <address>`; a place's agent addressing its question to the
+  role whose it is, `flume needs --to <role>` in its own stream or
+  `--to <stream>/<role>` in another."
 - **The change `roles-run-as-flume-kinds`**, a record amending it, as
   the design agent writes one:
   - Decision 1: the kinds reach the host as packages of crew's source,
     which the host locks, and crew declares each role in its roles file;
     the runner's launch gives way to flume's.
-  - Decision 3: a role's run takes its partition's stream and the
-    `planning` label, and the teams file's `flume` says only whether the
-    role runs as its kind.
+  - Decision 3: a partition's roles are at the addresses of its one
+    stream, each run in that stream under the `planning` label, and the
+    teams file's `flume` names the stream once and says for each role
+    only whether it runs as its kind.
   - Decision 6: the role record keeps what crew's board and cross-host
     records read, and the roles file is written beside it from the same
     facts; the runner wakes a role on its host; R1 and R3 leave, R2
     becomes `flume wake`, R4 stays.
   - Its departure from roles.7 is withdrawn.
 - **The roles file**: written by crew whole, from its partitions, as
-  10.2 has it, where its source's declaration names it.
+  11.2 has it, where its source's declaration names it.
 - **The turn and the briefs**:
   - `plugin/flume/turn.md`: after `crew role start`, `flume inbox --json`;
-    each question held, answered, passed or carded as decision 9 has it.
-  - Each brief its part of decision 2's table and decision 9.
-  - The operator's brief: the door behind every stall, passing a stalled
-    question once to the role whose it is, or putting it to the user on
-    one card; this departs from "You post no Pending You card".
+    each question held, answered, passed or carded as decision 10 has
+    it.
+  - Each brief its part of decision 3's table and decision 10.
+  - The operator's brief: the door behind every stall of its stream,
+    passing a stalled question once to the role whose it is, of any
+    stream, or putting it to the user on one card; this departs from
+    "You post no Pending You card".
   - briefs.11: a card for a place's question is keyed
     `flume/<host>/<digest of the location>/<key>`.
 - **`crew answer`** carries the key, `Answers:`, takes any place on the
   host by its place's name, and is open to the operator
   (`REQUESTERS`).
 - **Record 0049**: an amendment naming flume record 0039. A role is
-  woken by flume from crew's own declaration of it; the runner carries
-  crew's events and card answers to it by `flume wake`, in place of
-  Pending You's wake mod.
+  woken by flume from crew's own declaration of it, at its address in
+  its partition's stream; the runner carries crew's events and card
+  answers to it by `flume wake`, in place of Pending You's wake mod.
 
-#### 11.4 Boomdrive (agentplot/boomdrive: records and specs, Boomdrive has no statement in blueprints)
+#### 12.4 Boomdrive (agentplot/boomdrive: records and specs, Boomdrive has no statement in blueprints)
 
 - **Role runs**, `crew-control-plane` and `crates/boomdrive-crew/src/roles.rs`:
   a role wanted is woken by `flume wake <address>` on its record's host;
@@ -1464,26 +1651,26 @@ is Found beside.
   another host, and no question on the same host depends on it. A record
   says so.
 
-### 12. Moving each partition's roles onto their kinds, in order
+### 13. Moving each partition's roles onto their kinds, in order
 
 Each move is the user's word, one role at a time (crew's roles.2 and
 Decision 3): the teams file says the role runs as its kind, crew ends
 its standing agent at its next stop, and crew's roles file declares its
-run. Nothing of the host's changes at a move. The order, for the user
-to approve:
+run at its stream's address. Nothing of the host's changes at a move.
+The order, for the user to approve:
 
-1. **Each partition's operator, with flume's release.** agentplot's,
+1. **Each stream's operator, with flume's release.** agentplot's,
    madswan's and swancloud's operators move, each standing behind its
-   partition's stream. The doors must run before the release reaches
-   deneb, since a launch from a shell there takes its stream's door, and
-   is refused where none stands. The operator's effort is medium, so
-   flume's carrying no effort costs it little.
-2. **Each partition's ops.** It answers questions about live systems,
-   and its fixes of main name it. Its effort is high.
-3. **Each partition's reviewer.** It answers no question, and moves
+   stream. The doors must run before the release reaches deneb, since a
+   launch from a shell there takes its stream's door, and is refused
+   where none stands. The operator's effort is medium, so flume's
+   carrying no effort costs it little.
+2. **Each stream's ops.** It answers questions about live systems, and
+   its fixes of main name it. Its effort is high.
+3. **Each stream's reviewer.** It answers no question, and moves
    whenever the user likes. crew's design recommended it first, as the
    least risk.
-4. **Each partition's planner**, then 5. **its design agent.** Both run
+4. **Each stream's planner**, then 5. **its design agent.** Both run
    at extra-high effort, and flume carries no effort setting, so a run
    starts at its account's. crew's design recommended waiting for one.
    Until they move, an agent cannot address them by `--to`, the
@@ -1496,24 +1683,24 @@ orchestrator's work runs in its stream, then madswan and swancloud.
 wldn's main level runs on chuck-herdr-alpha, which still runs crew's
 team path, and moves when the user moves that host.
 
-### 13. Order across the repositories
+### 14. Order across the repositories
 
 1. **The user's read** of this design, and their answers to its Open
    Questions.
-2. **agentplot/blueprints.** flume's statement amended on main as 11.1
+2. **agentplot/blueprints.** flume's statement amended on main as 12.1
    words it (core.19).
 3. **This repository.** The change `a-host-declares-where-its-kinds-come-from`
    landed, since a source's declaration is read by it; then this
    change's build, released.
 4. **afterthought/crew.** Its kinds as packages declaring `planning`,
-   its roles file, the turn, the briefs, `crew answer` and the records
-   of 11.3.
-5. **agentplot/boomdrive.** The wakes and the retry's key of 11.4.
-6. **The host**, in one deploy with decision 12's first step and
+   its roles file at its streams' addresses, the turn, the briefs,
+   `crew answer` and the records of 12.3.
+5. **agentplot/boomdrive.** The wakes and the retry's key of 12.4.
+6. **The host**, in one deploy with decision 13's first step and
    flume's release: crew's source declared, crew's kinds locked, and its
    streams `agentplot`, `madswan` and `swancloud` with `planning`'s
    reserve in each.
-7. **The later moves**, one role at a time, as decision 12 orders them,
+7. **The later moves**, one role at a time, as decision 13 orders them,
    each crew's alone.
 
 Steps 4 and 5 work against the released flume and need nothing of each
@@ -1541,48 +1728,57 @@ keep working throughout.
    refused it: "Theoretically an agent might need something from ops
    separately from the planner or the designer."
 7. **A session serving an address beside the roles as kinds.** A bridge
-   for standing roles, which the moves retire (decision 10.5).
+   for standing roles, which the moves retire (decision 11.5).
 8. **The runner keeps launching role runs**, flume's wake unused. Two
    launchers. The user ruled flume the launcher.
 9. **Roles and answerers in each host's configuration**, as 132 and C.7
    have roles on main. Every host repeats crew's partitions. The user
-   ruled roles crew's to declare (decision 1).
+   ruled roles crew's to declare (decision 2).
+10. **An address of a partition of its own, beside the stream**, as 132
+    has it on main. A second division of the host's work that flume
+    cannot check, which the user questioned: "We're already going to use
+    streams to partition where agents run" (decision 1).
 
 ## Where the statements and the code disagree
 
 - **Clause 43 says a caller that starts collects what is pending for
   it.** flume's plugin does nothing at the start of a session flume did
   not start (`hook.rs`, `hook`). sluice's plugin collects (51, 135).
-  Decision 8 brings flume's code to its clause.
+  Decision 9 brings flume's code to its clause.
 - **Clause 132 has a role's run launched by flume and never ended.** Its
   kind lands nothing, and nothing gives the `flume done` that 114 waits
-  for. crew's runner did it. Decision 1 makes it flume's.
+  for. crew's runner did it. Decision 2 makes it flume's.
+- **core.35 rules out a partition in a command's help, output or
+  refusal.** `flume wake`'s help and its refusal, and the configuration
+  reader's refusal of a key, say `<partition>/<role>` (`commands/mod.rs`,
+  `wake.rs`, `config.rs`), and the site says `<group>/<role>`. Decision
+  1 has each say `<stream>/<role>`.
 - **crew's roles.7 says Flume wakes a role.** crew's change
   `roles-run-as-flume-kinds` has the runner launch role runs instead.
-  Decision 1 and 11.3 bring them back together, on the user's ruling.
+  Decision 2 and 12.3 bring them back together, on the user's ruling.
 - **crew's record 0052, amended, says the runner names no kinds file.**
-  Its R1 passes `--kinds` naming crew's file. Decision 1 has the host
+  Its R1 passes `--kinds` naming crew's file. Decision 2 has the host
   declare crew's source and the runner launch nothing of a role's.
 - **crew's planner brief says a place's question reaches the planner.**
-  Nothing tells a standing planner. Decisions 1 and 12 give the planner
+  Nothing tells a standing planner. Decisions 2 and 13 give the planner
   its run at its address.
 - **flume's CLAUDE.md says each tool's statement is in
   agentplot/blueprints.** Boomdrive has none there. Its records and
-  specs stand for one, so 11.4 is written against them.
+  specs stand for one, so 12.4 is written against them.
 - **Section 9's command line** names no `hold`, `wait`, `inbox` or
-  `wake`, though each is built and specified. 11.1 adds them.
+  `wake`, though each is built and specified. 12.1 adds them.
 
 ## Found beside
 
 - **flume carries no effort setting.** crew's planner and design agent
   run at extra-high effort, and their moves wait on one or on the user's
-  word to run them at their account's (decision 12). An effort setting,
+  word to run them at their account's (decision 13). An effort setting,
   layered as the model is, is a change of its own for flume.
 - **The open-session record's number.** The record on the unlanded
   change `an-answer-reaches-the-open-session-within-an-hour`, accepted
   on 2026-11-01, is numbered 0028, which main's statechart record took.
   It takes the next free number when it lands. This design's key is
-  written to cover its answer (decision 7).
+  written to cover its answer (decision 8).
 - **An answer's way back runs through the runner.** A question reaches
   its role through flume alone. The answer reaches flume by `crew
   answer` at the runner's next pass, and a card's answer wakes its role
@@ -1604,9 +1800,19 @@ keep working throughout.
 
 ## Risks / Trade-offs
 
-- **A wrong pick.** An agent that addresses the wrong role costs a pass.
-  The list gives each role's words, and a role passes what is not its
-  own.
+- **A wrong pick.** An agent that addresses the wrong role, or the right
+  role of the wrong stream, costs a pass. The list gives each role's
+  words, and a role passes what is not its own.
+- **A longer prompt on a host of many streams.** The list gives every
+  stream's answering roles, so it grows with the host's streams. It
+  comes after every part a stage's repetitions share (core.31), so it
+  costs no cached prefix, and a role a source declares with no `answers`
+  is not listed.
+- **A stream renamed.** An entry whose address names a stream the host
+  no longer declares declares nothing, and status names it and the
+  stream, until its source writes the new name. A place launched before
+  keeps its recipients (8), and its ends to the old address stay
+  pending, status naming why.
 - **Asked twice by a pane and a card.** A person's session that asks the
   user in its own conversation without holding the move lets the stall
   reach the door, which may card the user too. The notice, the plugin's
@@ -1614,9 +1820,10 @@ keep working throughout.
 - **Runs woken by stalls.** Each stall the door gets may wake its run,
   one agent session. One run collects a burst (132), and a role's hold
   at its take keeps the door out of the questions roles are working on.
-- **The door is its stream's last word.** Where the door's own run cannot
-  run, its run's stall goes to no address, and its failure is in status
-  under the host's addresses. Nothing of flume's tells a person (72).
+- **The door is its stream's last word.** Where the door's own run
+  cannot run, its run's stall goes to no address, and its failure is in
+  status under the host's addresses. Nothing of flume's tells a person
+  (72).
 - **crew's roles file is on every place's path.** A file crew wrote
   wrong, or has not yet written, leaves its addresses waking nothing and
   its streams with no door, so a launch from a shell into them is
@@ -1631,7 +1838,7 @@ keep working throughout.
   stream no role stands behind is refused after this change. Every place
   a refusal now stops is one whose questions reached no one before.
 - **Effort.** The planner and the design agent wait to move, or run at
-  their account's effort (decision 12).
+  their account's effort (decision 13).
 - **A session's start costs a flume call.** Every session the user
   starts runs `flume inbox` under a 20 seconds' bound, and prints
   nothing when nothing waits.
@@ -1646,16 +1853,17 @@ keep working throughout.
 - **Places launched before the release** keep their recipients (8),
   none among them. Their stalls take their stream's answerer from the
   release on. A stall recorded before it is read as the answerer's too
-  at the first settle after the build (decision 5), so the questions
+  at the first settle after the build (decision 6), so the questions
   waiting when the release lands reach the door once.
 - **The seven ends pending for `madswan/planner`** are delivered once
-  the planner's run takes the address. None is a question.
+  the planner's run takes the address. Its letters are the same, and
+  the stream `madswan` is declared on deneb. None is a question.
 - **A run standing under the old name** `<kind>--<role>` is found by its
   role field, and its next run takes its entry's name.
 - **A host's `[roles]` table** leaves its configuration. deneb has none.
   A host with one has it refused naming the table, and moves its roles
-  into a source of its own.
-- **deneb**, with decision 12's first step:
+  into a source of its own, at addresses of its streams.
+- **deneb**, with decision 13's first step:
   - its configuration, the host's operator's to write: `sources/crew.toml`
     naming crew's release's kinds directory and crew's roles file; crew's
     kinds locked on the host by `flume kinds lock --host`; the streams
@@ -1665,8 +1873,8 @@ keep working throughout.
     orchestrator's repositories the `agentplot` stream. No `[roles]` and
     no answerer;
   - crew's, from its teams file: its roles file declaring each
-    partition's operator standing behind its stream, and wldn's roles
-    carried.
+    partition's roles at its stream's addresses, each operator standing
+    behind its stream, and wldn's roles carried.
 - **The orchestrator** stops its status script. Its launches name no
   recipient and take the `agentplot` door.
 - **Rollback** is the earlier release. The fields this change adds, an
@@ -1680,16 +1888,17 @@ keep working throughout.
 
 For the user:
 
-1. **The order of the moves** (decision 12): the operator with flume's
+1. **The order of the moves** (decision 13): the operator with flume's
    release, then ops, then the reviewer, then the planner and the design
    agent; agentplot first, madswan and swancloud after each step, wldn
    with its host. And do the planner and the design agent wait for an
    effort setting in flume, or move at their account's effort?
-2. **Who picks** (decision 3): the launch names the owner, the asking
-   agent may address another role of its partition by `flume needs
-   --to`, and the operator, the door, stands behind every stall and may
-   put a stalled question to the user on one card. The last departs
-   from the operator's brief, "You post no Pending You card".
+2. **Who picks** (decision 4): the launch names the owner, the asking
+   agent may address another role of any stream by `flume needs --to`,
+   and the operator, the door of the place's stream, stands behind every
+   stall and may put a stalled question to the user on one card. The
+   last departs from the operator's brief, "You post no Pending You
+   card".
 3. **A role's run reads flume's inbox.** crew's change records the
    user's word of 2026-10-31, "crew reads nothing of Flume's but what
    the runner carries back". A role's run is a place flume launched on

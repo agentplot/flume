@@ -38,8 +38,8 @@ where it answers nothing, no session is named, or flume does not answer
 
 #### Scenario: An address in the environment
 
-- **WHEN** SessionStart runs in a session flume did not start with `FLUME_RECIPIENT=acme/planner`, and an end stands pending for `acme/planner`
-- **THEN** the hook collects as the session the terminal names, and the end stays pending for `acme/planner`
+- **WHEN** SessionStart runs in a session flume did not start with `FLUME_RECIPIENT=east/planner`, and an end stands pending for `east/planner`
+- **THEN** the hook collects as the session the terminal names, and the end stays pending for `east/planner`
 
 #### Scenario: flume unreachable
 

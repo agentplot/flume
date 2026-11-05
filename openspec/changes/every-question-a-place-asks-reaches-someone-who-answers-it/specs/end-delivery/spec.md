@@ -19,10 +19,10 @@ another recipient SHALL mark nothing delivered (43, core.25).
 `flume inbox` SHALL also give, as `waiting`, every place that waits on
 its caller and that the recipient is a recipient of, was named by the
 stop-short the place waits on, or was given a stall of as the answerer,
-delivered or not, with its kind, name and brief's first line, the move
-and since when, a stop-short's words, needs, key and addressee, and a
-hold's words, since and bound. It SHALL mark nothing for them (43, 130,
-193; core.25).
+delivered or not, with its kind, name, stream and brief's first line,
+the move and since when, a stop-short's words, needs, key and the
+address it named, and a hold's words, since and bound. It SHALL mark
+nothing for them (43, 130, 193; core.25).
 
 #### Scenario: A question collected, then a restart
 
@@ -31,13 +31,13 @@ hold's words, since and bound. It SHALL mark nothing for them (43, 130,
 
 #### Scenario: A question addressed to a role
 
-- **WHEN** a place whose recipient is `acme/planner` waits on a stop-short that named `acme/ops`, and `acme/ops`'s run runs `flume inbox`
-- **THEN** `waiting` gives that place, naming `acme/ops` as the stop-short's addressee
+- **WHEN** a place whose recipient is `east/planner` waits on a stop-short that named `east/ops`, and `east/ops`'s run runs `flume inbox`
+- **THEN** `waiting` gives that place, naming `east/ops` as the stop-short's addressee
 
 #### Scenario: The answerer's waiting places
 
-- **WHEN** a pane-launched place stalled and its stall was delivered to the answerer `acme/operator`, and the answerer's run runs `flume inbox`
-- **THEN** `waiting` gives that place, though `acme/operator` is not among its recipients (193)
+- **WHEN** a pane-launched place stalled and its stall was delivered to the answerer `east/operator`, and the answerer's run runs `flume inbox`
+- **THEN** `waiting` gives that place, though `east/operator` is not among its recipients (193)
 
 #### Scenario: A held question
 

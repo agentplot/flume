@@ -5,8 +5,9 @@
 A place waiting on its caller under no hold's words for five minutes, or
 for the launch's bound where it sets one, SHALL be stalled: status SHALL
 say so, and the settle that reads it SHALL deliver to each recipient, to
-the role the stop-short it waits on named, and to the answerer behind
-its stream where it is none of them, once each, that it is stalled,
+the role the stop-short it waits on named, of whichever stream, and to
+the answerer behind the place's own stream where it is none of them,
+once each, that it is stalled,
 which move is theirs, and the words, key and addressee of the
 stop-short it waits on (43, 130, 193).
 
@@ -17,13 +18,18 @@ stop-short it waits on (43, 130, 193).
 
 #### Scenario: The stall reaches the answerer
 
-- **WHEN** the same place, launched from the pane `ops`, stalls in the stream `work`, behind which the scratch source `acme` declares `acme/operator` with a run, and no run of it stands
-- **THEN** the stall is delivered once to `ops` and stands pending for `acme/operator`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (193, S93)
+- **WHEN** the same place, launched from the pane `ops`, stalls in the stream `east`, behind which the scratch source `acme` declares `east/operator` with a run, and no run of it stands
+- **THEN** the stall is delivered once to `ops` and stands pending for `east/operator`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (193, S93)
 
 #### Scenario: The role a question named
 
-- **WHEN** a construct of a place whose recipient is `acme/planner` stopped short naming `acme/ops`, and no one holds or answers it for five minutes
-- **THEN** the stall is delivered to `acme/planner`, to `acme/ops` and to `acme/operator`, the answerer, once each
+- **WHEN** a construct of a place in `east` whose recipient is `east/planner` stopped short naming `ops`, and no one holds or answers it for five minutes
+- **THEN** the stall is delivered to `east/planner`, to `east/ops` and to `east/operator`, the answerer, once each
+
+#### Scenario: Another stream's role named
+
+- **WHEN** the same construct stopped short naming `west/design` instead, and `west/operator` stands behind `west`
+- **THEN** the stall is delivered to `east/planner`, to `west/design` and to `east/operator`, the answerer behind the place's own stream, once each, and not to `west/operator` (S94)
 
 #### Scenario: The answerer is the recipient
 
@@ -53,12 +59,12 @@ on a place that waits on no move of its caller's (47, 130).
 
 #### Scenario: A role takes the question
 
-- **WHEN** a construct ended short needing an answer, and a role's run holds the waiting move with "acme-planner has it" for an hour
+- **WHEN** a construct ended short needing an answer, and a role's run holds the waiting move with "east-planner has it" for an hour
 - **THEN** status gives the hold with its words, since when and its bound, and the place is not stalled while it holds
 
 #### Scenario: Passed on
 
-- **WHEN** the same run then holds the move with "passed to acme/design" for an hour
+- **WHEN** the same run then holds the move with "passed to east/design" for an hour
 - **THEN** status gives the new words and bound in place of the first
 
 #### Scenario: The move made
@@ -92,5 +98,5 @@ delivered once (130, 193).
 
 #### Scenario: A stall from the earlier release
 
-- **WHEN** a place's held state, written by an earlier flume, holds a stall delivered to nobody, and a source now declares `acme/operator` standing behind the place's stream
-- **THEN** the next settle delivers the stall to `acme/operator` once, and later settles deliver it again to no one
+- **WHEN** a place's held state, written by an earlier flume, holds a stall delivered to nobody, and a source now declares `east/operator` standing behind the place's stream
+- **THEN** the next settle delivers the stall to `east/operator` once, and later settles deliver it again to no one
