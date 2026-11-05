@@ -544,6 +544,179 @@ fn a_launch_naming_no_base_is_cut_from_the_remotes_default_branch() {
     }
 }
 
+/// A clone of `source` through a bare remote beside it, the host's
+/// `origin`, and two commits pushed to that remote after the clone, so
+/// the clone's own `main`, which nothing on the host moves, lags it: the
+/// clone, and origin's `main` (S92).
+fn a_clone_lagging_origin(source: &Repository, label: &str) -> (Repository, String) {
+    let remote = source.bare_remote();
+    let clone = Repository::clone_of(&remote, Scratch::new(label));
+    for file in ["one.rs", "two.rs"] {
+        source.write(file, "landed on origin\n");
+        source.commit(file);
+    }
+    source.git(&["push", "--quiet", &remote.to_string_lossy(), "main"]);
+    assert_ne!(clone.head(), source.head(), "the clone's main is origin's");
+    (clone, source.head())
+}
+
+/// The commit a place's branch was cut at, the branch made by the launch.
+fn cut_at(place: &flume_core::PlaceStatus) -> String {
+    git(
+        Path::new(&place.place.0),
+        &["rev-parse", &format!("{}^{{commit}}", place.branch)],
+    )
+}
+
+#[test]
+fn a_base_no_merge_queue_lands_is_cut_from_origins_copy() {
+    // S92; 9, 56, 126, C.1: in a clone bound to no merge queue, whose own
+    // main lags origin's, a place is cut at origin's after flume's fetch,
+    // the clone's main left where it was; one on a branch origin lacks at
+    // the clone's own; and with origin out of reach, a launch is refused
+    // naming the fetch, nothing made. Status says where each base was
+    // read.
+    let host = Host::new("origin-base");
+    let source = repository("origin-base", None);
+    let (clone, origins) = a_clone_lagging_origin(&source, "origin-base-clone");
+    let own = clone.head();
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), origins, "the place cut at origin's main");
+    assert_eq!(place.base_from, Some(BaseFrom::Origin));
+    assert_eq!(clone.head(), own, "the clone's own main moved");
+    assert_eq!(
+        clone.git(&["rev-parse", "refs/remotes/origin/main"]),
+        origins,
+        "origin's main as the fetch left it"
+    );
+    let status = host.flume(&clone.dir, &["status", &place.place.0, "--json"], &[]);
+    assert_eq!(
+        status.json()["status"]["places"][0]["base_from"],
+        json!("origin")
+    );
+    let person = host.flume(&clone.dir, &["status", &place.place.0], &[]);
+    assert!(
+        person.text.contains("branch fix/one from main (at origin)"),
+        "{}",
+        person.text
+    );
+
+    clone.git(&["branch", "trial"]);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "two", "--base", "trial", "--kinds", &kinds,
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), own, "the place cut at the clone's own trial");
+    assert_eq!(place.base_from, Some(BaseFrom::OriginLacks));
+    let person = host.flume(&clone.dir, &["status", &place.place.0], &[]);
+    assert!(
+        person
+            .text
+            .contains("branch fix/two from trial (the host's own, origin holding none)"),
+        "{}",
+        person.text
+    );
+
+    let gone = clone.scratch.path("gone.git");
+    clone.git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
+    let refused = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "three", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(refused.code, 1, "{}", refused.text);
+    let reason = refused
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .expect("a refusal");
+    assert!(
+        reason.contains("fetch of main from origin failed"),
+        "{reason}"
+    );
+    assert!(
+        !Path::new(&host.place_of(&clone, "fix--three")).exists(),
+        "a place was made"
+    );
+    assert!(
+        clone.git(&["branch", "--list", "fix/three"]).is_empty(),
+        "a branch was made"
+    );
+}
+
+#[test]
+fn a_repository_with_no_origin_is_cut_from_its_own_base() {
+    // 9, 56, C.1: a repository with no remote is cut at its own main, and
+    // status says it has no origin.
+    let host = Host::new("no-origin");
+    let repository = repository("no-origin", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), repository.head());
+    assert_eq!(place.base_from, Some(BaseFrom::NoOrigin));
+}
+
+#[test]
+fn a_base_the_merge_queue_lands_is_read_where_it_says() {
+    // 9, 126, C.1: bound to a merge queue that lands main, here at the
+    // clone's own, a place is cut where the merge queue says, origin's
+    // main past it never read, though the binding's read fetched it (C.2).
+    let host = Host::new("queue-base");
+    let source = repository("queue-base", Some(STAND_IN_QUEUE));
+    let (clone, origins) = a_clone_lagging_origin(&source, "queue-base-clone");
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(
+        cut_at(place),
+        clone.head(),
+        "the place cut where the queue says"
+    );
+    assert_ne!(cut_at(place), origins);
+    assert_eq!(place.base_from, Some(BaseFrom::MergeQueue));
+    assert_eq!(
+        clone.git(&["rev-parse", "refs/remotes/origin/main"]),
+        origins,
+        "origin's main as the binding's read fetched it"
+    );
+}
+
 #[test]
 fn a_refusal() {
     // S26, 61: done names a fix place, whose kind lands.

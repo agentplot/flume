@@ -124,9 +124,11 @@ place gives:
 
 - its line, the one `--line` prints;
 - its kind, version and origin, and its phase, live or tidied;
-- its branch, base and head, and whether each readiness step passed or
-  failed, with the last ten lines a failed step printed, its terminal
-  escapes stripped;
+- its branch, base and head, and where the base's revision was read:
+  where its merge queue lands it, at `origin`, or the local branch's,
+  with why;
+- whether each readiness step passed or failed, with the last ten lines
+  a failed step printed, its terminal escapes stripped;
 - each stage's state and starts;
 - its current agent's identity, program, settings with their layers
   and state, and whether it started, is asking or has its own work

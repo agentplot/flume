@@ -199,6 +199,7 @@ impl Engine {
             name: place.name.clone(),
             branch: place.branch.clone(),
             base: place.base.clone(),
+            base_from: place.base_from,
             mark: place.mark.clone(),
             lands: place.kind.lands,
             phase: held.phase.clone(),
