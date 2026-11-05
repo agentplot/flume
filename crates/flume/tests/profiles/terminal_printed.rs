@@ -1,8 +1,9 @@
 //! The terminal profile that prints the command (C.5; design 12): the
 //! terminal seam's scenarios against it, its refusals among them, a tell
 //! refused with nothing typed, the command status gives, the same
-//! command printed whatever session its stream names (107), and an agent
-//! read stopped once its record says its session ended (134).
+//! command printed whatever session its stream names (107), an agent
+//! read stopped once its record says its session ended (134), and attach
+//! refused for either view (187).
 
 use crate::common::*;
 use flume::profiles::store::state_dir::StateDir;
@@ -131,6 +132,25 @@ fn the_printed_command_passes_the_terminal_scenarios() {
         scratch: Scratch::new("printed"),
         seam: Printed,
     });
+}
+
+#[test]
+fn attach_under_the_printed_command_is_refused_for_either_view() {
+    // 187, S91: no session a person can be shown, for a window or an app.
+    for view in [View::Terminal, View::App] {
+        for part in [Some("work"), None] {
+            assert_eq!(
+                Printed.attach(part, view),
+                Attached::Refused {
+                    reason: "the printed command holds no session a person can be shown; its \
+                             agents run in the commands it printed"
+                        .into()
+                },
+                "attach {part:?} for {}",
+                view.name()
+            );
+        }
+    }
 }
 
 /// An engine over `world`'s fakes with the printed command for its
