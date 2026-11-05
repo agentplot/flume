@@ -5,7 +5,7 @@
 flume finds a kind in three places today: its own, the repository's
 `.config/flume.toml`, and the file a launch names by `--kinds <file>`.
 A kind that any other repository or tool ships reaches a place only
-when every caller carries its file by path. The flywheel runner does
+when every caller carries its file by path. The Boomdrive runner does
 exactly that: its own configuration holds the path of crew's kinds file
 in crew's release, and it passes that path to every launch of a role.
 
@@ -22,8 +22,10 @@ Record 0022, accepted on 2026-10-29, already says what a kind from
 outside is: a package named `<source>/<name>@<version>`, with versions
 side by side, and run only where a lock records its content's hash
 (154 to 160; core.34). It left open how a host comes to hold a source,
-and it waits on a build plan (`docs/architecture/_open.md`). This change
-is that plan, with the host's configuration declaring its sources.
+and nothing has built it. This change builds it, with the host's
+configuration declaring its sources. The user approved this design on
+2026-11-05, "Start its code", and the statement states it (191, 192,
+S95 to S97).
 
 ## What Changes
 
@@ -31,8 +33,9 @@ is that plan, with the host's configuration declaring its sources.
   `$XDG_CONFIG_HOME/flume/sources/`, holding one file per source. The
   file `<source>.toml` declares the source of that name, and its one
   key, `kinds_dir`, names the directory that holds the source's
-  packages. A person, or a program that manages the host, adds a source
-  by writing its file, updates it by renaming a new file over it, and
+  packages. The sources are the managed layer's, and the local layer,
+  `config.local.toml`, declares none. A person, or a program that
+  manages the host, adds a source by writing its file, updates it by renaming a new file over it, and
   removes it by deleting the file. flume reads the directory as it
   stands at each launch and writes nothing in it. A source's file that
   cannot be read refuses only the launches that name its source.
@@ -125,14 +128,14 @@ is that plan, with the host's configuration declaring its sources.
   reading and writing (weir 88 to 93, C.4). This is weir's own change,
   landed before this one is built, and flume's pin then moves to it
   (core.4, core.22). Design, *What this change rests on*.
-- **agentplot/blueprints.** The statement lacks the host's sources and
-  holds a bare name that reaches a locked kind from outside. Design,
-  *For the user's ruling*, names each clause to add or amend, with
-  words for each (core.19).
-- **docs/adr and docs/architecture.** Record 0030 holds the decisions
-  the user rules here. core.34's details name the sources directory and
-  a bare name. `_open.md`'s item on record 0022 leaves once this is
-  built.
+- **agentplot/blueprints.** The statement states the user's ruling at
+  54d3efc on `design/flume-a-host-declares-where-its-kinds-come-from`:
+  191 and 192 new, 4, 19, 56, 154, 159, 160, C.2 and C.7 amended, S60
+  to S62 reworded and S95 to S97 added. Design, *The statement as the
+  user ruled*, names each (core.19).
+- **docs/adr and docs/architecture.** Record 0040 holds the decisions
+  the user ruled here. core.34's details name the sources directory and
+  a bare name.
 - **crates/flume-seams.** The kinds seam's new operations and types;
   `Host::sources`; a place record's `kind_from`; status fields, only
   added (core.14).

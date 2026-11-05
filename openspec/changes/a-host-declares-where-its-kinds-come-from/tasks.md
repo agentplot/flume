@@ -1,22 +1,23 @@
 # Tasks
 
 Each group is one session's work for an agent that reads this change
-(proposal, design, specs) and its group, and builds on the tree at
-b6cd1b5 and the groups before it. A group's last task runs the checks
-it touched through sluice; every conformance scenario a group adds
+(proposal, design, specs) and its group, and builds on main as this
+branch merged it at 201086c and the groups before it. A group's last
+task runs the checks it touched through sluice; every conformance scenario a group adds
 cites its clauses as data (106). Tests reach no real account and no
 configuration or data directory of the user's: every git call in a test
 runs under the scratch environment `crates/flume/tests/common` gives,
 and every `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, sources directory, lock and
 `kinds_dir` a test names is a scratch directory or file of the test's
-own. This change is built only once the user has ruled on its design's
-*For the user's ruling*, the statement says what the user ruled, and
-weir-kinds reads packages, identities, hashes and locks (design, *What
-this change rests on*).
+own. The user approved the design on 2026-11-05, and the statement
+states the ruling at 54d3efc on agentplot/blueprints'
+`design/flume-a-host-declares-where-its-kinds-come-from`. Group 2 and
+the groups after it are built once weir-kinds reads packages,
+identities, hashes and locks (design, *What this change rests on*).
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Write record 0030 in `docs/adr/`, accepted as the user ruled on this change's design, holding what the record carries beyond record 0022:
+- [ ] 1.1 Write record 0040 in `docs/adr/`, accepted as the user ruled on this change's design, holding what the record carries beyond record 0022:
   - the host's sources, one file each in its configuration's sources directory (decision 1);
   - a source holding packages and never a file of declarations (decision 2);
   - a bare name never reaching a host's source (decision 4);
@@ -24,12 +25,13 @@ this change rests on*).
   - `flume kinds lock --hash` (decision 6);
   - status naming where a kind came from (decisions 8, 9).
 
-  Its sources are record 0022 and the statement's revision that states the ruling, and its considered options are the design's. Amend core.34's details in the same commit:
+  Its sources are record 0022 and the statement at 54d3efc, which states the ruling, and its considered options are the design's. Amend core.34's details in the same commit:
   - **Rules out:** a bare name resolved to a kind of a host's source; a source's file, or anything in a `kinds_dir`, written by flume; a source's fault refusing a launch that does not name its source.
   - **Not ruled out:** a program that manages the host writing a source's file and running `flume kinds lock --host --hash`.
   - **Sources:** the record among them.
 
-  Have `docs/architecture/_open.md`'s item on record 0022 name this change as its build (decisions 1 to 9; 154 to 160; core.19, core.34). True when `sluice exec main -- moon run root:adrs root:format` passes.
+  True when `sluice exec main -- moon run root:adrs root:format` passes (decisions 1 to 9; 154 to 160, 191, 192; core.19, core.34).
+- [x] 1.2 Merge main at 201086c into the change, and fit the proposal, design, specs and tasks to it: the record numbered 0040, since 0030 to 0039 are taken; no `_open.md`, which main no longer holds; the Boomdrive runner (record 0034); the sources the managed layer's (C.7); and the statement's 191, 192 and S95 to S97, as blueprints states them at 54d3efc, cited (core.19). True when `sluice exec main -- moon run root:changes root:format` passes.
 
 ## 2. weir-kinds' pin
 
@@ -132,5 +134,4 @@ this change rests on*).
   - `unbuilt`'s test renamed for what it then names.
 
   True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 8.2 Take `docs/architecture/_open.md`'s item on record 0022 out, since the code is brought to core.34 (record 0022; core.34). True when `sluice exec main -- moon run root:format` passes.
-- [ ] 8.3 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools plugin-claude:format plugin-claude:validate plugin-claude:test site:prose site:build root:format root:adrs root:changes root:specs` passes.
+- [ ] 8.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools plugin-claude:format plugin-claude:validate plugin-claude:test site:prose site:build root:format root:adrs root:changes root:specs` passes.

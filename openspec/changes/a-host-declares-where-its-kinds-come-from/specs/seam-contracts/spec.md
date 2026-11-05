@@ -7,7 +7,7 @@ it; read-source, the identities a source's directory holds; read-package,
 a package's kind, identity and hash; the repository's lock at a revision;
 a lock on disk; and a lock written whole; flume's own SHALL be packages
 with their hashes; the same input SHALL give the same answer, and no read
-SHALL change anything (85, 154 to 157, 160).
+SHALL change anything (85, 154 to 157, 160, 192).
 
 #### Scenario: Each operation over the fake
 

@@ -6,19 +6,20 @@ flume SHALL read the host's sources from
 `$XDG_CONFIG_HOME/flume/sources/`, each regular file named
 `<source>.toml` and beginning with no `.` declaring the source of that
 name, its `kinds_dir` an absolute path or one under `~`, and SHALL ignore
-every other entry; it SHALL read them as they stand at each launch, wake,
-lock and status, and write nothing there or in a `kinds_dir` (154, 159,
-C.7).
+every other entry; the sources SHALL be the managed layer's, the local
+layer declaring none; it SHALL read them as they stand at each launch,
+wake, lock and status, and write nothing there or in a `kinds_dir` (154,
+159, 191, C.7).
 
 #### Scenario: A source written beside and renamed
 
 - **WHEN** a scratch host's sources directory gains `.acme.toml.tmp` giving `kinds_dir = "~/kinds/acme"`, which is then renamed to `acme.toml`
-- **THEN** a read before the rename holds no source, and one after holds the source `acme` at the host user's home's `kinds/acme` (159, C.7)
+- **THEN** a read before the rename holds no source, and one after holds the source `acme` at the host user's home's `kinds/acme` (159, 191, C.7)
 
 #### Scenario: Entries that are no source
 
 - **WHEN** the sources directory holds `README`, `acme.toml~` and a directory `beta.toml/` beside `acme.toml`
-- **THEN** the host declares the source `acme` alone (C.7)
+- **THEN** the host declares the source `acme` alone (191, C.7)
 
 #### Scenario: No sources directory
 
@@ -32,12 +33,12 @@ neither absolute nor under `~`, gives a key flume does not know, or is
 named `flume`, `repo`, `launch` or a name no identity allows, SHALL
 refuse each launch naming its source, naming the file and the fault, and
 no other launch; a `kinds_dir` that does not exist SHALL refuse such a
-launch naming the directory (4, 154, 159).
+launch naming the directory (4, 154, 159, 191).
 
 #### Scenario: A file with no kinds_dir
 
 - **WHEN** the sources directory holds `bad.toml` with no `kinds_dir`, and launches name `bad/x@1`, `fix` and `acme/review@1`, acme's review@1 locked by the host
-- **THEN** the first is refused naming `bad.toml` and `kinds_dir`, and makes nothing, and the other two are made (4, 159)
+- **THEN** the first is refused naming `bad.toml` and `kinds_dir`, and makes nothing, and the other two are made (S96, 4, 159, 191)
 
 #### Scenario: A file taking flume's own source's name
 
@@ -47,7 +48,7 @@ launch naming the directory (4, 154, 159).
 #### Scenario: A kinds_dir not yet written
 
 - **WHEN** `acme.toml` names a `kinds_dir` that does not exist, and a launch names `acme/review@1`
-- **THEN** it is refused naming the directory as missing, and makes nothing (4, 159)
+- **THEN** it is refused naming the directory as missing, and makes nothing (4, 159, 191)
 
 ### Requirement: A source holds packages side by side
 
@@ -108,7 +109,7 @@ hold (19, 154).
 #### Scenario: A source that holds fix
 
 - **WHEN** the host's source acme holds `fix@1`, locked by the host, and launches name `fix` and `acme/fix`
-- **THEN** the first runs flume's own fix@1 and the second acme's, and status names `flume/fix@1` and `acme/fix@1` (154)
+- **THEN** the first runs flume's own fix@1 and the second acme's, and status names `flume/fix@1` and `acme/fix@1` (S97, 154)
 
 #### Scenario: A name only the host's sources hold
 
@@ -230,4 +231,4 @@ directory as the launch read them (21).
 #### Scenario: The source moved under a running place
 
 - **WHEN** a place of acme/review@1 works its first stage, and `acme.toml` is renamed over by one naming a directory without `review@1/`, and the host's lock's entry for it is removed
-- **THEN** the place's next stage starts with review@1's prompt as launched, status names acme/review@1 from the source's file and the kind's directory as launched, and a new launch of `acme/review@1` is refused naming it as one acme does not hold (21)
+- **THEN** the place's next stage starts with review@1's prompt as launched, status names acme/review@1 from the source's file and the kind's directory as launched, and a new launch of `acme/review@1` is refused naming it as one acme does not hold (S95, 21, 191)

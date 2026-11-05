@@ -29,9 +29,9 @@ host's source, each as the launch read it (19, 21, 56).
 The host's part of status SHALL give each source the host declares, its
 file, its `kinds_dir`, the identity of every package that directory
 holds, and why the file or the directory cannot be read where either
-cannot, each read when asked (56, 159; core.15).
+cannot, each read when asked (56, 159, 191; core.15).
 
 #### Scenario: A source and a fault
 
 - **WHEN** the host's sources directory holds `acme.toml`, whose `kinds_dir` holds `review@1/` and `review@2/`, and `bad.toml` with no `kinds_dir`
-- **THEN** status's host part gives `acme` with its file, its `kinds_dir`, acme/review@1 and acme/review@2, and `bad` with the fault naming `kinds_dir` (56, 159)
+- **THEN** status's host part gives `acme` with its file, its `kinds_dir`, acme/review@1 and acme/review@2, and `bad` with the fault naming `kinds_dir` (S96, 56, 159, 191)
