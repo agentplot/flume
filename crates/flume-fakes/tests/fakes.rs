@@ -1327,8 +1327,12 @@ fn a_sources_packages_are_scripted_by_its_directory() {
     assert_eq!(
         kinds.read_package("acme", "/kinds/acme", "review", 2),
         PackageRead::Read {
-            package: Box::new(packaged("acme", kind_at("review", 2), Some(&hash_of('2')))),
-        }
+            package: Box::new(Packaged {
+                dir: Some(package_dir("/kinds/acme", "review", 2)),
+                ..packaged("acme", kind_at("review", 2), Some(&hash_of('2')))
+            }),
+        },
+        "the package with its directory as read"
     );
     assert_eq!(
         kinds.read_package("acme", "/kinds/acme", "lint", 1),
@@ -1502,4 +1506,29 @@ fn the_hosts_sources_are_scripted() {
     host.remove_source("bad");
     assert_eq!(host.sources().keys().collect::<Vec<_>>(), ["acme"]);
     assert_eq!(host.log.count("sources"), 4);
+    assert_eq!(
+        (host.sources_dir(), host.kinds_lock()),
+        (Some(SOURCES.to_string()), Some(HOST_LOCK.to_string())),
+        "where the sources' files and the host's lock lie"
+    );
+}
+
+#[test]
+fn a_declarations_identity_and_the_repositorys_files() {
+    let kinds = FakeKinds::default();
+    assert_eq!(
+        kinds.identity_of("repo", "bump", 2),
+        Ok(kind_identity("repo", "bump", 2))
+    );
+    assert_eq!(
+        kinds.log.of("identity_of"),
+        vec!["identity_of repo bump@2".to_string()]
+    );
+    assert_eq!(
+        (kinds.declaration_path(), kinds.lock_path()),
+        (
+            Some(".config/flume.toml".to_string()),
+            Some(".config/flume.lock".to_string())
+        )
+    );
 }

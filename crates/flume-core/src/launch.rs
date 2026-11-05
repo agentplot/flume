@@ -58,7 +58,10 @@ impl Engine {
     /// held, and one not held refuses the launch naming those held (4, 22,
     /// 154). A kind of flume's own or of a host's source reads both locks,
     /// and is checked against each that records it; one of a host's
-    /// source runs only where one does (155, 156; core.34).
+    /// source runs only where one does (155, 156; core.34). A host's
+    /// source's package is read before its locks are checked, so a package
+    /// weir refuses is named with its field whether or not a lock records
+    /// it, and the hash checked is the one just read (156, 157).
     fn resolve_kind(&self, launch: &Launch, revision: &Revision) -> Result<Resolved, String> {
         let kinds = self.resolver.kinds();
         let named = kinds.read_named(&launch.kind).map_err(|reason| {
