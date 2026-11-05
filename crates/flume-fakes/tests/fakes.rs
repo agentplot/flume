@@ -1173,8 +1173,9 @@ fn a_scripted_attach() {
 /// window scripted to print `attach work` answers that line for the
 /// terminal's command under the title the host declares for `work`, its
 /// log naming one show under that title and no window opened; then it
-/// opens one and refuses as scripted. The core's open giving the line is
-/// the stream-views scenarios' (188).
+/// opens one and refuses as scripted. The scenario through the core's
+/// open is conformance's `open: the fake window scripted to print attach
+/// work …` (188).
 #[test]
 fn a_scripted_window() {
     let host = Arc::new(FakeHost::default());
@@ -1210,7 +1211,8 @@ fn a_scripted_window() {
 
 /// The seam-fakes spec's scripted title, the fakes' part of it: the fake
 /// host's `work` titled as scripted and every other stream with none.
-/// Status giving it from `stream` is the streams scenarios' (143).
+/// The scenario through status is conformance's `streams: the fake
+/// host's work scripted with the title Work Agents …` (143).
 #[test]
 fn a_scripted_title() {
     let host = FakeHost::default();

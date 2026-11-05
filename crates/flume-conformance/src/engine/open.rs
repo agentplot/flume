@@ -92,6 +92,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_window_that_refuses,
         },
         Scenario {
+            name: "open: the fake window scripted to print attach work has the core's answer give that line, the fake window's log naming one show under the stream's title",
+            cites: &["106", "188"],
+            run: a_scripted_window,
+        },
+        Scenario {
             name: "open: a command that needs a variable is answered by the variable's name alone, with the printed line",
             cites: &["186", "56"],
             run: a_command_that_needs_a_variable,
@@ -498,6 +503,35 @@ fn a_window_that_refuses(_: &()) -> Outcome {
         refused(&world.engine.open_stream(Some("work")))?,
         "no display",
         "the refusal"
+    );
+    Ok(())
+}
+
+/// The seam-fakes spec's scripted window: the fake window scripted to
+/// answer printed with `attach work`, and the core asked to open `work`
+/// (106, 188).
+fn a_scripted_window(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_title("work", Some("Work Agents"));
+    world.window.answers(Some(WindowShown::Printed {
+        line: "attach work".into(),
+    }));
+    let answer = opened(&world.engine.open_stream(Some("work")))?;
+    ensure_eq!(
+        answer.window,
+        WindowOutcome::Printed {
+            line: "attach work".into()
+        },
+        "the core's answer"
+    );
+    ensure_eq!(
+        world.window.log.of("show"),
+        vec!["show fake-terminal attach work titled Work Agents".to_string()],
+        "the fake window's shows"
+    );
+    ensure!(
+        world.window.windows().is_empty(),
+        "the fake window opened a window"
     );
     Ok(())
 }

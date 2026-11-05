@@ -68,6 +68,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "143", "186", "190"],
             run: the_display_in_status,
         },
+        Scenario {
+            name: "streams: the fake host's work scripted with the title Work Agents has status give that title from stream",
+            cites: &["106", "143"],
+            run: a_scripted_title,
+        },
     ]
 }
 
@@ -415,6 +420,30 @@ fn the_hosts_sessions_labels_and_layers(_: &()) -> Outcome {
             .map(|value| (value.value.as_str(), value.layer)),
         Some(("3", ConfigLayer::Local)),
         "streams.work.agents and its layer"
+    );
+    Ok(())
+}
+
+/// The seam-fakes spec's scripted title: the fake host's `work` titled
+/// `Work Agents`, and status asked (106, 143).
+fn a_scripted_title(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_title("work", Some("Work Agents"));
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let work = host
+        .streams
+        .iter()
+        .find(|stream| stream.name == "work")
+        .ok_or("the host's streams give no work")?;
+    ensure_eq!(
+        work.title,
+        TitleHeld {
+            title: "Work Agents".into(),
+            from: TitleFrom::Stream,
+        },
+        "work's title"
     );
     Ok(())
 }
