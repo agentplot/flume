@@ -1,8 +1,9 @@
 //! The merge-queue profile over sluice (C.6; design 13) against the
 //! pinned sluice, on scratch repositories gated by a command and, where a
 //! base lands on a remote, a local bare remote: nothing reaches a forge,
-//! a credential or the host's own sluice state, and no multiplexer's
-//! session reaches sluice. The merge-queue seam's scenarios run against
+//! a credential or the host's own sluice state, sluice's checkouts keep
+//! their scratch in the test's own folder, and no multiplexer's session
+//! reaches sluice. The merge-queue seam's scenarios run against
 //! it; then a submission from a herdr pane's hook, a failed entry
 //! collected once, a queue nothing drives, a step beside a live driver, a
 //! conflict's base revision, a conflict sluice answers at the submit
@@ -15,6 +16,7 @@
 //! fails, and what the policy says of a place, its readiness asked of
 //! the pinned sluice's equip and its answer read.
 
+use super::walk::{user_scratch, USER_SCRATCH};
 use crate::common::*;
 use flume::profiles::merge_queue::sluice::{for_place, Sluice, EQUIP};
 use flume::profiles::place::git_worktree::{GitWorktree, Login};
@@ -33,17 +35,6 @@ use std::time::{Duration, Instant};
 
 const POLICY: &str =
     "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\n\n[branches.main]\n";
-
-/// The variable a test's sluice is told by where the directory standing
-/// for the host user's own scratch is, since the gate's sandbox lets a
-/// test write its own folders and not `/tmp/sluice-<uid>` (sluice 35).
-const SCRATCH: &str = "SLUICE_USER_SCRATCH";
-
-/// The folder standing for the host user's scratch of the sluice a test
-/// runs in the scratch home `home`, which sluice makes its own.
-fn scratch(home: &Path) -> PathBuf {
-    home.join("sluice-scratch")
-}
 
 /// A scratch repository gated by sluice, and the place it holds.
 struct Harness {
@@ -77,7 +68,10 @@ impl Harness {
                 seam = seam.with_env(&name, None);
             }
         }
-        let seam = seam.with_env(SCRATCH, Some(&scratch(&home).to_string_lossy()));
+        let seam = seam.with_env(
+            USER_SCRATCH,
+            Some(&user_scratch(&repository).to_string_lossy()),
+        );
         let place = Harness::worktree(&repository, "fix/one", "fix--one", "work.rs");
         Harness {
             repository,
@@ -142,7 +136,7 @@ impl Harness {
             .env("HOME", &self.home)
             .env("XDG_STATE_HOME", self.home.join("state"))
             .env("XDG_CONFIG_HOME", self.home.join("config"))
-            .env(SCRATCH, scratch(&self.home))
+            .env(USER_SCRATCH, user_scratch(&self.repository))
             .output()
             .expect("sluice runs");
         serde_json::from_slice(&output.stdout).unwrap_or_else(|_| {
@@ -292,6 +286,13 @@ impl MergeQueueHarness for Harness {
         let gone = self.repository.scratch.path("gone.git");
         self.repository
             .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
+    }
+
+    /// `trial`, made from main, whose policy names a table for main
+    /// alone, so sluice lands nothing on it (126, C.6).
+    fn base_unlanded(&self, _repository: &str) -> String {
+        self.repository.git(&["branch", "trial", "main"]);
+        "trial".into()
     }
 
     fn unreadable(&self) {
@@ -466,7 +467,7 @@ fn a_step_beside_a_live_driver_does_nothing_and_answers() {
         .env("HOME", &harness.home)
         .env("XDG_STATE_HOME", harness.home.join("state"))
         .env("XDG_CONFIG_HOME", harness.home.join("config"))
-        .env(SCRATCH, scratch(&harness.home))
+        .env(USER_SCRATCH, user_scratch(&harness.repository))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -691,7 +692,7 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
         .env("HOME", &harness.home)
         .env("XDG_STATE_HOME", harness.home.join("state"))
         .env("XDG_CONFIG_HOME", harness.home.join("config"))
-        .env(SCRATCH, scratch(&harness.home))
+        .env(USER_SCRATCH, user_scratch(&harness.repository))
         .stdin(Stdio::null())
         .output()
         .expect("the stand-in takes the request in");

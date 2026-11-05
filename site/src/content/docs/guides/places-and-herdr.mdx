@@ -19,8 +19,14 @@ flume makes a plain `git worktree` of the repository, named
 the kind's. It cuts the branch from the base's
 current revision. Where the repository's sluice policy lands the base
 on a remote, flume fetches that remote first and cuts the branch from
-the remote's revision; a launch whose fetch fails is refused. With no
-merge queue bound, it cuts from the local base.
+the remote's revision. Where the policy lands the base locally, it cuts
+from the local base, where each landing goes. Where no merge queue is
+bound, or the policy names no table for the base, flume fetches the
+base from `origin` and cuts from `origin/<base>`, so a local copy that
+lags origin is never read. It cuts from the local base only where the
+repository has no `origin`, or `origin` holds no such branch. A launch
+whose fetch fails otherwise is refused. `flume status` says beside each
+place's base where its revision was read.
 
 The repository is the directory git finds one in, a clone's main
 worktree, or, in a bare layout, `project/project.git` with its

@@ -179,6 +179,10 @@ impl Sluice {
                             .ok_or_else(|| {
                                 format!("{words}, and the base's revision is unread: {reason}")
                             })?,
+                        BaseRevision::Unlanded => base_at(&place.repository, &place.base)
+                            .ok_or_else(|| {
+                                format!("{words}, and the policy lands no base {}", place.base)
+                            })?,
                     },
                 };
                 Ok(SubmissionOutcome::Conflict { files, base, words })
@@ -418,14 +422,40 @@ fn policy(repository: &str, base: &str) -> Result<Option<toml::Table>, String> {
     Ok(None)
 }
 
-/// The remote the policy lands `base` on, none where it lands locally.
+/// Where the policy lands a base (126, C.6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Lands {
+    /// On the remote the base's table names.
+    On(String),
+    /// On the local branch, the base's table naming no remote.
+    Locally,
+    /// Nowhere: the policy names no table for the base, or no revision of
+    /// it holds a policy, so sluice lands no such base.
+    Not,
+}
+
+/// Where the policy at the base's revision lands `base`.
+fn lands(repository: &str, base: &str) -> Result<Lands, String> {
+    let policy = policy(repository, base)?;
+    let Some(table) = policy
+        .as_ref()
+        .and_then(|policy| branch_table(policy, base))
+    else {
+        return Ok(Lands::Not);
+    };
+    Ok(match table.get("remote").and_then(toml::Value::as_str) {
+        Some(remote) => Lands::On(remote.to_string()),
+        None => Lands::Locally,
+    })
+}
+
+/// The remote the policy lands `base` on, none where it lands it locally
+/// or not at all.
 pub fn base_remote(repository: &str, base: &str) -> Result<Option<String>, String> {
-    Ok(policy(repository, base)?.and_then(|policy| {
-        branch_table(&policy, base)?
-            .get("remote")?
-            .as_str()
-            .map(str::to_string)
-    }))
+    Ok(match lands(repository, base)? {
+        Lands::On(remote) => Some(remote),
+        Lands::Locally | Lands::Not => None,
+    })
 }
 
 /// The step a place's readiness names where sluice's equip answered no
@@ -689,23 +719,20 @@ impl MergeQueue for Sluice {
         }
     }
 
+    /// The base on the remote its table names after one fetch, or the
+    /// local base where its table names none; a base the policy names no
+    /// table for is one sluice lands not, which the core reads at origin
+    /// (9, 126, C.1, C.6).
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision {
         let git = Git::at(repository);
-        let remote = match base_remote(repository, base) {
-            Ok(remote) => remote,
+        let at = match lands(repository, base) {
+            Ok(Lands::On(remote)) => match git.fetch_branch(&remote, base) {
+                Ok(tracking) => tracking,
+                Err(reason) => return BaseRevision::Refused { reason },
+            },
+            Ok(Lands::Locally) => format!("refs/heads/{base}"),
+            Ok(Lands::Not) => return BaseRevision::Unlanded,
             Err(reason) => return BaseRevision::Refused { reason },
-        };
-        let at = match &remote {
-            Some(remote) => {
-                let refspec = format!("+refs/heads/{base}:refs/remotes/{remote}/{base}");
-                if let Err(words) = git.bytes(&["fetch", "--quiet", remote, &refspec]) {
-                    return BaseRevision::Refused {
-                        reason: format!("the fetch of {base} from {remote} failed: {words}"),
-                    };
-                }
-                format!("refs/remotes/{remote}/{base}")
-            }
-            None => format!("refs/heads/{base}"),
         };
         match git.commit(&at) {
             Ok(revision) => BaseRevision::At {

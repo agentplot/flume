@@ -34,6 +34,7 @@ mod unsettled;
 mod wait;
 mod wake;
 
+pub use accounts::{FRESH, THRESHOLD};
 pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
@@ -217,6 +218,7 @@ mod tests {
             branch: "fix/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: None,
             location: "/r/places/fix--one".into(),
             binding,
             brief: None,

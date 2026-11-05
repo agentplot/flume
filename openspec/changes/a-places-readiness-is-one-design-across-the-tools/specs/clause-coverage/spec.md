@@ -11,7 +11,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names 6188a10, a revision of agentplot/blueprints main that holds record 0036's amendment and states S89, its scenarios numbered with no gap; Part A and Part B hold what main's list holds when this change builds; the scenarios run S1 to S91 as that revision holds them; and it names as unbuilt what main's list names then, each with its change, S86 to S88 by record 0035's change, S90 and S91 by record 0037's, and nothing of this change's
+- **THEN** it names 6188a10, a revision of agentplot/blueprints main that holds record 0036's amendment and states S89, its scenarios numbered with no gap; Part A and Part B hold what main's list holds when this change builds; the scenarios run S1 to S91 as that revision holds them; and it names as unbuilt what main's list names then, each with its change, 186 to 190, S90 and S91 by record 0037's, and nothing of this change's
 
 ### Requirement: A clause cited by nothing fails the suite
 
