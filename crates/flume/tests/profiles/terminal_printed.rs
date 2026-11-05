@@ -3,11 +3,14 @@
 //! refused with nothing typed, the command status gives, the same
 //! command printed whatever session its stream names (107), an agent
 //! read stopped once its record says its session ended (134), and attach
-//! refused for either view (187).
+//! refused for either view with nothing run (187).
 
+use crate::common::window::StandIn;
 use crate::common::*;
+use flume::host::System;
 use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::terminal::printed::Printed;
+use flume::profiles::window::terminal::TerminalApp;
 use flume_conformance::engine::world::{launch, launched, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
@@ -151,6 +154,66 @@ fn attach_under_the_printed_command_is_refused_for_either_view() {
             );
         }
     }
+}
+
+/// Every file under `folder`, by its path.
+fn files_under(folder: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut found = vec![];
+    let mut todo = vec![folder.to_path_buf()];
+    while let Some(directory) = todo.pop() {
+        for entry in std::fs::read_dir(&directory)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                todo.push(path);
+            } else {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn attach_under_the_printed_command_runs_nothing() {
+    // 187, S91: `work` under the printed command opened through the core
+    // for a window and then for its app, each refused in the printed
+    // command's words, and nothing run: Terminal.app's `osascript`, the
+    // stream's terminal app, asked for no window, and nothing written
+    // where the printed command keeps the commands it prints.
+    let scratch = Scratch::new("printed-attach");
+    let world = World::new();
+    let osascript = StandIn::new(&scratch.path("stand-in"), "osascript");
+    world.resolver.with_window(
+        "terminal",
+        Arc::new(TerminalApp::for_system(System::MacOs).with_program(&osascript.path())),
+    );
+    world.host.set_stream("work", Some(Stream::default()));
+    let engine = printed(&world, &scratch);
+    world
+        .host
+        .set_host_display(Some("printed"), None, Some("terminal"));
+    let state = scratch.path("state");
+    let before = files_under(&state);
+    for view in [View::Terminal, View::App] {
+        world.host.set_display("work", None, Some(view), None);
+        assert_eq!(
+            engine.open_stream(Some("work")).refusal(),
+            Some(
+                "the printed command holds no session a person can be shown; its agents run in \
+                 the commands it printed"
+            ),
+            "the open of work for {}",
+            view.name()
+        );
+    }
+    assert!(osascript.runs_settled().is_empty(), "a window program ran");
+    assert_eq!(world.window.log.count("show"), 0, "the fake window's shows");
+    assert_eq!(files_under(&state), before, "the printed command's marks");
 }
 
 /// An engine over `world`'s fakes with the printed command for its

@@ -1,4 +1,4 @@
-use crate::{lock, FakeKinds, FakeWindow, Log};
+use crate::{lock, FakeKinds, Log};
 use flume_seams::{Agent, Binding, Change, Kinds, MergeQueue, Place, Resolver, Terminal, Window};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -66,8 +66,9 @@ impl FakeResolver {
         lock(&self.state).terminals.insert(name.into(), terminal);
     }
 
-    /// The window profile named `name` is `window` from now (105, 188).
-    pub fn with_window(&self, name: &str, window: Arc<FakeWindow>) {
+    /// The window profile named `name` is `window` from now, a fake or a
+    /// profile a test puts in its place (105, 188).
+    pub fn with_window(&self, name: &str, window: Arc<dyn Window>) {
         lock(&self.state).windows.insert(name.into(), window);
     }
 }
