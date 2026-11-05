@@ -97,12 +97,12 @@ impl Host {
             .find_map(|folder| linked(folder).ok())
             .unwrap_or_else(|| {
                 let socket = temporary.join(&named).join(SESSION_SOCKET);
-                panic!(
+                crate::could_not_run(&format!(
                     "herdr's session w would bind {}, {} bytes, past the {limit} a socket's path \
                      holds on this host, and /tmp cannot be written",
                     socket.display(),
                     socket.as_os_str().len()
-                )
+                ))
             });
         let walk = walk.with_home(link.clone());
         let scratch = walk.repository.scratch.root.clone();

@@ -19,3 +19,18 @@ mod stand_in;
 mod terminal_herdr;
 mod walk;
 mod walkthroughs;
+
+/// The exit by which a check says it could not run here, which
+/// `.config/sluice.toml`'s `[tests] not_run` names, so sluice records no
+/// outcome under the check's key and runs it again (sluice 114; record
+/// 0047, rule core.51).
+const NOT_RUN: i32 = 77;
+
+/// Ends the run, the host lacking what a test needs of it, with `why` on
+/// stderr past the harness's capture, which a process's exit would drop
+/// (record 0047, rule core.51).
+fn could_not_run(why: &str) -> ! {
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr(), "could not run here: {why}");
+    std::process::exit(NOT_RUN)
+}

@@ -2776,9 +2776,9 @@ struct SessionHome {
 }
 
 impl SessionHome {
-    /// The home for a test that starts the sessions `names`: refused, with
-    /// the bytes, where a session's socket would not fit a socket's
-    /// address.
+    /// The home for a test that starts the sessions `names`; where a
+    /// session's socket would not fit a socket's address, the run ends as
+    /// one that could not run here, naming the bytes (record 0047).
     fn new(names: &[&str]) -> SessionHome {
         let scratch = Scratch::new("herdr-sessions");
         fs::create_dir_all(scratch.path("home")).expect("the session home");
@@ -2791,7 +2791,7 @@ impl SessionHome {
         // The temporary folder where the sessions' sockets fit under it,
         // else `/tmp` where the run may write there, as a run whose
         // temporary folder is long needs; else the temporary folder, whose
-        // sockets the check below refuses naming their bytes.
+        // sockets the check below finds no room for, naming their bytes.
         let fits = |folder: &Path| {
             names.iter().all(|name| {
                 let socket = folder
@@ -2816,15 +2816,16 @@ impl SessionHome {
         for name in names {
             let socket = link.join(format!("herdr/sessions/{name}/{CLIENT_SOCKET}"));
             let bytes = socket.as_os_str().len();
-            assert!(
-                bytes <= limit,
-                "herdr's session {name} would bind {}, {bytes} bytes, past the {limit} a \
-                 socket's path holds on this host: the session home {}, {} bytes, leaves \
-                 no room for it",
-                socket.display(),
-                link.display(),
-                link.as_os_str().len()
-            );
+            if bytes > limit {
+                crate::could_not_run(&format!(
+                    "herdr's session {name} would bind {}, {bytes} bytes, past the {limit} a \
+                     socket's path holds on this host: the session home {}, {} bytes, leaves \
+                     no room for it",
+                    socket.display(),
+                    link.display(),
+                    link.as_os_str().len()
+                ));
+            }
         }
         SessionHome { scratch, link }
     }

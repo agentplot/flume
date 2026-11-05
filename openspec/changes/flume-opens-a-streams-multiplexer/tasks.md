@@ -16,7 +16,8 @@ its process group, and every host configuration, session home and
 state directory a test names is a scratch one of the test's own. A
 herdr session a test starts is named by one letter of its test's own,
 `w` for the stream's, as the sessions' tests name theirs, and a test
-whose socket's path leaves no room fails naming its bytes.
+whose socket's path leaves no room ends the run with the exit
+`[tests] not_run` names, naming its bytes (record 0047, core.51).
 
 ## 1. The decision recorded
 
