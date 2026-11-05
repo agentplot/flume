@@ -52,7 +52,7 @@ or the fake.
 ## 6. The site
 
 - [x] 6.1 Write design 12 into `site/src/content/docs/guides/agent-settings.md`, `reference/configuration.md` and `reference/state.md`: `most-left` in the strategies' table; "An account's reading", with C.7's form, how often a host writes it and that flume reads and never writes it and fetches nothing; "A threshold"; status's pool threshold and account reading; `strategy`'s three values, `threshold` and `usage` with their refusals; and the reading among what flume reads on the host and the new status fields. Write it to any host's operator, naming no host, team, tool or word of ours (core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 6.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 6.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 7. Coverage and the gate
 
