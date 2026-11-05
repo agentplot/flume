@@ -22,7 +22,7 @@ names is a scratch directory or file of the test's own.
 ## 2. The line on the command line
 
 - [x] 2.1 Give `flume status` its `--line` in `commands/mod.rs`, asking `Engine::lines` for the place named or for every place, settling nothing. Have `print.rs` print each line's full form on a line of its own, a place's full form under its heading in status, and each of the host's `terminal_setup` under the line naming the watch (design 3, 8; 56, 57, 60, 61, 72, 122). True when `sluice exec main -- moon run flume:test` passes with a `tests/commands.rs` test over a scratch repository of the command-line spec's scenario, and `print.rs` unit tests of a line, a place's heading with its line, and a missing key under the watch.
-- [ ] 2.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test` passes.
+- [x] 2.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test` passes.
 
 ## 3. The status line
 
