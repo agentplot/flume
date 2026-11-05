@@ -267,7 +267,10 @@ impl Engine {
             }
         }
         let before = match (&merge_queue, kind.lands) {
-            (Some(queue), true) => match queue.read_submission(repository, &branch) {
+            (Some(queue), true) => match crate::submit::on_base(
+                &launch.base,
+                queue.read_submission(repository, &branch),
+            ) {
                 SubmissionRead::Found { submission } => Some(submission.id),
                 SubmissionRead::None | SubmissionRead::CouldNotRead { .. } => None,
             },

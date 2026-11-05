@@ -18,6 +18,10 @@
 //! merge queue's record, which gives its outcome where the merge queue
 //! delivered it to the request rather than the place, acted on once
 //! whichever of the record and the inbox gives it first (124, 133, C.6).
+//! A branch the merge queue could not read is passed over, named in
+//! status, and decides nothing of the place unless it is the place's
+//! base, where its submission is: the record and the inbox of every other
+//! branch are read and acted on still (15, 68, 99, 133).
 
 use crate::start::Starts;
 use crate::{Engine, Step};
@@ -88,10 +92,11 @@ impl Engine {
 
     /// Collects the place's pending outcomes and acts on each once, in
     /// the order given; an inbox that cannot be read is named in status
-    /// and acts on nothing (133, 68). The outcome of a request's entry,
-    /// which the merge queue's record gives as well, is acted on only
-    /// where neither gave it since flume's submit (124, C.6). True when
-    /// it changed something.
+    /// and acts on nothing, and a branch it passed over is named in status
+    /// and decides nothing of the outcomes it gave (133, 68). The outcome
+    /// of a request's entry, which the merge queue's record gives as well,
+    /// is acted on only where neither gave it since flume's submit (124,
+    /// C.6). True when it changed something.
     fn collect(&self, id: &PlaceId, queue: &dyn MergeQueue, place: &PlaceRef) -> bool {
         match queue.inbox(place) {
             Inbox::CouldNotRead { reason } => {
@@ -101,11 +106,17 @@ impl Engine {
                 });
                 false
             }
-            Inbox::Outcomes { outcomes } => {
+            Inbox::Outcomes {
+                outcomes,
+                passed_over,
+            } => {
                 let mut changed = self
                     .update(id, |held| {
-                        let was = held.submission.unread.take();
-                        Step::Write(was.is_some())
+                        let ours = &mut held.submission;
+                        let was = ours.unread.take();
+                        let moved = ours.passed_over != passed_over;
+                        ours.passed_over = passed_over.clone();
+                        Step::Write(was.is_some() || moved)
                     })
                     .unwrap_or(false);
                 for outcome in outcomes {
@@ -196,7 +207,10 @@ impl Engine {
         // The branch's newest entry now is never this submission, whose
         // entry is the one the submit makes, or the one an intake takes
         // its request in as later (99, 124).
-        let before = match queue.read_submission(&place.repository, &place.branch) {
+        let before = match on_base(
+            &place.base,
+            queue.read_submission(&place.repository, &place.branch),
+        ) {
             SubmissionRead::Found { submission } => Some(submission.id),
             SubmissionRead::None | SubmissionRead::CouldNotRead { .. } => None,
         };
@@ -365,11 +379,29 @@ impl Engine {
     }
 }
 
-/// The merge queue's read of the place's branch as the place's own: a
-/// submission it held before the place was launched, an earlier place's
-/// of the same name, reads as none (3, 99, 132).
-pub(crate) fn own_read(held: &HeldState, read: SubmissionRead) -> SubmissionRead {
-    match read {
+/// read-submission's answer as a place on `base` takes it: a branch
+/// passed over decides that branch alone, so the read stands past every
+/// other one, and where the branch passed over is the base, the one
+/// branch flume submits the place to, the place's own submission could
+/// not be read, whatever the other branches gave (15, 68, 99).
+pub(crate) fn on_base(base: &str, across: ReadAcross) -> SubmissionRead {
+    match across
+        .passed_over
+        .into_iter()
+        .find(|over| over.branch == base)
+    {
+        Some(over) => SubmissionRead::CouldNotRead {
+            reason: format!("{}: {}", over.branch, over.words),
+        },
+        None => across.read,
+    }
+}
+
+/// The merge queue's read of the place's branch as the place's own, on
+/// its base (15): a submission it held before the place was launched, an
+/// earlier place's of the same name, reads as none (3, 99, 132).
+pub(crate) fn own_read(held: &HeldState, across: ReadAcross) -> SubmissionRead {
+    match on_base(&held.place.base, across) {
         SubmissionRead::Found { submission }
             if held.submission.before.as_ref() == Some(&submission.id) =>
         {

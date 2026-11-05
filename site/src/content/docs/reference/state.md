@@ -150,7 +150,7 @@ Each place:
 | `tasks` | a change's tasks ticked and in all |
 | `submission` | `read`, what the merge queue holds; `request`, the pull request flume's last submit opened or updated where the base takes them, and `read`'s entry names it once taken in; `submits`; `send_backs`; `verdict`; `waiting`, why the place waits on its submission; `held` |
 | `refused_acts` | each act the guard refused |
-| `cannot_read` | each fact flume could not read when asked |
+| `cannot_read` | each fact flume could not read when asked; among them, each branch the merge queue could not read, in its words, which flume reads past unless it is the place's base, where the place's own submission is |
 | `failures` | each act that failed, in flume's words |
 | `recipients` | the place's recipients |
 | `waiting_on`, `stalled` | what the place waits on its caller for, since when and in whose words, or, with `act` `answer` and `why` `dialog`, on a person to answer its agent's dialog, in the dialog's words; whether it is stalled |
