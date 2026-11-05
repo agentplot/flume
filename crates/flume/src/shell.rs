@@ -1,5 +1,6 @@
 //! Words written for a POSIX shell, as the terminal profiles write a
-//! command a person or a pane's shell runs.
+//! command a person or a pane's shell runs, and the end of what a step a
+//! shell ran printed, as the place's readiness and teardown keep it.
 
 /// `word` as one word to a POSIX shell: as it is where it holds only
 /// characters no shell reads, single-quoted otherwise.
@@ -20,6 +21,19 @@ pub fn words<'a>(words: impl IntoIterator<Item = &'a str>) -> String {
     words.into_iter().map(quote).collect::<Vec<_>>().join(" ")
 }
 
+/// The most of a step's words kept, its end.
+const WORDS: usize = 4000;
+
+/// The end of what a step printed, trimmed, as every step's words are
+/// cut, whichever profile reads them.
+pub fn tail(words: &str) -> String {
+    let words = words.trim();
+    match words.char_indices().rev().nth(WORDS) {
+        Some((at, _)) => words[at..].to_string(),
+        None => words.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -32,5 +46,14 @@ mod tests {
         assert_eq!(quote("two words"), "'two words'");
         assert_eq!(quote("it's $HOME"), "'it'\\''s $HOME'");
         assert_eq!(words(["a", "b c"]), "a 'b c'");
+    }
+
+    #[test]
+    fn a_steps_words_keep_their_end() {
+        assert_eq!(tail("  done\n"), "done");
+        let long = format!("{}the end", "x".repeat(5000));
+        let cut = tail(&long);
+        assert_eq!(cut.chars().count(), WORDS + 1);
+        assert!(cut.ends_with("the end"));
     }
 }

@@ -43,21 +43,24 @@
 //! its round, and beside a live `sluice run` finds the branch's lock held
 //! and does nothing, so no liveness is read (124, 125). The base lives at `<remote>/<base>` after one fetch where
 //! `.config/sluice.toml` lands it on a remote, and at the local base
-//! otherwise (9, 126, C.1). What the same policy at the base's revision
-//! says of a place, its toolchain, its runner's setup, its teardown and
-//! the base's remote, is read for the resolver to hand the place profile
-//! (C.1, C.6, core.3). Under the moon runner, as sluice's moon runner
-//! does before any moon command, where the same revision holds a
-//! `.prototools` the place cut from it has the versions it pins installed
-//! by `proto install --config-mode upwards` under the toolchain, a step of
-//! its own before moon's setup, since a toolchain may activate proto's
-//! pins and install none (11, 20, 79).
+//! otherwise (9, 126, C.1). A place is made ready by sluice's equipping
+//! of it, `sluice equip <base> --at <revision> --json` run in the place,
+//! the revision the place's launch read, so a retry equips it as its
+//! launch did: sluice reads `[tests]` of the base's policy at that
+//! revision and runs in the place what it runs before its own runs, the
+//! toolchain, then its runner's install of what the place pins, its check
+//! of its own version and its setup, and answers each step with its
+//! outcome and words, which [`equipped`] reads as the readiness's steps
+//! (11, 12, 20, 79, C.1, C.6). The profile reads no `[tests]` key and no
+//! `.prototools` for a place: the readiness, `sluice release` as the
+//! teardown and the remote the policy lands the base on are declared for
+//! the resolver to hand the place profile (core.3).
 
 use crate::git::Git;
 use crate::shell;
 use flume_seams::{
-    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, Revision, Stepped,
-    Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
+    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, ReadyStep, Revision,
+    Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -202,9 +205,18 @@ impl Sluice {
     }
 }
 
-/// sluice's own words for a refusal: its JSON error's message where it
-/// gave one, and its errors otherwise.
+/// sluice's own words for a refusal, naming the command refused.
 fn words(args: &[&str], stdout: &str, stderr: &str) -> String {
+    format!(
+        "sluice {}: {}",
+        args.first().copied().unwrap_or_default(),
+        refusal(stdout, stderr)
+    )
+}
+
+/// What sluice said of a refusal: its JSON error's message where it gave
+/// one, its errors otherwise, and what it printed where it gave neither.
+fn refusal(stdout: &str, stderr: &str) -> String {
     let message = serde_json::from_str::<Value>(stdout.trim())
         .ok()
         .and_then(|answer| {
@@ -214,18 +226,14 @@ fn words(args: &[&str], stdout: &str, stderr: &str) -> String {
                 .as_str()
                 .map(str::to_string)
         });
-    let said = message.unwrap_or_else(|| {
+    message.unwrap_or_else(|| {
         let stderr = stderr.trim();
         if stderr.is_empty() {
             stdout.trim().to_string()
         } else {
             stderr.to_string()
         }
-    });
-    format!(
-        "sluice {}: {said}",
-        args.first().copied().unwrap_or_default()
-    )
+    })
 }
 
 fn text(value: &Value, key: &str) -> Option<String> {
@@ -393,11 +401,6 @@ fn branch_table<'a>(policy: &'a toml::Table, base: &str) -> Option<&'a toml::Tab
 /// The policy at the base's revision: the local base's, else a remote's
 /// tracking copy's; none where neither holds one.
 fn policy(repository: &str, base: &str) -> Result<Option<toml::Table>, String> {
-    Ok(policy_at(repository, base)?.map(|(_, policy)| policy))
-}
-
-/// The policy at the base's revision, with the revision it was read at.
-fn policy_at(repository: &str, base: &str) -> Result<Option<(String, toml::Table)>, String> {
     let git = Git::at(repository);
     let mut revisions = vec![format!("refs/heads/{base}")];
     revisions.extend(
@@ -412,7 +415,7 @@ fn policy_at(repository: &str, base: &str) -> Result<Option<(String, toml::Table
         if let Some(text) = git.file(&revision, POLICY)? {
             return text
                 .parse::<toml::Table>()
-                .map(|policy| Some((revision.clone(), policy)))
+                .map(Some)
                 .map_err(|error| format!("{POLICY} at {revision}: {error}"));
         }
     }
@@ -455,66 +458,81 @@ pub fn base_remote(repository: &str, base: &str) -> Result<Option<String>, Strin
     })
 }
 
-/// A command the policy states, a string run by a shell or a list of
-/// words, as one shell line.
-fn line(value: &toml::Value) -> Option<String> {
-    match value {
-        toml::Value::String(line) => Some(line.clone()),
-        toml::Value::Array(words) => {
-            let words: Option<Vec<&str>> = words.iter().map(toml::Value::as_str).collect();
-            words.map(shell::words)
-        }
-        _ => None,
-    }
-}
+/// The step a place's readiness names where sluice's equip answered no
+/// step it could read.
+pub const EQUIP: &str = "sluice equip";
 
-/// The file a place pins its tools' versions in, which proto reads.
-pub const PINS: &str = ".prototools";
-
-/// What the policy says of a place where sluice is the merge queue, for
-/// the resolver to hand the place profile, which no profile calls
-/// (core.2): the toolchain, then the install of what the base pins and
-/// the runner's setup, that ready a place as sluice readies its own;
-/// `sluice release`, its teardown; and the remote the base lands on (C.1,
-/// C.6, core.3).
+/// What sluice says of a place, for the resolver to hand the place
+/// profile, which no profile calls (core.2): its readiness, sluice's
+/// equipping of it, whose answer [`equipped`] reads; `sluice release`, its
+/// teardown; and the remote the base lands on (C.1, C.6, core.3).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ForPlace {
-    /// The shell line whose output is the environment the steps after it
-    /// run under.
-    pub toolchain: Option<String>,
-    /// The install of the versions the base's revision pins in [`PINS`],
-    /// as a shell line; none where it pins none.
-    pub install: Option<String>,
-    /// The runner's setup, as a shell line.
-    pub setup: Option<String>,
+    /// The readiness, as a shell line: `sluice equip <base> --at
+    /// <revision> --json`, the revision the place's launch read; none
+    /// where no revision was given, as for a teardown.
+    pub equip: Option<String>,
     /// The teardown, as a shell line.
     pub teardown: String,
     pub base_remote: Option<String>,
 }
 
-/// What the policy at the base's revision says of a place, and whether
-/// the same revision pins its tools in [`PINS`], which the place cut from
-/// it holds (20).
-pub fn for_place(repository: &str, base: &str) -> Result<ForPlace, String> {
-    let (revision, policy) = policy_at(repository, base)?.unwrap_or_default();
-    let tests = policy.get("tests").and_then(toml::Value::as_table);
-    let moon = tests
-        .and_then(|tests| tests.get("runner"))
-        .and_then(toml::Value::as_str)
-        == Some("moon");
-    let pins = moon && Git::at(repository).file(&revision, PINS)?.is_some();
+/// What sluice says of a place on `base` in `repository`, its readiness
+/// asked at `revision`, the revision its launch read, where one is given
+/// (12, 20). Only where the base lives is read of the policy here: what
+/// equips the place is sluice's to read, at that revision.
+pub fn for_place(
+    repository: &str,
+    base: &str,
+    revision: Option<&Revision>,
+) -> Result<ForPlace, String> {
     Ok(ForPlace {
-        toolchain: tests
-            .and_then(|tests| tests.get("toolchain"))
-            .and_then(line),
-        install: pins.then(|| "proto install --config-mode upwards".to_string()),
-        setup: moon.then(|| "moon setup".to_string()),
+        equip: revision
+            .map(|revision| shell::words(["sluice", "equip", base, "--at", &revision.0, "--json"])),
         teardown: "sluice release".into(),
-        base_remote: branch_table(&policy, base)
-            .and_then(|table| table.get("remote"))
-            .and_then(toml::Value::as_str)
-            .map(str::to_string),
+        base_remote: base_remote(repository, base)?,
     })
+}
+
+/// The readiness's steps from what `sluice equip --json` printed, whether
+/// it passed, on its output and on its errors: each of its `steps[]`, in
+/// order, with its outcome and its words cut as any step's are. Where it
+/// answered no step it could read, a refusal, an answer that is not its
+/// form or a sluice that could not run, they are one failed step,
+/// [`EQUIP`], with sluice's message, else its errors, else what it
+/// printed; where it failed with every step it answered passed, that step
+/// follows them (12, 79, C.6).
+pub fn equipped(passed: bool, printed: &str, errors: &str) -> Vec<ReadyStep> {
+    let answer = serde_json::from_str::<Value>(printed.trim()).ok();
+    let steps = answer
+        .as_ref()
+        .filter(|answer| answer.get("error").is_none())
+        .and_then(|answer| answer.get("steps")?.as_array())
+        .and_then(|steps| {
+            steps
+                .iter()
+                .map(|step| {
+                    Some(ReadyStep {
+                        step: text(step, "step")?,
+                        passed: step.get("passed")?.as_bool()?,
+                        words: shell::tail(step.get("words")?.as_str()?),
+                    })
+                })
+                .collect::<Option<Vec<ReadyStep>>>()
+        });
+    let refused = || ReadyStep {
+        step: EQUIP.into(),
+        passed: false,
+        words: shell::tail(&refusal(printed, errors)),
+    };
+    match steps {
+        Some(steps) if passed || steps.iter().any(|step| !step.passed) => steps,
+        Some(mut steps) => {
+            steps.push(refused());
+            steps
+        }
+        None => vec![refused()],
+    }
 }
 
 /// The base's revision where its tracking copy or the local branch holds
@@ -722,5 +740,90 @@ impl MergeQueue for Sluice {
             },
             Err(reason) => BaseRevision::Refused { reason },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The steps a reading gave, each with whether it passed.
+    fn outcomes(steps: &[ReadyStep]) -> Vec<(&str, bool)> {
+        steps
+            .iter()
+            .map(|step| (step.step.as_str(), step.passed))
+            .collect()
+    }
+
+    #[test]
+    fn the_steps_sluice_equipped_with() {
+        let long = format!("{}moon setup: the toolchain is unknown", "x".repeat(5000));
+        let answer = serde_json::json!({
+            "branch": "main",
+            "revision": "2eb676c",
+            "steps": [
+                {"step": "toolchain", "passed": true, "words": "  activated\n"},
+                {"step": "proto install", "passed": true, "words": "installed moon 2.6.1"},
+                {"step": "moon --version", "passed": true, "words": "moon 2.6.1"},
+                {"step": "moon setup", "passed": false, "words": long},
+            ],
+        });
+        let steps = equipped(false, &answer.to_string(), "");
+        assert_eq!(
+            outcomes(&steps),
+            vec![
+                ("toolchain", true),
+                ("proto install", true),
+                ("moon --version", true),
+                ("moon setup", false),
+            ]
+        );
+        assert_eq!(steps[0].words, "activated");
+        assert_eq!(steps[3].words, shell::tail(&long));
+        assert!(steps[3].words.len() < long.len(), "the words were not cut");
+        assert!(steps[3].words.ends_with("the toolchain is unknown"));
+    }
+
+    #[test]
+    fn nothing_to_equip_is_no_step() {
+        let answer = r#"{"branch": "main", "revision": "2eb676c", "steps": []}"#;
+        assert_eq!(equipped(true, answer, ""), vec![]);
+    }
+
+    #[test]
+    fn an_answer_with_no_steps() {
+        let refused = r#"{"error": {"kind": "refused", "message": "no .config/sluice.toml at 2eb676c", "next": []}}"#;
+        let unread = "equipping /r/places/fix--one for main at 2eb676c";
+        let readings = [
+            (
+                equipped(false, refused, "a warning"),
+                "no .config/sluice.toml at 2eb676c",
+            ),
+            (equipped(false, unread, "unexpected"), "unexpected"),
+            (equipped(true, unread, ""), unread),
+            (
+                equipped(false, "", "bash: line 1: sluice: command not found"),
+                "bash: line 1: sluice: command not found",
+            ),
+        ];
+        for (steps, words) in readings {
+            assert_eq!(outcomes(&steps), vec![(EQUIP, false)], "{steps:?}");
+            assert_eq!(steps[0].words, words);
+        }
+    }
+
+    #[test]
+    fn a_failure_after_every_step_passed_is_sluices() {
+        let answer = r#"{"steps": [{"step": "toolchain", "passed": true, "words": ""}]}"#;
+        let steps = equipped(
+            false,
+            answer,
+            "sluice: the run directory could not be removed",
+        );
+        assert_eq!(outcomes(&steps), vec![("toolchain", true), (EQUIP, false)]);
+        assert_eq!(
+            steps[1].words,
+            "sluice: the run directory could not be removed"
+        );
     }
 }

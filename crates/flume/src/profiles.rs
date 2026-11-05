@@ -184,11 +184,11 @@ impl Resolver for BuiltIn {
 
 /// The place profile over plain `git worktree` for one repository, bound
 /// with the data its merge queue profile declares for the place's base
-/// at each call (design 9, 13): the readiness, the teardown and where the
-/// base lives, read from the merge queue's policy at the base's current
-/// revision, none of it where no merge queue is bound. The resolver
-/// hands the one profile's data to the other, and neither calls the
-/// other (core.2). flume's own data directory, where every place goes
+/// at each call (design 9, 13): the readiness, asked at the revision the
+/// place's launch read, which a ready is given, so a retry readies as the
+/// launch did; the teardown; and where the base lives; none of it where
+/// no merge queue is bound (12, 20, C.1). The resolver hands the one
+/// profile's data to the other, and neither calls the other (core.2). flume's own data directory, where every place goes
 /// (record 0027), is the login environment's where the resolver was
 /// given one, as the plugin's is.
 struct BoundPlace {
@@ -204,27 +204,31 @@ const POLICY_STEP: &str = "the merge queue's policy";
 
 /// What the merge queue named `merge_queue` declares for the places of
 /// `repository` on `base`, as the resolver binds the place profile with
-/// it: the toolchain, the install of what the repository pins, and the
-/// runner's setup, each a step of its own (79); none of it where no merge
-/// queue is bound (11).
+/// it: the readiness, the merge queue's equipping of the place asked at
+/// `revision`, the revision its launch read, where one is given, as one
+/// step with the merge queue profile's reading of what it printed (12,
+/// 20, 79); the teardown; and where the base lives; none of it where no
+/// merge queue is bound (11).
 pub fn place_data(
     repository: &str,
     merge_queue: Option<&str>,
     base: &str,
+    revision: Option<&Revision>,
 ) -> Result<PlaceData, String> {
     match merge_queue {
         Some(merge_queue::sluice::NAME) => {
-            let declared = merge_queue::sluice::for_place(repository, base)?;
-            let mut readiness = vec![];
-            if let Some(toolchain) = &declared.toolchain {
-                readiness.push(Step::toolchain("toolchain", toolchain));
-            }
-            if let Some(install) = &declared.install {
-                readiness.push(Step::run(install, install));
-            }
-            if let Some(setup) = &declared.setup {
-                readiness.push(Step::run(setup, setup));
-            }
+            let declared = merge_queue::sluice::for_place(repository, base, revision)?;
+            let readiness = declared
+                .equip
+                .iter()
+                .map(|equip| {
+                    Step::read(
+                        merge_queue::sluice::EQUIP,
+                        equip,
+                        merge_queue::sluice::equipped,
+                    )
+                })
+                .collect();
             Ok(PlaceData {
                 readiness,
                 teardown: vec![Step::run(&declared.teardown, &declared.teardown)],
@@ -236,9 +240,15 @@ pub fn place_data(
 }
 
 impl BoundPlace {
-    /// What the merge queue declares for the places on `base`.
-    fn data(&self, base: &str) -> Result<PlaceData, String> {
-        place_data(&self.repository, self.merge_queue.as_deref(), base)
+    /// What the merge queue declares for the places on `base`, the
+    /// readiness asked at `revision` where one is given.
+    fn data(&self, base: &str, revision: Option<&Revision>) -> Result<PlaceData, String> {
+        place_data(
+            &self.repository,
+            self.merge_queue.as_deref(),
+            base,
+            revision,
+        )
     }
 
     /// The profile bound with `data`.
@@ -277,7 +287,7 @@ impl Place for BoundPlace {
     }
 
     fn ready(&self, place: &PlaceRef, revision: &Revision) -> Readiness {
-        match self.data(&place.base) {
+        match self.data(&place.base, Some(revision)) {
             Ok(data) => self.bound(data).ready(place, revision),
             Err(words) => Readiness {
                 steps: vec![ReadyStep {
@@ -294,7 +304,7 @@ impl Place for BoundPlace {
     }
 
     fn remove(&self, place: &PlaceRef) -> Removed {
-        match self.data(&place.base) {
+        match self.data(&place.base, None) {
             Ok(data) => self.bound(data).remove(place),
             Err(words) => Removed::Refused {
                 step: POLICY_STEP.into(),
@@ -304,7 +314,7 @@ impl Place for BoundPlace {
     }
 
     fn remove_branch(&self, repository: &str, branch: &str, base: &str) -> BranchRemoved {
-        match self.data(base) {
+        match self.data(base, None) {
             Ok(data) => self.bound(data).remove_branch(repository, branch, base),
             // A base whose place cannot be read judges nothing: the branch
             // is kept (67).

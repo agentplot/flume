@@ -2,7 +2,8 @@
 //! each seam's scenarios against its profile, on a server or a scratch
 //! repository each test makes, never the host's own (106, core.22,
 //! core.29), the usage-limit words the Claude Code profile reads, found
-//! in the pinned release's program, and the walkthroughs, the built
+//! in the pinned release's program, a fresh clone's place equipped by the
+//! pinned sluice, and the walkthroughs, the built
 //! binary with the stand-in for Claude Code (design 18). Built only with
 //! the `tools` feature.
 
@@ -11,6 +12,7 @@ mod common;
 
 mod claude_words;
 mod merge_queue_sluice;
+mod place_git_worktree;
 mod stand_in;
 mod terminal_herdr;
 mod walk;

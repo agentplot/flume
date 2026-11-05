@@ -25,16 +25,20 @@ A launch of a kind that lands is refused in a repository that binds no
 merge queue. flume never assumes one because sluice is installed or the
 repository holds a `.config/sluice.toml`.
 
-Once bound, flume reads the repository's sluice policy,
-`.config/sluice.toml`, at the base's current revision, for what it
-says of a place:
+Once bound, flume reads where the base lives from the repository's
+sluice policy, `.config/sluice.toml`, at the base's current revision,
+and has sluice make each place ready and release it:
 
-| In `.config/sluice.toml` | What flume does with it |
+| In `.config/sluice.toml` | What happens in a place |
 |---|---|
-| `[branches."<base>"] remote` | cuts each place's branch from that remote's copy of the base, after one fetch, and judges a branch's commits against it at the tidy |
-| `[tests] toolchain` | runs it first in each new place; its output is the environment of every later step |
-| `[tests] runner = "moon"` | runs `moon setup` in each new place, first installing the versions a `.prototools` at the base pins with `proto install --config-mode upwards` |
-| always | runs `sluice release` in the place before removing it |
+| `[branches."<base>"] remote` | flume cuts each place's branch from that remote's copy of the base, after one fetch, and judges a branch's commits against it at the tidy |
+| `[tests] toolchain`, `[tests] runner` | flume runs `sluice equip <base> --at <revision> --json` in each new place, at the revision its launch read, and sluice equips it as it equips its own runs' working copies: the toolchain, then the runner's install of what the place pins, its version check and its setup ([making a place ready](/flume/guides/places-and-herdr/#making-a-place-ready)) |
+| always | flume runs `sluice release` in the place before removing it |
+
+flume reads no `[tests]` key itself. Which steps a place's readiness
+runs, and what they install, is sluice's to read from the policy and
+the place. The sluice that runs them is the one the host user's login
+`PATH` finds, 0.67.0 or later, the first release with `sluice equip`.
 
 ## The submission
 

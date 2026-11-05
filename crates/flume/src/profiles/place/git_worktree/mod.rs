@@ -18,15 +18,19 @@
 //!
 //! The readiness, the teardown and where the base lives are the merge
 //! queue profile's to declare; the binary's resolver hands them to this
-//! profile as [`PlaceData`] when it binds a repository, and neither
-//! profile calls the other (core.2). With no merge queue bound the data
-//! is empty and nothing runs (11, 12, 66, 79, C.7). Every step runs in
-//! the place with an environment cleared to the host user's login
-//! environment, nothing of the caller's session (11, 79), and what a
-//! toolchain step prints is kept in the place's own git directory, so the
-//! steps after it run under it and it goes with the place (C.1).
+//! profile as [`PlaceData`] when it binds a repository, the readiness
+//! asked at the revision the place's launch read, and neither profile
+//! calls the other (core.2). With no merge queue bound the data is empty
+//! and nothing runs (11, 66, 79, C.1). Every step runs in the place under
+//! `bash -c` with an environment cleared to the host user's login
+//! environment, nothing of the caller's session (11, 79). A step handed
+//! with a reading of what it printed, as the merge queue's equipping of
+//! the place is, gives the readiness the steps that reading gives, the
+//! merge queue's own (12, C.1); nothing of the readiness is kept in the
+//! place, its git directory among it (C.7).
 
 use crate::git::Git;
+use crate::shell::tail;
 use flume_seams::{
     BranchRemoved, Holds, MakeOutcome, Place, PlaceRead, PlaceRef, Readiness, ReadyStep, Removed,
     Revision,
@@ -35,16 +39,22 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-/// One step the merge queue's profile declares for a place: its name and
-/// the shell line it runs in the place.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A reading of what a step printed, whether it passed, on its output and
+/// on its errors, as the readiness's steps, each with its outcome and
+/// words: the merge queue profile's own, handed as data, so this profile
+/// reads nothing of the merge queue's form (core.2).
+pub type Reading = fn(bool, &str, &str) -> Vec<ReadyStep>;
+
+/// One step the merge queue's profile declares for a place: its name, the
+/// shell line it runs in the place, and the reading of what it printed
+/// where the profile gives one.
+#[derive(Clone, Debug)]
 pub struct Step {
     pub name: String,
     pub command: String,
-    /// Whether the step prints the environment the steps after it run
-    /// under, as a toolchain's does, kept at
-    /// `<git-dir>/flume/toolchain.sh` of the place.
-    pub prints_environment: bool,
+    /// The readiness's steps of what the step printed; the step itself,
+    /// passed or failed with its words, where none.
+    pub reading: Option<Reading>,
 }
 
 impl Step {
@@ -53,15 +63,15 @@ impl Step {
         Step {
             name: name.into(),
             command: command.into(),
-            prints_environment: false,
+            reading: None,
         }
     }
 
-    /// A step whose output is the environment the steps after it run
-    /// under.
-    pub fn toolchain(name: &str, command: &str) -> Step {
+    /// A step that runs `command`, the steps it gives read from what it
+    /// printed by `reading`.
+    pub fn read(name: &str, command: &str, reading: Reading) -> Step {
         Step {
-            prints_environment: true,
+            reading: Some(reading),
             ..Step::run(name, command)
         }
     }
@@ -70,7 +80,7 @@ impl Step {
 /// What the merge queue's profile declares for the places of one
 /// repository, handed to this profile by the binary's resolver (design
 /// 9, 13): none of it where no merge queue is bound.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default)]
 pub struct PlaceData {
     /// The steps that ready a place, in order (79).
     pub readiness: Vec<Step>,
@@ -156,15 +166,9 @@ pub struct GitWorktree {
 /// The name a place profile binding gives this profile (C.1).
 pub const NAME: &str = "git-worktree";
 
-/// Where a place's toolchain environment is kept in its git directory.
-const TOOLCHAIN: &str = "flume/toolchain.sh";
-
 /// The step named where `git worktree remove` refuses or what the place
 /// holds keeps it (81, 65).
 const REMOVE_STEP: &str = "git worktree remove";
-
-/// The most of a step's words kept, its end.
-const WORDS: usize = 4000;
 
 /// Where the place `place`, `<kind>--<name>`, of `repository` is made
 /// (3, C.1; record 0027): under `own`, flume's own data directory, at
@@ -236,27 +240,12 @@ impl GitWorktree {
         Ok(found)
     }
 
-    /// The place's own git directory.
-    fn git_dir(location: &str) -> Result<PathBuf, String> {
-        Git::at(location)
-            .text(&["rev-parse", "--absolute-git-dir"])
-            .map(|dir| PathBuf::from(dir.trim()))
-    }
-
-    /// Runs `step` in the place, under the toolchain's environment where
-    /// one is kept: passed, and its words.
-    fn run(&self, location: &str, step: &Step) -> (bool, String) {
-        let kept = Self::git_dir(location).map(|dir| dir.join(TOOLCHAIN));
-        let mut script = String::new();
-        if let Ok(kept) = &kept {
-            if !step.prints_environment && kept.is_file() {
-                script.push_str(&format!(". {}\n", quoted(&kept.to_string_lossy())));
-            }
-        }
-        script.push_str(&step.command);
+    /// Runs `step` in the place: whether it passed, what it printed on its
+    /// output and on its errors, or why it could not run.
+    fn run(&self, location: &str, step: &Step) -> Result<(bool, String, String), String> {
         let output = Command::new("bash")
             .arg("-c")
-            .arg(&script)
+            .arg(&step.command)
             .current_dir(location)
             .env_clear()
             .envs(
@@ -266,41 +255,30 @@ impl GitWorktree {
                     .map(|(name, value)| (name, value)),
             )
             .output();
-        let output = match output {
-            Ok(output) => output,
-            Err(error) => return (false, format!("{} could not run: {error}", step.name)),
+        let output = output.map_err(|error| format!("{} could not run: {error}", step.name))?;
+        Ok((
+            output.status.success(),
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        ))
+    }
+
+    /// Runs `step` in the place: the steps it gives, read from what it
+    /// printed where it has a reading, else itself, passed or failed, with
+    /// its words.
+    fn steps(&self, location: &str, step: &Step) -> Vec<ReadyStep> {
+        let itself = |passed, words: &str| ReadyStep {
+            step: step.name.clone(),
+            passed,
+            words: tail(words),
         };
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        if !output.status.success() {
-            let words = if step.prints_environment {
-                stderr
-            } else {
-                format!("{stdout}{stderr}")
-            };
-            return (false, tail(&words));
-        }
-        if step.prints_environment {
-            let kept = kept.and_then(|kept| {
-                if let Some(parent) = kept.parent() {
-                    std::fs::create_dir_all(parent)
-                        .map_err(|error| format!("{}: {error}", parent.display()))?;
-                }
-                std::fs::write(&kept, &stdout)
-                    .map_err(|error| format!("{}: {error}", kept.display()))
-            });
-            if let Err(reason) = kept {
-                return (
-                    false,
-                    format!(
-                        "the environment {} printed was not kept: {reason}",
-                        step.name
-                    ),
-                );
+        match (self.run(location, step), step.reading) {
+            (Err(why), _) => vec![itself(false, &why)],
+            (Ok((passed, stdout, stderr)), Some(reading)) => reading(passed, &stdout, &stderr),
+            (Ok((passed, stdout, stderr)), None) => {
+                vec![itself(passed, &format!("{stdout}{stderr}"))]
             }
-            return (true, tail(&stderr));
         }
-        (true, tail(&format!("{stdout}{stderr}")))
     }
 }
 
@@ -327,20 +305,6 @@ fn canonical(path: &Path) -> PathBuf {
     match (path.parent(), path.file_name()) {
         (Some(parent), Some(name)) => canonical(parent).join(name),
         _ => path.to_path_buf(),
-    }
-}
-
-/// `text` quoted for the shell.
-fn quoted(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "'\\''"))
-}
-
-/// The end of `words`, trimmed.
-fn tail(words: &str) -> String {
-    let words = words.trim();
-    match words.char_indices().rev().nth(WORDS) {
-        Some((at, _)) => words[at..].to_string(),
-        None => words.to_string(),
     }
 }
 
@@ -423,16 +387,13 @@ impl Place for GitWorktree {
         }
     }
 
+    /// The steps the resolver handed, built for `revision`, the revision
+    /// the place's launch read (12, 20).
     fn ready(&self, place: &PlaceRef, _revision: &Revision) -> Readiness {
         let mut readiness = Readiness::default();
         for step in &self.data.readiness {
-            let (passed, words) = self.run(&place.location, step);
-            readiness.steps.push(ReadyStep {
-                step: step.name.clone(),
-                passed,
-                words,
-            });
-            if !passed {
+            readiness.steps.extend(self.steps(&place.location, step));
+            if readiness.failed().is_some() {
                 break;
             }
         }
@@ -513,11 +474,14 @@ impl Place for GitWorktree {
             PlaceRead::Live { .. } => {}
         }
         for step in &self.data.teardown {
-            let (passed, words) = self.run(&place.location, step);
-            if !passed {
+            if let Some(failed) = self
+                .steps(&place.location, step)
+                .into_iter()
+                .find(|step| !step.passed)
+            {
                 return Removed::Refused {
-                    step: step.name.clone(),
-                    words,
+                    step: failed.step,
+                    words: failed.words,
                 };
             }
         }
