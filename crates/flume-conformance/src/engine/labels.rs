@@ -52,7 +52,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "labels: a reserve the local layer sets is held from the next start",
-            cites: &["181", "C.7", "S85"],
+            cites: &["181", "S85"],
             run: a_reserve_set_locally,
         },
         Scenario {

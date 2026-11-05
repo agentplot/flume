@@ -22,7 +22,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "sessions: a stream that names its session opens its agents in it",
-            cites: &["107", "143", "C.7"],
+            cites: &["107", "143"],
             run: a_stream_that_names_its_session,
         },
         Scenario {
@@ -52,7 +52,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "sessions: a session the kind's settings or the host's agents tables give is no setting, and the agent opens in its stream's",
-            cites: &["32", "158", "107"],
+            cites: &["32", "107"],
             run: a_session_no_other_layer_gives,
         },
         Scenario {
