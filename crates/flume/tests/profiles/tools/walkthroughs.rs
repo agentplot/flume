@@ -2298,6 +2298,9 @@ fn own_settings_that_are_reserved_or_hold_a_credential_or_cannot_be_read_refuse_
     );
 
     // The host's own settings give `apiKeyHelper`, the account's sign-in.
+    // The refusal gives no value; status's configuration values give the
+    // host's own words as written, a script's name being no credential
+    // (core.45; design 12), so only the refusal is read for it.
     walk.configure("[agents.programs.claude.settings]\napiKeyHelper = \"key-helper-script\"\n");
     let words = refused_whole(&walk, "helper", &[]);
     assert!(
