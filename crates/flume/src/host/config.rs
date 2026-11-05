@@ -43,8 +43,9 @@
 //! over it key by key, each key of [`LOCAL_KEYS`] it sets replacing the
 //! managed one's whole. A local file setting any other key, or at fault,
 //! is not taken at all, the managed layer read alone; a key `[host] pin`
-//! holds is passed over. The reading keeps each value with its layer. No
-//! command writes either file (core.16, core.45).
+//! holds is passed over. The reading keeps each value with its layer, an
+//! `env` table's and an own setting's shaped as a credential as `<set>`
+//! (core.30, core.50). No command writes either file (core.16, core.45).
 
 use flume_seams::{
     is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LabelFrom,
@@ -768,7 +769,7 @@ fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<Co
                 values_of(inner, inner_at, taken, values);
             }
         }
-        _ if at.secret || env => push(SET.to_string()),
+        _ if at.secret || env || own_credential(&at.path, value) => push(SET.to_string()),
         Value::Array(items)
             if !items.is_empty()
                 && items.iter().all(Value::is_table)
@@ -786,6 +787,27 @@ fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<Co
         }
         _ => push(value.to_string()),
     }
+}
+
+/// Whether `value`, at `path`, is a program's own setting given inline,
+/// `…programs.<program>.settings.<key>…`, holding a string shaped as a
+/// credential, which status never gives as written: the launch and the
+/// start refuse it, and the configuration's values give it as `<set>`
+/// (191; design 7; core.50).
+fn own_credential(path: &[String], value: &Value) -> bool {
+    let own = path
+        .windows(3)
+        .any(|run| run[0] == "programs" && run[2] == "settings")
+        && path.len() > 3;
+    fn shaped(name: &str, value: &Value) -> bool {
+        match value {
+            Value::String(text) => flume_core::shaped_as_credential(name, text),
+            Value::Array(items) => items.iter().any(|item| shaped(name, item)),
+            Value::Table(table) => table.iter().any(|(key, inner)| shaped(key, inner)),
+            _ => false,
+        }
+    }
+    own && shaped(path.last().map_or("", String::as_str), value)
 }
 
 /// A key as TOML writes it in a table's name.
@@ -2144,6 +2166,46 @@ label = "inception"
         assert!(
             !values.iter().any(|(_, value)| value.contains(".agent-w")),
             "a variable's value in {values:?}"
+        );
+    }
+
+    #[test]
+    fn an_own_setting_shaped_as_a_credential_is_given_as_set() {
+        // 191, core.50: an own setting's value is given as written where
+        // it passes design 7's check, and as `<set>` where it does not,
+        // at any depth and under any agents table.
+        let config = HostConfig::layers(
+            "[agents.programs.agent.settings]
+             line = \"~/bin/line $HOME\"
+             status = { command = \"run --key sk-a1B2c3D4e5F6g7H8i9J0\" }
+             [kinds.fix.agents.programs.agent.settings]
+             headers = { Authorization = \"Bearer abc\" }
+",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            value_at(&config, "agents.programs.agent.settings.line"),
+            Some(("\"~/bin/line $HOME\"".into(), ConfigLayer::Managed))
+        );
+        for key in [
+            "agents.programs.agent.settings.status",
+            "kinds.fix.agents.programs.agent.settings.headers",
+        ] {
+            assert_eq!(
+                value_at(&config, key).map(|(value, _)| value),
+                Some(SET.to_string()),
+                "{key}"
+            );
+        }
+        assert!(
+            !config
+                .configuration
+                .values
+                .iter()
+                .any(|value| value.value.contains("a1B2") || value.value.contains("abc")),
+            "a credential among {:?}",
+            config.configuration.values
         );
     }
 

@@ -205,6 +205,19 @@ fn place_status() -> PlaceStatus {
                 name: Some("review".into()),
                 from: SessionFrom::Launch,
             }),
+            own: Some(OwnStatus {
+                passed: Some("--own /state/fix--one/agent/own.json".into()),
+                read_back: false,
+                files: vec![OwnFileStatus {
+                    layer: Layer::Host,
+                    written: "~/.config/agent.json".into(),
+                    read: "/home/user/.config/agent.json".into(),
+                    left_out: vec![Reserved {
+                        key: "env".into(),
+                        owner: "the account".into(),
+                    }],
+                }],
+            }),
         }),
         head: Some(Revision::new("c3")),
         delivered: Some(false),

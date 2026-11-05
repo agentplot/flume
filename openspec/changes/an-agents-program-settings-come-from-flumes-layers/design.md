@@ -633,6 +633,13 @@ The agent seam gains the part **own settings** (192):
   where a path is outside the folder. The printed command's line names
   the file as any argument (C.5). It goes with the place's folder at
   its tidy (62).
+- The store seam gains `Store::write_file(place, path, text)`, through
+  which the core writes them: the place's folder is the store's, and the
+  core reaches nothing on the host but through a seam (core.2). The core
+  checks every path is under the folder before it writes any, and the
+  store refuses one outside it too. Writing them from the core with the
+  standard library was the other way, and would put the one file write
+  of the core's outside every seam.
 
 `Engine::resolution` asks `Agent::own` once the program is bound and
 the mode mapped, where the agent's resolved keys are not empty, and
@@ -776,17 +783,30 @@ The JSON form only gains fields (core.14). An agent's settings give
 `programs.<program>.settings.<key>` with its layer, its file where it
 came from one, and its value as written (56). `AgentStatus` gains
 `own: Option<OwnStatus>`, none where no layer gave the agent's program
-an entry. It holds `passed`, the profile's words for how it passed them,
-`--settings <path>` for Claude Code, and `read_back`, false. It also
-holds `files`: each file a layer named for the agent's program, with
-its layer, its path as written and as read, and the keys left out of it
-with their owners.
+an entry. It holds `passed`, how the profile passed them, `--settings
+<path>` for Claude Code: the arguments of the start's command that name
+a file the command lists, each with the argument before it, recorded on
+the start when it is opened, none where it passed no key. A seam part
+of its own for those words was the other way; the command already says
+it, for every profile that passes a file. It also holds `read_back`,
+false, and `files`: each file a layer named for the agent's program,
+with its layer, its path as written and as read, and the keys left out
+of it with their owners, the owners read from the profile when status
+is asked.
 
 The person's form prints, under the agent, each key on its own line
-with its layer and its file. Its value is printed as JSON where it fits
-on that line, and as `{…}` or `[…]` otherwise, since a people's file's
-hooks run long; the JSON form gives every value whole. Then each file's
-keys left out with their owners, and "own settings not read back".
+with its layer and its file. Its value is printed as JSON where the line
+is a hundred characters or fewer, and as `{…}` or `[…]` otherwise, since
+a people's file's hooks run long; the JSON form gives every value whole.
+Then each file's keys left out with their owners, and "own settings not
+read back".
+
+The host's part of status lists every value of the host's configuration
+as written, with its layer (core.45). An own setting a host table gives
+inline whose value holds a string shaped as a credential is listed as
+`<set>`, as an `env` table's values are: the launch and every start
+refuse it, and no answer gives it before the check passes it (design 7;
+core.50).
 
 ### 13. Refusals at the launch and at a later start
 

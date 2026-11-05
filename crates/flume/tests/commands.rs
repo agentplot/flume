@@ -41,7 +41,8 @@ const AS_FLUME: &str = "FLUME_TEST_AS_FLUME";
 /// The stand-in agent: it says it started and received its prompt at
 /// once, never asks or keeps own work, and reads its session ended once
 /// the test writes the mark `stand-in/<stage>-<start>` in the place's
-/// folder. It maps each mode to its own word and reads none back.
+/// folder. It maps each mode to its own word and reads none back, and
+/// takes its program's own settings, passing them nowhere (191).
 struct StandInAgent;
 
 fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
@@ -111,6 +112,9 @@ impl Agent for StandInAgent {
     /// Each of flume's four as its word, and an own value as written.
     fn mode(&self, entry: &ModeEntry) -> Result<String, String> {
         Ok(entry.to_string())
+    }
+    fn own(&self, _given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
+        Ok(())
     }
     fn send_back(&self) -> Offered {
         Offered::NotOffered

@@ -165,7 +165,7 @@ fn web_token_at(text: &str, at: usize) -> bool {
 /// opening, a JSON web token, a run of 32 or more mixing upper case,
 /// lower case and digits apart from any variable it names, or the value
 /// of a key named as a secret's that names no variable.
-pub(crate) fn shaped_as_credential(name: &str, text: &str) -> bool {
+pub fn shaped_as_credential(name: &str, text: &str) -> bool {
     let prefixed = PREFIXES.iter().any(|prefix| {
         text.match_indices(prefix)
             .any(|(at, _)| opens_a_run(text, at) && run(&text[at + prefix.len()..]) >= 16)

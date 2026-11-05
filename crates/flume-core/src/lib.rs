@@ -38,6 +38,7 @@ pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
+pub use own::shaped_as_credential;
 pub use prompt::group_name;
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
