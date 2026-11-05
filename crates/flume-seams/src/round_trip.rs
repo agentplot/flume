@@ -1596,8 +1596,29 @@ fn the_hosts_own_documents_and_their_keys() {
             until: 54_000,
             words: Some("You've hit your session limit".into()),
             recorded_at: 47_400,
+            unread: false,
         }),
     });
+    let unread = AccountSpent {
+        until: 51_000,
+        words: Some("You've hit your weekly limit \u{b7} resets soon (UTC)".into()),
+        recorded_at: 47_400,
+        unread: true,
+    };
+    round_trips(unread.clone());
+    // A document written before reads as a reset read.
+    let before: AccountSpent = serde_json::from_value(serde_json::json!({
+        "until": 54_000,
+        "words": "You've hit your session limit",
+        "recorded_at": 47_400,
+    }))
+    .expect("a spent document written before");
+    assert!(!before.unread);
+    assert!(serde_json::to_value(&before)
+        .expect("json")
+        .get("unread")
+        .is_none());
+    assert_eq!(serde_json::to_value(&unread).expect("json")["unread"], true);
     round_trips(HostVersioned {
         version: 4,
         document: HostDocument::Intent(two_programs()),

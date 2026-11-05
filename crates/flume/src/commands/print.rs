@@ -506,9 +506,10 @@ fn session_words(session: &SessionHeld) -> String {
 }
 
 /// A pool's lines: its strategy and threshold, then each account's
-/// program, agents running, bound and spent time, its reading under it,
-/// and what holds it past its threshold; never a reading's path (56, 144
-/// to 146, 184, 185).
+/// program, agents running, bound and spent time, under it the words in
+/// which no reset was read where that time is the hour, its reading, and
+/// what holds it past its threshold; never a reading's path (56, 144 to
+/// 146, 184, 185).
 fn pool_lines(pool: &PoolStatus) -> Vec<String> {
     let mut lines = vec![format!(
         "  pool {}, {}, threshold {}%:",
@@ -531,6 +532,9 @@ fn pool_lines(pool: &PoolStatus) -> Vec<String> {
             line.push_str(&format!(", spent until {until}"));
         }
         lines.push(line);
+        if let Some(words) = &account.spent_unread {
+            lines.push(format!("      spent an hour: no reset read in \"{words}\""));
+        }
         if let Some(reading) = &account.reading {
             lines.push(format!("      {}", reading_line(reading)));
         }
@@ -1251,6 +1255,7 @@ mod tests {
                         running: 2,
                         bound: Some(4),
                         spent_until: None,
+                        spent_unread: None,
                         reading: None,
                         past: None,
                     },
@@ -1260,6 +1265,19 @@ mod tests {
                         running: 0,
                         bound: None,
                         spent_until: Some(54_000),
+                        spent_unread: None,
+                        reading: None,
+                        past: None,
+                    },
+                    AccountStatus {
+                        name: "work-3".into(),
+                        program: "agent".into(),
+                        running: 0,
+                        bound: None,
+                        spent_until: Some(51_000),
+                        spent_unread: Some(
+                            "You've hit your weekly limit \u{b7} resets Nov 8, 12am (UTC)".into(),
+                        ),
                         reading: None,
                         past: None,
                     },
@@ -1275,6 +1293,10 @@ mod tests {
                 "    work-1 (agent): 2 agents running of 4".to_string(),
                 "    work-2 (agent): 0 agents running, no bound of its own, spent until 54000"
                     .to_string(),
+                "    work-3 (agent): 0 agents running, no bound of its own, spent until 51000"
+                    .to_string(),
+                "      spent an hour: no reset read in \"You've hit your weekly limit \u{b7} resets Nov 8, 12am (UTC)\""
+                    .to_string(),
                 "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
             ]
         );
@@ -1289,6 +1311,7 @@ mod tests {
             running: 0,
             bound: None,
             spent_until: None,
+            spent_unread: None,
             reading,
             past,
         }
