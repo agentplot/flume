@@ -53,10 +53,11 @@ None.
 - `seam-contracts`: the merge queue's base may answer that it lands no
   such base.
 - `history-and-host`: git's history reads a branch at origin after a
-  fetch.
+  fetch, a requirement of its own.
 - `merge-queue-profile`: sluice's base answers that it lands no base its
-  policy names no table for.
-- `place-status`: status gives where the base's revision was read.
+  policy names no table for, a requirement of its own.
+- `place-status`: status gives where the base's revision was read, a
+  requirement of its own.
 
 ## Impact
 

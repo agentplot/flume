@@ -1,21 +1,11 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: Status gives every fact of a place
+### Requirement: Status gives where a place's base was read
 
-Status SHALL give, for one place or every place, what clause 56 lists of
-it: the place's repository, kind at its version with its declaration,
-name, branch, base with where its revision was read (`merge-queue`,
-`origin`, `no-origin` or `origin-lacks`, none for a place launched
-before), mark, priority and recipients; each stage's state, end and
-start count; whether the deliverable exists; the submission, how often
-flume submitted and how often the place went back; the change's tasks;
-refused acts; and a refused stage's part, the host's part being the
-host queue's (56, 70, C.1).
-
-#### Scenario: A stage's end with what it delivered
-
-- **WHEN** status is asked of a place whose code stage delivered
-- **THEN** the stage's end carries the head it delivered at, and a stage that ended short carries the agent's words and its kind (43, 56)
+Status SHALL give, for each place, where its launch read the base's
+revision: `merge-queue`, `origin`, `no-origin` or `origin-lacks`, as
+`base_from` in the JSON form and beside the base in the person's form,
+and none for a place launched before flume said (56, C.1).
 
 #### Scenario: Where the base was read
 

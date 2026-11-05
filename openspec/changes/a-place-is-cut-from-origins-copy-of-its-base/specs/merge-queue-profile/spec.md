@@ -1,26 +1,12 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: Read, base and the place's data
+### Requirement: A base sluice lands not
 
-The profile SHALL read the newest entry of a branch from `sluice status
-<base> --json`; answer the base at `<remote>/<base>` after one fetch
-where `.config/sluice.toml` lands the base on a remote, the local base
-where the base's table names no remote, and that sluice lands no such
-base where the policy names no table for it or no revision of it holds
-a policy; and give the place profile the readiness, the teardown
-(`sluice release` in the place) and the base's ref, read from
-`.config/sluice.toml` once sluice is bound (9, 99, 125, 126, C.1, C.6,
-core.3).
-
-#### Scenario: A queue nothing drives
-
-- **WHEN** a place's entry waits on a base no `sluice run` drives and a settle steps it
-- **THEN** one round runs and the entry is decided (124, 125)
-
-#### Scenario: A fetch that fails
-
-- **WHEN** the base lands on a remote that refuses the fetch
-- **THEN** base answers why, and the launch is refused naming it (9, core.7)
+The profile's base SHALL answer that sluice lands no such base where
+`.config/sluice.toml` names no table for the base, its own or a
+pattern's, or no revision of the base holds a policy, so the core reads
+the base at origin; and SHALL answer the local base where the base's
+table names no remote, sluice landing it there (126, C.1, C.6).
 
 #### Scenario: A base the policy names no table for
 
