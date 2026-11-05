@@ -97,7 +97,7 @@ repository or package SHALL fail its table naming the file (4, 157,
 
 #### Scenario: A file outside its repository
 
-- **WHEN** the repository's `[kinds.fix.agents.programs.agent]` gives `file = "../agent.json"`
+- **WHEN** the repository's `[kinds.fix.agents.programs.agent]` gives `file = "../../agent.json"`, past the repository's root
 - **THEN** the declaration cannot be read, naming the field and saying the file lies outside the repository, and nothing is launched (4, 157; core.34)
 
 #### Scenario: A host's file that cannot be read

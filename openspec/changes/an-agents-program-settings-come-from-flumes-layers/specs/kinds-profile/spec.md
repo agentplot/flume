@@ -29,7 +29,7 @@ declaration naming the field (157, 191, C.2; core.34).
 
 #### Scenario: A file outside the repository or not at the revision
 
-- **WHEN** a declaration's agents table gives `programs = { claude = { file = "../claude.json" } }`, or names a file the revision does not hold
+- **WHEN** a declaration's agents table gives `programs = { claude = { file = "../../claude.json" } }`, past the repository's root, or names a file the revision does not hold
 - **THEN** the declaration cannot be read, naming the field, and nothing is launched (4, 157; core.34)
 
 ### Requirement: A repository's settings for every kind

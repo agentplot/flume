@@ -731,6 +731,283 @@ agents = [{ mode = ["edits"] }]
     assert!(world.store.places().is_empty(), "held state was left");
 }
 
+/// Launches `kind` over `repository` at its head through the kinds
+/// profile, and asserts it refused naming each of `fields` with nothing
+/// made or held.
+fn launch_refused_naming(repository: &Repository, kind: &str, fields: &[&str]) {
+    let world = World::new();
+    base_at(&world, &repository.name(), &repository.head());
+    let mut given = launch(kind, "one", Some("x"));
+    given.repository = repository.name();
+    let reason =
+        refused(&engine(&world, Arc::new(Weir)).launch(&given)).expect("the launch refused");
+    for field in fields {
+        assert!(
+            reason.contains(field),
+            "the refusal names not {field}: {reason}"
+        );
+    }
+    assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
+}
+
+/// The reason `repository`'s declaration at its head cannot be read.
+fn could_not_read(repository: &Repository) -> String {
+    match Weir.read_kinds(&repository.name(), &Revision::new(repository.head())) {
+        KindsRead::CouldNotRead { reason } => reason,
+        other => panic!("the declaration read as {other:?}"),
+    }
+}
+
+#[test]
+fn own_settings_for_every_stage_and_for_one() {
+    // 23, 157, 191, C.2: a kind's agents table, a stage's agents and a
+    // repository's table for a kind it does not declare each give
+    // `programs`, kept as JSON values, a stage's file read beside the
+    // declaration at the revision, not as the working tree holds it.
+    let repository = Repository::new("own-settings");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.change.agents.stages.verify.programs.claude.settings]
+statusLine = { type = "command", command = "verify-line" }
+
+[kinds.bump.agents.programs.claude.settings]
+tui = "fullscreen"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ programs = { claude = { file = "claude-bump.json" } } }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.write(
+        ".config/claude-bump.json",
+        r#"{ "statusLine": { "type": "command", "command": "bump-line" } }"#,
+    );
+    let revision = Revision::new(repository.commit("own settings for bump and its code"));
+    repository.write(".config/claude-bump.json", r#"{ "tui": "default" }"#);
+    let KindsRead::Read {
+        kinds, settings, ..
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
+        panic!("the declaration did not read");
+    };
+    let bump = &kinds[0];
+    assert_eq!(
+        bump.agents.every_stage.programs["claude"].settings,
+        BTreeMap::from([("tui".to_string(), serde_json::json!("fullscreen"))])
+    );
+    let code = &bump.stages[0].agents[0].programs["claude"];
+    assert!(code.settings.is_empty(), "{code:?}");
+    assert_eq!(
+        code.file,
+        Some(NamedFile {
+            written: "claude-bump.json".into(),
+            read: ".config/claude-bump.json".into(),
+            keys: BTreeMap::from([(
+                "statusLine".to_string(),
+                serde_json::json!({ "type": "command", "command": "bump-line" })
+            )]),
+            left_out: vec![],
+        }),
+        "read at the revision"
+    );
+    assert_eq!(
+        settings["change"].for_stage("verify").programs["claude"].settings["statusLine"],
+        serde_json::json!({ "type": "command", "command": "verify-line" })
+    );
+}
+
+#[test]
+fn a_launchs_declaration_reads_its_settings_file_on_disk() {
+    // 157, 191, C.2: a launch's declaration's file is read beside it on
+    // disk, as its prompts are.
+    let scratch = Scratch::new("launch-own");
+    let dir = scratch.path("launch");
+    std::fs::create_dir_all(dir.join("prompts")).unwrap();
+    std::fs::write(dir.join("prompts/bump-code.md"), "{{brief}}").unwrap();
+    std::fs::write(dir.join("claude.toml"), "tui = \"fullscreen\"\n").unwrap();
+    let file = dir.join("kinds.toml");
+    std::fs::write(
+        &file,
+        "[kinds.bump.agents.programs.claude]\nfile = \"claude.toml\"\n\n[[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/bump-code.md\"\ndeliverables = [\"commits\"]\n",
+    )
+    .unwrap();
+    let KindsRead::Read { kinds, .. } = Weir.read_declaration(&file.to_string_lossy()) else {
+        panic!("the launch's declaration did not read");
+    };
+    let named = kinds[0].agents.every_stage.programs["claude"]
+        .file
+        .clone()
+        .expect("the file");
+    assert_eq!(named.read, dir.join("claude.toml").display().to_string());
+    assert_eq!(named.keys["tui"], serde_json::json!("fullscreen"));
+}
+
+#[test]
+fn an_entry_flume_cannot_take_refuses_the_launch_naming_the_field() {
+    // 4, 191, C.2: an entry that is no table, and a program's own key
+    // beside its file rather than under `settings`, each fail the read
+    // naming the field, and the launch is refused with nothing made.
+    let repository = Repository::new("own-entry");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.change.agents]
+programs = { claude = "x" }
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ programs = { claude = { tui = "fullscreen" } } }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("entries flume cannot take");
+    let reason = could_not_read(&repository);
+    for field in [
+        "kinds.change.agents.programs.claude:",
+        "kinds.bump.stages[0].agents[0].programs.claude.tui:",
+        "go under settings",
+    ] {
+        assert!(
+            reason.contains(field),
+            "the read names not {field}: {reason}"
+        );
+    }
+    launch_refused_naming(
+        &repository,
+        "change",
+        &["kinds.change.agents.programs.claude"],
+    );
+}
+
+#[test]
+fn a_settings_file_outside_the_repository_or_not_at_the_revision_refuses_the_launch() {
+    // 4, 157; core.34: a file by `..` past the repository's root, and one
+    // the revision does not hold though the working tree does, each fail
+    // the read naming the field and the file.
+    let repository = Repository::new("own-file");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.change.agents.programs.claude]
+file = "../../claude.json"
+
+[kinds.bump.agents.programs.claude]
+file = "claude-bump.json"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("files flume cannot read");
+    repository.write(".config/claude-bump.json", "{}");
+    let reason = could_not_read(&repository);
+    for field in [
+        "kinds.change.agents.programs.claude.file: ../../claude.json lies outside the repository",
+        "kinds.bump.agents.programs.claude.file: .config/claude-bump.json is not in",
+    ] {
+        assert!(
+            reason.contains(field),
+            "the read names not {field}: {reason}"
+        );
+    }
+    launch_refused_naming(
+        &repository,
+        "change",
+        &[
+            "kinds.change.agents.programs.claude.file",
+            "outside the repository",
+        ],
+    );
+}
+
+#[test]
+fn a_repositorys_agents_for_every_kind() {
+    // S97, 21, 32, 191, C.2: the repository's `[agents]`, beside
+    // `[profiles]` and no part of any kind, gives its settings for every
+    // kind, apart from its settings for one kind; a launch's declaration
+    // is not read for it.
+    let repository = Repository::new("every-kind");
+    let declaration = r#"[profiles]
+place = "git-worktree"
+
+[agents]
+model = "opus"
+mode = "edits"
+instructions = "Mind the tagline."
+
+[agents.programs.claude.settings]
+attribution = { commit = "Assisted-by: Claude Code", pr = "" }
+
+[kinds.fix.agents]
+model = "sonnet"
+"#;
+    repository.write(DECLARATION, declaration);
+    let revision = Revision::new(repository.commit("the repository's agents"));
+    let KindsRead::Read {
+        kinds,
+        settings,
+        agents,
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
+        panic!("the declaration did not read");
+    };
+    assert!(kinds.is_empty());
+    assert_eq!(agents.model.as_deref(), Some("opus"));
+    assert_eq!(agents.mode, Some(ModeSetting::Flume(Mode::Edits)));
+    assert_eq!(agents.instructions.as_deref(), Some("Mind the tagline."));
+    assert_eq!(
+        agents.programs["claude"].settings["attribution"],
+        serde_json::json!({ "commit": "Assisted-by: Claude Code", "pr": "" })
+    );
+    assert_eq!(settings["fix"].every_stage.model.as_deref(), Some("sonnet"));
+    assert!(settings["fix"].every_stage.programs.is_empty(), "apart");
+    let scratch = Scratch::new("launch-agents");
+    let file = scratch.path("kinds.toml");
+    std::fs::write(
+        &file,
+        format!("{declaration}\n[agents.stages.code]\nmodel = \"x\"\n"),
+    )
+    .unwrap();
+    let KindsRead::Read { agents, .. } = Weir.read_declaration(&file.to_string_lossy()) else {
+        panic!("the launch's declaration did not read");
+    };
+    assert_eq!(
+        agents,
+        Settings::default(),
+        "a launch's [agents] is not read"
+    );
+}
+
+#[test]
+fn a_repositorys_agents_table_naming_a_stage_or_an_environment_refuses_the_launch() {
+    // 4, 32, C.2: `stages`, `streams`, `env` and `beside` in a
+    // repository's `[agents]` each fail the read naming the field, and
+    // the launch is refused with nothing made.
+    for (given, field) in [
+        ("stages = { code = { model = \"opus\" } }", "agents.stages"),
+        (
+            "streams = { work = { model = \"opus\" } }",
+            "agents.streams",
+        ),
+        ("env = { X = \"1\" }", "agents.env"),
+        ("beside = \"pane\"", "agents.beside"),
+    ] {
+        let repository = Repository::new("every-kind-refused");
+        repository.write(DECLARATION, &format!("[agents]\n{given}\n"));
+        repository.commit("a repository's agents flume refuses");
+        let reason = could_not_read(&repository);
+        assert!(reason.contains(&format!("{field}:")), "{given}: {reason}");
+        launch_refused_naming(&repository, "fix", &[field]);
+    }
+}
+
 #[test]
 fn a_worktrunk_binding_is_refused_naming_the_place_profiles_there_are() {
     let repository = Repository::new("worktrunk");

@@ -849,7 +849,7 @@ with the stand-in under the printed command:
   `permissions = { defaultMode = "bypassPermissions" }`; a launch giving
   a status line whose command holds a value shaped as a token; a host
   file whose `statusLine` command holds one; a host whose file does not
-  exist; and a repository whose `file` is `../claude.json`.
+  exist; and a repository whose `file` is `../../claude.json`, past the repository's root.
 - S97: three scratch repositories on one host. The host's
   `[repos."<fork>".agents.programs.claude.settings]` gives `attribution
   = { commit = "", pr = "", sessionUrl = false }`, for a fork of a
