@@ -2,7 +2,7 @@
 
 ## Context
 
-flume's tree at f82a8f9 shows a place in three ways. The settle's
+flume's tree at 201086c shows a place in three ways. The settle's
 `show` gives the terminal a place's clues: the current stage, labelled
 with its group where it repeats (`label`, `code 3/7`), and that stage's
 state, its agent's as the terminal reads it while one is live
@@ -307,9 +307,13 @@ before the sidebar's rows:
 key = "prefix+f"
 type = "plugin_action"
 command = "agentplot.flume.places"
+description = "flume: places in flight"
 ```
 
-`prefix+f` is free among herdr 0.9.5's default keys.
+`prefix+f` is free among herdr 0.9.5's default keys and the keys
+sluice's herdr plugin asks for, `prefix+m` and `prefix+shift+m`. The
+entry carries a `description` as sluice's entries do, so the family's
+entries read alike in herdr's configuration.
 
 The watch, at its start and after each settle, reads herdr's
 configuration file, `HERDR_CONFIG_PATH`, else
@@ -341,8 +345,10 @@ is pushed to a person: no herdr notification, no notice (72).
 
 The statement has no clause for what this change builds. Each draft
 below is the user's to rule in agentplot/blueprints
-`design/flume/requirements.md`. Until one lands, the code stands ahead
-of the statement, named in `docs/architecture/_open.md` (core.19).
+`design/flume/requirements.md`, asked on one Pending You card, as the
+user ruled on 2026-11-04 that an open decision is asked so and kept in
+no file. Until one lands, the code stands ahead of the statement
+(core.19).
 
 - **A place's line, beside 56.** "For every place, status gives one
   line: its kind and name, its kind's version, its current stage with

@@ -99,8 +99,9 @@ command and platforms, and no key. A key is only ever the host's own
   terminal's configuration lacks. Design 9 drafts each for the user's
   ruling: a status-line row in C.4 and `--settings` in its command row;
   the line in 56, beside 139's clues; and 122's watch and C.5's row
-  naming the missing setup. The code stands ahead of them, named in
-  `docs/architecture/_open.md` until they land (core.19).
+  naming the missing setup. The code stands ahead of them until they
+  land, and the drafts are asked of the user on one Pending You card
+  (core.19).
 - `crates/flume-seams`: the terminal seam gains `setup`, none by
   default.
 - `crates/flume-core`: a new `line.rs` makes the line and answers

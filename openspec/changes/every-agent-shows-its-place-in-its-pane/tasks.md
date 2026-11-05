@@ -2,7 +2,7 @@
 
 Each group is one session's work for an agent that reads this change
 (proposal, design, specs) and its group, and builds on the tree at
-f82a8f9 and the groups before it. A group's last task runs the checks
+201086c and the groups before it. A group's last task runs the checks
 it touched through sluice. Every conformance scenario a group adds
 cites its clauses as data (106). Tests reach no real account, no herdr
 of the user's and no configuration directory of the user's. Every git
@@ -47,7 +47,7 @@ names is a scratch directory or file of the test's own.
 ## 6. The docs and the open item
 
 - [ ] 6.1 Write the popup's entry, plainly and apart from the rows, into `README.md`, `site/src/content/docs/guides/places-and-herdr.mdx` and `install.mdx`, with `flume status` naming what herdr's configuration lacks. Give the sidebar row and the popup the line's words there. Write the status line into `guides/claude-code.mdx`: what it shows, that it reads no terminal and settles nothing, that the session's own status line stays beneath it, and that managed settings win over it. Write `flume status --line` and `flume hook status-line` into `reference/commands.md`, and status's `line` and `host.terminal_setup` into `reference/state.md`. Write all of it to any host's operator, naming no host, team or word of ours (design 10; core.35). True when `sluice exec main -- moon run site:prose site:build root:format` passes.
-- [ ] 6.2 Add to `docs/architecture/_open.md` an item that the place's line, the agent's status line and the watch's word on what herdr's configuration lacks stand ahead of the statement. Name design 9's drafts for 56, B.4 and C.4, and 122 and C.5 as the user's to rule in agentplot/blueprints `design/flume/requirements.md`. The item leaves when they land (design 9; core.19). True when `sluice exec main -- moon run root:format` passes.
+- [ ] 6.2 Ask the user, on one Pending You card, to rule design 9's drafts for 56, B.4 and C.4, and 122 and C.5 in agentplot/blueprints `design/flume/requirements.md`: that the place's line, the agent's status line and the watch's word on what herdr's configuration lacks stand ahead of the statement until they land. Write nothing of it into a file of open items (design 9; core.19). True when the card names each draft with its clause and the commit that ticks this task names the card.
 - [ ] 6.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 7. The gate
