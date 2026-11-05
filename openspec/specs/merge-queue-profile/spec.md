@@ -60,12 +60,12 @@ does nothing (124, 125; sluice clause 135).
 ### Requirement: Read, base and the place's data
 
 The profile SHALL read the newest entry of a branch from `sluice status
-<base> --json`; answer the base
-at `origin/<base>` after one fetch where `.config/sluice.toml` lands the
-base on a remote and the local base otherwise; and give the place
-profile the readiness, the teardown (`sluice release` in the place) and
-the base's ref, read from `.config/sluice.toml` once sluice is bound
-(9, 99, 125, 126, C.1, C.6, core.3).
+<base> --json`; answer the base at `origin/<base>` after one fetch
+where `.config/sluice.toml` lands the base on a remote and the local
+base otherwise; and give the place profile the readiness, `sluice equip
+<base> --at <revision> --json` with the reading of its steps, the
+teardown (`sluice release`) and the base's ref, reading no `[tests]`
+key for a place (9, 11, 20, 126, C.1, C.6, core.3).
 
 #### Scenario: A queue nothing drives
 
@@ -77,30 +77,20 @@ the base's ref, read from `.config/sluice.toml` once sluice is bound
 - **WHEN** the base lands on a remote that refuses the fetch
 - **THEN** base answers why, and the launch is refused naming it (9, core.7)
 
-### Requirement: A moon repository's pins installed before its setup
+#### Scenario: What the policy says of a place
 
-Where the policy's runner is moon and the base's revision the policy is
-read at holds a `.prototools`, the profile SHALL give the place profile
-`proto install --config-mode upwards` as a readiness step of its own,
-after the toolchain and before `moon setup`, run under the toolchain's
-environment, as sluice's moon runner installs before any moon command;
-it SHALL read the pins with the policy, never from a place's tree (11,
-12, 20, 79, C.1, C.6).
+- **WHEN** the policy at main names the moon runner, the toolchain `devenv print-dev-env` and `origin` as main's remote, and a place on main is readied at the revision R its launch read
+- **THEN** the place's data is one readiness step, `sluice equip main --at R --json`, with the profile's reading of it, `sluice release` as its teardown and `origin` as the base's remote, and names no toolchain and no `moon setup` (11, 20, C.1, C.6)
 
-#### Scenario: Pins nothing installed
+#### Scenario: The steps sluice equipped with
 
-- **WHEN** a place is made of a repository whose toolchain activates proto's pins and installs none, and whose `.prototools` pins moon, which nothing has installed
-- **THEN** its readiness runs the toolchain, the install with its words and `moon setup`, each passing
+- **WHEN** `sluice equip` answers the steps `toolchain`, `proto install` and `moon --version` passed and `moon setup` failed with its words, exiting 1
+- **THEN** the reading gives those four steps in that order, each with its outcome, the last with sluice's words cut as any step's are (12, 79, C.6)
 
-#### Scenario: An install that fails
+#### Scenario: An answer with no steps
 
-- **WHEN** proto cannot install what the repository pins
-- **THEN** the readiness stops at the install, named with proto's words, and `moon setup` is not run (12)
-
-#### Scenario: A repository that pins nothing
-
-- **WHEN** the base's revision holds no `.prototools`
-- **THEN** no install is run or named, and `moon setup` follows the toolchain
+- **WHEN** `sluice equip` answers a refusal with its `error.message`, or nothing the profile can read, or cannot be run
+- **THEN** the reading gives one failed step, `sluice equip`, with sluice's message, its errors, or why it could not run (12, C.6)
 
 ### Requirement: A base sluice lands not
 

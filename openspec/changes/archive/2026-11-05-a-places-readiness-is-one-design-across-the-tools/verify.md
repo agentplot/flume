@@ -140,3 +140,15 @@ The proposal names changes in agentplot/sluice, afterthought/crew,
 agentplot/boomdrive and afterthought/kit-standard. They are launched in
 those repositories and are not part of this change's tasks. sluice's
 part is released as 0.67.0, and this tree pins that release.
+
+## Notes
+
+- The merge-queue-profile delta rewrites the citations of "Read, base
+  and the place's data". Main's version cited 9, 99, 125, 126, C.1, C.6
+  and core.3. The delta's cites 9, 11, 20, 126, C.1, C.6 and core.3, so
+  99 and 125 are dropped. The requirement still reads a branch's newest
+  entry (99), and its scenario "A queue nothing drives" still cites 124
+  and 125. No requirement goes unmet. A later change to this
+  requirement can restore 99 and 125 to its citations (core.19).
+- `openspec archive` warned that the proposal's Why section exceeds
+  1000 characters. `--strict` validation passes.
