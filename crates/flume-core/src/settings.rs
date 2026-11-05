@@ -11,6 +11,7 @@
 //! its agent profile to its program's setting, or the stage refused
 //! naming the mode, the program, the stage and the layer (162, 169).
 
+use crate::own::Table;
 use crate::Engine;
 use flume_seams::{
     Account, Agent, Deliverable, Given, Kind, KindSettings, Layer, Mode, ModeEntry, PlaceRecord,
@@ -173,12 +174,21 @@ pub(crate) fn expand(
 impl Engine {
     /// The six layers of `stage`'s settings in `place`, most specific
     /// first, each a stage's own over those for every stage. The host's
-    /// configuration is read here, at each start, and nowhere else (32,
-    /// C.7).
-    fn layers(&self, place: &PlaceRecord, stage: &Stage) -> [(Layer, Settings); 6] {
+    /// configuration is read here, at each start, and nowhere else, its
+    /// own settings checked as they stand, or the refusal (32, 191, C.7).
+    fn layers(&self, place: &PlaceRecord, stage: &Stage) -> Result<[(Layer, Settings); 6], String> {
         let host = self
             .host
             .settings(&place.repository, &place.kind.name, &place.stream.name);
+        let host_for_stage = |settings: &KindSettings, layer: Layer| -> Result<Settings, String> {
+            let every = self.own_checked(&settings.every_stage, &Table::every_stage(layer))?;
+            Ok(match settings.stages.get(&stage.name) {
+                Some(own) => {
+                    every.under(&self.own_checked(own, &Table::stage(layer, &stage.name))?)
+                }
+                None => every,
+            })
+        };
         let launched = place.settings.get(&stage.name).map_or_else(
             || place.every_stage.clone(),
             |own| place.every_stage.under(own),
@@ -188,28 +198,31 @@ impl Engine {
             .agents
             .for_stage(&stage.name)
             .under(&stage.agents.first().cloned().unwrap_or_default());
-        [
+        Ok([
             (Layer::Launch, launched),
             (
                 Layer::HostRepository,
-                placeless(host.repository.for_stage(&stage.name)),
+                placeless(host_for_stage(&host.repository, Layer::HostRepository)?),
             ),
-            (Layer::HostKind, placeless(host.kind.for_stage(&stage.name))),
+            (
+                Layer::HostKind,
+                placeless(host_for_stage(&host.kind, Layer::HostKind)?),
+            ),
             (
                 Layer::Repository,
                 placeless(place.repository_settings.for_stage(&stage.name)),
             ),
             (Layer::Kind, sessionless(declared)),
             (Layer::Default, self.defaults.settings.clone()),
-        ]
+        ])
     }
 
     /// `stage`'s settings in `place` as each layer wrote them, folded
     /// from the most general layer to the most specific, keeping the
     /// layer of every setting and every variable (32).
-    pub(crate) fn resolve(&self, place: &PlaceRecord, stage: &Stage) -> Resolved {
+    pub(crate) fn resolve(&self, place: &PlaceRecord, stage: &Stage) -> Result<Resolved, String> {
         let mut resolved = Resolved::default();
-        for (layer, given) in self.layers(place, stage).into_iter().rev() {
+        for (layer, given) in self.layers(place, stage)?.into_iter().rev() {
             let whole = [
                 ("program", &given.program),
                 ("model", &given.model),
@@ -237,7 +250,7 @@ impl Engine {
             }
             resolved.settings = resolved.settings.under(&given);
         }
-        resolved
+        Ok(resolved)
     }
 
     /// The agent profile `resolved`'s program names, or why there is
@@ -290,7 +303,7 @@ impl Engine {
         place: &PlaceRecord,
         stage: &Stage,
     ) -> Result<Resolution, String> {
-        let resolved = self.resolve(place, stage);
+        let resolved = self.resolve(place, stage)?;
         let agent = self.agent_for(&resolved, &stage.name)?;
         let mode = mode_for(&resolved, agent.as_ref(), stage)?;
         Ok(Resolution {

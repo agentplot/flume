@@ -19,10 +19,12 @@
 //! the launch (4, 8, 143); its intent is the launch's name, else its
 //! repository and base (147).
 
+use crate::own::Table;
 use crate::reading::reads_change;
 use crate::settings::no_stage_lacking;
 use crate::{Answer, Bound, Engine, Step};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 impl Engine {
     /// Launches one place, or refuses naming why (2).
@@ -38,9 +40,10 @@ impl Engine {
 
     /// The kind a launch names, `<name>` or `<name>@<version>`, from the
     /// launch's declaration over the repository's at the base's revision
-    /// over flume's own (19, 20), and the settings the repository gives a
+    /// over flume's own (19, 20), the settings the repository gives a
     /// kind of that name it does not declare, which join whichever
-    /// declaration the name resolves to (32, C.2). The launch's and the
+    /// declaration the name resolves to, and those it gives every kind
+    /// (32, 191, C.2). The launch's and the
     /// repository's declarations hold one version of a name, and a version
     /// named that the resolved one does not hold refuses the launch; among
     /// flume's own the version named is taken, else the newest, and a
@@ -50,7 +53,7 @@ impl Engine {
         &self,
         launch: &Launch,
         revision: &Revision,
-    ) -> Result<(Kind, Declared, KindSettings), String> {
+    ) -> Result<(Kind, Declared, KindSettings, Settings), String> {
         let (name, version) = named_version(&launch.kind)?;
         let kinds = self.resolver.kinds();
         let named = |all: Vec<Kind>| all.into_iter().find(|kind| kind.name == name);
@@ -63,10 +66,13 @@ impl Engine {
             _ => Ok((kind, declared)),
         }
         };
-        let (declared, mut given) = match kinds.read_kinds(&launch.repository, revision) {
+        let (declared, mut given, every_kind) = match kinds.read_kinds(&launch.repository, revision)
+        {
             KindsRead::Read {
-                kinds, settings, ..
-            } => (kinds, settings),
+                kinds,
+                settings,
+                agents,
+            } => (kinds, settings, agents),
             KindsRead::CouldNotRead { reason } => {
                 return Err(format!(
                     "the kinds {} declares at {revision} could not be read: {reason}",
@@ -81,7 +87,7 @@ impl Engine {
                     if let Some(kind) = named(kinds) {
                         let by = format!("the launch's declaration {declaration}");
                         let (kind, declared) = held(kind, Declared::Launch, &by)?;
-                        return Ok((kind, declared, given));
+                        return Ok((kind, declared, given, every_kind));
                     }
                 }
                 KindsRead::CouldNotRead { reason } => {
@@ -94,7 +100,7 @@ impl Engine {
         if let Some(kind) = named(declared) {
             let by = format!("{} at {revision}", launch.repository);
             let (kind, declared) = held(kind, Declared::Repository, &by)?;
-            return Ok((kind, declared, given));
+            return Ok((kind, declared, given, every_kind));
         }
         let mut own: Vec<Kind> = kinds
             .flumes_own()
@@ -120,7 +126,7 @@ impl Engine {
             None => own.pop(),
             Some(version) => own.into_iter().find(|kind| kind.version == version),
         };
-        kind.map(|kind| (kind, Declared::Flume, given))
+        kind.map(|kind| (kind, Declared::Flume, given, every_kind))
             .ok_or_else(|| {
                 format!(
                     "the kind {} is not held: flume holds {name} at {versions} (22, 154)",
@@ -201,9 +207,29 @@ impl Engine {
                 .head(repository, &launch.base)
                 .ok_or_else(|| format!("{repository} has no base {}", launch.base))?,
         };
-        let (kind, declared, repository_settings) = self.resolve_kind(launch, &base_revision)?;
+        let (kind, declared, repository_settings, repository_agents) =
+            self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind)?;
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
+        // Every layer's own settings the launch read are checked before
+        // anything is made or held, and kept as checked; the host's are
+        // checked as each stage's agent is resolved below (191, core.8).
+        let settings = launch
+            .settings
+            .iter()
+            .map(|(stage, own)| {
+                self.own_checked(own, &Table::stage(Layer::Launch, stage))
+                    .map(|own| (stage.clone(), own))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let every_stage =
+            self.own_checked(&launch.every_stage, &Table::every_stage(Layer::Launch))?;
+        let repository_settings = self.own_checked_kind(&repository_settings, Layer::Repository)?;
+        let repository_agents = self.own_checked(
+            &repository_agents,
+            &Table::new(Layer::Repository, "for every kind"),
+        )?;
+        let kind = self.own_checked_declaration(&kind)?;
         let intent = self.intent_of(launch);
         let stream = self.stream_of(launch, &kind.name, &intent)?;
         let named = format!("the kind {}@{}", kind.name, kind.version);
@@ -303,10 +329,10 @@ impl Engine {
                 binding,
                 brief: launch.brief.clone(),
                 mark: launch.mark.clone(),
-                settings: launch.settings.clone(),
-                every_stage: launch.every_stage.clone(),
+                settings,
+                every_stage,
                 repository_settings,
-                repository_agents: Settings::default(),
+                repository_agents,
                 hold: launch.hold.clone(),
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),

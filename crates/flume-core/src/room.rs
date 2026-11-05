@@ -628,8 +628,8 @@ impl Engine {
                         let room = stage.room.clone().unwrap_or_default();
                         let program = self
                             .resolve(&held.place, &held.place.kind.stages[index])
-                            .settings
-                            .program;
+                            .ok()
+                            .and_then(|resolved| resolved.settings.program);
                         Waiting {
                             place: held.place.id.clone(),
                             index,
