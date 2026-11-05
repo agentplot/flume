@@ -427,6 +427,7 @@ impl TestServer {
                 confirm: "enter".into(),
             }),
             kind: Some("claude".into()),
+            files: BTreeMap::new(),
         }
     }
 
@@ -1127,8 +1128,10 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
     let place = server.place("fix--one");
     let who = identity(1);
     let command = claude.command(
+        &server.scratch.path("state/fix--one").to_string_lossy(),
         &settings,
         None,
+        &BTreeMap::new(),
         None,
         &env,
         &place,
@@ -1923,8 +1926,10 @@ impl StandIn {
 impl Agent for StandIn {
     fn command(
         &self,
+        _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
@@ -1947,6 +1952,7 @@ impl Agent for StandIn {
             prompt_args: vec![prompt.into()],
             folder_trust: None,
             kind: Some("claude".into()),
+            files: BTreeMap::new(),
         }
     }
 

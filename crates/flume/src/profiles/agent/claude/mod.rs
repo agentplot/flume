@@ -249,14 +249,18 @@ impl Agent for Claude {
     /// runs where it is a nix wrapper, with the variables the wrapper
     /// sets ([`wrapper`]), its account's
     /// environment and the four `FLUME_*` words, the prompt as its argument where the terminal cannot send
-    /// it; nothing of the caller's session (29, 32, 33, 88, C.4). The
+    /// it; nothing of the caller's session (29, 32, 33, 88, C.4). It
+    /// passes no own settings and lists no file, since the profile keeps
+    /// the seam's refusal of them, so the core hands it none (191). The
     /// host user's login environment is the terminal's to give, set on
     /// the pane under herdr and the person's shell's under the printed
     /// command.
     fn command(
         &self,
+        _folder: &str,
         settings: &Settings,
         mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
@@ -310,6 +314,7 @@ impl Agent for Claude {
                 confirm: TRUST_CONFIRM.into(),
             }),
             kind: Some(KIND.into()),
+            files: BTreeMap::new(),
         }
     }
 

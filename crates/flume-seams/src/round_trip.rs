@@ -1344,8 +1344,10 @@ struct Bare;
 impl Agent for Bare {
     fn command(
         &self,
+        _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
@@ -1411,6 +1413,23 @@ fn a_profile_that_maps_no_mode() {
         .expect_err("a profile that maps no mode mapped an own value");
     assert!(words.contains("`careful`"), "{words}");
     assert_eq!(Bare.mode_read_back(), Offered::NotOffered);
+}
+
+#[test]
+fn a_profile_that_passes_no_own_settings() {
+    // A profile that keeps the seam's defaults reserves no key, refuses
+    // its program's keys, saying it passes none, and takes an empty entry
+    // (170, 191, 192).
+    assert_eq!(Bare.reserved(), vec![]);
+    let given = BTreeMap::from([("line".to_string(), serde_json::json!("a"))]);
+    let words = Bare
+        .own(&given)
+        .expect_err("a profile that passes no own settings took one");
+    assert!(
+        words.contains("passes no settings of its program's own"),
+        "{words}"
+    );
+    assert_eq!(Bare.own(&BTreeMap::new()), Ok(()));
 }
 
 #[test]
@@ -2335,6 +2354,10 @@ fn the_agent_seams_answers() {
             confirm: "enter".into(),
         }),
         kind: Some("agent".into()),
+        files: BTreeMap::from([(
+            "/state/fix--one/agent/own.json".into(),
+            r#"{"line":"a"}"#.into(),
+        )]),
     });
     let before: AgentCommand =
         serde_json::from_str(r#"{"program":"agent","args":[],"env":{},"prompt_args":[]}"#).unwrap();
@@ -2342,6 +2365,14 @@ fn the_agent_seams_answers() {
         before.kind, None,
         "a command written before it named a kind"
     );
+    assert!(
+        before.files.is_empty(),
+        "a command written before it listed files"
+    );
+    round_trips(Reserved {
+        key: "permissions.default".into(),
+        owner: "flume's mode".into(),
+    });
     for reading in [Reading::Yes, Reading::No, Reading::Unknown] {
         round_trips(reading);
     }

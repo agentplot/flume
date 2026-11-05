@@ -27,6 +27,11 @@ fn the_fake_agent_passes_the_agent_scenarios() {
         &agent::scenarios(),
         FakeAgentHarness::carrying_none,
     );
+    pass_all(
+        "agent",
+        &agent::scenarios(),
+        FakeAgentHarness::taking_no_own,
+    );
 }
 
 #[test]

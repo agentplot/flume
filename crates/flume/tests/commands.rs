@@ -53,8 +53,10 @@ fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
 impl Agent for StandInAgent {
     fn command(
         &self,
+        _folder: &str,
         settings: &Settings,
         _mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         _resume: Option<&str>,
         env: &BTreeMap<String, String>,
         _place: &PlaceRef,
@@ -76,6 +78,7 @@ impl Agent for StandInAgent {
             prompt_args: vec![prompt.to_string()],
             folder_trust: None,
             kind: None,
+            files: BTreeMap::new(),
         }
     }
     fn started(&self, _folder: &str, _agent: &Identity) -> Reading {

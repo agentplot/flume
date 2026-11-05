@@ -220,6 +220,7 @@ name = "flume-fakes"
 version = "0.0.0"
 dependencies = [
  "flume-seams",
+ "serde_json",
 ]
 
 [[package]]

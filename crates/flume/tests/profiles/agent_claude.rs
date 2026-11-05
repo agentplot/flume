@@ -22,7 +22,7 @@ use flume::profiles::agent::claude::{
 use flume::profiles::agent::claude::{carry, mode, transcript};
 use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::agent::{self, AgentHarness, Modes};
+use flume_conformance::seams::agent::{self, AgentHarness, Modes, OwnWay};
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -359,6 +359,30 @@ impl AgentHarness for Harness {
             reaches_none: at_home(&self.apart("work-3", earlier)),
         })
     }
+
+    /// The seam's defaults, which the profile keeps until it passes its
+    /// program's settings by `--settings <file>` (191, 192).
+    fn own_way(&self) -> OwnWay {
+        OwnWay::default()
+    }
+
+    /// The JSON object of the file the command names by `--settings`, as
+    /// the release reads one, from the files the command lists; none where
+    /// it names none (191, C.4).
+    fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>> {
+        let file = command
+            .args
+            .iter()
+            .skip_while(|arg| *arg != "--settings")
+            .nth(1)?;
+        Some(
+            command
+                .files
+                .get(file)
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default(),
+        )
+    }
 }
 
 #[test]
@@ -395,8 +419,10 @@ fn the_command_for_a_code_stage() {
     ]);
     let who = identity("code");
     let command = harness.seam.command(
+        &harness.folder(),
         &settings,
         None,
+        &BTreeMap::new(),
         None,
         &env,
         &harness.place(),
@@ -444,8 +470,10 @@ fn the_command_for_a_code_stage() {
         ..Settings::default()
     };
     let command = harness.seam.command(
+        &harness.folder(),
         &by_path,
         None,
+        &BTreeMap::new(),
         None,
         &env,
         &harness.place(),
@@ -468,8 +496,10 @@ fn the_command_passes_the_mode_it_is_given() {
     };
     let command = |mode: Option<&str>| {
         harness.seam.command(
+            &harness.folder(),
             &settings,
             mode,
+            &BTreeMap::new(),
             None,
             &BTreeMap::new(),
             &harness.place(),
@@ -509,8 +539,10 @@ fn the_command_for_a_stage_in_edits() {
     let value = harness.seam.mode(&entry).expect("edits mapped");
     // A `PATH` holding no `claude`, so the program runs by its name.
     let command = harness.seam.command(
+        &harness.folder(),
         &settings,
         Some(&value),
+        &BTreeMap::new(),
         None,
         &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
         &harness.place(),
@@ -594,8 +626,10 @@ fn the_plugin_an_agent_loads() {
     let place = harness.place();
     let who = identity("code");
     let first = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &place,
@@ -610,8 +644,10 @@ fn the_plugin_an_agent_loads() {
         .expect("the plugin written");
     std::thread::sleep(std::time::Duration::from_millis(20));
     let second = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &place,
@@ -824,8 +860,10 @@ fn the_trust_screen() {
     // trusting choice before it confirms (34; record 0018).
     let harness = Harness::new();
     let command = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &harness.place(),
@@ -875,11 +913,13 @@ fn the_command_of_a_carried_start() {
     let harness = Harness::new();
     let command = |resume: Option<&str>| {
         harness.seam.command(
+            &harness.folder(),
             &Settings {
                 model: Some("opus".into()),
                 ..Settings::default()
             },
             None,
+            &BTreeMap::new(),
             resume,
             &BTreeMap::new(),
             &harness.place(),
@@ -951,8 +991,10 @@ fn a_conversation_carried_to_a_home_whose_projects_links_the_firsts() {
         yes
     );
     let command = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         Some(SESSION),
         &at_home(&second),
         &harness.place(),

@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151, 161, 162, 169, 179).
+//! 135, 151, 161, 162, 169, 179, 192).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -63,6 +63,24 @@ pub trait AgentHarness {
     /// usage limit, as the program's release has them or the harness
     /// scripted them; none where the profile offers no carry (179).
     fn carry_accounts(&self, earlier: &Identity) -> Option<CarryAccounts>;
+
+    /// How the profile takes its program's own settings, as its program's
+    /// release has it or the harness scripted it (191, 192).
+    fn own_way(&self) -> OwnWay;
+
+    /// The own settings `command` passes its program, read as the program
+    /// reads them, from a file the command lists, its arguments or its
+    /// environment; none where it passes none (191, 192).
+    fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>>;
+}
+
+/// How a profile takes its program's own settings: whether it passes
+/// them, none by the seam's default, and the keys of its program's
+/// settings it reserves, each with its owner (191, 192).
+#[derive(Clone, Debug, Default)]
+pub struct OwnWay {
+    pub takes: bool,
+    pub reserved: Vec<Reserved>,
 }
 
 /// The accounts a profile's carry is read against: one whose environment
@@ -96,8 +114,10 @@ fn identity(stage: &str) -> Identity {
 fn started<H: AgentHarness>(harness: &H, stage: &str) -> Identity {
     let who = identity(stage);
     let command = harness.seam().command(
+        &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &harness.place(),
@@ -208,7 +228,124 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             cites: &["179", "88", "128"],
             run: carry_to_the_account_that_reaches_it::<H>,
         },
+        Scenario {
+            name: "agent: reserved names each key of its program's settings another setting or the account owns, by its path, with its owner, and none where its profile reserves none",
+            cites: &["88", "32", "162"],
+            run: reserved_keys_with_their_owners::<H>,
+        },
+        Scenario {
+            name: "agent: own takes an empty entry, and its program's keys only where its profile passes them, refusing them otherwise in words",
+            cites: &["88", "32"],
+            run: own_takes_as_its_profile_passes::<H>,
+        },
+        Scenario {
+            name: "agent: the command passes own settings as its program takes them, each file it lists under the place's folder, and passes none where it is given none",
+            cites: &["88", "32", "128"],
+            run: the_command_passes_own_settings::<H>,
+        },
     ]
+}
+
+/// A program's own settings as the seam's scenarios give them, one key
+/// inline (191).
+fn a_line() -> BTreeMap<String, serde_json::Value> {
+    BTreeMap::from([("line".to_string(), serde_json::json!("a"))])
+}
+
+fn reserved_keys_with_their_owners<H: AgentHarness>(harness: &H) -> Outcome {
+    let by_key = |reserved: Vec<Reserved>| -> BTreeMap<String, String> {
+        reserved
+            .into_iter()
+            .map(|Reserved { key, owner }| (key, owner))
+            .collect()
+    };
+    let reserved = harness.seam().reserved();
+    let named = by_key(reserved.clone());
+    ensure_eq!(named.len(), reserved.len(), "a key reserved twice");
+    ensure_eq!(
+        &named,
+        &by_key(harness.own_way().reserved),
+        "the keys reserved"
+    );
+    for (key, owner) in &named {
+        ensure!(
+            key.split('.').all(|part| !part.trim().is_empty()),
+            "the reserved key `{key}` is no path of keys"
+        );
+        ensure!(
+            !owner.trim().is_empty(),
+            "the reserved key {key} names no owner"
+        );
+    }
+    Ok(())
+}
+
+fn own_takes_as_its_profile_passes<H: AgentHarness>(harness: &H) -> Outcome {
+    ensure_eq!(
+        harness.seam().own(&BTreeMap::new()),
+        Ok::<(), String>(()),
+        "an empty entry"
+    );
+    match (harness.seam().own(&a_line()), harness.own_way().takes) {
+        (Ok(()), true) => Ok(()),
+        (Err(words), false) => {
+            ensure!(!words.trim().is_empty(), "own settings refused in no words");
+            Ok(())
+        }
+        (Ok(()), false) => Err("own settings taken by a profile that passes none".into()),
+        (Err(words), true) => Err(format!(
+            "own settings refused by a profile that passes them: {words}"
+        )),
+    }
+}
+
+fn the_command_passes_own_settings<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = identity("code");
+    let folder = harness.folder();
+    let command = |own: &BTreeMap<String, serde_json::Value>| {
+        harness.seam().command(
+            &folder,
+            &Settings::default(),
+            None,
+            own,
+            None,
+            &BTreeMap::new(),
+            &harness.place(),
+            &who,
+            &Secret("secret".into()),
+            "begin",
+        )
+    };
+    let within = |command: &AgentCommand| -> Outcome {
+        for path in command.files.keys() {
+            ensure!(
+                path.starts_with(&format!("{folder}/"))
+                    && !path.split('/').any(|part| part == ".."),
+                "the command lists {path}, outside the place's folder {folder}"
+            );
+        }
+        Ok(())
+    };
+    let none = command(&BTreeMap::new());
+    within(&none)?;
+    ensure_eq!(
+        harness.own_passed(&none),
+        None,
+        "own settings passed by a command given none"
+    );
+    // A profile that passes none is never given any: the core asks own
+    // first (192).
+    if !harness.own_way().takes {
+        return Ok(());
+    }
+    let given = command(&a_line());
+    within(&given)?;
+    ensure_eq!(
+        harness.own_passed(&given),
+        Some(a_line()),
+        "the own settings the command passes"
+    );
+    Ok(())
 }
 
 fn carry_not_offered<H: AgentHarness>(harness: &H) -> Outcome {
@@ -284,8 +421,10 @@ fn carry_to_the_account_that_reaches_it<H: AgentHarness>(harness: &H) -> Outcome
     };
     let command = |resume: Option<&str>| {
         harness.seam().command(
+            &harness.folder(),
             &Settings::default(),
             None,
+            &BTreeMap::new(),
             resume,
             &accounts.reaches,
             &harness.place(),
@@ -358,8 +497,10 @@ fn the_command_passes_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
     let who = identity("code");
     let command = |mode: Option<&str>| {
         harness.seam().command(
+            &harness.folder(),
             &Settings::default(),
             mode,
+            &BTreeMap::new(),
             None,
             &BTreeMap::new(),
             &harness.place(),
@@ -396,8 +537,10 @@ fn started_without_names_the_mode<H: AgentHarness>(harness: &H) -> Outcome {
     let who = identity("code");
     let folder = harness.folder();
     let command = harness.seam().command(
+        &harness.folder(),
         &Settings::default(),
         Some(asked),
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &harness.place(),
@@ -571,8 +714,10 @@ fn command_carries_identity_and_secret<H: AgentHarness>(harness: &H) -> Outcome 
         "/scratch/agent-work-1".to_string(),
     )]);
     let command = harness.seam().command(
+        &harness.folder(),
         &settings,
         None,
+        &BTreeMap::new(),
         None,
         &env,
         &harness.place(),
