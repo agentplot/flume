@@ -214,6 +214,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_reading_at_its_limit,
         },
         Scenario {
+            name: "account pools: a stage started again once its account is past its threshold moves to another, its move and its intent's saying the window and when it resets",
+            cites: &["185", "145", "147", "56"],
+            run: a_stage_moved_off_a_threshold,
+        },
+        Scenario {
             name: "account pools: a most-left pool's account reading 40% and 80% used two minutes ago has 20 left, taking a start before one with 19 left and after one with 21",
             cites: &["184", "145"],
             run: a_fresh_reading,
@@ -2161,9 +2166,21 @@ fn s87_past_ninety_percent(_: &()) -> Outcome {
         })
         .ok_or("status gives no move of the intent")?;
     ensure_eq!(
-        (moved.from.as_str(), moved.to.as_str(), moved.why),
-        ("work-1", "work-2", MoveWhy::Threshold),
-        "the intent's move"
+        (
+            moved.from.as_str(),
+            moved.to.as_str(),
+            moved.why,
+            moved.window.as_deref(),
+            moved.until
+        ),
+        (
+            "work-1",
+            "work-2",
+            MoveWhy::Threshold,
+            Some("5-hour"),
+            Some(seventeen)
+        ),
+        "the intent's move, work-1 past its threshold in 5-hour until 17:00"
     );
     ensure_eq!(
         kept(&world, &intent, "agent"),
@@ -2578,6 +2595,83 @@ fn most_left_after_the_affinity(_: &()) -> Outcome {
         account_of(&world, &other, "code"),
         on("work", "work-2"),
         "a place of another intent"
+    );
+    Ok(())
+}
+
+fn a_stage_moved_off_a_threshold(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let monday = now + 3 * 24 * 3600;
+    read_pool(&world, Strategy::FillFirst, &["work-1", "work-2"]);
+    let id = begun_fix(&world, "one")?;
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-1"),
+        "the first start"
+    );
+    let first = World::identity("fix", "one", "code", 1);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    let asked = world.engine.needs(
+        &first.to_string(),
+        &secret.0,
+        "which file?",
+        StopKind::NeedsAnswer,
+    );
+    ensure!(asked.refusal().is_none(), "the stop-short: {asked:?}");
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![
+            window("5-hour", 9_300, Some(now + 3600)),
+            window("7-day", 9_100, Some(monday)),
+        ],
+    );
+    let at = world.host.now();
+    let retried = world.engine().retry(
+        &id,
+        Retry::Stage("code".into()),
+        Some("fix.rs".into()),
+        false,
+    );
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the start after work-1 passed its threshold"
+    );
+    let moves: Vec<AccountMove> = world
+        .status(&id)?
+        .moves
+        .into_iter()
+        .map(|status| status.moved)
+        .collect();
+    let off = |on: MoveOn| AccountMove {
+        on,
+        from: "work-1".into(),
+        to: "work-2".into(),
+        why: MoveWhy::Threshold,
+        at,
+        carried: None,
+        window: Some("7-day".into()),
+        until: Some(monday),
+    };
+    ensure_eq!(
+        moves,
+        vec![
+            off(MoveOn::Stage {
+                stage: "code".into()
+            }),
+            off(MoveOn::Intent {
+                program: Some("agent".into())
+            })
+        ],
+        "the moves, the window that holds work-1 latest named"
     );
     Ok(())
 }

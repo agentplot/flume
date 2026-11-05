@@ -175,6 +175,37 @@ impl AccountRoom {
         self.account.program == program && self.short().is_none()
     }
 
+    /// The move of `on` off it to `to` at `at`, where it cannot take a
+    /// start now, with why, `carried` as a stage's move after its agent
+    /// stopped at the usage limit gives it, and, off an account past its
+    /// threshold, the window that holds it and when that window stops
+    /// holding it; none where it can take a start (56, 145 to 147, 185).
+    pub fn move_off(
+        &self,
+        on: MoveOn,
+        to: &str,
+        at: Seconds,
+        carried: Option<bool>,
+    ) -> Option<AccountMove> {
+        let why = self.short()?;
+        let past = match why {
+            MoveWhy::Threshold => self.past(),
+            MoveWhy::Spent | MoveWhy::Full => None,
+        };
+        let (window, until) =
+            past.map_or((None, None), |past| (Some(past.window), Some(past.until)));
+        Some(AccountMove {
+            on,
+            from: self.account.name.clone(),
+            to: to.to_string(),
+            why,
+            at,
+            carried,
+            window,
+            until,
+        })
+    }
+
     /// When it is back: the latest of the time it is spent until and the
     /// end of what holds it past its threshold, where it has either; none
     /// where it is only full (145, 146, 185).
@@ -300,9 +331,10 @@ impl Engine {
     /// `program` takes: the intent's affinity's for `program` while it is
     /// usable, else the strategy's choice over its pool's usable accounts,
     /// in order; and, where the strategy chose because the affinity's
-    /// account for `program` was spent or full, the intent's move to it for
-    /// `program`, unless it is an account the affinity for `program` once
-    /// left. A program the affinity keeps no account for moves nothing, and
+    /// account for `program` was spent, past its threshold or full, the
+    /// intent's move to it for `program`, off a threshold with the window
+    /// and its end, unless it is an account the affinity for `program`
+    /// once left. A program the affinity keeps no account for moves nothing, and
     /// a pool that holds no account of `program` refuses the stage (4, 32,
     /// 144, 145, 147; core.32).
     pub(crate) fn choose_account(
@@ -351,19 +383,17 @@ impl Engine {
             return (Choice::Wait, None);
         };
         let moved = kept.zip(affinity).and_then(|(kept, affinity)| {
-            let why = kept.short()?;
-            (!affinity.left(program, &chosen.account.name)).then(|| AccountMove {
-                on: MoveOn::Intent {
+            if affinity.left(program, &chosen.account.name) {
+                return None;
+            }
+            kept.move_off(
+                MoveOn::Intent {
                     program: Some(program.to_string()),
                 },
-                from: kept.account.name.clone(),
-                to: chosen.account.name.clone(),
-                why,
-                at: now,
-                carried: None,
-                window: None,
-                until: None,
-            })
+                &chosen.account.name,
+                now,
+                None,
+            )
         });
         (chose(chosen, AccountFrom::Strategy), moved)
     }
@@ -468,10 +498,11 @@ impl Engine {
 
 impl Engine {
     /// The move of the stage at `index` from the account its last start
-    /// ran under to `to`, in the same pool, where that account is spent or
-    /// at its own bound now, with whether its conversation went with it,
+    /// ran under to `to`, in the same pool, where that account is spent,
+    /// past its threshold or at its own bound now, off a threshold with
+    /// the window and its end, with whether its conversation went with it,
     /// `carried`, where its agent stopped at its account's usage limit;
-    /// none otherwise (56, 145, 146, 179).
+    /// none otherwise (56, 145, 146, 179, 185).
     pub(crate) fn stage_moved(
         &self,
         held: &HeldState,
@@ -487,19 +518,14 @@ impl Engine {
         if from.pool != to.pool || from.name == to.name {
             return None;
         }
-        let why = queue.account(&from.pool, &from.name)?.short()?;
-        Some(AccountMove {
-            on: MoveOn::Stage {
+        queue.account(&from.pool, &from.name)?.move_off(
+            MoveOn::Stage {
                 stage: stage.name.clone(),
             },
-            from: from.name.clone(),
-            to: to.name.clone(),
-            why,
-            at: now,
+            &to.name,
+            now,
             carried,
-            window: None,
-            until: None,
-        })
+        )
     }
 }
 
