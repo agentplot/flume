@@ -363,6 +363,21 @@ fn place_status() -> PlaceStatus {
                 base: None,
             },
         }),
+        line: line(),
+    }
+}
+
+/// A place's line, every part present.
+fn line() -> PlaceLine {
+    PlaceLine {
+        name: "fix--one".into(),
+        kind: "fix@1".into(),
+        stage: Some("code".into()),
+        run: Some(2),
+        tasks: Some("1/3".into()),
+        state: "working".into(),
+        full: "fix--one · fix@1 · code · run 2 · tasks 1/3 · working".into(),
+        short: "code · run 2 · tasks 1/3 · working".into(),
     }
 }
 
@@ -551,6 +566,12 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                 place: place_status(),
             },
         ),
+        (
+            "lines",
+            Answer::Lines {
+                lines: vec![line()],
+            },
+        ),
     ]
 }
 
@@ -734,6 +755,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].clues.stage",
             "status.places[].clues.state",
             "status.places[].clues.title",
+            "status.places[].line",
+            "status.places[].line.full",
+            "status.places[].line.kind",
+            "status.places[].line.name",
+            "status.places[].line.run",
+            "status.places[].line.short",
+            "status.places[].line.stage",
+            "status.places[].line.state",
+            "status.places[].line.tasks",
             "status.places[].current",
             "status.places[].declared",
             "status.places[].delivered",
@@ -927,6 +957,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.clues.stage",
             "launched.place.clues.state",
             "launched.place.clues.title",
+            "launched.place.line",
+            "launched.place.line.full",
+            "launched.place.line.kind",
+            "launched.place.line.name",
+            "launched.place.line.run",
+            "launched.place.line.short",
+            "launched.place.line.stage",
+            "launched.place.line.state",
+            "launched.place.line.tasks",
             "launched.place.current",
             "launched.place.declared",
             "launched.place.delivered",
@@ -1120,6 +1159,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.clues.stage",
             "acted.status.clues.state",
             "acted.status.clues.title",
+            "acted.status.line",
+            "acted.status.line.full",
+            "acted.status.line.kind",
+            "acted.status.line.name",
+            "acted.status.line.run",
+            "acted.status.line.short",
+            "acted.status.line.stage",
+            "acted.status.line.state",
+            "acted.status.line.tasks",
             "acted.status.current",
             "acted.status.declared",
             "acted.status.delivered",
@@ -1418,6 +1466,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.clues.stage",
             "woken.place.clues.state",
             "woken.place.clues.title",
+            "woken.place.line",
+            "woken.place.line.full",
+            "woken.place.line.kind",
+            "woken.place.line.name",
+            "woken.place.line.run",
+            "woken.place.line.short",
+            "woken.place.line.stage",
+            "woken.place.line.state",
+            "woken.place.line.tasks",
             "woken.place.current",
             "woken.place.declared",
             "woken.place.delivered",
@@ -1556,6 +1613,21 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waiting_on.why",
             "woken.place.waiting_on.words",
             "woken.woke",
+        ],
+    ),
+    (
+        "lines",
+        &[
+            "lines",
+            "lines.lines",
+            "lines.lines[].full",
+            "lines.lines[].kind",
+            "lines.lines[].name",
+            "lines.lines[].run",
+            "lines.lines[].short",
+            "lines.lines[].stage",
+            "lines.lines[].state",
+            "lines.lines[].tasks",
         ],
     ),
 ];

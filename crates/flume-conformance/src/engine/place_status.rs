@@ -39,6 +39,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_terminals_setup,
         },
         Scenario {
+            name: "status: a fix whose code agent works gives its line with every part in the JSON form, `fix--<name> · fix@1 · code · run 1 · working` in full",
+            cites: &["56", "61"],
+            run: a_line_in_status,
+        },
+        Scenario {
+            name: "status: the place's answer dropping its line or one of the line's fields fails naming the answer and the field",
+            cites: &["61"],
+            run: a_line_field_dropped,
+        },
+        Scenario {
+            name: "status: a terminal whose configuration binds no key to flume's places gives those words as the host's terminal setup when one place is asked of, and nothing is sent to any pane",
+            cites: &["122", "72", "57"],
+            run: a_popup_with_no_key,
+        },
+        Scenario {
             name: "status: a place no longer held is not answered for",
             cites: &["62", "58"],
             run: a_place_gone,
@@ -527,6 +542,79 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
         .find(|place| place.kind == "change")
         .ok_or("no change")?;
     ensure!(plan.tasks.is_some(), "no tasks for a change's place");
+    Ok(())
+}
+
+fn a_line_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    let id = super::account_pools::begun_fix(&world, "parser")?;
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    let line = json["line"].as_object().ok_or("no line in the JSON form")?;
+    ensure_eq!(
+        line.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["full", "kind", "name", "run", "short", "stage", "state", "tasks"],
+        "the line's fields"
+    );
+    ensure_eq!(
+        status.line.full.as_str(),
+        "fix--parser · fix@1 · code · run 1 · working",
+        "the line in full"
+    );
+    Ok(())
+}
+
+fn a_line_field_dropped(_: &()) -> Outcome {
+    use super::answers::{full, missing};
+    let (name, answer) = full().remove(0);
+    for (field, path) in [
+        ("line", "status.places[].line"),
+        ("short", "status.places[].line.short"),
+    ] {
+        let mut json: serde_json::Value =
+            serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+        let place = &mut json["status"]["places"][0];
+        let holder = if field == "line" {
+            place
+        } else {
+            &mut place["line"]
+        };
+        holder
+            .as_object_mut()
+            .ok_or("no object")?
+            .remove(field)
+            .ok_or("no such field")?;
+        let missed = missing(name, &json);
+        ensure!(
+            missed.contains(&format!("the answer status lacks its field {path}")),
+            "the fields missed: {missed:?}"
+        );
+    }
+    Ok(())
+}
+
+fn a_popup_with_no_key(_: &()) -> Outcome {
+    use crate::fake_harness::SETUP;
+    let world = World::new();
+    let id = super::account_pools::begun_fix(&world, "parser")?;
+    world.terminal.set_setup(&[SETUP]);
+    let sends = |world: &World| {
+        (
+            world.terminal.log.count("send"),
+            world.terminal.log.count("send_to"),
+            world.terminal.every_notice().len(),
+        )
+    };
+    let before = sends(&world);
+    let Answer::Status { host, .. } = world.engine().status(Some(&id)) else {
+        return Err("status refused".into());
+    };
+    ensure_eq!(
+        host.terminal_setup,
+        vec![SETUP.to_string()],
+        "the host's terminal setup"
+    );
+    ensure_eq!(sends(&world), before, "what was sent to a pane");
     Ok(())
 }
 

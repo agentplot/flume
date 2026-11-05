@@ -113,6 +113,9 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Lines { lines: places } => {
+            lines.extend(places.iter().map(|line| line.full.clone()));
+        }
     }
     lines.join("\n")
 }

@@ -103,8 +103,8 @@ kit:testing.5).
 |---|---|
 | `name` | `<kind>--<name>` |
 | `kind` | `<kind>@<version>` |
-| `stage` | the current stage as `label` gives it, `code 3/9` for a repeating stage's group (142); none where the place has no current stage |
-| `run` | how many times the current stage started (48); none with no current stage |
+| `stage` | the current stage as `label` gives it, `code 3/9` for a repeating stage's group (142): the stage the place most recently started, else the first it reached with no start, held, waiting on its readiness or refused; none where the place is not live or reached none |
+| `run` | how many times the current stage started (48); none where it has not started |
 | `tasks` | `<ticked>/<all>` of the change's tasks at the head; none where the place has no change, or it holds no tasks |
 | `state` | design 2's word |
 | `full` | `name · kind · stage · run <n> · tasks <t>/<n> · state`, a part with none left out |
@@ -120,8 +120,8 @@ asking, and the asking session's identity where one asks. Status calls
 it with what it has read already. `Engine::line(place, identity)`
 reads only what the line needs. It reads the place's held state through
 the store seam (the state-directory profile). Where the place's kind
-has a change, it reads the place's head through the place seam and the
-change at that head through the change seam, the OpenSpec profile
+has a change and the place is live, it reads the place's head through
+the history seam and the change at that head through the change seam, the OpenSpec profile
 where the repository binds it, as status reads it, once (58). It asks
 the live agent's profile for its asking mark through the agent seam's
 `asking`, which the Claude Code profile reads from the agent's own
@@ -159,9 +159,9 @@ the agent's own record, never the terminal or the merge queue.
 | its stage waiting for room (70) | `waiting for room` |
 | its live agent not yet started (35) | `starting` |
 | its live agent's profile reads it asking a person (90) | `asking` |
+| its stage stuck past its limit, its agent live and quiet (118) | `stuck` |
 | its live agent in a conversation stage | `in conversation` |
 | its live agent otherwise | `working` |
-| its stage stuck past its limit (118) | `stuck` |
 | submitted by flume at least once, the submission not due, no stage running (48) | `submitted` |
 | otherwise | the current stage's state as `word` spells it, `delivered` or `repeating` |
 
