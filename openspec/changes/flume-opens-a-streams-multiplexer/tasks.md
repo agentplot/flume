@@ -2,11 +2,14 @@
 
 Each group is one session's work for an agent that reads this change
 (proposal, design, specs) and its group, and builds on main and on the
-groups before it. The change is built once the user has accepted record
-0037 and the statement's amendment stands on agentplot/blueprints main,
-and once `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`
+groups before it. Record 0037 is accepted and the statement's
+amendment stands on agentplot/blueprints main at d680e35. Groups 1 and
+2 are built on main as it stands. Groups 3 and 4 are built once
+`each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`
 has landed, on main as it leaves `room.rs`, `host.rs`, `config.rs` and
-the herdr profile. A group's last task runs the checks it touched
+the herdr profile, merged into this branch first, its `Stream`, its
+terminal seam and its fake terminal resolved beside group 2's. A
+group's last task runs the checks it touched
 through sluice. Every conformance scenario a group adds cites its
 clauses as data (106). The engine's scenarios name no tool (core.1).
 Tests reach no window of the host's display, no herdr session of the
@@ -23,6 +26,7 @@ and a test whose socket's path leaves no room fails naming its bytes.
 - [x] 1.1 Add record 0037, proposed, "A person opens a stream's agents in a window flume opens, titled as the stream declares", quoting the user's words of 2026-11-05, with its deciders, sources (the statement at 3cc35fa on `design/flume-a-stream-opens-in-a-window`; records 0018, 0026, 0031, 0032), context, five considered options, outcome, why not the others and consequences (105, 120, 143, 186 to 189, C.5, C.7, C.8, S90; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
 - [x] 1.2 Draw core.48 in `docs/architecture/core.md` under "Settling, surfaces and state" with its details, have core.1 name the window program and its details `ghostty` and `Ghostty.app`, and have core.13's details name a session's server the terminal's profile starts and a window the window seam hands to the display as no process of flume's, each citing record 0037. Have `site/src/content/docs/architecture/rules.md` mirror core.1 and core.48 as written (core.19, core.35). True when `sluice exec main -- moon run root:format site:prose site:build` passes.
 - [x] 1.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run root:format root:adrs root:changes site:prose site:build` passes.
+- [x] 1.4 Set record 0037 accepted on the user's word of 2026-11-05, "Yes, accept it", citing the statement on agentplot/blueprints main at d680e35, and its build's order as the user ruled, "I want to build it now": groups 1 and 2 on main as it stands, groups 3 and 4 after the change they read lands. Have the proposal, the design and this list cite that revision, and write design 13, how a multiplexer's native app is added as a terminal profile whose attach answers that it showed the part (187; core.2, core.19). True when `sluice exec main -- moon run root:format root:adrs root:changes` passes.
 
 ## 2. The seams and their fakes
 

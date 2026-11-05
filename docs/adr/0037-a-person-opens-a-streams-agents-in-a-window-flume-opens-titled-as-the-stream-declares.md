@@ -1,7 +1,7 @@
 ---
 number: 37
 title: A person opens a stream's agents in a window flume opens, titled as the stream declares
-status: proposed
+status: accepted
 date: 2026-11-05
 decision-makers:
 - Chuck Swanberg
@@ -9,10 +9,10 @@ decision-makers:
 
 # A person opens a stream's agents in a window flume opens, titled as the stream declares
 
-Status: proposed. The user asked for it on 2026-11-05 and asked the same day to rush it: "rather than maintaining aliases for launching my multiplexers, I could have a command that uses Flume to open the multiplexer for a given stream. I guess it would be at the stream level, right? This way as I add new multiplexers like Rex or TUIOS, I wouldn't have to keep maintaining custom scripts." It is stated on the agentplot/blueprints branch `design/flume-a-stream-opens-in-a-window` at 3cc35fa, proposed until the user's yes. The record waits on the user's yes once they have seen it as a record, on their review of the change `flume-opens-a-streams-multiplexer`.
+Status: accepted by the user on 2026-11-05, on their review of the change `flume-opens-a-streams-multiplexer`, in their Plannotator Inbox: "Yes, accept it". They asked for it the same day and asked to rush it: "rather than maintaining aliases for launching my multiplexers, I could have a command that uses Flume to open the multiplexer for a given stream. I guess it would be at the stream level, right? This way as I add new multiplexers like Rex or TUIOS, I wouldn't have to keep maintaining custom scripts." It is stated on agentplot/blueprints main at d680e35.
 
 Deciders: the user, who asked for one command, at the stream's level, that opens the stream's multiplexer, so that a new multiplexer needs no new script. The brief that carried their words gave the window's title as the stream's own, declared with the stream, so a window manager can file it. The writing agent's: the window as a seam of its own, bound once for the host; the terminal seam's attach; the command's name and form; the title's default; both keys in the managed layer alone; what the printed command gives; and that flume keeps nothing of a window.
-Sources: `agentplot/blueprints:design/flume/requirements.md` at 3cc35fa, clauses 105, 107, 120, 143 and 186 to 189, B.5, B.8, B.9, C.5, C.7, C.8 and S90; records 0018, 0026, 0031 and 0032; rules core.1, core.2, core.13, core.14, core.17, core.29, core.30, core.35; `crates/flume-seams/src/terminal.rs` (`Terminal`), `crates/flume/src/profiles.rs` (`terminal`), and, on the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`, `crates/flume-core/src/room.rs` (`StreamRoom::session`) and `crates/flume/src/profiles/terminal/herdr/mod.rs` (`socket_of`, `start_session`); Ghostty 1.4.0's `+help` and its `title` option's documentation; herdr 0.9.5's `session attach`.
+Sources: `agentplot/blueprints:design/flume/requirements.md` at d680e35, clauses 105, 107, 120, 143 and 186 to 189, B.5, B.8, B.9, C.5, C.7, C.8 and S90; records 0018, 0026, 0031 and 0032; rules core.1, core.2, core.13, core.14, core.17, core.29, core.30, core.35; `crates/flume-seams/src/terminal.rs` (`Terminal`), `crates/flume/src/profiles.rs` (`terminal`), and, on the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`, `crates/flume-core/src/room.rs` (`StreamRoom::session`) and `crates/flume/src/profiles/terminal/herdr/mod.rs` (`socket_of`, `start_session`); Ghostty 1.4.0's `+help` and its `title` option's documentation; herdr 0.9.5's `session attach`.
 
 ## Context and problem statement
 
@@ -48,10 +48,10 @@ Option 1 is what the user asked to end. Option 3 needs no code for a new window 
 
 ### Consequences
 
-- The statement gains 186 to 189, B.8 the window, with the binding moved to B.9, C.8 the window's profiles and S90. It amends the preamble's seams, the vocabulary, 105, 143, C.5 and C.7, and section 9's command line and profiles (core.19). The amendments are on the blueprints branch until the user accepts them, and the change is built once they stand on blueprints main.
+- The statement gains 186 to 189, B.8 the window, with the binding moved to B.9, C.8 the window's profiles and S90. It amends the preamble's seams, the vocabulary, 105, 143, C.5 and C.7, and section 9's command line and profiles (core.19). The amendments stand on blueprints main at d680e35.
 - Rule core.48 is drawn from this record. core.1 names the window program among the tools code outside a profile names none of, and core.13's details name the window and the terminal's server as processes that are not flume's.
 - The terminal seam gains attach. A new seam, the window, gains its interface, its fake and its scenarios. Its profiles are ghostty and the printed command.
 - A host that names no window gets the command. `flume open madswan` then prints the line a person's own launcher ran, and a launcher of one line can run it.
 - A new multiplexer is one terminal profile with its attach, and a new window program one window profile, each written once for every host.
 - Ghostty is not pinned by the tree: it is a program of the host's display, which no gate task runs. The ghostty profile is held by tests of the command line it builds, run against a stand-in for `open` and `ghostty`, and its flags are checked against Ghostty 1.4.0's documentation. A Ghostty that changes `title` or `-e` breaks the window and nothing else.
-- The change `flume-opens-a-streams-multiplexer` builds it, after the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer` lands, since it reads that change's sessions.
+- The change `flume-opens-a-streams-multiplexer` builds it. Its seams and their fakes are built on main as it stands, as the user ruled on 2026-11-05, "I want to build it now". The core's open, the profiles and the command are built after the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer` lands, since they read that change's sessions.

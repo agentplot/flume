@@ -19,13 +19,10 @@ day to rush it.
 
 flume knows the host's terminal, each stream's session and the herdr it
 drives. It does not know the program that opens a window on the host's
-display, or the title a stream's window wants. Record 0037, proposed,
-decides both, and the statement's amendment that states them is on the
-agentplot/blueprints branch `design/flume-a-stream-opens-in-a-window`
-at 3cc35fa (105, 120, 143, 186 to 189, B.5, B.8, B.9, C.5, C.7, C.8,
-S90). Nothing is built until the user accepts record 0037 on their
-review of this change and the amendment stands on blueprints main
-(core.19).
+display, or the title a stream's window wants. Record 0037, accepted
+by the user on 2026-11-05, decides both, and the statement's amendment
+that states them stands on agentplot/blueprints main at d680e35 (105,
+120, 143, 186 to 189, B.5, B.8, B.9, C.5, C.7, C.8, S90; core.19).
 
 ## What Changes
 
@@ -93,15 +90,15 @@ review of this change and the amendment stands on blueprints main
 
 ## Impact
 
-- agentplot/blueprints: the amendment on
-  `design/flume-a-stream-opens-in-a-window` at 3cc35fa, which the build
-  reads once it is on main (core.19). Clauses 184 and 185, S86 to S88
-  and S89 stay with the changes that claim them.
+- agentplot/blueprints: the amendment on main at d680e35, which the
+  build reads (core.19). Clauses 184 and 185, S86 to S88 and S89 stay
+  with the changes that claim them.
 - The change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`:
   this change reads its sessions, `StreamRoom::session`,
   `Herdr::socket_of` and `SESSION_HOME`, its host configuration's two
-  layers and its `Stream::session`. This change is built after it
-  lands, on main as it leaves them.
+  layers and its `Stream::session`. This change's seams and fakes are
+  built on main as it stands; its core's open, its profiles and its
+  command after that change lands, on main as it leaves them.
 - `crates/flume-seams`: `Terminal::attach`, `Attached`, `ViewCommand`,
   a new `window.rs` with `Window`, `WindowShown`, and `Stream::title`,
   only added, a stream written before reading with none.

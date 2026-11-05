@@ -22,8 +22,11 @@ found by `herdr session list --json` and started headless by `herdr
 and runs every call with `XDG_CONFIG_HOME`, `SESSION_HOME`, set where
 `with_session_home` gave a home. The host's configuration is read in two
 layers, and `[streams.<stream>]` takes `agents`, `priority`, `pool`,
-`session` and `labels`, refusing any other key. This change is built
-after that one lands, on main as it leaves them.
+`session` and `labels`, refusing any other key. This change's seams
+and fakes are built on main as it stands, as the user ruled on
+2026-11-05. Its core's open, its profiles and its command are built
+after that change lands, on main as it leaves them, and its `Stream`,
+its terminal seam and its fake terminal are merged in then.
 
 A person who wants a stream's agents today runs a launcher of their own:
 it opens a window of their terminal program, `herdr --session <name>`
@@ -34,14 +37,12 @@ and `open -na Ghostty.app --args …` does, `open --env` giving the new
 process a variable. herdr 0.9.5 attaches a client to a named session by
 `herdr session attach <name>`, finding it under its sessions' home.
 
-The statement's amendment is on the agentplot/blueprints branch
-`design/flume-a-stream-opens-in-a-window` at 3cc35fa: 186 in Part A,
-attach (187) in B.5, the window as B.8 (188, 189) with the binding
-moved to B.9, 105, 143, C.5's attach row, C.7's `title` and `[host]
-window`, C.8 the window's profiles, section 9's command line and S90.
-Record 0037 decides it, proposed until the user's review of this change
-accepts it. The build reads the statement at the revision of blueprints
-main that states it (core.19). Clauses 184 and 185, S86 to S88 and S89
+The statement's amendment stands on agentplot/blueprints main at
+d680e35: 186 in Part A, attach (187) in B.5, the window as B.8 (188,
+189) with the binding moved to B.9, 105, 143, C.5's attach row, C.7's
+`title` and `[host] window`, C.8 the window's profiles, section 9's
+command line and S90. Record 0037 decides it, accepted by the user on
+2026-11-05. The build reads the statement at that revision (core.19). Clauses 184 and 185, S86 to S88 and S89
 are claimed by `a-pool-chooses-the-seat-with-the-most-quota-left` and
 `a-places-readiness-is-one-design-across-the-tools`.
 
@@ -71,10 +72,11 @@ kit:testing.5).
 
 **Non-Goals:**
 
-- A terminal profile for Rex or TUIOS. The seam admits both: a
-  multiplexer that a window program runs answers attach with its
-  command, and one that draws its own windows answers that it showed
-  the part. Each is a change of its own, checked against its release.
+- A terminal profile for Rex or TUIOS, or for a multiplexer's native
+  app. The seam admits each: a multiplexer that a window program runs
+  answers attach with its command, and one that draws its own windows
+  answers that it showed the part (decision 13). Each is a change of
+  its own, checked against its release.
 - A window on a place's own tab or an agent's pane. The herdr plugin's
   key already opens a place's pane. A later `flume open` of a place can
   take a flag.
@@ -395,6 +397,32 @@ builds and has not built, 184, 185 and S86 to S89 among them where they
 stand there unbuilt, stays named unbuilt by that change. 186 to 189 and
 S90 are cited by this change's scenarios.
 
+### 13. A multiplexer's native app
+
+A multiplexer may show its sessions in a terminal interface that a
+window program runs, or in a native app that draws its own windows.
+herdr and Rex each have a native app on macOS. The user, on 2026-11-05:
+"I don't know how we support loading the TUI versus the native app."
+The seam holds both as it stands:
+
+- **The terminal interface** is a terminal profile whose attach answers
+  `Command`, which the window seam's program runs under the title, as
+  herdr's does in this change.
+- **A native app** is a terminal profile whose attach opens the app on
+  the named part under the title and answers `Shown`. `open_stream`
+  then asks nothing of the window seam, `[host] window` is not read for
+  it, and the answer's window is `Terminal` (187).
+
+This change writes no native app's profile. One is added as a change of
+its own, checked against the app's release: how the app is asked to
+open a session and to take a title, and that its attach answers within
+a bound it states (98). Where an app and a terminal interface drive one
+server, as herdr's app drives the server herdr's command line drives,
+the choice between them is the terminal profile's own, named in the
+host's configuration by that change, since no profile calls another
+(core.2). Its agents run on that server either way, so only attach
+differs.
+
 ## Risks / Trade-offs
 
 - **Ghostty is not pinned.** A release that changes `--title` or `-e`,
@@ -432,4 +460,4 @@ S90 are cited by this change's scenarios.
 ## Open Questions
 
 None. The command's name, the window seam and the keys' layer are
-record 0037's, proposed until the user's review of this change.
+record 0037's, accepted by the user on 2026-11-05.
