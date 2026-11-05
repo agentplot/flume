@@ -288,7 +288,7 @@ impl MergeQueueHarness for Harness {
 
     /// `bolt/x`, its policy naming it, given a submission from `unit/x`,
     /// then a policy at its tip that declares `[[checkout.cache]]`, which
-    /// sluice 0.57.1 refuses: no round of `bolt/x` has read its revision,
+    /// sluice 0.67.0 refuses: no round of `bolt/x` has read its revision,
     /// so `sluice status bolt/x` reads the policy at its tip and refuses
     /// the branch, as it refused one on deneb on 2026-11-04.
     fn refuse_another(&self, _place: &PlaceRef) -> String {
