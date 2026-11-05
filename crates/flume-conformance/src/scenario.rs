@@ -116,6 +116,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             branch: "fix/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: None,
             location: id.0.clone(),
             binding: Binding::default(),
             brief: Some("mend it".into()),

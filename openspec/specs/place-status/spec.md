@@ -233,6 +233,18 @@ core.30).
 - **WHEN** status is asked of a place whose carried start 2 ended before it said it started and whose start 3 started afresh
 - **THEN** the place lists start 2 as carried and not begun with why, and the agent of start 3 gives start 1, not carried, and why (56, S79)
 
+### Requirement: Status gives where a place's base was read
+
+Status SHALL give, for each place, where its launch read the base's
+revision: `merge-queue`, `origin`, `no-origin` or `origin-lacks`, as
+`base_from` in the JSON form and beside the base in the person's form,
+and none for a place launched before flume said (56, C.1).
+
+#### Scenario: Where the base was read
+
+- **WHEN** status is asked of a place cut at origin's base, and of one cut at the host's own where origin holds none
+- **THEN** the JSON form gives `base_from` `origin` and `origin-lacks`, and the person's form `from main (at origin)` and `from trial (the host's own, origin holding none)` (56, C.1)
+
 ### Requirement: Status gives every place's line
 
 Status SHALL give, for every place it gives, the place's line with each of its parts, its full form and its short form, made from the facts status read, in its JSON form, and the person's form SHALL print the line's full form under the place's heading (56, 61; core.14).

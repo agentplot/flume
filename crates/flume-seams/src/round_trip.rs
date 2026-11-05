@@ -193,6 +193,7 @@ fn held() -> HeldState {
             branch: "bump/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: Some(BaseFrom::OriginLacks),
             location: "/r/places/bump--one".into(),
             binding: Binding {
                 place: Some("place-tool".into()),
@@ -2338,6 +2339,42 @@ fn where_the_base_lives() {
     round_trips(BaseRevision::Refused {
         reason: "fetch failed".into(),
     });
+    round_trips(BaseRevision::Unlanded);
+    for branch in [
+        OriginBranch::At {
+            revision: Revision::new("c2"),
+        },
+        OriginBranch::NoOrigin,
+        OriginBranch::Lacks,
+        OriginBranch::Refused {
+            reason: "origin is out of reach".into(),
+        },
+    ] {
+        round_trips(branch);
+    }
+    for from in [
+        BaseFrom::MergeQueue,
+        BaseFrom::Origin,
+        BaseFrom::NoOrigin,
+        BaseFrom::OriginLacks,
+    ] {
+        round_trips(from);
+    }
+}
+
+#[test]
+fn a_place_held_before_it_said_where_its_base_was_read() {
+    // A place launched before flume said where it read the base reads
+    // with none, and writes none back (56, C.1).
+    let mut json = serde_json::to_value(held()).expect("held state as JSON");
+    json["place"]
+        .as_object_mut()
+        .expect("the place")
+        .remove("base_from");
+    let before: HeldState = serde_json::from_value(json).expect("read back");
+    assert_eq!(before.place.base_from, None);
+    let written = serde_json::to_value(&before).expect("written");
+    assert!(written["place"].get("base_from").is_none(), "{written}");
 }
 
 #[test]

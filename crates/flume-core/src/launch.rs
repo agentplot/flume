@@ -1,8 +1,9 @@
 //! A launch (1 to 12, 19 to 23): the kind resolved over the three
 //! declarations and the binding read, the base's revision where the
-//! merge queue says it lives, every refusal made before anything is
-//! made, then one place made, readied, and its first stage started, held
-//! or left waiting on readiness. The repository's settings for the kind
+//! merge queue says it lives, else at origin after a fetch, and where it
+//! was read kept for status (9, 56, C.1), every refusal made before
+//! anything is made, then one place made, readied, and its first stage
+//! started, held or left waiting on readiness. The repository's settings for the kind
 //! are read with its kinds and kept, and every stage's agent is resolved
 //! with the host's configuration as it stands, so a program no agent
 //! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
@@ -135,6 +136,40 @@ impl Engine {
             })
     }
 
+    /// The base's current revision and where it was read (9, 126, C.1):
+    /// where the merge queue's profile says the base lives, where the
+    /// merge queue lands it; else `origin/<base>` after git's fetch, so no
+    /// copy the host holds is read while origin holds the base; else the
+    /// host's own branch, where the repository has no `origin` or `origin`
+    /// holds no such branch. A fetch that fails refuses the launch.
+    fn base_now(
+        &self,
+        repository: &str,
+        base: &str,
+        queue: Option<&dyn MergeQueue>,
+    ) -> Result<(Revision, BaseFrom), String> {
+        let unread = |reason: String| {
+            format!("the base {base}'s current revision could not be read: {reason}")
+        };
+        if let Some(queue) = queue {
+            match queue.base_revision(repository, base) {
+                BaseRevision::At { revision } => return Ok((revision, BaseFrom::MergeQueue)),
+                BaseRevision::Refused { reason } => return Err(unread(reason)),
+                BaseRevision::Unlanded => {}
+            }
+        }
+        let from = match self.history.origin_branch(repository, base) {
+            OriginBranch::At { revision } => return Ok((revision, BaseFrom::Origin)),
+            OriginBranch::Refused { reason } => return Err(unread(reason)),
+            OriginBranch::NoOrigin => BaseFrom::NoOrigin,
+            OriginBranch::Lacks => BaseFrom::OriginLacks,
+        };
+        self.history
+            .head(repository, base)
+            .map(|revision| (revision, from))
+            .ok_or_else(|| format!("{repository} has no base {base}"))
+    }
+
     /// Refuses a kind that asks for more than flume runs (4, 23).
     fn runs(kind: &Kind) -> Result<(), String> {
         let named = format!("the kind {}@{}", kind.name, kind.version);
@@ -192,21 +227,8 @@ impl Engine {
         } = self
             .bind(repository, &binding)
             .map_err(|reason| format!("{repository}'s binding: {reason}"))?;
-        let base_revision = match &merge_queue {
-            Some(queue) => match queue.base_revision(repository, &launch.base) {
-                BaseRevision::At { revision } => revision,
-                BaseRevision::Refused { reason } => {
-                    return Err(format!(
-                        "the base {}'s current revision could not be read: {reason}",
-                        launch.base
-                    ))
-                }
-            },
-            None => self
-                .history
-                .head(repository, &launch.base)
-                .ok_or_else(|| format!("{repository} has no base {}", launch.base))?,
-        };
+        let (base_revision, base_from) =
+            self.base_now(repository, &launch.base, merge_queue.as_deref())?;
         let (kind, declared, repository_settings, repository_agents) =
             self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind)?;
@@ -325,6 +347,7 @@ impl Engine {
                 branch: branch.clone(),
                 base: launch.base.clone(),
                 base_revision: base_revision.clone(),
+                base_from: Some(base_from),
                 location: location.clone(),
                 binding,
                 brief: launch.brief.clone(),

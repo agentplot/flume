@@ -743,6 +743,12 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
         );
     }
 
+    fn base_unlanded(&self, repository: &str) -> String {
+        self.queue
+            .set_base(repository, "trial", BaseRevision::Unlanded);
+        "trial".into()
+    }
+
     fn unreadable(&self) {
         self.queue.unreadable("the merge queue is down");
     }
@@ -829,5 +835,22 @@ impl HistoryHarness for FakeHistoryHarness {
 
     fn made_default(&self) -> String {
         "fix/one".into()
+    }
+
+    fn origin_ahead(&self, repository: &str, branch: &str) -> Revision {
+        let own = self
+            .git
+            .branch_head(repository, branch)
+            .expect("the branch");
+        self.git.set_branch(repository, "origin-copy", &own);
+        self.git.commit(repository, "origin-copy", &["one.rs"]);
+        let ahead = self.git.commit(repository, "origin-copy", &["two.rs"]);
+        self.git.set_origin(repository, branch, &ahead);
+        ahead
+    }
+
+    fn origin_gone(&self, repository: &str) {
+        self.git
+            .origin_fails(repository, "origin does not appear to be a git repository");
     }
 }

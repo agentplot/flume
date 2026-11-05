@@ -21,6 +21,14 @@ pub trait HistoryHarness {
     /// The default branch the harness made the repository of
     /// [`HistoryHarness::branch`] with.
     fn made_default(&self) -> String;
+
+    /// The repository given a remote `origin` holding `branch` two commits
+    /// past the repository's own, which nothing moves: origin's head (9,
+    /// C.1).
+    fn origin_ahead(&self, repository: &str, branch: &str) -> Revision;
+
+    /// The repository's `origin` out of reach, so a fetch from it fails.
+    fn origin_gone(&self, repository: &str);
 }
 
 // ---- git's history: a unit that reads git appends its own scenarios at the list's end ----
@@ -58,7 +66,49 @@ pub fn scenarios<H: HistoryHarness>() -> Vec<Scenario<H>> {
             cites: &["132", "9"],
             run: the_default_branch::<H>,
         },
+        Scenario {
+            name: "history: a branch read at origin after a fetch, the host's own lagging it and left; one origin lacks; a repository with no origin; a fetch that fails",
+            cites: &["9", "126"],
+            run: a_branch_at_origin::<H>,
+        },
     ]
+}
+
+fn a_branch_at_origin<H: HistoryHarness>(harness: &H) -> Outcome {
+    let (repository, branch, start) = harness.branch();
+    ensure_eq!(
+        harness.seam().origin_branch(&repository, &branch),
+        OriginBranch::NoOrigin,
+        "a repository with no origin"
+    );
+    let ahead = harness.origin_ahead(&repository, &branch);
+    ensure!(ahead != start, "origin's head is the repository's own");
+    ensure_eq!(
+        harness.seam().origin_branch(&repository, &branch),
+        OriginBranch::At {
+            revision: ahead.clone()
+        },
+        "the branch at origin"
+    );
+    ensure_eq!(
+        harness.seam().head(&repository, &branch),
+        Some(start),
+        "the repository's own branch, after the fetch"
+    );
+    ensure_eq!(
+        harness.seam().origin_branch(&repository, "trial"),
+        OriginBranch::Lacks,
+        "a branch origin lacks"
+    );
+    harness.origin_gone(&repository);
+    ensure!(
+        matches!(
+            harness.seam().origin_branch(&repository, &branch),
+            OriginBranch::Refused { .. }
+        ),
+        "a fetch from an origin out of reach gave a revision"
+    );
+    Ok(())
 }
 
 fn the_default_branch<H: HistoryHarness>(harness: &H) -> Outcome {

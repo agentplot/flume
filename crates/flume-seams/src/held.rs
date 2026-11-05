@@ -370,6 +370,21 @@ pub enum DeliveredBy {
     Inbox,
 }
 
+/// Where a launch read its base's revision (9, 56, 126, C.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BaseFrom {
+    /// Where the merge queue's profile says the base lives, the merge
+    /// queue landing it.
+    MergeQueue,
+    /// `origin/<base>`, after flume's own fetch.
+    Origin,
+    /// The host's own branch, the repository having no remote `origin`.
+    NoOrigin,
+    /// The host's own branch, `origin` holding no such branch.
+    OriginLacks,
+}
+
 /// What a launch fixed of a place (8, 21).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceRecord {
@@ -383,6 +398,10 @@ pub struct PlaceRecord {
     pub base: String,
     /// The base's revision the place was cut from (9).
     pub base_revision: Revision,
+    /// Where the launch read the base's revision; none for a place
+    /// launched before flume said (56, C.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_from: Option<BaseFrom>,
     pub location: String,
     /// The repository's binding as it resolved at the launch (21).
     pub binding: Binding,

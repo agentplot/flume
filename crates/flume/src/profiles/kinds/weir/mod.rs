@@ -198,14 +198,7 @@ pub fn default_revision(repository: &str) -> Result<Revision, String> {
     if !git.remotes()?.iter().any(|remote| remote == REMOTE) {
         return git.commit(&format!("refs/heads/{branch}")).map(Revision);
     }
-    let tracking = format!("refs/remotes/{REMOTE}/{branch}");
-    git.bytes(&[
-        "fetch",
-        "--quiet",
-        REMOTE,
-        &format!("+refs/heads/{branch}:{tracking}"),
-    ])
-    .map_err(|words| format!("the fetch of {branch} from {REMOTE} failed: {words}"))?;
+    let tracking = git.fetch_branch(REMOTE, &branch)?;
     git.commit(&tracking).map(Revision)
 }
 

@@ -285,6 +285,13 @@ impl MergeQueueHarness for Harness {
             .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
     }
 
+    /// `trial`, made from main, whose policy names a table for main
+    /// alone, so sluice lands nothing on it (126, C.6).
+    fn base_unlanded(&self, _repository: &str) -> String {
+        self.repository.git(&["branch", "trial", "main"]);
+        "trial".into()
+    }
+
     fn unreadable(&self) {
         let records = self.repository.dir.join(".git/sluice");
         fs::create_dir_all(&records).expect("sluice's records");

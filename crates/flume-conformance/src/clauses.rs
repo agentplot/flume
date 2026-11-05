@@ -108,9 +108,11 @@ pub const MULTIPLEXER: &str =
 /// The change that builds record 0040: the sources of a host's kinds.
 pub const SOURCES: &str = "a-host-declares-where-its-kinds-come-from, record 0040";
 
-/// The change that builds record 0041: a place cut from origin's copy of
-/// its base.
-pub const ORIGIN: &str = "a-place-is-cut-from-origins-copy-of-its-base, record 0041";
+/// The change that built record 0041, a place cut from origin's copy of
+/// its base, which landed before the list held S92: no scenario cites it
+/// as data yet.
+pub const ORIGIN: &str =
+    "a-place-is-cut-from-origins-copy-of-its-base, record 0041, landed before the list held S92";
 
 /// The change that builds record 0043: an agent's program settings from
 /// flume's layers, until its scenarios cite them.
