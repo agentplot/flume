@@ -1203,6 +1203,26 @@ mod tests {
     }
 
     #[test]
+    fn a_command_that_needs_a_variable() {
+        // 186, core.30: the stream-views scenario's answer in the
+        // person's form, the variable by its name alone, its value
+        // nowhere, and the printed line on a line of its own.
+        use flume_conformance::engine::open::{a_variables_open, VARIABLES_LINE, VARIABLES_VALUE};
+        let printed = person(&a_variables_open());
+        assert!(
+            printed
+                .contains("  its command /bin/fake-terminal attach work, needing XDG_CONFIG_HOME"),
+            "{printed}"
+        );
+        assert!(!printed.contains(VARIABLES_VALUE), "{printed}");
+        assert_eq!(
+            printed.lines().last(),
+            Some(format!("run: {VARIABLES_LINE}").as_str()),
+            "{printed}"
+        );
+    }
+
+    #[test]
     fn each_terminal_a_tidy_closed_in() {
         // 137, 190: what each terminal closed and kept of a place, named
         // by its profile, the host's own where no profile gives it.

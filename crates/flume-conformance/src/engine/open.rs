@@ -536,7 +536,20 @@ fn a_scripted_window(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_command_that_needs_a_variable(_: &()) -> Outcome {
+/// The value of the variable the command of [`a_variables_open`] needs,
+/// which no form of the open's answer holds (core.30).
+pub const VARIABLES_VALUE: &str = "/scratch/home";
+
+/// The line the fake window prints for the command of
+/// [`a_variables_open`].
+pub const VARIABLES_LINE: &str = "XDG_CONFIG_HOME=<set> /bin/fake-terminal attach work";
+
+/// The stream-views spec's command that needs a variable: the core's
+/// answer to an open of `work` where the fake terminal's attach needs
+/// `XDG_CONFIG_HOME` set to [`VARIABLES_VALUE`] and the fake window
+/// answers printed, for its scenario's JSON form and for the person's
+/// form, which flume's command reads (186; core.30).
+pub fn a_variables_open() -> Answer {
     let world = World::new();
     world.host.set_stream("work", Some(Stream::default()));
     world.terminal.attaches_as(
@@ -545,15 +558,19 @@ fn a_command_that_needs_a_variable(_: &()) -> Outcome {
             command: ViewCommand {
                 program: "/bin/fake-terminal".into(),
                 arguments: vec!["attach".into(), "work".into()],
-                environment: [("XDG_CONFIG_HOME".to_string(), "/scratch/home".to_string())].into(),
+                environment: [("XDG_CONFIG_HOME".to_string(), VARIABLES_VALUE.to_string())].into(),
             },
         }),
     );
-    let line = "XDG_CONFIG_HOME=<set> /bin/fake-terminal attach work";
-    world
-        .window
-        .answers(Some(WindowShown::Printed { line: line.into() }));
-    let answer = world.engine.open_stream(Some("work"));
+    world.window.answers(Some(WindowShown::Printed {
+        line: VARIABLES_LINE.into(),
+    }));
+    world.engine.open_stream(Some("work"))
+}
+
+fn a_command_that_needs_a_variable(_: &()) -> Outcome {
+    let answer = a_variables_open();
+    let line = VARIABLES_LINE;
     let shown = opened(&answer)?;
     let command = shown.command.ok_or("no command in the answer")?;
     ensure_eq!(
@@ -582,7 +599,7 @@ fn a_command_that_needs_a_variable(_: &()) -> Outcome {
         "the JSON names no variable"
     );
     ensure!(
-        !json.contains("/scratch/home"),
+        !json.contains(VARIABLES_VALUE),
         "the JSON holds the variable's value: {json}"
     );
     Ok(())
