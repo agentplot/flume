@@ -14,6 +14,12 @@
 //! a launch's, and from the binary for flume's own, whose versions are
 //! each a declaration of its own with its prompts beside it (157).
 //!
+//! flume's own kinds are packages, each read through weir-kinds' package
+//! reader at its identity, `flume/<name>@<version>`, with its content's
+//! hash over its declaration's and prompts' paths and bytes (156, 157).
+//! A kind as a launch or a role names it is read by weir-kinds' reader of
+//! a kind's name, which spells it back (154; weir C.4).
+//!
 //! The repository's binding is the declaration's `[profiles]` table at
 //! the default branch: the remote's, after one fetch, where the
 //! repository has a remote, and the local default branch otherwise (20,
@@ -21,8 +27,8 @@
 
 use crate::git::{tree_path, Git, REMOTE};
 use flume_seams::{
-    Binding, BindingRead, Deliverable, Kind, KindIdentity, KindSettings, Kinds, KindsRead,
-    Packaged, Revision, Settings, Stage,
+    Binding, BindingRead, Deliverable, Kind, KindIdentity, KindNamed, KindSettings, Kinds,
+    KindsRead, Packaged, Revision, Settings, Stage,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -174,6 +180,25 @@ impl Kinds for Weir {
             Ok(revision) => binding_at(repository, &revision),
             Err(reason) => BindingRead::CouldNotRead { reason },
         }
+    }
+
+    fn read_named(&self, text: &str) -> Result<KindNamed, String> {
+        let named: weir_kinds::NamedKind = text
+            .parse()
+            .map_err(|refusal: weir_kinds::NameRefusal| refusal.to_string())?;
+        let version = named
+            .version()
+            .map(|version| {
+                u32::try_from(version)
+                    .map_err(|_| format!("`{text}` names a version more than flume counts"))
+            })
+            .transpose()?;
+        Ok(KindNamed {
+            source: named.source().map(str::to_string),
+            name: named.name().to_string(),
+            version,
+            spelled: named.to_string(),
+        })
     }
 }
 

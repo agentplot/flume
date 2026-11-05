@@ -49,7 +49,7 @@ identities, hashes and locks (design, *What this change rests on*).
   - `Host::sources()`, each a `HostSource`.
 
   True when `sluice exec main -- moon run seams:test flume:test` passes with `round_trip.rs` holding the seam-contracts spec's held state with and with no `kind_from`, a value of each new type round-tripping, and every existing test of flume's own kinds passing unchanged.
-- [ ] 3.2 Have `FakeKinds` and `FakeHost` script what the seam-fakes spec and design 10 list, logging each call. Add the new operations' scenarios to `crates/flume-conformance/src/seams/kinds.rs` below the seam's marker, generic over the trait, each citing its clause (design 10; 85, 154 to 157, 160). True when `sluice exec main -- moon run seams:test fakes:test conformance:test` passes with the seam-contracts spec's *Each operation over the fake*, and a `fakes.rs` test of each scripted reading.
+- [x] 3.2 Have `FakeKinds` and `FakeHost` script what the seam-fakes spec and design 10 list, logging each call. Add the new operations' scenarios to `crates/flume-conformance/src/seams/kinds.rs` below the seam's marker, generic over the trait, each citing its clause (design 10; 85, 154 to 157, 160). True when `sluice exec main -- moon run seams:test fakes:test conformance:test` passes with the seam-contracts spec's *Each operation over the fake*, and a `fakes.rs` test of each scripted reading.
 - [ ] 3.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test conformance:format conformance:lint conformance:test core:lint core:test flume:lint flume:test` passes.
 
 ## 4. The kinds profile and the host's sources

@@ -1,7 +1,7 @@
 use crate::{lock, Log};
 use flume_seams::{
-    Host, HostSettings, KindSettings, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds,
-    Secret, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
+    Host, HostSettings, HostSource, HostSourceRead, KindSettings, Pool, PoolFrom, PoolNamed,
+    RoleRun, RoomGuard, Seconds, Secret, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -9,9 +9,9 @@ use std::sync::{Arc, Condvar, Mutex};
 /// The host: a clock that moves only when a test advances it or a command
 /// sleeps on it, numbered secrets, files' write times, the commands of
 /// flume's that live, the bound on agents and the agents' settings its
-/// configuration states, its streams and pools of accounts, the recipient
-/// the calling command's environment names, the host user's login
-/// environment, and an exclusive room lock.
+/// configuration states, its streams and pools of accounts, the sources
+/// of its kinds, the recipient the calling command's environment names,
+/// the host user's login environment, and an exclusive room lock.
 pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
@@ -61,6 +61,16 @@ struct HostState {
     pool: Option<String>,
     /// The pools the configuration declares, by name (144).
     pools: BTreeMap<String, Pool>,
+    /// The sources the configuration declares, by name (191).
+    sources: BTreeMap<String, HostSource>,
+}
+
+/// Where the fake host's configuration keeps its sources' files (C.7).
+pub const SOURCES: &str = "/home/user/.config/flume/sources";
+
+/// The file that declares the source `name` on the fake host (191, C.7).
+pub fn source_file(name: &str) -> String {
+    format!("{SOURCES}/{name}.toml")
 }
 
 impl Default for FakeHost {
@@ -82,6 +92,7 @@ impl Default for FakeHost {
                 streams_named: BTreeMap::new(),
                 pool: None,
                 pools: BTreeMap::new(),
+                sources: BTreeMap::new(),
             }),
             room: Arc::default(),
             log: Log::default(),
@@ -218,6 +229,43 @@ impl FakeHost {
         };
     }
 
+    /// The configuration declares the source `name` by its file, its
+    /// packages in `kinds_dir`, in place of any it declared under that
+    /// name (191).
+    pub fn set_source(&self, name: &str, kinds_dir: &str) {
+        self.source(
+            name,
+            HostSourceRead::Read {
+                kinds_dir: kinds_dir.into(),
+            },
+        );
+    }
+
+    /// The file of the source `name` cannot be read, for `reason` (191).
+    pub fn faulty_source(&self, name: &str, reason: &str) {
+        self.source(
+            name,
+            HostSourceRead::CouldNotRead {
+                reason: reason.into(),
+            },
+        );
+    }
+
+    /// The configuration declares no source `name`: its file is gone.
+    pub fn remove_source(&self, name: &str) {
+        lock(&self.state).sources.remove(name);
+    }
+
+    fn source(&self, name: &str, read: HostSourceRead) {
+        lock(&self.state).sources.insert(
+            name.into(),
+            HostSource {
+                file: source_file(name),
+                read,
+            },
+        );
+    }
+
     /// Whether the room lock is held now.
     pub fn room_taken(&self) -> bool {
         *lock(&self.room.taken)
@@ -335,6 +383,11 @@ impl Host for FakeHost {
 
     fn log(&self, line: &str) {
         self.logged.push(line);
+    }
+
+    fn sources(&self) -> BTreeMap<String, HostSource> {
+        self.log.push("sources");
+        lock(&self.state).sources.clone()
     }
 
     fn room(&self) -> RoomGuard {
