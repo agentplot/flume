@@ -4,22 +4,27 @@
 //! an elaboration section, the binding
 //! from the default branch, a place profile flume does not hold, flume's
 //! own kinds, one declaration per version with change@1 and change@2
-//! side by side, and what their prompts ask (22, 141, 157).
+//! side by side, and what their prompts ask (22, 141, 157); a host's
+//! source's listing, its packages and their hashes wherever they lie, the
+//! repository's lock at a revision, a lock written and read back, and the
+//! packages refused at another identity, naming a part outside them, an
+//! environment or a program by a location (155 to 160, 192; S63).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
-use flume::profiles::kinds::weir::{binding_at, Weir, DECLARATION};
+use flume::profiles::kinds::weir::{binding_at, Weir, DECLARATION, LOCK};
 use flume_conformance::engine::repeating_stages::GROUPS;
 use flume_conformance::engine::settling::{archive, change_at_verify, deliver_fix, fix_begun};
 use flume_conformance::engine::world::{launch, launched, refused, World, REPOSITORY};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::kinds::{self, KindsHarness};
+use flume_conformance::seams::kinds::{self, entry, KindsHarness, SourceDir};
 use flume_core::Answer;
 use flume_fakes::Plan;
 use flume_seams::*;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// A kind written in the format, each stage's prompt a file beside the
@@ -125,11 +130,58 @@ fn write_declaration(root: &Path, file: &str, kinds: &[Kind], more: &str) {
     }
 }
 
+/// Writes each of `kinds` as a package of its own in `kinds_dir`, at
+/// `<name>@<version>/` with its `kind.toml` and its prompts (157, 159).
+fn write_packages(kinds_dir: &Path, kinds: &[Kind]) {
+    for kind in kinds {
+        let at = format!("{}@{}/kind.toml", kind.name, kind.version);
+        write_declaration(kinds_dir, &at, std::slice::from_ref(kind), "");
+    }
+}
+
+/// Writes the package `entry`, `<name>@<version>`, in `kinds_dir`: its
+/// `kind.toml` holding `declaration`, and each of `files` by its path
+/// within it.
+fn write_package(kinds_dir: &Path, entry: &str, declaration: &str, files: &[(&str, &str)]) {
+    let dir = kinds_dir.join(entry);
+    for (path, text) in std::iter::once(&("kind.toml", declaration)).chain(files) {
+        let at = dir.join(path);
+        std::fs::create_dir_all(at.parent().expect("a directory")).expect("the directory");
+        std::fs::write(at, text).expect("the package's file");
+    }
+}
+
+/// A lock's text recording `entries`, as C.4 spells one.
+fn spelled_lock(entries: &[LockEntry]) -> String {
+    entries
+        .iter()
+        .map(|entry| {
+            format!(
+                "[[kinds]]\nkind = \"{}\"\nhash = \"{}\"\n\n",
+                entry.kind.spelled, entry.hash
+            )
+        })
+        .collect()
+}
+
+/// A one-stage kind `name` at `version`, its prompt at `prompts/code.md`,
+/// with `more` in its stage's table.
+fn reviewing(name: &str, version: u32, more: &str) -> String {
+    format!(
+        "[kinds.{name}]\nversion = {version}\nbranch = \"{name}\"\n\n\
+         [[kinds.{name}.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+         deliverables = [\"commits\"]\nagents = [{{}}]\n{more}"
+    )
+}
+
 #[derive(Default)]
 struct Harness {
     seam: Weir,
     kept: RefCell<Vec<Repository>>,
     scratch: RefCell<Vec<Scratch>>,
+    /// Directories made read-only, made writable again before their
+    /// scratch is removed.
+    locked: RefCell<Vec<PathBuf>>,
 }
 
 impl Harness {
@@ -137,6 +189,31 @@ impl Harness {
         let named = (repository.name(), Revision::new(repository.head()));
         self.kept.borrow_mut().push(repository);
         named
+    }
+
+    /// A scratch directory kept while the harness lives, and the path
+    /// `relative` within it.
+    fn scratch(&self, label: &str, relative: &str) -> PathBuf {
+        let scratch = Scratch::new(label);
+        let path = scratch.path(relative);
+        self.scratch.borrow_mut().push(scratch);
+        path
+    }
+
+    /// A source `acme` whose directory is `kinds_dir`.
+    fn acme(kinds_dir: &Path) -> SourceDir {
+        SourceDir {
+            source: "acme".into(),
+            kinds_dir: kinds_dir.to_string_lossy().into_owned(),
+        }
+    }
+}
+
+impl Drop for Harness {
+    fn drop(&mut self) {
+        for dir in self.locked.borrow().iter() {
+            let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755));
+        }
     }
 }
 
@@ -177,6 +254,69 @@ impl KindsHarness for Harness {
         repository.write(DECLARATION, &profiles(binding));
         repository.commit("the binding");
         self.keep(repository).0
+    }
+
+    fn source(&self, kinds: &[Kind]) -> Option<SourceDir> {
+        let kinds_dir = self.scratch("source", "kinds/acme");
+        write_packages(&kinds_dir, kinds);
+        Some(Harness::acme(&kinds_dir))
+    }
+
+    fn unreadable_source(&self) -> Option<SourceDir> {
+        let kinds_dir = self.scratch("unreadable-source", "kinds/acme");
+        std::fs::create_dir_all(kinds_dir.parent().expect("a directory")).unwrap();
+        std::fs::write(&kinds_dir, "a file, which lists nothing").unwrap();
+        Some(Harness::acme(&kinds_dir))
+    }
+
+    fn refused_package(&self) -> Option<(SourceDir, String, u32)> {
+        let kinds_dir = self.scratch("refused-package", "kinds/acme");
+        write_package(
+            &kinds_dir,
+            "bump@2",
+            &reviewing("bump", 1, ""),
+            &[("prompts/code.md", "{{brief}}")],
+        );
+        Some((Harness::acme(&kinds_dir), "bump".into(), 2))
+    }
+
+    fn lock_at(&self, entries: &[LockEntry]) -> Option<(String, Revision)> {
+        let repository = Repository::new("lock-at");
+        repository.write(LOCK, &spelled_lock(entries));
+        repository.commit("the lock");
+        Some(self.keep(repository))
+    }
+
+    fn no_lock_at(&self) -> Option<(String, Revision)> {
+        Some(self.keep(Repository::new("no-lock-at")))
+    }
+
+    fn lock_file(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = self.scratch("lock-file", "flume/flume.lock");
+        std::fs::create_dir_all(path.parent().expect("a directory")).unwrap();
+        std::fs::write(&path, spelled_lock(entries)).unwrap();
+        Some(path.to_string_lossy().into_owned())
+    }
+
+    fn no_lock_file(&self) -> Option<String> {
+        let path = self.scratch("no-lock-file", "flume/flume.lock");
+        Some(path.to_string_lossy().into_owned())
+    }
+
+    fn unreadable_lock_file(&self) -> Option<String> {
+        let path = self.scratch("unreadable-lock", "flume.lock");
+        std::fs::write(&path, "[[kinds]\nkind = ").unwrap();
+        Some(path.to_string_lossy().into_owned())
+    }
+
+    fn unwritable_lock(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = self.scratch("unwritable-lock", "flume/flume.lock");
+        let dir = path.parent().expect("a directory").to_path_buf();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, spelled_lock(entries)).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        self.locked.borrow_mut().push(dir);
+        Some(path.to_string_lossy().into_owned())
     }
 }
 
@@ -1237,4 +1377,278 @@ fn a_place_launched_at_change_1_keeps_it() {
     world.settle(&id);
     assert_eq!(world.stage_state(&id, "verify"), Some(StageState::Begun));
     assert_eq!(world.held(&id).expect("the place").stages[1].starts, 1);
+}
+
+/// The package `<name>@<version>` of the source `acme` in `kinds_dir`,
+/// read; panics naming why where it could not be.
+fn package_at(kinds_dir: &Path, name: &str, version: u32) -> Packaged {
+    match Weir.read_package("acme", &kinds_dir.to_string_lossy(), name, version) {
+        PackageRead::Read { package } => *package,
+        PackageRead::CouldNotRead { reason } => panic!("{name}@{version} not read: {reason}"),
+    }
+}
+
+/// Why the package `<name>@<version>` of the source `acme` in `kinds_dir`
+/// could not be read; panics where it was.
+fn package_refused(kinds_dir: &Path, name: &str, version: u32) -> String {
+    match Weir.read_package("acme", &kinds_dir.to_string_lossy(), name, version) {
+        PackageRead::CouldNotRead { reason } => reason,
+        PackageRead::Read { package } => panic!("{name}@{version} read as {package:?}"),
+    }
+}
+
+#[test]
+fn a_packages_hash_wherever_it_lies() {
+    // 156; weir 90: one package copied to two directories, one reached
+    // through a link, reads the same kind at the same hash, and a byte of
+    // one prompt moves its hash.
+    let scratch = Scratch::new("hash-wherever");
+    let here = scratch.path("here/kinds");
+    let there = scratch.path("there/kinds");
+    for kinds_dir in [&here, &there] {
+        write_package(
+            kinds_dir,
+            "review@1",
+            &reviewing("review", 1, ""),
+            &[("prompts/code.md", "Review {{brief}}.\n")],
+        );
+    }
+    let linked = scratch.path("linked");
+    std::os::unix::fs::symlink(scratch.path("there"), &linked).unwrap();
+    let first = package_at(&here, "review", 1);
+    let second = package_at(&linked.join("kinds"), "review", 1);
+    assert_eq!(first, second, "one package in two places");
+    assert_eq!(first.identity.spelled, "acme/review@1");
+    assert_eq!(first.kind.stages[0].prompt, "Review {{brief}}.\n");
+    assert_eq!(first.hash.len(), "sha256:".len() + 64, "{}", first.hash);
+    std::fs::write(here.join("review@1/prompts/code.md"), "Review {{brief}}!\n").unwrap();
+    let edited = package_at(&here, "review", 1);
+    assert_ne!(edited.hash, first.hash, "a prompt's byte changed its hash");
+    assert_eq!(edited.kind.stages[0].prompt, "Review {{brief}}!\n");
+    assert_eq!(package_at(&linked.join("kinds"), "review", 1), second);
+}
+
+#[test]
+fn a_sources_listing() {
+    // 159, 192: the directories holding a `kind.toml` under a name weir
+    // reads as `<name>@<version>`, and no other entry.
+    let scratch = Scratch::new("listing");
+    let kinds_dir = scratch.path("kinds/acme");
+    for version in [2, 1] {
+        write_package(
+            &kinds_dir,
+            &format!("review@{version}"),
+            &reviewing("review", version, ""),
+            &[("prompts/code.md", "{{brief}}")],
+        );
+    }
+    std::fs::create_dir_all(kinds_dir.join("notes")).unwrap();
+    std::fs::create_dir_all(kinds_dir.join("lint@x")).unwrap();
+    std::fs::write(kinds_dir.join("lint@x/README"), "no kind").unwrap();
+    std::fs::create_dir_all(kinds_dir.join("lint@1/prompts")).unwrap();
+    std::fs::write(kinds_dir.join("lint@1/prompts/code.md"), "{{brief}}").unwrap();
+    std::fs::write(kinds_dir.join("fmt@1"), "a file, which is no package").unwrap();
+    let read = Weir.read_source("acme", &kinds_dir.to_string_lossy());
+    assert_eq!(
+        read,
+        SourceRead::Read {
+            kinds: vec![
+                kinds::identity_of("acme", "review", 1),
+                kinds::identity_of("acme", "review", 2),
+            ],
+        }
+    );
+    let SourceRead::CouldNotRead { reason } =
+        Weir.read_source("acme", &scratch.path("kinds/beta").to_string_lossy())
+    else {
+        panic!("a directory that does not exist read");
+    };
+    assert!(
+        reason.contains("kinds/beta") && reason.contains("does not exist"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn the_repositorys_lock_at_a_revision() {
+    // 20, 155: `.config/flume.lock` at each revision as git gives it, none
+    // at a revision that holds none.
+    let change = Weir
+        .flumes_own()
+        .into_iter()
+        .find(|own| own.identity.spelled == "flume/change@1")
+        .expect("flume's own change@1");
+    let repository = Repository::new("lock-revisions");
+    let before = Revision::new(repository.head());
+    let recorded = vec![entry("flume", "change", 1, &change.hash)];
+    repository.write(LOCK, &spelled_lock(&recorded));
+    let locked = Revision::new(repository.commit("change@1 locked"));
+    repository.write(LOCK, "");
+    let emptied = Revision::new(repository.commit("the lock emptied"));
+    std::fs::write(repository.dir.join(LOCK), "not a lock [").unwrap();
+    let name = repository.name();
+    assert_eq!(
+        Weir.read_lock_at(&name, &locked),
+        LockRead::Read { entries: recorded }
+    );
+    assert_eq!(
+        Weir.read_lock_at(&name, &emptied),
+        LockRead::Read { entries: vec![] }
+    );
+    assert_eq!(Weir.read_lock_at(&name, &before), LockRead::None);
+}
+
+#[test]
+fn a_lock_written_and_read_back() {
+    // 155; weir 91: a lock of acme/review@1 and acme/review@2 written and
+    // read as written, a lock beside nothing left, and a write that fails
+    // leaving the file as it was.
+    let scratch = Scratch::new("lock-written");
+    let path = scratch.path("flume/flume.lock");
+    let file = path.to_string_lossy().into_owned();
+    let written = vec![
+        entry("acme", "review", 1, &kinds::hash_of('1')),
+        entry("acme", "review", 2, &kinds::hash_of('2')),
+    ];
+    Weir.write_lock(&file, &written).expect("the lock written");
+    assert_eq!(
+        Weir.read_lock_file(&file),
+        LockRead::Read {
+            entries: written.clone()
+        }
+    );
+    let beside: Vec<_> = std::fs::read_dir(scratch.path("flume"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(
+        beside,
+        ["flume.lock"],
+        "what the write left beside the lock"
+    );
+    let text = std::fs::read_to_string(&path).unwrap();
+    let dir = scratch.path("flume");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let failed = Weir.write_lock(&file, &written[..1]);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let reason = failed.expect_err("a write into a directory that takes none");
+    assert!(reason.contains(&file), "{reason}");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "the lock moved"
+    );
+    let twice = vec![
+        written[0].clone(),
+        entry("acme", "review", 1, &kinds::hash_of('3')),
+    ];
+    let reason = Weir
+        .write_lock(&file, &twice)
+        .expect_err("one identity at two hashes");
+    assert!(reason.contains("acme/review@1"), "{reason}");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        text,
+        "the lock moved"
+    );
+}
+
+#[test]
+fn flumes_own_as_packages() {
+    // 156, 157: each version of flume's own a package at its identity,
+    // with its hash.
+    let own: Vec<(String, usize)> = Weir
+        .flumes_own()
+        .into_iter()
+        .map(|own| {
+            assert!(own.hash.starts_with("sha256:"), "{}", own.hash);
+            (own.identity.spelled, own.hash.len())
+        })
+        .collect();
+    let length = "sha256:".len() + 64;
+    assert_eq!(
+        own,
+        [
+            ("flume/change@1".to_string(), length),
+            ("flume/change@2".to_string(), length),
+            ("flume/chore@1".to_string(), length),
+            ("flume/fix@1".to_string(), length),
+        ]
+    );
+}
+
+#[test]
+fn a_package_at_another_identity_is_refused_naming_both_versions() {
+    // 157: acme's `review@2/kind.toml` declaring review at version 1.
+    let scratch = Scratch::new("another-identity");
+    let kinds_dir = scratch.path("kinds/acme");
+    write_package(
+        &kinds_dir,
+        "review@2",
+        &reviewing("review", 1, ""),
+        &[("prompts/code.md", "{{brief}}")],
+    );
+    let reason = package_refused(&kinds_dir, "review", 2);
+    for named in ["acme/review@1", "acme/review@2", "kinds.review.version"] {
+        assert!(reason.contains(named), "{named} not in: {reason}");
+    }
+    let reason = package_refused(&kinds_dir, "review", 3);
+    assert!(
+        reason.contains("review@3") && reason.contains("does not exist"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn a_part_outside_the_package_an_environment_and_a_program_by_a_location() {
+    // S63, 157, 158: standing instructions at `../shared/standing.md`, an
+    // agents table's `env`, and a program named by its path, each refusing
+    // the package naming the field.
+    let scratch = Scratch::new("outside");
+    let kinds_dir = scratch.path("kinds/acme");
+    std::fs::create_dir_all(kinds_dir.join("shared")).unwrap();
+    std::fs::write(kinds_dir.join("shared/standing.md"), "Stand.").unwrap();
+    let code = [("prompts/code.md", "{{brief}}")];
+    write_package(
+        &kinds_dir,
+        "review@1",
+        &reviewing("review", 1, "standing = \"../shared/standing.md\"\n"),
+        &code,
+    );
+    write_package(
+        &kinds_dir,
+        "lint@1",
+        &format!(
+            "{}\n[kinds.lint.agents]\nenv = {{ A = \"b\" }}\n",
+            reviewing("lint", 1, "")
+        ),
+        &code,
+    );
+    write_package(
+        &kinds_dir,
+        "fmt@1",
+        &reviewing("fmt", 1, "").replace(
+            "agents = [{}]",
+            "agents = [{ program = \"/opt/agents/bin/agent\" }]",
+        ),
+        &code,
+    );
+    let reason = package_refused(&kinds_dir, "review", 1);
+    assert!(
+        reason.contains("acme/review@1")
+            && reason.contains("kinds.review.stages[0].standing")
+            && reason.contains("../shared/standing.md"),
+        "{reason}"
+    );
+    let reason = package_refused(&kinds_dir, "lint", 1);
+    assert!(
+        reason.contains("acme/lint@1") && reason.contains("kinds.lint.agents.env"),
+        "{reason}"
+    );
+    let reason = package_refused(&kinds_dir, "fmt", 1);
+    assert!(
+        reason.contains("kinds.fmt.stages[0].agents[0].program")
+            && reason.contains("/opt/agents/bin/agent"),
+        "{reason}"
+    );
 }

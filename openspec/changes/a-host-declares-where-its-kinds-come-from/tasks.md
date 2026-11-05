@@ -54,7 +54,7 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 4. The kinds profile and the host's sources
 
-- [ ] 4.1 Give the kinds profile, through weir-kinds alone, each of the following, and name each in `profiles/kinds/weir/mod.rs`'s module doc (design 2, 7, 10; 155 to 160, C.2; core.4):
+- [x] 4.1 Give the kinds profile, through weir-kinds alone, each of the following, and name each in `profiles/kinds/weir/mod.rs`'s module doc (design 2, 7, 10; 155 to 160, C.2; core.4):
   - `read_named`;
   - `read_source`, which ignores entries of any other shape;
   - `read_package`, with 157's and 158's refusals naming the field;
