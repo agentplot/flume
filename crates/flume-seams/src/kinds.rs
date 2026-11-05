@@ -407,11 +407,30 @@ impl std::fmt::Display for Layer {
 }
 
 /// One setting's layer and its value as that layer wrote it, before an
-/// account value's `~` and variables are read (32, 56).
+/// account value's `~` and variables are read, an own setting's as JSON
+/// (32, 56, 191).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Given {
     pub layer: Layer,
     pub value: String,
+    /// For an own setting a layer's named file gave, the file as it was
+    /// read; none for every other setting, and in a start written before
+    /// (191).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+}
+
+/// A settings file a layer named for an agent's program, as its start
+/// took it: its layer, its path as the layer wrote it and as it was read,
+/// and each key its program's profile reserves, left out of it unread,
+/// by its path alone (191).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnFile {
+    pub layer: Layer,
+    pub written: String,
+    pub read: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<String>,
 }
 
 /// `from` with the value of every environment variable, `env.<NAME>`,
@@ -429,6 +448,7 @@ pub fn unvalued_from(from: &BTreeMap<String, Given>) -> BTreeMap<String, Given> 
                 Given {
                     layer: given.layer,
                     value,
+                    file: given.file.clone(),
                 },
             )
         })

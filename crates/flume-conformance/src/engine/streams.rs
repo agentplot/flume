@@ -51,6 +51,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_streams_part_of_status,
         },
         Scenario {
+            name: "streams: a place in a stream takes the host's settings for its stream over its settings for every agent, one in another stream the host's for every agent, each key with its layer",
+            cites: &["143", "32", "56"],
+            run: two_streams_status_lines,
+        },
+        Scenario {
             name: "streams: a later place of an intent naming no stream runs in its affinity's stream, from the intent, over the host's word for its repository",
             cites: &["143", "147"],
             run: a_later_place_of_an_intent,
@@ -326,6 +331,61 @@ fn a_streams_part_of_status(_: &()) -> Outcome {
         stream("work", StreamFrom::Launch),
         "the waiting place's own stream"
     );
+    Ok(())
+}
+
+fn two_streams_status_lines(_: &()) -> Outcome {
+    use super::own_settings::{by_file, given, inline, key_from, own_passed, HOST_FILE};
+    use serde_json::json;
+    let world = World::new();
+    world.agent.take_own();
+    world.host.set_stream("work", Some(Stream::default()));
+    world.host.set_every_agent(by_file(
+        "agent",
+        HOST_FILE,
+        json!({ "line": "host", "tui": "fullscreen" }),
+        json!({}),
+    ));
+    world
+        .host
+        .set_stream_settings("work", inline("agent", json!({ "line": "work" })));
+    for (name, stream, line, line_from) in [
+        (
+            "one",
+            Some("work"),
+            "work",
+            given(Layer::HostStream, json!("work"), None),
+        ),
+        (
+            "two",
+            None,
+            "host",
+            given(Layer::Host, json!("host"), Some(HOST_FILE)),
+        ),
+    ] {
+        launched(&world.engine.launch(&Launch {
+            stream: stream.map(str::to_string),
+            ..launch("fix", name, Some("x"))
+        }))?;
+        let id = World::id("fix", name);
+        world.settle(&id);
+        let place = stream.unwrap_or("default");
+        ensure_eq!(
+            own_passed(&world, &World::identity("fix", name, "code", 1))?,
+            Some(json!({ "line": line, "tui": "fullscreen" })),
+            format!("the keys in {place}")
+        );
+        ensure_eq!(
+            key_from(&world, &id, "line")?,
+            line_from,
+            format!("where line came from in {place}")
+        );
+        ensure_eq!(
+            key_from(&world, &id, "tui")?,
+            given(Layer::Host, json!("fullscreen"), Some(HOST_FILE)),
+            format!("where tui came from in {place}")
+        );
+    }
     Ok(())
 }
 

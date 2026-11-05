@@ -287,6 +287,7 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Repository,
                             value: "opus".into(),
+                            file: None,
                         },
                     ),
                     (
@@ -294,6 +295,7 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Launch,
                             value: programs().written(),
+                            file: None,
                         },
                     ),
                     (
@@ -301,6 +303,7 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Account,
                             value: "~/.agent-work".into(),
+                            file: None,
                         },
                     ),
                     (
@@ -308,6 +311,15 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::HostStream,
                             value: r#"{"type":"command","command":"work-line"}"#.into(),
+                            file: None,
+                        },
+                    ),
+                    (
+                        "programs.agent.settings.tips".into(),
+                        Given {
+                            layer: Layer::Host,
+                            value: "false".into(),
+                            file: Some("/home/operator/.config/agent/settings.json".into()),
                         },
                     ),
                 ]),
@@ -349,6 +361,15 @@ fn held() -> HeldState {
                 label: Some(LabelHeld {
                     name: "operation".into(),
                     from: LabelFrom::Kind,
+                }),
+                own: Some(OwnHeld {
+                    files: vec![OwnFile {
+                        layer: Layer::Host,
+                        written: "~/.config/agent/settings.json".into(),
+                        read: "/home/operator/.config/agent/settings.json".into(),
+                        left_out: vec!["env".into()],
+                    }],
+                    passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
             }),
             since: Some(120),
@@ -1108,12 +1129,15 @@ fn a_held_state_with_a_session_and_a_label() {
     );
 }
 
-/// `value` with every `programs` of a settings' table taken out, at any
-/// depth, as a held state written before own settings holds none.
+/// `value` with every `programs` of a settings' table, a start's `own`
+/// and a setting's `file` taken out, at any depth, as a held state
+/// written before own settings holds none.
 fn without_programs(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Object(map) => {
             map.remove("programs");
+            map.remove("own");
+            map.remove("file");
             map.values_mut().for_each(without_programs);
         }
         serde_json::Value::Array(values) => values.iter_mut().for_each(without_programs),
@@ -1155,11 +1179,23 @@ fn a_held_state_with_own_settings() {
         json["stages"][0]["start"]["from"]["programs.agent.settings.line"]["layer"],
         "host-stream"
     );
+    assert_eq!(
+        json["stages"][0]["start"]["from"]["programs.agent.settings.line"].get("file"),
+        None,
+        "a key given inline names no file"
+    );
+    assert_eq!(
+        json["stages"][0]["start"]["own"]["files"][0]["left_out"],
+        serde_json::json!(["env"])
+    );
     let mut before = json;
     without_programs(&mut before);
     let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
     assert!(read.place.settings["code"].programs.is_empty());
     assert!(read.place.repository_agents.programs.is_empty());
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!(start.own, None);
+    assert_eq!(start.from["programs.agent.settings.tips"].file, None);
     assert_eq!(
         serde_json::to_value(&read).expect("written again"),
         before,

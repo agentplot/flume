@@ -180,6 +180,7 @@ fn a_tables_entry(_: &()) -> Outcome {
         Some(&Given {
             layer: Layer::Launch,
             value: r#"{ agent = "careful", other = "edits" }"#.into(),
+            file: None,
         }),
         "the mode as written and its layer"
     );

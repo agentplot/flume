@@ -95,7 +95,87 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["134", "96", "45"],
             run: ended_where_the_terminal_reads_nothing,
         },
+        Scenario {
+            name: "start: each file a command lists under its start's folder is written before the terminal opens the agent, readable by the host's user alone",
+            cites: &["16", "17", "88", "128"],
+            run: a_file_written_before_the_open,
+        },
+        Scenario {
+            name: "start: a command listing a file outside its start's folder is not opened, naming the file, and nothing is written",
+            cites: &["16", "88", "128"],
+            run: a_file_outside_the_folder,
+        },
     ]
+}
+
+/// The fake taking own settings by a file, and the host giving every
+/// agent one key.
+fn one_own_key(world: &World) {
+    world.agent.take_own();
+    world.host.set_every_agent(Settings {
+        programs: std::collections::BTreeMap::from([(
+            "agent".to_string(),
+            ProgramSettings {
+                file: None,
+                settings: std::collections::BTreeMap::from([(
+                    "line".to_string(),
+                    serde_json::json!("a"),
+                )]),
+            },
+        )]),
+        ..Settings::default()
+    });
+}
+
+fn a_file_written_before_the_open(_: &()) -> Outcome {
+    let world = World::new();
+    one_own_key(&world);
+    let id = World::id("fix", "one");
+    let code = World::identity("fix", "one", "code", 1);
+    let file = flume_fakes::FakeAgent::own_file(&world.store.folder(&id), &code);
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+    world.terminal.before_next_open({
+        let (store, seen, file) = (world.store.clone(), seen.clone(), file.clone());
+        move || *seen.lock().expect("seen") = store.file(&file)
+    });
+    launched(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    let command = world.terminal.opened(&code).ok_or("code was not opened")?.0;
+    let text = command
+        .files
+        .get(&file)
+        .ok_or_else(|| format!("the command lists no {file}: {:?}", command.files))?;
+    ensure_eq!(
+        seen.lock().expect("seen").clone(),
+        Some((text.clone(), 0o600)),
+        "the file and its mode when the terminal opened the agent"
+    );
+    Ok(())
+}
+
+fn a_file_outside_the_folder(_: &()) -> Outcome {
+    let world = World::new();
+    one_own_key(&world);
+    let outside = "/host/elsewhere/own.json";
+    world.agent.own_file_at(outside);
+    let id = World::id("fix", "one");
+    launched(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "code"
+    );
+    ensure_eq!(world.store.log.count("write_file"), 0, "files written");
+    ensure!(world.store.file(outside).is_none(), "the file written");
+    let held = world.held(&id).ok_or("no held state")?;
+    ensure!(
+        held.failures
+            .iter()
+            .any(|failure| failure.contains(outside)),
+        "the failures: {:?}",
+        held.failures
+    );
+    Ok(())
 }
 
 fn agent_status(world: &World, place: &PlaceId) -> Result<flume_core::AgentStatus, String> {

@@ -406,3 +406,51 @@ fn a_name_reaches_nothing_outside_its_directory() {
         Some(spent_until(54_000))
     );
 }
+
+#[test]
+fn a_file_of_a_places_folder_is_written_whole_for_the_hosts_user_alone() {
+    use std::os::unix::fs::PermissionsExt;
+    let harness = Harness::new();
+    let id = PlaceId::new("/repository/places/fix--own");
+    let held = sample_held(&id, "/repository");
+    assert!(matches!(
+        harness.seam.write(&id, None, Some(&held)),
+        Written::Written { .. }
+    ));
+    let folder = harness.seam.folder(&id);
+    let path = format!("{folder}/agent/flume%r%fix--own%code%1/own.json");
+    assert_eq!(harness.seam.write_file(&id, &path, "{\"a\":1}"), Ok(()));
+    assert_eq!(harness.seam.write_file(&id, &path, "{\"a\":2}"), Ok(()));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"a\":2}");
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o600, "the file's mode");
+    let beside: Vec<_> = std::fs::read_dir(Path::new(&path).parent().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(beside, vec!["own.json"], "nothing left beside it");
+    for outside in [
+        harness
+            .scratch
+            .path("elsewhere.json")
+            .to_string_lossy()
+            .into_owned(),
+        format!("{folder}/../escape.json"),
+        folder.clone(),
+    ] {
+        let refused = harness.seam.write_file(&id, &outside, "x").unwrap_err();
+        assert!(refused.contains("outside the place's folder"), "{refused}");
+    }
+    assert!(!harness.scratch.path("elsewhere.json").exists());
+    assert!(matches!(
+        harness
+            .seam
+            .write(&id, Some(read_version(&harness, &id)), None),
+        Written::Written { .. }
+    ));
+    assert!(!Path::new(&path).exists(), "the file went with the folder");
+}
+
+fn read_version(harness: &Harness, id: &PlaceId) -> u64 {
+    harness.seam.read(id).expect("held state").version
+}

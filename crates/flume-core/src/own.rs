@@ -297,7 +297,6 @@ pub(crate) fn checked(
 
 /// One key of a table's own settings, folded: its value as written, and
 /// the file it came from, none for a key the table's `settings` give.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Folded<'a> {
     pub value: &'a Value,
@@ -306,7 +305,6 @@ pub(crate) struct Folded<'a> {
 
 /// `entry`'s keys, its `settings` over its file key by key, each key
 /// taken whole (32, 191; design 2, 4).
-#[allow(dead_code)]
 pub(crate) fn fold(entry: &ProgramSettings) -> BTreeMap<&str, Folded<'_>> {
     let mut keys = BTreeMap::new();
     if let Some(file) = &entry.file {
@@ -484,8 +482,8 @@ mod tests {
                 "/nix/store/0c4wbxzh7m2l1nyjzcpdv0ydr3crkx2l-status-line/bin/line",
             ),
             ("command", "task-cleanup-0123456789abcdefghij"),
-            ("commit", "Co-Authored-By: Claude <noreply@anthropic.com>"),
-            ("commit", "Assisted-by: Claude Code"),
+            ("commit", "Co-Authored-By: Agent <noreply@example.com>"),
+            ("commit", "Assisted-by: an agent"),
             ("commit", ""),
             ("maxTokens", "4096"),
             // A short run, and a long one of one case.

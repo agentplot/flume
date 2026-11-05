@@ -905,6 +905,7 @@ mod tests {
                     Given {
                         layer,
                         value: written.into(),
+                        file: None,
                     },
                 )]),
                 ..AgentSettings::default()

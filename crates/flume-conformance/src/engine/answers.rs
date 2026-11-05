@@ -172,6 +172,7 @@ fn place_status() -> PlaceStatus {
                     Given {
                         layer: Layer::Launch,
                         value: "large".into(),
+                        file: None,
                     },
                 )]),
             },

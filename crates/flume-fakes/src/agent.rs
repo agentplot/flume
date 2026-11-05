@@ -58,6 +58,9 @@ struct AgentModel {
     /// The keys of its settings the program reserves, each with its
     /// owner, a nested key by its path (191, 192).
     reserved: Vec<Reserved>,
+    /// The file its command lists its own settings in where scripted
+    /// apart from its own under the place's folder (192).
+    own_at: Option<String>,
 }
 
 #[derive(Clone)]
@@ -273,6 +276,13 @@ impl FakeAgent {
         });
     }
 
+    /// The program's own settings go to the file at `path`, wherever it
+    /// lies, as a profile that lists a file outside the place's folder
+    /// would (192).
+    pub fn own_file_at(&self, path: &str) {
+        lock(&self.state).own_at = Some(path.to_string());
+    }
+
     /// The file under the place's own `folder` that a command for `agent`
     /// lists its own settings in (192).
     pub fn own_file(folder: &str, agent: &Identity) -> String {
@@ -440,8 +450,12 @@ impl Agent for FakeAgent {
             let keys: Vec<&str> = own.keys().map(String::as_str).collect();
             self.log
                 .push(format!("own {identity}: {}", keys.join(", ")));
-            if lock(&self.state).takes_own {
-                let file = Self::own_file(folder, identity);
+            let (takes, at) = {
+                let state = lock(&self.state);
+                (state.takes_own, state.own_at.clone())
+            };
+            if takes {
+                let file = at.unwrap_or_else(|| Self::own_file(folder, identity));
                 args.extend(["--own".to_string(), file.clone()]);
                 files.insert(
                     file,
