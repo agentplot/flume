@@ -1,7 +1,7 @@
 ---
 number: 38
 title: Claude Code's standing prompt goes by a file of the start's own, since herdr types no argument holding a newline
-status: proposed
+status: accepted
 date: 2026-11-05
 decision-makers:
 - Chuck Swanberg
@@ -9,10 +9,10 @@ decision-makers:
 
 # Claude Code's standing prompt goes by a file of the start's own, since herdr types no argument holding a newline
 
-Status: proposed, the fixing agent's own choice, which the written rules leave to it and which is cheap to change: how the agent profile hands Claude Code a text it already hands it. It waits on the user's yes.
+Status: accepted by the user on 2026-11-05, on its guided review in the Plannotator Inbox ("Accept and release it, and push the statement's amendment"). It was proposed as the fixing agent's own choice, which the written rules leave to it and which is cheap to change: how the agent profile hands Claude Code a text it already hands it.
 
 Deciders: the fixing agent, on the fix `every-stages-agent-starts-whatever-its-arguments-hold` of 2026-11-05, whose brief asked that every stage's agent start, a value herdr cannot carry carried another way where flume can.
-Sources: `agentplot/blueprints:design/flume/requirements.md` at 4ec26f7, clauses 32, 35, 88, 148, C.4 (the command row) and C.5 (the open row and what herdr 0.9.5 was seen to do), as amended with this record at c8cab06; herdr 0.9.5's source, `src/app/agents.rs` (`start_agent`, which refuses any argument holding a control character as `invalid_agent_argument`, "agent arguments cannot be encoded safely for the target shell", before it quotes the start for the pane's shell and types it) and `src/agent_resume.rs` (`validate_resume_argv`, the same rule for a resumed agent); Claude Code 2.1.296's `--append-system-prompt-file`, absent from its help and read in an interactive session as `--append-system-prompt`'s text, as that release passes it to sessions it starts itself; records 0017, 0018 and 0021; rules core.29, core.33, core.39; `crates/flume/src/profiles/agent/claude/mod.rs` (the command), `crates/flume/src/profiles/terminal/herdr/mod.rs` (the open).
+Sources: `agentplot/blueprints:design/flume/requirements.md` at 4ec26f7, clauses 32, 35, 88, 148, C.4 (the command row) and C.5 (the open row and what herdr 0.9.5 was seen to do), as amended with this record at a465ba7; herdr 0.9.5's source, `src/app/agents.rs` (`start_agent`, which refuses any argument holding a control character as `invalid_agent_argument`, "agent arguments cannot be encoded safely for the target shell", before it quotes the start for the pane's shell and types it) and `src/agent_resume.rs` (`validate_resume_argv`, the same rule for a resumed agent); Claude Code 2.1.296's `--append-system-prompt-file`, absent from its help and read in an interactive session as `--append-system-prompt`'s text, as that release passes it to sessions it starts itself; records 0017, 0018 and 0021; rules core.29, core.33, core.39; `crates/flume/src/profiles/agent/claude/mod.rs` (the command), `crates/flume/src/profiles/terminal/herdr/mod.rs` (the open).
 
 ## Context and problem statement
 
@@ -44,5 +44,5 @@ Option 2 changes the text the agent reads, and a document's lists and code block
 - Claude Code's command names `--append-system-prompt-file <folder>/claude/<identity>/standing-prompt.md` wherever its settings give instructions, and the file holds them as given. A file that cannot be written is still named: Claude Code's words that it is missing are the screen of a start that never came up (35), as for the plugin.
 - `--append-system-prompt-file` is not in 2.1.296's help, so a later release that drops it is found by the walkthroughs' stand-in, which refuses a missing file as that release does, and by the live walkthrough, before a pin moves (core.22).
 - The tools layer reproduces herdr's refusal against the pinned herdr, and starts an agent from Claude Code's profile with instructions of many lines.
-- C.4's command row and C.5's open row and what herdr 0.9.5 was seen to do say so (blueprints c8cab06; core.19). Record 0021's sentence naming `--append-system-prompt` is amended with this record. Rule core.33's details name it.
+- C.4's command row and C.5's open row and what herdr 0.9.5 was seen to do say so (blueprints a465ba7; core.19). Record 0021's sentence naming `--append-system-prompt` is amended with this record. Rule core.33's details name it.
 - Neither of the family's other tools meets this refusal. sluice starts no agent in herdr: its herdr plugin opens its pane by `plugin pane open`, and its worktrunk profile only prompts an agent by `agent prompt`, which carries a newline, as flume's own prompts do. crew types a one-line command into a pane by `pane run`, and its role's brief, many lines long, reaches Claude Code as `--append-system-prompt` from its own launcher script's argument list, which herdr never types.

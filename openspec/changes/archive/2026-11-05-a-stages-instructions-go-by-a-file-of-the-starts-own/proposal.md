@@ -63,7 +63,6 @@ None.
 - `docs/`: record 0038, proposed, which amends record 0021; rule
   core.33's details name it.
 - agentplot/blueprints: C.4's command row and C.5's open row are
-  amended at c8cab06, on the branch
-  `design/flume-a-standing-prompt-goes-by-file` (core.19).
+  amended on main at a465ba7 (core.19).
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool.
