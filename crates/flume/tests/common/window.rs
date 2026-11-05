@@ -23,8 +23,9 @@ pub struct Run {
     pub ended: bool,
 }
 
-/// A stand-in program named `name` in a folder of its own, its runs
-/// recorded under that folder.
+/// A stand-in program named `name` in a folder's `bin`, its runs
+/// recorded under that folder by its name, so several stand-ins may share
+/// one `bin`.
 pub struct StandIn {
     pub program: PathBuf,
     records: PathBuf,
@@ -32,12 +33,12 @@ pub struct StandIn {
 }
 
 impl StandIn {
-    /// The stand-in `name` in `folder`, which it makes; its folder may be
-    /// put first on a `PATH`.
+    /// The stand-in `name` in `folder`'s `bin`, which it makes; that `bin`
+    /// may be put first on a `PATH`.
     pub fn new(folder: &Path, name: &str) -> StandIn {
         let bin = folder.join("bin");
-        let records = folder.join("runs");
-        let control = folder.join("control");
+        let records = folder.join("runs").join(name);
+        let control = folder.join("control").join(name);
         for dir in [&bin, &records, &control] {
             std::fs::create_dir_all(dir).expect("the stand-in's folders");
         }
