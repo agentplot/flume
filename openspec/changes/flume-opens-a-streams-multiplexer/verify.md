@@ -6,10 +6,15 @@ proposal, design, twelve delta specs and tasks.
 
 ## Verdict
 
-**Holds; archived.** Every task is ticked, every scenario of the twelve
-delta specs is held by a test that asserts its THEN, and the gate
-passes as the tasks hold it: `flume:tools`'s named-session tests by a
-direct run, as the operator ruled on 2026-11-05.
+**Falls short; not archived.** Every task is ticked, every scenario of
+the twelve delta specs is held by a test that asserts its THEN, and the
+gate passes at `70dc992` as the tasks hold it, `flume:tools`'s
+named-session tests by a direct run as the operator ruled on
+2026-11-05. But the archive this change asks for fails the gate:
+`host-configuration`'s modified requirement, once synced, is past the
+length `openspec validate --specs --strict` takes, so `root:specs`
+fails on the archived specs. The change goes back to its code stage for
+it. See "What fails".
 
 ## Tasks
 
@@ -114,6 +119,26 @@ holds it, and the test's assertions were read against each THEN.
   unbuilt list match the spec's list entry for entry.
   conformance:coverage passes.
 
+## What fails
+
+1. **The archived `host-configuration` spec fails `root:specs`.**
+   `openspec archive flume-opens-a-streams-multiplexer --yes`, run at
+   `bf232f6`, synced 31 requirements added and 7 modified. Then
+   `openspec validate --specs --strict`, the command `root:specs` runs,
+   passed 39 of 40 and failed `spec/host-configuration`: "requirements[1]:
+   Requirement text is very long (>500 characters)". The requirement is
+   "The local layer sets only C.7's keys", whose text this change's delta
+   (`specs/host-configuration/spec.md`) takes from 407 characters to 506
+   by adding `multiplexer` and "a stream's `view`, `terminal_app` and
+   `title` and every key of `[host]` among them". `root:changes` does not
+   catch it, since `openspec validate --changes --strict` does not hold a
+   delta's requirement to that length. The archive was undone and nothing
+   of it committed. The delta's requirement needs to come under 500
+   characters, by shorter words or split into two requirements, each
+   with its scenarios. It holds once `openspec archive` of the change
+   leaves `openspec validate --specs --strict` passing, read on a copy
+   of the tree or with the archive undone after.
+
 ## Observations
 
 None of these fails a THEN or a requirement; each stands for a later
@@ -124,8 +149,12 @@ change to weigh.
   `print.rs`, the fakes' host and terminal, `terminal_herdr.rs`,
   `docs/architecture/core.md` and three site pages among them, since
   #102, #104, #105 and #106 landed after this branch's merge of
-  `70afbf8`. Its submission will be read conflicting and go back with
-  the merge queue's words (27, 112). Main's clause list reads
+  `70afbf8`. Submitted as it stands, it would be read conflicting and
+  go back with the merge queue's words (27, 112); the code stage this
+  change goes back to can merge main beside "What fails". Main changes
+  16 of `openspec/specs/`'s files since `70afbf8` but not
+  `host-configuration`, so the length is this change's alone. Main's
+  clause list reads
   `6188a10` too and names 186 to 190, S90 and S91 unbuilt by this
   change, so the merge takes main's list with those entries built.
 - **The printed window quotes `=` in its program word.**
