@@ -243,11 +243,14 @@ fn stand_in_flume() {
     let words: Vec<String> = serde_json::from_str(&words).expect("the command's words");
     let build = || {
         let home = std::env::var("HOME").unwrap_or_default();
+        let state = config::flume_state()?;
         core_with(
-            &config::flume_state()?,
+            &state,
             HostConfig::of_host()?,
             flume::host::recipient(),
-            Arc::new(StandIn(BuiltIn::with_login(&[("HOME", &home)]))),
+            Arc::new(StandIn(
+                BuiltIn::with_login(&[("HOME", &home)]).over(&state),
+            )),
             Some(vec![("HOME".into(), home)]),
         )
     };

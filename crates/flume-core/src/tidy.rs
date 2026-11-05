@@ -96,7 +96,7 @@ impl Engine {
                             tidied,
                         );
                     }
-                    if let Closed::Refused { reason } = self.terminal.close(&identity) {
+                    if let Closed::Refused { reason } = self.agent_on(start).close() {
                         self.failed_end(id, &identity, &reason);
                         return self.keep(
                             id,

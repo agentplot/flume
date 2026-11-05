@@ -116,6 +116,15 @@ impl World {
         )
     }
 
+    /// A fake terminal of its own, which the resolver gives by `name` and
+    /// the fake agent reads its agents in (190).
+    pub fn other_terminal(&self, name: &str) -> Arc<FakeTerminal> {
+        let terminal = Arc::new(FakeTerminal::new(self.host.clone()));
+        self.resolver.with_terminal(name, terminal.clone());
+        self.agent.also_on(terminal.clone());
+        terminal
+    }
+
     /// The place `<kind>--<name>` of the repository, where the fake place
     /// makes it.
     pub fn id(kind: &str, name: &str) -> PlaceId {

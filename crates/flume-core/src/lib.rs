@@ -27,6 +27,7 @@ mod start;
 mod start_record;
 mod status;
 mod submit;
+mod terminals;
 mod tidy;
 mod uncarried;
 mod unsettled;

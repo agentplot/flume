@@ -134,12 +134,16 @@ fn the_printed_command_passes_the_terminal_scenarios() {
 }
 
 /// An engine over `world`'s fakes with the printed command for its
-/// terminal and the store in `scratch`'s state directory, where the
-/// printed command keeps its marks.
+/// terminal, the host's multiplexer and the resolver's `printed`, and the
+/// store in `scratch`'s state directory, where the printed command keeps
+/// its marks (190).
 fn printed(world: &World, scratch: &Scratch) -> Engine {
+    let printed: Arc<dyn Terminal> = Arc::new(Printed);
+    world.resolver.with_terminal("printed", printed.clone());
+    world.host.set_host_display(Some("printed"), None, None);
     Engine::new(
         world.resolver.clone(),
-        Arc::new(Printed),
+        printed,
         Arc::new(StateDir::at(scratch.path("state/flume"))),
         world.history.clone(),
         world.host.clone(),

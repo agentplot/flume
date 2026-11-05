@@ -130,6 +130,15 @@ impl BuiltIn {
         }
     }
 
+    /// The same profiles, their terminals' records under flume's state
+    /// directory `state`, as the core built over them keeps them, so a
+    /// resolver that wraps them gives terminals by name before
+    /// [`core_with`] builds the core over it (105, 190).
+    pub fn over(self, state: &Path) -> BuiltIn {
+        let _ = self.terminals.state.set(state.to_path_buf());
+        self
+    }
+
     /// The terminal profile `name` names, the printed command where none,
     /// its records under flume's state directory `state`: the one built
     /// before for this command, else built now and kept; or the refusal
@@ -451,7 +460,7 @@ pub fn core_over(
     resolver: BuiltIn,
 ) -> Result<Engine, String> {
     let login = resolver.login.clone();
-    let _ = resolver.terminals.state.set(state.to_path_buf());
+    let resolver = resolver.over(state);
     let terminal = resolver.terminal_named(config.terminal.as_deref(), state)?;
     core_built(
         state,
@@ -464,10 +473,12 @@ pub fn core_over(
 }
 
 /// The core over any resolver, as [`core_over`] builds it over the
-/// profiles built in: the terminal `config` binds, the store in `state`,
-/// git's history, and the host with `config`, `recipient` and exactly
-/// `login` for the host user's login environment where it is given one
-/// (design 16). A test binds a stand-in agent program through it.
+/// profiles built in: the terminal `config` binds, the one `resolver`
+/// gives by that name where it gives one, so a start in the host's own
+/// terminal reaches the core's own (190), the store in `state`, git's
+/// history, and the host with `config`, `recipient` and exactly `login`
+/// for the host user's login environment where it is given one (design
+/// 16). A test binds a stand-in agent program through it.
 pub fn core_with(
     state: &Path,
     config: HostConfig,
@@ -475,8 +486,12 @@ pub fn core_with(
     resolver: Arc<dyn Resolver>,
     login: Option<Vec<(String, String)>>,
 ) -> Result<Engine, String> {
-    let terminal = terminal(config.terminal.as_deref(), state, login.as_deref())?;
-    core_built(state, config, recipient, resolver, login, terminal)
+    let named = config.terminal.as_deref();
+    let own = match resolver.terminal(named.unwrap_or(terminal::printed::NAME)) {
+        Some(own) => own,
+        None => terminal(named, state, login.as_deref())?,
+    };
+    core_built(state, config, recipient, resolver, login, own)
 }
 
 /// The core over `resolver` and the host's own `terminal`, as

@@ -80,7 +80,7 @@ impl Engine {
                     "the agent {identity} is not quiet; ask again forced to end it"
                 ));
             }
-            if let Closed::Refused { reason } = self.terminal.close(&identity) {
+            if let Closed::Refused { reason } = self.agent_on(start).close() {
                 self.failed_end(id, &identity, &reason);
                 return Err(format!("the agent {identity} did not end: {reason}"));
             }
@@ -436,7 +436,7 @@ impl Engine {
                     start.identity
                 ));
             }
-            if let Closed::Refused { reason } = self.terminal.close(&start.identity) {
+            if let Closed::Refused { reason } = self.agent_on(&start).close() {
                 self.failed_end(place, &start.identity, &reason);
                 return Answer::refused(format!(
                     "the agent {} did not end: {reason}",
@@ -475,7 +475,7 @@ impl Engine {
         let folder = self.store.folder(place);
         let deadline = self.host.now() + bound.unwrap_or(TELL_BOUND);
         loop {
-            let state = self.state_of(Some(agent.as_ref()), &folder, &identity);
+            let state = self.state_of(Some(agent.as_ref()), &folder, start);
             let asking = agent.asking(&folder, &identity);
             if state == AgentState::Asking || asking == Reading::Yes {
                 return Answer::refused(format!(
@@ -501,7 +501,7 @@ impl Engine {
             self.host.sleep(POLL);
         }
         for _ in 0..2 {
-            if let Sent::Refused { reason } = self.terminal.send(&identity, words) {
+            if let Sent::Refused { reason } = self.agent_on(start).send(words) {
                 return Answer::refused(format!("the terminal did not send the words: {reason}"));
             }
             let sent = self.host.now();

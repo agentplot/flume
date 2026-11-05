@@ -1,4 +1,4 @@
-use crate::{lock, FakeKinds, FakeTerminal, FakeWindow, Log};
+use crate::{lock, FakeKinds, FakeWindow, Log};
 use flume_seams::{Agent, Binding, Change, Kinds, MergeQueue, Place, Resolver, Terminal, Window};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -60,9 +60,9 @@ impl FakeResolver {
         lock(&self.state).agents.insert(program.into(), agent);
     }
 
-    /// The terminal profile named `name` is `terminal` from now (105,
-    /// 190).
-    pub fn with_terminal(&self, name: &str, terminal: Arc<FakeTerminal>) {
+    /// The terminal profile named `name` is `terminal` from now, a fake
+    /// or a profile a test puts in its place (105, 190).
+    pub fn with_terminal(&self, name: &str, terminal: Arc<dyn Terminal>) {
         lock(&self.state).terminals.insert(name.into(), terminal);
     }
 

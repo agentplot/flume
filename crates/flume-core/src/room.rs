@@ -79,6 +79,10 @@ pub(crate) struct StreamRoom {
     /// Why its labels refuse every start of the stream, none where they
     /// do not (4, 181, 182).
     pub fault: Option<String>,
+    /// Why its multiplexer runs no agent, a terminal profile the resolver
+    /// does not carry, which refuses every start of the stream; none
+    /// where it runs them (4, 190).
+    pub uncarried: Option<String>,
 }
 
 /// A label's share of its stream as the queue reads it: its reserve, the
@@ -125,6 +129,7 @@ impl StreamRoom {
                 })
                 .collect(),
             fault,
+            uncarried: None,
         }
     }
 
@@ -305,11 +310,14 @@ impl Waiting {
     }
 
     /// Whether the room its claim would refuse it for has no bearing: its
-    /// pool holds an account of its program and its stream's labels are
-    /// at no fault (4, 145, 182).
+    /// pool holds an account of its program, its stream's labels are at
+    /// no fault and its stream's multiplexer runs agents (4, 145, 182,
+    /// 190).
     fn runs(&self, queue: &Queue) -> bool {
+        let stream = queue.stream(&self.stream);
         queue.runs(&self.stream, self.program.as_deref())
-            && queue.stream(&self.stream).fault.is_none()
+            && stream.fault.is_none()
+            && stream.uncarried.is_none()
     }
 
     /// The room it is short of now, none where it could start (70).
@@ -536,7 +544,10 @@ impl Engine {
             .streams()
             .into_iter()
             .map(|(name, stream)| {
-                let room = StreamRoom::of(&name, stream);
+                let room = StreamRoom {
+                    uncarried: self.stream_terminal(&name).err(),
+                    ..StreamRoom::of(&name, stream)
+                };
                 (name, room)
             })
             .collect();
@@ -667,9 +678,10 @@ impl Engine {
     /// its stream, its label and its account and orders what is left
     /// again, so a label that reaches its reserve goes back among its
     /// stream's others (181). Ahead of the host's room, each stage waiting
-    /// whose pool holds no account of its program, or whose stream's
-    /// labels are at fault, is claimed, which refuses it, whatever room
-    /// the host has (4, 32, 145, 182).
+    /// whose pool holds no account of its program, whose stream's labels
+    /// are at fault, or whose stream's multiplexer names a terminal
+    /// profile the resolver does not carry, is claimed, which refuses it,
+    /// whatever room the host has (4, 32, 145, 182, 190).
     pub(crate) fn start_waiting(&self) {
         let any = self.store.read_every().iter().any(|read| {
             read.state

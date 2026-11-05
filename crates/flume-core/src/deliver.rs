@@ -100,9 +100,9 @@ impl Engine {
                 // after the open returned: the terminal answers it where
                 // it shows it now (34, 35).
                 let answered =
-                    stage.state == StageState::Starting && self.terminal.answer_trust(identity);
+                    stage.state == StageState::Starting && self.agent_on(&start).answer_trust();
                 let stopped =
-                    self.state_of(Some(agent.as_ref()), &folder, identity) == AgentState::Stopped;
+                    self.state_of(Some(agent.as_ref()), &folder, &start) == AgentState::Stopped;
                 // Any other question it shows a person holds the start,
                 // which waits on them however long (34, 35).
                 let dialog = match (answered, stopped) {
@@ -139,7 +139,7 @@ impl Engine {
                 });
                 return true;
             }
-            let state = self.state_of(Some(agent.as_ref()), &folder, identity);
+            let state = self.state_of(Some(agent.as_ref()), &folder, &start);
             if state == AgentState::Stopped {
                 let end = self.read_out(&held, &start, false);
                 self.end_start(
@@ -191,7 +191,7 @@ impl Engine {
             if !self.claim_sending(id, identity, prompt.sendings.len(), now) {
                 continue;
             }
-            match self.terminal.send(identity, &prompt.text) {
+            match self.agent_on(&start).send(&prompt.text) {
                 Sent::Sent => sent = true,
                 Sent::Refused { reason } => {
                     let failure =
@@ -246,12 +246,11 @@ impl Engine {
     /// dialog is gone; where it cannot read it, the start keeps what it
     /// held. Whether a dialog holds the start (34, 35).
     fn read_dialog(&self, id: &PlaceId, start: &StartHeld) -> bool {
-        let identity = &start.identity;
-        let dialog = match self.terminal.state(identity) {
+        let on = self.agent_on(start);
+        let dialog = match on.state() {
             AgentState::Asking => Some(Dialog {
-                words: self
-                    .terminal
-                    .screen(identity)
+                words: on
+                    .screen()
                     .map(|screen| shown(&screen))
                     .filter(|words| !words.is_empty())
                     .or_else(|| start.dialog.as_ref().map(|dialog| dialog.words.clone()))
@@ -265,7 +264,9 @@ impl Engine {
             _ => None,
         };
         if dialog != start.dialog {
-            self.with_start(id, identity, |start, _| start.dialog.clone_from(&dialog));
+            self.with_start(id, &start.identity, |start, _| {
+                start.dialog.clone_from(&dialog);
+            });
         }
         dialog.is_some()
     }

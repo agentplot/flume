@@ -37,7 +37,7 @@ use flume::host::config::HostConfig;
 use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::terminal::herdr::{
-    herdr_name, Herdr, Pane, Server, SESSION_HOME, START_TIMEOUT,
+    herdr_name, Herdr, Pane, Server, NAME, SESSION_HOME, START_TIMEOUT,
 };
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
@@ -2084,16 +2084,23 @@ fn place_of(world: &World, repository: &str) -> PlaceId {
     )
 }
 
-/// An engine over `world`'s fakes with herdr for its terminal, the store
-/// in the scratch's state directory and the host's own clock.
+/// An engine over `world`'s fakes with herdr for its terminal, the
+/// host's multiplexer and the resolver's `herdr`, the store in the
+/// scratch's state directory and the host's own clock (190).
 fn engine(server: &TestServer, world: &World) -> Engine {
     let state = server.scratch.path("state/flume");
+    let herdr: Arc<dyn Terminal> = Arc::new(server.profile());
+    world.resolver.with_terminal(NAME, herdr.clone());
+    let config = HostConfig {
+        terminal: Some(NAME.into()),
+        ..HostConfig::default()
+    };
     Engine::new(
         world.resolver.clone(),
-        Arc::new(server.profile()),
+        herdr,
         Arc::new(StateDir::at(&state)),
         world.history.clone(),
-        Arc::new(RealHost::new(&state, HostConfig::default(), None)),
+        Arc::new(RealHost::new(&state, config, None)),
         world.defaults.clone(),
     )
 }
