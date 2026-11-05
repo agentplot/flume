@@ -1,7 +1,10 @@
 //! The agent profile for Claude Code (C.4; design 14; record 0016): the
 //! agent seam's scenarios against it over fixture transcripts and hook
 //! records of Claude Code 2.1.296, the release `devenv.nix` pins; the
-//! command for a code stage and for a stage in a mode; the map of
+//! command for a code stage and for a stage in a mode; the command for a
+//! stage with own settings and with none, the keys the profile reserves,
+//! a people's settings file named by the host through the core, the keys
+//! it takes as written and a repository's tagline among them; the map of
 //! flume's modes and the release's own, and the mode read back; the
 //! plugin an agent loads, written once per version; a prompt queued while
 //! the agent worked; a slash command's
@@ -14,16 +17,19 @@
 //! `hooks_claude.rs`.
 
 use crate::common::*;
+use flume::host::config::HostConfig;
 use flume::profiles::agent::claude::record::{self, Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
     TRUST_QUESTION, VERSION,
 };
-use flume::profiles::agent::claude::{carry, mode, transcript};
-use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
+use flume::profiles::agent::claude::{carry, mode, settings, transcript};
+use flume::profiles::{core_over, BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::agent::{self, AgentHarness, Modes, OwnWay};
+use flume_core::Answer;
 use flume_seams::*;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -360,10 +366,13 @@ impl AgentHarness for Harness {
         })
     }
 
-    /// The seam's defaults, which the profile keeps until it passes its
-    /// program's settings by `--settings <file>` (191, 192).
+    /// Taken by `--settings <file>`, with design 6's reserved keys (191,
+    /// 192).
     fn own_way(&self) -> OwnWay {
-        OwnWay::default()
+        OwnWay {
+            takes: true,
+            reserved: settings::reserved(),
+        }
     }
 
     /// The JSON object of the file the command names by `--settings`, as
@@ -552,6 +561,298 @@ fn the_command_for_a_stage_in_edits() {
     );
     assert_eq!(command.program, NAME);
     assert_eq!(command.args[2..], ["--permission-mode", "acceptEdits"]);
+}
+
+/// The command for a code stage given `own`, its program's resolved own
+/// settings.
+fn with_own(harness: &Harness, own: &BTreeMap<String, Value>) -> AgentCommand {
+    harness.seam.command(
+        &harness.folder(),
+        &Settings {
+            model: Some("opus".into()),
+            ..Settings::default()
+        },
+        None,
+        own,
+        None,
+        &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
+        &harness.place(),
+        &identity("code"),
+        &Secret("s".into()),
+        "x",
+    )
+}
+
+/// The keys `command`'s `--settings` file holds, as the release reads it.
+fn passed(command: &AgentCommand) -> BTreeMap<String, Value> {
+    Harness::new()
+        .own_passed(command)
+        .expect("own settings passed")
+}
+
+#[test]
+fn the_command_for_a_stage_with_own_settings() {
+    // Keys resolved from a named file and a table's `settings` are
+    // written as one JSON object to the file beside the start's record,
+    // which `--settings` names right after `--plugin-dir`; the named
+    // file's path is never on the line (S95, 191, 192).
+    let harness = Harness::new();
+    let named = "/host/agent-launcher/claude-settings.json";
+    let line = json!({ "type": "command", "command": "~/bin/line" });
+    let own = BTreeMap::from([
+        ("tui".to_string(), json!("fullscreen")),
+        ("statusLine".to_string(), line.clone()),
+    ]);
+    let command = with_own(&harness, &own);
+    let file = format!(
+        "{}/claude/{}/own-settings.json",
+        harness.folder(),
+        identity("code").to_string().replace('/', "%")
+    );
+    let plugin = harness.seam.plugin_dir().to_string_lossy().into_owned();
+    assert_eq!(
+        command.args,
+        [
+            "--plugin-dir",
+            &plugin,
+            "--settings",
+            &file,
+            "--model",
+            "opus"
+        ]
+    );
+    assert_eq!(command.files.keys().collect::<Vec<_>>(), [&file]);
+    assert_eq!(
+        serde_json::from_str::<Value>(&command.files[&file]).expect("JSON"),
+        json!({ "statusLine": line, "tui": "fullscreen" })
+    );
+    assert!(
+        !command
+            .args
+            .iter()
+            .chain(command.prompt_args.iter())
+            .any(|arg| arg.contains(named)),
+        "the named file on the line: {:?}",
+        command.args
+    );
+}
+
+#[test]
+fn the_command_for_a_stage_with_none() {
+    // No key for `claude`: no `--settings`, and no file (191).
+    let harness = Harness::new();
+    let command = with_own(&harness, &BTreeMap::new());
+    assert!(
+        !command.args.iter().any(|arg| arg == "--settings"),
+        "{:?}",
+        command.args
+    );
+    assert!(command.files.is_empty(), "{:?}", command.files);
+}
+
+#[test]
+fn each_reserved_key() {
+    // Each key 2.1.296's settings hold that another setting, the account
+    // or a person owns, `permissions.defaultMode` by its path, with its
+    // owner (34, 144, 162, 172, 191).
+    let reserved: Vec<(String, String)> = Harness::new()
+        .seam
+        .reserved()
+        .into_iter()
+        .map(|Reserved { key, owner }| (key, owner))
+        .collect();
+    let account = "the account's `env`";
+    let sign_in = "the account's sign-in";
+    let person = "a person, who alone accepts the warning it records";
+    assert_eq!(
+        reserved,
+        [
+            ("env", account),
+            ("model", "flume's `model`"),
+            ("permissions.defaultMode", "flume's `mode`"),
+            ("apiKeyHelper", sign_in),
+            ("awsAuthRefresh", sign_in),
+            ("awsCredentialExport", sign_in),
+            ("gcpAuthRefresh", sign_in),
+            ("otelHeadersHelper", sign_in),
+            ("forceLoginMethod", sign_in),
+            ("forceLoginOrgUUID", sign_in),
+            ("disableAllHooks", "flume's plugin"),
+            ("skipDangerousModePermissionPrompt", person),
+            ("skipAutoPermissionPrompt", person),
+        ]
+        .map(|(key, owner)| (key.to_string(), owner.to_string()))
+    );
+}
+
+#[test]
+fn a_peoples_settings_file() {
+    // A host names the file its people's sessions get: through the core,
+    // the command's file holds its status line, renderer, hooks and
+    // permissions' rules, and none of its `env`, its
+    // `permissions.defaultMode` or its acceptance of the bypass warning,
+    // which status names left out with their owners (S95, 191).
+    let repository = Repository::new("peoples-file");
+    let scratch = &repository.scratch;
+    let line = json!({ "type": "command", "command": "~/bin/line" });
+    let hooks = json!({ "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] });
+    std::fs::write(
+        scratch.path("people.json"),
+        json!({
+            "tui": "fullscreen",
+            "statusLine": line,
+            "hooks": hooks,
+            "env": { "EDITOR": "vi" },
+            "permissions": {
+                "allow": ["Bash(git log:*)"],
+                "defaultMode": "bypassPermissions"
+            },
+            "skipDangerousModePermissionPrompt": true
+        })
+        .to_string(),
+    )
+    .expect("the people's file");
+    let config = scratch.path("config.toml");
+    std::fs::write(
+        &config,
+        "[agents.programs.claude]\nfile = \"people.json\"\n",
+    )
+    .expect("the host's configuration");
+    let config = HostConfig::read(&config).expect("the configuration read");
+    let home = scratch.path("home");
+    std::fs::create_dir_all(&home).expect("a scratch home");
+    let path = std::env::var("PATH").unwrap_or_default();
+    let core = core_over(
+        &scratch.path("state"),
+        config,
+        None,
+        BuiltIn::with_login(&[
+            ("HOME", &home.to_string_lossy()),
+            ("PATH", &path),
+            ("LANG", "C"),
+        ]),
+    )
+    .expect("the core");
+    std::fs::create_dir_all(scratch.path("kinds/prompts")).expect("prompts");
+    std::fs::write(scratch.path("kinds/prompts/code.md"), "{{brief}}").expect("the prompt");
+    std::fs::write(
+        scratch.path("kinds/kinds.toml"),
+        r#"[kinds.survey]
+version = 1
+branch = "survey"
+
+[[kinds.survey.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["commits"]
+agents = [{}]
+"#,
+    )
+    .expect("the declaration");
+    let answer = core.launch(&Launch {
+        repository: repository.name(),
+        kind: "survey".into(),
+        name: "first".into(),
+        base: "main".into(),
+        brief: Some("look around".into()),
+        declaration: Some(scratch.path("kinds/kinds.toml").to_string_lossy().into()),
+        ..Launch::default()
+    });
+    let Answer::Launched { place } = answer else {
+        panic!("the launch answered otherwise: {answer:?}");
+    };
+    let agent = place.agent.expect("the stage's agent");
+    let own = agent.own.expect("own settings in status");
+    let passed = own.passed.expect("own settings passed");
+    let file = passed
+        .strip_prefix("--settings ")
+        .unwrap_or_else(|| panic!("passed otherwise: {passed}"));
+    assert!(
+        file.ends_with("/own-settings.json"),
+        "{file} is not the start's own file"
+    );
+    let printed = agent.printed.expect("the command printed");
+    assert!(printed.contains(file), "{printed}");
+    let text = std::fs::read_to_string(file).expect("the start's own file");
+    assert_eq!(
+        serde_json::from_str::<Value>(&text).expect("JSON"),
+        json!({
+            "hooks": hooks,
+            "permissions": { "allow": ["Bash(git log:*)"] },
+            "statusLine": line,
+            "tui": "fullscreen"
+        })
+    );
+    let read = scratch.path("people.json").to_string_lossy().into_owned();
+    assert!(!printed.contains(&read), "the named file passed: {printed}");
+    assert_eq!(
+        own.files
+            .iter()
+            .map(|file| (file.layer, file.read.clone(), file.left_out.clone()))
+            .collect::<Vec<_>>(),
+        [(
+            Layer::Host,
+            read,
+            [
+                "env",
+                "permissions.defaultMode",
+                "skipDangerousModePermissionPrompt"
+            ]
+            .iter()
+            .map(|key| {
+                settings::reserved()
+                    .into_iter()
+                    .find(|reserved| reserved.key == *key)
+                    .expect("reserved")
+            })
+            .collect::<Vec<_>>()
+        )]
+    );
+}
+
+#[test]
+fn keys_taken_as_written() {
+    // Keys no setting of flume's owns are taken, and the command's file
+    // holds each as written (191).
+    let harness = Harness::new();
+    let given = BTreeMap::from([
+        (
+            "statusLine".to_string(),
+            json!({ "type": "command", "command": "printf '%s' \"$(git branch --show-current)\"" }),
+        ),
+        ("tui".to_string(), json!("fullscreen")),
+        (
+            "hooks".to_string(),
+            json!({ "SessionStart": [{ "hooks": [{ "type": "command", "command": "touch started" }] }] }),
+        ),
+        (
+            "permissions".to_string(),
+            json!({ "allow": ["Bash(git log:*)"] }),
+        ),
+        ("enableAllProjectMcpServers".to_string(), json!(true)),
+    ]);
+    assert_eq!(harness.seam.own(&given), Ok(()));
+    assert_eq!(passed(&with_own(&harness, &given)), given);
+}
+
+#[test]
+fn a_repositorys_tagline_written_as_given() {
+    // `attribution = { commit = "", pr = "", sessionUrl = false }` among
+    // the resolved keys reaches the file exactly as the layer wrote it,
+    // nothing of flume's added to it (S97, 191, C.4).
+    let harness = Harness::new();
+    let attribution = json!({ "commit": "", "pr": "", "sessionUrl": false });
+    let own = BTreeMap::from([
+        ("attribution".to_string(), attribution.clone()),
+        ("tui".to_string(), json!("fullscreen")),
+    ]);
+    let command = with_own(&harness, &own);
+    let text = command.files.values().next().expect("the file");
+    assert_eq!(
+        text,
+        "{\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false},\"tui\":\"fullscreen\"}\n"
+    );
+    assert_eq!(passed(&command)["attribution"], attribution);
 }
 
 #[test]
