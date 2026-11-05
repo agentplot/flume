@@ -1,7 +1,9 @@
 //! The host's own facts the core reads: its clock, a new secret, a
 //! file's write time, whether a command of flume's still lives, the bound
-//! on agents its configuration states, its streams and pools of
-//! accounts, and a lock over the room (design 3, 6). No seam of Part B.
+//! on agents its configuration states, its streams with their sessions
+//! and labels, its pools of accounts, the labels it gives kinds, its
+//! configuration's values with their layers, and a lock over the room
+//! (design 3, 6). No seam of Part B.
 
 use crate::{KindSettings, Seconds, Secret};
 use serde::{Deserialize, Serialize};
@@ -15,8 +17,11 @@ pub const DEFAULT_STREAM: &str = "default";
 /// running, none where it states none and the host's bound alone holds
 /// it; its priority among streams, zero where it gives none; the pool
 /// its agents' accounts come from, none where the host's own pool stands;
-/// and the title a window on its part of the terminal carries, none where
-/// it gives none and its name stands (143, 144, 186, C.7).
+/// the terminal session its agents open in, none where it names none and
+/// its name, or the terminal's own for the default stream, stands; its
+/// labels' shares of its agents, by label, none where it states none; and
+/// the title a window on its part of the terminal carries, none where it
+/// gives none and its name stands (107, 143, 144, 181, 186, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -26,7 +31,100 @@ pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pool: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub labels: BTreeMap<String, Share>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+}
+
+/// A label's share of its stream's agents: the reserve its places start
+/// within before the stream's others, and how many of its stream's slots
+/// it keeps free while it runs fewer, each zero where its table gives
+/// none; and each other key its table holds, which refuses every start of
+/// the stream rather than the configuration (181, 182, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Share {
+    #[serde(default)]
+    pub reserve: u32,
+    #[serde(default)]
+    pub keep_free: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unknown: Vec<String>,
+}
+
+/// Where a place's label came from: the host's configuration for its
+/// repository and kind, the host's for its kind, or the kind's own
+/// (180).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LabelFrom {
+    HostRepositoryKind,
+    HostKind,
+    Kind,
+}
+
+/// A label by its name and where it came from (56, 180).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelHeld {
+    pub name: String,
+    pub from: LabelFrom,
+}
+
+/// The layer of the host's configuration a value came from: the managed
+/// `config.toml`, or the local `config.local.toml` read over it (C.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ConfigLayer {
+    Managed,
+    Local,
+}
+
+/// One value of the host's configuration by its dotted key, as TOML
+/// writes it, an account's variable's as [`crate::SET`], and the layer
+/// it came from (56, C.7; core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigValue {
+    pub key: String,
+    pub value: String,
+    pub layer: ConfigLayer,
+}
+
+/// Whether the host's local layer was taken: no local file, taken, or
+/// not taken at all, naming each key it may not set and, where it could
+/// not be read, why (C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub enum LocalLayer {
+    #[default]
+    NoFile,
+    Taken,
+    NotTaken {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        keys: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fault: Option<String>,
+    },
+}
+
+/// A key the local layer set that the managed layer pins, passed over,
+/// with the pin that holds it (C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PinnedKey {
+    pub key: String,
+    pub pin: String,
+}
+
+/// The host's configuration as it stands when asked: whether its local
+/// layer was taken, every value with its layer, and each local key
+/// passed over with its pin (56, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostConfiguration {
+    pub local: LocalLayer,
+    #[serde(default)]
+    pub values: Vec<ConfigValue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub passed_over: Vec<PinnedKey>,
 }
 
 /// How a pool chooses among its usable accounts: the first in order, or
@@ -229,6 +327,17 @@ pub trait Host: Send + Sync {
     /// kind, else for the repository, else for the kind, with where it
     /// came from; none where it names none (143, C.7).
     fn stream_for(&self, repository: &str, kind: &str) -> Option<StreamHeld>;
+
+    /// The label the host's configuration gives `kind` in `repository`,
+    /// as it stands now: its word for the repository and kind, else for
+    /// the kind, with where it came from; none where it gives none (180,
+    /// C.7).
+    fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld>;
+
+    /// The host's configuration as it stands now: every value with its
+    /// layer, whether the local layer was taken, and each key passed over
+    /// with its pin (56, C.7).
+    fn configuration(&self) -> HostConfiguration;
 
     /// The pool of a place in `stream`, as the host's configuration
     /// stands now: the stream's own, else the host's, with where it came

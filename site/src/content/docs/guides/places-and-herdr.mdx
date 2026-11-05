@@ -117,12 +117,22 @@ the recipients.
 
 <Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
 
-flume keeps its agents in a herdr session of its own, named `flume`:
+flume keeps each stream's agents in a herdr session of the stream's,
+the one its `session` names, else the one named by the stream's name,
+so `herdr --session work` shows every agent of the `work` stream. The
+`default` stream's agents run in flume's own session, `flume`, unless
+`[streams.default]` names another. A launch's `--agent
+session=<name>` opens its place's agents in that session whatever their
+stream ([a stream's session](/flume/guides/agent-settings/#a-streams-session)).
+flume starts a session's server, headless, the first time an agent
+opens in it. Where herdr does not take a session's name, the start is
+refused in herdr's words. In each session:
 
 - **A workspace per repository and base**, labelled
   `<repository> <base>` from the repository's directory name, such as
   `acme main`. flume opens it the first time a place on that base
-  starts.
+  starts in that session, so a base whose places run in two streams
+  has a workspace in each.
 - **A tab per place**, `<kind>--<name>`, in its base's workspace.
 - **A pane per agent** in the place's tab. flume starts each agent with
   herdr's `agent start`, with the agent's environment set on the pane,
@@ -156,8 +166,8 @@ the settings name, such as a `claude` your shell found earlier on the
 
 An agent's `beside` setting opens its pane as a split beside another
 pane instead, named by its label or id on flume's server, or as
-`herdr:<pane>@<socket>`. A conversation stage uses it to open beside
-the caller's own pane.
+`herdr:<pane>@<socket>`, in whatever session that pane is. A
+conversation stage uses it to open beside the caller's own pane.
 
 Every herdr call flume makes runs under a bound, ten seconds where the
 call states none, with the calling session's `HERDR_*` variables
@@ -258,10 +268,11 @@ place or all. flume:
    kept the branch chore/tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme, 1 commits not landed
    ```
 
-4. under herdr, closes the place's tab, and its base's workspace once
-   that holds no tab of a live place and no pane flume did not open. A
-   workspace where you opened a pane of your own stays open, and status
-   names it under the host's `terminal_kept`.
+4. under herdr, closes the place's tab in each session it has one, and
+   its base's workspace there once that holds no tab of a live place
+   and no pane flume did not open. A workspace where you opened a pane
+   of your own stays open, and status names it under the host's
+   `terminal_kept`.
 
 flume removes nothing it did not make: no worktree made by hand, no
 repository's main worktree, and no herdr workspace, tab or pane of

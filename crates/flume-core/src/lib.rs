@@ -208,6 +208,7 @@ mod tests {
                 lands: true,
                 agents: KindSettings::default(),
                 stages: vec![],
+                label: None,
             },
             declared: Declared::Flume,
             name: "one".into(),
