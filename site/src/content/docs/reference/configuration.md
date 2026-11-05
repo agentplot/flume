@@ -19,23 +19,30 @@ start ([two layers](/flume/guides/agent-settings/#two-layers)):
   host. A file that is not there is an empty one. A file flume cannot
   read makes every command refuse, naming its fault.
 - `config.local.toml`, the local layer, read over the managed one key
-  by key. It sets only a stream's `agents`, `priority` and `session`,
-  a label's `reserve` and `keep_free`, the `stream` and `label` of a
-  repository's kind, a repository or a kind, and the kinds' agents
-  tables. A local file that sets any other key, or that flume cannot
-  read, is not taken at all, and status names each key or the fault.
+  by key. It sets only a stream's `agents`, `priority`, `session` and
+  `multiplexer`, a label's `reserve` and `keep_free`, the `stream` and
+  `label` of a repository's kind, a repository or a kind, and the
+  kinds' agents tables. A local file that sets any other key, or that
+  flume cannot read, is not taken at all, and status names each key or
+  the fault.
 
 flume writes neither file.
 
 ```toml
 [host]
 agents = 8
-terminal = "herdr"
+multiplexer = "herdr"
+terminal_app = "ghostty"
 pool = "work"
+
+[streams.work]
+title = "Work Agents"
 
 [streams.personal]
 agents = 3
 pool = "personal"
+terminal_app = "terminal"
+title = "Personal Agents"
 
 [pools.work]
 strategy = "fill-first"
@@ -71,7 +78,10 @@ priority = 5
 | Key | Values | Meaning |
 |---|---|---|
 | `agents` | a whole number from 0 | The bound on agents running at once on the host, every caller's and every stream's counted together. A stage starts only while the host is under it and otherwise waits for room. With none, and no stream's bound, every stage starts at once and the host has no queue. |
-| `terminal` | `"herdr"`, `"printed"` | Where agents run: in herdr panes, or as a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminals there are. |
+| `multiplexer` | `"herdr"`, `"printed"` | The multiplexer a stream's agents run in where the stream names none: herdr panes, or a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminal profiles there are. |
+| `terminal` | as `multiplexer` | The word written before `multiplexer`, read as it. A `[host]` giving both is refused. |
+| `view` | `"terminal"`, `"app"` | How `flume open` shows a stream's agents where the stream names none: in a window of a terminal app, or in the multiplexer's own app. `"terminal"` where none is given. |
+| `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | The program that opens a stream's window where the stream names none: Ghostty, Terminal.app on macOS, or none, `flume open` printing the line to run. `"printed"` where none is given. Any other name refuses each stream's `flume open` that takes it, naming the window profiles there are; every other command runs. |
 | `pool` | a pool's name | The pool of a place whose stream names none. With none, such a place's agents run under no account. |
 | `pin` | a list of dotted keys, such as `"streams.work.agents"` | The keys the local layer may not set over the managed one. Each names a key the local layer could set, or a table of such keys, as `"streams.work"` does. A local key a pin holds is passed over, status naming it with its pin, and the rest of the local file is taken. |
 
@@ -88,6 +98,18 @@ for; a `[streams.default]` table gives it keys of its own.
 | `priority` | a whole number, negative allowed | the stream's priority: waiting stages start by it first, then by their place's | `0` |
 | `pool` | a pool's name | the pool its places' agents take accounts from | `[host] pool` |
 | `session` | a string herdr takes as a session's name | the herdr session its agents open in ([a stream's session](/flume/guides/agent-settings/#a-streams-session)) | the stream's own name, and flume's own session for `default` |
+| `multiplexer` | `"herdr"`, `"printed"` | the multiplexer its agents run in, read at each start; an agent stays in the one it opened in ([a stream's multiplexer](/flume/guides/agent-settings/#a-streams-multiplexer-and-view)) | `[host] multiplexer` |
+| `view` | `"terminal"`, `"app"` | how `flume open` shows its agents | `[host] view` |
+| `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | the program that opens its window | `[host] terminal_app` |
+| `title` | a string | its window's title, which a window manager can file the window by | the stream's name |
+
+The local layer may set a stream's `agents`, `priority`, `session` and
+`multiplexer`, so you can try a multiplexer on one stream of your host.
+Its `pool`, `view`, `terminal_app` and `title` are the managed layer's.
+A stream whose `multiplexer` names no terminal profile flume carries
+refuses each launch and each start on it, naming the stream, the name
+and the profiles there are, and every other stream runs. One whose
+`terminal_app` names no window profile refuses its `flume open` alone.
 
 ### `[streams.<stream>.labels.<label>]`
 
@@ -172,7 +194,10 @@ flume refuses the file, naming the key, for:
 - a key a stream, a pool or an account does not know;
 - a `label` that is not one word of letters, digits, `-` and `_`;
 - a `pin` that names no key the local layer could set and no table of
-  such keys.
+  such keys;
+- a `[host]` giving both `terminal` and `multiplexer`;
+- a `view` other than `terminal` and `app`;
+- a `multiplexer`, `terminal_app` or `title` that is not a string.
 
 A managed file that refuses leaves every launch and every start
 refused, naming its fault, until it is mended. A local file that would

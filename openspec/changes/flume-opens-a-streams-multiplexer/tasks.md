@@ -60,7 +60,7 @@ whose socket's path leaves no room fails naming its bytes.
 
 ## 7. The site
 
-- [ ] 7.1 Write design 15 into `reference/commands.md`, `reference/configuration.md`, `guides/places-and-herdr.mdx`, `guides/agent-settings.md`, `reference/state.md` and `roadmap.md`: `flume open [<stream>]`; `multiplexer`, `view` and `terminal_app` in `[host]` and a stream's over them, `[host] terminal` read as the first, and which layer sets each; a stream's `title`; a window manager filing a window by its title; the printed line where no terminal app is named; trying a multiplexer on one stream; and status's fields. Write it to any host's operator, naming Ghostty, Terminal.app and herdr as products flume integrates with and no host, team or word of ours (core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
+- [x] 7.1 Write design 15 into `reference/commands.md`, `reference/configuration.md`, `guides/places-and-herdr.mdx`, `guides/agent-settings.md`, `reference/state.md` and `roadmap.md`: `flume open [<stream>]`; `multiplexer`, `view` and `terminal_app` in `[host]` and a stream's over them, `[host] terminal` read as the first, and which layer sets each; a stream's `title`; a window manager filing a window by its title; the printed line where no terminal app is named; trying a multiplexer on one stream; and status's fields. Write it to any host's operator, naming Ghostty, Terminal.app and herdr as products flume integrates with and no host, team or word of ours (core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
 - [ ] 7.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 8. Coverage and the gate

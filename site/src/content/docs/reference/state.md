@@ -85,9 +85,13 @@ is kept. A start that carries a spent agent's conversation also
 records `session`, the session it resumes ([a spent
 account](/flume/guides/agent-settings/#the-conversation-carried)).
 Every start after a spent agent records `conversation` in the held
-state, as status gives it. The place's `unsettled` lists each start whose agent began
-otherwise than its record says ([the start
-check](/flume/guides/agent-settings/#the-start-check)).
+state, as status gives it. Each start records `terminal`, the
+multiplexer its agent opened in, with `from`, and the place keeps
+`terminals`, each multiplexer a start of it opened an agent in, once,
+so its tidy reaches every one. A start an earlier release wrote records
+none, and its agent is read as the host's. The place's `unsettled`
+lists each start whose agent began otherwise than its record says
+([the start check](/flume/guides/agent-settings/#the-start-check)).
 
 ## Elsewhere on the host
 
@@ -144,7 +148,7 @@ Each place:
 | `readiness` | each readiness step, whether it passed and what it printed |
 | `stages` | each stage: `name`, `state`, `starts`, `end`, `conversation`, and the part or setting it was refused for |
 | `current` | the current stage's name |
-| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity`, the intent's affinity for the agent's `program`, or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; `session`, the herdr session it opened in, `name`, `null` for the terminal's own, and `from`: `launch`, `stream`, `stream-name` or `own`, none where it opened beside a pane; and, for the agent of a start after a spent agent, `conversation`: `from`, the spent agent's start, `carried`, and `why` where it was not carried, naming a variable and never a path |
+| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity`, the intent's affinity for the agent's `program`, or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; `session`, the herdr session it opened in, `name`, `null` for the terminal's own, and `from`: `launch`, `stream`, `stream-name` or `own`, none where it opened beside a pane; `terminal`, the multiplexer it opened in, `profile` and `from`: `stream`, `host` or `neither`, `null` for a start an earlier release wrote, whose agent is in the host's; and, for the agent of a start after a spent agent, `conversation`: `from`, the spent agent's start, `carried`, and `why` where it was not carried, naming a variable and never a path |
 | `head` | the place's branch head |
 | `delivered` | whether the current stage's deliverable exists |
 | `tasks` | a change's tasks ticked and in all |
@@ -178,12 +182,13 @@ The host:
 | `running` | agents running on the host, every caller's |
 | `bound`, `room` | the host's bound, and how many more may start; `null` with no bound |
 | `queue` | the stages waiting for room, in the order they start, each with its stream, its `label`, its priority and the room it wants. That room, by `room`, is the host's, `host`; its stream's, `stream`, at its `bound`; its stream's past what other labels keep free, `kept-free`, naming those `labels`; or a usable account of its pool, `pool`. A stage whose pool holds no account of its program waits for none: it is refused ([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)). |
-| `streams` | each stream: `name`, `session`, the herdr session its agents open in with `from`, `stream`, `stream-name` or `own`, `priority`, `running`, `bound`, `room` and `queue`, `bound` and `room` `null` where the stream has no bound of its own; `labels`, each with its `name`, `reserve`, `keep_free`, `running` and `waiting`; `reserves`, `held`, `passed-over` where the stream states no bound, or `none` where it gives no label a share; and `refused`, why its labels refuse each of its starts, `null` where they do not |
+| `streams` | each stream: `name`, `session`, the herdr session its agents open in with `from`, `stream`, `stream-name` or `own`; `multiplexer` and `terminal_app`, each its `profile` and `from`, `stream`, `host` or `neither`; `view`, its `view`, `terminal` or `app`, and `from`; `title`, its `title` and `from`, `stream` or `stream-name`; `priority`, `running`, `bound`, `room` and `queue`, `bound` and `room` `null` where the stream has no bound of its own; `labels`, each with its `name`, `reserve`, `keep_free`, `running` and `waiting`; `reserves`, `held`, `passed-over` where the stream states no bound, or `none` where it gives no label a share; `refused`, why its labels, its multiplexer or its terminal app refuse it, `null` where none does; and `view_refused`, the terminal app's refusal alone, which refuses its `flume open` and none of its stages, left out where it holds none |
 | `pools` | each pool: `name`, `strategy` and `accounts`, each account's `name`, `program`, `running`, `bound` and `spent_until`, `null` where it is not spent |
-| `watch` | the terminal's watch, `none` with no herdr plugin running |
+| `watch` | the host's own multiplexer's watch, `{"bound":{"seconds":…}}`, or `none` with no herdr plugin running |
+| `terminals` | each multiplexer the host binds, the host's own first, then each stream's by the stream's name, each once: `profile`, `kept`, what a tidy kept there, and `watch`. Where any keeps no watch, every command of flume's that acts settles every place first |
 | `bases` | for each repository and base, its places running, asking, waiting on their caller and stalled, and the line shown in herdr |
 | `addresses` | each role's address with ends pending, and why its run was not woken |
-| `terminal_kept` | what a tidy kept in the terminal because something flume did not make holds it |
+| `terminal_kept` | what a tidy kept in the host's own multiplexer because something flume did not make holds it |
 | `configuration` | the host's configuration: `local`, its local layer's `state`, `no-file`, `taken` or `not-taken` with each of its `keys` the local layer may not set or its `fault`; `values`, every value by its dotted `key`, as TOML writes it, with its `layer`, `managed` or `local`, an account's variables `<set>`; and `passed_over`, each local `key` a `pin` holds |
 
 The JSON only ever gains fields, so a tool reading it keeps working
