@@ -109,7 +109,9 @@ stands on agentplot/blueprints main at 36cfd06, superseding 186 to
 - `terminal-profiles`: herdr's attach by view, and the printed
   command's refusal.
 - `streams`: a stream's title, and status's display of each stream.
-- `host-configuration`: the local layer sets a stream's `multiplexer`.
+- `host-configuration`: the local layer sets a stream's `multiplexer`,
+  and a stream's `view`, `terminal_app` and `title` and every key of
+  `[host]` are the managed layer's alone.
 - `launching`: a launch on a stream whose multiplexer names no profile
   is refused whole.
 - `settling`: flume runs attended while any terminal the host binds
