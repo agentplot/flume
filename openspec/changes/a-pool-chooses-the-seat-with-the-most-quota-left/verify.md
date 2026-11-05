@@ -1,61 +1,24 @@
 # Verify: a-pool-chooses-the-seat-with-the-most-quota-left
 
 Checked on 2026-11-05 at
-`change/a-pool-chooses-the-seat-with-the-most-quota-left` 4ffa2df. The
-branch last took main at 0372242 (1c1324b), and main's head on `origin`
-is still 0372242, so no merge was needed. The check covers this
-change's proposal, design, six specs and tasks.
+`change/a-pool-chooses-the-seat-with-the-most-quota-left` 6305b64. The
+branch last took main at 0372242 (1c1324b). main's head on `origin` is
+still 0372242, so no merge was needed. The check covers this change's
+proposal, design, six specs and tasks.
 
-**The work falls short in one place, and the change is not archived.**
-Every task is ticked. The gate passes on the branch. Every requirement and every scenario
-is held by a test that reads what its scenario says. But the archive
-breaks `root:specs`. The account-pools spec's modified requirement "An
-account is chosen under the room lock" grows from 478 characters to
-502. That is past the 500 that `openspec validate --strict` allows, and
-the strict run fails a warning as an error. So the archive leaves
-`openspec validate --specs --strict` failing 1 of 38, and main's gate
-would fail with it. The change goes back to its code stage to shorten
-that requirement's text.
-
-## What fails
-
-- **The archive breaks `root:specs`.** Running `openspec archive
-  a-pool-chooses-the-seat-with-the-most-quota-left --yes` over a copy
-  of `openspec/` applies 11 requirements added and 5 modified across
-  the six specs. Then `openspec validate --specs --strict` passes 37 of
-  38 and fails `account-pools`:
-
-  ```
-  ⚠ [WARNING] requirements[1]: Requirement text is very long (>500
-  characters). Move examples and edge cases into scenarios, or split it
-  into separate requirements that each state one behavior.
-  ```
-
-  `requirements[1]` is "An account is chosen under the room lock".
-  On main its text is 478 characters. The delta's text is 502: it adds
-  "or most-left's (184)", "not past its threshold" and 185. Run on the
-  open change, `openspec validate --changes --strict` (`root:changes`)
-  does not catch this. So the gate passes on the branch as it stands,
-  and fails only once the change is archived, which is this stage's
-  deliverable. Every other requirement of the six specs stays under 500
-  once synced. The longest are "An intent keeps an account per program"
-  at 481 and "An account's reading" at 452.
-- **What would fix it.** Shorten the delta's text of that requirement
-  to 500 characters or fewer, without changing what it requires. One
-  way: drop the "(184)" after "most-left's", since the closing
-  parenthesis cites 145, 147 and 185 and the requirement "A most-left
-  pool chooses the account with the most left" cites 184. Or split the
-  meaning of usable into a requirement of its own. Then run `openspec
-  validate --strict` on the change, and the archive over a copy with
-  `openspec validate --specs --strict` passing 38 of 38.
+**The work holds, and the change is archived.** All 23 tasks are
+ticked. Every requirement and scenario of the six specs is held by a
+test that reads what its scenario says. The gate passes on the branch.
+Archived over a copy of `openspec/`, the change leaves `openspec
+validate --specs --strict` passing 38 of 38.
 
 ## Tasks
 
-All 24 tasks of the seven groups are ticked, `[x]`, and none is open.
+All 23 tasks of the seven groups are ticked, `[x]`, and none is open.
 The gate run below backs each group's closing task: 1.4, 2.5, 3.4, 4.3,
-5.2, 6.2 and 7.2. 7.2 names `root:changes` and `root:specs`, and the
-gate runs both. Both pass on the branch as it stands, before the
-archive.
+5.2, 6.2 and 7.2. 7.2 names `root:changes` and `root:specs`. The gate
+runs `root:changes`, and the archive over a copy runs what `root:specs`
+runs.
 
 - **1.1 and 1.3's revision.** Record 0035 is accepted on the user's
   words, "Approve both: start their code", on 2026-11-05. It names
@@ -72,12 +35,21 @@ archive.
   account past its threshold taken. core.30's detail reads `~` and
   `$VAR` in an account's `usage` beside its `env`. The site's rules
   page mirrors core.32's line.
+- **7.3.** The account-pools delta's "An account is chosen under the
+  room lock" is 497 characters. Its text cites 184 in its closing
+  citation, beside 145, 147 and 185. Fill-first's choice reads "first
+  usable one". The requirement asks what it asked before: the
+  affinity, then the strategy's choice of fill-first, least-busy or
+  most-left; usable meaning not spent, not past its threshold, under
+  its own bound and of the stage's program; and the wait while the pool
+  holds an account of the program. Its scenarios are unchanged.
 
 ## Checks
 
-- **The gate.** `sluice exec main` at 4ffa2df ran the checks 4ffa2df
+- **The gate.** `sluice exec main` at 6305b64 ran the checks 6305b64
   affects against main at 0372242. It passed 23 tasks of `#check-fast`
-  and `#check-tools`, with `site:install` run for them:
+  and `#check-tools`, with `site:install` run for them, and sluice
+  recorded the pass under its key for 6305b64:
   - `seams`, `core`, `fakes` and `conformance`: format, lint and test,
     and `conformance:coverage`;
   - `flume`: format, lint, test and `tools`, 83 tests, the walkthrough
@@ -88,15 +60,17 @@ archive.
   - `root`: format, adrs and changes.
 
   `root:specs` did not run, since the branch changes nothing under
-  `openspec/specs/`. Run by hand on the branch, `openspec validate
-  --specs --strict` passes 38 of 38. sluice kept no record of the pass
-  under its key, since this report stood in the worktree beyond 4ffa2df
-  when the run ended.
-
+  `openspec/specs/`. The archive below runs what it runs.
 - **The change.** `openspec validate
   a-pool-chooses-the-seat-with-the-most-quota-left --strict` passes.
-- **The archive.** Over a copy of `openspec/`, it fails
-  `root:specs` as **What fails** says.
+- **The archive.** `openspec archive
+  a-pool-chooses-the-seat-with-the-most-quota-left --yes`, run over a
+  copy of `openspec/`, applies 11 requirements added and 5 modified
+  across the six specs. `openspec validate --specs --strict` then
+  passes 38 of 38. The synced account-pools spec's longest
+  requirements are "An account is chosen under the room lock" at 497
+  characters, "An intent keeps an account per program" at 481 and "An
+  account's reading" at 452. Each is under strict's 500.
 - **core.1 and core.35.** No line the change adds to `flume-core`,
   `flume-seams`, `flume-fakes` or `flume-conformance` names a tool or a
   program. No line it adds to `site/` names a tool, team, host or word
