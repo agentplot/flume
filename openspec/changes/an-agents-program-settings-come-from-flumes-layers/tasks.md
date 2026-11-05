@@ -2,7 +2,7 @@
 
 Each group is one session's work for an agent that reads this change
 (proposal, design, specs) and its group, and builds on main as merged
-into the branch, at 0f42aa7, and the groups before it. A group's last task runs the checks
+into the branch, at 7e7eb88, and the groups before it. A group's last task runs the checks
 it touched through sluice; every conformance scenario a group adds
 cites its clauses as data (106). Tests reach no real account and no
 configuration directory of the user's: every git call in a test runs
@@ -45,8 +45,9 @@ appears in any answer, log line, held state or panic.
 ## 5. Claude Code's way
 
 - [x] 5.1 Add `crates/flume/src/profiles/agent/claude/settings.rs`: design 6's reserved keys with their owners, `permissions.defaultMode` by its path; the file `own-settings.json` in `<folder>/claude/<identity>/`; and `fragments()`. Give the profile `reserved` and `own` from it, and have its command list the resolved keys as one JSON object in that file and pass `--settings <path>` after `--plugin-dir` where they are not empty, nothing where they are, and never a named file's path (design 6, 9; 88, 195, 196, C.4; core.1, core.2, core.39). True when `sluice exec main -- moon run flume:test` passes with `agent_claude.rs` tests of the agent-profile spec's five command and key scenarios, and of `attribution = { commit = "", pr = "", sessionUrl = false }` among the resolved keys written into the file exactly as given.
-- [ ] 5.2 Add to `crates/flume/tests/profiles/tools/claude_words.rs` a `check-tools` test that reads the pinned Claude Code, the file the `claude` wrapper from devenv.nix execs, and requires each fragment of `settings::fragments()`, design 9's five, the `attribution` schema's two texts among them, to stand byte for byte, naming any it does not find (design 9; C.4; core.22). True when `sluice exec main -- moon run flume:tools` passes with it.
-- [ ] 5.3 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test flume:tools` passes.
+- [x] 5.2 Add to `crates/flume/tests/profiles/tools/claude_words.rs` a `check-tools` test that reads the pinned Claude Code, the file the `claude` wrapper from devenv.nix execs, and requires each fragment of `settings::fragments()`, design 9's five, the `attribution` schema's two texts among them, to stand byte for byte, naming any it does not find (design 9; C.4; core.22). True when `sluice exec main -- moon run flume:tools` passes with it.
+- [x] 5.3 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test flume:tools` passes.
+- [x] 5.4 Cite the statement where its amendment landed, blueprints main at 033d887, in the clause list's `REVISION`, records 0017, 0020, 0024 and 0043, core.30 and core.50, and this change's proposal and design; and run 5.2's and 5.3's checks in a sluice place whose scratch is under `/tmp/sluice-<uid>/`, this worktree's place from before sluice's record 0063, whose scratch under the repository's `sluice/.tmp/` left no folder short enough for herdr's socket, released first (core.19, core.22). True when `sluice exec main -- moon run conformance:test` passes reading 033d887 and `sluice exec main` in this worktree gives `SLUICE_TMP` under `/tmp/sluice-<uid>/`.
 
 ## 6. The stand-in and the walkthroughs
 
