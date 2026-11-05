@@ -102,7 +102,8 @@ pub const MULTIPLEXER: &str =
 /// kinds go, one package per version and a launch naming a version, and
 /// their scenarios cite them. Parts A and B are as the list held them at
 /// 2c95a70; the scenarios run to S91 as the revision holds them, the
-/// three changes' that state S86 to S91 named as building them.
+/// changes' that state S86 to S88, S90 and S91 named as building them,
+/// and S89 cited by the launching scenario that holds it.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
     let standing = [148, 149, 152]
         .map(|clause| clause.to_string())
@@ -133,7 +134,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
     let allowance = (86..=88).map(|scenario| (format!("S{scenario}"), ALLOWANCE));
-    let readiness = std::iter::once(("S89".to_string(), READINESS));
     let multiplexer = (90..=91).map(|scenario| (format!("S{scenario}"), MULTIPLEXER));
     standing
         .chain(packages)
@@ -143,7 +143,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(statechart)
         .chain(mcp_servers)
         .chain(allowance)
-        .chain(readiness)
         .chain(multiplexer)
         .collect()
 }
@@ -187,19 +186,16 @@ mod tests {
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0035_0036_and_0037s_and_183(
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0035_and_0037s_and_183(
     ) {
         let unbuilt = unbuilt();
-        assert_eq!(
-            unbuilt.len(),
-            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 3 + 1 + 2
-        );
+        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 3 + 2);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
-            "S84", "S85",
+            "S84", "S85", "S89",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
@@ -209,7 +205,6 @@ mod tests {
         for (clause, change) in [
             ("S86", ALLOWANCE),
             ("S88", ALLOWANCE),
-            ("S89", READINESS),
             ("S90", MULTIPLEXER),
             ("S91", MULTIPLEXER),
         ] {

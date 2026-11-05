@@ -117,7 +117,7 @@ layer, where sluice is the one the tree pins.
   here, where no sluice runs, and 2.5 holds it under the pinned sluice.
   The place seam's scenarios, `ready_installs_the_pins` among them, must
   pass unchanged over the fake (design 5).
-- [ ] 2.4 Add to `crates/flume-conformance/src/engine/launching.rs` the
+- [x] 2.4 Add to `crates/flume-conformance/src/engine/launching.rs` the
   launching spec's scenarios:
   - "A retry readies at the launch's revision", citing 12 and 20, which
     reads the fake place's log of `ready <location> <revision>`;
