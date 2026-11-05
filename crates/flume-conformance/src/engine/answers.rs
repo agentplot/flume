@@ -416,6 +416,7 @@ fn host_status() -> HostStatus {
             }],
             reserves: Reserves::Held,
             refused: Some("the stream work's reserves, operation 3 and construction 3, 6 in all, pass its bound of 5".into()),
+            view_refused: None,
             multiplexer: ProfileHeld {
                 profile: "fake".into(),
                 from: NamedBy::Host,

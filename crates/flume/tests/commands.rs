@@ -1972,3 +1972,120 @@ fn flume_writes_neither_configuration_file() {
     assert!(!Path::new(&place).exists(), "{}", tidied.text);
     assert_eq!(read(), before, "a layer's file was written");
 }
+
+#[test]
+fn open_under_the_printed_command() {
+    // 187: the printed command holds no session a person can be shown,
+    // refused in its JSON, needing no repository.
+    let host = Host::new("open-printed");
+    host.configure("[streams.work]\nagents = 1\n");
+    let ran = host.flume(&host.home(), &["open", "work", "--json"], &[]);
+    assert_ne!(ran.code, 0, "{}", ran.text);
+    let reason = ran
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_else(|| panic!("open answered {}", ran.text));
+    assert!(
+        reason.contains("the printed command holds no session a person can be shown"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn open_of_an_undeclared_stream() {
+    // 4, 186: refused naming the stream, outside any repository.
+    let host = Host::new("open-undeclared");
+    host.configure("[streams.work]\nagents = 1\n");
+    let ran = host.flume(&host.home(), &["open", "nightly"], &[]);
+    assert_ne!(ran.code, 0, "{}", ran.text);
+    assert!(
+        ran.text.starts_with("refused: ") && ran.text.contains("nightly"),
+        "{}",
+        ran.text
+    );
+}
+
+#[test]
+fn an_unknown_terminal_app() {
+    // 105, 188, C.8: status answers, giving each stream's terminal app
+    // `kitty` from the host and its refusal, and open is refused naming
+    // `kitty` and the window profiles.
+    let host = Host::new("open-kitty");
+    host.configure("[host]\nterminal_app = \"kitty\"\n[streams.work]\nagents = 1\n");
+    let status = host.flume(&host.home(), &["status", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let status = status.json();
+    for name in ["work", "default"] {
+        let stream = stream_of(&status, name);
+        assert_eq!(
+            stream["terminal_app"],
+            json!({"profile": "kitty", "from": "host"}),
+            "{name}: {stream}"
+        );
+        for field in ["refused", "view_refused"] {
+            assert!(
+                stream[field]
+                    .as_str()
+                    .is_some_and(|refused| refused.contains("kitty")),
+                "{name}'s {field}: {stream}"
+            );
+        }
+    }
+    let person = host.flume(&host.home(), &["status"], &[]);
+    assert!(
+        person.text.contains("    it opens no view: ")
+            && !person.text.contains("it starts no stage"),
+        "{}",
+        person.text
+    );
+    let open = host.flume(&host.home(), &["open", "work", "--json"], &[]);
+    assert_ne!(open.code, 0, "{}", open.text);
+    let reason = open
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_default();
+    assert!(
+        reason.contains("kitty") && reason.contains(&flume::profiles::window_profiles().join(", ")),
+        "{reason}"
+    );
+}
+
+#[test]
+fn a_streams_multiplexer_flume_does_not_carry() {
+    // 4, 190; core.8: a launch on `trial`, whose multiplexer is `rex`,
+    // refused naming the stream, `rex` and the terminal profiles, nothing
+    // made; a launch on another stream runs.
+    let host = Host::new("stream-rex");
+    host.configure("[streams.trial]\nmultiplexer = \"rex\"\n[streams.personal]\nagents = 2\n");
+    let repository = repository("stream-rex", None);
+    let kinds = kinds_file(&host, false);
+    let launch = |name: &str, stream: &str| {
+        host.stand_in(
+            &repository.dir,
+            &[
+                "launch", "--kind", "change", "--name", name, "--kinds", &kinds, "--stream",
+                stream, "--json",
+            ],
+            &[],
+        )
+    };
+    let refused = launch("one", "trial");
+    assert_ne!(refused.code, 0, "{}", refused.text);
+    let reason = refused
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_default();
+    assert!(
+        reason.contains("trial")
+            && reason.contains("rex")
+            && reason.contains(&flume::profiles::terminal_profiles().join(", ")),
+        "{reason}"
+    );
+    assert!(!Path::new(&host.place_of(&repository, "change--one")).exists());
+    let launched = launch("two", "personal");
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    assert!(Path::new(&host.place_of(&repository, "change--two")).exists());
+}

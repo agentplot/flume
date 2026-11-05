@@ -230,20 +230,29 @@ impl Engine {
                 &self.resolver.terminal_profiles(),
             ));
         }
-        if display.view.view == View::Terminal
+        refused.extend(self.view_refused(stream, display));
+        (!refused.is_empty()).then(|| refused.join("; "))
+    }
+
+    /// Why the stream `stream`, whose display is `display`, opens no view
+    /// where its multiplexer can: for a terminal view, its terminal app
+    /// naming a window profile the resolver does not carry; none
+    /// otherwise. It refuses the stream's open alone, never its stages
+    /// (186, 188).
+    pub(crate) fn view_refused(&self, stream: &str, display: &StreamDisplay) -> Option<String> {
+        (display.view.view == View::Terminal
             && self
                 .resolver
                 .window(&display.terminal_app.profile)
-                .is_none()
-        {
-            refused.push(uncarried(
+                .is_none())
+        .then(|| {
+            uncarried(
                 stream,
                 Setting::TerminalApp,
                 &display.terminal_app,
                 &self.resolver.window_profiles(),
-            ));
-        }
-        (!refused.is_empty()).then(|| refused.join("; "))
+            )
+        })
     }
 
     /// The terminals the host binds as status gives them, the host's own

@@ -253,9 +253,13 @@ terminal's own, which for herdr stays `flume`.
 - Each stream's `StreamStatus` gains `multiplexer: ProfileHeld`,
   `view: ViewHeld`, `terminal_app: ProfileHeld` and `title: TitleHeld`,
   and its `refused` says where its multiplexer or terminal app names no
-  profile. The person's form gives `multiplexer herdr (the host's),
+  profile, the terminal app's refusal also given alone as
+  `view_refused`, since it refuses the stream's open and none of its
+  stages. The person's form gives `multiplexer herdr (the host's),
   view terminal (the host's), terminal app ghostty (the stream's),
-  title "Work Herdr" (the stream's title)` beside its session.
+  title "Work Herdr" (the stream's title)` beside its session, and
+  says "it starts no stage" of the rest of a refusal and "it opens no
+  view" of the terminal app's.
 - Each start's status gives its `terminal` beside its session, with
   where it came from, none for a start written before, which the
   person's form gives as the host's.

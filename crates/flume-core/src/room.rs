@@ -775,6 +775,7 @@ impl Engine {
                 name: name.clone(),
                 session: stream.session(name),
                 refused: self.stream_refused(name, stream.fault.as_ref(), &display),
+                view_refused: self.view_refused(name, &display),
                 multiplexer: display.multiplexer,
                 view: display.view,
                 terminal_app: display.terminal_app,

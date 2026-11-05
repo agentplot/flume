@@ -9,8 +9,8 @@ use flume_core::{
 };
 use flume_seams::{
     AccountFrom, Act, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration, IntentKey,
-    LabelHeld, LocalLayer, Made, Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead,
-    UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
+    LabelHeld, LocalLayer, Made, NamedBy, ProfileHeld, Readiness, SessionFrom, SessionHeld,
+    StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
 };
 use serde_json::{json, Value};
 
@@ -119,47 +119,65 @@ pub fn person(answer: &Answer) -> String {
     lines.join("\n")
 }
 
-/// An open's lines (186): what showed the stream's session, its title,
-/// its session and its view each with where it came from, and the
-/// printed window's line on a line of its own, each variable by its name
-/// alone (core.30).
+/// An open's lines (186): what showed the stream's session, with its
+/// title, its session, its multiplexer, its view and its terminal app
+/// each with where it came from, and the command by its program, its
+/// arguments and its variables' names; the printed window's line on a
+/// line of its own, `run: <line>`, each variable by its name alone
+/// (core.30).
 fn opened_lines(opened: &StreamOpened) -> Vec<String> {
     let multiplexer = &opened.multiplexer.profile;
-    let session = match &opened.session.name {
-        Some(name) => format!(
-            "{multiplexer}'s session {name} ({})",
-            session_from(opened.session.from)
+    let (session, its) = match &opened.session.name {
+        Some(name) => {
+            let from = session_from(opened.session.from);
+            (
+                format!("the session {name} ({from})"),
+                format!("{multiplexer}'s session {name} ({from})"),
+            )
+        }
+        None => (
+            "its own session".to_string(),
+            format!("{multiplexer}'s own session"),
         ),
-        None => format!("{multiplexer}'s own session"),
     };
-    let title = opened.title.as_ref().map(|title| {
-        let from = match title.from {
-            TitleFrom::Stream => "the stream's title",
-            TitleFrom::StreamName => "the stream's name",
-        };
-        format!("titled \"{}\" ({from})", title.title)
-    });
+    let title = opened
+        .title
+        .as_ref()
+        .map(|title| format!(" titled \"{}\" ({})", title.title, title_from(title.from)))
+        .unwrap_or_default();
     let app = opened
         .terminal_app
         .as_ref()
         .map_or("no", |app| app.profile.as_str());
     let mut lines = vec![match &opened.window {
-        WindowOutcome::Opened => format!(
-            "opened a {app} window {} on {session}",
-            title.unwrap_or_default()
-        ),
-        WindowOutcome::Printed { .. } => format!(
-            "the terminal app {app} opens no window; {session} is shown {} by:",
-            title.unwrap_or_default()
-        ),
+        WindowOutcome::Opened => format!("opened a {app} window{title} on {its}"),
+        WindowOutcome::Printed { .. } => {
+            format!("the terminal app {app} opens no window; run this line to show {its}{title}:")
+        }
         WindowOutcome::App => format!("{multiplexer}'s app showed {session}"),
     }];
-    lines.push(format!(
-        "  stream {}, view {} ({})",
-        opened.stream,
-        opened.view.view.name(),
-        word(json!(opened.view.from))
-    ));
+    let mut facts = vec![
+        format!("stream {}", opened.stream),
+        format!("multiplexer {}", profile_words(&opened.multiplexer)),
+        format!(
+            "view {} ({})",
+            opened.view.view.name(),
+            named_by(opened.view.from)
+        ),
+    ];
+    if let Some(app) = &opened.terminal_app {
+        facts.push(format!("terminal app {}", profile_words(app)));
+    }
+    lines.push(format!("  {}", facts.join(", ")));
+    if let Some(command) = &opened.command {
+        let mut words = vec![command.program.clone()];
+        words.extend(command.arguments.iter().cloned());
+        let needs = match command.environment.as_slice() {
+            [] => String::new(),
+            names => format!(", needing {}", names.join(", ")),
+        };
+        lines.push(format!("  its command {}{needs}", words.join(" ")));
+    }
     if let WindowOutcome::Printed { line } = &opened.window {
         lines.push(format!("run: {line}"));
     }
@@ -213,6 +231,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     if let Some(agent) = &place.agent {
         lines.push(agent_line(agent));
         lines.extend(where_line(agent));
+        lines.push(terminal_line(agent));
         for (setting, given) in &agent.settings.from {
             lines.push(format!(
                 "    {setting} = {} (from {})",
@@ -514,6 +533,56 @@ fn where_line(agent: &AgentStatus) -> Option<String> {
     }
 }
 
+/// The terminal the agent opened in, with where it came from; the host's
+/// for a start written before, which records none (56, 190).
+fn terminal_line(agent: &AgentStatus) -> String {
+    match &agent.terminal {
+        Some(terminal) => format!(
+            "    its terminal {}, {}",
+            terminal.profile,
+            named_by(terminal.from)
+        ),
+        None => "    its terminal the host's".into(),
+    }
+}
+
+/// Where a stream's multiplexer, view or terminal app came from (186,
+/// 190).
+fn named_by(from: NamedBy) -> &'static str {
+    match from {
+        NamedBy::Stream => "the stream's",
+        NamedBy::Host => "the host's",
+        NamedBy::Neither => "the default",
+    }
+}
+
+/// A profile with where it came from: `printed (the host's)` (186, 190).
+fn profile_words(held: &ProfileHeld) -> String {
+    format!("{} ({})", held.profile, named_by(held.from))
+}
+
+/// Where a stream's title came from (143, 186).
+fn title_from(from: TitleFrom) -> &'static str {
+    match from {
+        TitleFrom::Stream => "the stream's title",
+        TitleFrom::StreamName => "the stream's name",
+    }
+}
+
+/// A stream's display: its multiplexer, view, terminal app and title,
+/// each with where it came from (56, 143, 186, 190).
+fn display_line(stream: &StreamStatus) -> String {
+    format!(
+        "    multiplexer {}, view {} ({}), terminal app {}, title \"{}\" ({})",
+        profile_words(&stream.multiplexer),
+        stream.view.view.name(),
+        named_by(stream.view.from),
+        profile_words(&stream.terminal_app),
+        stream.title.title,
+        title_from(stream.title.from)
+    )
+}
+
 /// A session with where it came from: `the session work, the stream's
 /// name`, or the terminal's own (56, 107, 143).
 fn session_words(session: &SessionHeld) -> String {
@@ -624,6 +693,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             "    its agents open in {}",
             session_words(&stream.session)
         ));
+        lines.push(display_line(stream));
         lines.extend(label_lines(stream));
         for queued in &stream.queue {
             lines.push(format!("    {}", queued_line(queued)));
@@ -635,6 +705,20 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     lines.extend(configuration_lines(&host.configuration));
     for kept in &host.terminal_kept {
         lines.push(format!("  the terminal keeps {kept}"));
+    }
+    for terminal in host.terminals.iter().skip(1) {
+        let name = terminal.profile.as_deref().unwrap_or("the host's own");
+        for kept in &terminal.kept {
+            lines.push(format!("  the terminal {name} keeps {kept}"));
+        }
+        lines.push(match terminal.watch {
+            Watch::Bound { seconds } => {
+                format!("  the terminal {name} keeps watch every {seconds} seconds")
+            }
+            Watch::None => format!(
+                "  the terminal {name} keeps no watch, so every place settles at each command of flume's that acts"
+            ),
+        });
     }
     for address in &host.addresses {
         let run = match (&address.run, &address.role) {
@@ -739,8 +823,19 @@ fn label_lines(stream: &StreamStatus) -> Vec<String> {
     if stream.reserves == Reserves::PassedOver {
         lines.push("    its labels' reserves are passed over: it states no bound".into());
     }
-    if let Some(refused) = &stream.refused {
-        lines.push(format!("    it starts no stage: {refused}"));
+    let view = stream.view_refused.as_deref();
+    let stages = match (stream.refused.as_deref(), view) {
+        (Some(refused), Some(view)) => refused
+            .strip_suffix(view)
+            .map(|rest| rest.trim_end_matches("; "))
+            .filter(|rest| !rest.is_empty()),
+        (refused, _) => refused,
+    };
+    if let Some(stages) = stages {
+        lines.push(format!("    it starts no stage: {stages}"));
+    }
+    if let Some(view) = view {
+        lines.push(format!("    it opens no view: {view}"));
     }
     lines
 }
@@ -944,6 +1039,163 @@ mod tests {
                 "{line:?}"
             );
         }
+    }
+
+    /// A profile `name` from `from`.
+    fn held(name: &str, from: NamedBy) -> ProfileHeld {
+        ProfileHeld {
+            profile: name.into(),
+            from,
+        }
+    }
+
+    /// The open of `work` under the multiplexer `mux`, its window as
+    /// `window` came to, in `view`.
+    fn opened(window: WindowOutcome, view: View) -> StreamOpened {
+        let terminal = view == View::Terminal;
+        StreamOpened {
+            stream: "work".into(),
+            multiplexer: held("mux", NamedBy::Host),
+            session: SessionHeld {
+                name: Some("work".into()),
+                from: SessionFrom::StreamName,
+            },
+            view: ViewHeld {
+                view,
+                from: if terminal {
+                    NamedBy::Neither
+                } else {
+                    NamedBy::Stream
+                },
+            },
+            title: terminal.then(|| TitleHeld {
+                title: "Work Agents".into(),
+                from: TitleFrom::Stream,
+            }),
+            terminal_app: terminal.then(|| held("app-window", NamedBy::Stream)),
+            command: terminal.then(|| flume_core::ViewCommandStatus {
+                program: "/bin/mux".into(),
+                arguments: vec!["session".into(), "attach".into(), "work".into()],
+                environment: vec!["XDG_CONFIG_HOME".into()],
+            }),
+            window,
+        }
+    }
+
+    #[test]
+    fn the_opened_printed_and_app_lines() {
+        // 186, 188; core.30: what showed the session, each setting with
+        // where it came from, the command's variables by name alone, and
+        // the printed window's line on a line of its own.
+        assert_eq!(
+            opened_lines(&opened(WindowOutcome::Opened, View::Terminal)),
+            [
+                "opened a app-window window titled \"Work Agents\" (the stream's title) on mux's session work (the stream's name)",
+                "  stream work, multiplexer mux (the host's), view terminal (the default), terminal app app-window (the stream's)",
+                "  its command /bin/mux session attach work, needing XDG_CONFIG_HOME",
+            ]
+        );
+        let line = "XDG_CONFIG_HOME=<set> /bin/mux session attach work";
+        let printed = person(&Answer::Opened(opened(
+            WindowOutcome::Printed { line: line.into() },
+            View::Terminal,
+        )));
+        assert_eq!(
+            printed.lines().last(),
+            Some(format!("run: {line}").as_str())
+        );
+        assert!(
+            printed.starts_with("the terminal app app-window opens no window; run this line to show mux's session work (the stream's name) titled \"Work Agents\" (the stream's title):"),
+            "{printed}"
+        );
+        assert_eq!(
+            opened_lines(&opened(WindowOutcome::App, View::App)),
+            [
+                "mux's app showed the session work (the stream's name)",
+                "  stream work, multiplexer mux (the host's), view app (the stream's)",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_streams_display_and_a_terminal_app_refused() {
+        // 56, 186, 188, 190: the display with where each came from; a
+        // terminal app's refusal said of the view alone, beside a label's
+        // fault that starts no stage.
+        let stream = |refused: Option<&str>, view_refused: Option<&str>| StreamStatus {
+            name: "office".into(),
+            session: SessionHeld {
+                name: Some("office".into()),
+                from: SessionFrom::StreamName,
+            },
+            multiplexer: held("mux", NamedBy::Host),
+            view: ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Host,
+            },
+            terminal_app: held("kitty", NamedBy::Stream),
+            title: TitleHeld {
+                title: "Office Agents".into(),
+                from: TitleFrom::Stream,
+            },
+            priority: 0,
+            running: 0,
+            bound: None,
+            room: None,
+            queue: vec![],
+            labels: vec![],
+            reserves: Reserves::None,
+            refused: refused.map(str::to_string),
+            view_refused: view_refused.map(str::to_string),
+        };
+        let kitty = "the stream office names the terminal app kitty, and no window profile is named kitty; the window profiles there are: printed";
+        let fault = "the label ops of the stream office holds pool, which no label takes";
+        assert_eq!(
+            display_line(&stream(None, None)),
+            "    multiplexer mux (the host's), view terminal (the host's), terminal app kitty (the stream's), title \"Office Agents\" (the stream's title)"
+        );
+        assert_eq!(
+            label_lines(&stream(Some(kitty), Some(kitty))),
+            [format!("    it opens no view: {kitty}")]
+        );
+        assert_eq!(
+            label_lines(&stream(Some(&format!("{fault}; {kitty}")), Some(kitty))),
+            [
+                format!("    it starts no stage: {fault}"),
+                format!("    it opens no view: {kitty}"),
+            ]
+        );
+        assert_eq!(
+            label_lines(&stream(Some(fault), None)),
+            [format!("    it starts no stage: {fault}")]
+        );
+    }
+
+    #[test]
+    fn each_starts_terminal() {
+        // 56, 190: the terminal with where it came from, and the host's
+        // for a start written before.
+        let agent = |terminal| AgentStatus {
+            terminal,
+            ..in_mode(
+                "edits",
+                Layer::Launch,
+                ModeStatus {
+                    passed: "edits".into(),
+                    entry: None,
+                    read_back: true,
+                },
+            )
+        };
+        assert_eq!(
+            terminal_line(&agent(Some(held("mux", NamedBy::Stream)))),
+            "    its terminal mux, the stream's"
+        );
+        assert_eq!(
+            terminal_line(&agent(Some(held("printed", NamedBy::Neither)))),
+            "    its terminal printed, the default"
+        );
+        assert_eq!(terminal_line(&agent(None)), "    its terminal the host's");
     }
 
     /// An agent at work under `mode`, as `layer` wrote it, its start's
@@ -1358,6 +1610,7 @@ mod tests {
                     labels: vec![],
                     reserves: Reserves::None,
                     refused: None,
+                    view_refused: None,
                 },
                 StreamStatus {
                     name: "personal".into(),
@@ -1389,6 +1642,7 @@ mod tests {
                     labels: vec![],
                     reserves: Reserves::None,
                     refused: None,
+                    view_refused: None,
                 },
                 StreamStatus {
                     name: "default".into(),
@@ -1420,6 +1674,7 @@ mod tests {
                     labels: vec![],
                     reserves: Reserves::None,
                     refused: None,
+                    view_refused: None,
                 },
             ],
             ..HostStatus::default()
@@ -1436,12 +1691,15 @@ mod tests {
                 format!("  {p3}"),
                 "  stream work, priority 10: 4 agents running of 4, room for 0".to_string(),
                 "    its agents open in the session office, the stream's".to_string(),
+                "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"work\" (the stream's name)".to_string(),
                 format!("    {w5}"),
                 "  stream personal, priority 0: 2 agents running of 3, room for 1".to_string(),
                 "    its agents open in the session personal, the stream's name".to_string(),
+                "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"personal\" (the stream's name)".to_string(),
                 format!("    {p3}"),
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
                 "    its agents open in the terminal's own session".to_string(),
+                "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"default\" (the stream's name)".to_string(),
                 "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
             ]
         );
@@ -1530,6 +1788,7 @@ mod tests {
             }],
             reserves,
             refused: refused.map(str::to_string),
+            view_refused: None,
         };
         let host = HostStatus {
             streams: vec![
@@ -1554,15 +1813,18 @@ mod tests {
             [
                 "  stream work, priority 0: 5 agents running of 5, room for 0".to_string(),
                 "    its agents open in the session work, the stream's name".to_string(),
+                "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"work\" (the stream's name)".to_string(),
                 operation.to_string(),
                 "    waiting for room: /r/places/research--one's work in work, priority 0, short of the stream work's room, the rest kept free for operation".to_string(),
                 "    waiting for room: /r/places/deploy--two's work in work as operation, priority 0, short of the stream work's room, at its bound of 5".to_string(),
                 "  stream personal, priority 0: 5 agents running, no bound of its own".to_string(),
                 "    its agents open in the session personal, the stream's name".to_string(),
+                "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"personal\" (the stream's name)".to_string(),
                 operation.to_string(),
                 "    its labels' reserves are passed over: it states no bound".to_string(),
                 "  stream nightly, priority 0: 5 agents running of 1, room for 0".to_string(),
                 "    its agents open in the session nightly, the stream's name".to_string(),
+                "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"nightly\" (the stream's name)".to_string(),
                 operation.to_string(),
                 "    it starts no stage: the label operation of the stream nightly keeps 2 free of a reserve of 1, and a reserve is at least what it keeps free".to_string(),
             ]

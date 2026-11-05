@@ -190,6 +190,15 @@ enum Command {
         /// The role's address, `<partition>/<role>`.
         address: String,
     },
+    /// Show a stream's agents in its view: a window of its terminal app
+    /// running its multiplexer's attach for its session, titled as the
+    /// stream declares, else its name; or the multiplexer's own app; or
+    /// the line to run where no terminal app opens a window. Needs no
+    /// repository; each asking opens a window of its own (186).
+    Open {
+        /// A stream the host declares; `default` where none is named.
+        stream: Option<String>,
+    },
     /// flume's status over MCP on standard input and output, one tool,
     /// `status`, settling nothing (57, 60).
     Mcp,
@@ -504,6 +513,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             core.inbox(&recipient)
         }
         Command::Wake { address } => build()?.wake(address),
+        Command::Open { stream } => build()?.open_stream(stream.as_deref()),
         Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
             unreachable!("answered before the core's acts")
         }

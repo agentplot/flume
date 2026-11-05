@@ -546,8 +546,10 @@ impl RoomWanted {
 /// order they would start, its labels' shares, whether their reserves
 /// are held, and why it refuses: its labels' fault, its multiplexer
 /// naming a terminal profile flume does not carry, or, for a terminal
-/// view, its terminal app naming a window profile flume does not carry;
-/// none where none holds (56, 70, 107, 181, 182, 186, 188, 190).
+/// view, its terminal app naming a window profile flume does not carry,
+/// that last also given alone, since it refuses the stream's open and
+/// none of its stages; none where none holds (56, 70, 107, 181, 182, 186,
+/// 188, 190; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
@@ -567,6 +569,10 @@ pub struct StreamStatus {
     pub reserves: Reserves,
     #[serde(default)]
     pub refused: Option<String>,
+    /// The terminal app's refusal alone, the last part of `refused` where
+    /// it holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_refused: Option<String>,
 }
 
 /// The title a window on a stream's part of its terminal carries, and

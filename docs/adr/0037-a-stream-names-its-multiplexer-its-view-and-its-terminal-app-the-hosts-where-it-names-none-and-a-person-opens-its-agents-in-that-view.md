@@ -72,10 +72,15 @@ The writing agent's choices, and the paths not taken:
 - A title passed to an app that titles its own window.
 - A stage that waits for room on a stream whose multiplexer names no profile is refused at the next settle, whatever room the host has, as one whose stream's labels are at fault is. Left waiting, it would hold out for room that no room could end (4, 145).
 - A place keeps each terminal its starts opened an agent in, so a stage started again in another terminal, a retry's or a send-back's, leaves the first terminal tidied too. Reading only each stage's newest start would leave the earlier terminal's tab open (137, 190).
-- Status gives a stream's refusal as one answer: its labels' fault, then its multiplexer's, then, for a terminal view, its terminal app's. A field for each would split one question, why the stream refuses, across three.
+- Status gives a stream's refusal as one answer: its labels' fault, then its multiplexer's, then, for a terminal view, its terminal app's. A field for each would split one question, why the stream refuses, across three. The terminal app's refusal is also given alone, `view_refused`, since it refuses the stream's open and none of its stages: the person's form says "it starts no stage" of the rest and "it opens no view" of it. Reading the one answer's words apart would tie the person's form to the core's wording (core.14).
 - A base's clues in status are asked of each terminal its live places run in, so a base whose places run in two terminals is shown in both (139).
 - In status, the host's own terminal is named by the profile a stream takes it by, else by the one the resolver gives as it, and by none where neither does.
 - The open's JSON is its word with what it showed as the word's own fields, `{"opened": {"stream": "work", …}}`. A field under the word, as `launched` holds `place`, would give a reader `opened.opened` or a name that says nothing the word does not (core.14).
+
+- The printed window gives `run: <line>` on the open's last line, as design 8 has it, so a person's launcher takes the line after `run: `. A bare last line would leave a person reading the form no word for what the line is.
+- A window's line quotes a word for a POSIX shell where it holds anything but letters, digits and `-_./:=@%+,`, `=` plain so a variable `env` is given reads as written. The printed window's program, which stands where a shell reads a command's name after the variables, is quoted with `=` too, since there `A=b` would be read as one more variable.
+- Ghostty off macOS is found by its name on the calling command's `PATH`, as herdr is for its attach, and started in the login environment with the command's variables over it. The login shell may set a `PATH` of its own, and a program found there would not be the one the command's `PATH` names.
+- `open` and `osascript` run in a process group of their own, their output closed and their errors read, and at the bound the group is ended, so a program they started that holds on ends with them and nothing waits on it (189; core.13).
 
 `flume open <stream>` was chosen over `flume stream open <stream>`, which would begin a group of stream commands with one member. A later `flume open` of a place's own tab can take a flag. The name is cheap to change before it lands.
 
