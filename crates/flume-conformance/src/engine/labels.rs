@@ -46,8 +46,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_reserve_where_the_host_has_no_room,
         },
         Scenario {
-            name: "labels: a stream that states no bound holds no reserve, and its stages start in today's order",
-            cites: &["70", "181"],
+            name: "labels: a stream that states no bound holds no reserve, its stages start in today's order, and status names its reserves passed over",
+            cites: &["70", "181", "56"],
             run: a_stream_with_no_bound,
         },
         Scenario {
@@ -451,6 +451,23 @@ fn a_stream_with_no_bound(_: &()) -> Outcome {
     ensure!(
         waiting(&world, &deploy),
         "the operation place was put first in a stream with no bound"
+    );
+    let host = host(&world)?;
+    let personal = host
+        .streams
+        .iter()
+        .find(|stream| stream.name == "personal")
+        .ok_or("status gives no stream personal")?;
+    ensure_eq!(
+        personal.reserves,
+        Reserves::PassedOver,
+        "personal's reserves"
+    );
+    let json = serde_json::to_value(personal).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["reserves"],
+        serde_json::json!("passed-over"),
+        "personal's reserves in the JSON form"
     );
     Ok(())
 }
