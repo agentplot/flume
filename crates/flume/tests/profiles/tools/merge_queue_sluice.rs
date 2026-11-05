@@ -11,11 +11,14 @@
 //! no entry and the entry taken in from it read to its landing, through
 //! the stand-in for sluice on a base that takes pull requests, a branch
 //! whose records sluice cannot read passed over by the inbox and
-//! read-submission while the place's landing is collected, and a fetch
-//! that fails.
+//! read-submission while the place's landing is collected, a fetch that
+//! fails, and what the policy says of a place, its readiness asked of
+//! the pinned sluice's equip and its answer read.
 
 use crate::common::*;
-use flume::profiles::merge_queue::sluice::{for_place, Sluice};
+use flume::profiles::merge_queue::sluice::{for_place, Sluice, EQUIP};
+use flume::profiles::place::git_worktree::{GitWorktree, Login};
+use flume::profiles::place_data;
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::merge_queue::{self, MergeQueueHarness};
 use flume_seams::*;
@@ -822,26 +825,64 @@ fn a_fetch_that_fails_is_answered_with_its_words() {
 #[test]
 fn what_the_policy_says_of_a_place() {
     let harness = Harness::new();
-    let commanded = for_place(&harness.repository.name(), "main").expect("the policy");
-    assert_eq!(
-        commanded.install, None,
-        "an install under the command runner"
-    );
-    assert_eq!(commanded.setup, None, "a setup under the command runner");
-    harness.on_main(
+    let repository = harness.repository.name();
+    let launched = harness.on_main(
         ".config/sluice.toml",
         "[tests]\nrunner = \"moon\"\ntoolchain = [\"devenv\", \"print-dev-env\"]\n\n[branches.main]\nremote = \"origin\"\n",
     );
-    let unpinned = for_place(&harness.repository.name(), "main").expect("the policy");
-    assert_eq!(unpinned.install, None, "an install of no pins");
-    harness.on_main(".prototools", "moon = \"2.6.1\"\n");
-    let place = for_place(&harness.repository.name(), "main").expect("the policy");
-    assert_eq!(place.toolchain.as_deref(), Some("devenv print-dev-env"));
-    assert_eq!(
-        place.install.as_deref(),
-        Some("proto install --config-mode upwards")
-    );
-    assert_eq!(place.setup.as_deref(), Some("moon setup"));
+    let equip = format!("sluice equip main --at {} --json", launched.0);
+    let place = for_place(&repository, "main", Some(&launched)).expect("the policy");
+    assert_eq!(place.equip.as_deref(), Some(equip.as_str()));
     assert_eq!(place.teardown, "sluice release");
     assert_eq!(place.base_remote.as_deref(), Some("origin"));
+    let data =
+        place_data(&repository, Some("sluice"), "main", Some(&launched)).expect("the place's data");
+    let readiness: Vec<(&str, &str, bool)> = data
+        .readiness
+        .iter()
+        .map(|step| {
+            (
+                step.name.as_str(),
+                step.command.as_str(),
+                step.reading.is_some(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        readiness,
+        vec![(EQUIP, equip.as_str(), true)],
+        "a readiness of more than sluice's equip, read"
+    );
+    let teardown: Vec<&str> = data
+        .teardown
+        .iter()
+        .map(|step| step.command.as_str())
+        .collect();
+    assert_eq!(teardown, vec!["sluice release"]);
+    assert_eq!(data.base_remote.as_deref(), Some("origin"));
+
+    // The pinned sluice equips the place as the step asks it, at the
+    // revision named, and its answer is read as the readiness's steps.
+    let equipping = harness.on_main(
+        ".config/sluice.toml",
+        "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\ntoolchain = [\"printf\", \"export READY=1\\\\n\"]\n\n[branches.main]\n",
+    );
+    let data = place_data(&repository, Some("sluice"), "main", Some(&equipping))
+        .expect("the place's data");
+    let path = std::env::var("PATH").unwrap_or_default();
+    let profile = GitWorktree::with_login(
+        data,
+        Login::given(&[
+            ("HOME", &harness.home.to_string_lossy()),
+            ("PATH", &path),
+            ("LANG", "C"),
+        ]),
+    );
+    let readiness = profile.ready(&harness.place, &equipping);
+    let steps: Vec<(&str, bool)> = readiness
+        .steps
+        .iter()
+        .map(|step| (step.step.as_str(), step.passed))
+        .collect();
+    assert_eq!(steps, vec![("toolchain", true)], "{readiness:?}");
 }

@@ -65,7 +65,7 @@ layer, where sluice is the one the tree pins.
   core.19). True when
   `sluice exec main -- moon run conformance:test conformance:coverage`
   passes.
-- [ ] 2.2 In `crates/flume/src/profiles/merge_queue/sluice/mod.rs`:
+- [x] 2.2 In `crates/flume/src/profiles/merge_queue/sluice/mod.rs`:
   - Have `for_place` give the place's readiness as design 5 has it: one
     step, `sluice equip <base> --at <revision> --json`, built for the
     revision `ready` is given, with the reading `equipped`. `ForPlace`
@@ -87,7 +87,7 @@ layer, where sluice is the one the tree pins.
   holding the spec's scenario of that name against the pinned sluice,
   in place of #96's test of the install under the command runner and
   with no pins.
-- [ ] 2.3 In `crates/flume/src/profiles/place/git_worktree/mod.rs` and
+- [x] 2.3 In `crates/flume/src/profiles/place/git_worktree/mod.rs` and
   `crates/flume/src/profiles.rs`:
   - Have `Step` carry an optional reading of what the step printed, and
     lose `prints_environment`, `Step::toolchain` and `TOOLCHAIN`.

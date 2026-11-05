@@ -4,15 +4,15 @@
 //! place under flume's own data directory, for the bare repository beside
 //! its worktrees as for a clone, a place an earlier flume made inside a
 //! clone's main worktree or beside a bare repository's worktrees read and
-//! removed where it stands (record 0027), the toolchain's environment
-//! kept in the place's git directory, and, under sluice's moon runner, a
-//! place's pins installed before moon's setup, an install that fails
-//! named with its words, and none run where the repository pins
-//! nothing.
+//! removed where it stands (record 0027), a place readied at the revision
+//! its launch read through the resolver over a stand-in for sluice, and
+//! nothing of a readiness kept in the place's git directory. No sluice
+//! runs here: the pinned one equips a place in the tools layer.
 
 use crate::common::*;
+use flume::profiles::merge_queue::sluice::{equipped, EQUIP};
 use flume::profiles::place::git_worktree::{GitWorktree, Login, PlaceData, Step};
-use flume::profiles::place_data;
+use flume::profiles::{place_data, BuiltIn};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::place::{self, Pinned, PlaceHarness};
 use flume_seams::*;
@@ -34,89 +34,45 @@ fn login(scratch: &Scratch) -> Login {
     ])
 }
 
-/// The version of moon a scratch repository pins.
-const MOON: &str = "9.9.9";
-
-/// The install of a place's pins its readiness runs, by the name status
-/// gives it.
-const INSTALL: &str = "proto install --config-mode upwards";
-
-/// What a scratch repository's `.prototools` holds.
-enum Pins {
-    /// None: the repository has no `.prototools`.
-    None,
-    /// moon, which the stand-in for proto installs.
-    Installable,
-    /// moon, which the stand-in for proto refuses with these words.
-    Refused(&'static str),
+/// A stand-in for sluice, first on the `PATH` it gives: it records each
+/// command it is asked in `asked`, a line each, and answers `answer`,
+/// exiting `exit`. The `PATH`, and where it records.
+pub(crate) fn stand_in_sluice(scratch: &Scratch, answer: &str, exit: u8) -> (String, PathBuf) {
+    let bin = scratch.path("stand-in/bin");
+    std::fs::create_dir_all(&bin).expect("the stand-in's directory");
+    let asked = scratch.path("stand-in/asked");
+    let answers = scratch.path("stand-in/answer");
+    std::fs::write(&answers, format!("{answer}\n")).expect("the stand-in's answer");
+    let program = bin.join("sluice");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\necho \"$*\" >> '{}'\ncat '{}'\nexit {exit}\n",
+            asked.display(),
+            answers.display()
+        ),
+    )
+    .expect("the stand-in for sluice");
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))
+        .expect("the stand-in for sluice made executable");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    (path, asked)
 }
 
-/// Gives `repository` a sluice policy whose runner is moon and whose
-/// toolchain prints the environment devenv's does: proto's home in the
-/// repository's git common directory, and on `PATH` each tool proto
-/// installed there, read as the environment is sourced, installing none.
-/// proto is a stand-in that installs a stand-in moon, and no moon of the
-/// host's is on the toolchain's `PATH`, so moon runs only once proto
-/// installed it.
-fn moon_repository(repository: &Repository, pins: Pins) {
-    let path: Vec<String> = std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .filter(|dir| !dir.is_empty() && !Path::new(dir).join("moon").exists())
-        .map(str::to_string)
+/// What `sluice equip --json` answers with every step of `steps` run, each
+/// with whether it passed.
+pub(crate) fn equip_answer(steps: &[(&str, bool)]) -> String {
+    let steps: Vec<serde_json::Value> = steps
+        .iter()
+        .map(|(step, passed)| {
+            serde_json::json!({"step": step, "passed": passed, "words": format!("{step} said so")})
+        })
         .collect();
-    let home = repository.dir.join(".git/proto");
-    repository.write(
-        ".config/sluice.toml",
-        "[tests]\nrunner = \"moon\"\ntoolchain = \"cat tools/env.sh\"\n\n[branches.main]\n",
-    );
-    repository.write(
-        "tools/env.sh",
-        &format!(
-            r#"PROTO_HOME='{}'
-export PROTO_HOME
-PATH="$PWD/tools/bin:"'{}'
-if [ -d "$PROTO_HOME/bin" ]; then
-  PATH="$PROTO_HOME/bin:$PATH"
-fi
-export PATH
-"#,
-            home.display(),
-            path.join(":")
-        ),
-    );
-    let refusal = match pins {
-        Pins::Refused(words) => format!("echo '{words}' >&2\nexit 1\n"),
-        _ => String::new(),
-    };
-    repository.write(
-        "tools/bin/proto",
-        &format!(
-            r#"#!/bin/sh
-# A stand-in for proto: its install puts each tool .prototools pins in
-# $PROTO_HOME/bin.
-if [ "$*" != "install --config-mode upwards" ]; then
-  echo "proto: not the install: $*" >&2
-  exit 2
-fi
-{refusal}mkdir -p "$PROTO_HOME/bin"
-sed -n 's/^\([a-z]*\) = "\(.*\)"$/\1 \2/p' .prototools | while read -r tool version; do
-  printf '#!/bin/sh\necho "%s %s: $*"\n' "$tool" "$version" > "$PROTO_HOME/bin/$tool"
-  chmod +x "$PROTO_HOME/bin/$tool"
-  echo "installed $tool $version"
-done
-"#
-        ),
-    );
-    std::fs::set_permissions(
-        repository.dir.join("tools/bin/proto"),
-        std::fs::Permissions::from_mode(0o755),
-    )
-    .expect("the stand-in for proto made executable");
-    if !matches!(pins, Pins::None) {
-        repository.write(".prototools", &format!("moon = \"{MOON}\"\n"));
-    }
-    repository.commit("moon's policy, proto's pins");
+    serde_json::json!({"branch": "main", "revision": "0000000", "steps": steps}).to_string()
 }
 
 /// flume's own data directory on the scratch's host.
@@ -279,17 +235,10 @@ impl PlaceHarness for Harness {
             .collect();
     }
 
-    /// A repository whose sluice policy runs moon and whose `.prototools`
-    /// pins moon, which nothing installed, bound as the resolver binds it.
-    fn pinned(&self, repository: &str) -> Option<Pinned> {
-        moon_repository(&self.repository, Pins::Installable);
-        *self.seam.data.lock().unwrap() =
-            place_data(repository, Some("sluice"), "main").expect("the policy's data");
-        Some(Pinned {
-            steps: vec!["toolchain".into(), INSTALL.into(), "moon setup".into()],
-            install: INSTALL.into(),
-            said: format!("installed moon {MOON}"),
-        })
+    /// None here, where no sluice runs: whether to install is sluice's,
+    /// and the tools layer holds it under the pinned sluice (S89).
+    fn pinned(&self, _repository: &str) -> Option<Pinned> {
+        None
     }
 
     fn untracked(&self, place: &PlaceRef, file: &str) {
@@ -499,18 +448,22 @@ fn names(env: &str) -> BTreeSet<String> {
 fn s16_readiness_that_fails_at_its_toolchain() {
     let repository = Repository::new("s16");
     let seen = repository.scratch.path("seen-env");
-    let setup = repository.scratch.path("setup-ran");
+    let after = repository.scratch.path("after-ran");
+    let answer = serde_json::json!({"steps": [
+        {"step": "toolchain", "passed": false, "words": "the toolchain cannot be built"},
+    ]});
     let profile = profile(
         PlaceData {
             readiness: vec![
-                Step::toolchain(
-                    "toolchain",
+                Step::read(
+                    EQUIP,
                     &format!(
-                        "env > '{}'; echo the toolchain cannot be built >&2; exit 3",
+                        "env > '{}'; printf '%s\\n' '{answer}'; exit 1",
                         seen.display()
                     ),
+                    equipped,
                 ),
-                Step::run("setup", &format!("touch '{}'", setup.display())),
+                Step::run("after", &format!("touch '{}'", after.display())),
             ],
             ..PlaceData::default()
         },
@@ -519,15 +472,14 @@ fn s16_readiness_that_fails_at_its_toolchain() {
     let place = made(&profile, &repository, "unready");
     let readiness = profile.ready(&place, &Revision::new(repository.head()));
 
-    assert_eq!(readiness.steps.len(), 1, "{readiness:?}");
-    let failed = readiness.failed().expect("a failed step");
-    assert_eq!(failed.step, "toolchain");
-    assert!(
-        failed.words.contains("the toolchain cannot be built"),
-        "{}",
-        failed.words
+    assert_eq!(
+        steps(&readiness),
+        vec![("toolchain", false)],
+        "{readiness:?}"
     );
-    assert!(!setup.exists(), "a step after the failed one ran");
+    let failed = readiness.failed().expect("a failed step");
+    assert_eq!(failed.words, "the toolchain cannot be built");
+    assert!(!after.exists(), "a step after the failed one ran");
 
     let env = std::fs::read_to_string(&seen).expect("the step's environment");
     let shells = ["PWD", "SHLVL", "OLDPWD", "_", "BASH_EXECUTION_STRING"];
@@ -544,54 +496,6 @@ fn s16_readiness_that_fails_at_its_toolchain() {
     );
 }
 
-#[test]
-fn the_toolchain_environment_is_kept_in_the_places_git_directory() {
-    let repository = Repository::new("toolchain");
-    let torn = repository.scratch.path("torn-down");
-    let profile = profile(
-        PlaceData {
-            readiness: vec![
-                Step::toolchain("toolchain", "echo 'export FLUME_TEST_TOOL=present'"),
-                Step::run("setup", "test \"$FLUME_TEST_TOOL\" = present"),
-            ],
-            teardown: vec![Step::run(
-                "release",
-                &format!(
-                    "test \"$FLUME_TEST_TOOL\" = present && touch '{}'",
-                    torn.display()
-                ),
-            )],
-            ..PlaceData::default()
-        },
-        &repository.scratch,
-    );
-    let place = made(&profile, &repository, "tooled");
-    let readiness = profile.ready(&place, &Revision::new(repository.head()));
-    assert!(readiness.failed().is_none(), "{readiness:?}");
-    assert_eq!(readiness.steps.len(), 2);
-
-    let git_dir = git(
-        Path::new(&place.location),
-        &["rev-parse", "--absolute-git-dir"],
-    );
-    let kept = Path::new(&git_dir).join("flume/toolchain.sh");
-    assert!(
-        kept.is_file(),
-        "the toolchain's environment is not at {}",
-        kept.display()
-    );
-    assert!(
-        matches!(profile.read(&place), PlaceRead::Live { ref holds, .. } if !holds.any()),
-        "the kept environment shows in the place"
-    );
-    assert_eq!(profile.remove(&place), Removed::Removed);
-    assert!(torn.exists(), "the teardown ran outside the toolchain");
-    assert!(
-        !kept.exists(),
-        "the toolchain's environment outlived its place"
-    );
-}
-
 /// The steps a readiness ran, each with whether it passed.
 fn steps(readiness: &Readiness) -> Vec<(&str, bool)> {
     readiness
@@ -601,59 +505,118 @@ fn steps(readiness: &Readiness) -> Vec<(&str, bool)> {
         .collect()
 }
 
-#[test]
-fn pins_that_cannot_be_installed_stop_the_readiness_at_the_install_with_its_words() {
-    let repository = Repository::new("unpinned");
-    moon_repository(
-        &repository,
-        Pins::Refused("moon 9.9.9 cannot be downloaded"),
-    );
-    let data = place_data(&repository.name(), Some("sluice"), "main").expect("the policy");
-    let profile = profile(data, &repository.scratch);
-    let place = made(&profile, &repository, "unpinned");
-    let readiness = profile.ready(&place, &Revision::new(repository.head()));
+/// The resolver, a place's steps run in a scratch home with `path` for
+/// their `PATH`.
+fn resolver(scratch: &Scratch, path: &str) -> BuiltIn {
+    let home = scratch.path("home");
+    std::fs::create_dir_all(&home).expect("a scratch home");
+    BuiltIn::with_login(&[
+        ("HOME", &home.to_string_lossy()),
+        ("PATH", path),
+        ("LANG", "C"),
+    ])
+}
 
-    assert_eq!(
-        steps(&readiness),
-        vec![("toolchain", true), (INSTALL, false)],
-        "{readiness:?}"
-    );
-    let failed = readiness.failed().expect("the install failed");
-    assert!(
-        failed.words.contains("moon 9.9.9 cannot be downloaded"),
-        "{}",
-        failed.words
-    );
-    assert!(
-        !repository.dir.join(".git/proto/bin/moon").exists(),
-        "a refused install installed moon"
-    );
+/// A binding naming `merge_queue`, the place left to git worktree.
+fn binding(merge_queue: Option<&str>) -> Binding {
+    Binding {
+        merge_queue: merge_queue.map(str::to_string),
+        ..Binding::default()
+    }
 }
 
 #[test]
-fn a_repository_that_pins_nothing_runs_no_install() {
-    let repository = Repository::new("pinless");
-    moon_repository(&repository, Pins::None);
-    let data = place_data(&repository.name(), Some("sluice"), "main").expect("the policy");
-    let profile = profile(data, &repository.scratch);
-    let place = made(&profile, &repository, "pinless");
-    let readiness = profile.ready(&place, &Revision::new(repository.head()));
+fn a_place_is_readied_at_the_revision_its_launch_read() {
+    let repository = Repository::new("relaunched");
+    repository.write(
+        ".config/sluice.toml",
+        "[tests]\nrunner = \"command\"\ncommand = \"true\"\n\n[branches.main]\n",
+    );
+    let launched = Revision::new(repository.commit("the gate"));
+    let (path, asked) = stand_in_sluice(
+        &repository.scratch,
+        &equip_answer(&[("toolchain", true)]),
+        0,
+    );
+    let bound = resolver(&repository.scratch, &path)
+        .place(&repository.name(), &binding(Some("sluice")))
+        .expect("the place bound with sluice's data");
+    let place = made(bound.as_ref(), &repository, "relaunched");
+    let at_launch = bound.ready(&place, &launched);
+    repository.write("moved.txt", "main moves on\n");
+    let moved = repository.commit("main moves on");
+    let at_retry = bound.ready(&place, &launched);
 
+    for readiness in [&at_launch, &at_retry] {
+        assert_eq!(steps(readiness), vec![("toolchain", true)], "{readiness:?}");
+        assert_eq!(readiness.steps[0].words, "toolchain said so");
+    }
+    let asked = std::fs::read_to_string(&asked).expect("what sluice was asked");
+    let equip = format!("equip main --at {} --json", launched.0);
+    assert_eq!(asked.lines().collect::<Vec<_>>(), vec![equip.as_str(); 2]);
+    assert!(!asked.contains(&moved), "readied at main as it moved on");
+}
+
+#[test]
+fn nothing_is_kept_in_the_places_git_directory() {
+    let repository = Repository::new("unkept");
+    let launched = Revision::new(repository.head());
+    let (path, asked) = stand_in_sluice(
+        &repository.scratch,
+        &equip_answer(&[("toolchain", true), ("moon setup", true)]),
+        0,
+    );
+    let data = place_data(&repository.name(), Some("sluice"), "main", Some(&launched))
+        .expect("the place's data");
+    let profile = GitWorktree::with_login(
+        data,
+        Login::given(&[
+            ("HOME", &repository.scratch.path("home").to_string_lossy()),
+            ("PATH", &path),
+            ("LANG", "C"),
+        ]),
+    )
+    .with_own(&own(&repository.scratch));
+    let place = made(&profile, &repository, "unkept");
+    let readiness = profile.ready(&place, &launched);
     assert_eq!(
         steps(&readiness),
-        vec![("toolchain", true), ("moon setup", false)],
+        vec![("toolchain", true), ("moon setup", true)],
         "{readiness:?}"
     );
-    let failed = readiness.failed().expect("moon is not installed");
-    assert!(failed.words.contains("moon"), "{}", failed.words);
+
+    let git_dir = git(
+        Path::new(&place.location),
+        &["rev-parse", "--absolute-git-dir"],
+    );
+    assert!(
+        !Path::new(&git_dir).join("flume").exists(),
+        "the readiness kept {}/flume",
+        git_dir
+    );
+    assert!(
+        matches!(profile.read(&place), PlaceRead::Live { ref holds, .. } if !holds.any()),
+        "the readiness left something in the place"
+    );
+    assert_eq!(profile.remove(&place), Removed::Removed);
+    let asked = std::fs::read_to_string(&asked).expect("what sluice was asked");
+    assert_eq!(
+        asked.lines().collect::<Vec<_>>(),
+        vec![
+            format!("equip main --at {} --json", launched.0),
+            "release".to_string()
+        ]
+    );
 }
 
 #[test]
 fn with_no_merge_queue_bound_nothing_runs() {
     let repository = Repository::new("unbound");
-    let profile = profile(PlaceData::default(), &repository.scratch);
+    let launched = Revision::new(repository.head());
+    let data = place_data(&repository.name(), None, "main", Some(&launched)).expect("no data");
+    let profile = profile(data, &repository.scratch);
     let place = made(&profile, &repository, "bare");
-    let readiness = profile.ready(&place, &Revision::new(repository.head()));
+    let readiness = profile.ready(&place, &launched);
     assert!(readiness.steps.is_empty(), "{readiness:?}");
     let git_dir = git(
         Path::new(&place.location),
