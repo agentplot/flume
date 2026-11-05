@@ -2,31 +2,45 @@
 
 ## Context
 
-flume's main at d81d258 binds the terminal once for the host from
-`[host] terminal` (`profiles::terminal` in `crates/flume/src/profiles.rs`):
-the herdr profile, or the printed command where the host names none.
-`Terminal` (`crates/flume-seams/src/terminal.rs`) opens, sends to,
-reads, closes, tidies and shows agents, and names the calling
-command's session. Nothing in it shows a person a part of the terminal.
+flume's main at 70afbf8 holds the change
+`each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`
+(record 0031), landed as #98. Each stream's agents open in a session of
+their own: `StreamRoom::session(name)` in `crates/flume-core/src/room.rs`
+resolves the stream's `session`, else its name, and for `default`
+naming none the terminal's own, as a `SessionHeld` with its
+`SessionFrom`, and each `Start` in `crates/flume-seams/src/held.rs`
+keeps the `session` its agent opened in. The herdr profile reaches a
+named session's server by `socket_of(&Server::Session(name))`, found
+by `herdr session list --json` and started headless where none runs,
+and runs every call with `XDG_CONFIG_HOME` set where
+`with_session_home` gave a home. The host's configuration is read in
+two layers, `LOCAL_KEYS` in `crates/flume/src/host/config.rs` naming
+what the local one sets.
 
-The change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`
-(record 0031), built on its branch and not yet landed, runs each
-stream's agents in a session of their own. `StreamRoom::session(name)`
-in `crates/flume-core/src/room.rs` resolves a stream's session: its
-`session`, else its name, and for `default` naming none the terminal's
-own, as a `SessionHeld` with its `SessionFrom`. `Stream` in
-`crates/flume-seams/src/host.rs` gains `session`. The herdr profile
-reaches a named session's server by `socket_of(&Server::Session(name))`,
-found by `herdr session list --json` and started headless by `herdr
---session <name> server` in a process group of its own where none runs,
-and runs every call with `XDG_CONFIG_HOME`, `SESSION_HOME`, set where
-`with_session_home` gave a home. The host's configuration is read in two
-layers, and `[streams.<stream>]` takes `agents`, `priority`, `pool`,
-`session` and `labels`, refusing any other key. This change's seams
-and fakes are built on main as it stands, as the user ruled on
-2026-11-05. Its core's open, its profiles and its command are built
-after that change lands, on main as it leaves them, and its `Stream`,
-its terminal seam and its fake terminal are merged in then.
+The terminal is bound once for the host. `profiles::terminal` in
+`crates/flume/src/profiles.rs` builds the herdr profile or the printed
+command from `[host] terminal`, and `Engine` in
+`crates/flume-core/src/lib.rs` holds it as `terminal`. About thirty
+calls in the core reach it: open in `start.rs`; send, state, screen,
+answer_trust and close in `acts.rs`, `deliver.rs`, `end.rs`,
+`reading.rs`, `spent.rs`, `status.rs`, `submit.rs`, `tidy.rs`,
+`uncarried.rs` and `unsettled.rs`; send_to and session_state in
+`ends.rs`; tidy in `tidy.rs`; show and shown_at in `settle.rs` and
+`clues.rs`; kept and watch in `room.rs`; watch in `settle.rs`'s
+`settle_attended` and `wait.rs`; and session, the caller's, in
+`launch.rs` and `wait.rs`. `Resolver` in
+`crates/flume-seams/src/resolver.rs` gives the place, change,
+merge-queue and agent profiles by name; `BuiltIn` in `profiles.rs` and
+`FakeResolver` in `crates/flume-fakes/src/resolver.rs` implement it.
+
+This branch holds, at decb865, the terminal seam's `ViewCommand`,
+`Attached` and `Terminal::attach(session, title)`, the window seam's
+`Window` and `WindowShown` in `crates/flume-seams/src/window.rs`,
+`Stream::title`, the fake terminal's attach, the printed command's
+refusal and herdr's `not yet built`. Its place holds, staged and
+uncommitted, `FakeWindow` in `crates/flume-fakes/src/window.rs`,
+`FakeHost::set_title` and their tests in
+`crates/flume-fakes/tests/fakes.rs`.
 
 A person who wants a stream's agents today runs a launcher of their own:
 it opens a window of their terminal program, `herdr --session <name>`
@@ -34,149 +48,227 @@ in it, titled so their window manager files it. Ghostty 1.4.0 forces a
 window's title by `--title`, ignoring the titles a program inside sets,
 and runs a command by `-e`. On macOS its command line starts no window,
 and `open -na Ghostty.app --args …` does, `open --env` giving the new
-process a variable. herdr 0.9.5 attaches a client to a named session by
-`herdr session attach <name>`, finding it under its sessions' home.
+process a variable. Terminal 2.15 on macOS 27 answers AppleScript's
+`do script` with the new window's tab, whose `custom title` shows in
+the window's title beside what the person's Terminal profile adds.
+herdr 0.9.5 attaches a client to a named session by `herdr session
+attach <name>`. How each multiplexer splits into a backend and its
+views is `design/research/multiplexers-2026-11-05.md`.
 
-The statement's amendment stands on agentplot/blueprints main at
-d680e35: 186 in Part A, attach (187) in B.5, the window as B.8 (188,
-189) with the binding moved to B.9, 105, 143, C.5's attach row, C.7's
-`title` and `[host] window`, C.8 the window's profiles, section 9's
-command line and S90. Record 0037 decides it, accepted by the user on
-2026-11-05. The build reads the statement at that revision (core.19). Clauses 184 and 185, S86 to S88 and S89
-are claimed by `a-pool-chooses-the-seat-with-the-most-quota-left` and
-`a-places-readiness-is-one-design-across-the-tools`.
+Record 0037, accepted by the user on 2026-11-05 for the three settings
+and their per-stream override, decides it. The statement's amendment
+stands on agentplot/blueprints' branch
+`design/flume-a-streams-multiplexer-view-and-terminal-app` at 36cfd06:
+7, 105, 107, 118, 119, 143, 186 to 189, the vocabulary, C.5, C.7, C.8,
+section 9 and S90 amended, and 190 and S91 added. The build reads it
+once it lands on blueprints main (core.19). Clauses 184 and 185, S86 to
+S88 and S89 are claimed by `a-pool-chooses-the-seat-with-the-most-quota-left`
+and `a-places-readiness-is-one-design-across-the-tools`.
 
 The rules this design relies on: core.1 and core.2 (the core names no
 terminal and no window program, and one interface per seam, a profile
-calling no other), core.13 (no process of flume's outlives its command;
-its details name the terminal's server and the window as not flume's),
-core.14 (the JSON form only gains fields), core.17 (every act safe to
-repeat), core.19 (the clauses cited), core.21 and core.22 (no new
-project; Ghostty is run by no gate task), core.29 (every herdr call
-bounded and read from the pinned herdr), core.30 (no variable's value in
-an answer), core.35 (the site's neutral voice), and core.48, drawn with
-record 0037. The one rules page is `docs/architecture/core.md`. Where
-flume has no rule, the kit standard's code profile binds (kit:specs.3,
-kit:testing.5).
+calling no other), core.13 (no process of flume's outlives its
+command), core.14 (the JSON form only gains fields), core.17 (every act
+safe to repeat), core.19 (the clauses cited), core.21 and core.22 (no
+new project; Ghostty and Terminal.app run by no gate task), core.29
+(every herdr call bounded), core.30 (no variable's value in an answer),
+core.35 (the site's neutral voice), core.44 and core.45 (a stream's
+session, and the two layers, as main has them), core.48 (the view) and
+core.49 (the stream's terminal), both drawn with record 0037. The one
+rules page is `docs/architecture/core.md`. Where flume has no rule, the
+kit standard's code profile binds (kit:specs.3, kit:testing.5).
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- `flume open [<stream>]` opens a window on the stream's session, titled
-  as the stream declares or by its name (186, S90).
-- A new multiplexer is a terminal profile with its attach, and a new
-  window program a window profile, each written once for every host
-  (187, 188).
-- A host that names no window is given the command to run (105, 188).
+- Each stream names its multiplexer, its view and its terminal app,
+  the host's where it names none, so a person tries a setup on one
+  stream while the others run as they did (143, 186, 190).
+- A stage's agent opens in its stream's multiplexer and stays there for
+  as long as it lives (190, S91).
+- `flume open [<stream>]` shows the stream's session in its view: a
+  window titled as the stream declares, or the multiplexer's own app
+  (186, S90).
+- A new multiplexer is one terminal profile with attach for the views
+  it offers, and a new terminal app one window profile (187, 188).
 
 **Non-Goals:**
 
-- A terminal profile for Rex or TUIOS, or for a multiplexer's native
-  app. The seam admits each: a multiplexer that a window program runs
-  answers attach with its command, and one that draws its own windows
-  answers that it showed the part (decision 13). Each is a change of
-  its own, checked against its release.
-- A window on a place's own tab or an agent's pane. The herdr plugin's
-  key already opens a place's pane. A later `flume open` of a place can
-  take a flag.
-- Finding, raising or closing a window already open. flume keeps
-  nothing of a window (core.48), and a window manager files it by its
-  title.
+- A terminal profile for herdr-core, Rex, cmux or TUIOS. Each is a
+  change of its own, checked against its release; the research says
+  what each offers and what was not confirmed.
+- A multiplexer named by a launch's settings, a kind, a repository or a
+  label. The stream is where a setup is tried (record 0037).
+- A window on a place's own tab or an agent's pane, or a `--view` flag
+  for one asking. The herdr plugin's key already opens a place's pane.
+- Finding, raising or closing a window already open (core.48).
 - A key of the herdr plugin or a command of the Claude Code plugin that
-  opens a stream's window.
+  opens a stream's view.
 
 ## Decisions
 
-### 1. The command and the core
+### 1. The settings
 
-`flume open [<stream>] [--json]` calls `Engine::open_stream(stream,
-window)` in a new `crates/flume-core/src/open.rs`, `default` where the
-command names no stream. The window is passed at the call rather than
-held by the engine. Only `open` binds it, so a host whose `[host]
-window` names no profile refuses `open` alone and every other command
-runs as before (record 0037, item 5).
+`[host]` takes `multiplexer`, `view` and `terminal_app`, and
+`[streams.<stream>]` takes the same three and `title`
+(`crates/flume/src/host/config.rs`):
 
-`open_stream`, in order:
+- **`multiplexer`**, a name: the terminal profile. `[host] terminal`, a
+  host's word written before, is read as `[host] multiplexer`; a
+  `[host]` giving both is refused, `[host] gives both terminal and
+  multiplexer; terminal is the word written before multiplexer, so give
+  one`. Neither naming one is the printed command, as today.
+- **`view`**: `terminal` or `app`, any other value refused as a value
+  its key refuses, `[streams.work] view is "tab", where a view is
+  terminal or app`. Neither naming one is `terminal`.
+- **`terminal_app`**, a name: the window's profile. Neither naming one
+  is the printed window.
+- **`title`**, a text, on streams alone.
 
-1. The stream: the host's streams as `Host::streams` gives them, with
-   `default` always among them. A stream it does not declare refuses,
-   `the host declares no stream <name>; its streams are: …` (4, 186).
-2. The session: `StreamRoom::session(name)` over the stream's
-   `session` as the configuration stands now, the same resolution the
-   claim uses for a stage, so a window and a stage's agent never
-   disagree (107). It is a `SessionHeld`: a name from `stream` or
-   `stream-name`, or none from `own`.
-3. The title: the stream's `title`, from `stream`, else its name, from
-   `stream-name`, as a `TitleHeld` (186).
-4. `terminal.attach(session.name.as_deref(), &title)`. `Refused`
-   refuses with the terminal's words. `Shown` answers with no command
-   and asks nothing of the window.
-5. `window.show(&command, &title)`. `Refused` refuses with the window's
-   words.
+`LOCAL_KEYS` gains `streams.*.multiplexer` alone. A local layer setting
+a stream's `view`, `terminal_app` or `title`, or any `[host]` key, is
+not taken, the managed layer read alone and status naming the key, as
+for every key the local layer may not set (record 0032).
 
-It takes no lock, writes no held state and settles nothing (core.48).
-A second call opens a second window, and changes nothing flume holds,
-so it is safe to repeat (core.17).
-
-The answer is a new `Answer::Opened`:
+The host gives them as one fact. `flume-seams/src/host.rs` gains:
 
 ```rust
-pub struct StreamOpened {
-    pub stream: String,
-    pub session: SessionHeld,
-    pub title: TitleHeld,
-    /// None where the terminal showed the part in its own window.
-    pub command: Option<ViewCommandStatus>,
-    pub window: WindowOutcome,
-}
+/// Where a stream's multiplexer, view or terminal app came from: its
+/// stream's key, the host's, or neither, the default standing (186,
+/// 190, C.7).
+pub enum NamedBy { Stream, Host, Neither }
 
-pub struct TitleHeld { pub title: String, pub from: TitleFrom }
-pub enum TitleFrom { Stream, StreamName }
+/// A profile's name and where it came from; the printed command's name
+/// where neither names one (105, 190).
+pub struct ProfileHeld { pub profile: String, pub from: NamedBy }
 
-/// The command as the answer gives it: its program, its arguments, and
-/// the names of the variables it needs, never their values (core.30).
-pub struct ViewCommandStatus {
-    pub program: String,
-    pub arguments: Vec<String>,
-    pub environment: Vec<String>,
-}
+/// How a person is shown a stream's agents (186).
+pub enum View { Terminal, App }
 
-pub enum WindowOutcome {
-    /// The window seam opened a window.
-    Opened,
-    /// No window: the line for a person to run, as the profile gave it.
-    Printed { line: String },
-    /// The terminal showed the part in a window of its own.
-    Terminal,
+pub struct ViewHeld { pub view: View, pub from: NamedBy }
+
+/// A stream's terminal and how a person views it (143, 186, 190).
+pub struct StreamDisplay {
+    pub multiplexer: ProfileHeld,
+    pub view: ViewHeld,
+    pub terminal_app: ProfileHeld,
 }
 ```
 
-`TitleFrom` serializes as `stream` and `stream-name`, as `SessionFrom`
-does. The person's form says, for instance, `opened a window titled
-"Work Agents" (the stream's title) on the session work (the stream's
-name)`, and for the printed window, `run: <line>` on a line of its
-own, so `flume open work` can be pasted or read by a person's own
-launcher.
+`Stream` gains `multiplexer: Option<String>`, `view: Option<View>` and
+`terminal_app: Option<String>` beside decb865's `title`, each read with
+a default and skipped where none, so a stream written before reads with
+none. `Host` gains `display_for(stream) -> StreamDisplay`, resolved as
+`pool_for` resolves a pool: the stream's key, else the host's, else the
+default, which the host's reader names, `printed` for both profiles,
+so the core names neither (core.1). `NamedBy` and `View` serialize in
+kebab case: `stream`, `host`, `neither`, `terminal`, `app`.
 
-### 2. The terminal seam's attach
+### 2. The resolver gives a terminal and a window by name
 
-`flume-seams/src/terminal.rs` gains:
+`Resolver` gains:
 
 ```rust
-/// The command a person runs to see a part of the terminal: its program
-/// by its full path, its arguments, and the variables it needs of its
-/// environment with their values, which the window passes on and no
-/// answer gives (187; core.30).
-pub struct ViewCommand {
-    pub program: String,
-    pub arguments: Vec<String>,
-    pub environment: BTreeMap<String, String>,
-}
+/// The terminal profile named `profile`, none where it carries none
+/// (105, 190).
+fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>>;
+fn terminal_profiles(&self) -> Vec<String>;
+/// The window profile named `profile`, none where it carries none
+/// (105, 188).
+fn window(&self, profile: &str) -> Option<Arc<dyn Window>>;
+fn window_profiles(&self) -> Vec<String>;
+```
 
-/// attach: the command that shows the part, the part started first
-/// where it did not run; the part shown in a window the terminal draws
-/// itself; or a refusal (187).
+`BuiltIn` builds each terminal profile at most once for a command, the
+one `[host] multiplexer` names being the very `Arc` the engine is built
+with, so the host's herdr is one instance whatever reaches it.
+`Engine::new` keeps its `terminal`, the host's own. `profiles::terminal`
+builds a profile by name as today; `terminal_profiles()` and a new
+`window_profiles()` list them for refusals and `--help`.
+
+### 3. A start opens in its stream's terminal and records it
+
+`claim` in `start.rs` reads `host.display_for(stream).multiplexer` at
+each start, beside the session, and records it on the start:
+
+```rust
+// flume-seams/src/held.rs, on Start:
+/// The terminal its agent opened in, with where it came from; none in
+/// a start written before, which is the host's (56, 190).
+#[serde(default, skip_serializing_if = "Option::is_none")]
+pub terminal: Option<ProfileHeld>,
+```
+
+A name the resolver carries no profile for refuses the start as a
+setting does, `stage.refused_setting`, `the stream trial names the
+multiplexer rex, and no terminal profile is named rex; the terminal
+profiles there are: herdr, printed`. `make_place` in `launch.rs`
+refuses a launch on that stream the same way before it makes anything
+(4; core.8). Nothing else on the host is refused for it.
+
+The engine gains `terminal_of(&Start) -> Result<Arc<dyn Terminal>,
+String>`: the start's recorded profile through the resolver, the
+host's where it records none. Every call the core makes on an agent
+goes through it: send, state, screen, answer_trust and close, in each
+file the context names. A recorded profile the resolver no longer
+carries reads the agent's state unknown and refuses each call, naming
+the profile, which a release that drops a profile would cause and no
+configuration can.
+
+The session is resolved as `StreamRoom::session` resolves it today;
+"the terminal's own" for a default stream naming none is the stream's
+terminal's own, which for herdr stays `flume`.
+
+### 4. A place's terminals
+
+- **Clues.** show and shown_at go to the terminal of the place's live
+  start, else its newest start, else its stream's as the configuration
+  stands.
+- **Tidy.** `tidy(place)` runs on each distinct terminal the place's
+  starts recorded, the host's for a start recording none, and on its
+  stream's as the configuration stands where it has no start; each
+  answer is one `TerminalTidied`, as the list holds today (137).
+- **The terminals the host binds.** The host's own, then each declared
+  stream's that a profile carries, by the stream's name, each once.
+  `kept()` and `watch()` are read of each. `HostStatus` keeps
+  `terminal_kept` and `watch` as the host's own and gains `terminals`,
+  each `{profile, kept, watch}` (core.14).
+- **Attended (119).** `settle_attended` settles every place where any
+  terminal the host binds answers `Watch::None`, and `wait` drives a
+  settle on the same test. Settling every place is what an attended
+  host does today and is safe to repeat (core.17).
+- **The caller's session.** `recipient()` asks each terminal the host
+  binds for `session()`, in that order, and takes the first named.
+- **A recipient.** `ends.rs` asks each terminal the host binds, in
+  that order, for `session_state(recipient)` and sends by `send_to` to
+  the first that holds it; a `ToSession::NotFound` from every terminal
+  is not found, as from one today (43, 95). Recipients stay held as
+  names.
+
+### 5. Status
+
+- Each stream's `StreamStatus` gains `multiplexer: ProfileHeld`,
+  `view: ViewHeld`, `terminal_app: ProfileHeld` and `title: TitleHeld`,
+  and its `refused` says where its multiplexer or terminal app names no
+  profile. The person's form gives `multiplexer herdr (the host's),
+  view terminal (the host's), terminal app ghostty (the stream's),
+  title "Work Herdr" (the stream's title)` beside its session.
+- Each start's status gives its `terminal` beside its session, with
+  where it came from, none for a start written before, which the
+  person's form gives as the host's.
+- `HostStatus::terminals` as decision 4 says (56, 143, 190; core.14).
+
+### 6. The terminal seam's attach
+
+`Terminal::attach` takes the view in place of the title, which a
+terminal's command does not carry and an app does not take:
+
+```rust
+/// attach: for a window, the command that shows the part, the part
+/// started first where it did not run; for the terminal's own app, the
+/// app told to show it; or a refusal where the terminal holds no part
+/// a person can be shown or offers no such view (187).
 pub enum Attached {
     Command { command: ViewCommand },
     Shown,
@@ -184,280 +276,343 @@ pub enum Attached {
 }
 
 /// The part named `session`, the terminal's own where none, shown to a
-/// person under `title` (187).
-fn attach(&self, session: Option<&str>, title: &str) -> Attached;
+/// person in `view` (187).
+fn attach(&self, session: Option<&str>, view: View) -> Attached;
 ```
 
-`environment` serializes with a default and is skipped where empty,
-for the fakes' round trip. The core turns it into the names alone
-before anything prints it.
+`View::Terminal` answers `Command` or `Refused`, `View::App` `Shown`
+or `Refused`; the conformance suite holds every profile to it, and the
+core refuses any other answer naming the terminal. `ViewCommand` is
+decb865's: its program by its full path, its arguments, and its
+environment with values, read with a default and skipped where empty.
+The core turns it into the names alone before anything prints it.
 
-### 3. herdr's attach
+### 7. herdr's and the printed command's attach
 
 `Herdr::attach` (`crates/flume/src/profiles/terminal/herdr/mod.rs`):
 
+- **The app view** refuses before anything else: `herdr 0.9.5 has no
+  app of its own; the Herdr app runs on herdr-core, a backend apart
+  with sessions of its own`.
 - **The server.** For a name, `socket_of(&Server::Session(name))`, so
-  a stream's session not yet running is started headless as open
-  starts it, with the caller's `HERDR_*` stripped and the session home
-  set, before any window attaches. For none, the profile's own server:
-  `Server::Session(SESSION)` on the host, `flume`. A profile whose own
-  server is `Server::Socket`, as a test's is, refuses its own part:
-  herdr attaches a client by a session's name, and that server has
-  none. A session herdr refuses, or one that does not start within the
-  bound, refuses in herdr's words, as open does (core.29).
+  a session not yet running is started headless as open starts it,
+  with the caller's `HERDR_*` stripped and the session home set. For
+  none, the profile's own server, `Server::Session(SESSION)`, `flume`.
+  A profile whose own server is `Server::Socket`, as a test's is,
+  refuses its own part: herdr attaches a client by a session's name. A
+  session herdr refuses, or one that does not start within the bound,
+  refuses in herdr's words (core.29).
 - **The program.** The full path of the herdr the profile runs: its
   `program` where it is absolute, else the first executable of that
-  name on the `PATH` the command runs under, the one every call of the
-  profile's runs. None found refuses naming it. The window then runs the
-  same release whatever its own `PATH` holds.
-- **The arguments.** `session attach <name>`, `flume` for the own
-  session.
-- **The environment.** `XDG_CONFIG_HOME`, herdr 0.9.5's sessions' home,
-  where the profile's calls run under one: the home `with_session_home`
-  gave, else the command's own `XDG_CONFIG_HOME` where it is set.
-  Nothing otherwise, and never a `HERDR_*`.
+  name on the `PATH` the command runs under. None found refuses naming
+  it. The window then runs the same release whatever its own `PATH`.
+- **The arguments.** `session attach <name>`, `flume` for the own.
+- **The environment.** `XDG_CONFIG_HOME` where the profile's calls run
+  under one: the home `with_session_home` gave, else the command's own
+  `XDG_CONFIG_HOME` where it is set. Nothing otherwise, never a
+  `HERDR_*`.
 
-The title is not passed to herdr: the window gives it, and Ghostty
-holds it whatever herdr sets.
+The printed command's attach refuses both views, as decb865 has it:
+`the printed command holds no session a person can be shown; its
+agents run in the commands it printed`.
 
-The printed command's `attach` refuses: `the printed command holds no
-session a person can be shown; its agents run in the commands it
-printed` (187).
+### 8. The core's open
 
-### 4. The window seam
+`flume open [<stream>] [--json]` calls `Engine::open_stream(stream)` in
+a new `crates/flume-core/src/open.rs`, `default` where none is named.
+In order:
 
-A new `flume-seams/src/window.rs`, re-exported from the crate:
+1. The stream, as `Host::streams` gives them, `default` always among
+   them; one it does not declare refuses, `the host declares no stream
+   <name>; its streams are: …` (4, 186).
+2. `host.display_for(stream)`. Its multiplexer through
+   `resolver.terminal`, refused naming the profiles where none.
+3. The session from `StreamRoom::session(name)`, the claim's own
+   resolution (107).
+4. For `View::Terminal`: the title, the stream's `title` from `stream`,
+   else its name from `stream-name`, as a `TitleHeld`; its terminal app
+   through `resolver.window`, refused naming the window profiles where
+   none, before attach starts any session; `attach(session,
+   View::Terminal)`; then `show(&command, &title)`. A refusal of either
+   refuses in its words.
+5. For `View::App`: `attach(session, View::App)`, its `Shown` the
+   answer and its refusal refused in its words. No title is given and
+   the terminal app is not read.
+
+It takes no lock, writes no held state and settles nothing (core.48);
+a second call opens a second window (core.17).
 
 ```rust
-/// show: a window running the command under the title, the command for
-/// a person to run where the host shows no window, or a refusal (188).
-pub enum WindowShown {
-    Opened,
-    Printed { line: String },
-    Refused { reason: String },
+pub struct StreamOpened {
+    pub stream: String,
+    pub multiplexer: ProfileHeld,
+    pub session: SessionHeld,
+    pub view: ViewHeld,
+    /// None for the app's view, whose app titles its own window.
+    pub title: Option<TitleHeld>,
+    /// None for the app's view.
+    pub terminal_app: Option<ProfileHeld>,
+    /// None for the app's view.
+    pub command: Option<ViewCommandStatus>,
+    pub window: WindowOutcome,
 }
 
-/// The window seam (B.8), bound once for the host. The guarantee: show
-/// opens at most one window at each asking, runs nothing in it but the
-/// command it is given, and answers within a bound the profile states
-/// (189).
-pub trait Window: Send + Sync {
-    fn show(&self, command: &ViewCommand, title: &str) -> WindowShown;
+pub struct TitleHeld { pub title: String, pub from: TitleFrom }
+pub enum TitleFrom { Stream, StreamName }
+
+/// The command by its program, its arguments and its variables'
+/// names, never their values (core.30).
+pub struct ViewCommandStatus {
+    pub program: String,
+    pub arguments: Vec<String>,
+    pub environment: Vec<String>,
+}
+
+pub enum WindowOutcome {
+    /// The terminal app opened a window.
+    Opened,
+    /// No window: the line for a person to run.
+    Printed { line: String },
+    /// The multiplexer's own app showed the session.
+    App,
 }
 ```
 
-`profiles.rs` gains the seam's marker and module list,
-`pub mod window { pub mod ghostty; pub mod printed; }`, and
-`window(name: Option<&str>) -> Result<Arc<dyn Window>, String>`: the
-printed command where none is named, ghostty for `ghostty`, and
-otherwise a refusal naming the profiles, as `terminal()` refuses an
-unknown terminal. `window_profiles()` lists them for the refusal and
-for `--help`.
+The person's form says, for instance, `opened a ghostty window titled
+"Work Herdr" (the stream's title) on herdr's session work (the stream's
+name)`, `herdr's app showed the session work`, and for the printed
+window `run: <line>` on a line of its own, so a person's own launcher
+can run what `flume open work` prints.
 
-### 5. The ghostty profile
+### 9. The window seam
+
+`flume-seams/src/window.rs` is decb865's: `WindowShown` with `Opened`,
+`Printed { line }` and `Refused { reason }`, and `Window::show(command,
+title)`, its guarantee one window at most at each asking, nothing run
+in it but the command, and an answer within a bound the profile states
+(188, 189). It is bound per stream through the resolver by
+`terminal_app`. `profiles.rs` gains the seam's marker and module list,
+`pub mod window { pub mod ghostty; pub mod terminal; pub mod printed; }`,
+and `window(name)`: the printed window for `printed`, ghostty for
+`ghostty`, Terminal.app for `terminal`, none otherwise.
+
+### 10. The ghostty window
 
 `crates/flume/src/profiles/window/ghostty/mod.rs`, `NAME = "ghostty"`:
 
 - **On macOS:** `open -na Ghostty.app`, `--env <name>=<value>` for each
   variable of the command's environment in order, then `--args
   --title=<title> -e <program> <arguments…>`, each a word of its own and
-  nothing passed through a shell. `open` runs under a bound of ten
-  seconds and is waited on. Its exit 0 is `Opened`. Any other exit, or
-  no answer within the bound, is `Refused` with its standard error's
-  words, `Unable to find application named 'Ghostty.app'` among them.
-  The display starts Ghostty under its own environment with the
-  variables given, so nothing of the calling command's, its `HERDR_*`
-  among it, reaches the window.
+  nothing passed through a shell. `open` is bounded at ten seconds and
+  waited on. Its exit 0 is `Opened`; any other exit, or none within the
+  bound, is `Refused` with its standard error's words, `Unable to find
+  application named 'Ghostty.app'` among them.
 - **Elsewhere:** `ghostty --title=<title> -e <program> <arguments…>`,
   started in a process group of its own, as the herdr profile starts a
-  session's server, with its input, output and errors closed, under the
-  host user's login environment, `host::login_environment()`, with the
+  session's server, its input, output and errors closed, under the host
+  user's login environment, `host::login_environment()`, with the
   command's environment over it and nothing else. It is not waited on:
-  a start that fails to spawn is `Refused` with the error, and any
-  other is `Opened`.
-- `Ghostty::new()` runs `open` and `ghostty` by name, on the path of
-  the system it runs on. `for_system(System::MacOs)` and
-  `for_system(System::Other)` build either path, so a test on any host
-  holds both. A test builds it with `with_programs(open, ghostty)`
-  naming stand-ins of its own, and `with_login(variables)` as
-  `Herdr::with_login` does.
+  a start that fails to spawn is `Refused`, and any other is `Opened`.
+- `Ghostty::new()` takes the host's system; `for_system(System::MacOs)`
+  and `for_system(System::Other)` build either path, so a test on any
+  host holds both. `with_programs(open, ghostty)` names a test's
+  stand-ins, and `with_login(variables)` its login environment.
 
-The profile's flags are checked against Ghostty 1.4.0 (C.8). Ghostty is
-not pinned by the tree: it is a program of the host's display, and no
-gate task runs it (core.22). The profile is held by its tests' stand-in
-for `open` and `ghostty`, which records the words and the environment
-it was run with.
+Checked against Ghostty 1.4.0 (C.8).
 
-### 6. The printed window
+### 11. The Terminal.app window
+
+`crates/flume/src/profiles/window/terminal/mod.rs`, `NAME = "terminal"`:
+
+- **On macOS:** `osascript` with the script, each line an `-e` of its
+  own, and the command's line and the title as its two arguments:
+
+  ```applescript
+  on run argv
+    tell application "Terminal"
+      set opened to do script (item 1 of argv)
+      set custom title of opened to (item 2 of argv)
+      set title displays custom title of opened to true
+      activate
+    end tell
+  end run
+  ```
+
+  The line is `exec /usr/bin/env <name>=<value> … <program>
+  <arguments…>`, `/usr/bin/env` and its variables left out where the
+  command needs none, each word quoted for a POSIX shell where it holds
+  anything but letters, digits and `-_./:=@%+,`. `exec` has the attach
+  take the place of Terminal's shell. `osascript` is bounded at ten
+  seconds and waited on; exit 0 is `Opened`, and any other exit, or
+  none within the bound, `Refused` with its standard error's words,
+  `Not authorized to send Apple events to Terminal` among them.
+- **Elsewhere:** `Refused`, `Terminal.app runs only on macOS`.
+- `for_system` and `with_program(osascript)` as the ghostty profile
+  has them.
+
+Checked against Terminal 2.15 on macOS 27 (C.8). The window's title is
+the custom title beside what the person's Terminal profile adds there.
+
+### 12. The printed window
 
 `crates/flume/src/profiles/window/printed/mod.rs`, `NAME = "printed"`,
-the window a host that names none gets. `show` answers `Printed` with
-the line: each variable of the command's environment as `<name>=<set>`,
-then the program and its arguments, each quoted for a POSIX shell where
-it holds anything but letters, digits and `-_./:=@%+,`. It runs
-nothing. A command with no environment, herdr's on a host, prints as a
-person runs it: `/nix/store/…/bin/herdr session attach work` (core.30).
+the window a stream and a host naming none get. `show` answers
+`Printed` with the line: each variable of the command's environment as
+`<name>=<set>`, then the program and its arguments, quoted as decision
+11 quotes them. It runs nothing. A command with no environment prints
+as a person runs it, `/nix/store/…/bin/herdr session attach work`
+(core.30).
 
-### 7. The host's configuration
+### 13. The fakes
 
-`crates/flume/src/host/config.rs`:
+- **The fake terminal.** `attach(session, view)` answers, by default,
+  `Command` of `fake-terminal attach <session>` or `attach own` with no
+  environment for `View::Terminal`, and `Shown` for `View::App`. A
+  script sets either view's answer. Each asking is logged `attach
+  <session> for terminal` or `for app`.
+- **The fake window**, `FakeWindow` in
+  `crates/flume-fakes/src/window.rs`, logs each show with its command
+  and title and answers `Opened`, `Printed` or `Refused` as scripted,
+  keeping the windows it opened. It reads no display.
+- **The fake host.** `set_title(stream, title)` and
+  `set_display(stream, multiplexer, view, terminal_app)` script a
+  stream's keys; `set_host_display(multiplexer, view, terminal_app)`
+  the host's; `display_for` resolves them as decision 1 says, `fake`
+  and `fake-window` standing where neither names one.
+- **The fake resolver** holds terminals and windows by name:
+  `fake`, the engine's own, and any a test adds by
+  `with_terminal(name, FakeTerminal)` and `with_window(name,
+  FakeWindow)`, each with a log of its own.
 
-- `[streams.<stream>]` takes `title`, a text, kept in `Stream::title`,
-  none where it gives none; any other key is refused as today.
-- `[host]` takes `window`, a name, kept in `HostConfig::window`.
-- Neither is a key of `LOCAL_KEYS`, so a local layer that sets
-  `streams.<stream>.title` or `host.window` is not taken, the managed
-  layer read alone and status naming the key, as for every key the local
-  layer may not set (record 0032; record 0037, item 7).
-- `Stream` in `flume-seams/src/host.rs` gains `title: Option<String>`,
-  read with a default and skipped where none, so a stream written before
-  reads with none.
-
-### 8. Status
-
-`StreamStatus` gains `title: TitleHeld`, resolved as `open_stream`
-resolves it, so status gives each stream's title with where it came
-from in the JSON form, and in the person's form as `title "Work Agents"
-(the stream's title)` beside its session (56, 143; core.14).
-
-### 9. The fakes
-
-- The fake terminal's `attach` answers a scripted `Attached`, by
-  default `Command` of `fake-terminal attach <session>` or `attach own`
-  with no environment, and logs `attach <session> titled <title>` on a
-  line of its own. A script makes it answer `Shown` or `Refused`.
-- A new fake window, `FakeWindow` in `crates/flume-fakes/src/window.rs`,
-  logs each `show` with its command and title, and answers `Opened`,
-  `Printed` or `Refused` as scripted. It reads no display.
-- The fake host's streams take a scripted `title`.
-
-### 10. How it is held
+### 14. How it is held
 
 - `flume-seams/src/round_trip.rs`: `ViewCommand`, `Attached`,
-  `WindowShown`, `Stream::title`, and a stream written before reading
-  with none.
-- `flume-fakes`: the fake terminal's attach and log, the fake window,
-  and their tests in `crates/flume-fakes/tests/fakes.rs`.
+  `WindowShown`, `View`, `ViewHeld`, `ProfileHeld`, `StreamDisplay`, a
+  `Stream` with its four keys and one written before reading with none,
+  and a `Start` with its terminal and one written before with none.
+- `flume-fakes`: the fake terminal's attach by view, the fake window,
+  the fake host's display and the fake resolver's named terminals, in
+  `crates/flume-fakes/tests/fakes.rs`.
 - `flume-conformance/src/seams/window.rs`: the window seam's scenarios,
-  run against the fake, and through `Seam scenarios run against any
-  profile`, against the ghostty profile over its stand-in and the
-  printed one. `seams/terminal.rs` gains attach's scenarios over the
-  fake, and the printed terminal's refusal.
-- `flume-conformance/src/engine/open.rs`: the stream-windows spec's
-  scenarios over the fakes, S90 among them as `s90_a_streams_window`.
-- `flume-conformance/src/no_tool.rs`: `ghostty` among the words (core.1).
-- `crates/flume/src/host/config.rs`'s unit tests: `title`, `window`, and
-  a local layer setting either not taken.
-- `crates/flume/src/commands/print.rs`'s unit tests: the opened, printed
-  and terminal-shown lines.
-- `crates/flume/tests/profiles/window_ghostty.rs` and
-  `window_printed.rs` (check-fast): the profile's words and environment
-  over a stand-in for `open` and `ghostty`, the refusal of a stand-in
-  that exits non-zero, and the printed line.
-- `crates/flume/tests/commands.rs` (check-fast): `flume open` refused
-  under the printed terminal, an undeclared stream refused, an unknown
-  `[host] window` refusing `open` alone, and `--json`'s shape.
+  run against the fake and, through `Seam scenarios run against any
+  profile`, against the ghostty and terminal profiles over their
+  stand-ins and the printed one. `seams/terminal.rs` gains attach's
+  scenarios by view over the fake, and the printed terminal's refusal.
+- `flume-conformance/src/engine/stream_terminals.rs`: the
+  stream-terminals spec's scenarios over two fake terminals, the S91
+  one named `s91_a_stream_under_its_own_terminal`.
+- `flume-conformance/src/engine/open.rs`: the stream-views spec's
+  scenarios over the fakes, the S90 one named `s90_a_streams_view`.
+- `flume-conformance/src/no_tool.rs`: `ghostty` and `osascript` among
+  the words (core.1).
+- `crates/flume/src/host/config.rs`'s unit tests: the four keys,
+  `[host] terminal` read as `multiplexer` and both refused, a bad view
+  refused, and the local layer taking a stream's `multiplexer` and not
+  its `view`, `terminal_app` or `title`.
+- `crates/flume/src/commands/print.rs`'s unit tests: the opened,
+  printed and app lines, and a stream's and a start's terminal.
+- `crates/flume/tests/profiles/window_ghostty.rs`,
+  `window_terminal.rs` and `window_printed.rs` (check-fast): each
+  profile's words and environment over stand-ins for `open`, `ghostty`
+  and `osascript`, both systems, a stand-in that exits non-zero refused
+  in its words, one that never exits refused at the bound, and the
+  printed line.
+- `crates/flume/tests/commands.rs` (check-fast): `flume open` under the
+  printed command refused, an undeclared stream refused, a stream whose
+  `terminal_app` names no profile refusing its open alone, a stream
+  whose `multiplexer` names `rex` refusing a launch on it while a
+  launch on another stream runs, and `--json`'s shape.
 - `crates/flume/tests/profiles/tools/terminal_herdr.rs` (check-tools):
-  attach under the pinned herdr with a scratch session home, one-letter
-  session names as the sessions' tests have them: a session not running
-  started headless and listed running, the command naming the herdr's
-  full path and `session attach w` with `XDG_CONFIG_HOME` the scratch
-  home, a client the command runs attaching to that server, and the own
-  session of a socket server refused.
-- `crates/flume/tests/profiles/tools/open.rs` (check-tools): S90 through
-  the binary, `flume open w` under herdr with the ghostty profile over
-  a stand-in, then an agent of a fix launched on `w` opening in the
-  session the window attached to, a second open recording a second
-  window, `flume open` naming no stream attaching to the own session,
-  and the printed window's line under a host that names none.
+  attach under the pinned herdr with a scratch session home and
+  one-letter session names: a session not running started headless and
+  listed running, the command naming the herdr's full path and `session
+  attach w` with `XDG_CONFIG_HOME` the scratch home, a client it runs
+  attaching to that server, the own session of a socket server refused,
+  and the app view refused.
+- `crates/flume/tests/profiles/tools/open.rs` (check-tools): S90
+  through the binary under the pinned herdr, the ghostty profile over a
+  stand-in `open` or `ghostty` and the terminal profile over a stand-in
+  `osascript` first on the binary's `PATH`, Terminal.app held by its
+  refusal on a host that is not macOS; and S91's binary part, a stream
+  under the printed command beside one under herdr, status giving each
+  agent's terminal.
 
-### 11. The site
+### 15. The site
 
 Every page speaks to any host's operator (core.35).
 
 - `reference/commands.md`: `flume open [<stream>]`, what it answers and
   what refuses.
-- `reference/configuration.md`: `[host] window`, its profiles and its
-  default, and `[streams.<stream>] title`, each the managed layer's.
-- `guides/places-and-herdr.mdx`: opening a stream's session in a
-  window, its title for a window manager, and the printed command where
-  the host names no window.
-- `guides/agent-settings.md`, under "Streams": a stream's title beside
-  its session.
-- `reference/state.md`: status's `title` of each stream.
-- `roadmap.md`: the window built, and terminals for other multiplexers
-  not yet written.
+- `reference/configuration.md`: `[host] multiplexer`, `terminal` read
+  as it, `view` and `terminal_app`, their values and defaults, and a
+  stream's four keys, which layer sets each.
+- `guides/places-and-herdr.mdx`: a stream's view, a window manager
+  filing a window by its title, the printed line where no terminal app
+  is named, herdr's lack of an app, and trying a multiplexer on one
+  stream.
+- `guides/agent-settings.md`, under "Streams": a stream's multiplexer,
+  view, terminal app and title beside its session.
+- `reference/state.md`: status's fields of decision 5.
+- `roadmap.md`: the stream's terminal and view built, and profiles for
+  herdr-core, Rex, cmux and TUIOS not yet written.
 
-### 12. The clause list
+### 16. The clause list
 
 `clauses.rs` reads the statement at the revision of blueprints main
-that states 186 to 189 and S90: Part A gains 186, Part B 187 to 189, and
-the scenarios run to S90. A clause of that revision another change
+the amendment lands at: Part A gains 186 and 190, Part B 187 to 189,
+and the scenarios run to S91. A clause of that revision another change
 builds and has not built, 184, 185 and S86 to S89 among them where they
-stand there unbuilt, stays named unbuilt by that change. 186 to 189 and
-S90 are cited by this change's scenarios.
-
-### 13. A multiplexer's native app
-
-A multiplexer may show its sessions in a terminal interface that a
-window program runs, or in a native app that draws its own windows.
-herdr and Rex each have a native app on macOS. The user, on 2026-11-05:
-"I don't know how we support loading the TUI versus the native app."
-The seam holds both as it stands:
-
-- **The terminal interface** is a terminal profile whose attach answers
-  `Command`, which the window seam's program runs under the title, as
-  herdr's does in this change.
-- **A native app** is a terminal profile whose attach opens the app on
-  the named part under the title and answers `Shown`. `open_stream`
-  then asks nothing of the window seam, `[host] window` is not read for
-  it, and the answer's window is `Terminal` (187).
-
-This change writes no native app's profile. One is added as a change of
-its own, checked against the app's release: how the app is asked to
-open a session and to take a title, and that its attach answers within
-a bound it states (98). Where an app and a terminal interface drive one
-server, as herdr's app drives the server herdr's command line drives,
-the choice between them is the terminal profile's own, named in the
-host's configuration by that change, since no profile calls another
-(core.2). Its agents run on that server either way, so only attach
-differs.
+stand there unbuilt, stays named unbuilt by that change. 186 to 190, S90
+and S91 are cited by this change's scenarios.
 
 ## Risks / Trade-offs
 
-- **Ghostty is not pinned.** A release that changes `--title` or `-e`,
-  or how macOS starts it, breaks the window and nothing else, and the
-  gate does not see it, since no gate task opens a window. The stand-in
-  holds the words flume passes, and C.8 names the release they were
-  checked against.
-- **`open` on macOS answers once the display has the request.** A
-  Ghostty that starts and fails at once, a bad option among them, shows
-  its own error in its window, not in flume's answer.
-- **A window per asking.** A launcher bound to a key opens a window
-  each press. A window manager that files windows by title stacks them;
-  finding the one already open is the window manager's, and flume keeps
-  nothing to find it by (core.48).
+- **Ghostty and Terminal.app are not pinned.** A release that changes
+  their words breaks the window and nothing else, and the gate does not
+  see it, since no gate task opens a window. The stand-ins hold the
+  words flume passes, and C.8 names the releases they were checked
+  against.
+- **`open` and `osascript` answer once the display has the request.** A
+  Ghostty that starts and fails at once shows its error in its own
+  window, not in flume's answer.
+- **Terminal.app's first asking.** macOS asks the person to let the
+  program running flume control Terminal; an asking the person has not
+  allowed within the bound is refused in `osascript`'s words, and the
+  next succeeds once they allow it.
+- **Terminal.app's title.** The person's Terminal profile may add the
+  process or the size beside the custom title, so a window manager
+  filing by the whole title should match the stream's title within it.
+- **Terminal.app's line.** `do script` types the command's line into
+  the window's shell, so a variable's value it needs shows there, the
+  sessions' home under a test's herdr among them; the answer names the
+  variable alone (core.30).
+- **A window per asking.** A launcher bound to a key opens a window each
+  press; finding the one already open is the window manager's (core.48).
 - **The session started for the window.** A stream whose session is not
-  running is started headless at `open`, so herdr's server runs before
-  any of the stream's places has an agent. It runs as open would have
-  started it, and stays as every session's server stays (C.5).
-- **A sessions' home set only for flume.** A command run with an
-  `XDG_CONFIG_HOME` of its own passes it to the window, so the window's
-  herdr finds the session flume started. The printed line names it
-  `<set>`, so a person running it by hand runs it under the same home.
+  running is started headless at `open`, before any of its places has
+  an agent. It stays as every session's server stays (C.5).
+- **Attended by one stream.** A host with one stream under the printed
+  command settles every place at each acting command, as a host under
+  the printed command does today; that stream's trial costs the others
+  nothing but those settles.
+- **One place in two terminals.** A stream's multiplexer changed while
+  a place runs leaves its live agent where it opened and opens the next
+  stage in the new one, so the place's agents are found in two
+  terminals until it is tidied in both.
 
 ## Migration Plan
 
-- A host that names no window and no title gets the printed command
-  from `flume open`, and status gives each stream's title as its name.
-  Nothing else moves.
+- A host whose configuration gives `[host] terminal` runs as before,
+  read as `[host] multiplexer`. A host that names no view, no terminal
+  app and no title gets the printed command from `flume open`, and
+  status gives each stream's title as its name.
 - A host's launcher becomes `flume open <stream>`. The title it gave the
-  window is declared once as the stream's `title`, and `[host] window =
-  "ghostty"` names the window program.
-- A stream written before reads with no title. Held state is unchanged:
-  `open` writes none.
+  window is declared once as the stream's `title`, and `[host]
+  terminal_app = "ghostty"` names the window program.
+- A stream written before reads with none of the four keys, and a start
+  written before records no terminal, read as the host's.
 
 ## Open Questions
 
-None. The command's name, the window seam and the keys' layer are
-record 0037's, accepted by the user on 2026-11-05.
+None. The settings and their override are the user's, accepted on
+2026-11-05; the rest is record 0037's.
