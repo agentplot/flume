@@ -1,5 +1,5 @@
-//! What a launch's words give the core (2 to 8, 32, 70, 130, 162; design
-//! 5a, 16a): each `--agent [<stage>.]<field>=<value>` one setting of
+//! What a launch's words give the core (2 to 8, 32, 70, 107, 130, 162;
+//! design 5a, 16a): each `--agent [<stage>.]<field>=<value>` one setting of
 //! every stage's agent or one stage's, `[<stage>.]mode.<program>=<value>`
 //! one entry of its mode's table of programs, and each `--hold
 //! <stage>=<words>` a stage on hold with its words. Nothing is resolved
@@ -10,12 +10,19 @@
 use flume_seams::{ModeSetting, Settings};
 use std::collections::BTreeMap;
 
-/// The fields `--agent` sets (32, 162).
-const FIELDS: [&str; 5] = ["program", "model", "instructions", "beside", "mode"];
+/// The fields `--agent` sets (32, 107, 162).
+const FIELDS: [&str; 6] = [
+    "program",
+    "model",
+    "instructions",
+    "beside",
+    "session",
+    "mode",
+];
 
 /// The settings `--agent` gives, as its refusals name them.
 const SETTINGS: &str =
-    "the settings are program, model, instructions, beside and mode, or mode.<program> for one program's entry of a mode";
+    "the settings are program, model, instructions, beside, session and mode, or mode.<program> for one program's entry of a mode";
 
 /// Sets the one setting `given` names, `[<stage>.]<field>=<value>`, in
 /// `every_stage` or in its stage's entry of `stages` (7, 32); a mode's
@@ -47,6 +54,7 @@ pub fn agent(
         "model" => settings.model = text,
         "instructions" => settings.instructions = text,
         "beside" => settings.beside = text,
+        "session" => settings.session = text,
         "mode" => {
             let word = ModeSetting::from_word(value).map_err(|reason| {
                 format!(
@@ -168,10 +176,19 @@ mod tests {
         for words in ["colour=red", "model"] {
             let refused = given(&[words]).unwrap_err();
             assert!(
-                refused.contains("beside and mode") && refused.contains("mode.<program>"),
+                refused.contains("beside, session and mode") && refused.contains("mode.<program>"),
                 "{refused}"
             );
         }
+    }
+
+    #[test]
+    fn a_session_for_every_stage_and_one_for_a_stage() {
+        // 7, 32, 107: `session` as `beside` is, at the launch's layer.
+        let (every, stages) = given(&["session=review", "verify.session=late"]).unwrap();
+        assert_eq!(every.session.as_deref(), Some("review"));
+        assert_eq!(stages["verify"].session.as_deref(), Some("late"));
+        assert_eq!(stages["verify"].beside, None);
     }
 
     #[test]

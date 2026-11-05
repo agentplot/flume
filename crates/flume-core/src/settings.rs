@@ -113,10 +113,18 @@ fn mode_for(
     })
 }
 
-/// Settings with `beside` taken away, for a layer that does not say
-/// where in the terminal an agent runs (107, 32).
+/// Settings with `beside` and `session` taken away, for a layer that does
+/// not say where in the terminal an agent runs (107, 32).
 fn placeless(mut settings: Settings) -> Settings {
     settings.beside = None;
+    sessionless(settings)
+}
+
+/// Settings with `session` taken away, for every layer but the launch's:
+/// a kind names nothing a host owns, and a host's agents table names no
+/// session (32, 107, 158).
+fn sessionless(mut settings: Settings) -> Settings {
+    settings.session = None;
     settings
 }
 
@@ -189,7 +197,7 @@ impl Engine {
                 Layer::Repository,
                 placeless(place.repository_settings.for_stage(&stage.name)),
             ),
-            (Layer::Kind, declared),
+            (Layer::Kind, sessionless(declared)),
             (Layer::Default, self.defaults.settings.clone()),
         ]
     }
