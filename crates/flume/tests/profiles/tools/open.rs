@@ -82,23 +82,28 @@ impl Host {
         let limit = socket_path_limit();
         let fits =
             |folder: &Path| folder.join(&named).join(SESSION_SOCKET).as_os_str().len() <= limit;
-        let temporary = std::env::temp_dir();
-        let folder = if fits(&temporary) {
-            temporary
-        } else {
-            PathBuf::from("/tmp")
+        // The temporary folder where the session's sockets fit under it,
+        // else `/tmp` where the run may write there.
+        let linked = |folder: &Path| {
+            let link = folder.join(&named);
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink(walk.home(), &link).map(|()| link)
         };
-        let link = folder.join(&named);
-        let bytes = link.join(SESSION_SOCKET).as_os_str().len();
-        assert!(
-            bytes <= limit,
-            "herdr's session w would bind {}, {bytes} bytes, past the {limit} a socket's path \
-             holds on this host",
-            link.join(SESSION_SOCKET).display()
-        );
-        let _ = std::fs::remove_file(&link);
-        std::os::unix::fs::symlink(walk.home(), &link)
-            .unwrap_or_else(|error| panic!("a short link at {}: {error}", link.display()));
+        let temporary = std::env::temp_dir();
+        let tmp = PathBuf::from("/tmp");
+        let link = [&temporary, &tmp]
+            .into_iter()
+            .filter(|folder| fits(folder))
+            .find_map(|folder| linked(folder).ok())
+            .unwrap_or_else(|| {
+                let socket = temporary.join(&named).join(SESSION_SOCKET);
+                panic!(
+                    "herdr's session w would bind {}, {} bytes, past the {limit} a socket's path \
+                     holds on this host, and /tmp cannot be written",
+                    socket.display(),
+                    socket.as_os_str().len()
+                )
+            });
         let walk = walk.with_home(link.clone());
         let scratch = walk.repository.scratch.root.clone();
         let claude = scratch.join("bin/claude");
