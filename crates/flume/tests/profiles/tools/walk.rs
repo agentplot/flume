@@ -13,7 +13,8 @@
 //! the walkthrough starts, flume, sluice, git and the stand-in, runs in the
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
-//! core.22, core.29): the remote is a directory.
+//! core.22, core.29): the remote is a directory, and sluice's checkouts
+//! keep their scratch in the walkthrough's own folder.
 
 use crate::common::*;
 use flume::profiles::place::git_worktree;
@@ -53,6 +54,19 @@ fn a_callers(name: &str) -> bool {
     ]
     .iter()
     .any(|prefix| name.starts_with(prefix))
+}
+
+/// The variable naming the folder that stands for the host user's own,
+/// under which the pinned sluice keeps a checkout's scratch rather than
+/// under `/tmp/sluice-<uid>`, which the gate's sandbox refuses a process
+/// a check starts; sluice's own tests name theirs by it (sluice record
+/// 0063).
+pub const USER_SCRATCH: &str = "SLUICE_USER_SCRATCH";
+
+/// The test's own folder for the scratch of the checkouts sluice makes
+/// for `repository`.
+pub fn user_scratch(repository: &Repository) -> PathBuf {
+    repository.scratch.path("sluice")
 }
 
 /// The stand-in's run: what it printed and how it ended.
@@ -236,6 +250,7 @@ impl Walk {
             .env("XDG_DATA_HOME", self.home.join("data"))
             .env("PATH", &self.path)
             .env("OPENSPEC_TELEMETRY", "0")
+            .env(USER_SCRATCH, user_scratch(&self.repository))
             .stdin(Stdio::null());
         command
     }
