@@ -124,13 +124,15 @@ pub struct HostConfiguration {
     pub passed_over: Vec<PinnedKey>,
 }
 
-/// How a pool chooses among its usable accounts: the first in order, or
-/// the one running the fewest of flume's agents, equals in order (145).
+/// How a pool chooses among its usable accounts: the first in order, the
+/// one running the fewest of flume's agents, or the one with the most
+/// left by a fresh reading, equals in order (145, 184).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Strategy {
     FillFirst,
     LeastBusy,
+    MostLeft,
 }
 
 impl Strategy {
@@ -139,15 +141,17 @@ impl Strategy {
         match self {
             Strategy::FillFirst => "fill-first",
             Strategy::LeastBusy => "least-busy",
+            Strategy::MostLeft => "most-left",
         }
     }
 }
 
 /// An account of a pool: its name, the agent program it runs, the
 /// environment that signs that program in, each value as the
-/// configuration wrote it, and how many agents run on it at once, none
-/// where it states none (144, C.7). It is an agent's whole environment
-/// beyond the login environment (32).
+/// configuration wrote it, how many agents run on it at once, none where
+/// it states none, and the path of its reading as the configuration wrote
+/// it, none where it names none (144, 184, C.7). Its environment is an
+/// agent's whole environment beyond the login environment (32).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Account {
     pub name: String,
@@ -156,14 +160,39 @@ pub struct Account {
     pub env: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agents: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<String>,
 }
 
-/// A pool of accounts, in order, and the strategy by which one is chosen
-/// at each start (144, 145).
+/// A pool of accounts, in order, the strategy by which one is chosen at
+/// each start, and the whole percentage of a window past which an account
+/// takes no new start, none where the pool states none and 90 holds (144,
+/// 145, 185).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pool {
     pub strategy: Strategy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threshold: Option<u32>,
     pub accounts: Vec<Account>,
+}
+
+/// An account's reading as the host last wrote it: when the host read the
+/// account's allowance, and each of its usage windows (184, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Usage {
+    pub read_at: Seconds,
+    pub windows: Vec<Window>,
+}
+
+/// One usage window of an account's allowance: its name as the host gives
+/// it, how much of it is used in hundredths of a percent, 0 to 10000, and
+/// when it resets, none where the reading gives none (184, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Window {
+    pub name: String,
+    pub used: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_at: Option<Seconds>,
 }
 
 /// Where a place's stream came from (143).
@@ -345,6 +374,10 @@ pub trait Host: Send + Sync {
     /// The pool the host's configuration declares under `name`, as it
     /// stands now (144, C.7).
     fn pool(&self, name: &str) -> Option<Pool>;
+
+    /// The reading in the file at `path`, an absolute path, as it stands
+    /// now; or why there is none, in words that name no path (184, C.7).
+    fn usage(&self, path: &str) -> Result<Usage, String>;
 
     /// A variable of the host user's login environment, `HOME` among
     /// them, never of the calling command's session; none where it lacks
