@@ -3,14 +3,16 @@
 //! random bytes, a file's write time, a command of flume's named by its
 //! process and that process's start, the bound and the agents' settings
 //! the host's configuration states, the role runs, streams, pools and
-//! labels it names, its values with their layers, the recipient the
-//! calling command's environment names, the host user's login
-//! environment, and the room lock at `$XDG_STATE_HOME/flume/room.lock`
-//! (41, 70, 75; design 6, 10). No tool is named here (core.1).
+//! labels it names, its values with their layers, an account's reading
+//! from the file its `usage` names, the recipient the calling command's
+//! environment names, the host user's login environment, and the room
+//! lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75, 184; design 6,
+//! 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
 pub mod process;
+pub mod usage;
 
 use config::HostConfig;
 use flume_seams::{
@@ -282,8 +284,10 @@ impl Host for RealHost {
         self.config.pools.get(name).cloned()
     }
 
-    fn usage(&self, _path: &str) -> Result<Usage, String> {
-        Err("this host reads no reading".to_string())
+    /// The reading in the file at `path` as it stands now, read and never
+    /// written (184, C.7).
+    fn usage(&self, path: &str) -> Result<Usage, String> {
+        usage::read(Path::new(path))
     }
 
     fn login(&self, name: &str) -> Option<String> {
