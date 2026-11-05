@@ -326,6 +326,11 @@ pub struct HostStatus {
     /// its places show gives and where the terminal shows it (139).
     #[serde(default)]
     pub bases: Vec<BaseClues>,
+    /// What the terminal's own configuration lacks for flume's plugin,
+    /// each in the terminal profile's words; none where it lacks nothing
+    /// (72, 122).
+    #[serde(default)]
+    pub terminal_setup: Vec<String>,
 }
 
 fn no_watch() -> Watch {
@@ -345,6 +350,7 @@ impl Default for HostStatus {
             addresses: vec![],
             watch: Watch::None,
             bases: vec![],
+            terminal_setup: vec![],
         }
     }
 }

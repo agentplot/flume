@@ -23,6 +23,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_field_removed,
         },
         Scenario {
+            name: "answers: a status written before the host gave its terminal's setup reads with none",
+            cites: &["61", "122"],
+            run: a_status_before_terminal_setup,
+        },
+        Scenario {
             name: "answers: a refusal is an answer of the same form",
             cites: &["2", "61"],
             run: a_refusal_is_an_answer,
@@ -432,6 +437,7 @@ fn host_status() -> HostStatus {
             line: "1 running · 0 asking · 1 waiting on caller · 0 stalled".into(),
             shown_at: Some("workspace w1".into()),
         }],
+        terminal_setup: vec![crate::fake_harness::SETUP.into()],
     }
 }
 
@@ -581,6 +587,23 @@ fn a_field_removed(_: &()) -> Outcome {
     Ok(())
 }
 
+fn a_status_before_terminal_setup(_: &()) -> Outcome {
+    let (_, answer) = full().remove(0);
+    let mut json: Value =
+        serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+    json["status"]["host"]
+        .as_object_mut()
+        .ok_or("no host")?
+        .remove("terminal_setup")
+        .ok_or("no terminal_setup")?;
+    let back: Answer = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    let Answer::Status { host, .. } = back else {
+        return Err(format!("read back as {back:?}"));
+    };
+    ensure_eq!(host.terminal_setup, Vec::<String>::new(), "the setup read");
+    Ok(())
+}
+
 fn a_refusal_is_an_answer(_: &()) -> Outcome {
     let world = super::world::World::new();
     let refused = world
@@ -666,6 +689,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.pools[].accounts[].spent_until",
             "status.host.pools[].name",
             "status.host.pools[].strategy",
+            "status.host.terminal_setup",
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",

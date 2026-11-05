@@ -34,6 +34,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: every_fact_of_every_place,
         },
         Scenario {
+            name: "status: a fake terminal scripted to lack one entry for flume's plugin gives it as the host's terminal setup, and status opens, sends to and closes nothing",
+            cites: &["122", "57", "72"],
+            run: the_terminals_setup,
+        },
+        Scenario {
             name: "status: a place no longer held is not answered for",
             cites: &["62", "58"],
             run: a_place_gone,
@@ -522,6 +527,27 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
         .find(|place| place.kind == "change")
         .ok_or("no change")?;
     ensure!(plan.tasks.is_some(), "no tasks for a change's place");
+    Ok(())
+}
+
+fn the_terminals_setup(_: &()) -> Outcome {
+    use crate::fake_harness::SETUP;
+    let world = World::new();
+    world.begun("build", Some(Deliverable::Commits), "one")?;
+    world.terminal.set_setup(&[SETUP]);
+    let calls = |world: &World| {
+        ["open", "send", "close"].map(|operation| world.terminal.log.count(operation))
+    };
+    let before = calls(&world);
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status refused".into());
+    };
+    ensure_eq!(
+        host.terminal_setup,
+        vec![SETUP.to_string()],
+        "the host's terminal setup"
+    );
+    ensure_eq!(calls(&world), before, "the opens, sends and closes");
     Ok(())
 }
 

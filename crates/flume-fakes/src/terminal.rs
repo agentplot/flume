@@ -47,6 +47,9 @@ struct TerminalState {
     agent_sessions: BTreeMap<String, String>,
     /// Every text sent to a session by its name, in order.
     notices: Vec<(String, String)>,
+    /// What the terminal's configuration lacks for flume's plugin, as
+    /// scripted.
+    setup: Vec<String>,
 }
 
 /// What the next opens answer.
@@ -119,6 +122,7 @@ impl FakeTerminal {
                 sessions: BTreeMap::new(),
                 agent_sessions: BTreeMap::new(),
                 notices: vec![],
+                setup: vec![],
             }),
             log: Log::default(),
         }
@@ -262,6 +266,12 @@ impl FakeTerminal {
 
     pub fn set_watch(&self, watch: Watch) {
         lock(&self.state).watch = watch;
+    }
+
+    /// What the terminal's configuration lacks for flume's plugin, each
+    /// in its words, until set otherwise (122).
+    pub fn set_setup(&self, setup: &[&str]) {
+        lock(&self.state).setup = setup.iter().map(|words| words.to_string()).collect();
     }
 
     /// The session the calling command runs in, as the terminal names it.
@@ -605,6 +615,12 @@ impl Terminal for FakeTerminal {
 
     fn watch(&self) -> Watch {
         lock(&self.state).watch
+    }
+
+    /// What was scripted, logged so a reading that asks none is seen to.
+    fn setup(&self) -> Vec<String> {
+        self.log.push("setup");
+        lock(&self.state).setup.clone()
     }
 
     fn session(&self) -> Option<String> {
