@@ -126,7 +126,7 @@ layer, where sluice is the one the tree pins.
   Take S89 out of the unbuilt list. True when
   `sluice exec main -- moon run core:test conformance:test conformance:coverage`
   passes, with `readiness_fails` passing unchanged.
-- [ ] 2.5 Add to `crates/flume/tests/profiles/tools/` the place-profile
+- [x] 2.5 Add to `crates/flume/tests/profiles/tools/` the place-profile
   spec's scenario "A fresh clone's pins installed by the pinned sluice".
   A scratch moon repository on main has:
   - `.config/sluice.toml` naming the moon runner and a toolchain that
@@ -144,10 +144,10 @@ layer, where sluice is the one the tree pins.
   fails as deneb's place did (S89, 11, 79, C.1, C.6). True when
   `sluice exec main -- moon run flume:tools` passes, and every existing
   tools test passes unchanged.
-- [ ] 2.6 Run the checks of the projects this group touched. True when
+- [x] 2.6 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools`
   passes.
-- [ ] 2.7 Pin sluice 0.67.0, the release that has `sluice equip`
+- [x] 2.7 Pin sluice 0.67.0, the release that has `sluice equip`
   (sluice #379), in `devenv.nix` with its three release assets' hashes,
   main merged in first, as the answer to this stage's stop asked. Check
   equip's command and answer at that tag: `sluice equip <branch> [--at
