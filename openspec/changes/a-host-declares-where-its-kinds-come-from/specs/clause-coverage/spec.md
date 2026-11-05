@@ -11,7 +11,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the statement's revision the build read, which states the host's sources as the user ruled on this change's design; Part A and Part B hold every clause that revision holds, 191 and 192 among them; the scenarios run from S1 with no gap to that revision's last; and it names as unbuilt no clause or scenario of record 0022's, 154 to 160 and S59 to S63 among them, nor 191, 192 or S95 to S97, each named otherwise as the revision's list holds it
+- **THEN** it names the statement's revision the build read, which states the host's sources as the user ruled on this change's design; Part A and Part B hold every clause that revision holds, 191 and 192 among them; the scenarios are every one that revision holds, and no other; and it names as unbuilt no clause or scenario of record 0022's, 154 to 160 and S59 to S63 among them, nor 191, 192 or S95 to S97, each named otherwise as the revision's list holds it
 
 ### Requirement: A clause cited by nothing fails the suite
 

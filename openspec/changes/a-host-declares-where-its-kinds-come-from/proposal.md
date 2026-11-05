@@ -128,8 +128,8 @@ S95 to S97).
   reading and writing (weir 88 to 93, C.4). This is weir's own change,
   landed before this one is built, and flume's pin then moves to it
   (core.4, core.22). Design, *What this change rests on*.
-- **agentplot/blueprints.** The statement states the user's ruling at
-  54d3efc on `design/flume-a-host-declares-where-its-kinds-come-from`:
+- **agentplot/blueprints.** The statement states the user's ruling on
+  main at ff616eb:
   191 and 192 new, 4, 19, 56, 154, 159, 160, C.2 and C.7 amended, S60
   to S62 reworded and S95 to S97 added. Design, *The statement as the
   user ruled*, names each (core.19).

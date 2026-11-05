@@ -638,14 +638,10 @@ program of ours, and calls a program that manages the host just that
 ## The statement as the user ruled
 
 The user ruled each item below on 2026-11-05, approving this design.
-The statement states them on agentplot/blueprints' branch
-`design/flume-a-host-declares-where-its-kinds-come-from` at 54d3efc,
-cut from main at 9f1f0fd, for blueprints' main to take (core.19).
-Clause 190 and S91 to S94 are taken by
-`every-question-a-place-asks-reaches-someone-who-answers-it`, so the new
-clauses are 191 and 192, and the new scenarios S95 to S97. Parts A and B
-name a source's declaration, and C.7 names its file, since the
-statement's Parts A and B name no file.
+The statement states them on agentplot/blueprints' main at ff616eb
+(core.19). The new clauses are 191 and 192, and the new scenarios S95
+to S97. Parts A and B name a source's declaration, and C.7 names its
+file, since the statement's Parts A and B name no file.
 
 1. **191, new in A.3, the host's sources** (decision 1):
 
@@ -793,8 +789,8 @@ details come with it in one commit (task 1.1).
    none of it, so the build stops short at 2.1, naming it, until it
    lands.
 2. **The statement as the user ruled** (*The statement as the user
-   ruled*), at 54d3efc. Task 8.1's clause list reads blueprints' main
-   once it holds the amendment.
+   ruled*), on blueprints' main at ff616eb, which task 8.1's clause
+   list reads.
 3. **Records 0021, 0024's plan stage, 0025 and 0026** are not needed.
    See *Risks* for 0021.
 

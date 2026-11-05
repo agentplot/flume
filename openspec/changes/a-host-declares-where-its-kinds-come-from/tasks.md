@@ -10,8 +10,7 @@ runs under the scratch environment `crates/flume/tests/common` gives,
 and every `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, sources directory, lock and
 `kinds_dir` a test names is a scratch directory or file of the test's
 own. The user approved the design on 2026-11-05, and the statement
-states the ruling at 54d3efc on agentplot/blueprints'
-`design/flume-a-host-declares-where-its-kinds-come-from`. Group 2 and
+states the ruling on agentplot/blueprints' main at ff616eb. Group 2 and
 the groups after it are built once weir-kinds reads packages,
 identities, hashes and locks (design, *What this change rests on*).
 
@@ -25,13 +24,14 @@ identities, hashes and locks (design, *What this change rests on*).
   - `flume kinds lock --hash` (decision 6);
   - status naming where a kind came from (decisions 8, 9).
 
-  Its sources are record 0022 and the statement at 54d3efc, which states the ruling, and its considered options are the design's. Amend core.34's details in the same commit:
+  Its sources are record 0022 and the statement at ff616eb, which states the ruling, and its considered options are the design's. Amend core.34's details in the same commit:
   - **Rules out:** a bare name resolved to a kind of a host's source; a source's file, or anything in a `kinds_dir`, written by flume; a source's fault refusing a launch that does not name its source.
   - **Not ruled out:** a program that manages the host writing a source's file and running `flume kinds lock --host --hash`.
   - **Sources:** the record among them.
 
   True when `sluice exec main -- moon run root:adrs root:format` passes (decisions 1 to 9; 154 to 160, 191, 192; core.19, core.34).
-- [x] 1.2 Merge main at 201086c into the change, and fit the proposal, design, specs and tasks to it: the record numbered 0040, since 0030 to 0039 are taken; no `_open.md`, which main no longer holds; the Boomdrive runner (record 0034); the sources the managed layer's (C.7); and the statement's 191, 192 and S95 to S97, as blueprints states them at 54d3efc, cited (core.19). True when `sluice exec main -- moon run root:changes root:format` passes.
+- [x] 1.2 Merge main at 201086c into the change, and fit the proposal, design, specs and tasks to it: the record numbered 0040, since 0030 to 0039 are taken; no `_open.md`, which main no longer holds; the Boomdrive runner (record 0034); the sources the managed layer's (C.7); and the statement's 191, 192 and S95 to S97, as blueprints states them at ff616eb, cited (core.19). True when `sluice exec main -- moon run root:changes root:format` passes.
+- [x] 1.3 Cite the statement's amendment where blueprints' main took it, at ff616eb, in record 0040, the proposal, the design and these tasks, and have the clause list's scenario hold every scenario that revision holds, which numbers none from S92 to S94 (core.19). True when `sluice exec main -- moon run root:adrs root:changes root:format` passes.
 
 ## 2. weir-kinds' pin
 
