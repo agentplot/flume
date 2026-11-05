@@ -72,6 +72,7 @@ The host's two tables give a model and instructions alone, so a host runs `chang
 - Status gains each place's stream and account with where each came from, each move with its reason, each stream's queue and each pool's accounts.
 - Nothing is built until the user approves a plan; `_open.md` names the wait.
 - Amended 2026-10-29: the user, approving the plan, ruled out an environment or a program in the host's tables for a kind and for a repository and kind, and a pool named for a kind: "I don't think we want the old per-kind config." Accounts exist only in pools, a stream or the host names the pool, and the account gives an agent its whole environment; the host's tables give a model and instructions. The sections above say what stands; clauses 29, 32, 143, 144, C.2, C.7 and S44 are amended at blueprints 87a7458, core.30 and core.32 with them, and record 0017 carries a line saying so.
+- Amended 2026-11-05 by record 0040, proposed: a stream's agents take the settings the host's configuration gives for the stream, `[agents.streams.<stream>]`, beside `[agents]` for every agent. The reason this record gave for none, that a stream's word on a kind's model would be a third host table for what the host's word for the kind already says, holds no longer: what an agent shows and does differs by the share of the host it runs in, which no kind table can say. Clause 143 is amended at blueprints 068cbc0, core.30's details with it.
 
 ## Amendment, 2026-11-02: a spent account's agent keeps its conversation
 
