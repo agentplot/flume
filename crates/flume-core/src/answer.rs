@@ -66,6 +66,54 @@ pub enum Answer {
         woke: Woke,
         place: PlaceStatus,
     },
+    /// A stream's session shown in its view at a person's asking, and
+    /// nothing flume holds changed (186; core.48).
+    Opened(StreamOpened),
+}
+
+/// What an open showed (186): the stream, its multiplexer, the session
+/// shown, its view, the title and the terminal app of a window, each
+/// with where it came from, the command the window runs by its
+/// variables' names, and what the window did.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamOpened {
+    pub stream: String,
+    pub multiplexer: ProfileHeld,
+    pub session: SessionHeld,
+    pub view: ViewHeld,
+    /// None for the app's view, whose app titles its own window.
+    #[serde(default)]
+    pub title: Option<TitleHeld>,
+    /// None for the app's view.
+    #[serde(default)]
+    pub terminal_app: Option<ProfileHeld>,
+    /// None for the app's view.
+    #[serde(default)]
+    pub command: Option<ViewCommandStatus>,
+    pub window: WindowOutcome,
+}
+
+/// The command a window runs to show a stream's session, by its program,
+/// its arguments and its variables' names, never their values (187;
+/// core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewCommandStatus {
+    pub program: String,
+    pub arguments: Vec<String>,
+    #[serde(default)]
+    pub environment: Vec<String>,
+}
+
+/// What showing a stream's session did (186, 188).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowOutcome {
+    /// The terminal app opened a window.
+    Opened,
+    /// No window: the line for a person to run.
+    Printed { line: String },
+    /// The multiplexer's own app showed the session.
+    App,
 }
 
 /// What a wake of a role's address came to (132): its run launched by

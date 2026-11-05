@@ -46,7 +46,7 @@ whose socket's path leaves no room fails naming its bytes.
 
 ## 5. The core's open
 
-- [ ] 5.1 Add `crates/flume-core/src/open.rs` with `Engine::open_stream(stream)` as design 8 has it: the stream's display, its terminal and terminal app through the resolver, the session from `StreamRoom::session`, the title for a window alone; `Answer::Opened` with `StreamOpened`, `TitleHeld`, `TitleFrom`, `ViewCommandStatus` and `WindowOutcome`; and its refusals. It takes no lock, writes no held state and settles nothing (107, 186 to 190; core.14, core.17, core.30, core.48). True when `sluice exec main -- moon run core:test conformance:test` passes, with `engine/open.rs` holding the stream-views spec's scenarios over the fakes, the S90 one named `s90_a_streams_view`.
+- [x] 5.1 Add `crates/flume-core/src/open.rs` with `Engine::open_stream(stream)` as design 8 has it: the stream's display, its terminal and terminal app through the resolver, the session from `StreamRoom::session`, the title for a window alone; `Answer::Opened` with `StreamOpened`, `TitleHeld`, `TitleFrom`, `ViewCommandStatus` and `WindowOutcome`; and its refusals. It takes no lock, writes no held state and settles nothing (107, 186 to 190; core.14, core.17, core.30, core.48). True when `sluice exec main -- moon run core:test conformance:test` passes, with `engine/open.rs` holding the stream-views spec's scenarios over the fakes, the S90 one named `s90_a_streams_view`.
 - [ ] 5.2 Run the checks of the projects this group touched. True when `sluice exec main -- moon run core:format core:lint core:test conformance:format conformance:lint conformance:test` passes.
 
 ## 6. The profiles and the command

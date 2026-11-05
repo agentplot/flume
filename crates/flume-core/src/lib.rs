@@ -17,6 +17,7 @@ mod end;
 mod ends;
 mod held;
 mod launch;
+mod open;
 mod prompt;
 mod reading;
 mod room;

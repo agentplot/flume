@@ -5,7 +5,7 @@
 
 use flume_core::{
     group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, Reserves,
-    StageStatus, StreamStatus, Tidied, Woke,
+    StageStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration, IntentKey,
@@ -114,8 +114,56 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Opened(opened) => lines.extend(opened_lines(opened)),
     }
     lines.join("\n")
+}
+
+/// An open's lines (186): what showed the stream's session, its title,
+/// its session and its view each with where it came from, and the
+/// printed window's line on a line of its own, each variable by its name
+/// alone (core.30).
+fn opened_lines(opened: &StreamOpened) -> Vec<String> {
+    let multiplexer = &opened.multiplexer.profile;
+    let session = match &opened.session.name {
+        Some(name) => format!(
+            "{multiplexer}'s session {name} ({})",
+            session_from(opened.session.from)
+        ),
+        None => format!("{multiplexer}'s own session"),
+    };
+    let title = opened.title.as_ref().map(|title| {
+        let from = match title.from {
+            TitleFrom::Stream => "the stream's title",
+            TitleFrom::StreamName => "the stream's name",
+        };
+        format!("titled \"{}\" ({from})", title.title)
+    });
+    let app = opened
+        .terminal_app
+        .as_ref()
+        .map_or("no", |app| app.profile.as_str());
+    let mut lines = vec![match &opened.window {
+        WindowOutcome::Opened => format!(
+            "opened a {app} window {} on {session}",
+            title.unwrap_or_default()
+        ),
+        WindowOutcome::Printed { .. } => format!(
+            "the terminal app {app} opens no window; {session} is shown {} by:",
+            title.unwrap_or_default()
+        ),
+        WindowOutcome::App => format!("{multiplexer}'s app showed {session}"),
+    }];
+    lines.push(format!(
+        "  stream {}, view {} ({})",
+        opened.stream,
+        opened.view.view.name(),
+        word(json!(opened.view.from))
+    ));
+    if let WindowOutcome::Printed { line } = &opened.window {
+        lines.push(format!("run: {line}"));
+    }
+    lines
 }
 
 /// A word of the answer's own as its JSON spells it.
@@ -472,13 +520,17 @@ fn session_words(session: &SessionHeld) -> String {
     let Some(name) = &session.name else {
         return "the terminal's own session".into();
     };
-    let from = match session.from {
+    format!("the session {name}, {}", session_from(session.from))
+}
+
+/// Where a session's name came from (56, 107, 143).
+fn session_from(from: SessionFrom) -> &'static str {
+    match from {
         SessionFrom::Launch => "the launch's",
         SessionFrom::Stream => "the stream's",
         SessionFrom::StreamName => "the stream's name",
         SessionFrom::Own => "the terminal's own",
-    };
-    format!("the session {name}, {from}")
+    }
 }
 
 /// A pool's lines: its strategy, then each account's program, agents

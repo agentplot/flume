@@ -15,6 +15,7 @@ pub mod host_queue;
 pub mod labels;
 pub mod launching;
 pub mod made_things;
+pub mod open;
 pub mod place_status;
 pub mod places;
 pub mod repeating_stages;
@@ -64,5 +65,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(start_integrity::scenarios());
     every.extend(carried_conversations::scenarios());
     every.extend(stream_terminals::scenarios());
+    every.extend(open::scenarios());
     every
 }

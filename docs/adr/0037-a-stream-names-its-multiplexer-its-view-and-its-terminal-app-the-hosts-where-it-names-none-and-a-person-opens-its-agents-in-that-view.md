@@ -75,6 +75,7 @@ The writing agent's choices, and the paths not taken:
 - Status gives a stream's refusal as one answer: its labels' fault, then its multiplexer's, then, for a terminal view, its terminal app's. A field for each would split one question, why the stream refuses, across three.
 - A base's clues in status are asked of each terminal its live places run in, so a base whose places run in two terminals is shown in both (139).
 - In status, the host's own terminal is named by the profile a stream takes it by, else by the one the resolver gives as it, and by none where neither does.
+- The open's JSON is its word with what it showed as the word's own fields, `{"opened": {"stream": "work", …}}`. A field under the word, as `launched` holds `place`, would give a reader `opened.opened` or a name that says nothing the word does not (core.14).
 
 `flume open <stream>` was chosen over `flume stream open <stream>`, which would begin a group of stream commands with one member. A later `flume open` of a place's own tab can take a flag. The name is cheap to change before it lands.
 
