@@ -176,7 +176,9 @@ impl Engine {
     /// configuration is read here, at each start, and nowhere else (32,
     /// C.7).
     fn layers(&self, place: &PlaceRecord, stage: &Stage) -> [(Layer, Settings); 6] {
-        let host = self.host.settings(&place.repository, &place.kind.name);
+        let host = self
+            .host
+            .settings(&place.repository, &place.kind.name, &place.stream.name);
         let launched = place.settings.get(&stage.name).map_or_else(
             || place.every_stage.clone(),
             |own| place.every_stage.under(own),

@@ -1128,15 +1128,39 @@ fn the_settings_of_the_host_and_of_a_repository_are_set() {
     let host = FakeHost::default();
     host.set_settings(None, "change", given("opus"));
     host.set_settings(Some("/r"), "change", given("sonnet"));
-    let in_r = host.settings("/r", "change");
+    let model = |model: &str| Settings {
+        model: Some(model.into()),
+        ..Settings::default()
+    };
+    host.set_every_kind("/r", model("haiku"));
+    host.set_stream_settings("work", model("fast"));
+    host.set_every_agent(model("any"));
+    let in_r = host.settings("/r", "change", "work");
     assert_eq!(in_r.kind, given("opus"));
     assert_eq!(in_r.repository, given("sonnet"));
+    assert_eq!(in_r.every_kind, model("haiku"));
+    assert_eq!(in_r.stream, model("fast"));
+    assert_eq!(in_r.every_agent, model("any"));
     assert_eq!(
-        host.settings("/s", "change").repository,
-        KindSettings::default()
+        host.log.of("settings"),
+        vec!["settings /r change work".to_string()]
     );
+    let in_s = host.settings("/s", "change", "default");
+    assert_eq!(in_s.repository, KindSettings::default());
+    assert_eq!(in_s.every_kind, Settings::default());
+    assert_eq!(in_s.stream, Settings::default());
+    assert_eq!(in_s.every_agent, model("any"));
     host.set_settings(None, "change", KindSettings::default());
-    assert_eq!(host.settings("/r", "change").kind, KindSettings::default());
+    host.set_every_kind("/r", Settings::default());
+    host.set_stream_settings("work", Settings::default());
+    host.set_every_agent(Settings::default());
+    assert_eq!(
+        host.settings("/r", "change", "work"),
+        HostSettings {
+            repository: given("sonnet"),
+            ..HostSettings::default()
+        }
+    );
     assert_eq!(host.login("HOME").as_deref(), Some("/home/user"));
     host.set_login("ACCOUNT", Some("work"));
     assert_eq!(host.login("ACCOUNT").as_deref(), Some("work"));

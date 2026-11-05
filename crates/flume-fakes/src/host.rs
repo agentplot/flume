@@ -1,8 +1,8 @@
 use crate::{lock, Log};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, KindSettings, LabelFrom,
-    LabelHeld, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Share, Stream,
-    StreamFrom, StreamHeld, DEFAULT_STREAM,
+    LabelHeld, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Settings, Share,
+    Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -52,6 +52,13 @@ struct HostState {
     kinds: BTreeMap<String, KindSettings>,
     /// The agents' settings by repository and kind.
     repos: BTreeMap<(String, String), KindSettings>,
+    /// The agents' settings for every kind, by repository (32, 191).
+    repos_agents: BTreeMap<String, Settings>,
+    /// The agents' settings for every agent in a stream, by the stream
+    /// (32, 143).
+    streams_agents: BTreeMap<String, Settings>,
+    /// The settings for every agent on the host (32).
+    every_agent: Settings,
     login: BTreeMap<String, String>,
     /// The role runs the configuration names, by address (132, C.7).
     roles: BTreeMap<String, RoleRun>,
@@ -85,6 +92,9 @@ impl Default for FakeHost {
                 recipient: None,
                 kinds: BTreeMap::new(),
                 repos: BTreeMap::new(),
+                repos_agents: BTreeMap::new(),
+                streams_agents: BTreeMap::new(),
+                every_agent: Settings::default(),
                 login: BTreeMap::from([("HOME".to_string(), "/home/user".to_string())]),
                 roles: BTreeMap::new(),
                 streams: BTreeMap::new(),
@@ -172,6 +182,35 @@ impl FakeHost {
                 state.kinds.insert(kind.to_string(), settings);
             }
         }
+    }
+
+    /// The settings the configuration gives every kind's agents in
+    /// `repository`, its `[repos."<repository>".agents]`; empty settings
+    /// remove them (32, 191).
+    pub fn set_every_kind(&self, repository: &str, settings: Settings) {
+        let mut state = lock(&self.state);
+        if settings == Settings::default() {
+            state.repos_agents.remove(repository);
+        } else {
+            state.repos_agents.insert(repository.to_string(), settings);
+        }
+    }
+
+    /// The settings the configuration gives every agent in `stream`, its
+    /// `[agents.streams.<stream>]`; empty settings remove them (32, 143).
+    pub fn set_stream_settings(&self, stream: &str, settings: Settings) {
+        let mut state = lock(&self.state);
+        if settings == Settings::default() {
+            state.streams_agents.remove(stream);
+        } else {
+            state.streams_agents.insert(stream.to_string(), settings);
+        }
+    }
+
+    /// The settings the configuration gives every agent on the host, its
+    /// `[agents]` (32).
+    pub fn set_every_agent(&self, settings: Settings) {
+        lock(&self.state).every_agent = settings;
     }
 
     /// A variable of the host user's login environment, or none; `HOME`
@@ -402,8 +441,9 @@ impl Host for FakeHost {
         lock(&self.state).pools.get(name).cloned()
     }
 
-    fn settings(&self, repository: &str, kind: &str) -> HostSettings {
-        self.log.push(format!("settings {repository} {kind}"));
+    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings {
+        self.log
+            .push(format!("settings {repository} {kind} {stream}"));
         let state = lock(&self.state);
         HostSettings {
             repository: state
@@ -411,7 +451,18 @@ impl Host for FakeHost {
                 .get(&(repository.to_string(), kind.to_string()))
                 .cloned()
                 .unwrap_or_default(),
+            every_kind: state
+                .repos_agents
+                .get(repository)
+                .cloned()
+                .unwrap_or_default(),
             kind: state.kinds.get(kind).cloned().unwrap_or_default(),
+            stream: state
+                .streams_agents
+                .get(stream)
+                .cloned()
+                .unwrap_or_default(),
+            every_agent: state.every_agent.clone(),
         }
     }
 

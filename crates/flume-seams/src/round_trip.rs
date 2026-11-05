@@ -1812,7 +1812,26 @@ fn a_kind_with_its_stages() {
     round_trips(HostSettings {
         repository: kind_settings(),
         kind: KindSettings::default(),
+        ..HostSettings::default()
     });
+    round_trips(HostSettings {
+        every_kind: every_kind(),
+        stream: Settings {
+            model: Some("opus".into()),
+            ..every_kind()
+        },
+        every_agent: Settings {
+            model: Some("sonnet".into()),
+            ..Settings::default()
+        },
+        ..HostSettings::default()
+    });
+    let written_before: HostSettings = serde_json::from_value(serde_json::json!({
+        "repository": KindSettings::default(),
+        "kind": KindSettings::default(),
+    }))
+    .unwrap();
+    assert_eq!(written_before, HostSettings::default());
     for layer in [
         Layer::Launch,
         Layer::HostRepository,

@@ -191,14 +191,14 @@ mod tests {
     #[test]
     fn inline_settings_kept_as_json_values() {
         let read = programs(
-            r#"programs.claude.settings = { tui = "fullscreen", count = 3, ratio = 0.5, on = true, list = ["a", 1], statusLine = { type = "command", command = "~/bin/line $HOME" } }"#,
+            r#"programs.agent.settings = { tui = "fullscreen", count = 3, ratio = 0.5, on = true, list = ["a", 1], statusLine = { type = "command", command = "~/bin/line $HOME" } }"#,
             &files(&[]),
         )
         .unwrap();
-        let claude = &read["claude"];
-        assert_eq!(claude.file, None);
+        let agent = &read["agent"];
+        assert_eq!(agent.file, None);
         assert_eq!(
-            Json::Object(claude.settings.clone().into_iter().collect()),
+            Json::Object(agent.settings.clone().into_iter().collect()),
             json!({
                 "tui": "fullscreen",
                 "count": 3,
@@ -214,31 +214,31 @@ mod tests {
     fn a_json_file_and_a_toml_file_beside_inline_keys() {
         let reader = files(&[
             (
-                "claude.json",
+                "agent.json",
                 r#"{ "tui": "fullscreen", "hooks": { "Stop": [] } }"#,
             ),
             (
-                "codex.toml",
+                "other.toml",
                 "model_reasoning = \"high\"\n[tui]\nnotifications = true\n",
             ),
         ]);
         let read = programs(
             r#"
-            [programs.claude]
-            file = "claude.json"
+            [programs.agent]
+            file = "agent.json"
             settings = { tui = "default" }
-            [programs.codex]
-            file = "codex.toml"
+            [programs.other]
+            file = "other.toml"
             "#,
             &reader,
         )
         .unwrap();
-        let claude = &read["claude"];
+        let agent = &read["agent"];
         assert_eq!(
-            claude.file,
+            agent.file,
             Some(NamedFile {
-                written: "claude.json".into(),
-                read: "read/claude.json".into(),
+                written: "agent.json".into(),
+                read: "read/agent.json".into(),
                 keys: BTreeMap::from([
                     ("hooks".into(), json!({ "Stop": [] })),
                     ("tui".into(), json!("fullscreen")),
@@ -246,10 +246,10 @@ mod tests {
                 left_out: vec![],
             })
         );
-        assert_eq!(claude.settings["tui"], json!("default"));
-        let codex = &read["codex"];
-        assert!(codex.settings.is_empty());
-        let file = codex.file.as_ref().unwrap();
+        assert_eq!(agent.settings["tui"], json!("default"));
+        let other = &read["other"];
+        assert!(other.settings.is_empty());
+        let file = other.file.as_ref().unwrap();
         assert_eq!(file.keys["model_reasoning"], json!("high"));
         assert_eq!(file.keys["tui"], json!({ "notifications": true }));
     }
@@ -257,11 +257,11 @@ mod tests {
     #[test]
     fn a_file_that_gives_no_key_is_kept() {
         let read = programs(
-            r#"programs.claude.file = "empty.json""#,
+            r#"programs.agent.file = "empty.json""#,
             &files(&[("empty.json", "{}")]),
         )
         .unwrap();
-        let file = read["claude"].file.as_ref().unwrap();
+        let file = read["agent"].file.as_ref().unwrap();
         assert!(file.keys.is_empty());
         assert_eq!(file.read, "read/empty.json");
     }
@@ -269,32 +269,56 @@ mod tests {
     #[test]
     fn a_shape_flume_cannot_take_is_refused_naming_its_key() {
         for (text, named, words) in [
-            (r#"programs = "claude""#, "agents.programs:", "table of programs"),
-            ("programs.claude = 3", "agents.programs.claude:", "file, settings or both"),
-            (r#"programs = { claude = "x" }"#, "agents.programs.claude:", "file, settings or both"),
             (
-                r#"programs.claude.tui = "fullscreen""#,
-                "agents.programs.claude.tui:",
-                "a program's own settings go under settings, as agents.programs.claude.settings.tui",
+                r#"programs = "agent""#,
+                "agents.programs:",
+                "table of programs",
             ),
-            ("programs.claude.file = 3", "agents.programs.claude.file:", "path of a settings file"),
-            (r#"programs.claude.settings = "x""#, "agents.programs.claude.settings:", "own settings"),
             (
-                "programs.claude.settings.since = 2026-11-01",
-                "agents.programs.claude.settings.since:",
+                "programs.agent = 3",
+                "agents.programs.agent:",
+                "file, settings or both",
+            ),
+            (
+                r#"programs = { agent = "x" }"#,
+                "agents.programs.agent:",
+                "file, settings or both",
+            ),
+            (
+                r#"programs.agent.tui = "fullscreen""#,
+                "agents.programs.agent.tui:",
+                "a program's own settings go under settings, as agents.programs.agent.settings.tui",
+            ),
+            (
+                "programs.agent.file = 3",
+                "agents.programs.agent.file:",
+                "path of a settings file",
+            ),
+            (
+                r#"programs.agent.settings = "x""#,
+                "agents.programs.agent.settings:",
+                "own settings",
+            ),
+            (
+                "programs.agent.settings.since = 2026-11-01",
+                "agents.programs.agent.settings.since:",
                 "give it as a string",
             ),
             (
-                "programs.claude.settings.at = { when = 07:32:00 }",
-                "agents.programs.claude.settings.at.when:",
+                "programs.agent.settings.at = { when = 07:32:00 }",
+                "agents.programs.agent.settings.at.when:",
                 "give it as a string",
             ),
             (
-                "programs.claude.settings.list = [1, 2026-11-01T07:32:00Z]",
-                "agents.programs.claude.settings.list[1]:",
+                "programs.agent.settings.list = [1, 2026-11-01T07:32:00Z]",
+                "agents.programs.agent.settings.list[1]:",
                 "date or time",
             ),
-            ("programs.claude.settings.n = nan", "agents.programs.claude.settings.n:", "no number"),
+            (
+                "programs.agent.settings.n = nan",
+                "agents.programs.agent.settings.n:",
+                "no number",
+            ),
             (
                 r#"programs."my agent".settings."a b" = 1979-05-27"#,
                 r#"agents.programs."my agent".settings."a b":"#,
@@ -335,9 +359,9 @@ mod tests {
             ),
         ] {
             let refused =
-                programs(&format!("programs.claude.file = {path:?}"), &reader).unwrap_err();
+                programs(&format!("programs.agent.file = {path:?}"), &reader).unwrap_err();
             assert!(
-                refused.starts_with("agents.programs.claude.file: ") && refused.contains(words),
+                refused.starts_with("agents.programs.agent.file: ") && refused.contains(words),
                 "{path}: {refused}"
             );
         }
@@ -350,12 +374,12 @@ mod tests {
         let token = format!("ghp_{}", "a1B2c3D4e5F6g7H8i9J0");
         let read = programs(
             &format!(
-                "programs.claude.settings = {{ env = {{ TOKEN = {token:?} }}, line = \"$HOME\" }}"
+                "programs.agent.settings = {{ env = {{ TOKEN = {token:?} }}, line = \"$HOME\" }}"
             ),
             &files(&[]),
         )
         .unwrap();
-        assert_eq!(read["claude"].settings["env"], json!({ "TOKEN": token }));
-        assert_eq!(read["claude"].settings["line"], json!("$HOME"));
+        assert_eq!(read["agent"].settings["env"], json!({ "TOKEN": token }));
+        assert_eq!(read["agent"].settings["line"], json!("$HOME"));
     }
 }

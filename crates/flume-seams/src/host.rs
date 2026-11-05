@@ -5,7 +5,7 @@
 //! configuration's values with their layers, and a lock over the room
 //! (design 3, 6). No seam of Part B.
 
-use crate::{KindSettings, Seconds, Secret};
+use crate::{KindSettings, Seconds, Secret, Settings};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -224,14 +224,26 @@ impl std::fmt::Debug for RoomGuard {
     }
 }
 
-/// The settings the host's configuration gives a kind's agents, each value
-/// as the configuration wrote it (32, C.7).
+/// The settings the host's configuration gives a kind's agents in one
+/// repository and one stream, each value as the configuration wrote it,
+/// each table none where the configuration gives none, and in settings
+/// written before (32, 143, 191, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostSettings {
     /// For the kind in one repository.
     pub repository: KindSettings,
+    /// For every kind in the repository, its
+    /// `[repos."<repository>".agents]`, beneath its table for the kind.
+    #[serde(default)]
+    pub every_kind: Settings,
     /// For the kind in every repository.
     pub kind: KindSettings,
+    /// For every agent in the stream, its `[agents.streams.<stream>]`.
+    #[serde(default)]
+    pub stream: Settings,
+    /// For every agent on the host, its `[agents]`.
+    #[serde(default)]
+    pub every_agent: Settings,
 }
 
 /// The run a host wakes for a role's address, as its configuration's
@@ -305,9 +317,10 @@ pub trait Host: Send + Sync {
     fn recipient(&self) -> Option<String>;
 
     /// The settings the host's configuration gives `kind`'s agents in
-    /// `repository`, as it stands now: read at every start, never kept
-    /// in held state (32, C.7).
-    fn settings(&self, repository: &str, kind: &str) -> HostSettings;
+    /// `repository` and in `stream`, the place's, and every agent's, as
+    /// it stands now: read at every start, never kept in held state (32,
+    /// 143, C.7).
+    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings;
 
     /// The run the host's configuration names for a role's address, as
     /// it stands now; none where it names nothing for it (132, C.7).
