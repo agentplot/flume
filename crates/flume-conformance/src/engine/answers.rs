@@ -95,6 +95,26 @@ fn made() -> Vec<Made> {
     ]
 }
 
+/// Where a kind came from, every field present, as no one source gives
+/// them all (19, 56).
+fn kind_from() -> KindFrom {
+    KindFrom {
+        identity: KindIdentity {
+            source: "flume".into(),
+            name: "fix".into(),
+            version: 1,
+            spelled: "flume/fix@1".into(),
+        },
+        source: "flume".into(),
+        source_file: Some("/config/flume/sources/acme.toml".into()),
+        kind_dir: Some("/kinds/acme/fix@1".into()),
+        declaration_file: Some(".config/flume.toml".into()),
+        revision: Some(Revision::new("c1")),
+        hash: Some(format!("sha256:{}", "0".repeat(64))),
+        lock_file: Some(".config/flume.lock".into()),
+    }
+}
+
 fn place_status() -> PlaceStatus {
     PlaceStatus {
         place: PlaceId::new("/r/places/fix--one"),
@@ -102,6 +122,8 @@ fn place_status() -> PlaceStatus {
         kind: "fix".into(),
         version: 1,
         declared: Declared::Flume,
+        identity: Some("flume/fix@1".into()),
+        kind_from: Some(kind_from()),
         name: "one".into(),
         branch: "fix/one".into(),
         base: "main".into(),
@@ -432,6 +454,13 @@ fn host_status() -> HostStatus {
             line: "1 running · 0 asking · 1 waiting on caller · 0 stalled".into(),
             shown_at: Some("workspace w1".into()),
         }],
+        sources: vec![SourceStatus {
+            name: "acme".into(),
+            source_file: "/config/flume/sources/acme.toml".into(),
+            kinds_dir: Some("/kinds/acme".into()),
+            kinds: vec!["acme/review@1".into()],
+            cannot_read: Some("/kinds/acme/lint@1 could not be read".into()),
+        }],
     }
 }
 
@@ -641,6 +670,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.queue[].wants.stream",
             "status.host.room",
             "status.host.running",
+            "status.host.sources",
+            "status.host.sources[].cannot_read",
+            "status.host.sources[].kinds",
+            "status.host.sources[].kinds_dir",
+            "status.host.sources[].name",
+            "status.host.sources[].source_file",
             "status.host.streams",
             "status.host.streams[].bound",
             "status.host.streams[].name",
@@ -745,7 +780,21 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].holds[].since",
             "status.places[].holds[].stage",
             "status.places[].holds[].words",
+            "status.places[].identity",
             "status.places[].kind",
+            "status.places[].kind_from",
+            "status.places[].kind_from.declaration_file",
+            "status.places[].kind_from.hash",
+            "status.places[].kind_from.identity",
+            "status.places[].kind_from.identity.name",
+            "status.places[].kind_from.identity.source",
+            "status.places[].kind_from.identity.spelled",
+            "status.places[].kind_from.identity.version",
+            "status.places[].kind_from.kind_dir",
+            "status.places[].kind_from.lock_file",
+            "status.places[].kind_from.revision",
+            "status.places[].kind_from.source",
+            "status.places[].kind_from.source_file",
             "status.places[].lands",
             "status.places[].mark",
             "status.places[].name",

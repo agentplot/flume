@@ -469,6 +469,7 @@ impl Engine {
             addresses: self.addresses(),
             watch: self.terminal.watch(),
             bases: self.bases(),
+            sources: vec![],
         }
     }
 

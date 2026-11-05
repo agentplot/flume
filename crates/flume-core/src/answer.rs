@@ -138,6 +138,13 @@ pub struct PlaceStatus {
     pub kind: String,
     pub version: u32,
     pub declared: Declared,
+    /// The kind's identity as its launch read it, `acme/review@2`; none
+    /// for a place whose held state keeps no `kind_from` (19, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<String>,
+    /// Where the kind came from, as its launch read it (19, 21, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind_from: Option<KindFrom>,
     pub name: String,
     pub branch: String,
     pub base: String,
@@ -326,6 +333,26 @@ pub struct HostStatus {
     /// its places show gives and where the terminal shows it (139).
     #[serde(default)]
     pub bases: Vec<BaseClues>,
+    /// Each source the host declares, by name, read when asked (56, 159,
+    /// 191; core.15).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<SourceStatus>,
+}
+
+/// A source the host declares as status gives it (56, 191): its name, its
+/// file, the directory its packages lie in, the identity of every package
+/// that directory holds, and why the file or the directory cannot be read
+/// where either cannot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceStatus {
+    pub name: String,
+    pub source_file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kinds_dir: Option<String>,
+    #[serde(default)]
+    pub kinds: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cannot_read: Option<String>,
 }
 
 fn no_watch() -> Watch {
@@ -345,6 +372,7 @@ impl Default for HostStatus {
             addresses: vec![],
             watch: Watch::None,
             bases: vec![],
+            sources: vec![],
         }
     }
 }

@@ -191,6 +191,8 @@ impl Engine {
             kind: place.kind.name.clone(),
             version: place.kind.version,
             declared: place.declared,
+            identity: None,
+            kind_from: None,
             name: place.name.clone(),
             branch: place.branch.clone(),
             base: place.base.clone(),

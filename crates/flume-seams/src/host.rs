@@ -1,7 +1,8 @@
 //! The host's own facts the core reads: its clock, a new secret, a
 //! file's write time, whether a command of flume's still lives, the bound
 //! on agents its configuration states, its streams and pools of
-//! accounts, and a lock over the room (design 3, 6). No seam of Part B.
+//! accounts, the sources of its kinds, and a lock over the room (design
+//! 3, 6). No seam of Part B.
 
 use crate::{KindSettings, Seconds, Secret};
 use serde::{Deserialize, Serialize};
@@ -155,6 +156,27 @@ pub struct RoleRun {
     pub stream: Option<String>,
 }
 
+/// A source the host's configuration declares by a file of its own in its
+/// sources directory, the file's name less `.toml` being the source's
+/// (191, C.7): the file, and the directory its packages lie in or why
+/// the file cannot be read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSource {
+    pub file: String,
+    pub read: HostSourceRead,
+}
+
+/// A source's file read: the directory holding its packages, its leading
+/// `~` read as the host user's home; or why the file cannot be read, a
+/// name that is flume's own source's, the repository's or a launch's
+/// among the reasons (154, 191, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostSourceRead {
+    Read { kinds_dir: String },
+    CouldNotRead { reason: String },
+}
+
 /// Whether a recipient's name is a role's address, `<partition>/<role>`,
 /// each part a word of letters, digits, `.`, `_` and `-`; any other name
 /// is a session's (132; design 1).
@@ -249,4 +271,11 @@ pub trait Host: Send + Sync {
     /// The host-wide lock over the room, held until the guard is dropped,
     /// so two starts at once never pass the bound (70, 75).
     fn room(&self) -> RoomGuard;
+
+    /// The sources the host's configuration declares, by name, as they
+    /// stand now, each source's fault its own (159, 191, C.7); none by
+    /// default, a host with no sources directory.
+    fn sources(&self) -> BTreeMap<String, HostSource> {
+        BTreeMap::new()
+    }
 }

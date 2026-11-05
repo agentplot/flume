@@ -4,9 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PassedOver, PlaceId, PlaceRef,
-    Prompt, Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld, Unsettled,
-    Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, PassedOver, PlaceId,
+    PlaceRef, Prompt, Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld,
+    Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -378,6 +378,10 @@ pub struct PlaceRecord {
     /// The kind as it resolved at the launch, its stages with it (21).
     pub kind: Kind,
     pub declared: Declared,
+    /// Where the kind came from, as the launch read it; none in a held
+    /// state written before a launch kept it (19, 21).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind_from: Option<KindFrom>,
     pub name: String,
     pub branch: String,
     pub base: String,

@@ -97,6 +97,7 @@ impl Engine {
         let mut own: Vec<Kind> = kinds
             .flumes_own()
             .into_iter()
+            .map(|own| own.kind)
             .filter(|kind| kind.name == name)
             .collect();
         if own.is_empty() {
@@ -293,6 +294,7 @@ impl Engine {
                 repository: repository.clone(),
                 kind: kind.clone(),
                 declared,
+                kind_from: None,
                 name: launch.name.clone(),
                 branch: branch.clone(),
                 base: launch.base.clone(),

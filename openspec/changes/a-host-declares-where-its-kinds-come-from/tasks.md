@@ -39,14 +39,14 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 3. The seams and the fakes
 
-- [ ] 3.1 Add to `flume-seams` the following, as design 10 has them (19, 21, 154 to 160; core.4, core.14):
-  - the types `Identity`, `KindNamed`, `Packaged`, `PackageRead`, `SourceRead`, `LockEntry`, `LockRead` and `KindFrom`;
+- [x] 3.1 Add to `flume-seams` the following, as design 10 has them (19, 21, 154 to 160; core.4, core.14):
+  - the types `KindIdentity`, `KindNamed`, `Packaged`, `PackageRead`, `SourceRead`, `LockEntry`, `LockRead` and `KindFrom`;
   - `Declared::Host`;
   - `PlaceRecord::kind_from`, read with a default so held state written before it reads with none;
-  - `PlaceStatus::identity` and `PlaceStatus::kind_from`, and the host part's `sources`, each written only where set;
+  - in `flume-core`'s answer, `PlaceStatus::identity` and `PlaceStatus::kind_from`, and the host part's `sources`, each written only where set;
   - the kinds seam's `read_named`, `read_source`, `read_package`, `read_lock_at`, `read_lock_file` and `write_lock`, each refusing by default, so a profile not yet built answers that it reads none;
   - `flumes_own` answering `Packaged`, the kinds profile reading each version of `OWN` with its identity and its hash over `OWN`'s paths and bytes through weir-kinds, and the core taking the kind from each as before;
-  - `Host::sources()`.
+  - `Host::sources()`, each a `HostSource`.
 
   True when `sluice exec main -- moon run seams:test flume:test` passes with `round_trip.rs` holding the seam-contracts spec's held state with and with no `kind_from`, a value of each new type round-tripping, and every existing test of flume's own kinds passing unchanged.
 - [ ] 3.2 Have `FakeKinds` and `FakeHost` script what the seam-fakes spec and design 10 list, logging each call. Add the new operations' scenarios to `crates/flume-conformance/src/seams/kinds.rs` below the seam's marker, generic over the trait, each citing its clause (design 10; 85, 154 to 157, 160). True when `sluice exec main -- moon run seams:test fakes:test conformance:test` passes with the seam-contracts spec's *Each operation over the fake*, and a `fakes.rs` test of each scripted reading.

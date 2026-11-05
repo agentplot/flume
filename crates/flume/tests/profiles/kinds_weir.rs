@@ -861,7 +861,7 @@ type Summary = (
 fn flumes_own_kinds_are_built_in() {
     // 22, 140, 157, C.2: fix@1, chore@1, change@1 and change@2, change@2's
     // code stage repeating per task group and change@1's not.
-    let own = Weir.flumes_own();
+    let own = own_kinds();
     let summary: Vec<Summary> = own
         .iter()
         .map(|kind| {
@@ -932,12 +932,17 @@ fn flumes_own_kinds_are_built_in() {
     }
 }
 
+/// The kind of each of flume's own packages, as built in.
+fn own_kinds() -> Vec<Kind> {
+    Weir.flumes_own().into_iter().map(|own| own.kind).collect()
+}
+
 /// change@1's code prompt as flume held it before change@2 (22, 157).
 const CHANGE_1_CODE: &str = "You are the code stage of the change {{name}}, working in the place {{place}} on the branch {{branch}}, which was cut from {{base}}.\n\n{{#words}}This stage has been sent back to you with these words:\n\n{{words}}\n\nWhere the words name files contested and the base's revision the merge queue tested against, take that revision in before anything else: run `git merge <the revision the words name>` in this place, which merges it into {{branch}}, resolve each of the files contested, and commit the merge. Never rebase, and never rewrite a commit already on {{branch}}.\n\nWhere the change has been archived on {{branch}}, move it back out of the archive to {{change}} first. Then fix what the words name, and record the fix as a task of the change, ticked.\n\n{{/words}}Build the change at {{change}}: work through its tasks in order, tick each task in its tasks file as it is done, and commit as you go on {{branch}}. Your deliverable is the tasks ticked: the stage is done once a commit on {{branch}} holds every task of the change ticked and you are quiet. Leave the branch where your last commit puts it; what happens to it after this stage is not yours to do.\n\nIf you cannot go on without an answer, stop short: {{needs}}\n";
 
 /// flume's own kind `name` at `version`, as built in.
 fn own(name: &str, version: u32) -> Kind {
-    Weir.flumes_own()
+    own_kinds()
         .into_iter()
         .find(|kind| kind.name == name && kind.version == version)
         .unwrap_or_else(|| panic!("flume holds no {name}@{version}"))
@@ -977,7 +982,7 @@ fn each_versions_prompts_are_its_own() {
             KindsRead::CouldNotRead { reason } => panic!("{version}: {reason}"),
         }
     }
-    assert_eq!(read, Weir.flumes_own(), "the kinds built in, as on disk");
+    assert_eq!(read, own_kinds(), "the kinds built in, as on disk");
     let one = own("change", 1);
     let two = own("change", 2);
     assert_eq!(
@@ -1004,7 +1009,7 @@ fn each_versions_prompts_are_its_own() {
 /// flume's own kinds with `change` at `version` alone, as a flume that
 /// held that version of it and no other.
 fn own_at(version: u32) -> Vec<Kind> {
-    Weir.flumes_own()
+    own_kinds()
         .into_iter()
         .filter(|kind| kind.name != "change" || kind.version == version)
         .collect()
@@ -1216,7 +1221,7 @@ fn a_place_launched_at_change_1_keeps_it() {
     // names change@1.
     let world = world_with_own_kinds(1);
     let id = change_code_begun(&world, "old");
-    world.kinds.set_own(Weir.flumes_own());
+    world.kinds.set_own_packages(Weir.flumes_own());
     world.tick_groups("change/old", "old", GROUPS, 2);
     world.settle(&id);
     let held = world.held(&id).expect("the place");

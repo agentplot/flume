@@ -210,6 +210,7 @@ mod tests {
                 stages: vec![],
             },
             declared: Declared::Flume,
+            kind_from: None,
             name: "one".into(),
             branch: "fix/one".into(),
             base: "main".into(),

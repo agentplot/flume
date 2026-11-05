@@ -185,7 +185,12 @@ fn what_a_stage_makes<H: KindsHarness>(harness: &H) -> Outcome {
 }
 
 fn flumes_own<H: KindsHarness>(harness: &H) -> Outcome {
-    let own = harness.seam().flumes_own();
+    let own: Vec<Kind> = harness
+        .seam()
+        .flumes_own()
+        .into_iter()
+        .map(|own| own.kind)
+        .collect();
     let mut names: Vec<String> = own
         .iter()
         .map(|kind| format!("{}@{}", kind.name, kind.version))

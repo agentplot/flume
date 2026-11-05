@@ -474,8 +474,10 @@ same input and changing nothing (85, 160):
 
 - **`read_named(text)`**: the parts of a kind as a launch writes it, or
   why the text names no kind.
-- **`read_source(kinds_dir)`**: every identity the source's directory
-  holds, or why it could not be read.
+- **`read_source(source, kinds_dir)`**: every identity the directory of
+  the source `source` holds, or why it could not be read. The source's
+  name is given beside its directory, since an identity holds its source
+  and the directory does not name it.
 - **`read_package(source, kinds_dir, name, version)`**: the package's
   kind, identity and hash, or why it could not be read (157, 158).
 - **`read_lock_at(repository, revision)`**: the repository's lock at the
@@ -486,15 +488,19 @@ same input and changing nothing (85, 160):
 
 `flumes_own` answers packages, each with its identity and hash.
 
-The types are `Identity` (`source`, `name`, `version` and `spelled`,
-weir's spelling), `KindNamed`, `Packaged`, `PackageRead`, `SourceRead`,
-`LockEntry` (`kind`, `hash`), `LockRead` (none, read, or could not be
-read) and `KindFrom`.
+The types are `KindIdentity` (`source`, `name`, `version` and
+`spelled`, weir's spelling), `KindNamed`, `Packaged`, `PackageRead`,
+`SourceRead`, `LockEntry` (`kind`, `hash`), `LockRead` (none, read, or
+could not be read) and `KindFrom`. A kind's identity is `KindIdentity`
+because the seams already pass an agent's identity as `Identity` (33),
+which keeps its name.
 
 The host's sources are configuration, read beside `config.toml` by
 `crates/flume/src/host/config.rs` and given to the core by
-`Host::sources()`. Each entry is a name, its file, its `kinds_dir`, or
-its fault.
+`Host::sources()`, by name. Each entry, a `HostSource`, is its file and
+its `kinds_dir`, or its fault. Status's fields are the core's answer's,
+`PlaceStatus` and the host part's `SourceStatus` in `flume-core`, beside
+the fields they join.
 
 In the core, `resolve_kind` takes the named parts and searches as
 decision 3 has it. It checks the locks as decision 5 has them and

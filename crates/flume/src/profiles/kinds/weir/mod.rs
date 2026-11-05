@@ -21,8 +21,8 @@
 
 use crate::git::{tree_path, Git, REMOTE};
 use flume_seams::{
-    Binding, BindingRead, Deliverable, Kind, KindSettings, Kinds, KindsRead, Revision, Settings,
-    Stage,
+    Binding, BindingRead, Deliverable, Kind, KindIdentity, KindSettings, Kinds, KindsRead,
+    Packaged, Revision, Settings, Stage,
 };
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -32,13 +32,18 @@ use weir_kinds::{End, Refusal};
 /// Where a repository declares its kinds and its binding, in its tree.
 pub const DECLARATION: &str = ".config/flume.toml";
 
-/// One version of one of flume's own kinds, built into the binary: its
-/// declaration and each prompt it names by its path within the version's
-/// own directory (22, 157, C.2; design 7).
+/// One version of one of flume's own kinds, built into the binary: the
+/// identity it is held at, as weir's reader is given it, its declaration
+/// and each prompt it names by its path within the version's own
+/// directory (22, 156, 157, C.2; design 7).
 struct Own {
+    identity: &'static str,
     declaration: &'static str,
     prompts: &'static [(&'static str, &'static str)],
 }
+
+/// Where a package declares its kind, at its root (157; weir C.4).
+const KIND_TOML: &str = "kind.toml";
 
 /// flume's own kinds, one declaration per version, each in a directory of
 /// its own under `own/`, `<name>@<version>/kind.toml` with its prompts
@@ -46,6 +51,7 @@ struct Own {
 /// fix@1 and chore@1 (22, 157, C.2; record 0022).
 const OWN: &[Own] = &[
     Own {
+        identity: "flume/change@1",
         declaration: include_str!("own/change@1/kind.toml"),
         prompts: &[
             (
@@ -63,6 +69,7 @@ const OWN: &[Own] = &[
         ],
     },
     Own {
+        identity: "flume/change@2",
         declaration: include_str!("own/change@2/kind.toml"),
         prompts: &[
             (
@@ -80,6 +87,7 @@ const OWN: &[Own] = &[
         ],
     },
     Own {
+        identity: "flume/chore@1",
         declaration: include_str!("own/chore@1/kind.toml"),
         prompts: &[(
             "prompts/code.md",
@@ -87,6 +95,7 @@ const OWN: &[Own] = &[
         )],
     },
     Own {
+        identity: "flume/fix@1",
         declaration: include_str!("own/fix@1/kind.toml"),
         prompts: &[("prompts/code.md", include_str!("own/fix@1/prompts/code.md"))],
     },
@@ -142,24 +151,20 @@ impl Kinds for Weir {
         })
     }
 
-    /// Every kind of every one of flume's own declarations, each read
-    /// through weir-kinds with its prompts from its own version's
-    /// directory, two versions of `change` among them (22, 157).
-    fn flumes_own(&self) -> Vec<Kind> {
+    /// Each version of flume's own kinds as a package, read through
+    /// weir-kinds' package reader over its declaration and prompts by
+    /// their paths within its version's directory, at the identity it is
+    /// held at, with its content's hash over those paths and bytes; two
+    /// versions of `change` among them (22, 156, 157).
+    fn flumes_own(&self) -> Vec<Packaged> {
         OWN.iter()
-            .flat_map(|own| {
-                match read(own.declaration, |path| {
-                    own.prompts
-                        .iter()
-                        .find(|(at, _)| *at == path)
-                        .map(|(_, text)| text.to_string())
-                        .ok_or_else(|| format!("{path} is not built in"))
-                }) {
-                    KindsRead::Read { kinds, .. } => kinds,
-                    KindsRead::CouldNotRead { reason } => {
-                        panic!("flume's own declaration is built in and reads: {reason}")
-                    }
-                }
+            .map(|own| {
+                own_package(own).unwrap_or_else(|reason| {
+                    panic!(
+                        "flume's own {} is built in and reads: {reason}",
+                        own.identity
+                    )
+                })
             })
             .collect()
     }
@@ -169,6 +174,52 @@ impl Kinds for Weir {
             Ok(revision) => binding_at(repository, &revision),
             Err(reason) => BindingRead::CouldNotRead { reason },
         }
+    }
+}
+
+/// One version of flume's own kinds read as a package (156, 157).
+fn own_package(own: &Own) -> Result<Packaged, String> {
+    let held: weir_kinds::Identity = own
+        .identity
+        .parse()
+        .map_err(|refusal: weir_kinds::NameRefusal| refusal.to_string())?;
+    let files = std::iter::once((KIND_TOML, own.declaration)).chain(own.prompts.iter().copied());
+    let package = weir_kinds::read_package(files, &held).map_err(|refusal| refused(&refusal))?;
+    let mut problems = vec![];
+    let identity = map_identity(&package.identity, &mut problems);
+    let kind = map_kind(
+        &package.kind,
+        &|path: &str| {
+            own.prompts
+                .iter()
+                .find(|(at, _)| *at == path)
+                .map(|(_, text)| text.to_string())
+                .ok_or_else(|| format!("{path} is not built in"))
+        },
+        &mut problems,
+    );
+    if !problems.is_empty() {
+        return Err(problems.join("; "));
+    }
+    Ok(Packaged {
+        identity,
+        kind,
+        hash: package.hash.to_string(),
+    })
+}
+
+/// An identity as weir's reader gave it, mapped onto the seam's with its
+/// parts and weir's spelling (154; weir 88, C.4).
+fn map_identity(identity: &weir_kinds::Identity, problems: &mut Vec<String>) -> KindIdentity {
+    let version = u32::try_from(identity.version()).unwrap_or_else(|_| {
+        problems.push(format!("{identity}: its version is more than flume counts"));
+        0
+    });
+    KindIdentity {
+        source: identity.source().to_string(),
+        name: identity.name().to_string(),
+        version,
+        spelled: identity.to_string(),
     }
 }
 
