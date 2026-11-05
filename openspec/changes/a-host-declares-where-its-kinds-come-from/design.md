@@ -156,9 +156,16 @@ kinds_dir = "~/.local/share/flume/kinds/acme"
 - **Entries flume reads.** It reads every regular file whose name ends
   in `.toml` and begins with no `.`, and ignores every other entry. So a
   program writes `.acme.toml.tmp` and renames it over `acme.toml`, and
-  no reader ever sees half a file.
+  no reader ever sees half a file. A link is read as what it leads to,
+  so a host whose files a store manages links them in; a source's file is
+  configuration, never hashed, so weir's refusal of a link in a package
+  does not reach it.
 - **A missing directory.** It is a host with no sources, as a missing
-  `config.toml` is a host with no bound.
+  `config.toml` is a host with no bound. A `sources` that cannot be
+  listed, a file of that name among them, fails the configuration as a
+  `config.toml` that cannot be read does: it names no source a fault
+  could be kept with, and reading it as no sources would hide every
+  source the host declares.
 - **The managed layer.** The sources directory is of the host's managed
   layer, written by whoever manages the host, as its accounts are
   (C.7). The local layer, `config.local.toml`, declares no source and
