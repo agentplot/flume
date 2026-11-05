@@ -516,7 +516,7 @@ fn tidied() -> Tidied {
         not_over: vec![place.clone()],
         terminal: vec![TerminalTidied {
             place,
-            profile: Some("herdr".into()),
+            profile: Some("mux".into()),
             closed: vec!["the tab fix--one".into()],
             kept: vec!["the workspace r main, held by the pane w1:p3".into()],
         }],
