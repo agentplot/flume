@@ -1,21 +1,21 @@
 ## ADDED Requirements
 
-### Requirement: A stop-short's end says until when its session is open
+### Requirement: A stop-short's end says until when its agent is kept open
 
 The end of a stage ended short needing an answer SHALL carry, where its
-agent's session is open for the answer, the time the session closes, in
-the JSON form and in the notice's words (41, 43).
+agent is kept open for the answer, the time it is kept open until, in
+the JSON form and in the notice's words (43, 198).
 
 #### Scenario: The notice of a question
 
 - **WHEN** a code agent stops short needing an answer at a time t, on a terminal that hands a running agent words
-- **THEN** the end delivered to each recipient gives its session open until t plus its `keep_open`, and the notice's words say so (41, 43)
+- **THEN** the end delivered to each recipient gives its agent kept open until t plus its `keep_open`, and the notice's words say so (43, 198)
 
 ### Requirement: A wait after an answer waits on the next end
 
 A wait on a stage SHALL answer only an end of its current start read
 after the last answer that start took in its session, so a wait after
-an answer never answers the stop-short it answered (43).
+an answer never answers the stop-short it answered (43, 198).
 
 #### Scenario: Waiting again after an answer
 

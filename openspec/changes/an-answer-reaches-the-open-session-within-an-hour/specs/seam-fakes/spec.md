@@ -3,9 +3,8 @@
 ### Requirement: The fake terminal scripts whether it hands words
 
 The fake terminal SHALL script whether it can type into a running
-agent, and the fake agent SHALL script a session that ends and an
-account spent after a stop-short, so the engine's scenarios read each
-(41, 53, 146).
+agent, and the fake agent SHALL script a session that ends after a
+stop-short, so the engine's scenarios read each (53, 96, 134, 198).
 
 #### Scenario: A fake terminal that hands no words
 

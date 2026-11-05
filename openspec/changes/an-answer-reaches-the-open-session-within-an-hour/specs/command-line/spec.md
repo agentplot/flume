@@ -5,7 +5,7 @@
 `flume launch --agent [<stage>.]keep_open=<time>` SHALL give the
 setting in the forms `--stall-after` takes, `<n>`, `<n>s`, `<n>m` or
 `<n>h`, and SHALL refuse a value of any other form, naming the field
-and the forms (7, 32, 41).
+and the forms (7, 32, 198).
 
 #### Scenario: A stage's time
 
@@ -16,3 +16,8 @@ and the forms (7, 32, 41).
 
 - **WHEN** a caller launches with `--agent keep_open=soon`
 - **THEN** the launch is refused naming `keep_open` and the forms it takes, and nothing is made (7)
+
+#### Scenario: A program's time
+
+- **WHEN** a caller launches with `--agent keep_open.claude=1h`
+- **THEN** the launch is refused naming `keep_open` and that it is one time for every program, and nothing is made (7, 198)
