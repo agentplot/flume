@@ -41,11 +41,11 @@ write either file (32, C.7; core.16).
 ### Requirement: The local layer sets only C.7's keys
 
 The local layer SHALL set only a stream's `agents`, `priority`,
-`points`, `pace`, `session` and `multiplexer`, a label's `reserve` and
-`keep_free`, the `stream` and `label` a repository's kind or a kind is
-given, the `stream` a repository is given, and a kind's agents table; a
-local file setting any other key, unreadable, or setting a value its key
-refuses, SHALL not be taken at all, the managed layer read alone (C.7).
+`points`, `pace` and `session`, a label's `reserve` and `keep_free`,
+the `stream` and `label` a repository's kind or a kind is given, the
+`stream` a repository is given, and a kind's agents table; a local file
+setting any other key, unreadable, or setting a value its key refuses,
+SHALL not be taken at all, the managed layer read alone (C.7).
 
 #### Scenario: A local file that sets a pool
 
@@ -66,11 +66,6 @@ refuses, SHALL not be taken at all, the managed layer read alone (C.7).
 
 - **WHEN** the local layer gives `[streams.nightly]` one agent and `[kinds.chore] stream = "nightly"`, and the managed layer gives `[host] pool = "personal"`
 - **THEN** the host declares `nightly` with one agent from the local layer and the pool `personal` from the host's, and a chore runs in it (143, C.7)
-
-#### Scenario: A stream's multiplexer set locally
-
-- **WHEN** the managed layer gives `[host] multiplexer = "herdr"` and `[streams.trial] multiplexer = "printed"`, and the local layer gives `[streams.trial] multiplexer = "herdr"`
-- **THEN** the local layer is taken, `trial` reads `herdr` from `stream` in the local layer, and status gives it with that layer (190, C.7, S91)
 
 ### Requirement: The managed layer pins keys
 
@@ -114,20 +109,3 @@ C.7; core.30).
 
 - **WHEN** status is asked of a host whose local layer sets `[pools.work]`
 - **THEN** both forms give the local layer not taken, naming `pools.work`, and the JSON form every value from `managed` (56, S83)
-
-### Requirement: A stream's view, terminal app and title are the managed layer's
-
-A stream's `view`, `terminal_app` and `title`, and every key of
-`[host]`, SHALL be the managed layer's alone: a local file that sets one
-SHALL not be taken at all, status naming the key, the managed layer read
-alone (186, C.7).
-
-#### Scenario: A stream's view set locally
-
-- **WHEN** the local layer gives `[streams.work] view = "app"`
-- **THEN** no key of it is taken, and status names `streams.work.view` (186, C.7)
-
-#### Scenario: A stream's title or the host's multiplexer set locally
-
-- **WHEN** the local layer gives `[streams.work] title = "Mine"`, or `[host] multiplexer = "herdr"`
-- **THEN** no key of it is taken, and status names `streams.work.title`, or `host.multiplexer` (186, C.7)
