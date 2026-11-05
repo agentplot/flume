@@ -16,6 +16,7 @@ mod deliver;
 mod end;
 mod ends;
 mod held;
+mod kinds_lock;
 mod launch;
 mod prompt;
 mod reading;
@@ -37,6 +38,7 @@ pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
+pub use kinds_lock::{KindsLock, LockOf};
 pub use prompt::group_name;
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,

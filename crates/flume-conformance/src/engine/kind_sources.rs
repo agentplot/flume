@@ -3,7 +3,8 @@
 //! the host declares searched alone where it is named, a bare name never
 //! reaching one, the versions side by side, and nothing from outside run
 //! but as a lock records its content; a source's fault refuses only the
-//! launches naming it, and a place keeps the kind its launch read.
+//! launches naming it, and a place keeps the kind its launch read; and
+//! `flume kinds lock` recording a kind's content, or removing it (74, 155).
 
 use super::world::*;
 use crate::seams::kinds::{entry, hash_of};
@@ -128,7 +129,220 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["21", "156"],
             run: a_package_edited_after_a_launch,
         },
+        Scenario {
+            name: "kind sources: flume kinds lock records a host's source's kind and flume's own, each at its content's hash, in the host's lock and a working copy's, answering the lock and each entry",
+            cites: &["155", "156", "74"],
+            run: kinds_locked,
+        },
+        Scenario {
+            name: "kind sources: flume kinds lock --hash naming a hash the content does not have is refused naming both, the host's lock as it was",
+            cites: &["155", "156"],
+            run: a_hash_the_content_does_not_have,
+        },
+        Scenario {
+            name: "kind sources: flume kinds lock of the repository's kind is refused as needing no lock, and of a kind named without its version as not whole, the host's lock as it was",
+            cites: &["155"],
+            run: an_identity_no_lock_records,
+        },
+        Scenario {
+            name: "kind sources: flume kinds lock --remove takes an entry out, reading no package, and run again changes nothing",
+            cites: &["155", "74"],
+            run: a_removal_run_twice,
+        },
+        Scenario {
+            name: "kind sources: flume kinds lock never writes over a lock that cannot be read",
+            cites: &["155", "74"],
+            run: a_lock_kinds_lock_cannot_read,
+        },
     ]
+}
+
+/// `flume kinds lock` of `kinds` in the host's lock, removing where
+/// `remove` says, with `hash` where one is given.
+fn lock_host(
+    world: &World,
+    kinds: &[&str],
+    remove: bool,
+    hash: Option<&str>,
+) -> flume_core::Answer {
+    world.engine.lock_kinds(&flume_core::KindsLock {
+        of: flume_core::LockOf::Host,
+        kinds: kinds.iter().map(|kind| kind.to_string()).collect(),
+        remove,
+        hash: hash.map(str::to_string),
+    })
+}
+
+/// The entries the host's lock records on the fake.
+fn host_entries(world: &World) -> Vec<LockEntry> {
+    match world.kinds.read_lock_file(HOST_LOCK) {
+        LockRead::Read { entries } => entries,
+        _ => vec![],
+    }
+}
+
+fn kinds_locked(_: &()) -> Outcome {
+    let world = World::new();
+    holds(&world, "acme", ACME, &[("review", 1, '1')]);
+    let own = own_hash(&world, "change", 1)?;
+    let answer = lock_host(&world, &["acme/review@1", "flume/change@1"], false, None);
+    ensure_eq!(
+        answer,
+        flume_core::Answer::Locked {
+            lock_file: HOST_LOCK.into(),
+            recorded: vec![
+                flume_core::LockedKind {
+                    kind: "acme/review@1".into(),
+                    hash: hash_of('1'),
+                },
+                flume_core::LockedKind {
+                    kind: "flume/change@1".into(),
+                    hash: own.clone(),
+                },
+            ],
+            removed: vec![],
+        },
+        "the answer"
+    );
+    ensure_eq!(
+        host_entries(&world),
+        vec![
+            entry("acme", "review", 1, &hash_of('1')),
+            entry("flume", "change", 1, &own),
+        ],
+        "the host's lock"
+    );
+    let writes = world.kinds.log.count("write_lock");
+    lock_host(&world, &["acme/review@1"], false, None);
+    ensure_eq!(
+        world.kinds.log.count("write_lock"),
+        writes,
+        "writes of a lock run again"
+    );
+    let copy = world.engine.lock_kinds(&flume_core::KindsLock {
+        of: flume_core::LockOf::WorkingCopy {
+            dir: "/work/copy".into(),
+        },
+        kinds: vec!["acme/review@1".into()],
+        remove: false,
+        hash: Some(hash_of('1')),
+    });
+    ensure!(
+        matches!(&copy, flume_core::Answer::Locked { lock_file, .. } if lock_file == "/work/copy/.config/flume.lock"),
+        "the working copy's lock: {copy:?}"
+    );
+    ensure_eq!(
+        world.kinds.read_lock_file("/work/copy/.config/flume.lock"),
+        LockRead::Read {
+            entries: vec![entry("acme", "review", 1, &hash_of('1'))]
+        },
+        "the working copy's lock"
+    );
+    Ok(())
+}
+
+fn a_hash_the_content_does_not_have(_: &()) -> Outcome {
+    let world = World::new();
+    holds(&world, "acme", ACME, &[("review", 1, '1')]);
+    host_locks(&world, vec![entry("acme", "lint", 1, &hash_of('2'))]);
+    let reason = refused(&lock_host(
+        &world,
+        &["acme/review@1"],
+        false,
+        Some("sha256:00"),
+    ))?;
+    ensure!(
+        reason.contains("sha256:00") && reason.contains(&hash_of('1')),
+        "the refusal names not both hashes: {reason}"
+    );
+    ensure_eq!(world.kinds.log.count("write_lock"), 0, "locks written");
+    ensure_eq!(
+        host_entries(&world),
+        vec![entry("acme", "lint", 1, &hash_of('2'))],
+        "the host's lock"
+    );
+    Ok(())
+}
+
+fn an_identity_no_lock_records(_: &()) -> Outcome {
+    let world = World::new();
+    holds(&world, "acme", ACME, &[("review", 1, '1')]);
+    let repository = refused(&lock_host(&world, &["repo/bump@1"], false, None))?;
+    ensure!(
+        repository.contains("repo/bump@1") && repository.contains("the repository's"),
+        "the refusal names not the repository's kinds as needing no lock: {repository}"
+    );
+    let bare = refused(&lock_host(&world, &["acme/review"], false, None))?;
+    ensure!(
+        bare.contains("acme/review") && bare.contains("<source>/<name>@<version>"),
+        "the refusal names not the whole identity as required: {bare}"
+    );
+    ensure_eq!(world.kinds.log.count("write_lock"), 0, "locks written");
+    ensure_eq!(host_entries(&world), vec![], "the host's lock");
+    Ok(())
+}
+
+fn a_removal_run_twice(_: &()) -> Outcome {
+    let world = World::new();
+    host_locks(
+        &world,
+        vec![
+            entry("acme", "review", 1, &hash_of('1')),
+            entry("acme", "lint", 1, &hash_of('2')),
+        ],
+    );
+    let first = lock_host(&world, &["acme/lint@1"], true, None);
+    ensure_eq!(
+        first,
+        flume_core::Answer::Locked {
+            lock_file: HOST_LOCK.into(),
+            recorded: vec![],
+            removed: vec!["acme/lint@1".into()],
+        },
+        "the first removal"
+    );
+    ensure_eq!(
+        host_entries(&world),
+        vec![entry("acme", "review", 1, &hash_of('1'))],
+        "the host's lock after the first removal"
+    );
+    let second = lock_host(&world, &["acme/lint@1"], true, None);
+    ensure_eq!(
+        second,
+        flume_core::Answer::Locked {
+            lock_file: HOST_LOCK.into(),
+            recorded: vec![],
+            removed: vec![],
+        },
+        "the second removal"
+    );
+    ensure_eq!(
+        host_entries(&world),
+        vec![entry("acme", "review", 1, &hash_of('1'))],
+        "the host's lock after the second removal"
+    );
+    ensure_eq!(world.kinds.log.count("write_lock"), 1, "locks written");
+    ensure_eq!(
+        world.kinds.log.count("read_package") + world.kinds.log.count("read_source"),
+        0,
+        "packages read"
+    );
+    Ok(())
+}
+
+fn a_lock_kinds_lock_cannot_read(_: &()) -> Outcome {
+    let world = World::new();
+    holds(&world, "acme", ACME, &[("review", 1, '1')]);
+    world
+        .kinds
+        .unreadable_lock_file(HOST_LOCK, "expected `=` at line 1");
+    let reason = refused(&lock_host(&world, &["acme/review@1"], false, None))?;
+    ensure!(
+        reason.contains(HOST_LOCK) && reason.contains("expected `=`"),
+        "the refusal names not the lock and its fault: {reason}"
+    );
+    ensure_eq!(world.kinds.log.count("write_lock"), 0, "locks written");
+    Ok(())
 }
 
 /// The directories the host's sources acme and beta keep their packages

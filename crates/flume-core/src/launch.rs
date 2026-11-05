@@ -901,6 +901,18 @@ pub(crate) struct Locks {
 }
 
 impl Locks {
+    /// No lock read, for an act that names its version whole and checks
+    /// no lock (155).
+    pub(crate) fn none() -> Locks {
+        Locks {
+            repository: vec![],
+            repository_file: String::new(),
+            revision: Revision::new(""),
+            host: vec![],
+            host_file: None,
+        }
+    }
+
     /// The version a launch of `named`, of `source`, takes, with the
     /// identity it is named by: the version named, else the newest the
     /// repository's lock records, else the newest the host's records, else

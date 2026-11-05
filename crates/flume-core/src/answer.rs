@@ -66,6 +66,21 @@ pub enum Answer {
         woke: Woke,
         place: PlaceStatus,
     },
+    /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
+    /// at its content's hash, and each it removed (155).
+    Locked {
+        lock_file: String,
+        recorded: Vec<LockedKind>,
+        removed: Vec<String>,
+    },
+}
+
+/// A kind `flume kinds lock` recorded: its identity and its content's
+/// hash (155).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedKind {
+    pub kind: String,
+    pub hash: String,
 }
 
 /// What a wake of a role's address came to (132): its run launched by

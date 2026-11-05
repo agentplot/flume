@@ -113,6 +113,24 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Locked {
+            lock_file,
+            recorded,
+            removed,
+        } => {
+            for locked in recorded {
+                lines.push(format!(
+                    "recorded {} at {} in {lock_file}",
+                    locked.kind, locked.hash
+                ));
+            }
+            for kind in removed {
+                lines.push(format!("removed {kind} from {lock_file}"));
+            }
+            if lines.is_empty() {
+                lines.push(format!("{lock_file} is as it was"));
+            }
+        }
     }
     lines.join("\n")
 }

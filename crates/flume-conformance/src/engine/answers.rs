@@ -574,6 +574,17 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                 place: place_status(),
             },
         ),
+        (
+            "locked",
+            Answer::Locked {
+                lock_file: "/config/flume/flume.lock".into(),
+                recorded: vec![LockedKind {
+                    kind: "acme/review@1".into(),
+                    hash: format!("sha256:{}", "1".repeat(64)),
+                }],
+                removed: vec!["acme/lint@1".into()],
+            },
+        ),
     ]
 }
 
@@ -1581,6 +1592,17 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waiting_on.why",
             "woken.place.waiting_on.words",
             "woken.woke",
+        ],
+    ),
+    (
+        "locked",
+        &[
+            "locked",
+            "locked.lock_file",
+            "locked.recorded",
+            "locked.recorded[].hash",
+            "locked.recorded[].kind",
+            "locked.removed",
         ],
     ),
 ];
