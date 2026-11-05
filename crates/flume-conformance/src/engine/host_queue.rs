@@ -7,9 +7,12 @@
 //! host's agents running, bound, room and queue, and each stream's (56,
 //! 130); a host with no bound of its own and no stream's bound has no
 //! queue, and a stream's bound holds on a host that states none of its
-//! own.
+//! own. Within a stream, a stage of a label below its reserve starts
+//! first, and a stage starts only while its stream's room passes what the
+//! stream's other labels keep free (181).
 
 use super::account_pools::{account, account_of, pool, spent, stream_on};
+use super::labels::{end, labelled_kinds, placed, running, shared, waiting};
 use super::settling::{construct_begun, deliver_fix, fix_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -92,6 +95,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "host queue: a place waiting on its stream's bound while the host has room waits on the host, naming the stream's bound, never on its caller and never stalled",
             cites: &["70", "130", "143", "56"],
             run: waiting_on_a_streams_room,
+        },
+        Scenario {
+            name: "host queue: a slot another label keeps free holds a place of no label, and a place of that label launched then starts in it",
+            cites: &["70", "181"],
+            run: a_slot_another_label_keeps_free,
+        },
+        Scenario {
+            name: "host queue: a stage of a label below its reserve starts before a place of higher priority whose label runs past its own",
+            cites: &["70", "181", "46"],
+            run: a_label_below_its_reserve_before_a_places_priority,
         },
     ]
 }
@@ -738,6 +751,58 @@ fn a_pool_with_nothing_usable(_: &()) -> Outcome {
         account_of(&world, &w1, "code"),
         Some(("work".to_string(), "work-1".to_string())),
         "w1's account"
+    );
+    Ok(())
+}
+
+fn a_slot_another_label_keeps_free(_: &()) -> Outcome {
+    let world = World::new();
+    labelled_kinds(&world);
+    shared(&world, "work", Some(2), &[("operation", 1, 1)]);
+    placed(&world, "work", "build", "b1", 0)?;
+    let research = placed(&world, "work", "research", "r1", 0)?;
+    ensure!(
+        waiting(&world, &research),
+        "the place of no label did not wait"
+    );
+    let deploy = placed(&world, "work", "deploy", "d1", 0)?;
+    ensure!(
+        running(&world, &deploy),
+        "the operation place did not start in its slot"
+    );
+    ensure!(
+        waiting(&world, &research),
+        "the place of no label did not keep waiting"
+    );
+    Ok(())
+}
+
+fn a_label_below_its_reserve_before_a_places_priority(_: &()) -> Outcome {
+    let world = World::new();
+    labelled_kinds(&world);
+    shared(
+        &world,
+        "work",
+        Some(3),
+        &[("operation", 1, 0), ("construction", 1, 0)],
+    );
+    for name in ["b1", "b2", "b3"] {
+        placed(&world, "work", "build", name, 0)?;
+    }
+    let deploy = placed(&world, "work", "deploy", "d1", 0)?;
+    let build = placed(&world, "work", "build", "b4", 50)?;
+    ensure!(
+        waiting(&world, &deploy) && waiting(&world, &build),
+        "the two places do not wait"
+    );
+    end(&world, "build", "b1");
+    ensure!(
+        running(&world, &deploy),
+        "the operation place did not start"
+    );
+    ensure!(
+        waiting(&world, &build),
+        "the construction place at priority 50 did not wait"
     );
     Ok(())
 }

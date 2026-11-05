@@ -413,9 +413,11 @@ pub struct Queued {
     pub wants: RoomWanted,
 }
 
-/// The room a stage waiting for room is short of (70, 143, 145): the
+/// The room a stage waiting for room is short of (70, 143, 145, 181): the
 /// host's, its own full or taken by stages that rank ahead; its stream's,
-/// whose bound its agents running have reached; or its pool's, every
+/// whose bound its agents running have reached; its stream's room past
+/// what the stream's other labels keep free and do not use, naming those
+/// labels; or its pool's, every
 /// account that runs its program spent or at its own bound, with the
 /// soonest time one stops being spent, none where none is spent. A stage
 /// whose pool holds no account of its program waits on no room: it is
@@ -428,10 +430,23 @@ pub enum RoomWanted {
         stream: String,
         bound: u32,
     },
+    KeptFree {
+        stream: String,
+        labels: Vec<String>,
+    },
     Pool {
         pool: String,
         until: Option<Seconds>,
     },
+}
+
+/// `items` as a person reads a list: `a`, `a and b`, `a, b and c`.
+pub(crate) fn and_list(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
 }
 
 impl RoomWanted {
@@ -442,6 +457,10 @@ impl RoomWanted {
             RoomWanted::Stream { stream, bound } => {
                 format!("the stream {stream}'s room, at its bound of {bound}")
             }
+            RoomWanted::KeptFree { stream, labels } => format!(
+                "the stream {stream}'s room, the rest kept free for {}",
+                and_list(labels)
+            ),
             RoomWanted::Pool {
                 pool,
                 until: Some(until),

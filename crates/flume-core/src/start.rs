@@ -306,8 +306,13 @@ impl Engine {
             return Err(Start::NoPlace);
         };
         let place = &read.state.place;
-        let resolution = self.resolution(place, &place.kind.stages[index]);
         let queue = admit.queue();
+        // A stream whose labels are at fault starts no stage: its words
+        // refuse the start before its settings are resolved (4, 181, 182).
+        let resolution = match queue.stream(&place.stream.name).fault {
+            Some(fault) => Err(fault),
+            None => self.resolution(place, &place.kind.stages[index]),
+        };
         let now = self.host.now();
         let affinity = queue
             .pool_of(&place.stream.name)
@@ -433,7 +438,13 @@ impl Engine {
             if let Admit::Queue(queue) = admit {
                 let program = resolution.resolved.settings.program.as_deref();
                 if matches!(chosen, Choice::Wait)
-                    || queue.must_wait(id, &held.place.stream.name, program, held.priority)
+                    || queue.must_wait(
+                        id,
+                        &held.place.stream.name,
+                        label.as_ref().map(|label| label.name.as_str()),
+                        program,
+                        held.priority,
+                    )
                 {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::WaitingForRoom;
