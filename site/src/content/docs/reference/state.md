@@ -144,7 +144,7 @@ Each place:
 | `readiness` | each readiness step, whether it passed and what it printed |
 | `stages` | each stage: `name`, `state`, `starts`, `end`, `conversation`, and the part or setting it was refused for |
 | `current` | the current stage's name |
-| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity`, the intent's affinity for the agent's `program`, or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; and, for the agent of a start after a spent agent, `conversation`: `from`, the spent agent's start, `carried`, and `why` where it was not carried, naming a variable and never a path |
+| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity`, the intent's affinity for the agent's `program`, or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; `session`, the herdr session it opened in, `name`, `null` for the terminal's own, and `from`: `launch`, `stream`, `stream-name` or `own`, none where it opened beside a pane; and, for the agent of a start after a spent agent, `conversation`: `from`, the spent agent's start, `carried`, and `why` where it was not carried, naming a variable and never a path |
 | `head` | the place's branch head |
 | `delivered` | whether the current stage's deliverable exists |
 | `tasks` | a change's tasks ticked and in all |
@@ -157,6 +157,7 @@ Each place:
 | `holds`, `hold_words` | each hold and its words |
 | `priority` | the place's priority |
 | `stream` | the stream the place runs in, `name` and `from`: `launch`, `intent`, `host-repository-kind`, `host-repository`, `host-kind` or `default` |
+| `label` | the place's label as it would resolve at a start now, `name` and `from`: `host-repository-kind`, `host-kind` or `kind`; `null` where nothing gives one |
 | `intent` | the intent the place serves: `from` `launch` with its `name`, or `base` with its `repository` and `base`; and its `digest` |
 | `moves` | each move between accounts, of a stage (`on` `stage` with its `stage`) or of the intent (`on` `intent` with its `program`, the program whose account moved, none on a move an earlier release recorded): `from`, `to`, `why`, `at`, and `cache`, `lost`; and `carried`, whether a stage's conversation went with it, where its agent was spent |
 | `unsettled` | each start whose agent began without its settings: `stage`, `start`, `at`, the variables `missing` and `different` by name, `program`, whether the program differed, `session`, `true` where it came up in another session than the one its start resumes, and `mode`, where the mode did, with `asked` and `began` |
@@ -176,13 +177,14 @@ The host:
 |---|---|
 | `running` | agents running on the host, every caller's |
 | `bound`, `room` | the host's bound, and how many more may start; `null` with no bound |
-| `queue` | the stages waiting for room, in the order they start, each with its stream, its priority and the room it wants. That room is the host's, its stream's, or a usable account of its pool. A stage whose pool holds no account of its program waits for none: it is refused ([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)). |
-| `streams` | each stream: `name`, `priority`, `running`, `bound`, `room` and `queue`; `bound` and `room` `null` where the stream has no bound of its own |
+| `queue` | the stages waiting for room, in the order they start, each with its stream, its `label`, its priority and the room it wants. That room, by `room`, is the host's, `host`; its stream's, `stream`, at its `bound`; its stream's past what other labels keep free, `kept-free`, naming those `labels`; or a usable account of its pool, `pool`. A stage whose pool holds no account of its program waits for none: it is refused ([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)). |
+| `streams` | each stream: `name`, `session`, the herdr session its agents open in with `from`, `stream`, `stream-name` or `own`, `priority`, `running`, `bound`, `room` and `queue`, `bound` and `room` `null` where the stream has no bound of its own; `labels`, each with its `name`, `reserve`, `keep_free`, `running` and `waiting`; `reserves`, `held`, `passed-over` where the stream states no bound, or `none` where it gives no label a share; and `refused`, why its labels refuse each of its starts, `null` where they do not |
 | `pools` | each pool: `name`, `strategy` and `accounts`, each account's `name`, `program`, `running`, `bound` and `spent_until`, `null` where it is not spent |
 | `watch` | the terminal's watch, `none` with no herdr plugin running |
 | `bases` | for each repository and base, its places running, asking, waiting on their caller and stalled, and the line shown in herdr |
 | `addresses` | each role's address with ends pending, and why its run was not woken |
 | `terminal_kept` | what a tidy kept in the terminal because something flume did not make holds it |
+| `configuration` | the host's configuration: `local`, its local layer's `state`, `no-file`, `taken` or `not-taken` with each of its `keys` the local layer may not set or its `fault`; `values`, every value by its dotted `key`, as TOML writes it, with its `layer`, `managed` or `local`, an account's variables `<set>`; and `passed_over`, each local `key` a `pin` holds |
 
 The JSON only ever gains fields, so a tool reading it keeps working
 across releases.

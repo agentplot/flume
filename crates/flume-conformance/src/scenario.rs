@@ -91,6 +91,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         starts_unready: true,
         lands: true,
         agents: KindSettings::default(),
+        label: None,
         stages: vec![Stage {
             name: "code".into(),
             prompt: "{{brief}}\n\n{{needs}}".into(),

@@ -2,7 +2,8 @@
 //! its readiness, teardown and agents run in it, no branch moved by flume
 //! but its own, no question answered for its agent, and a place kept
 //! where it was made though the place seam now makes one elsewhere (3,
-//! 76; record 0027).
+//! 76; record 0027); and a base whose places open in two sessions given
+//! once for each of its workspaces (139; record 0031).
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -34,6 +35,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "places: a place made where the place seam no longer makes one is read, submitted and tidied where it stands, and a launch of its kind and name is refused",
             cites: &["3", "76", "77", "64", "111"],
             run: an_earlier_place_where_it_stands,
+        },
+        Scenario {
+            name: "places: a base with places in two sessions, each holding a workspace for it, is given in status's bases once for each, with one count and its own workspace",
+            cites: &["139", "107", "143"],
+            run: one_base_in_two_sessions,
         },
     ]
 }
@@ -207,6 +213,46 @@ fn an_earlier_place_where_it_stands(_: &()) -> Outcome {
         world.place.log.of("remove"),
         vec![format!("remove {}", earlier.0)],
         "removes"
+    );
+    Ok(())
+}
+
+fn one_base_in_two_sessions(_: &()) -> Outcome {
+    let world = World::new();
+    for name in ["work", "personal"] {
+        world.host.set_stream(name, Some(Stream::default()));
+    }
+    for (stream, name) in [("work", "one"), ("personal", "two")] {
+        launched(&world.engine.launch(&Launch {
+            stream: Some(stream.into()),
+            ..launch("fix", name, Some("x"))
+        }))?;
+    }
+    let flume_core::Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    ensure_eq!(host.bases.len(), 2, "the base's entries");
+    ensure!(
+        host.bases
+            .iter()
+            .all(|base| base.base == "main" && base.count == host.bases[0].count),
+        "the base's entries differ in their count: {:?}",
+        host.bases
+    );
+    ensure_eq!(host.bases[0].count.running, 2, "the base's places running");
+    let mut shown: Vec<Option<String>> = host
+        .bases
+        .iter()
+        .map(|base| base.shown_at.clone())
+        .collect();
+    shown.sort();
+    ensure_eq!(
+        shown,
+        vec![
+            Some("workspace repository main in personal".to_string()),
+            Some("workspace repository main in work".to_string()),
+        ],
+        "each workspace of the base"
     );
     Ok(())
 }
