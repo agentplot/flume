@@ -101,7 +101,7 @@ identities, hashes and locks (design, *What this change rests on*).
   - its *Unlocked, then locked by the repository*;
   - its *A lock that cannot be read*;
   - its *A file with no kinds_dir*.
-- [ ] 6.2 Give the person's form of status the kind's line and the host's sources as design 9 has them (design 9; 56). True when `sluice exec main -- moon run flume:test` passes with `print.rs` unit tests of the place-status spec's three places and the host's sources with a fault.
+- [x] 6.2 Give the person's form of status the kind's line and the host's sources as design 9 has them (design 9; 56). True when `sluice exec main -- moon run flume:test` passes with `print.rs` unit tests of the place-status spec's three places and the host's sources with a fault.
 - [ ] 6.3 Add to `crates/flume/tests/profiles/tools/walkthroughs.rs` design 13's walkthrough under the printed command with the stand-in (design 12, 13; 21, 154, 155, 159):
   - a scratch host's source `acme` holds `review@1`, a one-stage kind that commits and lands, locked by `flume kinds lock --host --hash`;
   - a launch of `acme/review` lands, status naming `acme/review@1` from the source's file and the kind's directory with its hash, locked in the host's lock;
