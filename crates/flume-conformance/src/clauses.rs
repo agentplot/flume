@@ -84,10 +84,6 @@ pub const STATECHART: &str =
 pub const MCP_SERVERS: &str =
     "the answer to section 10's question on how a host's MCP servers reach an agent";
 
-/// The change that builds record 0036: a place made ready by its merge
-/// queue's equipping of it.
-pub const READINESS: &str = "record 0036's change, a place equipped by its merge queue";
-
 /// The change that builds record 0037: each stream's multiplexer, view
 /// and terminal app, and the window a person opens its agents in.
 pub const MULTIPLEXER: &str =

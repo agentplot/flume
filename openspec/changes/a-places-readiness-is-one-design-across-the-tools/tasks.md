@@ -188,7 +188,7 @@ layer, where sluice is the one the tree pins.
 
 ## 4. Coverage and the gate
 
-- [ ] 4.1 Have the suite's clause list name nothing of this change
+- [x] 4.1 Have the suite's clause list name nothing of this change
   unbuilt, with its constant gone and S89 cited by 2.4's scenario, as
   the clause-coverage spec's scenarios have it (core.19). True when
   `sluice exec main -- moon run conformance:test conformance:coverage`
