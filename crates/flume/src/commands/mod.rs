@@ -574,8 +574,10 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         .transpose()?;
     let mut every_stage = Default::default();
     let mut settings = BTreeMap::new();
+    let working = std::env::current_dir()
+        .map_err(|error| format!("the working directory could not be read: {error}"))?;
     for given in &args.agent {
-        launch::agent(given, &mut every_stage, &mut settings)?;
+        launch::agent(given, &working, &mut every_stage, &mut settings)?;
     }
     let mut hold = vec![];
     let mut hold_words = BTreeMap::new();
