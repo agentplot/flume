@@ -2007,6 +2007,52 @@ fn open_of_an_undeclared_stream() {
 }
 
 #[test]
+fn the_keys_and_none_in_status() {
+    // 143, 186, 190: the streams spec's keys and none, read from the
+    // host's file through the binary: `office` takes the host's
+    // multiplexer, the default view, its own terminal app and its own
+    // title; `personal` the host's multiplexer and terminal app, the
+    // default view and its name for its title, each with where it came
+    // from.
+    let host = Host::new("keys-and-none");
+    host.configure(
+        "[host]\nmultiplexer = \"printed\"\nterminal_app = \"printed\"\n\
+         [streams.office]\nterminal_app = \"terminal\"\ntitle = \"Office Agents\"\n\
+         [streams.personal]\n",
+    );
+    let status = host.flume(&host.home(), &["status", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let status = status.json();
+    let display = |name: &str| {
+        let stream = stream_of(&status, name);
+        json!({
+            "multiplexer": stream["multiplexer"],
+            "view": stream["view"],
+            "terminal_app": stream["terminal_app"],
+            "title": stream["title"],
+        })
+    };
+    assert_eq!(
+        display("office"),
+        json!({
+            "multiplexer": {"profile": "printed", "from": "host"},
+            "view": {"view": "terminal", "from": "neither"},
+            "terminal_app": {"profile": "terminal", "from": "stream"},
+            "title": {"title": "Office Agents", "from": "stream"},
+        })
+    );
+    assert_eq!(
+        display("personal"),
+        json!({
+            "multiplexer": {"profile": "printed", "from": "host"},
+            "view": {"view": "terminal", "from": "neither"},
+            "terminal_app": {"profile": "printed", "from": "host"},
+            "title": {"title": "personal", "from": "stream-name"},
+        })
+    );
+}
+
+#[test]
 fn an_unknown_terminal_app() {
     // 105, 188, C.8: status answers, giving each stream's terminal app
     // `kitty` from the host and its refusal, and open is refused naming

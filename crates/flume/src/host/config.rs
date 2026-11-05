@@ -2109,7 +2109,8 @@ label = "inception"
     fn the_keys_and_none() {
         // 143, 186, 190: a stream's multiplexer, view and terminal app its
         // own, else the host's, else the default; its title its own, the
-        // core naming it by its name where none.
+        // core naming it by its name where none, which status gives
+        // through the binary in commands.rs's the_keys_and_none_in_status.
         let config = HostConfig::parse(
             "[host]\nmultiplexer = \"mux\"\nterminal_app = \"app-window\"\n\
              [streams.office]\nterminal_app = \"terminal\"\ntitle = \"Office Agents\"\n\
