@@ -54,6 +54,13 @@ pub mod store {
     pub mod state_dir;
 }
 
+// ---- the window seam's profiles: a profile unit appends its module line below ----
+pub mod window {
+    pub mod ghostty;
+    pub mod printed;
+    pub mod terminal;
+}
+
 /// The program an agent runs where no layer of its settings names one:
 /// Claude Code (32, C.4; design 16).
 pub const DEFAULT_PROGRAM: &str = "claude";
@@ -78,8 +85,8 @@ pub fn defaults() -> Defaults {
 /// (105, core.3): the kinds through weir's format, the place through
 /// plain `git worktree` bound with the merge queue's data, the change
 /// through OpenSpec, the merge queue through sluice, the agent by its
-/// program, and the terminal by its name. A name it does not hold
-/// resolves to nothing, so the core refuses naming it.
+/// program, and the terminal and the window by their names. A name it
+/// does not hold resolves to nothing, so the core refuses naming it.
 #[derive(Clone, Debug, Default)]
 pub struct BuiltIn {
     /// The login environment the place's steps run in, the host user's
@@ -255,13 +262,15 @@ impl Resolver for BuiltIn {
         terminal_profiles()
     }
 
-    /// No window profile is built in yet (188).
-    fn window(&self, _profile: &str) -> Option<Arc<dyn Window>> {
-        None
+    /// The window profile named `profile`, Ghostty's started in the login
+    /// environment the resolver was given where it was given one; none
+    /// for a name it does not hold (105, 188).
+    fn window(&self, profile: &str) -> Option<Arc<dyn Window>> {
+        window(profile, self.login.as_deref())
     }
 
     fn window_profiles(&self) -> Vec<String> {
-        vec![]
+        window_profiles()
     }
 }
 
@@ -429,6 +438,40 @@ pub fn terminal(
             "the host's configuration names the terminal {other}, and no terminal profile is named {other}; the terminal profiles there are: {}",
             terminal_profiles().join(", ")
         )),
+    }
+}
+
+/// The window profiles built in, by the name `terminal_app` gives them;
+/// the printed window where none names one (105, 188, C.8).
+pub fn window_profiles() -> Vec<String> {
+    vec![
+        window::ghostty::NAME.into(),
+        window::terminal::NAME.into(),
+        window::printed::NAME.into(),
+    ]
+}
+
+/// The window profile `name` names, for the host's own system, Ghostty's
+/// started in exactly `login` for the host user's login environment where
+/// it is given one; none for a name no profile holds (105, 188, C.8).
+pub fn window(name: &str, login: Option<&[(String, String)]>) -> Option<Arc<dyn Window>> {
+    match name {
+        window::printed::NAME => Some(Arc::new(window::printed::PrintedWindow)),
+        window::ghostty::NAME => {
+            let ghostty = window::ghostty::Ghostty::new();
+            Some(Arc::new(match login {
+                Some(login) => {
+                    let login: Vec<(&str, &str)> = login
+                        .iter()
+                        .map(|(name, value)| (name.as_str(), value.as_str()))
+                        .collect();
+                    ghostty.with_login(&login)
+                }
+                None => ghostty,
+            }))
+        }
+        window::terminal::NAME => Some(Arc::new(window::terminal::TerminalApp::new())),
+        _ => None,
     }
 }
 

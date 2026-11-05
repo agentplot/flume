@@ -2111,8 +2111,8 @@ label = "inception"
         // own, else the host's, else the default; its title its own, the
         // core naming it by its name where none.
         let config = HostConfig::parse(
-            "[host]\nmultiplexer = \"herdr\"\nterminal_app = \"ghostty\"\n\
-             [streams.office]\nterminal_app = \"terminal\"\ntitle = \"Office Herdr\"\n\
+            "[host]\nmultiplexer = \"mux\"\nterminal_app = \"app-window\"\n\
+             [streams.office]\nterminal_app = \"terminal\"\ntitle = \"Office Agents\"\n\
              [streams.personal]\n",
         )
         .unwrap();
@@ -2127,30 +2127,30 @@ label = "inception"
         assert_eq!(
             config.display_for("office"),
             StreamDisplay {
-                multiplexer: held("herdr", NamedBy::Host),
+                multiplexer: held("mux", NamedBy::Host),
                 view: neither.clone(),
                 terminal_app: held("terminal", NamedBy::Stream),
             }
         );
         assert_eq!(
             config.streams["office"].title.as_deref(),
-            Some("Office Herdr")
+            Some("Office Agents")
         );
         assert_eq!(
             config.display_for("personal"),
             StreamDisplay {
-                multiplexer: held("herdr", NamedBy::Host),
+                multiplexer: held("mux", NamedBy::Host),
                 view: neither,
-                terminal_app: held("ghostty", NamedBy::Host),
+                terminal_app: held("app-window", NamedBy::Host),
             }
         );
         assert_eq!(config.streams["personal"].title, None);
         let config = HostConfig::parse(
-            "[host]\nview = \"app\"\n[streams.work]\nmultiplexer = \"herdr\"\nview = \"terminal\"\n",
+            "[host]\nview = \"app\"\n[streams.work]\nmultiplexer = \"mux\"\nview = \"terminal\"\n",
         )
         .unwrap();
         let work = config.display_for("work");
-        assert_eq!(work.multiplexer, held("herdr", NamedBy::Stream));
+        assert_eq!(work.multiplexer, held("mux", NamedBy::Stream));
         assert_eq!(
             work.view,
             ViewHeld {
@@ -2175,17 +2175,16 @@ label = "inception"
     fn the_word_written_before() {
         // C.7: `[host] terminal` read as `[host] multiplexer`, and both
         // refused naming both.
-        let config = HostConfig::parse("[host]\nterminal = \"herdr\"\n").unwrap();
-        assert_eq!(config.display_for("default").multiplexer.profile, "herdr");
+        let config = HostConfig::parse("[host]\nterminal = \"mux\"\n").unwrap();
+        assert_eq!(config.display_for("default").multiplexer.profile, "mux");
         assert_eq!(
             config.display_for("default").multiplexer.from,
             NamedBy::Host
         );
-        let config = HostConfig::parse("[host]\nmultiplexer = \"herdr\"\n").unwrap();
-        assert_eq!(config.terminal.as_deref(), Some("herdr"));
-        let refused =
-            HostConfig::parse("[host]\nterminal = \"herdr\"\nmultiplexer = \"printed\"\n")
-                .unwrap_err();
+        let config = HostConfig::parse("[host]\nmultiplexer = \"mux\"\n").unwrap();
+        assert_eq!(config.terminal.as_deref(), Some("mux"));
+        let refused = HostConfig::parse("[host]\nterminal = \"mux\"\nmultiplexer = \"printed\"\n")
+            .unwrap_err();
         assert!(
             refused.contains("terminal") && refused.contains("multiplexer"),
             "{refused}"
@@ -2231,25 +2230,25 @@ label = "inception"
         // 190, C.7, S91: a stream's multiplexer a key the local layer may
         // set, kept with its layer.
         let config = HostConfig::layers(
-            "[host]\nmultiplexer = \"herdr\"\n[streams.trial]\nmultiplexer = \"printed\"\n",
-            Some("[streams.trial]\nmultiplexer = \"herdr\"\n"),
+            "[host]\nmultiplexer = \"mux\"\n[streams.trial]\nmultiplexer = \"printed\"\n",
+            Some("[streams.trial]\nmultiplexer = \"mux\"\n"),
         )
         .unwrap();
         assert_eq!(config.configuration.local, LocalLayer::Taken);
         assert_eq!(
             config.display_for("trial").multiplexer,
             ProfileHeld {
-                profile: "herdr".into(),
+                profile: "mux".into(),
                 from: NamedBy::Stream,
             }
         );
         assert_eq!(
             value_at(&config, "streams.trial.multiplexer"),
-            Some(("\"herdr\"".into(), ConfigLayer::Local))
+            Some(("\"mux\"".into(), ConfigLayer::Local))
         );
         assert_eq!(
             value_at(&config, "host.multiplexer"),
-            Some(("\"herdr\"".into(), ConfigLayer::Managed))
+            Some(("\"mux\"".into(), ConfigLayer::Managed))
         );
     }
 
@@ -2272,7 +2271,7 @@ label = "inception"
         // C.7; record 0032: a stream's terminal app and title, and every
         // key of `[host]`, the managed layer's alone; open uses the
         // managed layer's terminal app.
-        let managed = format!("{WORK}[host]\nterminal_app = \"ghostty\"\n");
+        let managed = format!("{WORK}[host]\nterminal_app = \"app-window\"\n");
         let config = HostConfig::layers(
             &managed,
             Some("[streams.work]\nterminal_app = \"terminal\"\n"),
@@ -2288,13 +2287,13 @@ label = "inception"
         assert_eq!(
             config.display_for("work").terminal_app,
             ProfileHeld {
-                profile: "ghostty".into(),
+                profile: "app-window".into(),
                 from: NamedBy::Host,
             }
         );
         for (local, key) in [
             ("[streams.work]\ntitle = \"Mine\"\n", "streams.work.title"),
-            ("[host]\nmultiplexer = \"herdr\"\n", "host.multiplexer"),
+            ("[host]\nmultiplexer = \"mux\"\n", "host.multiplexer"),
             ("[host]\nview = \"app\"\n", "host.view"),
             ("[host]\nterminal_app = \"terminal\"\n", "host.terminal_app"),
         ] {

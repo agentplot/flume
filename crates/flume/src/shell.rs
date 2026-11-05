@@ -15,6 +15,21 @@ pub fn quote(word: &str) -> String {
     }
 }
 
+/// `word` as one argument to a POSIX shell, standing after a command's
+/// name: as [`quote`] gives it, `=` plain too, so a variable `env` is
+/// given reads as written (188).
+pub fn argument(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./:=@%+,".contains(c));
+    if plain {
+        word.to_string()
+    } else {
+        quote(word)
+    }
+}
+
 /// The words as one shell line, each quoted.
 pub fn words<'a>(words: impl IntoIterator<Item = &'a str>) -> String {
     words.into_iter().map(quote).collect::<Vec<_>>().join(" ")
@@ -32,5 +47,8 @@ mod tests {
         assert_eq!(quote("two words"), "'two words'");
         assert_eq!(quote("it's $HOME"), "'it'\\''s $HOME'");
         assert_eq!(words(["a", "b c"]), "a 'b c'");
+        assert_eq!(quote("A=b"), "'A=b'");
+        assert_eq!(argument("A=/b"), "A=/b");
+        assert_eq!(argument("A=/b c"), "'A=/b c'");
     }
 }

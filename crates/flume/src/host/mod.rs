@@ -25,6 +25,25 @@ use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+/// The system a profile is built for: macOS, or any other, so a profile
+/// whose program differs between them holds both paths on any host (C.8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum System {
+    MacOs,
+    Other,
+}
+
+impl System {
+    /// The system this host runs.
+    pub fn of_host() -> System {
+        if cfg!(target_os = "macos") {
+            System::MacOs
+        } else {
+            System::Other
+        }
+    }
+}
+
 /// The host this command runs on.
 #[derive(Clone, Debug)]
 pub struct RealHost {
