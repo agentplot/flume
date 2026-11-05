@@ -1,7 +1,7 @@
 ---
 number: 36
 title: A place is made ready by its merge queue's equipping, as the merge queue equips its own working copies
-status: proposed
+status: accepted
 date: 2026-11-04
 decision-makers:
 - Chuck Swanberg
@@ -9,9 +9,9 @@ decision-makers:
 
 # A place is made ready by its merge queue's equipping, as the merge queue equips its own working copies
 
-Status: proposed, for the user's yes on the design of the change `a-places-readiness-is-one-design-across-the-tools`. Nothing here binds until then.
+Status: accepted by the user on 2026-11-05, in the Plannotator Inbox, on the design of the change `a-places-readiness-is-one-design-across-the-tools` and this record ("Approve: start its code").
 
-Deciders: the user, in the brief of that change on 2026-11-04, after an answer was proposed to them without the analysis: "The thing is, Flume's job is to make the place ready. Sluice creates the branch, I believe, right? Flume was actually creating the work tree. I feel like you just gave me a solution without actually doing the analysis. I think you actually need a coding agent on [it], thinking about it comprehensively." And on why: "I don't want to feel like, too often, we're doing these point fixes and we're getting the solutions wrong ... We can't just be myopic, thinking about the one repo. We need to look at the related tools as a whole." The user's words of 2026-10-28 in record 0014 stand: one place profile, plain `git worktree`, "readied as sluice readies its own places". The analysis and the shape are the constructing agent's, put to the user in the change's design.
+Deciders: the user, in the brief of that change on 2026-11-04, after an answer was proposed to them without the analysis: "The thing is, Flume's job is to make the place ready. Sluice creates the branch, I believe, right? Flume was actually creating the work tree. I feel like you just gave me a solution without actually doing the analysis. I think you actually need a coding agent on [it], thinking about it comprehensively." And on why: "I don't want to feel like, too often, we're doing these point fixes and we're getting the solutions wrong ... We can't just be myopic, thinking about the one repo. We need to look at the related tools as a whole." The user's words of 2026-10-28 in record 0014 stand: one place profile, plain `git worktree`, "readied as sluice readies its own places". The analysis and the shape are the constructing agent's, put to the user in the change's design, which the user approved with this record on 2026-11-05, in the Plannotator Inbox: "Approve: start its code".
 Sources: `agentplot/blueprints:design/flume/requirements.md` at ebfbc0d, the definition of readiness, clauses 11, 12, 13, 20, 79, C.1, C.2, C.6, C.7, S16; `design/sluice/requirements.md` at ebfbc0d, clauses 31, 33, 56, 84, C.1, C.2, section 9; records 0014 and 0027; sluice records 0013, 0018, 0045, 0050 and 0066; this repository's `crates/flume/src/profiles/merge_queue/sluice/mod.rs` (`for_place`), `crates/flume/src/profiles.rs` (`BoundPlace::data`), `crates/flume/src/profiles/place/git_worktree/mod.rs` (`ready`, `run`, `TOOLCHAIN`) and `devenv.nix` (`flume:proto:install`); `agentplot/sluice` at 571c83f6, `crates/sluice/src/profiles/moon.rs` (`plan`, `install`, `kept_out`), `crates/sluice/src/profiles/checks.rs` (`Checks::start`, `toolchain`), `crates/sluice-core/src/session.rs` (`session_request`) and `crates/sluice-core/src/preview.rs`; `afterthought/crew` at teamless/deneb 83a5cec0, `plugin/lib/kit.py`, `plugin/lib/plan.py` (`SUBMIT`), `devenv.nix` and records 0023, 0024 and 0028; `agentplot/boomdrive` at c5396d9, `crates/boomdrive/src/clone.rs`, `view.rs`, `flume.rs`, `docs/architecture/core.md` (core.14) and record 0009; `afterthought/kit-standard` at 20468ea, rules gate.2, gate.5, toolchain.2, toolchain.4 and toolchain.5; deneb, 2026-11-05, a place of a fresh clone failing `moon setup` after its toolchain passed.
 
 ## Context and problem statement
@@ -35,7 +35,7 @@ What readies a working copy is today written in five places, and they disagree. 
 
 ## Decision outcome
 
-Option 2, proposed.
+Option 2.
 
 1. **Who.** The repository declares which tools a working copy needs: the toolchain in its policy, the runner in its policy, and the versions in `.prototools` and the runner's own files. sluice owns how a working copy is equipped for the runner, by one sequence for every working copy it runs anything in. flume owns when a place is made ready, at its launch and at the retry of a first stage whose readiness failed (12), and what happens when it fails (12, S16). crew and Boomdrive ready nothing.
 2. **What readiness is.** The toolchain the policy names; the runner's install of what the working copy pins; the runner's check of its own version; and the runner's setup. A check's services, ports and stacks are not readiness: the check brings them up itself (sluice 31, 84; sluice record 0066).

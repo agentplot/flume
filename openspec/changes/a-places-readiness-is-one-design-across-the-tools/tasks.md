@@ -29,7 +29,7 @@ layer, where sluice is the one the tree pins.
   consequences give the blueprints revision that holds the statements'
   amendment (11, 20, 79, C.1, C.2, C.6, C.7, S89; core.19). True when
   `sluice exec main -- moon run root:adrs root:format` passes.
-- [ ] 1.2 Draw core.47 in `docs/architecture/core.md` under "Branches,
+- [x] 1.2 Draw core.47 in `docs/architecture/core.md` under "Branches,
   submissions and landings", the next free id when this lands, citing
   11, 12, 20, 79, C.1 and C.6 and record 0036. The rule: "A place is made
   ready only by its merge queue's equipping of it, asked at the revision
