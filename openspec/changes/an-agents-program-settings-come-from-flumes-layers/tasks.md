@@ -17,7 +17,7 @@ appears in any answer, log line, held state or panic.
 ## 1. The record, the rules and the statement
 
 - [x] 1.1 Write the record of design 1 to 7, 16 and 18 as the user ruled its two questions, `docs/adr/<n>-an-agents-program-settings-come-from-flumes-layers.md`, `<n>` the next free number, its deciders and sources set out as records 0024's and 0026's are. Add to records 0017, 0020 and 0024 the line saying it amends them. In the same commit, amend core.30's text and details and draw core.50 into "Stages and agents" with its details, as design 18 has them (CLAUDE.md; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
-- [ ] 1.2 Have the suite's clause list read the statement at the revision of blueprints main that holds 191, 192, S95, S96 and S97 and amends 32 and 143 as the user ruled, naming the five as unbuilt by this change until group 9 cites them (clause-coverage spec; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
+- [x] 1.2 Have the suite's clause list read the statement at the revision of blueprints main that holds 191, 192, S95, S96 and S97 and amends 32 and 143 as the user ruled, naming the five as unbuilt by this change until group 9 cites them (clause-coverage spec; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
 - [ ] 1.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run root:adrs root:format conformance:format conformance:lint conformance:test conformance:coverage` passes.
 
 ## 2. Own settings in the seams
