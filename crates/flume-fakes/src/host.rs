@@ -10,8 +10,9 @@ use std::sync::{Arc, Condvar, Mutex};
 /// The host: a clock that moves only when a test advances it or a command
 /// sleeps on it, numbered secrets, files' write times, the commands of
 /// flume's that live, the bound on agents and the agents' settings its
-/// configuration states, its streams with their sessions and labels'
-/// shares, its pools of accounts, the labels it gives kinds, its
+/// configuration states, its streams with their sessions, labels'
+/// shares, titles and displays, the host's own display, its pools of
+/// accounts, the labels it gives kinds, its
 /// configuration's values with their layers, the recipient the calling
 /// command's environment names, the host user's login environment, and
 /// an exclusive room lock. It reads no configuration file (106).
@@ -21,6 +22,14 @@ pub struct FakeHost {
     pub log: Log,
     /// The lines written to the host's log (139).
     pub logged: Log,
+}
+
+/// A multiplexer, a view and a terminal app, each named or not.
+#[derive(Clone, Default)]
+struct Display {
+    multiplexer: Option<String>,
+    view: Option<View>,
+    terminal_app: Option<String>,
 }
 
 /// The room lock: taken while held, waited on by every other taker.
@@ -62,6 +71,8 @@ struct HostState {
     streams_named: BTreeMap<(Option<String>, Option<String>), String>,
     /// The host's own pool (144).
     pool: Option<String>,
+    /// The host's own multiplexer, view and terminal app (186, 190).
+    display: Display,
     /// The pools the configuration declares, by name (144).
     pools: BTreeMap<String, Pool>,
     /// The label named for a repository and kind, or a kind, by the
@@ -90,6 +101,7 @@ impl Default for FakeHost {
                 streams: BTreeMap::new(),
                 streams_named: BTreeMap::new(),
                 pool: None,
+                display: Display::default(),
                 pools: BTreeMap::new(),
                 labels_named: BTreeMap::new(),
                 configuration: HostConfiguration::default(),
@@ -199,6 +211,49 @@ impl FakeHost {
         match stream {
             Some(stream) => state.streams.insert(name.to_string(), stream),
             None => state.streams.remove(name),
+        };
+    }
+
+    /// The title the configuration declares for the stream `name`, or
+    /// none, the stream declared with nothing else where it was not (143,
+    /// 186).
+    pub fn set_title(&self, name: &str, title: Option<&str>) {
+        lock(&self.state)
+            .streams
+            .entry(name.to_string())
+            .or_default()
+            .title = title.map(str::to_string);
+    }
+
+    /// The multiplexer, view and terminal app the configuration names for
+    /// the stream `name`, each none where it names none, the stream
+    /// declared where it was not (186, 190).
+    pub fn set_display(
+        &self,
+        name: &str,
+        multiplexer: Option<&str>,
+        view: Option<View>,
+        terminal_app: Option<&str>,
+    ) {
+        let mut state = lock(&self.state);
+        let stream = state.streams.entry(name.to_string()).or_default();
+        stream.multiplexer = multiplexer.map(str::to_string);
+        stream.view = view;
+        stream.terminal_app = terminal_app.map(str::to_string);
+    }
+
+    /// The host's own multiplexer, view and terminal app, each none where
+    /// the configuration names none (186, 190).
+    pub fn set_host_display(
+        &self,
+        multiplexer: Option<&str>,
+        view: Option<View>,
+        terminal_app: Option<&str>,
+    ) {
+        lock(&self.state).display = Display {
+            multiplexer: multiplexer.map(str::to_string),
+            view,
+            terminal_app: terminal_app.map(str::to_string),
         };
     }
 
@@ -398,34 +453,38 @@ impl Host for FakeHost {
     }
 
     /// The stream's multiplexer, view and terminal app, each the
-    /// stream's key where it names one, else `fake`, a terminal view and
-    /// `fake-window`, the fakes' own (186, 190).
+    /// stream's key where it names one, else the host's, else `fake`, a
+    /// terminal view and `fake-window`, the fakes' own (186, 190).
     fn display_for(&self, stream: &str) -> StreamDisplay {
+        self.log.push(format!("display_for {stream}"));
         let state = lock(&self.state);
         let stream = state.streams.get(stream);
-        let named = |name: Option<&String>, default: &str| match name {
-            Some(name) => ProfileHeld {
-                profile: name.clone(),
-                from: NamedBy::Stream,
-            },
-            None => ProfileHeld {
-                profile: default.to_string(),
-                from: NamedBy::Neither,
-            },
+        let host = &state.display;
+        let from = |stream: bool, host: bool| match (stream, host) {
+            (true, _) => NamedBy::Stream,
+            (false, true) => NamedBy::Host,
+            (false, false) => NamedBy::Neither,
         };
+        let named = |stream: Option<&String>, host: Option<&String>, default: &str| ProfileHeld {
+            profile: stream.or(host).map_or(default, String::as_str).to_string(),
+            from: from(stream.is_some(), host.is_some()),
+        };
+        let view = stream.and_then(|stream| stream.view);
         StreamDisplay {
-            multiplexer: named(stream.and_then(|s| s.multiplexer.as_ref()), "fake"),
-            view: match stream.and_then(|s| s.view) {
-                Some(view) => ViewHeld {
-                    view,
-                    from: NamedBy::Stream,
-                },
-                None => ViewHeld {
-                    view: View::Terminal,
-                    from: NamedBy::Neither,
-                },
+            multiplexer: named(
+                stream.and_then(|stream| stream.multiplexer.as_ref()),
+                host.multiplexer.as_ref(),
+                "fake",
+            ),
+            view: ViewHeld {
+                view: view.or(host.view).unwrap_or(View::Terminal),
+                from: from(view.is_some(), host.view.is_some()),
             },
-            terminal_app: named(stream.and_then(|s| s.terminal_app.as_ref()), "fake-window"),
+            terminal_app: named(
+                stream.and_then(|stream| stream.terminal_app.as_ref()),
+                host.terminal_app.as_ref(),
+                "fake-window",
+            ),
         }
     }
 

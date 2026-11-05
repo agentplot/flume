@@ -1117,6 +1117,225 @@ fn the_terminal_holds_recipients_sessions_by_name() {
     assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
 }
 
+fn attach_command(part: &str) -> Attached {
+    Attached::Command {
+        command: ViewCommand {
+            program: "fake-terminal".into(),
+            arguments: vec!["attach".into(), part.into()],
+            environment: BTreeMap::new(),
+        },
+    }
+}
+
+/// The seam-fakes spec's scripted attach: the app's view scripted to
+/// refuse, a window's command for `work` and then the refusal, each
+/// asking logged with its view; and a command of the fake's own for its
+/// own session, shown for its app once the script is gone, and either
+/// view scripted apart from the other (187).
+#[test]
+fn a_scripted_attach() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let no_app = Attached::Refused {
+        reason: "no app".into(),
+    };
+    terminal.attaches_as(View::App, Some(no_app.clone()));
+    assert_eq!(
+        terminal.attach(Some("work"), View::Terminal),
+        attach_command("work")
+    );
+    assert_eq!(terminal.attach(Some("work"), View::App), no_app);
+    assert_eq!(
+        terminal.log.of("attach"),
+        vec!["attach work for terminal", "attach work for app"]
+    );
+
+    assert_eq!(terminal.attach(None, View::Terminal), attach_command("own"));
+    terminal.attaches_as(View::App, None);
+    assert_eq!(terminal.attach(Some("work"), View::App), Attached::Shown);
+    let no_session = Attached::Refused {
+        reason: "the terminal holds no session".into(),
+    };
+    terminal.attaches_as(View::Terminal, Some(no_session.clone()));
+    assert_eq!(terminal.attach(Some("work"), View::Terminal), no_session);
+    assert_eq!(terminal.attach(None, View::App), Attached::Shown);
+    assert_eq!(
+        terminal.log.of("attach")[2..],
+        [
+            "attach own for terminal",
+            "attach work for app",
+            "attach work for terminal",
+            "attach own for app",
+        ]
+    );
+}
+
+/// The seam-fakes spec's scripted window, the fakes' part of it: the
+/// window scripted to print `attach work` answers that line for the
+/// terminal's command under the title the host declares for `work`, its
+/// log naming one show under that title and no window opened; then it
+/// opens one and refuses as scripted. The core's open giving the line is
+/// the stream-views scenarios' (188).
+#[test]
+fn a_scripted_window() {
+    let host = Arc::new(FakeHost::default());
+    host.set_title("work", Some("Work Agents"));
+    let title = host.streams()["work"].title.clone().expect("work's title");
+    let terminal = FakeTerminal::new(host);
+    let Attached::Command { command } = terminal.attach(Some("work"), View::Terminal) else {
+        panic!("the fake terminal answers a command");
+    };
+    let window = FakeWindow::default();
+    let printed = WindowShown::Printed {
+        line: "attach work".into(),
+    };
+    window.answers(Some(printed.clone()));
+    assert_eq!(window.show(&command, &title), printed);
+    assert_eq!(
+        window.log.calls(),
+        vec!["show fake-terminal attach work titled Work Agents"]
+    );
+    assert!(window.windows().is_empty());
+
+    window.answers(None);
+    assert_eq!(window.show(&command, &title), WindowShown::Opened);
+    assert_eq!(window.windows(), vec![(command.clone(), title.clone())]);
+    let refused = WindowShown::Refused {
+        reason: "no display".into(),
+    };
+    window.answers(Some(refused.clone()));
+    assert_eq!(window.show(&command, &title), refused);
+    assert_eq!(window.windows().len(), 1);
+    assert_eq!(window.log.count("show"), 3);
+}
+
+/// The seam-fakes spec's scripted title, the fakes' part of it: the fake
+/// host's `work` titled as scripted and every other stream with none.
+/// Status giving it from `stream` is the streams scenarios' (143).
+#[test]
+fn a_scripted_title() {
+    let host = FakeHost::default();
+    host.set_stream(
+        "personal",
+        Some(Stream {
+            agents: Some(3),
+            ..Stream::default()
+        }),
+    );
+    host.set_title("work", Some("Work Agents"));
+    host.set_title("personal", Some("Personal"));
+    host.set_title("personal", None);
+    let streams = host.streams();
+    assert_eq!(streams["work"].title.as_deref(), Some("Work Agents"));
+    assert_eq!(streams["personal"].title, None);
+    assert_eq!(streams["personal"].agents, Some(3));
+    assert_eq!(streams[DEFAULT_STREAM].title, None);
+}
+
+/// The seam-fakes spec's scripted display: the host's own view `app` and
+/// `trial`'s multiplexer `other`, `trial` giving `other` from `stream`,
+/// every stream the view `app` from `host`, and every other key the
+/// fakes' own from `neither`, each asking logged; then a stream's key
+/// over the host's, and the host's over the fakes' own (143, 190).
+#[test]
+fn a_scripted_display() {
+    let host = FakeHost::default();
+    host.set_host_display(None, Some(View::App), None);
+    host.set_display("trial", Some("other"), None, None);
+    host.set_stream("work", Some(Stream::default()));
+    let held = |profile: &str, from| ProfileHeld {
+        profile: profile.into(),
+        from,
+    };
+    for name in host.streams().keys() {
+        let multiplexer = match name.as_str() {
+            "trial" => held("other", NamedBy::Stream),
+            _ => held("fake", NamedBy::Neither),
+        };
+        assert_eq!(
+            host.display_for(name),
+            StreamDisplay {
+                multiplexer,
+                view: ViewHeld {
+                    view: View::App,
+                    from: NamedBy::Host,
+                },
+                terminal_app: held("fake-window", NamedBy::Neither),
+            },
+            "{name}'s display"
+        );
+    }
+    assert_eq!(
+        host.log.of("display_for"),
+        vec![
+            "display_for default",
+            "display_for trial",
+            "display_for work"
+        ]
+    );
+
+    host.set_host_display(Some("host-terminal"), None, Some("host-window"));
+    host.set_display("trial", None, Some(View::Terminal), Some("trial-window"));
+    assert_eq!(
+        host.display_for("trial"),
+        StreamDisplay {
+            multiplexer: held("host-terminal", NamedBy::Host),
+            view: ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Stream,
+            },
+            terminal_app: held("trial-window", NamedBy::Stream),
+        }
+    );
+    assert_eq!(
+        host.display_for("work").view,
+        ViewHeld {
+            view: View::Terminal,
+            from: NamedBy::Neither,
+        }
+    );
+    assert_eq!(
+        host.display_for("work").terminal_app,
+        held("host-window", NamedBy::Host)
+    );
+}
+
+/// The fake resolver's terminals and windows by name: none until a test
+/// names one, each the very fake it was given, with a log of its own,
+/// and a name it holds none for none (105, 188, 190).
+#[test]
+fn the_resolver_holds_terminals_and_windows_by_name() {
+    let resolver = FakeResolver::new(Arc::new(FakeKinds::default()));
+    assert!(resolver.terminal("fake").is_none());
+    assert!(resolver.window("fake-window").is_none());
+    let host = Arc::new(FakeHost::default());
+    let own = Arc::new(FakeTerminal::new(host.clone()));
+    let other = Arc::new(FakeTerminal::new(host));
+    let window = Arc::new(FakeWindow::default());
+    resolver.with_terminal("fake", own.clone());
+    resolver.with_terminal("other", other.clone());
+    resolver.with_window("fake-window", window.clone());
+
+    let Attached::Command { command } = resolver
+        .terminal("other")
+        .expect("the terminal other")
+        .attach(Some("work"), View::Terminal)
+    else {
+        panic!("the fake terminal answers a command");
+    };
+    let shown = resolver
+        .window("fake-window")
+        .expect("the window fake-window")
+        .show(&command, "Work Agents");
+    assert_eq!(shown, WindowShown::Opened);
+    assert_eq!(other.log.of("attach"), vec!["attach work for terminal"]);
+    assert!(own.log.calls().is_empty());
+    assert_eq!(window.windows(), vec![(command, "Work Agents".to_string())]);
+    assert_eq!(resolver.terminal_profiles(), vec!["fake", "other"]);
+    assert_eq!(resolver.window_profiles(), vec!["fake-window"]);
+    assert!(resolver.terminal("rex").is_none());
+    assert!(resolver.window("kitty").is_none());
+}
+
 /// The history-and-host spec's host's streams and pools: a stream's pool
 /// and the host's, each with where it came from, and the streams
 /// declared, `default` among them, as the configuration stands when

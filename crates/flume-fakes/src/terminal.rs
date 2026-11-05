@@ -54,8 +54,10 @@ struct TerminalState {
     agent_sessions: BTreeMap<String, String>,
     /// Every text sent to a session by its name, in order.
     notices: Vec<(String, String)>,
-    /// What every attach answers, the fake's own command where none.
-    attaches_as: Option<Attached>,
+    /// What every attach for a terminal view answers, and for the app's,
+    /// the fake's own answer where none.
+    attaches_terminal: Option<Attached>,
+    attaches_app: Option<Attached>,
 }
 
 /// What the next opens answer.
@@ -186,7 +188,8 @@ impl FakeTerminal {
                 sessions: BTreeMap::new(),
                 agent_sessions: BTreeMap::new(),
                 notices: vec![],
-                attaches_as: None,
+                attaches_terminal: None,
+                attaches_app: None,
             }),
             log: Log::default(),
         }
@@ -337,10 +340,15 @@ impl FakeTerminal {
         lock(&self.state).notices.clone()
     }
 
-    /// Every attach from now answers `answer`, shown or refused among
-    /// them, or the fake's own command where none (187).
-    pub fn attaches_as(&self, answer: Option<Attached>) {
-        lock(&self.state).attaches_as = answer;
+    /// Every attach for `view` from now answers `answer`, a refusal
+    /// among them, or the fake's own answer for the view where none
+    /// (187).
+    pub fn attaches_as(&self, view: View, answer: Option<Attached>) {
+        let mut state = lock(&self.state);
+        match view {
+            View::Terminal => state.attaches_terminal = answer,
+            View::App => state.attaches_app = answer,
+        }
     }
 
     pub fn refuse_opens(&self, reason: &str) {
@@ -754,18 +762,20 @@ impl Terminal for FakeTerminal {
     fn attach(&self, session: Option<&str>, view: View) -> Attached {
         let part = session.unwrap_or("own");
         self.log.push(format!("attach {part} for {}", view.name()));
-        lock(&self.state)
-            .attaches_as
-            .clone()
-            .unwrap_or_else(|| match view {
-                View::Terminal => Attached::Command {
-                    command: ViewCommand {
-                        program: "fake-terminal".into(),
-                        arguments: vec!["attach".into(), part.into()],
-                        environment: Default::default(),
-                    },
+        let state = lock(&self.state);
+        let scripted = match view {
+            View::Terminal => &state.attaches_terminal,
+            View::App => &state.attaches_app,
+        };
+        scripted.clone().unwrap_or_else(|| match view {
+            View::Terminal => Attached::Command {
+                command: ViewCommand {
+                    program: "fake-terminal".into(),
+                    arguments: vec!["attach".into(), part.into()],
+                    environment: Default::default(),
                 },
-                View::App => Attached::Shown,
-            })
+            },
+            View::App => Attached::Shown,
+        })
     }
 }

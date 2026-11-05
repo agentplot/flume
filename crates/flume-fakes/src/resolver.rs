@@ -1,4 +1,4 @@
-use crate::{lock, FakeKinds, Log};
+use crate::{lock, FakeKinds, FakeTerminal, FakeWindow, Log};
 use flume_seams::{Agent, Binding, Change, Kinds, MergeQueue, Place, Resolver, Terminal, Window};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -6,7 +6,10 @@ use std::sync::{Arc, Mutex};
 /// From profile names to fakes: the place profile with no name is the
 /// one that needs nothing beyond git, and a name it does not hold
 /// resolves to nothing. Every place it binds is logged with the
-/// repository and the merge queue whose data it is bound with.
+/// repository and the merge queue whose data it is bound with. It holds
+/// the terminals and windows a test names, `fake` the engine's own and
+/// `fake-window` the fake window where a test names them so, each with a
+/// log of its own (105, 188, 190).
 pub struct FakeResolver {
     kinds: Arc<FakeKinds>,
     state: Mutex<Profiles>,
@@ -55,6 +58,17 @@ impl FakeResolver {
 
     pub fn bind_agent(&self, program: &str, agent: Arc<dyn Agent>) {
         lock(&self.state).agents.insert(program.into(), agent);
+    }
+
+    /// The terminal profile named `name` is `terminal` from now (105,
+    /// 190).
+    pub fn with_terminal(&self, name: &str, terminal: Arc<FakeTerminal>) {
+        lock(&self.state).terminals.insert(name.into(), terminal);
+    }
+
+    /// The window profile named `name` is `window` from now (105, 188).
+    pub fn with_window(&self, name: &str, window: Arc<FakeWindow>) {
+        lock(&self.state).windows.insert(name.into(), window);
     }
 }
 
