@@ -2473,22 +2473,10 @@ fn an_agent_that_began_after_its_start_read_never_begun_is_begun_and_a_retry_lea
     );
 }
 
-/// The scratch home of herdr's named sessions: the run's own scratch,
-/// `SLUICE_TMP`, where sluice runs the suite, since its sandbox lets a
-/// check write nothing else, and the temporary folder otherwise. herdr
-/// 0.9.5 binds a session's sockets in `herdr/sessions/<name>` under it,
-/// `herdr.sock` and [`CLIENT_SOCKET`], whatever `HERDR_SOCKET_PATH` or
-/// `HERDR_CLIENT_SOCKET_PATH` says, so the tests name their sessions by
-/// one letter, each test its own, until sluice gives a run a short
-/// scratch.
-fn session_folder() -> PathBuf {
-    std::env::var_os("SLUICE_TMP")
-        .filter(|scratch| !scratch.is_empty())
-        .map_or_else(std::env::temp_dir, PathBuf::from)
-}
-
 /// The longer of the two sockets the pinned herdr binds in a named
-/// session's folder.
+/// session's folder, `herdr/sessions/<name>` under the session home,
+/// beside `herdr.sock`, whatever `HERDR_SOCKET_PATH` or
+/// `HERDR_CLIENT_SOCKET_PATH` says.
 const CLIENT_SOCKET: &str = "herdr-client.sock";
 
 /// The longest path a socket's address holds on this host, its closing
@@ -2499,26 +2487,34 @@ fn socket_path_limit() -> usize {
     address.sun_path.len() - 1
 }
 
-/// The scratch home of herdr's named sessions, shared by the run's tests,
-/// each owning the sessions it names, whose servers are stopped and
-/// folders removed when it is dropped.
+/// A test's own scratch home of herdr's named sessions, never the host's:
+/// a short link in the run's own scratch (`short_folder`), `SLUICE_TMP`
+/// under sluice, to a folder of the test's, so two tests may each name a
+/// session `work`. Its servers are stopped and its link removed when it
+/// is dropped.
 struct SessionHome {
     scratch: Scratch,
-    home: PathBuf,
-    names: Vec<&'static str>,
+    link: PathBuf,
 }
 
 impl SessionHome {
     /// The home for a test that starts the sessions `names`: refused, with
     /// the bytes, where a session's socket would not fit a socket's
-    /// address, and where a session of its names already runs there.
-    fn new(names: &[&'static str]) -> SessionHome {
+    /// address.
+    fn new(names: &[&str]) -> SessionHome {
         let scratch = Scratch::new("herdr-sessions");
-        fs::create_dir_all(scratch.path("home")).expect("the scratch home");
-        let home = session_folder();
+        fs::create_dir_all(scratch.path("home")).expect("the session home");
+        let link = short_folder().join(format!(
+            "c{}-{}",
+            std::process::id(),
+            LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = fs::remove_file(&link);
+        std::os::unix::fs::symlink(scratch.path("home"), &link)
+            .unwrap_or_else(|error| panic!("a short link at {}: {error}", link.display()));
         let limit = socket_path_limit();
         for name in names {
-            let socket = home.join(format!("herdr/sessions/{name}/{CLIENT_SOCKET}"));
+            let socket = link.join(format!("herdr/sessions/{name}/{CLIENT_SOCKET}"));
             let bytes = socket.as_os_str().len();
             assert!(
                 bytes <= limit,
@@ -2526,26 +2522,15 @@ impl SessionHome {
                  socket's path holds on this host: the session home {}, {} bytes, leaves \
                  no room for it",
                 socket.display(),
-                home.display(),
-                home.as_os_str().len()
+                link.display(),
+                link.as_os_str().len()
             );
         }
-        let session_home = SessionHome {
-            scratch,
-            home,
-            names: names.to_vec(),
-        };
-        let running = session_home.running();
-        assert!(
-            names.iter().all(|name| !running.contains_key(*name)),
-            "a session of {names:?} already runs under {}, another run's: {running:?}",
-            session_home.home.display()
-        );
-        session_home
+        SessionHome { scratch, link }
     }
 
     fn path(&self) -> &Path {
-        &self.home
+        &self.link
     }
 
     /// herdr's answer for `args`, run under this home, on the server at
@@ -2566,7 +2551,7 @@ impl SessionHome {
             }
         }
         command
-            .env(SESSION_HOME, &self.home)
+            .env(SESSION_HOME, &self.link)
             .env("HOME", self.scratch.path("home"));
         if let Some(socket) = socket {
             command.env("HERDR_SOCKET_PATH", socket);
@@ -2584,8 +2569,8 @@ impl SessionHome {
         }
     }
 
-    /// The sessions herdr lists running under this home, every test's, by
-    /// name, with their sockets.
+    /// The sessions herdr lists running under this home, by name, with
+    /// their sockets.
     fn running(&self) -> BTreeMap<String, PathBuf> {
         self.try_herdr(None, &["session", "list", "--json"])
             .unwrap_or_default()["sessions"]
@@ -2616,22 +2601,14 @@ impl SessionHome {
 
 impl Drop for SessionHome {
     fn drop(&mut self) {
-        let own = |running: BTreeMap<String, PathBuf>| {
-            running
-                .into_iter()
-                .filter(|(name, _)| self.names.contains(&name.as_str()))
-                .collect::<BTreeMap<_, _>>()
-        };
-        for socket in own(self.running()).values() {
+        for socket in self.running().values() {
             let _ = self.try_herdr(Some(socket), &["server", "stop"]);
         }
         let deadline = Instant::now() + Duration::from_secs(10);
-        while !own(self.running()).is_empty() && Instant::now() < deadline {
+        while !self.running().is_empty() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(100));
         }
-        for name in &self.names {
-            let _ = fs::remove_dir_all(self.home.join(format!("herdr/sessions/{name}")));
-        }
+        let _ = fs::remove_file(&self.link);
     }
 }
 
@@ -2669,14 +2646,12 @@ fn the_pinned_herdr_keeps_its_named_sessions_under_the_session_home() {
 fn two_streams_sessions_under_herdr() {
     // 107, S82: each fix's agent in the session the core names, each
     // session's server started headless, its workspace of the base
-    // holding the fix's tab and its agent's pane. `w` and `p` are the
-    // sessions work and personal, by the one letter the session home
-    // leaves room for (`session_folder`).
+    // holding the fix's tab and its agent's pane.
     let server = TestServer::start("herdr-streams");
-    let home = SessionHome::new(&["w", "p"]);
+    let home = SessionHome::new(&["work", "personal"]);
     let profile = server.profile().with_session_home(home.path());
     let mut panes = BTreeMap::new();
-    for (session, short) in [("w", "fix--one"), ("p", "fix--two")] {
+    for (session, short) in [("work", "fix--one"), ("personal", "fix--two")] {
         let who = identity_of(short, 1);
         let pane = opened_at(
             &server,
@@ -2756,10 +2731,9 @@ fn a_session_name_herdr_refuses_refuses_the_open_in_its_words() {
 #[test]
 fn a_place_tidied_in_two_sessions_closes_its_tab_and_workspace_in_each() {
     // 137, 138: a place whose first agent opened in flume's own session
-    // and its next in its stream's, `t`, by one letter as
-    // `two_streams_sessions_under_herdr`'s are.
+    // and its next in its stream's, `work`.
     let server = TestServer::start("herdr-two-tidy");
-    let home = SessionHome::new(&["t"]);
+    let home = SessionHome::new(&["work"]);
     let profile = server.profile().with_session_home(home.path());
     let place = server.place("fix--one");
     opened_in(
@@ -2775,7 +2749,9 @@ fn a_place_tidied_in_two_sessions_closes_its_tab_and_workspace_in_each() {
         &place,
         &identity(2),
         &server.command(&[]),
-        &OpenIn::Session { name: "t".into() },
+        &OpenIn::Session {
+            name: "work".into(),
+        },
     );
     assert_eq!(profile.tabs(&place).len(), 2, "the place's tabs");
     assert_eq!(profile.workspaces(&place).len(), 2, "the base's workspaces");
@@ -2802,7 +2778,7 @@ fn a_place_tidied_in_two_sessions_closes_its_tab_and_workspace_in_each() {
     );
     assert!(
         home.labels(&pane.socket, "workspace").is_empty(),
-        "t keeps the place's workspace"
+        "work keeps the place's workspace"
     );
     assert_eq!(profile.tabs(&place), vec![], "the tabs' records");
     assert_eq!(

@@ -231,27 +231,25 @@ test reads which variables those are from the pinned release
 keeps a session at `<it>/herdr/sessions/<name>`, its socket
 `herdr.sock` there.
 
-The tools tests' session home is the run's own scratch, `SLUICE_TMP`
-under sluice and the temporary folder run directly, and each test names
-its sessions by one letter of its own: `w` and `p` for `work` and
-`personal`, `t` for the place tidied in two sessions. sluice's sandbox
-lets a check write `SLUICE_TMP` alone, `<common dir>/sluice/.tmp/<10
-hex>`. herdr 0.9.5 binds a named session's two sockets, `herdr.sock`
-and `herdr-client.sock`, in `herdr/sessions/<name>` under the session
-home, whatever `HERDR_SOCKET_PATH` or `HERDR_CLIENT_SOCKET_PATH` says,
-and a socket's address holds 103 bytes of path on macOS. The longer
-socket's path is the session home's and 35 bytes with a one-letter
-name, and a test whose path leaves no room fails naming its bytes and
-the limit.
-The user ruled it on 2026-11-03: "Build B now: the named-session tests
-use SLUICE_TMP itself as the session home with one-letter session
-names, failing with a clear message naming the byte count wherever the
-path leaves no room. A is the right fix and is mine to make in
-agentplot/sluice later (a confined run's scratch at a short path) [...]
-C is out: a test run by hand is no verification." A, sluice giving a
-confined run's scratch a short path, returns the tests to `work` and
-`personal`. C, the named-session tests run by hand outside the gate as
-`check-live` is, verifies nothing.
+Each tools test that starts a named session has a session home of its
+own: a short link in the run's own scratch, `SLUICE_TMP` under sluice
+and the temporary folder run directly, to a folder of the test's, so
+two tests may each name a session `work`. Its sessions are named as the
+spec's scenarios name them, `work` and `personal`. sluice's sandbox lets
+a check write `SLUICE_TMP` alone, and since sluice 0.66.0 a place's
+scratch is `/tmp/sluice-<uid>/<repository's key>/<place's key>`, 45
+bytes on macOS. herdr 0.9.5 binds a named session's two sockets,
+`herdr.sock` and `herdr-client.sock`, in `herdr/sessions/<name>` under
+the session home, whatever `HERDR_SOCKET_PATH` or
+`HERDR_CLIENT_SOCKET_PATH` says, and a socket's address holds 103 bytes
+of path on macOS. `personal`'s client socket is the link's path and 42
+bytes, about 97 in all, and a test whose path leaves no room fails
+naming its bytes and the limit. The user ruled it on 2026-11-05, once
+sluice gave a place's scratch a short path: "return the session tests
+to running under sluice as designed, check herdr's two sockets fit
+under macOS's limit there". The named-session tests run by hand
+outside the gate verify nothing, as the user ruled on 2026-11-03: "a
+test run by hand is no verification."
 
 ### 3. The printed command and the fakes
 
