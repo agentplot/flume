@@ -18,6 +18,7 @@ pub mod hook;
 pub mod limit;
 pub mod mode;
 pub mod record;
+pub mod status_line;
 pub mod transcript;
 pub mod withheld;
 pub mod wrapper;

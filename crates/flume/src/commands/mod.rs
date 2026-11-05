@@ -140,7 +140,8 @@ enum Command {
     },
     /// From an agent program's hook: what the hook for `event` does with
     /// the input on standard input, in an agent flume started; nothing
-    /// elsewhere. It always exits 0 (C.4).
+    /// elsewhere. `status-line` reads no input and prints the place's
+    /// line. It always exits 0 (C.4).
     Hook {
         /// One of the plugin's hooks; any other does nothing.
         event: String,
@@ -330,7 +331,9 @@ where
     match &cli.command {
         Command::Hook { event } => {
             let mut input = String::new();
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            if crate::profiles::hook_reads_input(event) {
+                let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            }
             return Outcome {
                 text: crate::profiles::hook(event, &input, build),
                 usage: false,

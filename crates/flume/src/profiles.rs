@@ -405,12 +405,20 @@ pub fn core_with(
 }
 
 /// The words `flume hook` takes, one per hook of the agent program's
-/// plugin (C.4).
+/// plugin, and the status line its module pins (C.4; design 5).
 pub fn hook_events() -> Vec<&'static str> {
     agent::claude::hook::EVENTS
         .iter()
         .map(|(word, _)| *word)
+        .chain([agent::claude::status_line::EVENT])
         .collect()
+}
+
+/// Whether the hook for `event` reads its input on standard input: every
+/// hook of the agent program's does, and the status line reads none
+/// (design 5).
+pub fn hook_reads_input(event: &str) -> bool {
+    event != agent::claude::status_line::EVENT
 }
 
 /// What the agent program's hook for `event` answers to `input`, in the
