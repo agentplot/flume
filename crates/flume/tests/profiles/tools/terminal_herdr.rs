@@ -27,7 +27,9 @@
 //! never begun, which a retry leaves be; a nix-wrapped Claude Code
 //! started from the agent profile, a role run's pane reached by its
 //! address after a move, and a recipient on another server reached
-//! through its own socket.
+//! through its own socket; and what flume's herdr plugin's own watch
+//! writes herdr's configuration lacks, given by status while its lease
+//! is fresh.
 
 use crate::common::*;
 use flume::host::config::HostConfig;
@@ -551,7 +553,8 @@ impl Harness {
         let seam = server
             .profile()
             .with_start_timeout(HARNESS_START)
-            .with_caller(Some(caller.clone()));
+            .with_caller(Some(caller.clone()))
+            .with_plugin(Some(server.scratch.path("plugin")));
         Harness {
             server,
             seam,
@@ -708,6 +711,29 @@ impl TerminalHarness for Harness {
             socket: self.server.socket.clone(),
         }
         .session()
+    }
+
+    /// The plugin's watch on this server, its lease renewed now, having
+    /// written that herdr's configuration binds no key to the popup.
+    fn setup(&self) -> Vec<String> {
+        let words = "herdr's configuration, /h/config.toml, binds no key to flume's places";
+        let watched = self.server.scratch.path("plugin/servers/1");
+        fs::create_dir_all(&watched).expect("the plugin's server state");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the clock")
+            .as_secs();
+        fs::write(
+            watched.join("watch.lease"),
+            format!("{} {now}\n", std::process::id()),
+        )
+        .expect("the lease");
+        fs::write(
+            watched.join("setup.json"),
+            serde_json::json!([words]).to_string(),
+        )
+        .expect("setup.json");
+        vec![words.to_string()]
     }
 }
 
@@ -2448,4 +2474,143 @@ fn an_agent_that_began_after_its_start_read_never_begun_is_begun_and_a_retry_lea
             .is_none(),
         "a second agent was opened"
     );
+}
+
+/// flume's herdr plugin's own watch, run on a server of the test's own,
+/// ended with the test.
+struct PluginWatch(Child);
+
+impl Drop for PluginWatch {
+    fn drop(&mut self) {
+        // SAFETY: a signal to the watch this test started, whose trap
+        // ends its renewer and removes its lease.
+        unsafe { libc::kill(self.0.id() as libc::pid_t, libc::SIGTERM) };
+        let _ = self.0.wait();
+    }
+}
+
+/// `flume status --json` under the scratch host, the herdr terminal
+/// bound, its terminal setup.
+fn terminal_setup(server: &TestServer, flume: &Path) -> Value {
+    let mut command = Command::new(flume);
+    for (name, _) in std::env::vars_os() {
+        let name = name.to_string_lossy().into_owned();
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+            command.env_remove(name);
+        }
+    }
+    let output = command
+        .args(["status", "--json"])
+        .current_dir(server.scratch.path("home"))
+        .env("HOME", server.scratch.path("home"))
+        .env("XDG_STATE_HOME", server.scratch.path("state"))
+        .env("XDG_CONFIG_HOME", server.scratch.path("config"))
+        .env("XDG_DATA_HOME", server.scratch.path("data"))
+        .stdin(Stdio::null())
+        .output()
+        .expect("flume runs");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "flume status: {text}");
+    let answer: Value = serde_json::from_str(text.trim()).expect("status's JSON");
+    answer["status"]["host"]["terminal_setup"].clone()
+}
+
+#[test]
+fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
+    // 122, C.5, design 8: the plugin's watch, on the pinned herdr's
+    // server, reads a herdr configuration that binds no key to the popup
+    // and names no row of flume's, and writes what it lacks beside its
+    // lease; `flume status --json` gives those words as the host's
+    // terminal setup, and none once the watch has stopped.
+    let server = TestServer::start("setup");
+    let flume = Path::new(env!("CARGO_BIN_EXE_flume"));
+    let plugin = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../plugins/herdr")
+        .canonicalize()
+        .expect("the herdr plugin");
+    let plugin_state = server.scratch.path("state/herdr/plugins/agentplot.flume");
+    fs::create_dir_all(server.scratch.path("config/flume")).expect("flume's configuration");
+    fs::write(
+        server.scratch.path("config/flume/config.toml"),
+        "[host]\nterminal = \"herdr\"\n",
+    )
+    .expect("flume's configuration");
+    let herdr_config = server.scratch.path("herdr.toml");
+    fs::write(
+        &herdr_config,
+        "[[keys.command]]\nkey = \"prefix+m\"\ntype = \"plugin_action\"\ncommand = \"agentplot.sluice.board\"\n",
+    )
+    .expect("herdr's configuration");
+    let path = format!(
+        "{}:{}",
+        flume.parent().expect("flume's folder").display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let log = server.scratch.path("log/watch.log");
+    let mut command = Command::new("sh");
+    for (name, _) in std::env::vars_os() {
+        let name = name.to_string_lossy().into_owned();
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+            command.env_remove(name);
+        }
+    }
+    let watch = PluginWatch(
+        command
+            .arg(plugin.join("bin/watch.sh"))
+            .current_dir(server.scratch.path("home"))
+            .env("PATH", path)
+            .env("HOME", server.scratch.path("home"))
+            .env("XDG_STATE_HOME", server.scratch.path("state"))
+            .env("XDG_CONFIG_HOME", server.scratch.path("config"))
+            .env("XDG_DATA_HOME", server.scratch.path("data"))
+            .env("HERDR_PLUGIN_ROOT", &plugin)
+            .env("HERDR_PLUGIN_STATE_DIR", &plugin_state)
+            .env("HERDR_SOCKET_PATH", &server.socket)
+            .env("HERDR_BIN_PATH", herdr_program())
+            .env("HERDR_CONFIG_PATH", &herdr_config)
+            .env("FLUME_HERDR_TICK", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(fs::File::create(&log).expect("the watch's log"))
+            .spawn()
+            .expect("the watch starts"),
+    );
+    let written = || -> Option<Value> {
+        let servers = fs::read_dir(plugin_state.join("servers")).ok()?;
+        servers
+            .filter_map(Result::ok)
+            .find(|server| server.path().join("watch.lease").exists())
+            .and_then(|server| fs::read_to_string(server.path().join("setup.json")).ok())
+            .and_then(|text| serde_json::from_str(&text).ok())
+    };
+    server.within("the watch wrote no setup.json beside its lease", || {
+        written().is_some()
+    });
+    let lacking = written().expect("setup.json");
+    let file = herdr_config.display().to_string();
+    let words: Vec<&str> = lacking
+        .as_array()
+        .expect("an array")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(
+        words.len(),
+        2,
+        "{lacking}; the watch logged: {}",
+        fs::read_to_string(&log).unwrap_or_default()
+    );
+    assert!(
+        words[0].contains(&file) && words[0].contains("binds no key to flume's places"),
+        "{}",
+        words[0]
+    );
+    assert!(
+        words[1].contains(&file) && words[1].contains("\"$flume\""),
+        "{}",
+        words[1]
+    );
+    assert_eq!(terminal_setup(&server, flume), lacking);
+    drop(watch);
+    assert_eq!(terminal_setup(&server, flume), Value::Array(vec![]));
 }
