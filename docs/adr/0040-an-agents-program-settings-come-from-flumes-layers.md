@@ -111,6 +111,7 @@ Placement option 2 would collide with any word flume adds to an agents table lat
 ### Consequences
 
 - Clauses 4, 32, 56, 88, 143, 158, 171, 173, C.2, C.4, C.7 and section 3's settings are amended, and 191, 192, S95, S96 and S97 added, with weir's C.4, on blueprints at 068cbc0, on the branch `design/flume-an-agents-program-settings` until it reaches main (core.19). The change drafted them as 175, 176 and S76 to S78, numbers main has since taken.
+- Clause 128 and C.7's store row give the store a file written into the place's folder, through which the core writes a command's files, at blueprints 352aa32 on the branch `design/flume-the-store-writes-a-starts-files` until it reaches main (design 8; core.2, core.19).
 - Rule core.30 is amended and core.50 drawn from this record.
 - Weir's C.4 names `programs` in an agents table, the reader's to check, as it names `mode`, so weir-kinds returns it as written and flume's pin of it stays (core.4).
 - The research `research--mcp-servers-for-flumes-agents` and record 0033 decide the host's MCP servers, a table of the managed layer, not own settings; their change writes a server file for Claude Code through the same command files and adds Claude Code's MCP keys to its reserved list. The change `every-agent-shows-its-place-in-its-pane` puts flume's status line into the same `--settings` file, the layers' `statusLine` kept as the session's own beneath it.

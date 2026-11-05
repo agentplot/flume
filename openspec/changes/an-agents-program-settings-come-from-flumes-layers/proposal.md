@@ -173,7 +173,10 @@ host's `[repos."<repository>"]` table (32, 191, C.2, C.7).
   "a stream gives its agents no settings" and core.30's rule against a
   stream's settings change first (core.19). weir's C.4 names `programs`
   in an agents table, the reader's to check, so weir-kinds returns it
-  as written and flume's pin stays (core.4).
+  as written and flume's pin stays (core.4). Clause 128 and C.7's store
+  row give the store a file written into the place's folder, at
+  blueprints 352aa32 on the branch
+  `design/flume-the-store-writes-a-starts-files` (design 8).
 - `docs/adr`: record 0040, amending records 0017, 0020 and 0024;
   core.30 amended and core.50 drawn with it.
 - `crates/flume-seams`: `Settings::programs` with `ProgramSettings` and

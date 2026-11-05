@@ -633,7 +633,9 @@ The agent seam gains the part **own settings** (192):
   where a path is outside the folder. The printed command's line names
   the file as any argument (C.5). It goes with the place's folder at
   its tidy (62).
-- The store seam gains `Store::write_file(place, path, text)`, through
+- The store seam gains `Store::write_file(place, path, text)`, clause
+  128's file in the place's folder, as blueprints 352aa32 amends it on
+  the branch `design/flume-the-store-writes-a-starts-files`, through
   which the core writes them: the place's folder is the store's, and the
   core reaches nothing on the host but through a seam (core.2). The core
   checks every path is under the folder before it writes any, and the
