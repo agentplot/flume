@@ -55,6 +55,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["143", "147"],
             run: a_later_place_of_an_intent,
         },
+        Scenario {
+            name: "streams: the host's facts give a stream's session and its labels' shares, a kind's label in any repository with where it came from, and each value of the configuration with its layer, as the core reads them",
+            cites: &["143", "180", "181"],
+            run: the_hosts_sessions_labels_and_layers,
+        },
     ]
 }
 
@@ -282,6 +287,7 @@ fn a_streams_part_of_status(_: &()) -> Outcome {
             agents: Some(4),
             priority: 10,
             pool: None,
+            ..Stream::default()
         }),
     );
     let mut places = vec![];
@@ -352,6 +358,55 @@ fn a_later_place_of_an_intent(_: &()) -> Outcome {
         other.stream,
         stream("work", StreamFrom::HostRepository),
         "another intent's place's stream"
+    );
+    Ok(())
+}
+
+fn the_hosts_sessions_labels_and_layers(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream_session("work", Some("office"));
+    let operation = Share {
+        reserve: 2,
+        keep_free: 1,
+        unknown: vec![],
+    };
+    world
+        .host
+        .set_share("work", "operation", Some(operation.clone()));
+    world.host.name_label(None, "research", Some("inception"));
+    world
+        .host
+        .set_value("streams.work.agents", "3", ConfigLayer::Local);
+    let host: &dyn Host = world.host.as_ref();
+    let streams = host.streams();
+    let work = streams
+        .get("work")
+        .ok_or("the host's streams give no work")?;
+    ensure_eq!(work.session.as_deref(), Some("office"), "work's session");
+    ensure_eq!(
+        work.labels.get("operation"),
+        Some(&operation),
+        "operation's share of work"
+    );
+    for repository in [REPOSITORY, "/another"] {
+        ensure_eq!(
+            host.label_for(repository, "research"),
+            Some(LabelHeld {
+                name: "inception".into(),
+                from: LabelFrom::HostKind,
+            }),
+            "research's label in {repository}"
+        );
+    }
+    let configuration = host.configuration();
+    ensure_eq!(
+        configuration
+            .values
+            .iter()
+            .find(|value| value.key == "streams.work.agents")
+            .map(|value| (value.value.as_str(), value.layer)),
+        Some(("3", ConfigLayer::Local)),
+        "streams.work.agents and its layer"
     );
     Ok(())
 }

@@ -1,6 +1,7 @@
 //! The terminal profile that prints the command (C.5; design 12): the
 //! terminal seam's scenarios against it, its refusals among them, a tell
-//! refused with nothing typed, the command status gives, and an agent
+//! refused with nothing typed, the command status gives, the same
+//! command printed whatever session its stream names (107), and an agent
 //! read stopped once its record says its session ended (134).
 
 use crate::common::*;
@@ -150,6 +151,44 @@ fn the_command_status_gives_carries_the_prompt() {
     );
     assert_eq!(agent.state, AgentState::Unknown, "the agent's state");
     assert_eq!(agent.screen, None, "the screen");
+}
+
+#[test]
+fn a_session_names_nothing_in_the_printed_command() {
+    // 107, C.5, design 3: the command printed for an agent of a stream
+    // naming its session is the one printed for the default stream's,
+    // and status still gives the session as resolved.
+    let commands: Vec<(String, Option<SessionHeld>)> = [None, Some("office")]
+        .into_iter()
+        .map(|session| {
+            let scratch = Scratch::new("printed-session");
+            let world = World::new();
+            if let Some(session) = session {
+                world.host.set_stream_session(DEFAULT_STREAM, Some(session));
+            }
+            let place = launched(&printed(&world, &scratch).launch(&launch(
+                "fix",
+                "one",
+                Some("bump the pin"),
+            )))
+            .expect("the launch");
+            let agent = place.agent.expect("an agent in the launch's answer");
+            let printed = agent.printed.expect("no command printed");
+            (
+                printed.replace(&scratch.root.display().to_string(), "<scratch>"),
+                agent.session,
+            )
+        })
+        .collect();
+    assert_eq!(commands[0].0, commands[1].0, "the commands printed");
+    assert_eq!(
+        commands[1].1,
+        Some(SessionHeld {
+            name: Some("office".into()),
+            from: SessionFrom::Stream,
+        }),
+        "the agent's session"
+    );
 }
 
 #[test]

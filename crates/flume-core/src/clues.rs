@@ -55,6 +55,7 @@ impl Engine {
             .terminal
             .shown_at(&held.place.place_ref(), clues.agent.as_ref());
         shown_at.base = None;
+        shown_at.bases.clear();
         Some(PlaceClues {
             title: format!("{} · {}", clues.stage, clues.state),
             display_agent: held.place.short(),
@@ -98,8 +99,10 @@ impl Engine {
     }
 
     /// Every repository's base a live place stands on, with its count, the
-    /// count's one line as show gives it, and where the terminal shows it
-    /// (139).
+    /// count's one line as show gives it, and where the terminal shows it:
+    /// once for each of the base's workspaces the terminal names, each
+    /// with the one count, and once with what the terminal names of it
+    /// where it names no workspace of each session (139; record 0031).
     pub(crate) fn bases(&self) -> Vec<BaseClues> {
         let mut bases: Vec<(PlaceRef, BaseCount)> = vec![];
         for read in self.store.read_every() {
@@ -123,12 +126,20 @@ impl Engine {
         bases.sort_by(|a, b| (&a.0.repository, &a.0.base).cmp(&(&b.0.repository, &b.0.base)));
         bases
             .into_iter()
-            .map(|(place, count)| BaseClues {
-                shown_at: self.terminal.shown_at(&place, None).base,
-                repository: place.repository,
-                base: place.base,
-                line: count.to_string(),
-                count,
+            .flat_map(|(place, count)| {
+                let shown = self.terminal.shown_at(&place, None);
+                let at: Vec<Option<String>> = if shown.bases.is_empty() {
+                    vec![shown.base]
+                } else {
+                    shown.bases.into_iter().map(Some).collect()
+                };
+                at.into_iter().map(move |shown_at| BaseClues {
+                    shown_at,
+                    repository: place.repository.clone(),
+                    base: place.base.clone(),
+                    line: count.to_string(),
+                    count,
+                })
             })
             .collect()
     }

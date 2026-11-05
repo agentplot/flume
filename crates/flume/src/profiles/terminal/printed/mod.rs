@@ -16,8 +16,8 @@
 
 use crate::shell;
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, ShownAt,
-    Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Closed, Clues, Identity, OpenIn, Opened, PlaceRef, Sent, Shown,
+    ShownAt, Terminal, TerminalTidy, ToSession, Watch,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -100,7 +100,7 @@ impl Terminal for Printed {
         folder: &str,
         command: &AgentCommand,
         identity: &Identity,
-        _beside: Option<&str>,
+        _at: &OpenIn,
         _session: Option<&str>,
     ) -> Opened {
         let env = environment(folder, identity);
