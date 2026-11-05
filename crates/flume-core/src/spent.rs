@@ -3,11 +3,13 @@
 //! recorded spent in the host's own documents until the reset the
 //! agent's record names, or for an hour, so no start of any flume process
 //! on the host takes it before then; once the agent is quiet it is ended
-//! and its stage started afresh with flume's own words, on another usable
-//! account of the pool or waiting for one, counted toward no bound of the
-//! kind's and waiting on no caller (31, 112). A start under no account is
-//! read as clause 43 reads it, and no other agent on the account is
-//! ended for it.
+//! and its stage started again with flume's own words, on another usable
+//! account of the pool or waiting for one, carrying the agent's
+//! conversation where its profile answers that the account chosen reaches
+//! it and afresh otherwise, counted toward no bound of the kind's and
+//! waiting on no caller (31, 112, 179). A start under no account is read
+//! as clause 43 reads it, and no other agent on the account is ended for
+//! it.
 
 use crate::reading::AgentReading;
 use crate::start::{StartReason, Starts};
@@ -62,10 +64,11 @@ impl Engine {
 
     /// The live start `start` of the stage at `index` read spent: its
     /// account recorded spent, and, once its agent is quiet and the stage
-    /// has not delivered, the agent ended and the stage started afresh
-    /// with [`StartReason::Spent`]'s words; true when it was. A start
-    /// under no account, or whose agent's record shows no usage limit,
-    /// is left to the reading of its end (43, 146).
+    /// has not delivered, the agent ended and the stage started again with
+    /// [`StartReason::Spent`]'s words, its wait naming `start` so the next
+    /// start may carry its conversation; true when it was. A start under
+    /// no account, or whose agent's record shows no usage limit, is left
+    /// to the reading of its end (43, 146, 179).
     pub(crate) fn read_spent(
         &self,
         id: &PlaceId,
@@ -114,6 +117,11 @@ impl Engine {
                 stage.room = Some(RoomWait {
                     order,
                     words: Some(words.clone()),
+                    carry: Some(AfterSpent {
+                        start: identity.clone(),
+                        carry: true,
+                        why: None,
+                    }),
                 });
                 Step::Write(())
             });

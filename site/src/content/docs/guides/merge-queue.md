@@ -33,7 +33,7 @@ says of a place:
 |---|---|
 | `[branches."<base>"] remote` | cuts each place's branch from that remote's copy of the base, after one fetch, and judges a branch's commits against it at the tidy |
 | `[tests] toolchain` | runs it first in each new place; its output is the environment of every later step |
-| `[tests] runner = "moon"` | runs `moon setup` in each new place |
+| `[tests] runner = "moon"` | runs `moon setup` in each new place, first installing the versions a `.prototools` at the base pins with `proto install --config-mode upwards` |
 | always | runs `sluice release` in the place before removing it |
 
 ## The submission

@@ -34,6 +34,18 @@
 //!   refuses the mode asked begins in another, so every hook input that
 //!   names the mode names it as its `permission_mode`.
 //!
+//! Where the command passes `--resume <session>`, it resumes the session
+//! as that release does: it looks for `<home>/projects/<folder>/<session>.jsonl`
+//! alone, `<home>` its configuration home, `CLAUDE_CONFIG_DIR` or else
+//! `~/.claude`, and `<folder>` the working directory with every character
+//! that is not a letter or a digit written `-`. Where it finds none it
+//! prints `No conversation found with session ID: <session>` and exits 1
+//! before any hook, no session begun. Otherwise its session is the one
+//! resumed, its acts' records appended to that transcript and chained to
+//! its last, and its SessionStart names `source` `resume`, where a
+//! session not resumed names `startup`; every later hook's input names the
+//! resumed session, UserPromptSubmit's among them.
+//!
 //! The inputs of UserPromptSubmit, PreToolUse, PostToolUse and Stop name
 //! the mode the session runs in as that release names it: the
 //! `--permission-mode` passed, `manual` read as its own `default`,
@@ -73,11 +85,13 @@ fn main() {
     let mut plugin = None;
     let mut prompt = None;
     let mut mode = None;
+    let mut resume = None;
     let mut words = args.iter();
     while let Some(word) = words.next() {
         match word.as_str() {
             "--plugin-dir" => plugin = words.next().map(PathBuf::from),
             "--permission-mode" => mode = words.next().cloned(),
+            "--resume" => resume = words.next().cloned(),
             "--model" | "--append-system-prompt" | "--settings" => {
                 words.next();
             }
@@ -103,7 +117,15 @@ fn main() {
         }
     }
     let cwd = std::env::current_dir().expect("the place");
-    let mut session = Session::new(cwd, plugin, mode);
+    let resumed = resume.map(|session| {
+        let transcript = transcript_of(&cwd, &session);
+        if !transcript.is_file() {
+            eprintln!("No conversation found with session ID: {session}");
+            std::process::exit(1);
+        }
+        (session, transcript)
+    });
+    let mut session = Session::new(cwd, plugin, mode, resumed);
     let failed = session.run(prompt.as_deref(), &script);
     std::process::exit(i32::from(failed));
 }
@@ -121,6 +143,29 @@ fn submitted(prompt: &str) -> String {
     }
 }
 
+/// Where that release keeps the transcript of the session `session` run
+/// in `cwd`: `<home>/projects/<folder>/<session>.jsonl`, `<home>` its
+/// configuration home, `CLAUDE_CONFIG_DIR` or else `~/.claude`, `<folder>`
+/// the working directory with every character that is not a letter or a
+/// digit written `-`.
+fn transcript_of(cwd: &Path, session: &str) -> PathBuf {
+    let config = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
+        });
+    let project: String = cwd
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    config
+        .join("projects")
+        .join(project)
+        .join(format!("{session}.jsonl"))
+}
+
 /// One session of the stand-in.
 struct Session {
     cwd: PathBuf,
@@ -133,14 +178,23 @@ struct Session {
     calls: u32,
     /// The mode the session runs in, as every hook's input names it.
     mode: String,
+    /// Whether the session is one resumed.
+    resumed: bool,
 }
 
 impl Session {
-    fn new(cwd: PathBuf, plugin: Option<PathBuf>, mode: String) -> Session {
+    /// A new session in `cwd`, or the session `resumed` names and the
+    /// transcript it was found in.
+    fn new(
+        cwd: PathBuf,
+        plugin: Option<PathBuf>,
+        mode: String,
+        resumed: Option<(String, PathBuf)>,
+    ) -> Session {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |since| since.as_nanos());
-        let id = format!(
+        let new = format!(
             "{:08x}-{:04x}-4{:03x}-8{:03x}-{:012x}",
             (nanos >> 32) as u32,
             std::process::id() & 0xffff,
@@ -148,20 +202,25 @@ impl Session {
             (nanos >> 8) as u16 & 0xfff,
             nanos as u64 & 0xffff_ffff_ffff
         );
-        let config = std::env::var_os("CLAUDE_CONFIG_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
-            });
-        let project: String = cwd
-            .to_string_lossy()
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-            .collect();
-        let transcript = config
-            .join("projects")
-            .join(project)
-            .join(format!("{id}.jsonl"));
+        let is_resumed = resumed.is_some();
+        let (id, transcript, parent, calls) = match resumed {
+            Some((id, transcript)) => {
+                // Chained to the transcript's last record, its ids past
+                // every one the transcript holds.
+                let text = std::fs::read_to_string(&transcript).unwrap_or_default();
+                let parent = text.lines().rev().find_map(|line| {
+                    serde_json::from_str::<Value>(line)
+                        .ok()
+                        .and_then(|record| record["uuid"].as_str().map(str::to_string))
+                });
+                let calls = u32::try_from(text.lines().count()).unwrap_or(u32::MAX);
+                (id, transcript, parent, calls)
+            }
+            None => {
+                let transcript = transcript_of(&cwd, &new);
+                (new, transcript, None, 0)
+            }
+        };
         let hooks = plugin
             .as_ref()
             .and_then(|dir| std::fs::read_to_string(dir.join("hooks/hooks.json")).ok())
@@ -174,9 +233,10 @@ impl Session {
             transcript,
             hooks,
             prompt: String::new(),
-            parent: None,
-            calls: 0,
+            parent,
+            calls,
             mode,
+            resumed: is_resumed,
         }
     }
 
@@ -186,8 +246,14 @@ impl Session {
         if let Some(dir) = self.transcript.parent() {
             std::fs::create_dir_all(dir).expect("the transcript's folder");
         }
-        say(&format!("session {} in {}", self.id, self.cwd.display()));
-        self.hook("SessionStart", json!({ "source": "startup" }), None);
+        let source = if self.resumed { "resume" } else { "startup" };
+        say(&format!(
+            "session {} in {}{}",
+            self.id,
+            self.cwd.display(),
+            if self.resumed { ", resumed" } else { "" }
+        ));
+        self.hook("SessionStart", json!({ "source": source }), None);
         let mut failed = false;
         if let Some(prompt) = prompt {
             self.prompt = prompt.to_string();

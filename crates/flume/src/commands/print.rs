@@ -8,8 +8,8 @@ use flume_core::{
     Tidied, Woke,
 };
 use flume_seams::{
-    Act, HoldOn, IntentKey, Made, Readiness, SubmissionRead, UnsettledStart, WaitingOn, Waits,
-    Watch,
+    AccountFrom, Act, Conversation, HoldOn, IntentKey, Made, Readiness, SubmissionRead,
+    UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
 };
 use serde_json::{json, Value};
 
@@ -171,6 +171,9 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
                 word(json!(given.layer))
             ));
         }
+        if let Some(conversation) = &agent.conversation {
+            lines.push(conversation_line(conversation));
+        }
         if let Some(printed) = &agent.printed {
             lines.push(format!("    run: {printed}"));
         }
@@ -186,6 +189,9 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     }
     for unsettled in &place.unsettled {
         lines.push(unsettled_line(unsettled));
+    }
+    for uncarried in &place.uncarried {
+        lines.push(uncarried_line(uncarried));
     }
     if let Some(delivered) = place.delivered {
         lines.push(format!(
@@ -398,16 +404,20 @@ fn intent_words(intent: &IntentKey) -> String {
 }
 
 /// The current agent's line: its identity, program, account and state,
-/// and its mode as written with its layer, the entry it took of a table
-/// and the value passed, where a layer gave one (56, 145, 169).
+/// the account from the intent's affinity for the agent's program or the
+/// strategy, and its mode as written with its layer, the entry it took of
+/// a table and the value passed, where a layer gave one (56, 145, 147,
+/// 169).
 fn agent_line(agent: &AgentStatus) -> String {
     let mut line = format!("  agent {} ({})", agent.identity, agent.program);
     if let Some(account) = &agent.account {
+        let from = match account.from {
+            AccountFrom::Affinity => format!("the affinity for {}", agent.program),
+            AccountFrom::Strategy => "the strategy".to_string(),
+        };
         line.push_str(&format!(
-            " on the account {} of {} (from the {})",
-            account.name,
-            account.pool,
-            word(json!(account.from))
+            " on the account {} of {} (from {from})",
+            account.name, account.pool,
         ));
     }
     line.push_str(&format!(": {}", word(json!(agent.state))));
@@ -568,6 +578,34 @@ fn unsettled_line(unsettled: &UnsettledStart) -> String {
     )
 }
 
+/// Whether the current agent carries the conversation of its stage's
+/// start whose agent stopped at its account's usage limit, or why not,
+/// naming no path (56, 146, 179; core.30).
+fn conversation_line(conversation: &Conversation) -> String {
+    match &conversation.why {
+        None if conversation.carried => {
+            format!(
+                "    carries the conversation of start {}",
+                conversation.from
+            )
+        }
+        why => format!(
+            "    starts afresh after start {}: {}",
+            conversation.from,
+            why.as_deref().unwrap_or("its conversation stayed behind")
+        ),
+    }
+}
+
+/// A start that carried its stage's conversation and did not begin, with
+/// what happened (56, 146, S79).
+fn uncarried_line(uncarried: &UncarriedStart) -> String {
+    format!(
+        "  carried and not begun: {}'s start {} at {}: {}, and its stage started afresh",
+        uncarried.stage, uncarried.start, uncarried.at, uncarried.words
+    )
+}
+
 /// A stage waiting for room, with its stream, its priority and the room
 /// it is short of (56, 70, 143).
 fn queued_line(queued: &Queued) -> String {
@@ -646,10 +684,24 @@ mod tests {
             last_words: None,
             notes: vec![],
             mode: None,
+            conversation: None,
         };
         assert_eq!(
             agent_line(&agent),
             "  agent flume:r:fix--one:code:2 (agent) on the account work-2 of work (from the strategy): working"
+        );
+        let kept = AgentStatus {
+            program: "other".into(),
+            account: Some(AccountHeld {
+                pool: "work".into(),
+                name: "other-1".into(),
+                from: AccountFrom::Affinity,
+            }),
+            ..agent.clone()
+        };
+        assert_eq!(
+            agent_line(&kept),
+            "  agent flume:r:fix--one:code:2 (other) on the account other-1 of work (from the affinity for other): working"
         );
         let none = AgentStatus {
             account: None,
@@ -690,6 +742,7 @@ mod tests {
             last_words: None,
             notes: vec![],
             mode: Some(status),
+            conversation: None,
         }
     }
 
@@ -784,6 +837,89 @@ mod tests {
     }
 
     #[test]
+    fn a_carried_conversation() {
+        assert_eq!(
+            conversation_line(&Conversation {
+                from: 1,
+                carried: true,
+                why: None,
+            }),
+            "    carries the conversation of start 1"
+        );
+    }
+
+    #[test]
+    fn a_conversation_that_stayed() {
+        assert_eq!(
+            conversation_line(&Conversation {
+                from: 1,
+                carried: false,
+                why: Some("the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's".into()),
+            }),
+            "    starts afresh after start 1: the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's"
+        );
+    }
+
+    #[test]
+    fn a_carried_start_not_begun() {
+        let uncarried = UncarriedStart {
+            stage: "code".into(),
+            start: 2,
+            at: 54_000,
+            words: "the start that carried its conversation ended before it said it started".into(),
+        };
+        assert_eq!(
+            uncarried_line(&uncarried),
+            "  carried and not begun: code's start 2 at 54000: the start that carried its conversation ended before it said it started, and its stage started afresh"
+        );
+    }
+
+    #[test]
+    fn a_start_in_another_conversation() {
+        let unsettled = UnsettledStart {
+            stage: "code".into(),
+            start: 2,
+            at: 54_000,
+            unsettled: Unsettled {
+                session: true,
+                ..Unsettled::default()
+            },
+        };
+        assert_eq!(
+            unsettled_line(&unsettled),
+            "  without its settings: code's start 2 began at 54000 in another conversation than the one its start resumes, and was not taken as its stage's agent"
+        );
+    }
+
+    #[test]
+    fn a_move_with_its_conversation_and_without() {
+        let moved = |carried| {
+            MoveStatus::of(&AccountMove {
+                on: MoveOn::Stage {
+                    stage: "code".into(),
+                },
+                from: "work-1".into(),
+                to: "work-2".into(),
+                why: MoveWhy::Spent,
+                at: 54_000,
+                carried: Some(carried),
+            })
+        };
+        assert_eq!(
+            moved(true).words(),
+            "code moved from work-1 to work-2 at 54000, work-1 spent, its conversation with it, its agents after starting without work-1's cache"
+        );
+        assert_eq!(
+            moved(false).words(),
+            "code moved from work-1 to work-2 at 54000, work-1 spent, its conversation stayed behind, its agents after starting without work-1's cache"
+        );
+        assert_eq!(
+            serde_json::to_value(moved(true)).unwrap()["carried"],
+            json!(true)
+        );
+    }
+
+    #[test]
     fn a_move() {
         let moved = MoveStatus::of(&AccountMove {
             on: MoveOn::Stage {
@@ -793,6 +929,7 @@ mod tests {
             to: "work-2".into(),
             why: MoveWhy::Spent,
             at: 54_000,
+            carried: None,
         });
         assert_eq!(
             moved.words(),
@@ -801,6 +938,38 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&moved).unwrap(),
             json!({"on": "stage", "stage": "code", "from": "work-1", "to": "work-2", "why": "spent", "at": 54000, "cache": "lost"})
+        );
+    }
+
+    #[test]
+    fn an_intents_move_for_its_program_and_one_recorded_before() {
+        let moved = |program: Option<&str>| {
+            MoveStatus::of(&AccountMove {
+                on: MoveOn::Intent {
+                    program: program.map(str::to_string),
+                },
+                from: "agent-1".into(),
+                to: "agent-2".into(),
+                why: MoveWhy::Spent,
+                at: 54_000,
+                carried: None,
+            })
+        };
+        assert_eq!(
+            moved(Some("agent")).words(),
+            "the intent moved for agent from agent-1 to agent-2 at 54000, agent-1 spent, its agents after starting without agent-1's cache"
+        );
+        assert_eq!(
+            serde_json::to_value(moved(Some("agent"))).unwrap(),
+            json!({"on": "intent", "program": "agent", "from": "agent-1", "to": "agent-2", "why": "spent", "at": 54000, "cache": "lost"})
+        );
+        assert_eq!(
+            moved(None).words(),
+            "the intent moved from agent-1 to agent-2 at 54000, agent-1 spent, its agents after starting without agent-1's cache"
+        );
+        assert_eq!(
+            serde_json::to_value(moved(None)).unwrap(),
+            json!({"on": "intent", "from": "agent-1", "to": "agent-2", "why": "spent", "at": 54000, "cache": "lost"})
         );
     }
 

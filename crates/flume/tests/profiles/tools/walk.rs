@@ -370,8 +370,17 @@ impl Walk {
             .to_string()
     }
 
+    /// The session the printed command resumes, none where it resumes
+    /// none (179).
+    pub fn resumes(&self, place: &str) -> Option<String> {
+        let printed = self.printed(place);
+        let (_, after) = printed.split_once(" --resume ")?;
+        after.split_whitespace().next().map(str::to_string)
+    }
+
     /// The prompt the printed command carries, its last word, which
-    /// follows the plugin's folder, unquoted.
+    /// follows the plugin's folder and the session it resumes, if any,
+    /// unquoted.
     pub fn prompt(&self, place: &str) -> String {
         let printed = self.printed(place);
         let (_, after) = printed
@@ -380,6 +389,12 @@ impl Walk {
         let (_, quoted) = after
             .split_once(' ')
             .unwrap_or_else(|| panic!("no prompt in {printed}"));
+        let quoted = match quoted.strip_prefix("--resume ") {
+            Some(resumed) => resumed
+                .split_once(' ')
+                .map_or(resumed, |(_, quoted)| quoted),
+            None => quoted,
+        };
         quoted
             .strip_prefix('\'')
             .and_then(|quoted| quoted.strip_suffix('\''))
@@ -644,6 +659,32 @@ pub fn finish(child: Child) -> Ran {
         ),
         code: output.status.code().unwrap_or(-1),
     }
+}
+
+/// The seconds since the epoch now.
+pub fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock past the epoch")
+        .as_secs()
+}
+
+/// The top of the UTC hour two hours on from `at`, well clear of any
+/// walk's length, and the session limit naming it in the words the pinned
+/// Claude Code writes, a time of day in en-US's 12-hour form (151, C.4).
+pub fn session_limit_after(at: u64) -> (u64, String) {
+    let reset = at - at % 3600 + 2 * 3600;
+    let hour = reset % 86_400 / 3600;
+    let clock = match hour {
+        0 => "12am".to_owned(),
+        1..=11 => format!("{hour}am"),
+        12 => "12pm".to_owned(),
+        _ => format!("{}pm", hour - 12),
+    };
+    (
+        reset,
+        format!("You've hit your session limit · resets {clock} (UTC)"),
+    )
 }
 
 /// The place's stage named `name`, as status gives it.

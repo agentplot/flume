@@ -74,6 +74,7 @@ pub(crate) fn start_record(
         account: account.map(|account| account.name.clone()),
         env,
         mode: None,
+        session: None,
     }
 }
 

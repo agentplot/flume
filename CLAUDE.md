@@ -18,6 +18,28 @@ the operator rules (plan step L1). This repository cites the
 statement's clauses by number and never restates them. Where the site
 and the design disagree, the design wins.
 
+## The family
+
+**The family.** This tool works with the others of the Boomdrive
+family: sluice (the merge queue), Flume (places and their agents),
+Boomdrive (the runner), timber, weir and boom. Each tool's statement is
+in agentplot/blueprints, `design/<tool>/requirements.md`. Before
+designing or fixing a behavior here, look at how the related tools do
+the same thing, in their code and their statements: readiness,
+configuration, credentials, retries, what a place is. Where two tools do
+one thing, reconcile them into one design with one owner the others call
+or cite, and say so in the design. Never fix one tool alone when the
+cause is that the tools differ.
+
+## Specs
+
+**Specs.** `openspec/specs/` changes only through an OpenSpec change: a
+proposal, a delta spec, and tasks, validated with
+`openspec validate --strict` and archived with `openspec archive`, so
+the spec reconciles. This holds for a fix or a chore too. Where the
+work changes a requirement, it carries that change in the same branch.
+Never edit a spec file directly.
+
 ## Rules
 
 The rules are in `docs/architecture/`: `core.md` binds wherever a change

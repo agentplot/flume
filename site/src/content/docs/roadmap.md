@@ -24,7 +24,7 @@ the same answers you do.
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
 | Agent settings in six layers | ✓ | ✓ |
 | Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
-| Pools of accounts, a spent account paused and its stage started afresh on another | ✓ | ✓ |
+| Pools of accounts, a spent account paused and its agent's conversation carried to another where the host shares it, else its stage started afresh | ✓ | ✓ |
 | An intent's agents kept to one account while it is usable | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |

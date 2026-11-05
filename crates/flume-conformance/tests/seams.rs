@@ -22,6 +22,11 @@ fn the_fake_change_passes_the_change_scenarios() {
 #[test]
 fn the_fake_agent_passes_the_agent_scenarios() {
     pass_all("agent", &agent::scenarios(), FakeAgentHarness::default);
+    pass_all(
+        "agent",
+        &agent::scenarios(),
+        FakeAgentHarness::carrying_none,
+    );
 }
 
 #[test]
