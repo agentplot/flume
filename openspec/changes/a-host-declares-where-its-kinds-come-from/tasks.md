@@ -92,7 +92,7 @@ identities, hashes and locks (design, *What this change rests on*).
   - answered as `Answer::Locked` with the lock's file and its entries.
 
   True when `sluice exec main -- moon run core:test conformance:test` passes with `engine/kind_sources.rs` gaining the kind-sources spec's *A hash the content does not have*, *An identity no lock records* and the removal of *Two writers at once, and a removal* over the fakes.
-- [ ] 5.4 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test flume:lint flume:test` passes.
+- [x] 5.4 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test flume:lint flume:test` passes.
 
 ## 6. The command line
 
