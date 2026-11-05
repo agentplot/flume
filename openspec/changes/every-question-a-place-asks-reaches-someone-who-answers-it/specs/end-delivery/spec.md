@@ -1,0 +1,56 @@
+## MODIFIED Requirements
+
+### Requirement: The inbox collects what is pending
+
+`flume inbox` SHALL give every end pending for a recipient, of every
+place on the host, with what 43 names and its key, and SHALL record each
+delivered to that recipient. Status, a wait's read and an inbox for
+another recipient SHALL mark nothing delivered (43, core.25).
+
+#### Scenario: Collected after a restart
+
+- **WHEN** two ends of two places are pending for `ops` while its session is gone, and its restarted session runs `flume inbox` as `ops`
+- **THEN** the answer holds both ends whole, each with its key, both read delivered to `ops`, and a second `flume inbox` gives nothing
+
+## ADDED Requirements
+
+### Requirement: The inbox gives what waits on its recipient
+
+`flume inbox` SHALL also give, as `waiting`, every place that waits on
+its caller and that the recipient is a recipient of, or the host's
+answerer was given a stall of, delivered or not, with its kind, name
+and brief's first line, the move and since when, a stop-short's words,
+needs and key, and a hold's words, since and bound. It SHALL mark
+nothing for them (43, 130, 190; core.25).
+
+#### Scenario: A question collected, then a restart
+
+- **WHEN** `ops` collected a construct's stop-short by `flume inbox`, did nothing with it, and its restarted session runs `flume inbox` again
+- **THEN** `ends` is empty, and `waiting` gives the place with the retry of construct as its move, since the stop-short, the agent's words and the key `stage/construct/1/ended-short`
+
+#### Scenario: The answerer's waiting places
+
+- **WHEN** a pane-launched place stalled and its stall was delivered to the host's answerer `ops/answerer`, and the answerer's run runs `flume inbox`
+- **THEN** `waiting` gives that place, though `ops/answerer` is not among its recipients (190)
+
+#### Scenario: A held question
+
+- **WHEN** a recipient holds the waiting move with words and a bound of one hour
+- **THEN** `waiting` gives the place with the hold's words, since when and its bound, and the next `flume inbox` gives it the same
+
+### Requirement: A notice names the place's brief and the end's key
+
+A notice SHALL stay one line, and SHALL name the place, the first line
+of its brief cut at 60 characters, the end, its key, and the command
+that reads it whole: `flume inbox` for an end the place waits on a move
+for, and `flume status <place>` for any other (43; core.11, core.25).
+
+#### Scenario: A stop-short's notice
+
+- **WHEN** a change whose brief begins "Every question a place asks reaches someone who answers it" ends short needing an answer at construct, and the settle delivers it to a pane
+- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short` and `flume inbox` (S92)
+
+#### Scenario: A delivery's notice
+
+- **WHEN** the same place's construct delivers instead
+- **THEN** the notice names `flume status` and the delivery's key
