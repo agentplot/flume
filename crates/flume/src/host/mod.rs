@@ -3,10 +3,10 @@
 //! random bytes, a file's write time, a command of flume's named by its
 //! process and that process's start, the bound and the agents' settings
 //! the host's configuration states, the role runs, streams and pools it
-//! names, the recipient the calling command's
-//! environment names, the host user's login environment, and the room
-//! lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75; design
-//! 6, 10). No tool is named here (core.1).
+//! names, the sources of kinds it declares, the recipient the calling
+//! command's environment names, the host user's login environment, and
+//! the room lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75, 191;
+//! design 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
@@ -14,7 +14,8 @@ pub mod process;
 
 use config::HostConfig;
 use flume_seams::{
-    Host, HostSettings, Pool, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Stream, StreamHeld,
+    Host, HostSettings, HostSource, Pool, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Stream,
+    StreamHeld,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -273,6 +274,12 @@ impl Host for RealHost {
 
     fn login(&self, name: &str) -> Option<String> {
         self.login_environment().get(name).cloned()
+    }
+
+    /// The sources as this command read the configuration: each command
+    /// reads them as they stand (159, 191, C.7).
+    fn sources(&self) -> BTreeMap<String, HostSource> {
+        self.config.sources.clone()
     }
 
     /// A line appended to `$XDG_STATE_HOME/flume/flume.log` with the

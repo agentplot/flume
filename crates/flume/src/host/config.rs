@@ -24,10 +24,26 @@
 //! pool` is the host's own pool; and `stream` in `[repos."<repository>"]`,
 //! `[repos."<repository>".kinds.<kind>]` and `[kinds.<kind>]` names a
 //! place's stream (143, 144, C.7).
+//!
+//! The host's sources of kinds are files of the configuration's managed
+//! layer, one each in `sources/` beside `config.toml` (159, 191, C.7;
+//! design 1). Each regular file there, or a link to one, whose name ends
+//! in `.toml` and begins with no `.` declares the source its name less
+//! `.toml` names; every other entry is ignored, so a source written
+//! beside as `.acme.toml.tmp` and renamed over `acme.toml` is never read
+//! half written. Its one key, `kinds_dir`, is the directory holding the
+//! source's packages, absolute or under `~`, read as the home. A file that
+//! is not TOML, gives no `kinds_dir`, one neither absolute nor under `~`
+//! or any other key, or takes a name the kinds profile refuses for a
+//! source, is that source's fault alone, kept with it and failing nothing
+//! else of the configuration; no `sources/` is no source, and one that
+//! cannot be listed fails the configuration as a `config.toml` that cannot
+//! be read does. flume writes nothing there.
 
+use crate::profiles::kinds::weir::source_fault;
 use flume_seams::{
-    is_address, Account, KindSettings, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Strategy,
-    Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
+    is_address, Account, HostSource, HostSourceRead, KindSettings, Pool, PoolFrom, PoolNamed,
+    RoleRun, Settings, Strategy, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -59,6 +75,9 @@ pub struct HostConfig {
     pub pool: Option<String>,
     /// The pools declared, by name (144).
     pub pools: BTreeMap<String, Pool>,
+    /// The sources of kinds declared in `sources/` beside the file, by
+    /// name, each with its fault where it has one (159, 191, C.7).
+    pub sources: BTreeMap<String, HostSource>,
 }
 
 /// The streams the configuration names for places: `stream` in
@@ -86,22 +105,25 @@ impl Default for HostConfig {
             streams_named: StreamsNamed::default(),
             pool: None,
             pools: BTreeMap::new(),
+            sources: BTreeMap::new(),
         }
     }
 }
 
 impl HostConfig {
-    /// The configuration in `path`: none of it where there is no file,
-    /// and the file's fault named where it is not one.
+    /// The configuration in `path` and the sources in `sources/` beside
+    /// it: none of the file where there is none, and the file's fault
+    /// named where it is not one (159, 191, C.7).
     pub fn read(path: &Path) -> Result<HostConfig, String> {
-        let text = match std::fs::read_to_string(path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(HostConfig::default())
+        let mut config = match std::fs::read_to_string(path) {
+            Ok(text) => {
+                HostConfig::parse(&text).map_err(|fault| format!("{}: {fault}", path.display()))?
             }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => HostConfig::default(),
             Err(error) => return Err(format!("{}: {error}", path.display())),
         };
-        HostConfig::parse(&text).map_err(|fault| format!("{}: {fault}", path.display()))
+        config.sources = read_sources(&path.with_file_name(SOURCES))?;
+        Ok(config)
     }
 
     /// The configuration `text` states.
@@ -227,6 +249,98 @@ impl HostConfig {
     /// The host's configuration, `$XDG_CONFIG_HOME/flume/config.toml`.
     pub fn of_host() -> Result<HostConfig, String> {
         HostConfig::read(&config_file()?)
+    }
+}
+
+/// The directory beside `config.toml` holding a file for each source of
+/// kinds the host declares (191, C.7).
+pub const SOURCES: &str = "sources";
+
+/// What ends the name of a source's file.
+const SOURCE_FILE: &str = ".toml";
+
+/// Every source the sources directory `dir` declares, by name: none where
+/// there is no directory, and why it cannot be listed where it cannot.
+/// Each file's fault is its own source's (191, C.7; design 1).
+pub fn read_sources(dir: &Path) -> Result<BTreeMap<String, HostSource>, String> {
+    let listed = |error: std::io::Error| format!("{}: {error}", dir.display());
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
+        Err(error) => return Err(listed(error)),
+    };
+    let mut sources = BTreeMap::new();
+    for entry in entries {
+        let entry = entry.map_err(listed)?;
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        let path = entry.path();
+        let Some(name) = file_name.strip_suffix(SOURCE_FILE) else {
+            continue;
+        };
+        if file_name.starts_with('.') || !path.is_file() {
+            continue;
+        }
+        let read = match source_of(name, &path) {
+            Ok(kinds_dir) => HostSourceRead::Read { kinds_dir },
+            Err(reason) => HostSourceRead::CouldNotRead { reason },
+        };
+        sources.insert(
+            name.to_string(),
+            HostSource {
+                file: path.to_string_lossy().into_owned(),
+                read,
+            },
+        );
+    }
+    Ok(sources)
+}
+
+/// The directory a source's file at `path` declares the source `name`'s
+/// packages in, or every fault of the file (154, 191, C.7).
+fn source_of(name: &str, path: &Path) -> Result<String, String> {
+    let mut faults: Vec<String> = source_fault(name).into_iter().collect();
+    let read = std::fs::read_to_string(path)
+        .map_err(|error| format!("could not be read: {error}"))
+        .and_then(|text| {
+            text.parse::<Table>()
+                .map_err(|error| format!("is not TOML: {}", error.message().trim()))
+        });
+    let table = match read {
+        Ok(table) => table,
+        Err(fault) => {
+            faults.push(fault);
+            return Err(faults.join("; "));
+        }
+    };
+    for key in table.keys().filter(|key| *key != "kinds_dir") {
+        faults.push(format!(
+            "`{key}` is no key of a source's file, which gives `kinds_dir` alone"
+        ));
+    }
+    let kinds_dir = match table.get("kinds_dir") {
+        None => {
+            faults.push("gives no `kinds_dir`, the directory holding the source's packages".into());
+            None
+        }
+        Some(Value::String(given)) => {
+            let read = home(given);
+            if Path::new(&read).is_absolute() {
+                Some(read)
+            } else {
+                faults.push(format!(
+                    "`kinds_dir` is `{given}`, which is neither absolute nor under `~`"
+                ));
+                None
+            }
+        }
+        Some(_) => {
+            faults.push("`kinds_dir` is not a path".into());
+            None
+        }
+    };
+    match kinds_dir {
+        Some(kinds_dir) if faults.is_empty() => Ok(kinds_dir),
+        _ => Err(faults.join("; ")),
     }
 }
 
