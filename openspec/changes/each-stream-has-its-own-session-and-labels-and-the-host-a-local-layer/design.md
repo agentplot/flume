@@ -90,8 +90,7 @@ standard's code profile binds (kit:specs.3, kit:testing.5).
   none, flume reads no field of the format itself (core.4), and the
   field's name waits on the user's ruling, since weir 94 gives `label`
   another meaning. The seam's kind carries a label, the fakes set it,
-  and the weir profile gives none until weir-kinds reads one
-  (`_open.md`).
+  and the weir profile gives none until weir-kinds reads one.
 - Clause 183, an MCP server naming its labels: how a host's servers
   reach an agent is section 10's question.
 - A stream's `points` and `pace`, record 0025's change. The local layer
@@ -251,8 +250,8 @@ path leaves no room. A is the right fix and is mine to make in
 agentplot/sluice later (a confined run's scratch at a short path) [...]
 C is out: a test run by hand is no verification." A, sluice giving a
 confined run's scratch a short path, returns the tests to `work` and
-`personal` (`docs/architecture/_open.md`). C, the named-session tests
-run by hand outside the gate as `check-live` is, verifies nothing.
+`personal`. C, the named-session tests run by hand outside the gate as
+`check-live` is, verifies nothing.
 
 ### 3. The printed command and the fakes
 
@@ -551,8 +550,6 @@ to 182 and S82 to S85 are cited by this change's scenarios.
   stand.
 - A host with no `config.local.toml` reads as today, and status says
   the local layer has no file.
-- The open item on records 0031 to 0033 leaves `_open.md` once this is
-  built. The items on weir's label and on 183 stay.
 
 ## Open Questions
 

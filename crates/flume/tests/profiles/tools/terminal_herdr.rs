@@ -2480,7 +2480,7 @@ fn an_agent_that_began_after_its_start_read_never_begun_is_begun_and_a_retry_lea
 /// `herdr.sock` and [`CLIENT_SOCKET`], whatever `HERDR_SOCKET_PATH` or
 /// `HERDR_CLIENT_SOCKET_PATH` says, so the tests name their sessions by
 /// one letter, each test its own, until sluice gives a run a short
-/// scratch (`docs/architecture/_open.md`).
+/// scratch.
 fn session_folder() -> PathBuf {
     std::env::var_os("SLUICE_TMP")
         .filter(|scratch| !scratch.is_empty())

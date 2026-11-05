@@ -102,7 +102,7 @@ this change. The change is built once they do.
   statement and crate do not hold for a simple kind, and weir 94 gives
   a statechart kind's `label` another meaning. Until weir reads one, a
   kind's own label reads as none and the host gives every label
-  (core.4). `docs/architecture/_open.md` names the wait.
+  (core.4).
 - Clause 183, an MCP server naming its labels, is not built: how a
   host's servers reach an agent is section 10's question.
 - `crates/flume-seams`: `OpenIn`, `Terminal::open`'s `at`,

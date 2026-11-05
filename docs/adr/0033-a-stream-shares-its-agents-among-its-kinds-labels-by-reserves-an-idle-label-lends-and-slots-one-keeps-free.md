@@ -55,6 +55,6 @@ Option 1 is today's: a fix's priority orders it first but keeps no room for it, 
 
 - Clauses 70 and 143, the vocabulary's label, reserve and room, C.2 and C.7 are amended, and 180 to 183, section 10's question on MCP servers, S84 and S85 added, on blueprints main at 2c95a70 (core.19).
 - Rule core.26 is amended and rule core.46 drawn from this record.
-- C.2 puts a kind's `label` in its table. The kind format is weir's, and flume reads a field of it only through weir's crate (core.4). weir's statement names no `label` for a simple kind (weir 52, C.4), and weir-kinds reads none. weir 94 gives a statechart kind's `label` another meaning, the words a person reads for it. Until weir states and reads a simple kind's label, under a name the user rules on, a kind's own label is read as none and only the host gives one. `docs/architecture/_open.md` names the wait.
-- Clause 183 is not built, and `_open.md` says so.
+- C.2 puts a kind's `label` in its table. The kind format is weir's, and flume reads a field of it only through weir's crate (core.4). weir's statement names no `label` for a simple kind (weir 52, C.4), and weir-kinds reads none. weir 94 gives a statechart kind's `label` another meaning, the words a person reads for it. Until weir states and reads a simple kind's label, under a name the user rules on, a kind's own label is read as none and only the host gives one.
+- Clause 183 is not built: how a host's servers reach an agent is section 10's question.
 - The change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer` builds the rest.
