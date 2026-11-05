@@ -3,17 +3,17 @@
 ### Requirement: The way to stop short lists the roles an agent may address
 
 The way to stop short in a stage's prompt SHALL list each role's
-address the agent may name, with the `answers` words the host's
-configuration gives for it: every address `[roles]` names a run for or
-carries, in the partition of the place's recipients' addresses, else of
-the answerer behind the place's stream; read at each start, and placed
-after every part the stage's repetitions share. Where there is none, it
-SHALL list none (28, 41, 132, 191; core.31).
+address the agent may name, with the `answers` words its source gives
+for it: every address a source of the host declares with `answers`, a
+run's or a carried one's, in the partition of the place's recipients'
+addresses, else of the answerer behind the place's stream; read at each
+start, and placed after every part the stage's repetitions share. Where
+there is none, it SHALL list none (28, 41, 132, 193; core.31).
 
 #### Scenario: A place of crew's work
 
-- **WHEN** a place names `acme/planner`, `[roles]` names runs for `acme/planner`, `acme/design` and `acme/ops`, and a stage's prompt is rendered
-- **THEN** the way to stop short names the three addresses, each with its configured words, after the rest of the prompt
+- **WHEN** a place names `acme/planner`, a source declares runs for `acme/planner`, `acme/design` and `acme/ops`, each with its `answers`, and a stage's prompt is rendered
+- **THEN** the way to stop short names the three addresses, each with its source's words, after the rest of the prompt
 
 #### Scenario: A person's pane
 
@@ -22,7 +22,7 @@ SHALL list none (28, 41, 132, 191; core.31).
 
 #### Scenario: No roles
 
-- **WHEN** a place's recipient is a pane and its stream has no answerer
+- **WHEN** a place's recipient is a pane and no role stands behind its stream
 - **THEN** the way to stop short names no role
 
 ### Requirement: A stop-short may name the role it is for

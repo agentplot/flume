@@ -22,7 +22,7 @@ stop-short the place waits on, or was given a stall of as the answerer,
 delivered or not, with its kind, name and brief's first line, the move
 and since when, a stop-short's words, needs, key and addressee, and a
 hold's words, since and bound. It SHALL mark nothing for them (43, 130,
-191; core.25).
+193; core.25).
 
 #### Scenario: A question collected, then a restart
 
@@ -37,7 +37,7 @@ hold's words, since and bound. It SHALL mark nothing for them (43, 130,
 #### Scenario: The answerer's waiting places
 
 - **WHEN** a pane-launched place stalled and its stall was delivered to the answerer `acme/operator`, and the answerer's run runs `flume inbox`
-- **THEN** `waiting` gives that place, though `acme/operator` is not among its recipients (191)
+- **THEN** `waiting` gives that place, though `acme/operator` is not among its recipients (193)
 
 #### Scenario: A held question
 

@@ -8,17 +8,17 @@ say so, and the settle that reads it SHALL deliver to each recipient, to
 the role the stop-short it waits on named, and to the answerer behind
 its stream where it is none of them, once each, that it is stalled,
 which move is theirs, and the words, key and addressee of the
-stop-short it waits on (43, 130, 191).
+stop-short it waits on (43, 130, 193).
 
 #### Scenario: Stalled after five minutes
 
-- **WHEN** a construct ends short needing an answer and no retry comes for five minutes of the fake clock under a watch, on a host that names no answerer
+- **WHEN** a construct ends short needing an answer and no retry comes for five minutes of the fake clock under a watch, in a stream no role stands behind
 - **THEN** the watch's settle reads the place stalled, status says so, and each recipient gets one notice naming the retry of construct as the move, and none at later settles
 
 #### Scenario: The stall reaches the answerer
 
-- **WHEN** the same place, launched from the pane `ops`, stalls on a host whose configuration names `acme/operator` its answerer with a run, and no run of it stands
-- **THEN** the stall is delivered once to `ops` and stands pending for `acme/operator`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (191, S93)
+- **WHEN** the same place, launched from the pane `ops`, stalls in the stream `work`, behind which the scratch source `acme` declares `acme/operator` with a run, and no run of it stands
+- **THEN** the stall is delivered once to `ops` and stands pending for `acme/operator`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (193, S93)
 
 #### Scenario: The role a question named
 
@@ -27,7 +27,7 @@ stop-short it waits on (43, 130, 191).
 
 #### Scenario: The answerer is the recipient
 
-- **WHEN** a place whose one recipient is the host's answerer stalls
+- **WHEN** a place whose one recipient is its stream's answerer stalls
 - **THEN** the stall is delivered to the answerer once
 
 #### Scenario: The launch's bound
@@ -76,7 +76,7 @@ on a place that waits on no move of its caller's (47, 130).
 Once a hold on the waiting move has stood past its bound, the settle
 that reads it SHALL lapse it, and the place SHALL stall again at once,
 its stall a new end with a key of its own, naming the lapsed hold's
-words (130, 191).
+words (130, 193).
 
 #### Scenario: A hold's bound passes
 
@@ -88,9 +88,9 @@ words (130, 191).
 A stall an earlier flume recorded, which names no answerer, SHALL be
 read at the first settle after the build as the answerer's too, where
 the place still waits on its caller under no hold's words, and
-delivered once (130, 191).
+delivered once (130, 193).
 
 #### Scenario: A stall from the earlier release
 
-- **WHEN** a place's held state, written by an earlier flume, holds a stall delivered to nobody, and the host's configuration now names `acme/operator`
+- **WHEN** a place's held state, written by an earlier flume, holds a stall delivered to nobody, and a source now declares `acme/operator` standing behind the place's stream
 - **THEN** the next settle delivers the stall to `acme/operator` once, and later settles deliver it again to no one
