@@ -96,8 +96,8 @@ settles() {
 }
 
 # A status of one change place at its code stage, its agent on pane $1
-# of this server, $2 of 5 tasks ticked, its agent $3; and its base's
-# workspace w1 with its count.
+# of this server, $2 of 5 tasks ticked, its agent $3, and its line saying
+# so; and its base's workspace w1 with its count.
 status_of() {
   jq -n --arg pane "$1" --argjson ticked "$2" --arg state "$3" --arg sock "$SOCK" '
     {status: {host: {watch: {bound: {seconds: 30}},
@@ -107,7 +107,10 @@ status_of() {
         current: "code", tasks: [range(5) | {text: "t", ticked: (. < $ticked)}],
         submission: null, waiting_on: null, stalled: false,
         clues: {stage: "code", state: $state, title: "code · \($state)", display_agent: "change--plan",
-                shown_at: {place: "herdr:t1@\($sock)", agent: "herdr:\($pane)@\($sock)", base: null}}}]}}'
+                shown_at: {place: "herdr:t1@\($sock)", agent: "herdr:\($pane)@\($sock)", base: null}},
+        line: {name: "change--plan", kind: "change@2", stage: "code", run: 1, tasks: "\($ticked)/5", state: $state,
+               full: "change--plan · change@2 · code · run 1 · tasks \($ticked)/5 · \($state)",
+               short: "code · run 1 · tasks \($ticked)/5 · \($state)"}}]}}'
 }
 
 # herdr's listing of panes, each `<id>:<agent state>`, or `<id>:` for a
@@ -244,7 +247,7 @@ jq --arg sock "$SOCK" '.status.places += [.status.places[0] | .place = "/r/place
   | .clues.shown_at.agent = "herdr:p9@/another.sock"]' "$FAKE/status.json" >"$t/s" && mv "$t/s" "$FAKE/status.json"
 panes p1:blocked
 tick_at 1000
-grep -qx 'pane report-metadata p1 --source flume --title code · asking --display-agent change--plan --token flume=change · code · asking · 2/5' "$FAKE/herdr-calls" ||
+grep -qx 'pane report-metadata p1 --source flume --title code · asking --display-agent change--plan --token flume=code · run 1 · tasks 2/5 · asking' "$FAKE/herdr-calls" ||
   fail "the pane's title and row not reported as status gives them: $(cat "$FAKE/herdr-calls")"
 grep -qx 'workspace report-metadata w1 --source flume --token flume=1 running · 0 asking · 0 waiting on caller · 0 stalled' "$FAKE/herdr-calls" ||
   fail "the base's count not reported as status gives it"
@@ -264,23 +267,49 @@ jq -e '.status.places[0].kind == "change"' "$S/status.json" >/dev/null || fail "
 pass
 
 fresh 'sidebar: a row from status'
-status_of p1 2 working >"$S/status.json"
+# The line's group is not the clues' stage, so a row made of the clues
+# would not read so.
+status_of p1 2 working | jq '.status.places[0].line |= (.stage = "code 1/2"
+  | .short = "code 1/2 · run 1 · tasks 2/5 · working")' >"$FAKE/status.json"
+panes p1:working
+tick_at 1000
+grep -qx 'pane report-metadata p1 --source flume --title code · working --display-agent change--plan --token flume=code 1/2 · run 1 · tasks 2/5 · working' "$FAKE/herdr-calls" ||
+  fail "the row not reported as status gives it: $(cat "$FAKE/herdr-calls")"
+others=$(grep -v -e '^settle$' -e '^status --json$' "$FAKE/flume-calls")
+[ -z "$others" ] || fail "ran more of flume's than settle and status: $others"
+no_send
+pass
+
+fresh 'popup: two places, each its number and its line with its location beneath (S14)'
+# One working, its line given; the other held.
+status_of p1 2 working | jq '.status.places += [.status.places[0]
+  | .place = "/r/places/change--held" | .name = "held" | .waiting_on = {act: "retry", words: "after the review"}
+  | .line = {name: "change--held", kind: "change@2", stage: "code", run: 1, tasks: "0/5", state: "held",
+             full: "change--held · change@2 · code · run 1 · tasks 0/5 · held",
+             short: "code · run 1 · tasks 0/5 · held"}]
+  | .status.places[0].place = "/r/places/fix--one" | .status.places[0].name = "one"
+  | .status.places[0].line |= (.name = "fix--one" | .kind = "fix@1" | .tasks = null
+    | .full = "fix--one · fix@1 · code · run 1 · working" | .short = "code · run 1 · working")' >"$S/status.json"
 echo q | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
-grep -q 'change · code · working · 2/5' "$t/out" || fail "the row reads: $(cat "$t/out")"
+printf '%s\n' '▶ 1  fix--one · fix@1 · code · run 1 · working' '     /r/places/fix--one' \
+  '  2  change--held · change@2 · code · run 1 · tasks 0/5 · held' '     /r/places/change--held' >"$t/want"
+sed -n 1,4p "$t/out" | cmp -s "$t/want" - || fail "the popup reads: $(cat "$t/out")"
 [ -s "$FAKE/flume-calls" ] && fail "the popup asked flume: $(cat "$FAKE/flume-calls")"
 [ -s "$FAKE/herdr-calls" ] && fail "the popup asked herdr: $(cat "$FAKE/herdr-calls")"
 pass
 
-fresh 'sidebar: a place waiting on its caller, stalled'
-status_of p1 0 waiting | jq '.status.places[0] |= (.waiting_on = {act: "retry"} | .stalled = true | .tasks = null)' >"$S/status.json"
+fresh 'popup: a place waiting on its caller, stalled, reads as its line says'
+status_of p1 0 waiting | jq '.status.places[0] |= (.waiting_on = {act: "retry"} | .stalled = true | .tasks = null
+  | .line |= (.tasks = null | .state = "stalled" | .full = "change--plan · change@2 · code · run 1 · stalled"))' >"$S/status.json"
 echo q | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
-grep -q 'change · code · waiting · stalled' "$t/out" || fail "the row reads: $(cat "$t/out")"
+grep -qx '▶ 1  change--plan · change@2 · code · run 1 · stalled' "$t/out" || fail "the row reads: $(cat "$t/out")"
 pass
 
-fresh 'sidebar: a place whose agent shows a dialog waits on a person'
-status_of p1 0 starting | jq '.status.places[0] |= (.waiting_on = {act: "answer", why: "dialog"} | .tasks = null)' >"$S/status.json"
+fresh 'popup: a place whose agent shows a dialog reads as its line says'
+status_of p1 0 starting | jq '.status.places[0] |= (.waiting_on = {act: "answer", why: "dialog"} | .tasks = null
+  | .line |= (.tasks = null | .run = null | .state = "asking" | .full = "change--plan · change@2 · code · asking"))' >"$S/status.json"
 echo q | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
-grep -q 'change · code · starting · waits on a person' "$t/out" || fail "the row reads: $(cat "$t/out")"
+grep -qx '▶ 1  change--plan · change@2 · code · asking' "$t/out" || fail "the row reads: $(cat "$t/out")"
 pass
 
 fresh 'keys: retry from the sidebar, one key and the words as lines'
@@ -311,7 +340,8 @@ pass
 # Three places, the second and third named p1 and p2.
 three() {
   status_of p1 2 working | jq '.status.places = [range(3) as $i | .status.places[0]
-    | .place = "/r/places/change--p\($i)" | .name = "p\($i)"]' >"$S/status.json"
+    | .place = "/r/places/change--p\($i)" | .name = "p\($i)"
+    | .line.name = "change--p\($i)" | .line.full = "change--p\($i) · change@2 · code · run 1 · working"]' >"$S/status.json"
 }
 
 fresh 'keys: a number chooses the place a key acts on'
@@ -319,7 +349,7 @@ three
 printf '3sn\n2sn\n' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
 printf 'stop /r/places/change--p2\nstop /r/places/change--p1\n' >"$t/want"
 cmp -s "$t/want" "$FAKE/flume-calls" || fail "the keys ran: $(cat "$FAKE/flume-calls")"
-grep -q '^▶ 2  p1' "$t/out" || fail "the chosen place not marked: $(cat "$t/out")"
+grep -q '^▶ 2  change--p1 · ' "$t/out" || fail "the chosen place not marked: $(cat "$t/out")"
 pass
 
 fresh 'keys: j and k, and the arrows, move the choice'

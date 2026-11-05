@@ -134,15 +134,15 @@ states() {
   printf '%s' "$1" | jq -r '"agents:" + ([.result.panes[]? | select(.agent != null) | " " + .pane_id] | sort | add // "")' 2>/dev/null
 }
 
-# Each clue and row status gives, reported where status says the terminal
-# shows it on this server: a pane's title, the agent's name and its row;
-# a base's workspace's count line. Copied from status and computed by
-# nothing here (139; core.14). A report that fails is logged and the tick
-# goes on.
+# Each clue and line status gives, reported where status says the
+# terminal shows it on this server: a pane's title, the agent's name and
+# its row, the short form of its place's line; a base's workspace's count
+# line. Copied from status and computed by nothing here (56, 60, 139;
+# core.14). A report that fails is logged and the tick goes on.
 report() {
-  jq -r "$rows_jq"'
+  jq -r '
     (.status.places[]? | select(.clues != null and .clues.shown_at.agent != null)
-      | ["pane", .clues.shown_at.agent, .clues.title, .clues.display_agent, row]),
+      | ["pane", .clues.shown_at.agent, .clues.title, .clues.display_agent, .line.short]),
     (.status.host.bases[]? | select(.shown_at != null) | ["workspace", .shown_at, .line])
     | @tsv' "$status" 2>/dev/null >"$state/reports"
   while IFS='	' read -r what at a b c; do
