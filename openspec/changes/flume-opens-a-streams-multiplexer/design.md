@@ -57,13 +57,12 @@ views is `design/research/multiplexers-2026-11-05.md`.
 
 Record 0037, accepted by the user on 2026-11-05 for the three settings
 and their per-stream override, decides it. The statement's amendment
-stands on agentplot/blueprints' branch
-`design/flume-a-streams-multiplexer-view-and-terminal-app` at 36cfd06:
-7, 105, 107, 118, 119, 143, 186 to 189, the vocabulary, C.5, C.7, C.8,
-section 9 and S90 amended, and 190 and S91 added. The build reads it
-once it lands on blueprints main (core.19). Clauses 184 and 185, S86 to
-S88 and S89 are claimed by `a-pool-chooses-the-seat-with-the-most-quota-left`
-and `a-places-readiness-is-one-design-across-the-tools`.
+stands on agentplot/blueprints main at 36cfd06: 7, 105, 107, 118, 119,
+143, 186 to 189, the vocabulary, C.5, C.7, C.8, section 9 and S90
+amended, and 190 and S91 added, and the build reads it there (core.19).
+Clauses 184 and 185, S86 to S88 and S89 are claimed by
+`a-pool-chooses-the-seat-with-the-most-quota-left` and
+`a-places-readiness-is-one-design-across-the-tools`.
 
 The rules this design relies on: core.1 and core.2 (the core names no
 terminal and no window program, and one interface per seam, a profile

@@ -27,10 +27,9 @@ it".
 
 Record 0037, accepted by the user on 2026-11-05 for the three settings
 and their per-stream override, decides it. The statement's amendment
-stands on agentplot/blueprints' branch
-`design/flume-a-streams-multiplexer-view-and-terminal-app` at 36cfd06,
-superseding 186 to 189 and S90 as main stated them at d680e35 (7, 105,
-107, 118, 119, 143, 186 to 190, C.5, C.7, C.8, S90, S91; core.19).
+stands on agentplot/blueprints main at 36cfd06, superseding 186 to
+189 and S90 as main stated them at d680e35 (7, 105, 107, 118, 119,
+143, 186 to 190, C.5, C.7, C.8, S90, S91; core.19).
 
 ## What Changes
 
@@ -121,9 +120,8 @@ superseding 186 to 189 and S90 as main stated them at d680e35 (7, 105,
 
 ## Impact
 
-- agentplot/blueprints: the amendment on
-  `design/flume-a-streams-multiplexer-view-and-terminal-app` at
-  36cfd06, to land on main before the clause list reads it (core.19).
+- agentplot/blueprints: the amendment on main at 36cfd06, which the
+  clause list reads (core.19).
   Clauses 184 and 185, S86 to S88 and S89 stay with the changes that
   claim them.
 - The change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`,

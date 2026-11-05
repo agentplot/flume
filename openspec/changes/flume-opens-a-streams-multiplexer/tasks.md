@@ -3,9 +3,8 @@
 Each group is one session's work for an agent that reads this change
 (proposal, design, specs) and its group, and builds on main and on the
 groups before it. Record 0037 is accepted, and the statement's
-amendment stands on agentplot/blueprints'
-`design/flume-a-streams-multiplexer-view-and-terminal-app` at 36cfd06.
-Group 2 begins by merging main, which holds
+amendment stands on agentplot/blueprints main at 36cfd06. Group 2
+begins by merging main, which holds
 `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`
 since 70afbf8. A group's last task runs the checks it touched through
 sluice. Every conformance scenario a group adds cites its clauses as
@@ -24,7 +23,7 @@ whose socket's path leaves no room fails naming its bytes.
 - [x] 1.1 Amend record 0037, renamed for what it decides, "A stream names its multiplexer, its view and its terminal app, the host's where it names none, and a person opens its agents in that view": accepted on the user's words of 2026-11-05 for the three settings, their per-stream override and one change for all of it, quoted, with the writing agent's choices and the paths not taken, citing the statement at 36cfd06 and `design/research/multiplexers-2026-11-05.md` (105, 143, 186 to 190, C.5, C.7, C.8, S90, S91; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
 - [x] 1.2 Have core.48 say the view, draw core.49 for the stream's terminal under "Stages and agents" with its details, have core.1's details name `Terminal.app` and `osascript`, core.13's the window Terminal.app opens and a terminal's own app, and core.39 speak of every program a terminal starts, each citing record 0037; have `site/src/content/docs/architecture/rules.md` mirror core.39, core.48 and core.49 as written (core.19, core.35). True when `sluice exec main -- moon run root:format site:prose site:build` passes.
 - [x] 1.3 Move the research the user read, `design-research-multiplexers-2026-11-05.md`, to `design/research/multiplexers-2026-11-05.md`, and rewrite this change's proposal, design, specs and tasks to the three settings and the stream's multiplexer (186 to 190). True when `sluice exec main -- moon run root:format root:adrs root:changes` passes.
-- [ ] 1.4 Once the statement's amendment lands on agentplot/blueprints main, have record 0037, the proposal, the design and this list cite main's revision in place of the branch's (core.19). True when `sluice exec main -- moon run root:format root:adrs root:changes` passes and `git grep 36cfd06 -- docs openspec` finds nothing.
+- [x] 1.4 Once the statement's amendment lands on agentplot/blueprints main, have record 0037, the proposal, the design and this list cite main's revision in place of the branch's (core.19). True when `sluice exec main -- moon run root:format root:adrs root:changes` passes and `git grep 'view-and-terminal[-]app' -- docs openspec` finds nothing.
 
 ## 2. Main merged, and the seams
 
