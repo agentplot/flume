@@ -97,7 +97,7 @@ check](/flume/guides/agent-settings/#the-start-check)).
 | `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>/` | the Claude Code plugin flume hands its agents, written once per version and binary |
 | `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>/` | a place, a worktree of its repository outside the repository's own directory; `<id>` is the repository's, as its agents' identities carry it |
 | `<place's git directory>/flume/toolchain.sh` | the environment the place's toolchain step printed, which later steps run under; it goes with the worktree |
-| `$XDG_STATE_HOME/herdr/plugins/agentplot.flume/` | the herdr plugin's lease, its last status and `watch.log`, one directory per herdr server |
+| `$XDG_STATE_HOME/herdr/plugins/agentplot.flume/` | the herdr plugin's lease, its last status, `watch.log`, and `setup.json`, what herdr's configuration lacks for the plugin, one directory per herdr server |
 
 ## In the repository
 
@@ -163,6 +163,7 @@ Each place:
 | `uncarried` | each start that carried a spent agent's conversation and did not begin: `stage`, `start`, `at` and `words`, what happened; its stage started afresh after it |
 | `ends` | each end, with whom it was delivered to, when and by what, `notice`, `wait` or `inbox`, and whom it is pending for |
 | `clues` | the display hints: the stage, the state, the pane's title and name, and where herdr shows them |
+| `line` | the place's one line: `name`, `<kind>--<name>`; `kind`, `<kind>@<version>`; `stage`, the current stage with a repeating stage's group, as `code 1/2`; `run`, how many times that stage started; `tasks`, the change's tasks ticked at the head, as `2/5`; `state`, the place's state in words; `full`, the parts joined by ` · `; and `short`, `full` less `name` and `kind`, as the herdr sidebar shows it. `stage`, `run` and `tasks` are `null` where the place has none, and `full` and `short` leave them out. It is the line `flume status --line` gives, read from the place's held state, its change and its agent's own record alone ([the status line](/flume/guides/claude-code/#the-status-line) lists the states) |
 
 A stage's `state` is one of `not_reached`, `waiting_on_readiness`,
 `on_hold`, `waiting_for_room`, `starting`, `started`, `begun`, `delivered`,
@@ -183,6 +184,7 @@ The host:
 | `bases` | for each repository and base, its places running, asking, waiting on their caller and stalled, and the line shown in herdr |
 | `addresses` | each role's address with ends pending, and why its run was not woken |
 | `terminal_kept` | what a tidy kept in the terminal because something flume did not make holds it |
+| `terminal_setup` | what the terminal's own configuration lacks for flume's plugin there, each in words a person acts on, naming the file read: under herdr, the popup's `[[keys.command]]` entry or the sidebar rows' `$flume`, as the plugin's watch last read herdr's configuration; empty where nothing is missing, there is no watch or the terminal reads none |
 
 The JSON only ever gains fields, so a tool reading it keeps working
 across releases.
