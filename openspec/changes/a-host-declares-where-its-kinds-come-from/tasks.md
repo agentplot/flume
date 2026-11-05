@@ -17,7 +17,7 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Write record 0040 in `docs/adr/`, accepted as the user ruled on this change's design, holding what the record carries beyond record 0022:
+- [x] 1.1 Write record 0040 in `docs/adr/`, accepted as the user ruled on this change's design, holding what the record carries beyond record 0022:
   - the host's sources, one file each in its configuration's sources directory (decision 1);
   - a source holding packages and never a file of declarations (decision 2);
   - a bare name never reaching a host's source (decision 4);
