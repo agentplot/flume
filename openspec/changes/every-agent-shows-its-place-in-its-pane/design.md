@@ -260,12 +260,26 @@ configuration, settles nothing and starts no agent (57; core.16).
 
 The module rests on the pinned 2.1.296's engine: `$.ui.status`,
 `$.clock.every`, `$.process.run`, `$.env.get`, the `session.start`,
-`tool.call` and turn-end events, and the `modules` a plugin's
-`hooks/hooks.json` names. `plugins/claude/engine-types/` holds the
-engine types the pinned Claude Code writes, checked against them by
-`plugin-claude:engine-types` as sluice's board checks its own, and the
-module is typed against them, so a release that moves one fails the
-gate naming it (C.4; core.22, core.39).
+`tool.call` and `turn.complete` events, and the `modules` a plugin's
+`hooks/hooks.json` names, which the pinned release reads beside the
+command `hooks` in the one file. `plugins/claude/engine-types/` holds
+the engine's own module, `claude-code`, as the pinned Claude Code writes
+it; the tools' and the MCP servers' declarations it writes beside it are
+the session's own tools and servers, and differ from host to host at one
+release, so they are not kept. `plugin-claude:engine-types` has a
+session of the pinned release write them: started on a terminal of its
+own over a scratch mod, with a scratch home, a key that is no one's, an
+address nothing answers on and no traffic, it writes them as it loads
+the mod, before any prompt, and is ended. The task fails naming the file
+and the release where a kept file is not the one written, byte for byte,
+and fails where a copy with one line changed reads as the same. sluice's
+board checks only that its types name the pinned release; this check
+reads what the release writes, and sluice's board can take it as it
+stands. The module and its tests are typed against them by `tsc` from
+the TypeScript `devenv.nix` pins, 7.0.2, nixpkgs' at the lock, named
+there so a lock that moves it fails to evaluate, and checked by
+`root:toolchain`. So a release that moves one fails the gate naming it
+(C.4; core.22, core.39).
 
 The stand-in for Claude Code runs no module. Under the printed command,
 the walkthroughs run `flume hook status-line` in a code agent's
