@@ -7,7 +7,7 @@ agent, and `[agents.streams.<stream>]`, for every agent in one stream,
 each giving `model`, `mode`, `instructions` and `programs` as the kind
 tables do. A `program`, `env`, `beside` or `stages` there, or a stream
 the host does not declare, SHALL refuse the configuration naming the
-table and the key (32, 143, 175, C.7).
+table and the key (32, 143, 191, C.7).
 
 #### Scenario: Settings for every agent and for a stream
 
@@ -24,12 +24,12 @@ table and the key (32, 143, 175, C.7).
 Every agents table of the host's configuration SHALL read `programs`, a
 table of entries each with `file` and `settings`, kept as JSON values,
 and any other shape SHALL refuse the configuration naming the table and
-`programs` (175, C.7).
+`programs` (191, C.7).
 
 #### Scenario: Own settings for a kind and for a repository's stage
 
 - **WHEN** the configuration gives `[kinds.fix.agents.programs.claude.settings] tui = "fullscreen"` and `[repos."/r".kinds.fix.agents.stages.code.programs.claude] file = "fix-code.json"`, a file beside the configuration giving a `statusLine`
-- **THEN** the host's settings for fix@1 in `/r` read `tui` at `host-kind` and, for code, the file's `statusLine` at `host-repository` with the file's path (32, 175, C.7)
+- **THEN** the host's settings for fix@1 in `/r` read `tui` at `host-kind` and, for code, the file's `statusLine` at `host-repository` with the file's path (32, 191, C.7)
 
 #### Scenario: A programs that is no table of entries
 
@@ -43,7 +43,7 @@ configuration at each start: absolute, under `~/` read as the host
 user's home, or relative to the configuration's directory, and read
 where it leads when it is a link. One that cannot be read, does not
 parse, or is named neither `.json` nor `.toml` SHALL refuse the
-configuration naming the file (175, C.7).
+configuration naming the file (191, C.7).
 
 #### Scenario: A file flume cannot read
 
@@ -57,12 +57,12 @@ settings for every agent of every kind in that repository, by its
 location as `[repos."<repository>"]` is, giving `model`, `mode`,
 `instructions` and `programs` as the host's kind tables do. A
 `program`, `env`, `beside`, `stages` or `streams` there SHALL refuse
-the configuration naming the table and the key (32, 175, C.7).
+the configuration naming the table and the key (32, 191, C.7).
 
 #### Scenario: A fork's table for every kind
 
 - **WHEN** the configuration gives `[repos."~/Code/upstream-fork".agents.programs.claude.settings] attribution = { commit = "", pr = "", sessionUrl = false }`
-- **THEN** the host's settings for every kind of the repository at `~/Code/upstream-fork`, under the host user's home, read `attribution` as written, at the `host-repository` layer beneath its kinds' tables (S78, 32, C.7)
+- **THEN** the host's settings for every kind of the repository at `~/Code/upstream-fork`, under the host user's home, read `attribution` as written, at the `host-repository` layer beneath its kinds' tables (S97, 32, C.7)
 
 #### Scenario: A repository's table that names a stage
 

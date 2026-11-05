@@ -92,17 +92,25 @@ text and not the other, the other is the release's own,
 adds `Co-authored-by: Codex <noreply@openai.com>` and `Generated with
 [Codex](…)` by instructions of its own.
 
-Two places run beside this one in the repository. The research
-conversation `research--mcp-servers-for-flumes-agents` is converging, as
-of its transcript on 2026-11-01, on an `mcp` setting of the same layers,
-whose servers the host's configuration defines once and each profile
-passes its own way (Claude Code by `--mcp-config <file>
---strict-mcp-config`). The held change `every-agent-shows-its-place-in-its-pane`
-passes Claude Code `--settings` with a JSON string holding flume's own
-`statusLine`, whose hook prints the place's line above the session's
-own status line. Design 17 says what each takes from this one. A third,
-`change--an-answer-reaches-the-open-session-within-an-hour`, adds
-`keep_open` to the same `Settings` and host tables.
+Other work meets this change. Record 0033, as the user ruled on
+2026-11-05, declares a host's MCP servers in its managed layer, under
+`[mcp.<server>]` with the labels whose places may have them, and hands
+each agent its place's share at its start (183): servers are a table of
+the host's, not own settings. Record 0032 gives the host's
+configuration a managed layer, `config.toml`, and a local one,
+`config.local.toml`, read over it key by key, the local one setting
+only the keys C.7 lists, a kind's agents table among them. Record 0038
+gives `Agent::command` the place's own folder, and Claude Code's
+profile writes the standing prompt to `standing-prompt.md` beside the
+start's record, named by `--append-system-prompt-file`. The change
+`every-agent-shows-its-place-in-its-pane`, approved on 2026-11-05,
+passes Claude Code `--settings` with flume's own `statusLine`, whose
+hook prints the place's line above the session's own status line.
+Design 17 says what each takes from this one. Records 0032 and 0033
+come with the change `each-stream-has-its-own-session-and-labels-and-the-host-a-local-layer`,
+and record 0038 with the fix `every-stages-agent-starts-whatever-its-arguments-hold`;
+whichever of them lands before this change's group touching the same
+code is merged into it there.
 
 The rules this design relies on are core.1 and core.2 (only an agent
 profile names its program, its flags or its keys; the core names
@@ -136,13 +144,13 @@ rule, the kit standard's code profile binds (kit:specs.3, kit:testing.5).
 - A host, a stream, a repository, a kind or a launch gives an agent
   program's own settings in that program's own words, inline, from a
   settings file it names, or both, and they reach that program and no
-  other (175).
+  other (191).
 - A host names the file its people's sessions get, and its agents get
-  the same keys, all but those another setting or a person owns (175).
+  the same keys, all but those another setting or a person owns (191).
 - A host says once what every agent gets, and a stream says what its
   agents get differently (32, 143).
 - A host that says nothing changes nothing: nothing is passed, and the
-  account's own configuration decides (162, 175).
+  account's own configuration decides (162, 191).
 - No own setting carries a credential, an environment variable, a
   model, a mode or a person's acceptance past the setting that owns it
   (29, 34, 144, 162, 172; core.12, core.30).
@@ -185,7 +193,7 @@ rule, the kit standard's code profile binds (kit:specs.3, kit:testing.5).
   reports the settings it loaded to a hook, so the start's record names
   none and status says they are not read back.
 - Translating a setting from one program's words to another's, or
-  merging inside a value (175; core.43).
+  merging inside a value (191; core.50).
 
 ## Decisions
 
@@ -387,22 +395,39 @@ its own layers (record 0024), and a stream whose model or status line
 the host chose for its pool's accounts would otherwise lose to any kind
 that names one. The cost is that a kind's own status line never shows
 on a host that gives one, and a repository's own `[agents]` never
-overrides a host's `[agents]` or kind table; the user rules on it
-(question 2). Under this order a host that gives a default lets one
+overrides a host's `[agents]` or kind table; the user ruled this
+order on 2026-11-05. Under it a host that gives a default lets one
 repository differ by `[repos."<repository>".agents]`.
 
-This departs from core.30's details, which rule out "settings given by
-a stream (record 0020, as amended 2026-10-29)", and from 143's "a
-stream gives its agents no settings (32)". Record 0020 kept a stream
+A stream's settings amend 143, which said "a stream gives its agents no
+settings (32)", and core.30's details, which ruled out "settings given
+by a stream (record 0020, as amended 2026-10-29)". Record 0020 kept a stream
 from giving settings because "a stream's word on a kind's model would
 be a third host table for what the host's word for the kind already
 says". It does not hold for own settings: what a host's agents show and
 do differs by the share of the host they run in, which no kind table
 can say. Nor does it hold for the model as it did. The kind table says
 its word for every stream and the stream's for every kind, and a stream
-is where an allowance is spent, through its pool (question 1). The
-record this change's first group writes amends record 0020, 143 and
-core.30 together (core.19).
+is where an allowance is spent, through its pool, which is why the
+user ruled that the new tables give the model, the mode and the
+instructions too. Record 0040 amends record 0020, 143 and core.30
+together (core.19).
+
+**The managed and local layers.** The host's configuration is read as
+record 0032 reads it: its local layer, `config.local.toml`, over its
+managed one, `config.toml`, key by key, before the eight layers are
+folded. Every agents table of the host's, the three new ones among
+them, is one the local layer may set, as a kind's agents table is, and
+the managed layer may pin any key of one. Each own setting,
+`programs.<program>.settings.<key>`, and each
+`programs.<program>.file`, is one key of that fold, so a local layer
+replaces one own setting, or names another file, without restating the
+managed layer's other keys. A named file in either layer is read
+relative to the configuration's directory, the one both files share.
+Record 0032 put the agents tables in the local layer because they say
+how the host's work runs this hour, a stream's model or mode among
+them; a host's status line, renderer or tagline is the same kind of
+word, and the managed layer pins what it means to keep.
 
 `Layer` gains `HostStream`, named `host-stream` in status, and `Host`,
 named `host`. `HostRepository` and `Repository` keep their names and
@@ -434,7 +459,7 @@ other two ways were weighed.
   lines would merge into one object neither wrote, a command from one
   and a padding from the other, and two lists would join in an order
   the program does not define. That is flume deciding what a program's
-  value means, which it does not (core.43). A deep merge also leaves a
+  value means, which it does not (core.50). A deep merge also leaves a
   layer no way to replace a table it means to replace, a hook list or
   a permission list, since a key it leaves out would show through from
   beneath.
@@ -584,7 +609,7 @@ command reaches the program as written and its shell reads it there.
 
 ### 8. The agent seam
 
-The agent seam gains the part **own settings** (176):
+The agent seam gains the part **own settings** (192):
 
 - `Agent::reserved(&self) -> Vec<Reserved>`: each key of its program's
   settings that another setting or the account owns, by its path, with
@@ -793,7 +818,7 @@ Its doc comment names this beside its acts.
 Walkthroughs in `crates/flume/tests/profiles/tools/walkthroughs.rs`,
 with the stand-in under the printed command:
 
-- S76: a host whose `[agents.programs.claude]` names a scratch file,
+- S95: a host whose `[agents.programs.claude]` names a scratch file,
   `people-settings.json`, as a host's launcher would pass its people.
   The file gives `tui = "fullscreen"`, a `statusLine` running
   `people-line`, `env = { PEOPLE = "1" }`, `permissions = { allow =
@@ -816,7 +841,7 @@ with the stand-in under the printed command:
   in `default` read `host-line` and the file's `tui`. A fix on a host
   and a repository that give no entry prints no `--settings`, writes no
   file, and lands.
-- S77: launches refused, each naming the key and its layer, and the
+- S96: launches refused, each naming the key and its layer, and the
   file where there is one, with no value in the refusal or in status,
   and nothing made: `--agent programs.claude.settings.env={"X":"1"}`; a
   host whose `[agents.programs.claude.settings]` gives `apiKeyHelper`; a
@@ -825,7 +850,7 @@ with the stand-in under the printed command:
   a status line whose command holds a value shaped as a token; a host
   file whose `statusLine` command holds one; a host whose file does not
   exist; and a repository whose `file` is `../claude.json`.
-- S78: three scratch repositories on one host. The host's
+- S97: three scratch repositories on one host. The host's
   `[repos."<fork>".agents.programs.claude.settings]` gives `attribution
   = { commit = "", pr = "", sessionUrl = false }`, for a fork of a
   project that refuses a tagline; the repository `ours` commits a
@@ -906,7 +931,7 @@ different between two repositories on one host (design 3). A fork's own
 `.config/flume.toml` is no place for its upstream's rule, since a file
 committed there would travel in the pull request the upstream reviews,
 so a fork's word is the host's `[repos."<repository>".agents]`. Under
-question 2's recommended order, that table comes before every host
+the order the user ruled, that table comes before every host
 table but the repository and kind's, so the fork carries no tagline
 whatever the host's default. A repository's own `[agents]` stands
 where no host table gives the key.
@@ -922,47 +947,36 @@ are read for theirs the same way.
 it as any value: `Co-Authored-By: Claude <noreply@anthropic.com>` and
 `Assisted-by: Claude Code` pass it.
 
-### 17. What the two places beside this one take from it
+### 17. What the work beside this one takes from it
 
-**The MCP research** (`research--mcp-servers-for-flumes-agents`)
-should take:
+**The host's MCP servers** (record 0033, clause 183) are a table of the
+managed layer, `[mcp.<server>]` with its `labels`, and each agent is
+handed its place's share at its start. They are not own settings, and
+their change takes from this one:
 
-- **Its own setting, beside this one.** `mcp` should be its own setting
-  of the same eight layers, `[agents]` and `[agents.streams.<stream>]`
-  among them, rather than own settings. A server is defined once by the
-  host and is the same server for every program, so `mcp` is flume's
-  word that each profile maps, as a mode is. Own settings are each
-  program's own and are never mapped.
-- **The merge unit.** Each server's name is taken whole from the first
-  layer that names it, as each top-level key of own settings is.
-- **A repository's tables for every kind.** A repository's servers are
-  as much its own as its tagline: `[repos."<repository>".agents]` and
-  the repository's `[agents]` (design 3) give `mcp` as they give own
-  settings, so a repository names its servers once for every kind.
-- **A named file, where it wants one.** A host whose people's sessions
-  get their servers from one file, as `--mcp-config` takes, would name
-  it as design 2 names a settings file: read where its layer lives, its
-  servers under the layer's own, and never passed as it stands.
 - **The command's files.** Claude Code's servers file, for
   `--mcp-config <file> --strict-mcp-config`, is written beside this
   change's file through `AgentCommand::files`.
 - **The credential check.** Design 7's check applies to every server
   definition, so a server's credential is named by a variable or a
   helper and never by its value.
-- **The reserved keys.** Once `mcp` stands, each profile adds its
-  program's own MCP keys to `Agent::reserved`: Claude Code's
-  `enableAllProjectMcpServers`, `enabledMcpjsonServers` and
-  `disabledMcpjsonServers`, Codex's `mcp_servers`, Gemini CLI's
-  `mcpServers` and OpenCode's `mcp`. Then an agent's servers come from
-  one setting: such a key is refused where a table writes it and left
-  out of a named file, as `env` is. The user's host's file gives
-  `enableAllProjectMcpServers`, which would then be left out. Until
-  then a host may give them as own settings. That is a fix it has today
-  for a repository's server that stops an agent at Claude Code's
-  approval dialog, and the MCP record says how those keys move.
-- **Status's shape.** `mcp.<name>`, each with its layer.
+- **The reserved keys.** Each profile adds its program's own MCP keys
+  to `Agent::reserved`: Claude Code's `enableAllProjectMcpServers`,
+  `enabledMcpjsonServers` and `disabledMcpjsonServers`, Codex's
+  `mcp_servers`, Gemini CLI's `mcpServers` and OpenCode's `mcp`. Then an
+  agent's servers come from the host's table alone: such a key is
+  refused where a layer writes it and left out of a named file, as
+  `env` is. Until that change lands a host may give them as own
+  settings, which is how a host lets an agent past Claude Code's
+  approval of a repository's servers today.
 
-**The held status-line change** (`every-agent-shows-its-place-in-its-pane`)
+**Record 0038's standing prompt** is a file of the start's own beside
+its record, named by `--append-system-prompt-file`. Where both are
+built, the start's folder is the one argument `Agent::command` takes
+for both, and the standing prompt is one of the files `AgentCommand`
+lists, so the core writes every file a command needs the one way.
+
+**The status-line change** (`every-agent-shows-its-place-in-its-pane`)
 should take:
 
 - **One `--settings`.** The release reads one `--settings`. Its
@@ -987,154 +1001,70 @@ should take:
 - **The shared fragments** of `--settings` and the sources' order,
   pinned once.
 
-### 18. The statement and the rules, drafted for the user's ruling
+### 18. The statement, the record and the rules
 
-The statement at blueprints main, 92afa99, holds no clause for a
-program's own settings and says a stream gives no settings. Drafts:
+The statement at blueprints 068cbc0, on the branch
+`design/flume-an-agents-program-settings` cut from main at 9f1f0fd,
+holds this change (core.19):
 
-- **175** (A.4). An agent's own settings are one of its settings (32):
-  a table of programs, each entry naming, for its program, a settings
-  file in the program's own words and keys given as the program spells
-  them, its status line, its renderer, hooks, tools' permissions or
-  what its commits and pull requests say about who made them among
-  them. Every layer of 32 may give them. A layer's file is read
-  where the layer lives: the host's on the host at each start, the
-  repository's and the kind's within their repository or package at the
-  launch, and the launch's at the launch (21, 157). The file's keys lie
-  beneath the layer's own. Each top-level key is a setting of its own,
-  taken whole from the first layer that gives it, and only the agent's
-  program's entry is taken, so no program is given another's. flume
-  reads nothing inside a value, merges no two layers' values of one key,
-  reads no `~` or variable in one, never passes a named file as it
-  stands, and passes the keys resolved as the agent's profile takes them
-  (176), its program laying them over its account's configuration as it
-  lays its own. Where no layer gives the agent's program a key, flume
-  passes none and the account's configuration decides (144). A key the
-  profile names as another setting's or the account's, the environment,
-  the model, the mode, a sign-in, the hooks flume's start rests on or a
-  person's acceptance of a warning (34), is refused where a layer writes
-  it and left out of a named file, naming the key and what owns it. A
-  value shaped as a credential is refused before anything holds it,
-  naming the key and never the value (29), and so is an entry for a
-  program whose profile takes none. The launch is refused so (4), or,
-  at a later start, the stage (32). Status gives each key with the
-  agent, its layer and its file, and each key left out (56).
-- **176** (B.4). **own settings**: the keys of its program's settings
-  another setting or the account owns, each with its owner; and, given
-  a program's own settings as the layers resolved them, how the program
-  is started with them, by a file the start writes in the place's own
-  folder, by arguments or by a variable of the program's, or that the
-  program gives no way to take them (175).
-- **32**: eight layers, the host's for the place's stream and for
-  every agent fourth and fifth, which name no stage; the host's for the
-  place's repository giving, beneath its word for the kind, its word
-  for every kind, and the repository's, beneath its word for a kind it
-  does not declare, its word for every kind it runs, its own kinds'
-  among them, neither naming a stage; within each, a stage's own before
-  the kind's every stage, and that before a repository's every kind;
-  each top-level key of own settings taken whole as a setting, a
-  layer's file beneath its own keys (175); and, on question 1's answer,
-  the model, the mode and the instructions given by every new table.
-- **143**: "a stream gives its agents no settings (32)" becomes "a
-  stream's agents take the settings the host's configuration gives for
-  the stream (32)".
-- **158**: a kind's own settings, and the file it names for them, are
-  parts of its package, within its content's hash (154), and name no
-  location on a host; a kind whose own settings' values name one is tied
-  to the hosts that hold it, as one whose prompt names one is.
-- **4**, **56**, **88**, **171** (a tenth reading: own settings not
-  offered, refused until the entry names its release's way), **173**
-  (an account usable only where its program takes the stage's keys)
-  and section 3's **settings** and two new terms, **own settings** and
-  **named file**.
-- **C.2**: the repository's `[agents]`, flume's beside `[profiles]`
-  and `[prompt]`, the repository's and no part of any kind, its agents'
-  settings for every kind it runs, read at the base's revision with the
-  kinds; with `programs` in every agents table a declaration holds.
-- **C.4**: the command row's `--settings` and design 6's reserved keys;
-  the common profile's own settings row; Claude Code's `attribution`
-  as the docs' example of own settings. **C.7**: `[agents]`,
-  `[agents.streams.<stream>]`, `[repos."<repository>".agents]` and
-  `programs` in every agents table, an entry's `file` and `settings`,
-  and design 2's host paths.
-- **S76** and **S77**, as design 14's walkthroughs, and **S78**: a
-  host runs places in a fork of a project whose maintainers refuse a
-  commit or a pull request that names an agent program, and in a
-  repository of its own. The host's `[repos."<fork>".agents]` gives
-  Claude Code's attribution with no text and no link; the repository's
-  own `.config/flume.toml` gives its own words in `[agents]`. Every
-  agent of every kind in the fork starts with no attribution, status
-  naming the setting from `host-repository`; every agent in the
-  repository with its words, from `repository`; and an agent in a
-  repository neither names with its account's own.
+- **191** (A.4), an agent's own settings: a table of programs in every
+  layer of 32, each entry a named file and keys in its program's own
+  words, the file read where its layer lives and its keys beneath the
+  layer's own, each top-level key taken whole, only the agent's
+  program's entry taken, nothing passed where nothing is given, a
+  reserved key refused where written and left out of a named file, a
+  value shaped as a credential refused before anything holds it, and
+  status giving each key with its layer and its file.
+- **192** (B.4), the agent seam's **own settings** part: a program's
+  reserved keys with their owners, and how its program is started with
+  the keys resolved, or that it gives no way.
+- **32**: eight layers, as design 3 orders them, the host's tables for
+  a stream and for every agent and a repository's two tables for every
+  kind giving the model, the mode, the instructions and own settings,
+  and the repository's `[agents]` a program as its kind tables do.
+- **143**: a stream's agents take the settings the host's configuration
+  gives for the stream.
+- **158**: a kind's own settings and its file are parts of its package.
+- **4**, **56**, **88**, **171** (an eleventh reading: own settings not
+  offered), **173** (an account usable only where its program takes the
+  stage's keys), section 3's **settings** and two new terms, **own
+  settings** and **named file**.
+- **C.2**: `programs` in every agents table and the repository's
+  `[agents]` beside `[profiles]` and `[prompt]`; **C.4**: the command
+  row's `--settings`, the reserved keys, `attribution` as the example,
+  and the common profile's own-settings row; **C.7**: `[agents]`,
+  `[agents.streams.<stream>]`, `[repos."<repository>".agents]`, the
+  host's file paths, and every agents table of the host's one the local
+  layer may set, each own setting and named file a key of its own.
+- **S95** and **S96**, design 14's first two walkthroughs, and **S97**,
+  the tagline across a fork and a repository of the host's own.
 - **weir C.4**: `programs` in an agents table, the reader's to check.
 
-The rules: **core.30**'s text reads "the layers clause 32 orders". Its
-details lose "settings given by a stream", read "a program, or a pool,
-chosen by the host's tables for a kind, for a repository or for a
-repository and kind", and gain, among what is not ruled out, a
-profile's own variable for its program's settings, and a host's
-settings file's path read with a leading `~` as the home, as a
-repository's key is. A new rule, **core.43**, in "Stages and agents":
+Record 0040 states decisions 1 to 7 and 16 as the user ruled, and
+amends records 0017, 0020 and 0024. **core.30**'s text reads "the
+layers clause 32 orders"; its details rule out a program or a pool
+chosen by any host table and the new tables' forbidden keys, and leave
+open a stream's settings, a host's file path read with a leading `~/`,
+and a profile's own variable for its program's settings. **core.50**,
+in "Stages and agents", is decision 1 to 7's rule: a program's own
+settings reach that program alone, each top-level key taken whole and
+passed as written, never the named file as it stands; a reserved key
+refused where written and left out of a file; a credential-shaped value
+refused before anything holds it; and nothing passed where nothing is
+given.
 
-> A program's own settings are given under its name and reach no other
-> program, by a layer's own keys and a file it names, the file's beneath
-> its own; each top-level key is taken whole from the first layer that
-> gives it and passed as written, the way its profile takes them, never
-> the named file as it stands, never translated, merged inside or read
-> by flume; a key its profile reserves for another setting or the
-> account is refused where a layer writes it and left out of a named
-> file, status naming it; a value shaped as a credential is refused
-> before anything holds it; and where no layer gives one, nothing is
-> passed.
+## The user's rulings
 
-Its details rule out a Codex setting reaching Claude Code; a key mapped
-from one program's spelling to another's; two layers' values merged
-inside one key; a named file passed to its program; a reserved key of a
-named file passed, or one a layer writes taken; a launch's, a
-repository's or a kind's file read again after the launch; a
-repository's or a kind's file outside its repository or package; `~` or
-`$VAR` read in an own setting's value, or `$VAR` in a file's path; a
-credential-shaped value taken, held, logged or printed by a refusal or
-status; `--settings` passed, or a file written, where no layer gives a
-key; and own settings taken silently by a profile that gives no way.
-They leave open the program's own merge over its account's
-configuration, a host's file read again at each start and reached by a
-link, a host's path in a kind's own settings' values (158), flume's
-own status line wrapped around the layers', and a repository's
-attribution given once for every kind by its own file or by the host's
-table for it. The record is the next free
-number at its writing, 0030 at main b6cd1b5. The place
-`change--an-answer-reaches-the-open-session-within-an-hour` holds a
-record numbered 0028 that main's 0028 already takes, so whichever lands
-second renumbers.
+The user approved this design on 2026-11-05, with the recommended
+answer to each of its two questions:
 
-## Questions for the user's ruling
-
-1. **Do `model`, `mode` and `instructions` gain the new tables too:
-   the host's `[agents]` and `[agents.streams.<stream>]`, and a
-   repository's tables for every kind, the host's
-   `[repos."<repository>".agents]` and the repository's `[agents]`?**
-   Recommended: yes, every setting but the program and the environment
-   in every layer, the repository's `[agents]` giving a program as its
-   kind tables do. A stream is where the host's allowance is spent,
-   through its pool's accounts, so a stream on a smaller model or in a
-   narrower mode is a host's word no kind table can say, and a
-   repository's own rules may ask a mode of every kind run in it. One
-   rule for every setting is simpler to write and to read in status.
-   If no, the new tables give `programs` alone and refuse `model`,
-   `mode` and `instructions`, naming `[kinds.<kind>.agents]` as where
-   they go, and the agent-modes and launching deltas keep the six
-   layers' tables for them.
-2. **Do the two host tables come before the repository's and the
-   kind's?** Recommended: yes, the host's word, as every host table is
-   today (record 0024). The cost is that a kind's own status line or
-   model never shows where the host gives one, and a repository's own
-   `[agents]`, its attribution among it, yields to a host's `[agents]`
-   or kind table that gives the same key; a host lets one repository
-   differ by `[repos."<repository>".agents]`. The other order makes the
-   two defaults the work overrides: launch, host-repository, host-kind,
-   repository, kind, host-stream, host, default.
+1. `model`, `mode` and `instructions` gain the new tables too: every
+   setting but the program and the environment is given in every
+   layer, the repository's `[agents]` giving a program as its kind
+   tables do.
+2. The host's new tables come before the repository's and the kind's,
+   as every host table does (record 0024). A host lets one repository
+   differ by `[repos."<repository>".agents]`.
 
 ## Risks / Trade-offs
 
@@ -1159,7 +1089,7 @@ second renumbers.
 - **A key changed in part must be restated.** A stream that wants the
   host's permissions and one more rule gives the whole `permissions`
   key. The docs show it.
-- **The host's word wins.** With question 2's recommended order, a
+- **The host's word wins.** Under the order the user ruled, a
   kind that ships its own status line shows it only on a host that
   gives none.
 - **Own settings are not read back.** A program that ignores a key, or
@@ -1170,7 +1100,7 @@ second renumbers.
   leaves the pull request's text to the account or the release's
   default, since the key is taken whole and the release fills what it
   leaves out. The docs give both texts and `sessionUrl = false` for
-  none, and S78 tests that form.
+  none, and S97 tests that form.
 - **A repository's `[agents]` comes before its own kind.** A
   repository whose own kind should differ from its `[agents]` on a key
   moves the key into each kind's table (design 3).
@@ -1178,8 +1108,10 @@ second renumbers.
   `[repos."<repository>"]` names a repository by its location on the
   host, so a fork cloned again elsewhere carries its upstream's rule
   only once its new location is named, as its stream does today.
-- **Three changes touch `Settings` and the host's tables.** This one,
-  the held status-line change and the open-session change each add to
-  `Settings`, `Engine::resolve` and `agent_settings`. Whichever lands
-  second merges the others' fields, and its stand-in reads one
-  `--settings`.
+- **Other changes touch the same code.** The status-line change adds
+  to the command and the stand-in's `--settings`; record 0038's fix
+  adds the start's folder to `Agent::command`; records 0032 and 0033's
+  change reads the host's configuration in two layers and adds `label`
+  and `session` to the host's tables. Whichever lands first is merged
+  into the group of this change that touches the same code, and the
+  stand-in reads one `--settings`.
