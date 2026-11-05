@@ -24,12 +24,12 @@ C.7).
 
 At each start of an agent with a pool flume SHALL choose, under the
 room lock, the intent's account for the stage's program while usable,
-else the strategy's: fill-first's first usable account, least-busy's
-usable one running fewest of flume's agents, or most-left's (184),
-equals in order. Usable SHALL mean not spent, not past its threshold,
+else the strategy's: fill-first's first usable one, least-busy's
+usable one running fewest of flume's agents, or most-left's, equals
+in order. Usable SHALL mean not spent, not past its threshold,
 under its own bound and of the stage's program. With none usable the
 stage SHALL wait for room while its pool holds an account of its
-program (145, 147, 185).
+program (145, 147, 184, 185).
 
 #### Scenario: Fill-first and least-busy
 
