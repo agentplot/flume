@@ -1,7 +1,7 @@
 ---
 number: 41
 title: A place is cut from origin's copy of its base wherever no merge queue lands it, and from the host's own only where origin holds none
-status: proposed
+status: accepted
 date: 2026-11-05
 decision-makers:
 - Chuck Swanberg
@@ -9,7 +9,7 @@ decision-makers:
 
 # A place is cut from origin's copy of its base wherever no merge queue lands it, and from the host's own only where origin holds none
 
-Status: proposed on 2026-11-05 by the code stage of the fix `a-place-is-cut-from-origins-copy-of-its-base`. The direction is the orchestrator's, in its brief's words below; the user has not ruled on it. How a base origin lacks is told from a fetch that failed, what status says, and that a base a merge queue lands stays where the merge queue's profile says, are the stage's choices, made on the statement and these rules.
+Status: accepted by the user on 2026-11-05, at the fix's review: "Accept and release it, and push the amendment". Its statement amendment is on agentplot/blueprints main at 1b0275f (9, 56, 126, C.1, C.6, S92). Proposed earlier that day by the code stage of the fix `a-place-is-cut-from-origins-copy-of-its-base`; the direction is the orchestrator's, in its brief's words below. How a base origin lacks is told from a fetch that failed, what status says, and that a base a merge queue lands stays where the merge queue's profile says, are the stage's choices, made on the statement and these rules.
 
 Deciders: the orchestrator's brief, for the direction; the code stage, for the rest; the user, at the fix's review.
 Sources: the orchestrator's brief of the fix `a-place-is-cut-from-origins-copy-of-its-base`, 2026-11-05; `agentplot/blueprints:design/flume/requirements.md` at a465ba7, clauses 9, 56, 126, C.1, C.2 and C.6, as amended with this record on the branch `design/flume-a-place-is-cut-from-origins-copy-of-its-base` at 347520c; the runner's record 0019 (agentplot/boomdrive, accepted by the user on 2026-11-05); sluice's statement, clause 124, its scenario S58 and sluice record 0069; crew's rule plan.19; swancloud's rule herdr.13 and its fix `the-views-timer-moves-anchors-only`, in flight; records 0004 and 0027; rules core.1, core.2, core.5, core.7 and core.14; `crates/flume-core/src/launch.rs`, `crates/flume/src/host/history.rs`, `crates/flume/src/git.rs`, `crates/flume/src/profiles/merge_queue/sluice/mod.rs` and `crates/flume/src/profiles/kinds/weir/mod.rs`.
