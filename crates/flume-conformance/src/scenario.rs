@@ -123,6 +123,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             settings: BTreeMap::new(),
             every_stage: Settings::default(),
             repository_settings: KindSettings::default(),
+            repository_agents: Settings::default(),
             hold: vec![],
             hold_submission: false,
             hold_words: BTreeMap::new(),

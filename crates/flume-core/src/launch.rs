@@ -64,7 +64,9 @@ impl Engine {
         }
         };
         let (declared, mut given) = match kinds.read_kinds(&launch.repository, revision) {
-            KindsRead::Read { kinds, settings } => (kinds, settings),
+            KindsRead::Read {
+                kinds, settings, ..
+            } => (kinds, settings),
             KindsRead::CouldNotRead { reason } => {
                 return Err(format!(
                     "the kinds {} declares at {revision} could not be read: {reason}",
@@ -304,6 +306,7 @@ impl Engine {
                 settings: launch.settings.clone(),
                 every_stage: launch.every_stage.clone(),
                 repository_settings,
+                repository_agents: Settings::default(),
                 hold: launch.hold.clone(),
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),

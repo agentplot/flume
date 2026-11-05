@@ -250,7 +250,8 @@ fn a_repository_with_no_declaration_declares_no_kind() {
         Weir.read_kinds(&repository.name(), &revision),
         KindsRead::Read {
             kinds: vec![],
-            settings: Default::default()
+            settings: Default::default(),
+            agents: Settings::default(),
         }
     );
     assert_eq!(
@@ -289,7 +290,10 @@ agents = [{ instructions = "keep it short" }]
     repository.write(".config/prompts/bump-code.md", "{{brief}}");
     repository.commit("settings for change@1, and bump's own");
     let revision = Revision::new(repository.head());
-    let KindsRead::Read { kinds, settings } = Weir.read_kinds(&repository.name(), &revision) else {
+    let KindsRead::Read {
+        kinds, settings, ..
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
         panic!("the declaration did not read");
     };
     assert_eq!(
@@ -641,7 +645,10 @@ agents = [{ session = "z", instructions = "keep it short" }]
     repository.write(".config/prompts/bump-code.md", "{{brief}}");
     repository.commit("a session for every stage and for one");
     let revision = Revision::new(repository.head());
-    let KindsRead::Read { kinds, settings } = Weir.read_kinds(&repository.name(), &revision) else {
+    let KindsRead::Read {
+        kinds, settings, ..
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
         panic!("the declaration did not read");
     };
     let change = &settings["change"];

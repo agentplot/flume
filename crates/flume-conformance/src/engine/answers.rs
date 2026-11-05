@@ -82,6 +82,7 @@ fn settings() -> Settings {
             ("other".into(), "edits".into()),
         ]))),
         session: Some("review".into()),
+        programs: BTreeMap::new(),
     }
 }
 

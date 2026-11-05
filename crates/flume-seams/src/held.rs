@@ -401,6 +401,11 @@ pub struct PlaceRecord {
     /// 32).
     #[serde(default)]
     pub repository_settings: KindSettings,
+    /// The repository's settings for every kind, its `[agents]`, as the
+    /// launch read them at the base's revision; none in a held state
+    /// written before (21, 32, 191).
+    #[serde(default)]
+    pub repository_agents: Settings,
     pub hold: Vec<String>,
     pub hold_submission: bool,
     /// The words of each hold the launch put, by stage name (7, 130).

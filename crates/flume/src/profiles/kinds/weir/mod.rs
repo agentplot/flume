@@ -108,6 +108,7 @@ impl Kinds for Weir {
                 return KindsRead::Read {
                     kinds: vec![],
                     settings: BTreeMap::new(),
+                    agents: Settings::default(),
                 }
             }
             Err(reason) => return KindsRead::CouldNotRead { reason },
@@ -281,7 +282,11 @@ fn read(text: &str, prompt: impl Fn(&str) -> Result<String, String>) -> KindsRea
         })
         .collect();
     if problems.is_empty() {
-        KindsRead::Read { kinds, settings }
+        KindsRead::Read {
+            kinds,
+            settings,
+            agents: Settings::default(),
+        }
     } else {
         KindsRead::CouldNotRead {
             reason: problems.join("; "),
@@ -449,5 +454,6 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
         mode,
         // A kind names nothing a host owns, a session among it (158).
         session: None,
+        programs: BTreeMap::new(),
     }
 }

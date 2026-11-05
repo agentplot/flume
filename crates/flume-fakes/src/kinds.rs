@@ -1,5 +1,5 @@
 use crate::{lock, Log};
-use flume_seams::{Binding, BindingRead, Kind, KindSettings, Kinds, KindsRead, Revision};
+use flume_seams::{Binding, BindingRead, Kind, KindSettings, Kinds, KindsRead, Revision, Settings};
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
@@ -31,9 +31,14 @@ impl KindsState {
     /// `read` with each kind given the label its name is scripted with.
     fn labelled(&self, read: KindsRead) -> KindsRead {
         match read {
-            KindsRead::Read { kinds, settings } => KindsRead::Read {
+            KindsRead::Read {
+                kinds,
+                settings,
+                agents,
+            } => KindsRead::Read {
                 kinds: kinds.into_iter().map(|kind| self.label(kind)).collect(),
                 settings,
+                agents,
             },
             refused => refused,
         }
@@ -160,9 +165,10 @@ impl Kinds for FakeKinds {
             .cloned()
             .unwrap_or_default();
         state.labelled(match read {
-            KindsRead::Read { kinds, .. } => KindsRead::Read {
+            KindsRead::Read { kinds, agents, .. } => KindsRead::Read {
                 kinds,
                 settings: given,
+                agents,
             },
             refused => refused,
         })
@@ -201,10 +207,12 @@ impl Kinds for FakeKinds {
     }
 }
 
-/// A declaration read holding `kinds` and no settings for others.
+/// A declaration read holding `kinds` and no settings for others or for
+/// every kind.
 fn read(kinds: Vec<Kind>) -> KindsRead {
     KindsRead::Read {
         kinds,
         settings: BTreeMap::new(),
+        agents: Settings::default(),
     }
 }
