@@ -56,7 +56,7 @@ layer, where sluice is the one the tree pins.
 
 ## 2. A place's readiness is sluice's equip
 
-- [ ] 2.1 Have the suite's clause list read the statement at the revision
+- [x] 2.1 Have the suite's clause list read the statement at the revision
   of agentplot/blueprints main that holds the amendment and states S89:
   `REVISION` that revision, and `SCENARIOS` 89 or what that revision
   holds. Parts A and B are as main's list holds them when this group

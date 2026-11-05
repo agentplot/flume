@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "2c95a70";
+pub const REVISION: &str = "6188a10";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -51,7 +51,7 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11, which numbers them with no gap.
-pub const SCENARIOS: u32 = 85;
+pub const SCENARIOS: u32 = 91;
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -71,6 +71,10 @@ pub const POINTS: &str = "record 0025's change, points, built after the mode";
 /// parts of the agent seam.
 pub const PROFILES: &str = "record 0026's change, every program the terminal starts, once accepted";
 
+/// The change that builds record 0036: a place made ready by its merge
+/// queue's equipping of it.
+pub const READINESS: &str = "record 0036's change, a place equipped by its merge queue";
+
 /// The change that builds records 0028 and 0029: statechart kinds, run
 /// on the family's engine moved into weir.
 pub const STATECHART: &str =
@@ -82,11 +86,23 @@ pub const STATECHART: &str =
 pub const MCP_SERVERS: &str =
     "the answer to section 10's question on how a host's MCP servers reach an agent";
 
+/// The change that builds record 0035: a pool choosing the account with
+/// the most of its allowance left.
+pub const ALLOWANCE: &str =
+    "record 0035's change, a pool choosing the account with the most of its allowance left";
+
+/// The change that builds record 0037: each stream's multiplexer, view
+/// and terminal app, and the window a person opens its agents in.
+pub const MULTIPLEXER: &str =
+    "record 0037's change, each stream's multiplexer, view and terminal app";
+
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
 /// asks none to be cited. 154 and 157 are built as far as flume's own
 /// kinds go, one package per version and a launch naming a version, and
-/// their scenarios cite them.
+/// their scenarios cite them. Parts A and B are as the list held them at
+/// 2c95a70; the scenarios run to S91 as the revision holds them, the
+/// three changes' that state S86 to S91 named as building them.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
     let standing = [148, 149, 152]
         .map(|clause| clause.to_string())
@@ -116,6 +132,9 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain((76..=77).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
+    let allowance = (86..=88).map(|scenario| (format!("S{scenario}"), ALLOWANCE));
+    let readiness = std::iter::once(("S89".to_string(), READINESS));
+    let multiplexer = (90..=91).map(|scenario| (format!("S{scenario}"), MULTIPLEXER));
     standing
         .chain(packages)
         .chain(plan)
@@ -123,6 +142,9 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(profiles)
         .chain(statechart)
         .chain(mcp_servers)
+        .chain(allowance)
+        .chain(readiness)
+        .chain(multiplexer)
         .collect()
 }
 
@@ -148,9 +170,9 @@ mod tests {
                 .filter(|clause| ![100, 150].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 181 + 8 + 85);
+        assert_eq!(all().len(), 181 + 8 + 91);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        assert_eq!(REVISION, "2c95a70");
+        assert_eq!(REVISION, "6188a10");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
             173, 175, 176, 177, 180, 181, 182, 183,
@@ -165,9 +187,13 @@ mod tests {
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_and_0029s_and_183() {
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0035_0036_and_0037s_and_183(
+    ) {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1);
+        assert_eq!(
+            unbuilt.len(),
+            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 3 + 1 + 2
+        );
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
@@ -178,6 +204,18 @@ mod tests {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
                 "{built} is named unbuilt"
+            );
+        }
+        for (clause, change) in [
+            ("S86", ALLOWANCE),
+            ("S88", ALLOWANCE),
+            ("S89", READINESS),
+            ("S90", MULTIPLEXER),
+            ("S91", MULTIPLEXER),
+        ] {
+            assert!(
+                unbuilt.contains(&(clause.to_string(), change)),
+                "{clause} is not named unbuilt by {change}"
             );
         }
     }
