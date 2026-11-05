@@ -46,8 +46,8 @@ Option 1 keeps a second copy of what sluice's runner does. That copy has already
 
 ### Consequences
 
-- C.1's ready column, C.2's `merge_queue` line, C.6's place row and readiness paragraph, C.7's line on the kept toolchain, clauses 11, 20 and 79, and the definition of readiness are amended in flume's statement, and S89 is added, as the change's design words them, once the user approves (core.19).
-- sluice's statement gains clause 147, `equip`, and amends 33, 84, C.1, C.2 and section 9's givens, and S72 is added. sluice's change builds `sluice equip`, and flume's pin moves to the release that has it, by a chore of its own, before flume's build.
+- C.1's ready column, C.2's `merge_queue` line, C.6's place row and readiness paragraph, C.7's line on the kept toolchain, clauses 11, 20 and 79, and the definition of readiness are amended in flume's statement, and S89 is added before S90, as the change's design words them, on blueprints main at 9f1f0fd, accepted with this record (core.19).
+- sluice's statement gains clause 147, `equip`, in B.2, the check, after 84, and amends 33, 84, C.1, C.2 and section 9's givens, and S72 is added, on blueprints main at 9f1f0fd, 33, 84 and S72 as sluice's design of its equip change words them. sluice's change builds `sluice equip`, and flume's pin moves to the release that has it, by a chore of its own, before flume's build.
 - Rule core.47 is drawn, and core.3's details are amended.
 - crew's records 0023, 0024 and 0028, its `kit-toolchain` spec and its policy's comment stop saying crew readies a worktree. Boomdrive's record 0009 says a host's setup installs the host's tools, never a repository's pins. The kit standard gains a rule that the toolchain only activates, and that the runner's equip installs the pins.
 - `<place's git directory>/flume/toolchain.sh` is no longer written. A place made before keeps it until its tidy, which removes it with the worktree.

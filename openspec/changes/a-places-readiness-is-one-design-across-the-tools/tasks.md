@@ -24,7 +24,7 @@ layer, where sluice is the one the tree pins.
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Accept record 0036. Its status reads accepted by the user, with
+- [x] 1.1 Accept record 0036. Its status reads accepted by the user, with
   their words and the date. Its deciders name the user's yes. Its
   consequences give the blueprints revision that holds the statements'
   amendment (11, 20, 79, C.1, C.2, C.6, C.7, S89; core.19). True when
@@ -51,7 +51,7 @@ layer, where sluice is the one the tree pins.
   written (core.19, core.35). True when
   `sluice exec main -- moon run root:format site:prose site:build`
   passes.
-- [ ] 1.3 Run the checks of the projects this group touched. True when
+- [x] 1.3 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run root:format root:adrs site:prose site:build`
   passes.
 
