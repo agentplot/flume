@@ -84,12 +84,6 @@ pub const STATECHART: &str =
 pub const MCP_SERVERS: &str =
     "the answer to section 10's question on how a host's MCP servers reach an agent";
 
-/// The change that builds record 0035: a pool choosing the account with
-/// the most of its allowance left by the host's reading, and a pool's
-/// threshold past which an account takes no new start.
-pub const MOST_LEFT: &str =
-    "record 0035's change, a pool choosing by the allowance left, built after its first group";
-
 /// The change that builds record 0036: a place made ready by its merge
 /// queue's equipping of it.
 pub const READINESS: &str = "record 0036's change, a place equipped by its merge queue";
@@ -190,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0035_0036_and_0037s_and_183(
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0036_and_0037s_and_183(
     ) {
         let unbuilt = unbuilt();
         assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 1 + 7);
