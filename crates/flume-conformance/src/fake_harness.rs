@@ -643,6 +643,25 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
     fn unreadable(&self) {
         self.queue.unreadable("the merge queue is down");
     }
+
+    fn refuse_another(&self, place: &PlaceRef) -> String {
+        let other = "bolt/x";
+        let base = self
+            .git
+            .branch_head(&place.repository, &place.base)
+            .expect("the base");
+        self.git.set_branch(&place.repository, other, &base);
+        self.git.set_branch(&place.repository, "unit/x", &base);
+        self.git.commit(&place.repository, "unit/x", &["x.rs"]);
+        self.queue
+            .hand_submission(&place.repository, "unit/x", other, SubmissionState::Waiting);
+        self.queue.refuse_branch(
+            &place.repository,
+            other,
+            &format!("{other}'s policy cannot be read"),
+        );
+        other.into()
+    }
 }
 
 #[derive(Default)]
