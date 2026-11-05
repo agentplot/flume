@@ -3,8 +3,9 @@
 //! started.
 
 use super::account_pools::{
-    account, begun_fix, code_delivered, fill_first_at_homes, fix_in, home, host, of_the_surfaces,
-    pool, spent, stops_at_limit, two_programs, UNREACHED,
+    account, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in, fix_of, home,
+    host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent, stops_at_limit,
+    two_programs, window, UNREACHED,
 };
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::for_every_stage;
@@ -97,6 +98,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: the host's pools give each pool's strategy and each account's agents running, bound and spent time, and no value of an account's environment",
             cites: &["56", "144", "145"],
             run: a_pool_with_a_spent_account,
+        },
+        Scenario {
+            name: "status: a most-left pool stating no threshold gives most-left and 90, an account's fresh reading with its window's use as a percentage and its reset, another's stale reading, and a third's missing file with why, in the JSON form, and no reading's path",
+            cites: &["56", "184", "185"],
+            run: a_pool_with_readings,
+        },
+        Scenario {
+            name: "status: an account whose 7-day window reads 95% used gives what holds it past its threshold, 7-day until its reset, and that window past, in the JSON form",
+            cites: &["56", "185"],
+            run: an_account_past_its_threshold,
+        },
+        Scenario {
+            name: "status: an intent whose affinity for agent moved off work-1, past its threshold in 5-hour until 17:00, to work-2 gives the move with why threshold, the window and its end, in the JSON form",
+            cites: &["56", "147", "185"],
+            run: an_intents_move_past_a_threshold,
+        },
+        Scenario {
+            name: "status: a move a held state holds as an earlier release wrote it, spent with no window or end, is given as written",
+            cites: &["56", "61"],
+            run: a_move_recorded_before,
         },
         Scenario {
             name: "status: an agent that took edits from the host's table gives its mode as written from host-kind, the value its profile passed and that it was read back, in the JSON form",
@@ -778,6 +799,7 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
         vec![PoolStatus {
             name: "work".into(),
             strategy: Strategy::FillFirst,
+            threshold: 90,
             accounts: vec![
                 AccountStatus {
                     name: "work-1".into(),
@@ -785,6 +807,8 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 2,
                     bound: Some(4),
                     spent_until: None,
+                    reading: None,
+                    past: None,
                 },
                 AccountStatus {
                     name: "work-2".into(),
@@ -792,6 +816,8 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 0,
                     bound: None,
                     spent_until: Some(until),
+                    reading: None,
+                    past: None,
                 },
             ],
         }],
@@ -801,6 +827,195 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
     ensure!(
         !answer.contains("a-token-of-the-account"),
         "status gives a value of an account's environment"
+    );
+    Ok(())
+}
+
+fn a_pool_with_readings(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let seventeen = now + 2 * 3600;
+    pool_at(
+        &world,
+        "work",
+        Strategy::MostLeft,
+        None,
+        ["work-1", "work-2", "work-3"]
+            .into_iter()
+            .map(|name| reading_at(account(name, None)))
+            .collect(),
+    );
+    reads(
+        &world,
+        "work-1",
+        now - 120,
+        vec![window("5-hour", 4_200, Some(seventeen))],
+    );
+    reads(
+        &world,
+        "work-2",
+        now - 20 * 60,
+        vec![window("5-hour", 1_250, Some(seventeen))],
+    );
+    let json = serde_json::to_value(host(&world)?).map_err(|error| error.to_string())?;
+    let unbound = |name: &str, reading| {
+        serde_json::json!({
+            "name": name,
+            "program": "agent",
+            "running": 0,
+            "bound": null,
+            "spent_until": null,
+            "reading": reading,
+        })
+    };
+    ensure_eq!(
+        json["pools"],
+        serde_json::json!([{
+            "name": "work",
+            "strategy": "most-left",
+            "threshold": 90,
+            "accounts": [
+                unbound("work-1", serde_json::json!({
+                    "read_at": now - 120,
+                    "fresh": true,
+                    "windows": [{"name": "5-hour", "used": 42, "resets_at": seventeen, "past": false}],
+                })),
+                unbound("work-2", serde_json::json!({
+                    "read_at": now - 20 * 60,
+                    "fresh": false,
+                    "windows": [{"name": "5-hour", "used": 12.5, "resets_at": seventeen, "past": false}],
+                })),
+                unbound("work-3", serde_json::json!({"unread": "the file is missing"})),
+            ],
+        }]),
+        "the host's pools in the JSON form"
+    );
+    let answer = world.engine().status(None).to_json();
+    ensure!(
+        !answer.contains(".local/state/usage"),
+        "status gives a reading's path: {answer}"
+    );
+    Ok(())
+}
+
+fn an_account_past_its_threshold(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let monday = now + 3 * 24 * 3600;
+    pool_at(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        None,
+        vec![reading_at(account("work-1", None)), account("work-2", None)],
+    );
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![
+            window("5-hour", 3_000, Some(now + 3600)),
+            window("7-day", 9_500, Some(monday)),
+        ],
+    );
+    let json = serde_json::to_value(host(&world)?).map_err(|error| error.to_string())?;
+    let accounts = &json["pools"][0]["accounts"];
+    ensure_eq!(
+        accounts[0]["past"],
+        serde_json::json!({"window": "7-day", "until": monday}),
+        "what holds work-1 past its threshold"
+    );
+    ensure_eq!(
+        accounts[0]["reading"]["windows"],
+        serde_json::json!([
+            {"name": "5-hour", "used": 30, "resets_at": now + 3600, "past": false},
+            {"name": "7-day", "used": 95, "resets_at": monday, "past": true},
+        ]),
+        "work-1's windows"
+    );
+    ensure_eq!(
+        (accounts[1].get("past"), accounts[1].get("reading")),
+        (None, None),
+        "work-2, which names no reading"
+    );
+    Ok(())
+}
+
+fn an_intents_move_past_a_threshold(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let seventeen = now + 2 * 3600;
+    pool_at(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        None,
+        vec![reading_at(account("work-1", None)), account("work-2", None)],
+    );
+    let first = fix_of(&world, None, "a", Some("the-surfaces"))?;
+    ensure_eq!(
+        account_of(&world, &first, "code"),
+        on("work", "work-1"),
+        "the intent's first place's account"
+    );
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![window("5-hour", 9_200, Some(seventeen))],
+    );
+    let id = fix_of(&world, None, "b", Some("the-surfaces"))?;
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["moves"],
+        serde_json::json!([{
+            "on": "intent",
+            "program": "agent",
+            "from": "work-1",
+            "to": "work-2",
+            "why": "threshold",
+            "at": now,
+            "window": "5-hour",
+            "until": seventeen,
+            "cache": "lost",
+        }]),
+        "the place's moves in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_move_recorded_before(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_in(&world, None, "one")?;
+    let before = serde_json::json!({
+        "on": "stage",
+        "stage": "code",
+        "from": "work-1",
+        "to": "work-2",
+        "why": "spent",
+        "at": world.host.now(),
+    });
+    let mut held = world.held(&id).ok_or("no held state")?;
+    held.moves
+        .push(serde_json::from_value(before.clone()).map_err(|error| error.to_string())?);
+    world.store.put(&id, held);
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status
+            .moves
+            .iter()
+            .map(|moved| (moved.moved.window.clone(), moved.moved.until))
+            .collect::<Vec<_>>(),
+        vec![(None, None)],
+        "the move's window and end"
+    );
+    let mut given = before;
+    given["cache"] = serde_json::json!("lost");
+    ensure_eq!(
+        serde_json::to_value(&status).map_err(|error| error.to_string())?["moves"],
+        serde_json::json!([given]),
+        "the move in the JSON form"
     );
     Ok(())
 }

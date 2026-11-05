@@ -40,7 +40,7 @@ or the fake.
 
 ## 4. Status
 
-- [ ] 4.1 Give `PoolStatus` its `threshold` and `AccountStatus` its `reading` and `past`, as design 8 has them, `used` given as a percentage in the JSON form, and `RoomWanted::Pool`'s `until` the soonest back. Add to `engine/place_status.rs` the place-status spec's scenarios of a pool with readings, an account past its threshold, and a move past a threshold and one recorded before, in the JSON form (56, 145, 184, 185; core.14, core.30). True when `sluice exec main -- moon run core:test conformance:test` passes, the scenario of a pool with a spent account passing unchanged.
+- [x] 4.1 Give `PoolStatus` its `threshold` and `AccountStatus` its `reading` and `past`, as design 8 has them, `used` given as a percentage in the JSON form, and `RoomWanted::Pool`'s `until` the soonest back. Add to `engine/place_status.rs` the place-status spec's scenarios of a pool with readings, an account past its threshold, and a move past a threshold and one recorded before, in the JSON form (56, 145, 184, 185; core.14, core.30). True when `sluice exec main -- moon run core:test conformance:test` passes, the scenario of a pool with a spent account passing unchanged.
 - [ ] 4.2 Have the person's form print a pool's threshold, each account's reading, fresh, stale or unread, an account past its threshold, and a move off one, as design 8 has them, and no reading's path. Add `print.rs` unit tests of each line (56, 185). True when `sluice exec main -- moon run flume:test` passes.
 - [ ] 4.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run core:format core:lint core:test conformance:test flume:format flume:lint flume:test` passes.
 

@@ -1737,7 +1737,7 @@ fn a_stage_under_no_account(_: &()) -> Outcome {
 }
 
 /// The path of `account`'s reading under the fake host's `HOME`.
-fn usage_path(account: &str) -> String {
+pub fn usage_path(account: &str) -> String {
     format!("/home/user/.local/state/usage/{account}.json")
 }
 
@@ -1817,7 +1817,7 @@ fn a_scripted_reading(_: &()) -> Outcome {
 
 /// An account like `account` whose reading is the file [`usage_path`]
 /// names, under the fake host's `HOME` (184).
-fn reading_at(account: Account) -> Account {
+pub fn reading_at(account: Account) -> Account {
     Account {
         usage: Some(format!("~/.local/state/usage/{}.json", account.name)),
         ..account
@@ -1825,7 +1825,7 @@ fn reading_at(account: Account) -> Account {
 }
 
 /// A window `name`, `used` hundredths used, resetting at `resets_at`.
-fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
+pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
     Window {
         name: name.into(),
         used,
@@ -1834,7 +1834,7 @@ fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
 }
 
 /// The host writes `account`'s reading, read at `read_at`, of `windows`.
-fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<Window>) {
+pub fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<Window>) {
     world
         .host
         .set_usage(&usage_path(account), Ok(Usage { read_at, windows }));
@@ -1842,7 +1842,7 @@ fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<Window>) {
 
 /// The host declares `name` with `accounts` under `strategy` and
 /// `threshold`, the host's own pool.
-fn pool_at(
+pub fn pool_at(
     world: &World,
     name: &str,
     strategy: Strategy,

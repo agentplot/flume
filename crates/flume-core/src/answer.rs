@@ -430,8 +430,9 @@ pub struct Queued {
 /// whose bound its agents running have reached; its stream's room past
 /// what the stream's other labels keep free and do not use, naming those
 /// labels; or its pool's, every
-/// account that runs its program spent or at its own bound, with the
-/// soonest time one stops being spent, none where none is spent. A stage
+/// account that runs its program spent, past its threshold or at its own
+/// bound, with the soonest time one is back, none where each is only at
+/// its bound (185). A stage
 /// whose pool holds no account of its program waits on no room: it is
 /// refused (4, 32, 145).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -476,7 +477,7 @@ impl RoomWanted {
             RoomWanted::Pool {
                 pool,
                 until: Some(until),
-            } => format!("a usable account of the pool {pool}, the soonest spent until {until}"),
+            } => format!("a usable account of the pool {pool}, the soonest back at {until}"),
             RoomWanted::Pool { pool, until: None } => {
                 format!("a usable account of the pool {pool}, each at its own bound")
             }
@@ -532,19 +533,28 @@ pub enum Reserves {
     None,
 }
 
-/// A pool of the host (144, 145): its strategy and its accounts in
-/// order.
+/// A pool of the host (144, 145, 185): its strategy, its threshold, 90
+/// where it states none, and its accounts in order.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolStatus {
     pub name: String,
     pub strategy: Strategy,
+    #[serde(default = "threshold")]
+    pub threshold: u32,
     pub accounts: Vec<AccountStatus>,
 }
 
-/// An account of a pool (144 to 146): the program it runs, flume's
-/// agents running on it, its own bound, none where it states none, and
-/// the time it is spent until, none where it is not spent; never a value
-/// of its environment.
+/// The threshold of a pool that states none (185).
+fn threshold() -> u32 {
+    crate::THRESHOLD
+}
+
+/// An account of a pool (144 to 146, 184, 185): the program it runs,
+/// flume's agents running on it, its own bound, none where it states
+/// none, the time it is spent until, none where it is not spent, its
+/// reading, none where it names none, and what holds it past its
+/// threshold, none where nothing does; never a value of its environment
+/// or a reading's path.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountStatus {
     pub name: String,
@@ -552,6 +562,82 @@ pub struct AccountStatus {
     pub running: u32,
     pub bound: Option<u32>,
     pub spent_until: Option<Seconds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reading: Option<ReadingStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub past: Option<Past>,
+}
+
+/// An account's reading as status gives it (184): when the host read it,
+/// whether it is fresh at the host's clock, and each of its windows; or,
+/// where the account names one that cannot be read, why, in words that
+/// name no path.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ReadingStatus {
+    Read {
+        read_at: Seconds,
+        fresh: bool,
+        windows: Vec<WindowStatus>,
+    },
+    Unread {
+        unread: String,
+    },
+}
+
+/// A window of an account's reading as status gives it (184, 185): its
+/// name, how much of it is used, in hundredths of a percent and a
+/// percentage in the JSON form, when it resets, none where the reading
+/// gives none, and whether it holds the account past its threshold.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowStatus {
+    pub name: String,
+    #[serde(with = "as_percentage")]
+    pub used: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_at: Option<Seconds>,
+    pub past: bool,
+}
+
+/// What holds an account past its threshold: the window, and when it
+/// stops holding it, its reset, or, where it names none, when the reading
+/// stops being fresh (185).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Past {
+    pub window: String,
+    pub until: Seconds,
+}
+
+/// Hundredths of a percent as a percentage, a whole number where it is
+/// one, as a reading's file writes it (184).
+pub fn percentage(hundredths: u32) -> String {
+    match hundredths % 100 {
+        0 => (hundredths / 100).to_string(),
+        _ => format!("{}", f64::from(hundredths) / 100.0),
+    }
+}
+
+/// Hundredths of a percent given as a percentage in the JSON form, a
+/// whole number where it is one (184).
+mod as_percentage {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(hundredths: &u32, serializer: S) -> Result<S::Ok, S::Error> {
+        match hundredths % 100 {
+            0 => serializer.serialize_u32(hundredths / 100),
+            _ => serializer.serialize_f64(f64::from(*hundredths) / 100.0),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+        let percent = f64::deserialize(deserializer)?;
+        if !(0.0..=100.0).contains(&percent) {
+            return Err(serde::de::Error::custom(format!(
+                "{percent} is not a percentage from 0 to 100"
+            )));
+        }
+        Ok((percent * 100.0).round() as u32)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -1165,6 +1165,7 @@ mod tests {
             pools: vec![PoolStatus {
                 name: "work".into(),
                 strategy: Strategy::FillFirst,
+                threshold: 90,
                 accounts: vec![
                     AccountStatus {
                         name: "work-1".into(),
@@ -1172,6 +1173,8 @@ mod tests {
                         running: 2,
                         bound: Some(4),
                         spent_until: None,
+                        reading: None,
+                        past: None,
                     },
                     AccountStatus {
                         name: "work-2".into(),
@@ -1179,6 +1182,8 @@ mod tests {
                         running: 0,
                         bound: None,
                         spent_until: Some(54_000),
+                        reading: None,
+                        past: None,
                     },
                 ],
             }],

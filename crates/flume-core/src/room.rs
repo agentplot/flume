@@ -615,6 +615,7 @@ impl Engine {
                 name.clone(),
                 PoolRoom {
                     strategy: pool.strategy,
+                    threshold,
                     accounts,
                 },
             );
@@ -795,6 +796,7 @@ impl Engine {
             .map(|(name, pool)| PoolStatus {
                 name: name.clone(),
                 strategy: pool.strategy,
+                threshold: pool.threshold,
                 accounts: pool
                     .accounts
                     .iter()
@@ -804,6 +806,8 @@ impl Engine {
                         running: room.running,
                         bound: room.account.agents,
                         spent_until: room.spent_until,
+                        reading: room.reading_status(),
+                        past: room.past(),
                     })
                     .collect(),
             })

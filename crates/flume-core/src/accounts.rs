@@ -6,7 +6,7 @@
 //! the usable accounts in order (184, 185; core.32).
 
 use crate::room::Queue;
-use crate::{settings, Engine};
+use crate::{settings, Engine, Past, ReadingStatus, WindowStatus};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
@@ -18,10 +18,12 @@ pub const THRESHOLD: u32 = 90;
 /// clock (184).
 pub const FRESH: Seconds = 15 * 60;
 
-/// A pool as the queue reads it: its strategy and its accounts in order.
+/// A pool as the queue reads it: its strategy, its threshold, 90 where
+/// it states none, and its accounts in order (185).
 #[derive(Clone, Debug)]
 pub(crate) struct PoolRoom {
     pub strategy: Strategy,
+    pub threshold: u32,
     pub accounts: Vec<AccountRoom>,
 }
 
@@ -50,15 +52,6 @@ pub(crate) enum Reading {
     Unread(String),
     /// Its reading, as read now.
     Read(Usage),
-}
-
-/// What holds an account past its threshold: the window, and when it
-/// stops holding it, its reset, or, where it names none, when the reading
-/// stops being fresh (185).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Past {
-    pub window: String,
-    pub until: Seconds,
 }
 
 /// The window's use now in hundredths of a percent: none where its reset
@@ -142,6 +135,33 @@ impl AccountRoom {
         match &self.reading {
             Reading::Read(usage) => past(usage, self.threshold, self.now),
             Reading::None | Reading::Unread(_) => None,
+        }
+    }
+
+    /// Its reading as status gives it, none where it names none: when the
+    /// host read it, whether it is fresh, and each window with whether it
+    /// holds the account past its threshold; or why it cannot be read
+    /// (184, 185).
+    pub fn reading_status(&self) -> Option<ReadingStatus> {
+        match &self.reading {
+            Reading::None => None,
+            Reading::Unread(why) => Some(ReadingStatus::Unread {
+                unread: why.clone(),
+            }),
+            Reading::Read(usage) => Some(ReadingStatus::Read {
+                read_at: usage.read_at,
+                fresh: fresh(usage, self.now),
+                windows: usage
+                    .windows
+                    .iter()
+                    .map(|window| WindowStatus {
+                        name: window.name.clone(),
+                        used: window.used,
+                        resets_at: window.resets_at,
+                        past: holds_until(usage, window, self.threshold, self.now).is_some(),
+                    })
+                    .collect(),
+            }),
         }
     }
 
