@@ -58,7 +58,12 @@ the base's revision and runs, in the new place:
 1. `[tests] toolchain`, when it names one, such as
    `["devenv", "print-dev-env"]`. Its output is the environment every
    later step runs under, kept in the place's own git directory.
-2. `moon setup`, when `[tests] runner = "moon"`.
+2. `proto install --config-mode upwards`, when `[tests] runner = "moon"`
+   and the base holds a `.prototools`. It installs the versions the
+   repository pins, under the toolchain's environment, as sluice's moon
+   runner does before any moon command. A toolchain that only activates
+   those versions leaves them uninstalled in a fresh clone.
+3. `moon setup`, when `[tests] runner = "moon"`.
 
 Each step runs with the host user's login environment, nothing of the
 caller's session. A step that fails leaves the place made: a fix or a

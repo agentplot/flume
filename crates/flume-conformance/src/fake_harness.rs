@@ -7,7 +7,7 @@ use crate::seams::{
     history::HistoryHarness,
     kinds::KindsHarness,
     merge_queue::MergeQueueHarness,
-    place::PlaceHarness,
+    place::{Pinned, PlaceHarness},
     store::StoreHarness,
     terminal::TerminalHarness,
 };
@@ -150,6 +150,25 @@ impl PlaceHarness for FakePlaceHarness {
             .map(|(step, passed)| (*step, *passed, if *passed { "ok" } else { "failed" }))
             .collect();
         self.place.set_readiness(repository, &steps);
+    }
+
+    /// The fake runs the readiness the repository declares, here the
+    /// toolchain, the pins' install and the setup that runs what it
+    /// installed.
+    fn pinned(&self, repository: &str) -> Option<Pinned> {
+        self.place.set_readiness(
+            repository,
+            &[
+                ("toolchain", true, "ok"),
+                ("install", true, "installed the pins"),
+                ("setup", true, "ok"),
+            ],
+        );
+        Some(Pinned {
+            steps: vec!["toolchain".into(), "install".into(), "setup".into()],
+            install: "install".into(),
+            said: "installed the pins".into(),
+        })
     }
 
     fn untracked(&self, place: &PlaceRef, file: &str) {

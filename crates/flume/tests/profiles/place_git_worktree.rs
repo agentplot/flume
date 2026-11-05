@@ -4,15 +4,20 @@
 //! place under flume's own data directory, for the bare repository beside
 //! its worktrees as for a clone, a place an earlier flume made inside a
 //! clone's main worktree or beside a bare repository's worktrees read and
-//! removed where it stands (record 0027), and the toolchain's environment
-//! kept in the place's git directory.
+//! removed where it stands (record 0027), the toolchain's environment
+//! kept in the place's git directory, and, under sluice's moon runner, a
+//! place's pins installed before moon's setup, an install that fails
+//! named with its words, and none run where the repository pins
+//! nothing.
 
 use crate::common::*;
 use flume::profiles::place::git_worktree::{GitWorktree, Login, PlaceData, Step};
+use flume::profiles::place_data;
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::place::{self, PlaceHarness};
+use flume_conformance::seams::place::{self, Pinned, PlaceHarness};
 use flume_seams::*;
 use std::collections::BTreeSet;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -27,6 +32,91 @@ fn login(scratch: &Scratch) -> Login {
         ("PATH", &path),
         ("LANG", "C"),
     ])
+}
+
+/// The version of moon a scratch repository pins.
+const MOON: &str = "9.9.9";
+
+/// The install of a place's pins its readiness runs, by the name status
+/// gives it.
+const INSTALL: &str = "proto install --config-mode upwards";
+
+/// What a scratch repository's `.prototools` holds.
+enum Pins {
+    /// None: the repository has no `.prototools`.
+    None,
+    /// moon, which the stand-in for proto installs.
+    Installable,
+    /// moon, which the stand-in for proto refuses with these words.
+    Refused(&'static str),
+}
+
+/// Gives `repository` a sluice policy whose runner is moon and whose
+/// toolchain prints the environment devenv's does: proto's home in the
+/// repository's git common directory, and on `PATH` each tool proto
+/// installed there, read as the environment is sourced, installing none.
+/// proto is a stand-in that installs a stand-in moon, and no moon of the
+/// host's is on the toolchain's `PATH`, so moon runs only once proto
+/// installed it.
+fn moon_repository(repository: &Repository, pins: Pins) {
+    let path: Vec<String> = std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|dir| !dir.is_empty() && !Path::new(dir).join("moon").exists())
+        .map(str::to_string)
+        .collect();
+    let home = repository.dir.join(".git/proto");
+    repository.write(
+        ".config/sluice.toml",
+        "[tests]\nrunner = \"moon\"\ntoolchain = \"cat tools/env.sh\"\n\n[branches.main]\n",
+    );
+    repository.write(
+        "tools/env.sh",
+        &format!(
+            r#"PROTO_HOME='{}'
+export PROTO_HOME
+PATH="$PWD/tools/bin:"'{}'
+if [ -d "$PROTO_HOME/bin" ]; then
+  PATH="$PROTO_HOME/bin:$PATH"
+fi
+export PATH
+"#,
+            home.display(),
+            path.join(":")
+        ),
+    );
+    let refusal = match pins {
+        Pins::Refused(words) => format!("echo '{words}' >&2\nexit 1\n"),
+        _ => String::new(),
+    };
+    repository.write(
+        "tools/bin/proto",
+        &format!(
+            r#"#!/bin/sh
+# A stand-in for proto: its install puts each tool .prototools pins in
+# $PROTO_HOME/bin.
+if [ "$*" != "install --config-mode upwards" ]; then
+  echo "proto: not the install: $*" >&2
+  exit 2
+fi
+{refusal}mkdir -p "$PROTO_HOME/bin"
+sed -n 's/^\([a-z]*\) = "\(.*\)"$/\1 \2/p' .prototools | while read -r tool version; do
+  printf '#!/bin/sh\necho "%s %s: $*"\n' "$tool" "$version" > "$PROTO_HOME/bin/$tool"
+  chmod +x "$PROTO_HOME/bin/$tool"
+  echo "installed $tool $version"
+done
+"#
+        ),
+    );
+    std::fs::set_permissions(
+        repository.dir.join("tools/bin/proto"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .expect("the stand-in for proto made executable");
+    if !matches!(pins, Pins::None) {
+        repository.write(".prototools", &format!("moon = \"{MOON}\"\n"));
+    }
+    repository.commit("moon's policy, proto's pins");
 }
 
 /// flume's own data directory on the scratch's host.
@@ -187,6 +277,19 @@ impl PlaceHarness for Harness {
                 )
             })
             .collect();
+    }
+
+    /// A repository whose sluice policy runs moon and whose `.prototools`
+    /// pins moon, which nothing installed, bound as the resolver binds it.
+    fn pinned(&self, repository: &str) -> Option<Pinned> {
+        moon_repository(&self.repository, Pins::Installable);
+        *self.seam.data.lock().unwrap() =
+            place_data(repository, Some("sluice"), "main").expect("the policy's data");
+        Some(Pinned {
+            steps: vec!["toolchain".into(), INSTALL.into(), "moon setup".into()],
+            install: INSTALL.into(),
+            said: format!("installed moon {MOON}"),
+        })
     }
 
     fn untracked(&self, place: &PlaceRef, file: &str) {
@@ -487,6 +590,62 @@ fn the_toolchain_environment_is_kept_in_the_places_git_directory() {
         !kept.exists(),
         "the toolchain's environment outlived its place"
     );
+}
+
+/// The steps a readiness ran, each with whether it passed.
+fn steps(readiness: &Readiness) -> Vec<(&str, bool)> {
+    readiness
+        .steps
+        .iter()
+        .map(|step| (step.step.as_str(), step.passed))
+        .collect()
+}
+
+#[test]
+fn pins_that_cannot_be_installed_stop_the_readiness_at_the_install_with_its_words() {
+    let repository = Repository::new("unpinned");
+    moon_repository(
+        &repository,
+        Pins::Refused("moon 9.9.9 cannot be downloaded"),
+    );
+    let data = place_data(&repository.name(), Some("sluice"), "main").expect("the policy");
+    let profile = profile(data, &repository.scratch);
+    let place = made(&profile, &repository, "unpinned");
+    let readiness = profile.ready(&place, &Revision::new(repository.head()));
+
+    assert_eq!(
+        steps(&readiness),
+        vec![("toolchain", true), (INSTALL, false)],
+        "{readiness:?}"
+    );
+    let failed = readiness.failed().expect("the install failed");
+    assert!(
+        failed.words.contains("moon 9.9.9 cannot be downloaded"),
+        "{}",
+        failed.words
+    );
+    assert!(
+        !repository.dir.join(".git/proto/bin/moon").exists(),
+        "a refused install installed moon"
+    );
+}
+
+#[test]
+fn a_repository_that_pins_nothing_runs_no_install() {
+    let repository = Repository::new("pinless");
+    moon_repository(&repository, Pins::None);
+    let data = place_data(&repository.name(), Some("sluice"), "main").expect("the policy");
+    let profile = profile(data, &repository.scratch);
+    let place = made(&profile, &repository, "pinless");
+    let readiness = profile.ready(&place, &Revision::new(repository.head()));
+
+    assert_eq!(
+        steps(&readiness),
+        vec![("toolchain", true), ("moon setup", false)],
+        "{readiness:?}"
+    );
+    let failed = readiness.failed().expect("moon is not installed");
+    assert!(failed.words.contains("moon"), "{}", failed.words);
 }
 
 #[test]
