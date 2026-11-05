@@ -12,10 +12,11 @@ and the queue.
 
 A stage that may start SHALL start only while the agents running on
 the host, every caller's counted together, are under the host's bound,
-its stream's are under the stream's, and an account of its pool is
-usable; otherwise it SHALL wait for room. The count and the start SHALL
-be taken under one host-wide lock. A host that states no bound of its
-own and no stream's bound SHALL have no queue (70, 75, 143, 145).
+its stream's are under the stream's less what the stream's other labels
+keep free and do not use, and an account of its pool is usable;
+otherwise it SHALL wait for room. The count and the start SHALL be
+taken under one host-wide lock. A host that states no bound of its own
+and no stream's bound SHALL have no queue (70, 75, 143, 145, 181).
 
 #### Scenario: A third launch on a host of two
 
@@ -37,13 +38,19 @@ own and no stream's bound SHALL have no queue (70, 75, 143, 145).
 - **WHEN** the host states no bound of its own, `work` states one agent, and two work places and a place in `default` are launched
 - **THEN** one work agent and the default place's agent start, the second work place waits for its stream's room, and when the work agent ends it starts (70, 143)
 
+#### Scenario: A slot another label keeps free
+
+- **WHEN** `work` has two agents, one running, and its label `operation`, running none, keeps one free, and a place of no label is launched on `work`
+- **THEN** its stage waits for room, and an operation place launched then starts (70, 181)
+
 ### Requirement: What waits starts by priority
 
-Every settle SHALL start the stages waiting for room, by their stream's
-priority, then their place's, then the order they came to wait, as many
-as there is room for, passing over one whose stream is at its bound or
+Every settle SHALL start the stages waiting for room by their stream's
+priority, then, within a stream, a label's below its reserve first,
+then their place's priority, then the order they came to wait, as many
+as there is room for, passing over one whose stream has no room or
 whose pool has no usable account without holding the host's room for
-it, and SHALL end no agent for one (31, 46, 70, 143).
+it, and SHALL end no agent for one (31, 46, 70, 143, 181).
 
 #### Scenario: Nine units on a host of four
 
@@ -64,6 +71,11 @@ it, and SHALL end no agent for one (31, 46, 70, 143).
 
 - **WHEN** a stage's pool has every account spent and a stage of another pool waits behind it
 - **THEN** the stage behind starts, and the first keeps its turn until an account of its pool is usable (70, 145)
+
+#### Scenario: A label below its reserve before a place's priority
+
+- **WHEN** in `work` an operation place at priority zero, its label running none of its reserve of one, and a construction place at priority 50, its label past its reserve, wait, and one agent's room opens
+- **THEN** the operation place starts (70, 181)
 
 ### Requirement: Priority is the caller's
 

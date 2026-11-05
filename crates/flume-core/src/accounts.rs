@@ -1,36 +1,186 @@
 //! A pool's accounts as the queue reads them under the room lock (144,
 //! 145): each account's agents of flume's running, the time it stays
-//! spent until where the host's own document records it spent, and the
-//! choice of an account at a start, the strategy over the usable accounts
-//! in order (core.32).
+//! spent until where the host's own document records it spent, its
+//! reading as the host last wrote it and the threshold that reading holds
+//! it past, and the choice of an account at a start, the strategy over
+//! the usable accounts in order (184, 185; core.32).
 
 use crate::room::Queue;
-use crate::Engine;
+use crate::{settings, Engine, Past, ReadingStatus, WindowStatus};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
-/// A pool as the queue reads it: its strategy and its accounts in order.
+/// The whole percentage of a window past which an account takes no new
+/// start, where its pool states none (185, C.7).
+pub const THRESHOLD: u32 = 90;
+
+/// How long a reading is fresh from when the host read it, by the host's
+/// clock (184).
+pub const FRESH: Seconds = 15 * 60;
+
+/// A pool as the queue reads it: its strategy, its threshold, 90 where
+/// it states none, and its accounts in order (185).
 #[derive(Clone, Debug)]
 pub(crate) struct PoolRoom {
     pub strategy: Strategy,
+    pub threshold: u32,
     pub accounts: Vec<AccountRoom>,
 }
 
 /// An account of a pool: as the configuration declares it, flume's
-/// agents running on it, and the time it is spent until, none where it is
-/// not spent at the host's clock (144, 146).
+/// agents running on it, the time it is spent until, none where it is
+/// not spent at the host's clock, and its reading, with the host's clock
+/// and its pool's threshold, 90 where the pool states none, the queue
+/// read it at (144, 146, 184, 185).
 #[derive(Clone, Debug)]
 pub(crate) struct AccountRoom {
     pub account: Account,
     pub running: u32,
     pub spent_until: Option<Seconds>,
+    pub reading: Reading,
+    pub threshold: u32,
+    pub now: Seconds,
+}
+
+/// An account's reading as the queue reads it (184).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Reading {
+    /// The account names no reading.
+    None,
+    /// It names one that cannot be read, with why, in words that name no
+    /// path.
+    Unread(String),
+    /// Its reading, as read now.
+    Read(Usage),
+}
+
+/// The window's use now in hundredths of a percent: none where its reset
+/// has passed at `now`, its `used` otherwise (184).
+pub(crate) fn used_now(window: &Window, now: Seconds) -> u32 {
+    match window.resets_at {
+        Some(resets_at) if resets_at <= now => 0,
+        _ => window.used,
+    }
+}
+
+/// When the host read the reading, a time later than `now` read as `now`
+/// (184).
+fn read_at(usage: &Usage, now: Seconds) -> Seconds {
+    usage.read_at.min(now)
+}
+
+/// Whether the reading is fresh at `now`: less than [`FRESH`] past when
+/// the host read it (184).
+pub(crate) fn fresh(usage: &Usage, now: Seconds) -> bool {
+    now < read_at(usage, now).saturating_add(FRESH)
+}
+
+/// Until when `window` of `usage` holds its account past `threshold`, a
+/// whole percentage, at `now`: where its use now is at the threshold or
+/// past it, until its reset whatever the reading's age, and, where it
+/// names none, until the reading stops being fresh, while it is; none
+/// otherwise (185).
+pub(crate) fn holds_until(
+    usage: &Usage,
+    window: &Window,
+    threshold: u32,
+    now: Seconds,
+) -> Option<Seconds> {
+    if used_now(window, now) < threshold.saturating_mul(100) {
+        return None;
+    }
+    match window.resets_at {
+        Some(resets_at) => Some(resets_at),
+        None => fresh(usage, now).then(|| read_at(usage, now).saturating_add(FRESH)),
+    }
+}
+
+/// What holds the account whose reading is `usage` past `threshold` at
+/// `now`: of the windows that hold it, the one that holds it latest,
+/// equals in the reading's order; none where none holds it (185).
+pub(crate) fn past(usage: &Usage, threshold: u32, now: Seconds) -> Option<Past> {
+    usage
+        .windows
+        .iter()
+        .filter_map(|window| {
+            holds_until(usage, window, threshold, now).map(|until| Past {
+                window: window.name.clone(),
+                until,
+            })
+        })
+        .fold(None, |latest: Option<Past>, past| match latest {
+            Some(latest) if latest.until >= past.until => Some(latest),
+            _ => Some(past),
+        })
+}
+
+/// What the account whose reading is `usage` has left at `now`, in
+/// hundredths of a percent: 10000 less the most use now of its windows,
+/// for a fresh reading with a window; none otherwise (145, 184).
+pub(crate) fn left(usage: &Usage, now: Seconds) -> Option<u32> {
+    if !fresh(usage, now) {
+        return None;
+    }
+    usage
+        .windows
+        .iter()
+        .map(|window| used_now(window, now))
+        .max()
+        .map(|most| 10_000u32.saturating_sub(most))
 }
 
 impl AccountRoom {
+    /// What holds it past its threshold, none where nothing does (185).
+    pub fn past(&self) -> Option<Past> {
+        match &self.reading {
+            Reading::Read(usage) => past(usage, self.threshold, self.now),
+            Reading::None | Reading::Unread(_) => None,
+        }
+    }
+
+    /// Its reading as status gives it, none where it names none: when the
+    /// host read it, whether it is fresh, and each window with whether it
+    /// holds the account past its threshold; or why it cannot be read
+    /// (184, 185).
+    pub fn reading_status(&self) -> Option<ReadingStatus> {
+        match &self.reading {
+            Reading::None => None,
+            Reading::Unread(why) => Some(ReadingStatus::Unread {
+                unread: why.clone(),
+            }),
+            Reading::Read(usage) => Some(ReadingStatus::Read {
+                read_at: usage.read_at,
+                fresh: fresh(usage, self.now),
+                windows: usage
+                    .windows
+                    .iter()
+                    .map(|window| WindowStatus {
+                        name: window.name.clone(),
+                        used: window.used,
+                        resets_at: window.resets_at,
+                        past: holds_until(usage, window, self.threshold, self.now).is_some(),
+                    })
+                    .collect(),
+            }),
+        }
+    }
+
+    /// What it has left by a fresh reading, none where it has none (184).
+    pub fn left(&self) -> Option<u32> {
+        match &self.reading {
+            Reading::Read(usage) => left(usage, self.now),
+            Reading::None | Reading::Unread(_) => None,
+        }
+    }
+
     /// Why the account cannot take a start now, none where it can: spent,
-    /// or at its own bound (145).
+    /// past its threshold, or at its own bound (145, 146, 185).
     pub fn short(&self) -> Option<MoveWhy> {
         if self.spent_until.is_some() {
             return Some(MoveWhy::Spent);
+        }
+        if self.past().is_some() {
+            return Some(MoveWhy::Threshold);
         }
         self.account
             .agents
@@ -38,10 +188,52 @@ impl AccountRoom {
             .then_some(MoveWhy::Full)
     }
 
-    /// Whether a start of `program` may take it: not spent, under its own
-    /// bound, and running that program (144, 145).
+    /// Whether a start of `program` may take it: not spent, not past its
+    /// threshold, under its own bound, and running that program (144,
+    /// 145, 185).
     pub fn usable(&self, program: &str) -> bool {
         self.account.program == program && self.short().is_none()
+    }
+
+    /// The move of `on` off it to `to` at `at`, where it cannot take a
+    /// start now, with why, `carried` as a stage's move after its agent
+    /// stopped at the usage limit gives it, and, off an account past its
+    /// threshold, the window that holds it and when that window stops
+    /// holding it; none where it can take a start (56, 145 to 147, 185).
+    pub fn move_off(
+        &self,
+        on: MoveOn,
+        to: &str,
+        at: Seconds,
+        carried: Option<bool>,
+    ) -> Option<AccountMove> {
+        let why = self.short()?;
+        let past = match why {
+            MoveWhy::Threshold => self.past(),
+            MoveWhy::Spent | MoveWhy::Full => None,
+        };
+        let (window, until) =
+            past.map_or((None, None), |past| (Some(past.window), Some(past.until)));
+        Some(AccountMove {
+            on,
+            from: self.account.name.clone(),
+            to: to.to_string(),
+            why,
+            at,
+            carried,
+            window,
+            until,
+        })
+    }
+
+    /// When it is back: the latest of the time it is spent until and the
+    /// end of what holds it past its threshold, where it has either; none
+    /// where it is only full (145, 146, 185).
+    pub fn back(&self) -> Option<Seconds> {
+        self.spent_until
+            .into_iter()
+            .chain(self.past().map(|past| past.until))
+            .max()
     }
 }
 
@@ -51,9 +243,9 @@ pub(crate) enum Usable {
     Some,
     /// No account of the pool runs the program (144).
     NoProgram,
-    /// Every account of the pool that runs the program is spent or full;
-    /// the soonest time one stops being spent, none where none is spent
-    /// (145, 146).
+    /// Every account of the pool that runs the program is spent, past its
+    /// threshold or full; the soonest time one is back, none where each is
+    /// only full (145, 146, 185).
     None(Option<Seconds>),
 }
 
@@ -65,10 +257,15 @@ impl PoolRoom {
             .filter(move |room| room.account.program == program)
     }
 
+    /// Whether the pool holds an account that runs `program`, spent, full
+    /// or neither (145).
+    pub fn runs(&self, program: &str) -> bool {
+        self.running_program(program).next().is_some()
+    }
+
     /// Whether a start of `program` may take an account of the pool.
     pub fn usable(&self, program: &str) -> Usable {
-        let mut of_program = self.running_program(program).peekable();
-        if of_program.peek().is_none() {
+        if !self.runs(program) {
             return Usable::NoProgram;
         }
         if self.accounts.iter().any(|room| room.usable(program)) {
@@ -76,14 +273,18 @@ impl PoolRoom {
         }
         Usable::None(
             self.running_program(program)
-                .filter_map(|room| room.spent_until)
+                .filter_map(AccountRoom::back)
                 .min(),
         )
     }
 
     /// The account the strategy chooses for a start of `program`: under
-    /// fill-first the first usable in order, under least-busy the usable
-    /// one with fewest of flume's agents, equals in order (145).
+    /// fill-first the first usable in order; under least-busy the usable
+    /// one with fewest of flume's agents, equals in order; under most-left
+    /// the usable one with the most left by a fresh reading, then each with
+    /// no fresh reading, equals in either by fewest of flume's agents and
+    /// then in order, so that with no fresh reading anywhere it chooses as
+    /// least-busy does (145, 184).
     pub fn strategy(&self, program: &str) -> Option<&AccountRoom> {
         let mut usable = self.accounts.iter().filter(|room| room.usable(program));
         match self.strategy {
@@ -91,6 +292,16 @@ impl PoolRoom {
             Strategy::LeastBusy => {
                 usable.fold(None, |least: Option<&AccountRoom>, room| match least {
                     Some(least) if least.running <= room.running => Some(least),
+                    _ => Some(room),
+                })
+            }
+            Strategy::MostLeft => {
+                let rank = |room: &AccountRoom| {
+                    let left = room.left();
+                    (left.is_some(), left, std::cmp::Reverse(room.running))
+                };
+                usable.fold(None, |most: Option<&AccountRoom>, room| match most {
+                    Some(most) if rank(most) >= rank(room) => Some(most),
                     _ => Some(room),
                 })
             }
@@ -120,18 +331,36 @@ pub(crate) enum Choice {
     Wait,
     /// The pool named is not declared, naming it.
     Undeclared(String),
+    /// The pool holds no account that runs the stage's program, in
+    /// [`no_account`]'s words: the stage is refused, since no room the pool
+    /// gives could start it (4, 32, 145).
+    NoAccount(String),
+}
+
+/// Why a stage whose agent runs `program` cannot start on the pool `pool`,
+/// which holds no account of that program: the words a launch and a start
+/// refuse it in (4, 32, 145).
+pub(crate) fn no_account(stage: &str, pool: &str, program: &str) -> String {
+    format!(
+        "the stage {stage}'s agent runs {program}, and the pool {pool} holds no account of {program}, so no room it gives could start it (145)"
+    )
 }
 
 impl Engine {
-    /// The account a start of `place`'s stage whose agent runs `program`
-    /// takes: the intent's affinity's while it is usable, else the
-    /// strategy's choice over its pool's usable accounts, in order; and,
-    /// where the strategy chose because the affinity's account was spent
-    /// or full, the intent's move to it, unless it is an account the
-    /// affinity once left (144, 145, 147; core.32).
+    /// The account a start of `place`'s stage `stage` whose agent runs
+    /// `program` takes: the intent's affinity's for `program` while it is
+    /// usable, else the strategy's choice over its pool's usable accounts,
+    /// in order; and, where the strategy chose because the affinity's
+    /// account for `program` was spent, past its threshold or full, the
+    /// intent's move to it for `program`, off a threshold with the window
+    /// and its end, unless it is an account the affinity for `program`
+    /// once left. A program the affinity keeps no account for moves nothing, and
+    /// a pool that holds no account of `program` refuses the stage (4, 32,
+    /// 144, 145, 147; core.32).
     pub(crate) fn choose_account(
         &self,
         place: &PlaceRecord,
+        stage: &str,
         program: Option<&str>,
         affinity: Option<&Affinity>,
         queue: &Queue,
@@ -152,9 +381,13 @@ impl Engine {
         let Some(program) = program else {
             return (Choice::Wait, None);
         };
+        if let Usable::NoProgram = room.usable(program) {
+            return (Choice::NoAccount(no_account(stage, pool, program)), None);
+        }
         let kept = affinity
-            .filter(|affinity| affinity.pool == pool)
-            .and_then(|affinity| room.account(&affinity.account));
+            .and_then(|affinity| affinity.accounts.get(program))
+            .filter(|kept| kept.pool == pool)
+            .and_then(|kept| room.account(&kept.account));
         let chose = |chosen: &AccountRoom, from| Choice::Chose {
             held: AccountHeld {
                 pool: pool.to_string(),
@@ -170,59 +403,132 @@ impl Engine {
             return (Choice::Wait, None);
         };
         let moved = kept.zip(affinity).and_then(|(kept, affinity)| {
-            let why = kept.short()?;
-            (!affinity.left(&chosen.account.name)).then(|| AccountMove {
-                on: MoveOn::Intent,
-                from: kept.account.name.clone(),
-                to: chosen.account.name.clone(),
-                why,
-                at: now,
-            })
+            if affinity.left(program, &chosen.account.name) {
+                return None;
+            }
+            kept.move_off(
+                MoveOn::Intent {
+                    program: Some(program.to_string()),
+                },
+                &chosen.account.name,
+                now,
+                None,
+            )
         });
         (chose(chosen, AccountFrom::Strategy), moved)
     }
 
-    /// The intent's affinity after a start of `place` under `account`:
-    /// written at the intent's first start with a pool, moved by `moved`,
+    /// The intent's affinity after a start of `place` whose agent runs
+    /// `program` under `account`: written at the intent's first start
+    /// with a pool, its account for `program` kept at the first start on
+    /// `program` and moved by `moved`, every other program's as it stands,
     /// and no longer gone (147).
     pub(crate) fn affinity_after(
         &self,
         place: &PlaceRecord,
+        program: &str,
         account: &AccountHeld,
         moved: Option<&AccountMove>,
     ) {
+        let kept = AffinityAccount {
+            pool: account.pool.clone(),
+            account: account.name.clone(),
+        };
         self.write_affinity(&place.intent, |standing| {
-            Some(match standing {
-                None => Affinity {
-                    stream: place.stream.name.clone(),
-                    pool: account.pool.clone(),
-                    account: account.name.clone(),
-                    moves: vec![],
-                    gone: None,
-                },
-                Some(mut affinity) => {
-                    if let Some(moved) = moved {
-                        affinity.stream = place.stream.name.clone();
-                        affinity.account = moved.to.clone();
-                        affinity.moves.push(moved.clone());
-                    }
-                    affinity.gone = None;
-                    affinity
-                }
-            })
+            let mut affinity = standing.unwrap_or_else(|| Affinity {
+                stream: place.stream.name.clone(),
+                accounts: BTreeMap::new(),
+                moves: vec![],
+                gone: None,
+                pool: None,
+                account: None,
+            });
+            if let Some(moved) = moved {
+                affinity.stream = place.stream.name.clone();
+                affinity.accounts.insert(
+                    program.to_string(),
+                    AffinityAccount {
+                        account: moved.to.clone(),
+                        ..kept.clone()
+                    },
+                );
+                affinity.moves.push(moved.clone());
+            }
+            affinity
+                .accounts
+                .entry(program.to_string())
+                .or_insert_with(|| kept.clone());
+            affinity.gone = None;
+            Some(affinity)
         });
     }
 }
 
 impl Engine {
+    /// The account's reading as the host's file holds it now: none where
+    /// it names none, and where its `usage`, its `~` and `$VAR` read
+    /// against the host user's login environment, names a variable that
+    /// environment lacks, or a file the host gives no reading of, why, in
+    /// words that name no path; flume writes, keeps and renews nothing of
+    /// it (29, 184; core.30, core.32).
+    pub(crate) fn reading(&self, account: &Account) -> Reading {
+        let Some(usage) = &account.usage else {
+            return Reading::None;
+        };
+        match settings::expand(usage, |variable| self.host.login(variable)) {
+            Err(variable) => Reading::Unread(format!(
+                "its usage names ${variable}, which the host user's login environment lacks"
+            )),
+            Ok(path) => match self.host.usage(&path) {
+                Ok(usage) => Reading::Read(usage),
+                Err(why) => Reading::Unread(why),
+            },
+        }
+    }
+}
+
+impl Engine {
+    /// Refuses a launch's stage `stage` of a place in `stream` whose agent
+    /// runs `program` where the pool the host's configuration names for
+    /// the stream, as it stands now, declares no account of that program;
+    /// a stream with no pool, or with one the host does not declare, is
+    /// refused nothing here (4, 32, 145; core.8, core.30).
+    pub(crate) fn pool_runs(
+        &self,
+        stream: &str,
+        stage: &str,
+        program: Option<&str>,
+    ) -> Result<(), String> {
+        let (Some(named), Some(program)) = (self.host.pool_for(stream), program) else {
+            return Ok(());
+        };
+        let Some(pool) = self.host.pool(&named.name) else {
+            return Ok(());
+        };
+        if pool
+            .accounts
+            .iter()
+            .any(|account| account.program == program)
+        {
+            return Ok(());
+        }
+        Err(no_account(stage, &named.name, program))
+    }
+}
+
+impl Engine {
     /// The move of the stage at `index` from the account its last start
-    /// ran under to `to`, in the same pool, where that account is spent or
-    /// at its own bound now; none otherwise (56, 145, 146).
+    /// ran under to `to`, in the same pool, where that account is spent,
+    /// past its threshold or at its own bound now, off a threshold with
+    /// the window and its end, with whether its conversation went with it,
+    /// `carried`, where its agent stopped at its account's usage limit;
+    /// none otherwise (56, 145, 146, 179, 185).
     pub(crate) fn stage_moved(
         &self,
         held: &HeldState,
         index: usize,
         to: Option<&AccountHeld>,
+        carried: Option<bool>,
         queue: &Queue,
         now: Seconds,
     ) -> Option<AccountMove> {
@@ -232,16 +538,14 @@ impl Engine {
         if from.pool != to.pool || from.name == to.name {
             return None;
         }
-        let why = queue.account(&from.pool, &from.name)?.short()?;
-        Some(AccountMove {
-            on: MoveOn::Stage {
+        queue.account(&from.pool, &from.name)?.move_off(
+            MoveOn::Stage {
                 stage: stage.name.clone(),
             },
-            from: from.name.clone(),
-            to: to.name.clone(),
-            why,
-            at: now,
-        })
+            &to.name,
+            now,
+            carried,
+        )
     }
 }
 
@@ -261,7 +565,12 @@ impl Engine {
 
     /// The intent's affinity and the version it was read at, none where
     /// it has none; one whose last place went an hour ago or more is
-    /// removed by compare-and-set and read as none (147).
+    /// removed by compare-and-set and read as none (147). A document
+    /// written before an intent kept an account per program reads as the
+    /// affinity for its account's program, as the host's configuration
+    /// declares that account now, and with its stream alone where it
+    /// declares it no more; it is written in the new shape at its next
+    /// change (147, 153).
     pub(crate) fn affinity(&self, intent: &IntentKey) -> Option<(u64, Affinity)> {
         let key = Self::intent_key(intent);
         let read = self.store.read_host(&key)?;
@@ -274,7 +583,42 @@ impl Engine {
                 return None;
             }
         }
-        Some((read.version, affinity))
+        Some((read.version, self.folded(affinity)))
+    }
+
+    /// A document written before an intent kept an account per program,
+    /// its one account given its program, as the host's configuration
+    /// declares the account in its pool now: the account kept for that
+    /// program unless one is kept for it already, and every intent move
+    /// with no program given it; the account dropped where the pool no
+    /// longer declares it (147).
+    fn folded(&self, mut affinity: Affinity) -> Affinity {
+        let (Some(pool), Some(account)) = (affinity.pool.take(), affinity.account.take()) else {
+            return affinity;
+        };
+        let program = self.host.pool(&pool).and_then(|declared| {
+            declared
+                .accounts
+                .into_iter()
+                .find(|declared| declared.name == account)
+                .map(|declared| declared.program)
+        });
+        let Some(program) = program else {
+            return affinity;
+        };
+        for moved in &mut affinity.moves {
+            if let MoveOn::Intent {
+                program: none @ None,
+            } = &mut moved.on
+            {
+                *none = Some(program.clone());
+            }
+        }
+        affinity
+            .accounts
+            .entry(program)
+            .or_insert(AffinityAccount { pool, account });
+        affinity
     }
 
     /// Writes the intent's affinity as `change` makes it of what stands,
@@ -327,5 +671,167 @@ impl Engine {
                 ..affinity
             })
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NOW: Seconds = 1_000_000;
+
+    fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
+        Window {
+            name: name.into(),
+            used,
+            resets_at,
+        }
+    }
+
+    fn usage(read_at: Seconds, windows: Vec<Window>) -> Usage {
+        Usage { read_at, windows }
+    }
+
+    #[test]
+    fn a_window_past_its_reset_reads_as_nothing_used() {
+        let passed = window("5-hour", 9_500, Some(NOW - 3600));
+        assert_eq!(used_now(&passed, NOW), 0);
+        assert_eq!(used_now(&window("5-hour", 9_500, Some(NOW)), NOW), 0);
+        assert_eq!(
+            used_now(&window("5-hour", 9_500, Some(NOW + 1)), NOW),
+            9_500
+        );
+        assert_eq!(used_now(&window("7-day", 9_500, None), NOW), 9_500);
+        let read = usage(NOW - 2 * 3600, vec![passed]);
+        assert_eq!(past(&read, THRESHOLD, NOW), None);
+    }
+
+    #[test]
+    fn a_reading_is_fresh_for_fifteen_minutes() {
+        assert!(fresh(&usage(NOW - 120, vec![]), NOW));
+        assert!(fresh(&usage(NOW - FRESH + 1, vec![]), NOW));
+        assert!(!fresh(&usage(NOW - FRESH, vec![]), NOW));
+        assert!(!fresh(&usage(NOW - 20 * 60, vec![]), NOW));
+        assert!(fresh(&usage(NOW + 3600, vec![]), NOW), "a read_at to come");
+    }
+
+    #[test]
+    fn a_window_with_a_reset_holds_until_it_whatever_the_readings_age() {
+        let monday = NOW + 3 * 24 * 3600;
+        let old = usage(NOW - 3 * 3600, vec![window("7-day", 9_500, Some(monday))]);
+        assert_eq!(
+            past(&old, THRESHOLD, NOW),
+            Some(Past {
+                window: "7-day".into(),
+                until: monday
+            })
+        );
+        assert_eq!(past(&old, THRESHOLD, monday), None);
+    }
+
+    #[test]
+    fn a_window_with_no_reset_holds_while_the_reading_is_fresh() {
+        let read = usage(NOW, vec![window("weekly", 9_500, None)]);
+        assert_eq!(
+            past(&read, THRESHOLD, NOW + 60),
+            Some(Past {
+                window: "weekly".into(),
+                until: NOW + FRESH
+            })
+        );
+        assert_eq!(past(&read, THRESHOLD, NOW + FRESH), None);
+    }
+
+    #[test]
+    fn the_threshold_is_held_at_its_own_share() {
+        let at = |used| usage(NOW, vec![window("5-hour", used, Some(NOW + 3600))]);
+        assert!(past(&at(9_000), THRESHOLD, NOW).is_some(), "90% at 90");
+        assert!(past(&at(8_999), THRESHOLD, NOW).is_none(), "89.99% at 90");
+        assert!(past(&at(9_900), 100, NOW).is_none(), "99% at 100");
+        assert!(past(&at(10_000), 100, NOW).is_some(), "100% at 100");
+        assert!(past(&at(5_000), 50, NOW).is_some(), "50% at 50");
+        assert!(past(&at(4_999), 50, NOW).is_none(), "49.99% at 50");
+    }
+
+    #[test]
+    fn the_window_that_holds_latest_is_named() {
+        let read = usage(
+            NOW,
+            vec![
+                window("5-hour", 9_200, Some(NOW + 3600)),
+                window("7-day", 9_600, Some(NOW + 3 * 24 * 3600)),
+                window("other", 9_900, Some(NOW + 3 * 24 * 3600)),
+                window("under", 1_000, Some(NOW + 9 * 24 * 3600)),
+            ],
+        );
+        assert_eq!(
+            past(&read, THRESHOLD, NOW),
+            Some(Past {
+                window: "7-day".into(),
+                until: NOW + 3 * 24 * 3600
+            })
+        );
+    }
+
+    #[test]
+    fn what_a_fresh_reading_leaves() {
+        let read = |read_at| {
+            usage(
+                read_at,
+                vec![
+                    window("5-hour", 4_000, Some(NOW + 3600)),
+                    window("7-day", 8_000, Some(NOW + 3 * 24 * 3600)),
+                ],
+            )
+        };
+        assert_eq!(left(&read(NOW - 120), NOW), Some(2_000), "20 left");
+        assert_eq!(left(&read(NOW - 20 * 60), NOW), None, "stale");
+        assert_eq!(left(&usage(NOW, vec![]), NOW), None, "no window");
+        let reset = usage(NOW, vec![window("5-hour", 9_000, Some(NOW))]);
+        assert_eq!(left(&reset, NOW), Some(10_000), "a window reset");
+    }
+
+    fn room(spent_until: Option<Seconds>, reading: Reading, agents: Option<u32>) -> AccountRoom {
+        AccountRoom {
+            account: Account {
+                name: "work-1".into(),
+                program: "agent".into(),
+                env: BTreeMap::new(),
+                agents,
+                usage: Some("~/.local/state/usage/work-1.json".into()),
+            },
+            running: 1,
+            spent_until,
+            reading,
+            threshold: THRESHOLD,
+            now: NOW,
+        }
+    }
+
+    #[test]
+    fn short_answers_spent_then_threshold_then_full() {
+        let past = Reading::Read(usage(NOW, vec![window("5-hour", 9_200, Some(NOW + 3600))]));
+        let under = Reading::Read(usage(NOW, vec![window("5-hour", 4_000, Some(NOW + 3600))]));
+        let spent = Some(NOW + 600);
+        assert_eq!(
+            room(spent, past.clone(), Some(1)).short(),
+            Some(MoveWhy::Spent)
+        );
+        assert_eq!(
+            room(None, past.clone(), Some(1)).short(),
+            Some(MoveWhy::Threshold)
+        );
+        assert_eq!(
+            room(None, under.clone(), Some(1)).short(),
+            Some(MoveWhy::Full)
+        );
+        assert_eq!(room(None, under, None).short(), None);
+        assert_eq!(
+            room(None, Reading::Unread("the file is missing".into()), None).short(),
+            None
+        );
+        assert_eq!(room(spent, past.clone(), None).back(), Some(NOW + 3600));
+        assert_eq!(room(Some(NOW + 7200), past, None).back(), Some(NOW + 7200));
+        assert_eq!(room(None, Reading::None, Some(1)).back(), None);
     }
 }

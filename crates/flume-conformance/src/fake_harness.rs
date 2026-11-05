@@ -2,12 +2,12 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::{AgentHarness, Modes},
+    agent::{AgentHarness, CarryAccounts, Modes},
     change::ChangeHarness,
     history::HistoryHarness,
     kinds::KindsHarness,
     merge_queue::MergeQueueHarness,
-    place::PlaceHarness,
+    place::{Pinned, PlaceHarness},
     store::StoreHarness,
     terminal::TerminalHarness,
 };
@@ -55,6 +55,7 @@ pub fn flumes_own() -> Vec<Kind> {
         starts_unready: false,
         lands: true,
         agents: KindSettings::default(),
+        label: None,
         stages: vec![
             stage(
                 "construct",
@@ -81,6 +82,7 @@ pub fn flumes_own() -> Vec<Kind> {
             starts_unready: true,
             lands: true,
             agents: KindSettings::default(),
+            label: None,
             stages: vec![code.clone()],
         },
         Kind {
@@ -90,6 +92,7 @@ pub fn flumes_own() -> Vec<Kind> {
             starts_unready: true,
             lands: true,
             agents: KindSettings::default(),
+            label: None,
             stages: vec![code],
         },
         change,
@@ -150,6 +153,25 @@ impl PlaceHarness for FakePlaceHarness {
             .map(|(step, passed)| (*step, *passed, if *passed { "ok" } else { "failed" }))
             .collect();
         self.place.set_readiness(repository, &steps);
+    }
+
+    /// The fake runs the readiness the repository declares, here the
+    /// toolchain, the pins' install and the setup that runs what it
+    /// installed.
+    fn pinned(&self, repository: &str) -> Option<Pinned> {
+        self.place.set_readiness(
+            repository,
+            &[
+                ("toolchain", true, "ok"),
+                ("install", true, "installed the pins"),
+                ("setup", true, "ok"),
+            ],
+        );
+        Some(Pinned {
+            steps: vec!["toolchain".into(), "install".into(), "setup".into()],
+            install: "install".into(),
+            said: "installed the pins".into(),
+        })
     }
 
     fn untracked(&self, place: &PlaceRef, file: &str) {
@@ -252,6 +274,20 @@ pub struct FakeAgentHarness {
     pub host: Arc<FakeHost>,
     pub terminal: Arc<FakeTerminal>,
     pub agent: FakeAgent,
+    /// Whether the harness scripts the fake to carry a conversation, or
+    /// leaves it carrying none, as a profile that offers no carry (179).
+    carries: bool,
+}
+
+impl FakeAgentHarness {
+    /// The fake left carrying no conversation, as a profile that keeps the
+    /// seam's default (179).
+    pub fn carrying_none() -> Self {
+        FakeAgentHarness {
+            carries: false,
+            ..FakeAgentHarness::default()
+        }
+    }
 }
 
 /// The fake agent's map of modes the seam's scenarios run with: each of
@@ -288,6 +324,7 @@ impl Default for FakeAgentHarness {
             agent,
             terminal,
             host,
+            carries: true,
         }
     }
 }
@@ -318,7 +355,7 @@ impl AgentHarness for FakeAgentHarness {
 
     fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str) {
         self.terminal
-            .open(&a_place(), folder, command, identity, None, None);
+            .open(&a_place(), folder, command, identity, &OpenIn::Own, None);
         self.agent.keep_record_in(identity, folder);
     }
 
@@ -381,6 +418,36 @@ impl AgentHarness for FakeAgentHarness {
     /// is `asked`.
     fn begin_in(&self, identity: &Identity, _asked: &str, began: &str) {
         self.agent.set_began_in(identity, began);
+    }
+
+    /// The fake scripted to carry to one account's home with the session
+    /// `s-1`, and to answer no to another's with words naming its
+    /// variable; none where the harness leaves it carrying none (179).
+    fn carry_accounts(&self, _earlier: &Identity) -> Option<CarryAccounts> {
+        if !self.carries {
+            return None;
+        }
+        let home = |home: &str| BTreeMap::from([(FakeAgent::HOME.to_string(), home.to_string())]);
+        self.agent.carry_to(
+            "/scratch/agent-work-2",
+            Carry::Yes {
+                session: "s-1".into(),
+            },
+        );
+        self.agent.carry_to(
+            "/scratch/agent-work-3",
+            Carry::No {
+                why: format!(
+                    "the account's {} does not reach its conversation",
+                    FakeAgent::HOME
+                ),
+            },
+        );
+        Some(CarryAccounts {
+            reaches: home("/scratch/agent-work-2"),
+            session: "s-1".into(),
+            reaches_none: home("/scratch/agent-work-3"),
+        })
     }
 }
 
@@ -497,7 +564,17 @@ impl TerminalHarness for FakeTerminalHarness {
     fn no_session(&self) -> String {
         "nobody".into()
     }
+
+    fn setup(&self) -> Vec<String> {
+        self.terminal.set_setup(&[SETUP]);
+        vec![SETUP.to_string()]
+    }
 }
+
+/// What the fake terminal's configuration is scripted to lack for
+/// flume's plugin (122).
+pub const SETUP: &str =
+    "no key opens flume's places: bind one to the plugin's places in the terminal's configuration";
 
 pub struct FakeMergeQueueHarness {
     pub git: Arc<FakeGit>,
@@ -595,8 +672,33 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
         );
     }
 
+    fn base_unlanded(&self, repository: &str) -> String {
+        self.queue
+            .set_base(repository, "trial", BaseRevision::Unlanded);
+        "trial".into()
+    }
+
     fn unreadable(&self) {
         self.queue.unreadable("the merge queue is down");
+    }
+
+    fn refuse_another(&self, place: &PlaceRef) -> String {
+        let other = "bolt/x";
+        let base = self
+            .git
+            .branch_head(&place.repository, &place.base)
+            .expect("the base");
+        self.git.set_branch(&place.repository, other, &base);
+        self.git.set_branch(&place.repository, "unit/x", &base);
+        self.git.commit(&place.repository, "unit/x", &["x.rs"]);
+        self.queue
+            .hand_submission(&place.repository, "unit/x", other, SubmissionState::Waiting);
+        self.queue.refuse_branch(
+            &place.repository,
+            other,
+            &format!("{other}'s policy cannot be read"),
+        );
+        other.into()
     }
 }
 
@@ -662,5 +764,22 @@ impl HistoryHarness for FakeHistoryHarness {
 
     fn made_default(&self) -> String {
         "fix/one".into()
+    }
+
+    fn origin_ahead(&self, repository: &str, branch: &str) -> Revision {
+        let own = self
+            .git
+            .branch_head(repository, branch)
+            .expect("the branch");
+        self.git.set_branch(repository, "origin-copy", &own);
+        self.git.commit(repository, "origin-copy", &["one.rs"]);
+        let ahead = self.git.commit(repository, "origin-copy", &["two.rs"]);
+        self.git.set_origin(repository, branch, &ahead);
+        ahead
+    }
+
+    fn origin_gone(&self, repository: &str) {
+        self.git
+            .origin_fails(repository, "origin does not appear to be a git repository");
     }
 }

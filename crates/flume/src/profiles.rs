@@ -184,11 +184,11 @@ impl Resolver for BuiltIn {
 
 /// The place profile over plain `git worktree` for one repository, bound
 /// with the data its merge queue profile declares for the place's base
-/// at each call (design 9, 13): the readiness, the teardown and where the
-/// base lives, read from the merge queue's policy at the base's current
-/// revision, none of it where no merge queue is bound. The resolver
-/// hands the one profile's data to the other, and neither calls the
-/// other (core.2). flume's own data directory, where every place goes
+/// at each call (design 9, 13): the readiness, asked at the revision the
+/// place's launch read, which a ready is given, so a retry readies as the
+/// launch did; the teardown; and where the base lives; none of it where
+/// no merge queue is bound (12, 20, C.1). The resolver hands the one
+/// profile's data to the other, and neither calls the other (core.2). flume's own data directory, where every place goes
 /// (record 0027), is the login environment's where the resolver was
 /// given one, as the plugin's is.
 struct BoundPlace {
@@ -202,27 +202,53 @@ struct BoundPlace {
 /// could not be read.
 const POLICY_STEP: &str = "the merge queue's policy";
 
-impl BoundPlace {
-    /// What the merge queue declares for the places on `base`.
-    fn data(&self, base: &str) -> Result<PlaceData, String> {
-        match self.merge_queue.as_deref() {
-            Some(merge_queue::sluice::NAME) => {
-                let declared = merge_queue::sluice::for_place(&self.repository, base)?;
-                let mut readiness = vec![];
-                if let Some(toolchain) = &declared.toolchain {
-                    readiness.push(Step::toolchain("toolchain", toolchain));
-                }
-                if let Some(setup) = &declared.setup {
-                    readiness.push(Step::run(setup, setup));
-                }
-                Ok(PlaceData {
-                    readiness,
-                    teardown: vec![Step::run(&declared.teardown, &declared.teardown)],
-                    base_remote: declared.base_remote,
+/// What the merge queue named `merge_queue` declares for the places of
+/// `repository` on `base`, as the resolver binds the place profile with
+/// it: the readiness, the merge queue's equipping of the place asked at
+/// `revision`, the revision its launch read, where one is given, as one
+/// step with the merge queue profile's reading of what it printed (12,
+/// 20, 79); the teardown; and where the base lives; none of it where no
+/// merge queue is bound (11).
+pub fn place_data(
+    repository: &str,
+    merge_queue: Option<&str>,
+    base: &str,
+    revision: Option<&Revision>,
+) -> Result<PlaceData, String> {
+    match merge_queue {
+        Some(merge_queue::sluice::NAME) => {
+            let declared = merge_queue::sluice::for_place(repository, base, revision)?;
+            let readiness = declared
+                .equip
+                .iter()
+                .map(|equip| {
+                    Step::read(
+                        merge_queue::sluice::EQUIP,
+                        equip,
+                        merge_queue::sluice::equipped,
+                    )
                 })
-            }
-            _ => Ok(PlaceData::default()),
+                .collect();
+            Ok(PlaceData {
+                readiness,
+                teardown: vec![Step::run(&declared.teardown, &declared.teardown)],
+                base_remote: declared.base_remote,
+            })
         }
+        _ => Ok(PlaceData::default()),
+    }
+}
+
+impl BoundPlace {
+    /// What the merge queue declares for the places on `base`, the
+    /// readiness asked at `revision` where one is given.
+    fn data(&self, base: &str, revision: Option<&Revision>) -> Result<PlaceData, String> {
+        place_data(
+            &self.repository,
+            self.merge_queue.as_deref(),
+            base,
+            revision,
+        )
     }
 
     /// The profile bound with `data`.
@@ -261,7 +287,7 @@ impl Place for BoundPlace {
     }
 
     fn ready(&self, place: &PlaceRef, revision: &Revision) -> Readiness {
-        match self.data(&place.base) {
+        match self.data(&place.base, Some(revision)) {
             Ok(data) => self.bound(data).ready(place, revision),
             Err(words) => Readiness {
                 steps: vec![ReadyStep {
@@ -278,7 +304,7 @@ impl Place for BoundPlace {
     }
 
     fn remove(&self, place: &PlaceRef) -> Removed {
-        match self.data(&place.base) {
+        match self.data(&place.base, None) {
             Ok(data) => self.bound(data).remove(place),
             Err(words) => Removed::Refused {
                 step: POLICY_STEP.into(),
@@ -288,7 +314,7 @@ impl Place for BoundPlace {
     }
 
     fn remove_branch(&self, repository: &str, branch: &str, base: &str) -> BranchRemoved {
-        match self.data(base) {
+        match self.data(base, None) {
             Ok(data) => self.bound(data).remove_branch(repository, branch, base),
             // A base whose place cannot be read judges nothing: the branch
             // is kept (67).
@@ -335,7 +361,8 @@ pub fn terminal(
 
 /// The core over the profiles built in, for one command on this host:
 /// flume's state in `$XDG_STATE_HOME/flume`, the host's configuration in
-/// `$XDG_CONFIG_HOME/flume/config.toml`, and the recipient
+/// `$XDG_CONFIG_HOME/flume/config.toml` and `config.local.toml` over it,
+/// and the recipient
 /// `$FLUME_RECIPIENT` names; a configuration that cannot be read is
 /// refused, naming its fault (C.7; design 16).
 pub fn core() -> Result<Engine, String> {
@@ -389,12 +416,20 @@ pub fn core_with(
 }
 
 /// The words `flume hook` takes, one per hook of the agent program's
-/// plugin (C.4).
+/// plugin, and the status line its module pins (C.4; design 5).
 pub fn hook_events() -> Vec<&'static str> {
     agent::claude::hook::EVENTS
         .iter()
         .map(|(word, _)| *word)
+        .chain([agent::claude::status_line::EVENT])
         .collect()
+}
+
+/// Whether the hook for `event` reads its input on standard input: every
+/// hook of the agent program's does, and the status line reads none
+/// (design 5).
+pub fn hook_reads_input(event: &str) -> bool {
+    event != agent::claude::status_line::EVENT
 }
 
 /// What the agent program's hook for `event` answers to `input`, in the
@@ -415,8 +450,9 @@ pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>
 }
 
 /// The started ack of the agent this process's environment names: its
-/// session, transcript, source and plugin version, taken only where the
-/// start's record matches it (135, 161).
+/// session, transcript, source and plugin version, with the transcript's
+/// length the ack measures, taken only where the start's record matches
+/// it, the session among it where the start resumes one (135, 161, 179).
 pub fn ack_started(
     session: &str,
     transcript: &str,
@@ -434,6 +470,7 @@ pub fn ack_started(
             transcript_path: transcript.into(),
             source: source.into(),
             plugin_version: plugin_version.into(),
+            from: 0,
         },
         build,
         &binary,

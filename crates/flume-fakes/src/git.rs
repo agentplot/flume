@@ -1,5 +1,5 @@
 use crate::{lock, Log};
-use flume_seams::{History, Revision, Touch};
+use flume_seams::{History, OriginBranch, Revision, Touch};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
@@ -23,6 +23,9 @@ struct GitState {
     /// Each repository's default branch: the branch it was first made
     /// with, unless set.
     defaults: BTreeMap<String, String>,
+    /// Each repository's remote `origin`: the branches it holds, or why a
+    /// fetch of it fails; a repository named here by none has no origin.
+    origins: BTreeMap<String, Result<BTreeMap<String, Revision>, String>>,
 }
 
 struct Node {
@@ -89,6 +92,51 @@ impl FakeGit {
         lock(&self.state)
             .branches
             .insert((repository.into(), branch.into()), revision.clone());
+    }
+
+    /// The repository given a remote `origin` holding no branch, where it
+    /// has none.
+    pub fn add_origin(&self, repository: &str) {
+        let mut state = lock(&self.state);
+        let origin = state
+            .origins
+            .entry(repository.into())
+            .or_insert_with(|| Ok(BTreeMap::new()));
+        if origin.is_err() {
+            *origin = Ok(BTreeMap::new());
+        }
+    }
+
+    /// The repository's `origin` holding `branch` at `revision`, a commit
+    /// the repository holds, as a fetch would leave it.
+    pub fn set_origin(&self, repository: &str, branch: &str, revision: &Revision) {
+        self.add_origin(repository);
+        if let Some(Ok(branches)) = lock(&self.state).origins.get_mut(repository) {
+            branches.insert(branch.into(), revision.clone());
+        }
+    }
+
+    /// Every fetch of the repository's `origin` fails with `reason`.
+    pub fn origin_fails(&self, repository: &str, reason: &str) {
+        lock(&self.state)
+            .origins
+            .insert(repository.into(), Err(reason.into()));
+    }
+
+    /// `branch` as the repository's `origin` holds it (9, C.1).
+    pub fn origin_branch(&self, repository: &str, branch: &str) -> OriginBranch {
+        match lock(&self.state).origins.get(repository) {
+            None => OriginBranch::NoOrigin,
+            Some(Err(reason)) => OriginBranch::Refused {
+                reason: reason.clone(),
+            },
+            Some(Ok(branches)) => match branches.get(branch) {
+                Some(revision) => OriginBranch::At {
+                    revision: revision.clone(),
+                },
+                None => OriginBranch::Lacks,
+            },
+        }
     }
 
     pub fn delete_branch(&self, repository: &str, branch: &str) {
@@ -271,6 +319,12 @@ impl History for FakeHistory {
     fn head(&self, repository: &str, branch: &str) -> Option<Revision> {
         self.log.push(format!("head {repository} {branch}"));
         self.git.read_head(repository, branch)
+    }
+
+    fn origin_branch(&self, repository: &str, branch: &str) -> OriginBranch {
+        self.log
+            .push(format!("origin_branch {repository} {branch}"));
+        self.git.origin_branch(repository, branch)
     }
 
     fn holds_since(&self, repository: &str, head: &Revision, start: &Revision) -> bool {

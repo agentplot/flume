@@ -1,7 +1,7 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Host, Identity, Opened, PlaceRef, Seconds, Sent,
-    Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Closed, Clues, Host, Identity, OpenIn, Opened, PlaceRef, Seconds,
+    Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -10,9 +10,12 @@ use std::sync::{Arc, Mutex};
 /// as set or as scheduled by the fake clock, what each shows and holds
 /// typed, what was sent to each, and whether it sends, closes and
 /// watches. A send clears what the agent holds typed before it types.
-/// An open not beside a pane makes a tab for its place in a workspace
-/// for its repository and base; a tidy closes the place's tab, and the
-/// workspace once no tab of a live place and no person's pane is in it.
+/// Each open is logged with where it was asked to open, beside a pane,
+/// in a session or in the terminal's own. An open not beside a pane
+/// makes a tab for its place in a workspace for its repository and base,
+/// in the session it names or the terminal's own; a tidy closes the
+/// place's tab in every session, and each workspace once no tab of a
+/// live place and no person's pane is in it (107, 137, 138).
 /// What show was given is kept, and a show may be made to fail. It
 /// holds recipients' sessions by name, each with a state a test sets,
 /// and keeps every text sent to each in order; an agent opened under a
@@ -33,12 +36,12 @@ struct TerminalState {
     sent: Vec<(String, String)>,
     session: Option<String>,
     opens_as: OpensAs,
-    /// The tabs made, by place location, each with its workspace.
-    tabs: BTreeMap<String, (String, String)>,
-    /// The workspaces made, by `<repository> <base>`.
-    workspaces: BTreeSet<String>,
+    /// The tabs made, oldest first, each a place's in one session.
+    tabs: Vec<Tab>,
+    /// The workspaces made, each by its session and `<repository> <base>`.
+    workspaces: BTreeSet<Workspace>,
     /// A person's panes, by the workspace they stand in.
-    persons: BTreeMap<String, String>,
+    persons: BTreeMap<Workspace, String>,
     shows_fail: bool,
     shown: Vec<(String, Clues)>,
     /// Recipients' sessions by name, each with its state.
@@ -47,6 +50,9 @@ struct TerminalState {
     agent_sessions: BTreeMap<String, String>,
     /// Every text sent to a session by its name, in order.
     notices: Vec<(String, String)>,
+    /// What the terminal's configuration lacks for flume's plugin, as
+    /// scripted.
+    setup: Vec<String>,
 }
 
 /// What the next opens answer.
@@ -67,12 +73,70 @@ fn workspace(place: &PlaceRef) -> String {
     format!("{repository} {}", place.base)
 }
 
+/// A workspace by the session it stands in, none for the terminal's own,
+/// and its label.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Workspace {
+    session: Option<String>,
+    label: String,
+}
+
+impl Workspace {
+    fn of(place: &PlaceRef, session: Option<&str>) -> Workspace {
+        Workspace {
+            session: session.map(str::to_string),
+            label: workspace(place),
+        }
+    }
+
+    /// The workspace as the fake names it: its label, and the session it
+    /// stands in where that is not the terminal's own.
+    fn named(&self) -> String {
+        in_session(&self.label, self.session.as_deref())
+    }
+}
+
+/// `name`, and the session it stands in where that is not the
+/// terminal's own.
+fn in_session(name: &str, session: Option<&str>) -> String {
+    match session {
+        Some(session) => format!("{name} in {session}"),
+        None => name.to_string(),
+    }
+}
+
+/// A place's tab in one workspace.
+struct Tab {
+    location: String,
+    name: String,
+    workspace: Workspace,
+}
+
+/// The session an open made its tab in, none for the terminal's own;
+/// none of either beside a pane.
+fn session_of(at: &OpenIn) -> Option<Option<&str>> {
+    match at {
+        OpenIn::Beside { .. } => None,
+        OpenIn::Session { name } => Some(Some(name)),
+        OpenIn::Own => Some(None),
+    }
+}
+
+/// Where an open was asked, as the log names it.
+fn where_words(at: &OpenIn) -> String {
+    match at {
+        OpenIn::Beside { pane } => format!("beside {pane}"),
+        OpenIn::Session { name } => format!("in session {name}"),
+        OpenIn::Own => "in own".into(),
+    }
+}
+
 struct Running {
     state: AgentState,
     schedule: Vec<(Seconds, AgentState)>,
     carried: bool,
     command: AgentCommand,
-    beside: Option<String>,
+    at: OpenIn,
     folder: Option<String>,
     screen: Option<String>,
     typed: String,
@@ -87,7 +151,7 @@ impl Running {
             schedule: vec![],
             carried: false,
             command,
-            beside: None,
+            at: OpenIn::Own,
             folder: None,
             screen: Some("the agent's screen".into()),
             typed: String::new(),
@@ -111,7 +175,7 @@ impl FakeTerminal {
                 sent: vec![],
                 session: None,
                 opens_as: OpensAs::Running,
-                tabs: BTreeMap::new(),
+                tabs: vec![],
                 workspaces: BTreeSet::new(),
                 persons: BTreeMap::new(),
                 shows_fail: false,
@@ -119,6 +183,7 @@ impl FakeTerminal {
                 sessions: BTreeMap::new(),
                 agent_sessions: BTreeMap::new(),
                 notices: vec![],
+                setup: vec![],
             }),
             log: Log::default(),
         }
@@ -181,25 +246,47 @@ impl FakeTerminal {
     }
 
     /// A person opens a pane of their own in the workspace of `place`'s
-    /// repository and base.
+    /// repository and base, in the terminal's own session.
     pub fn person_pane(&self, place: &PlaceRef, pane: &str) {
+        self.person_pane_in(None, place, pane);
+    }
+
+    /// A person opens a pane of their own in the workspace of `place`'s
+    /// repository and base in the session `session`, none for the
+    /// terminal's own.
+    pub fn person_pane_in(&self, session: Option<&str>, place: &PlaceRef, pane: &str) {
         lock(&self.state)
             .persons
-            .insert(workspace(place), pane.into());
+            .insert(Workspace::of(place, session), pane.into());
     }
 
     /// The person's pane in `place`'s workspace is closed.
     pub fn close_person_pane(&self, place: &PlaceRef) {
-        lock(&self.state).persons.remove(&workspace(place));
+        lock(&self.state)
+            .persons
+            .remove(&Workspace::of(place, None));
     }
 
-    /// The tabs standing, by place location, and the workspaces.
+    /// The tabs standing, by place location, oldest first, and the
+    /// workspaces, each named with its session where that is not the
+    /// terminal's own.
     pub fn made(&self) -> (Vec<String>, Vec<String>) {
         let state = lock(&self.state);
         (
-            state.tabs.keys().cloned().collect(),
-            state.workspaces.iter().cloned().collect(),
+            state.tabs.iter().map(|tab| tab.location.clone()).collect(),
+            state.workspaces.iter().map(Workspace::named).collect(),
         )
+    }
+
+    /// The sessions `place`'s tabs stand in, oldest first, none for the
+    /// terminal's own.
+    pub fn tabs_of(&self, place: &PlaceRef) -> Vec<Option<String>> {
+        lock(&self.state)
+            .tabs
+            .iter()
+            .filter(|tab| tab.location == place.location)
+            .map(|tab| tab.workspace.session.clone())
+            .collect()
     }
 
     /// Every show fails, or none does.
@@ -262,6 +349,12 @@ impl FakeTerminal {
 
     pub fn set_watch(&self, watch: Watch) {
         lock(&self.state).watch = watch;
+    }
+
+    /// What the terminal's configuration lacks for flume's plugin, each
+    /// in its words, until set otherwise (122).
+    pub fn set_setup(&self, setup: &[&str]) {
+        lock(&self.state).setup = setup.iter().map(|words| words.to_string()).collect();
     }
 
     /// The session the calling command runs in, as the terminal names it.
@@ -329,10 +422,18 @@ impl FakeTerminal {
     }
 
     pub fn beside(&self, agent: &Identity) -> Option<String> {
+        self.opened_at(agent).and_then(|at| match at {
+            OpenIn::Beside { pane } => Some(pane),
+            _ => None,
+        })
+    }
+
+    /// Where the agent was asked to open (107).
+    pub fn opened_at(&self, agent: &Identity) -> Option<OpenIn> {
         lock(&self.state)
             .agents
             .get(&agent.to_string())
-            .and_then(|running| running.beside.clone())
+            .map(|running| running.at.clone())
     }
 
     fn read(&self, key: &str) -> AgentState {
@@ -358,10 +459,11 @@ impl Terminal for FakeTerminal {
         folder: &str,
         command: &AgentCommand,
         identity: &Identity,
-        beside: Option<&str>,
+        at: &OpenIn,
         session: Option<&str>,
     ) -> Opened {
         self.log.push(format!("open {identity} {}", place.location));
+        self.log.push(format!("at {identity} {}", where_words(at)));
         let key = identity.to_string();
         if self.read(&key) != AgentState::Stopped {
             return Opened::Refused {
@@ -382,13 +484,17 @@ impl Terminal for FakeTerminal {
                 reason: reason.clone(),
             };
         }
-        if beside.is_none() {
-            let label = workspace(place);
-            state.tabs.insert(
-                place.location.clone(),
-                (identity.place.clone(), label.clone()),
-            );
-            state.workspaces.insert(label);
+        if let Some(in_session) = session_of(at) {
+            let made = Workspace::of(place, in_session);
+            state
+                .tabs
+                .retain(|tab| tab.location != place.location || tab.workspace != made);
+            state.tabs.push(Tab {
+                location: place.location.clone(),
+                name: identity.place.clone(),
+                workspace: made.clone(),
+            });
+            state.workspaces.insert(made);
         }
         let carried = !state.sends;
         let (comes_up, answer) = match state.opens_as.clone() {
@@ -404,7 +510,7 @@ impl Terminal for FakeTerminal {
         };
         let mut running = Running::new(comes_up, command.clone());
         running.carried = carried;
-        running.beside = beside.map(str::to_string);
+        running.at = at.clone();
         running.folder = Some(folder.to_string());
         if let Opened::Held { screen } = &answer {
             running.screen = Some(screen.clone());
@@ -527,24 +633,33 @@ impl Terminal for FakeTerminal {
         let mut state = lock(&self.state);
         let mut tidy = TerminalTidy::default();
         let label = workspace(place);
-        if let Some((tab, _)) = state.tabs.remove(&place.location) {
-            tidy.closed.push(format!("the tab {tab}"));
+        let (gone, kept): (Vec<Tab>, Vec<Tab>) = std::mem::take(&mut state.tabs)
+            .into_iter()
+            .partition(|tab| tab.location == place.location);
+        state.tabs = kept;
+        for tab in gone {
+            tidy.closed.push(format!(
+                "the tab {}",
+                in_session(&tab.name, tab.workspace.session.as_deref())
+            ));
         }
-        if !state.workspaces.contains(&label)
-            || state
-                .tabs
-                .values()
-                .any(|(_, workspace)| *workspace == label)
-        {
-            return tidy;
-        }
-        match state.persons.get(&label) {
-            Some(pane) => tidy
-                .kept
-                .push(format!("the workspace {label}, held by the pane {pane}")),
-            None => {
-                state.workspaces.remove(&label);
-                tidy.closed.push(format!("the workspace {label}"));
+        let bases: Vec<Workspace> = state
+            .workspaces
+            .iter()
+            .filter(|made| made.label == label)
+            .filter(|made| !state.tabs.iter().any(|tab| tab.workspace == **made))
+            .cloned()
+            .collect();
+        for made in bases {
+            let named = made.named();
+            match state.persons.get(&made) {
+                Some(pane) => tidy
+                    .kept
+                    .push(format!("the workspace {named}, held by the pane {pane}")),
+                None => {
+                    state.workspaces.remove(&made);
+                    tidy.closed.push(format!("the workspace {named}"));
+                }
             }
         }
         tidy
@@ -555,17 +670,12 @@ impl Terminal for FakeTerminal {
         state
             .workspaces
             .iter()
-            .filter(|label| {
-                !state
-                    .tabs
-                    .values()
-                    .any(|(_, workspace)| workspace == *label)
-            })
-            .filter_map(|label| {
+            .filter(|made| !state.tabs.iter().any(|tab| tab.workspace == **made))
+            .filter_map(|made| {
                 state
                     .persons
-                    .get(label)
-                    .map(|pane| format!("the workspace {label}, held by the pane {pane}"))
+                    .get(made)
+                    .map(|pane| format!("the workspace {}, held by the pane {pane}", made.named()))
             })
             .collect()
     }
@@ -582,29 +692,61 @@ impl Terminal for FakeTerminal {
         Shown::Shown
     }
 
-    /// The tab made for the place, the agent while it runs, and the
-    /// workspace of its repository and base while it stands, each by the
-    /// name the fake gives it; nothing logged, since it asks nothing.
+    /// The place's tab in the session its live agent opened in, else its
+    /// newest; the agent while it runs; the workspace of its repository
+    /// and base in that tab's session, or the terminal's own where it has
+    /// no tab, while it stands; and each workspace of its repository and
+    /// base in any session; each by the name the fake gives it, with its
+    /// session where that is not the terminal's own; nothing logged,
+    /// since it asks nothing (107, 139).
     fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
         let state = lock(&self.state);
+        let running = agent.and_then(|agent| state.agents.get(&agent.to_string()));
+        let tabs: Vec<&Tab> = state
+            .tabs
+            .iter()
+            .filter(|tab| tab.location == place.location)
+            .collect();
+        let tab = running
+            .and_then(|running| session_of(&running.at))
+            .and_then(|session| {
+                tabs.iter()
+                    .find(|tab| tab.workspace.session.as_deref() == session)
+            })
+            .or(tabs.last());
+        let base = tab.map_or_else(|| Workspace::of(place, None), |tab| tab.workspace.clone());
         let label = workspace(place);
         ShownAt {
-            place: state
-                .tabs
-                .get(&place.location)
-                .map(|(tab, _)| format!("tab {tab}")),
+            place: tab.map(|tab| {
+                format!(
+                    "tab {}",
+                    in_session(&tab.name, tab.workspace.session.as_deref())
+                )
+            }),
             agent: agent
-                .filter(|agent| state.agents.contains_key(&agent.to_string()))
+                .filter(|_| running.is_some())
                 .map(|agent| format!("pane {agent}")),
             base: state
                 .workspaces
-                .contains(&label)
-                .then(|| format!("workspace {label}")),
+                .contains(&base)
+                .then(|| format!("workspace {}", base.named())),
+            bases: state
+                .workspaces
+                .iter()
+                .filter(|made| made.label == label)
+                .map(|made| format!("workspace {}", made.named()))
+                .collect(),
         }
     }
 
     fn watch(&self) -> Watch {
         lock(&self.state).watch
+    }
+
+    /// What was scripted, logged so a reading that asks none is seen to.
+    fn setup(&self) -> Vec<String> {
+        self.log.push("setup");
+        lock(&self.state).setup.clone()
     }
 
     fn session(&self) -> Option<String> {

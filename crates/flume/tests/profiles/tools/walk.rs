@@ -9,11 +9,16 @@
 //! host's terminal and account as its configuration names them. Where a
 //! walkthrough asks, the stand-in for sluice is first on `PATH` too, the
 //! pinned sluice answering its first submit decided, or each submit a
-//! pull request that waits for the walkthrough to take it in. Every process
+//! pull request that waits for the walkthrough to take it in. With the
+//! stand-in, the host user's login shell is the walk's own, which gives
+//! the walk's `PATH`, so a place's steps, sluice's equip and release, run
+//! the sluice the tree pins; and every sluice keeps its scratch in the
+//! walk's home, which the gate's sandbox lets it write. Every process
 //! the walkthrough starts, flume, sluice, git and the stand-in, runs in the
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
-//! core.22, core.29): the remote is a directory.
+//! core.22, core.29): the remote is a directory, and sluice's checkouts
+//! keep their scratch in the walkthrough's own folder.
 
 use crate::common::*;
 use flume::profiles::place::git_worktree;
@@ -55,6 +60,19 @@ fn a_callers(name: &str) -> bool {
     .any(|prefix| name.starts_with(prefix))
 }
 
+/// The variable naming the folder that stands for the host user's own,
+/// under which the pinned sluice keeps a checkout's scratch rather than
+/// under `/tmp/sluice-<uid>`, which the gate's sandbox refuses a process
+/// a check starts; sluice's own tests name theirs by it (sluice record
+/// 0063).
+pub const USER_SCRATCH: &str = "SLUICE_USER_SCRATCH";
+
+/// The test's own folder for the scratch of the checkouts sluice makes
+/// for `repository`.
+pub fn user_scratch(repository: &Repository) -> PathBuf {
+    repository.scratch.path("sluice")
+}
+
 /// The stand-in's run: what it printed and how it ended.
 pub struct Ran {
     pub out: String,
@@ -67,6 +85,10 @@ pub struct Walk {
     pub remote: PathBuf,
     home: PathBuf,
     path: String,
+    /// The host user's login shell, the walk's own, with the stand-in;
+    /// none for the check-live layer, whose host's own shell starts its
+    /// terminal's panes.
+    shell: Option<PathBuf>,
     runs: std::cell::Cell<u32>,
     /// The stand-in's account's `CLAUDE_CONFIG_DIR`, none for the
     /// check-live layer, whose configuration names its own account.
@@ -121,6 +143,7 @@ impl Walk {
         .expect("a PATH")
         .to_string_lossy()
         .into_owned();
+        let shell = stand_in.then(|| login_shell(&repository.scratch.path("login"), &path));
         let account = stand_in.then(|| repository.scratch.path("account-1"));
         if let Some(dir) = &account {
             std::fs::create_dir_all(dir).expect("the account's folder");
@@ -130,6 +153,7 @@ impl Walk {
             remote,
             home,
             path,
+            shell,
             runs: std::cell::Cell::new(0),
             account,
         };
@@ -155,8 +179,6 @@ impl Walk {
     }
 
     /// The walkthrough's home.
-    // The check-live layer's, which the tools layer does not use.
-    #[allow(dead_code)]
     pub fn home(&self) -> &Path {
         &self.home
     }
@@ -236,7 +258,11 @@ impl Walk {
             .env("XDG_DATA_HOME", self.home.join("data"))
             .env("PATH", &self.path)
             .env("OPENSPEC_TELEMETRY", "0")
+            .env(USER_SCRATCH, user_scratch(&self.repository))
             .stdin(Stdio::null());
+        if let Some(shell) = &self.shell {
+            command.env("SHELL", shell);
+        }
         command
     }
 
@@ -370,8 +396,17 @@ impl Walk {
             .to_string()
     }
 
+    /// The session the printed command resumes, none where it resumes
+    /// none (179).
+    pub fn resumes(&self, place: &str) -> Option<String> {
+        let printed = self.printed(place);
+        let (_, after) = printed.split_once(" --resume ")?;
+        after.split_whitespace().next().map(str::to_string)
+    }
+
     /// The prompt the printed command carries, its last word, which
-    /// follows the plugin's folder, unquoted.
+    /// follows the plugin's folder and the session it resumes, if any,
+    /// unquoted.
     pub fn prompt(&self, place: &str) -> String {
         let printed = self.printed(place);
         let (_, after) = printed
@@ -380,6 +415,12 @@ impl Walk {
         let (_, quoted) = after
             .split_once(' ')
             .unwrap_or_else(|| panic!("no prompt in {printed}"));
+        let quoted = match quoted.strip_prefix("--resume ") {
+            Some(resumed) => resumed
+                .split_once(' ')
+                .map_or(resumed, |(_, quoted)| quoted),
+            None => quoted,
+        };
         quoted
             .strip_prefix('\'')
             .and_then(|quoted| quoted.strip_suffix('\''))
@@ -551,6 +592,26 @@ exec "$pinned" "$@"
         .expect("the stand-in for sluice made executable");
 }
 
+/// The walk's login shell, written into `dir` as `shell`: run as a login
+/// shell, it runs `/bin/sh` with the rest of its words and `path` for its
+/// `PATH`, so the login environment a place's steps run in names the
+/// walk's tools, the pinned sluice among them, rather than whatever the
+/// host user's own login shell names (11, 79; core.22). Its path.
+fn login_shell(dir: &Path, path: &str) -> PathBuf {
+    std::fs::create_dir_all(dir).expect("the login shell's folder");
+    let shell = dir.join("shell");
+    std::fs::write(
+        &shell,
+        format!(
+            "#!/bin/sh\nPATH='{path}'\nexport PATH\n[ \"$1\" = -l ] && shift\nexec /bin/sh \"$@\"\n"
+        ),
+    )
+    .expect("the login shell");
+    std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755))
+        .expect("the login shell made executable");
+    shell
+}
+
 /// The pull request the stand-in for sluice on a base that takes pull
 /// requests answers with.
 pub const PULL_REQUEST: &str = "7";
@@ -644,6 +705,32 @@ pub fn finish(child: Child) -> Ran {
         ),
         code: output.status.code().unwrap_or(-1),
     }
+}
+
+/// The seconds since the epoch now.
+pub fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock past the epoch")
+        .as_secs()
+}
+
+/// The top of the UTC hour two hours on from `at`, well clear of any
+/// walk's length, and the session limit naming it in the words the pinned
+/// Claude Code writes, a time of day in en-US's 12-hour form (151, C.4).
+pub fn session_limit_after(at: u64) -> (u64, String) {
+    let reset = at - at % 3600 + 2 * 3600;
+    let hour = reset % 86_400 / 3600;
+    let clock = match hour {
+        0 => "12am".to_owned(),
+        1..=11 => format!("{hour}am"),
+        12 => "12pm".to_owned(),
+        _ => format!("{}pm", hour - 12),
+    };
+    (
+        reset,
+        format!("You've hit your session limit · resets {clock} (UTC)"),
+    )
 }
 
 /// The place's stage named `name`, as status gives it.

@@ -4,8 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PlaceId, PlaceRef, Prompt,
-    Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld, Unsettled, Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, LabelHeld, PassedOver, PlaceId,
+    PlaceRef, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld, Settings, StopKind,
+    StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -69,6 +70,11 @@ pub struct HeldState {
     /// its start recorded, in order, by its variables' names alone (56,
     /// 161).
     pub unsettled: Vec<UnsettledStart>,
+    /// Each start of the place's that carried its stage's conversation and
+    /// did not begin, in order, with what happened: its stage started
+    /// afresh after it (56, 146, S79).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub uncarried: Vec<UncarriedStart>,
 }
 
 /// A start whose agent began without the settings its start recorded:
@@ -81,6 +87,17 @@ pub struct UnsettledStart {
     pub at: Seconds,
     #[serde(flatten)]
     pub unsettled: Unsettled,
+}
+
+/// A start that carried its stage's conversation and did not begin: its
+/// stage and number, when a settle read it so, and the words saying what
+/// happened, naming no session (146, 179, S79).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UncarriedStart {
+    pub stage: String,
+    pub start: u32,
+    pub at: Seconds,
+    pub words: String,
 }
 
 /// How long a place waits on its caller under no hold's words before it
@@ -353,6 +370,21 @@ pub enum DeliveredBy {
     Inbox,
 }
 
+/// Where a launch read its base's revision (9, 56, 126, C.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BaseFrom {
+    /// Where the merge queue's profile says the base lives, the merge
+    /// queue landing it.
+    MergeQueue,
+    /// `origin/<base>`, after flume's own fetch.
+    Origin,
+    /// The host's own branch, the repository having no remote `origin`.
+    NoOrigin,
+    /// The host's own branch, `origin` holding no such branch.
+    OriginLacks,
+}
+
 /// What a launch fixed of a place (8, 21).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceRecord {
@@ -366,6 +398,10 @@ pub struct PlaceRecord {
     pub base: String,
     /// The base's revision the place was cut from (9).
     pub base_revision: Revision,
+    /// Where the launch read the base's revision; none for a place
+    /// launched before flume said (56, C.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_from: Option<BaseFrom>,
     pub location: String,
     /// The repository's binding as it resolved at the launch (21).
     pub binding: Binding,
@@ -576,6 +612,26 @@ pub struct RoomWait {
     pub order: u64,
     /// The words it starts with: a fix round's or a retry's (49, 112).
     pub words: Option<String>,
+    /// For a stage waiting after its agent stopped at its account's usage
+    /// limit, that start and whether the next may carry its conversation;
+    /// none for any other wait, so no other start carries one (30, 146,
+    /// 179).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carry: Option<AfterSpent>,
+}
+
+/// A stage's wait after its agent stopped at its account's usage limit:
+/// the start that stopped, whether the next start may carry its
+/// conversation, and why not where it may not (146, 179, S79).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AfterSpent {
+    /// The start whose agent stopped at its account's usage limit.
+    pub start: Identity,
+    /// Whether the next start may carry its conversation.
+    pub carry: bool,
+    /// Why it does not, where it may not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
 }
 
 /// A stage's end as reported when it ended (43).
@@ -713,6 +769,33 @@ pub struct StartHeld {
     /// it: the place waits on a person while it shows (34, 35).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dialog: Option<Dialog>,
+    /// For a start after its stage's agent stopped at its account's usage
+    /// limit, whether it carries that agent's conversation, or why not;
+    /// none for any other start (56, 146, 179).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<Conversation>,
+    /// The session its agent opened in, with where it came from; none
+    /// for an agent opened beside a pane, and in a start written before
+    /// (56, 107, 143).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<SessionHeld>,
+    /// The label its place started under, with where it came from, which
+    /// its agent counts toward until it ends; none where it had none, and
+    /// in a start written before (56, 180, 181).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<LabelHeld>,
+}
+
+/// Whether a start carries the conversation of its stage's start before
+/// it, whose agent stopped at its account's usage limit: that start's
+/// number, and why not where it does not (56, 146, 179).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Conversation {
+    /// The number of the start whose agent stopped.
+    pub from: u32,
+    pub carried: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
 }
 
 /// A question an agent's program shows a person before it takes its
@@ -735,7 +818,9 @@ pub struct Dialog {
 /// No value is kept, and no guessed value is tested against a digest
 /// without the secret (core.30). Its mode is the value the start's
 /// profile passes, none where the settings give no mode, and in a record
-/// written before (161, 162).
+/// written before (161, 162). Its session is the one the start resumes,
+/// none where it carries no conversation, and in a record written before
+/// (161, 179).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StartRecord {
     pub program: String,
@@ -743,6 +828,8 @@ pub struct StartRecord {
     pub env: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
 }
 
 /// The account a start runs under: its pool, its name, and whether the
@@ -765,7 +852,11 @@ pub enum AccountFrom {
 /// A move from one account to another: of a stage, whose start went to
 /// another account than its last, or of an intent, whose affinity moved;
 /// why, and when. The agents after it start without the earlier
-/// account's cache (56, 145 to 147).
+/// account's cache (56, 145 to 147). A stage's move after its agent
+/// stopped at its account's usage limit says whether its conversation
+/// went with it, none for any other (56, 179). A move off an account past
+/// its threshold names the window that held it and when that window
+/// resets, none for any other and on a move recorded before (185).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountMove {
     #[serde(flatten)]
@@ -774,22 +865,36 @@ pub struct AccountMove {
     pub to: String,
     pub why: MoveWhy,
     pub at: Seconds,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carried: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<Seconds>,
 }
 
-/// What moved between accounts: a stage, or the intent (147).
+/// What moved between accounts: a stage, or the intent's affinity for
+/// the program whose account moved, none on a move recorded before an
+/// intent kept an account per program (147).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "on", rename_all = "snake_case")]
 pub enum MoveOn {
-    Stage { stage: String },
-    Intent,
+    Stage {
+        stage: String,
+    },
+    Intent {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program: Option<String>,
+    },
 }
 
-/// Why a start went to another account: the one before was spent, or at
-/// its own bound (145, 146).
+/// Why a start went to another account: the one before was spent, past
+/// its threshold, or at its own bound (145, 146, 185).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MoveWhy {
     Spent,
+    Threshold,
     Full,
 }
 
@@ -797,6 +902,7 @@ impl MoveWhy {
     pub fn name(self) -> &'static str {
         match self {
             MoveWhy::Spent => "spent",
+            MoveWhy::Threshold => "threshold",
             MoveWhy::Full => "full",
         }
     }
@@ -856,4 +962,9 @@ pub struct SubmissionHeld {
     /// acted on nothing (133, 68).
     #[serde(default)]
     pub unread: Option<String>,
+    /// Each branch the place's inbox passed over at the last settle, with
+    /// its words, its outcomes left pending for a later one; the
+    /// outcomes of every other branch were acted on (133).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub passed_over: Vec<PassedOver>,
 }

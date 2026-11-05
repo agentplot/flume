@@ -2,7 +2,11 @@
 //! at one head per place, from one core, and nothing written, sent or
 //! started.
 
-use super::account_pools::{account, fix_in, host, pool, spent};
+use super::account_pools::{
+    account, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in, fix_of, home,
+    host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent, stops_at_limit,
+    two_programs, window, UNREACHED,
+};
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::for_every_stage;
 use super::world::*;
@@ -29,6 +33,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: every fact of clause 56 for every place, side by side",
             cites: &["56", "43", "7", "19", "48"],
             run: every_fact_of_every_place,
+        },
+        Scenario {
+            name: "status: a fake terminal scripted to lack one entry for flume's plugin gives it as the host's terminal setup, and status opens, sends to and closes nothing",
+            cites: &["122", "57", "72"],
+            run: the_terminals_setup,
+        },
+        Scenario {
+            name: "status: a fix whose code agent works gives its line with every part in the JSON form, `fix--<name> · fix@1 · code · run 1 · working` in full",
+            cites: &["56", "61"],
+            run: a_line_in_status,
+        },
+        Scenario {
+            name: "status: the place's answer dropping its line or one of the line's fields fails naming the answer and the field",
+            cites: &["61"],
+            run: a_line_field_dropped,
+        },
+        Scenario {
+            name: "status: a terminal whose configuration binds no key to flume's places gives those words as the host's terminal setup when one place is asked of, and nothing is sent to any pane",
+            cites: &["122", "72", "57"],
+            run: a_popup_with_no_key,
         },
         Scenario {
             name: "status: a place no longer held is not answered for",
@@ -61,6 +85,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: status_mid_stage,
         },
         Scenario {
+            name: "status: a place whose code start 2 carries start 1's conversation under work-2 gives the agent's conversation from start 1, carried, and code's move from work-1 to work-2 carried, in the JSON and the person's form",
+            cites: &["56", "146", "S78"],
+            run: a_carried_agent,
+        },
+        Scenario {
+            name: "status: a place whose code start 2 started afresh because work-2's CLAUDE_CONFIG_DIR does not reach start 1's conversation gives the agent's conversation from start 1, not carried, and why by the variable's name and no path, and the move not carried",
+            cites: &["56", "S55", "179"],
+            run: a_conversation_that_stayed,
+        },
+        Scenario {
+            name: "status: a place whose carried start 2 ended before it said it started and whose start 3 started afresh lists start 2 carried and not begun with why, and start 3's agent from start 1, not carried, and why",
+            cites: &["56", "S79", "146"],
+            run: a_carried_start_that_did_not_begin,
+        },
+        Scenario {
             name: "status: a repetition adding a fourth group to a change of three gives the count as 4, read at the head",
             cites: &["58", "142"],
             run: a_group_added_mid_stage,
@@ -71,9 +110,34 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_stage_that_moved,
         },
         Scenario {
+            name: "status: a place whose code started after the intent moved for one program, and whose review started on another program's account from the affinity, gives the intent's move with its program and the review's account from the affinity for its program",
+            cites: &["56", "147", "S80"],
+            run: an_intent_that_moved_for_one_program,
+        },
+        Scenario {
             name: "status: the host's pools give each pool's strategy and each account's agents running, bound and spent time, and no value of an account's environment",
             cites: &["56", "144", "145"],
             run: a_pool_with_a_spent_account,
+        },
+        Scenario {
+            name: "status: a most-left pool stating no threshold gives most-left and 90, an account's fresh reading with its window's use as a percentage and its reset, another's stale reading, and a third's missing file with why, in the JSON form, and no reading's path",
+            cites: &["56", "184", "185"],
+            run: a_pool_with_readings,
+        },
+        Scenario {
+            name: "status: an account whose 7-day window reads 95% used gives what holds it past its threshold, 7-day until its reset, and that window past, in the JSON form",
+            cites: &["56", "185"],
+            run: an_account_past_its_threshold,
+        },
+        Scenario {
+            name: "status: an intent whose affinity for agent moved off work-1, past its threshold in 5-hour until 17:00, to work-2 gives the move with why threshold, the window and its end, in the JSON form and the person's",
+            cites: &["56", "147", "185"],
+            run: an_intents_move_past_a_threshold,
+        },
+        Scenario {
+            name: "status: a move a held state holds as an earlier release wrote it, spent with no window or end, is given as written, in the JSON form and the person's",
+            cites: &["56", "61"],
+            run: a_move_recorded_before,
         },
         Scenario {
             name: "status: an agent that took edits from the host's table gives its mode as written from host-kind, the value its profile passed and that it was read back, in the JSON form",
@@ -502,6 +566,100 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
     Ok(())
 }
 
+fn a_line_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    let id = super::account_pools::begun_fix(&world, "parser")?;
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    let line = json["line"].as_object().ok_or("no line in the JSON form")?;
+    ensure_eq!(
+        line.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["full", "kind", "name", "run", "short", "stage", "state", "tasks"],
+        "the line's fields"
+    );
+    ensure_eq!(
+        status.line.full.as_str(),
+        "fix--parser · fix@1 · code · run 1 · working",
+        "the line in full"
+    );
+    Ok(())
+}
+
+fn a_line_field_dropped(_: &()) -> Outcome {
+    use super::answers::{full, missing};
+    let (name, answer) = full().remove(0);
+    for (field, path) in [
+        ("line", "status.places[].line"),
+        ("short", "status.places[].line.short"),
+    ] {
+        let mut json: serde_json::Value =
+            serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+        let place = &mut json["status"]["places"][0];
+        let holder = if field == "line" {
+            place
+        } else {
+            &mut place["line"]
+        };
+        holder
+            .as_object_mut()
+            .ok_or("no object")?
+            .remove(field)
+            .ok_or("no such field")?;
+        let missed = missing(name, &json);
+        ensure!(
+            missed.contains(&format!("the answer status lacks its field {path}")),
+            "the fields missed: {missed:?}"
+        );
+    }
+    Ok(())
+}
+
+fn a_popup_with_no_key(_: &()) -> Outcome {
+    use crate::fake_harness::SETUP;
+    let world = World::new();
+    let id = super::account_pools::begun_fix(&world, "parser")?;
+    world.terminal.set_setup(&[SETUP]);
+    let sends = |world: &World| {
+        (
+            world.terminal.log.count("send"),
+            world.terminal.log.count("send_to"),
+            world.terminal.every_notice().len(),
+        )
+    };
+    let before = sends(&world);
+    let Answer::Status { host, .. } = world.engine().status(Some(&id)) else {
+        return Err("status refused".into());
+    };
+    ensure_eq!(
+        host.terminal_setup,
+        vec![SETUP.to_string()],
+        "the host's terminal setup"
+    );
+    ensure_eq!(sends(&world), before, "what was sent to a pane");
+    Ok(())
+}
+
+fn the_terminals_setup(_: &()) -> Outcome {
+    use crate::fake_harness::SETUP;
+    let world = World::new();
+    world.begun("build", Some(Deliverable::Commits), "one")?;
+    world.terminal.set_setup(&[SETUP]);
+    let calls = |world: &World| {
+        ["open", "send", "close"].map(|operation| world.terminal.log.count(operation))
+    };
+    let before = calls(&world);
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status refused".into());
+    };
+    ensure_eq!(
+        host.terminal_setup,
+        vec![SETUP.to_string()],
+        "the host's terminal setup"
+    );
+    ensure_eq!(calls(&world), before, "the opens, sends and closes");
+    Ok(())
+}
+
 fn a_place_gone(_: &()) -> Outcome {
     let world = World::new();
     let id = world.begun("build", Some(Deliverable::Commits), "one")?;
@@ -665,6 +823,9 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             to: "work-2".into(),
             why: MoveWhy::Spent,
             at,
+            carried: None,
+            window: None,
+            until: None,
         },
         cache: Cache::Lost,
     };
@@ -674,9 +835,57 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             moved(MoveOn::Stage {
                 stage: "code".into()
             }),
-            moved(MoveOn::Intent)
+            moved(MoveOn::Intent {
+                program: Some("agent".into())
+            })
         ],
         "the place's moves"
+    );
+    Ok(())
+}
+
+fn an_intent_that_moved_for_one_program(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    let first = of_the_surfaces(&world, "two", "a", None)?;
+    code_delivered(&world, &first, "a")?;
+    spent(&world, "work", "agent-1", world.host.now() + 3600);
+    let id = of_the_surfaces(&world, "two", "b", None)?;
+    code_delivered(&world, &id, "b")?;
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["moves"],
+        serde_json::json!([{
+            "on": "intent",
+            "program": "agent",
+            "from": "agent-1",
+            "to": "agent-2",
+            "why": "spent",
+            "at": world.host.now(),
+            "cache": "lost",
+        }]),
+        "the place's moves in the JSON form"
+    );
+    ensure_eq!(
+        (
+            json["agent"]["stage"].as_str(),
+            json["agent"]["program"].as_str(),
+            json["agent"]["account"]["name"].as_str(),
+            json["agent"]["account"]["from"].as_str(),
+        ),
+        (
+            Some("review"),
+            Some("other"),
+            Some("other-1"),
+            Some("affinity")
+        ),
+        "the review's agent and its account in the JSON form"
+    );
+    let words = status.moves[0].words();
+    ensure!(
+        words.starts_with("the intent moved for agent from agent-1 to agent-2"),
+        "the move's words: {words}"
     );
     Ok(())
 }
@@ -704,6 +913,7 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
         vec![PoolStatus {
             name: "work".into(),
             strategy: Strategy::FillFirst,
+            threshold: 90,
             accounts: vec![
                 AccountStatus {
                     name: "work-1".into(),
@@ -711,6 +921,8 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 2,
                     bound: Some(4),
                     spent_until: None,
+                    reading: None,
+                    past: None,
                 },
                 AccountStatus {
                     name: "work-2".into(),
@@ -718,6 +930,8 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 0,
                     bound: None,
                     spent_until: Some(until),
+                    reading: None,
+                    past: None,
                 },
             ],
         }],
@@ -727,6 +941,341 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
     ensure!(
         !answer.contains("a-token-of-the-account"),
         "status gives a value of an account's environment"
+    );
+    Ok(())
+}
+
+fn a_pool_with_readings(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let seventeen = now + 2 * 3600;
+    pool_at(
+        &world,
+        "work",
+        Strategy::MostLeft,
+        None,
+        ["work-1", "work-2", "work-3"]
+            .into_iter()
+            .map(|name| reading_at(account(name, None)))
+            .collect(),
+    );
+    reads(
+        &world,
+        "work-1",
+        now - 120,
+        vec![window("5-hour", 4_200, Some(seventeen))],
+    );
+    reads(
+        &world,
+        "work-2",
+        now - 20 * 60,
+        vec![window("5-hour", 1_250, Some(seventeen))],
+    );
+    let json = serde_json::to_value(host(&world)?).map_err(|error| error.to_string())?;
+    let unbound = |name: &str, reading| {
+        serde_json::json!({
+            "name": name,
+            "program": "agent",
+            "running": 0,
+            "bound": null,
+            "spent_until": null,
+            "reading": reading,
+        })
+    };
+    ensure_eq!(
+        json["pools"],
+        serde_json::json!([{
+            "name": "work",
+            "strategy": "most-left",
+            "threshold": 90,
+            "accounts": [
+                unbound("work-1", serde_json::json!({
+                    "read_at": now - 120,
+                    "fresh": true,
+                    "windows": [{"name": "5-hour", "used": 42, "resets_at": seventeen, "past": false}],
+                })),
+                unbound("work-2", serde_json::json!({
+                    "read_at": now - 20 * 60,
+                    "fresh": false,
+                    "windows": [{"name": "5-hour", "used": 12.5, "resets_at": seventeen, "past": false}],
+                })),
+                unbound("work-3", serde_json::json!({"unread": "the file is missing"})),
+            ],
+        }]),
+        "the host's pools in the JSON form"
+    );
+    let answer = world.engine().status(None).to_json();
+    ensure!(
+        !answer.contains(".local/state/usage"),
+        "status gives a reading's path: {answer}"
+    );
+    Ok(())
+}
+
+fn an_account_past_its_threshold(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let monday = now + 3 * 24 * 3600;
+    pool_at(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        None,
+        vec![reading_at(account("work-1", None)), account("work-2", None)],
+    );
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![
+            window("5-hour", 3_000, Some(now + 3600)),
+            window("7-day", 9_500, Some(monday)),
+        ],
+    );
+    let json = serde_json::to_value(host(&world)?).map_err(|error| error.to_string())?;
+    let accounts = &json["pools"][0]["accounts"];
+    ensure_eq!(
+        accounts[0]["past"],
+        serde_json::json!({"window": "7-day", "until": monday}),
+        "what holds work-1 past its threshold"
+    );
+    ensure_eq!(
+        accounts[0]["reading"]["windows"],
+        serde_json::json!([
+            {"name": "5-hour", "used": 30, "resets_at": now + 3600, "past": false},
+            {"name": "7-day", "used": 95, "resets_at": monday, "past": true},
+        ]),
+        "work-1's windows"
+    );
+    ensure_eq!(
+        (accounts[1].get("past"), accounts[1].get("reading")),
+        (None, None),
+        "work-2, which names no reading"
+    );
+    Ok(())
+}
+
+fn an_intents_move_past_a_threshold(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let seventeen = now + 2 * 3600;
+    pool_at(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        None,
+        vec![reading_at(account("work-1", None)), account("work-2", None)],
+    );
+    let first = fix_of(&world, None, "a", Some("the-surfaces"))?;
+    ensure_eq!(
+        account_of(&world, &first, "code"),
+        on("work", "work-1"),
+        "the intent's first place's account"
+    );
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![window("5-hour", 9_200, Some(seventeen))],
+    );
+    let id = fix_of(&world, None, "b", Some("the-surfaces"))?;
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["moves"],
+        serde_json::json!([{
+            "on": "intent",
+            "program": "agent",
+            "from": "work-1",
+            "to": "work-2",
+            "why": "threshold",
+            "at": now,
+            "window": "5-hour",
+            "until": seventeen,
+            "cache": "lost",
+        }]),
+        "the place's moves in the JSON form"
+    );
+    let words = status.moves[0].words();
+    ensure!(
+        words.starts_with(&format!(
+            "the intent moved for agent from work-1 to work-2 at {now}, work-1 past its threshold in 5-hour until {seventeen},"
+        )),
+        "the move in the person's form: {words}"
+    );
+    Ok(())
+}
+
+fn a_move_recorded_before(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_in(&world, None, "one")?;
+    let before = serde_json::json!({
+        "on": "stage",
+        "stage": "code",
+        "from": "work-1",
+        "to": "work-2",
+        "why": "spent",
+        "at": world.host.now(),
+    });
+    let mut held = world.held(&id).ok_or("no held state")?;
+    held.moves
+        .push(serde_json::from_value(before.clone()).map_err(|error| error.to_string())?);
+    world.store.put(&id, held);
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status
+            .moves
+            .iter()
+            .map(|moved| (moved.moved.window.clone(), moved.moved.until))
+            .collect::<Vec<_>>(),
+        vec![(None, None)],
+        "the move's window and end"
+    );
+    let words = status.moves[0].words();
+    ensure!(
+        words.contains("work-1 spent,") && !words.contains("threshold"),
+        "the move in the person's form: {words}"
+    );
+    let mut given = before;
+    given["cache"] = serde_json::json!("lost");
+    ensure_eq!(
+        serde_json::to_value(&status).map_err(|error| error.to_string())?["moves"],
+        serde_json::json!([given]),
+        "the move in the JSON form"
+    );
+    Ok(())
+}
+
+/// The fix `one`'s code under work-1 stopped at its usage limit and
+/// started again on work-2, where the fake agent answers `carry`; its
+/// status and that status in the JSON form.
+fn moved_to_work_2(
+    world: &World,
+    carry: Carry,
+) -> Result<(PlaceStatus, serde_json::Value), String> {
+    fill_first_at_homes(world);
+    world.agent.carry_to(&home("work-2"), carry);
+    let id = begun_fix(world, "one")?;
+    stops_at_limit(world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    Ok((status, json))
+}
+
+/// The move of code in a place's status.
+fn code_moved(status: &PlaceStatus) -> Result<&MoveStatus, String> {
+    status
+        .moves
+        .iter()
+        .find(|moved| {
+            moved.moved.on
+                == MoveOn::Stage {
+                    stage: "code".into(),
+                }
+        })
+        .ok_or_else(|| "status gives no move of code".to_string())
+}
+
+fn a_carried_agent(_: &()) -> Outcome {
+    let world = World::new();
+    let (status, json) = moved_to_work_2(
+        &world,
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    )?;
+    ensure_eq!(
+        json["agent"]["conversation"],
+        serde_json::json!({"from": 1, "carried": true}),
+        "the agent's conversation in the JSON form"
+    );
+    ensure_eq!(
+        json["moves"][0]["carried"],
+        serde_json::json!(true),
+        "code's move in the JSON form"
+    );
+    let words = code_moved(&status)?.words();
+    ensure!(
+        words.starts_with("code moved from work-1 to work-2")
+            && words.contains("its conversation with it"),
+        "code's move in the person's form: {words}"
+    );
+    ensure!(
+        !json.to_string().contains("/homes"),
+        "status gives a configuration home's path"
+    );
+    Ok(())
+}
+
+fn a_conversation_that_stayed(_: &()) -> Outcome {
+    let world = World::new();
+    let (status, json) = moved_to_work_2(
+        &world,
+        Carry::No {
+            why: UNREACHED.into(),
+        },
+    )?;
+    ensure_eq!(
+        json["agent"]["conversation"],
+        serde_json::json!({"from": 1, "carried": false, "why": UNREACHED}),
+        "the agent's conversation in the JSON form"
+    );
+    ensure!(
+        UNREACHED.contains("CLAUDE_CONFIG_DIR") && !UNREACHED.contains('/'),
+        "the why names no variable or names a path"
+    );
+    ensure_eq!(
+        json["moves"][0]["carried"],
+        serde_json::json!(false),
+        "code's move in the JSON form"
+    );
+    let words = code_moved(&status)?.words();
+    ensure!(
+        words.contains("its conversation stayed behind"),
+        "code's move in the person's form: {words}"
+    );
+    ensure!(
+        !json.to_string().contains("/homes"),
+        "status gives a configuration home's path"
+    );
+    Ok(())
+}
+
+fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.carried_starts_end();
+    let (status, json) = moved_to_work_2(
+        &world,
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    )?;
+    let ended = "the start that carried its conversation ended before it said it started";
+    ensure_eq!(
+        status
+            .uncarried
+            .iter()
+            .map(|read| (read.stage.as_str(), read.start, read.words.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("code", 2, ended)],
+        "the place's carried starts that did not begin"
+    );
+    ensure_eq!(
+        (
+            json["agent"]["identity"].clone(),
+            json["agent"]["conversation"].clone()
+        ),
+        (
+            serde_json::json!(World::identity("fix", "one", "code", 3).to_string()),
+            serde_json::json!({"from": 1, "carried": false, "why": ended})
+        ),
+        "the agent of start 3 and its conversation in the JSON form"
+    );
+    ensure_eq!(
+        json["uncarried"][0]["words"],
+        serde_json::json!(ended),
+        "the place's carried start that did not begin in the JSON form"
     );
     Ok(())
 }

@@ -1,19 +1,26 @@
 //! The merge-queue profile over sluice (C.6; design 13) against the
 //! pinned sluice, on scratch repositories gated by a command and, where a
 //! base lands on a remote, a local bare remote: nothing reaches a forge,
-//! a credential or the host's own sluice state, and no multiplexer's
-//! session reaches sluice. The merge-queue seam's scenarios run against
+//! a credential or the host's own sluice state, sluice's checkouts keep
+//! their scratch in the test's own folder, and no multiplexer's session
+//! reaches sluice. The merge-queue seam's scenarios run against
 //! it; then a submission from a herdr pane's hook, a failed entry
 //! collected once, a queue nothing drives, a step beside a live driver, a
 //! conflict's base revision, a conflict sluice answers at the submit
 //! itself, through the stand-in for sluice, and a settle beside that
 //! submit, which the inbox gives nothing, a pull request answered with
 //! no entry and the entry taken in from it read to its landing, through
-//! the stand-in for sluice on a base that takes pull requests, and a
-//! fetch that fails.
+//! the stand-in for sluice on a base that takes pull requests, a branch
+//! whose records sluice cannot read passed over by the inbox and
+//! read-submission while the place's landing is collected, a fetch that
+//! fails, and what the policy says of a place, its readiness asked of
+//! the pinned sluice's equip and its answer read.
 
+use super::walk::{user_scratch, USER_SCRATCH};
 use crate::common::*;
-use flume::profiles::merge_queue::sluice::{for_place, Sluice};
+use flume::profiles::merge_queue::sluice::{for_place, Sluice, EQUIP};
+use flume::profiles::place::git_worktree::{GitWorktree, Login};
+use flume::profiles::place_data;
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::merge_queue::{self, MergeQueueHarness};
 use flume_seams::*;
@@ -61,6 +68,10 @@ impl Harness {
                 seam = seam.with_env(&name, None);
             }
         }
+        let seam = seam.with_env(
+            USER_SCRATCH,
+            Some(&user_scratch(&repository).to_string_lossy()),
+        );
         let place = Harness::worktree(&repository, "fix/one", "fix--one", "work.rs");
         Harness {
             repository,
@@ -125,6 +136,7 @@ impl Harness {
             .env("HOME", &self.home)
             .env("XDG_STATE_HOME", self.home.join("state"))
             .env("XDG_CONFIG_HOME", self.home.join("config"))
+            .env(USER_SCRATCH, user_scratch(&self.repository))
             .output()
             .expect("sluice runs");
         serde_json::from_slice(&output.stdout).unwrap_or_else(|_| {
@@ -276,12 +288,74 @@ impl MergeQueueHarness for Harness {
             .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
     }
 
+    /// `trial`, made from main, whose policy names a table for main
+    /// alone, so sluice lands nothing on it (126, C.6).
+    fn base_unlanded(&self, _repository: &str) -> String {
+        self.repository.git(&["branch", "trial", "main"]);
+        "trial".into()
+    }
+
     fn unreadable(&self) {
         let records = self.repository.dir.join(".git/sluice");
         fs::create_dir_all(&records).expect("sluice's records");
         fs::set_permissions(&records, fs::Permissions::from_mode(0o000))
             .expect("the records locked");
         *self.locked.borrow_mut() = Some(records);
+    }
+
+    /// `bolt/x`, its policy naming it, given a submission from `unit/x`,
+    /// then a policy at its tip that declares `[[checkout.cache]]`, which
+    /// sluice 0.67.0 refuses: no round of `bolt/x` has read its revision,
+    /// so `sluice status bolt/x` reads the policy at its tip and refuses
+    /// the branch, as it refused one on deneb on 2026-11-04.
+    fn refuse_another(&self, _place: &PlaceRef) -> String {
+        let other = "bolt/x";
+        let at = self.repository.dir.join("places/bolt--x");
+        self.repository.git(&[
+            "worktree",
+            "add",
+            "--quiet",
+            "-b",
+            other,
+            &at.to_string_lossy(),
+            "main",
+        ]);
+        let policy = format!("{POLICY}\n[branches.\"bolt/*\"]\n");
+        let commit = |text: &str| {
+            fs::write(at.join(".config/sluice.toml"), text).expect("bolt/x's policy");
+            git(&at, &["add", ".config/sluice.toml"]);
+            git(
+                &at,
+                &[
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "bolt/x's policy",
+                ],
+            );
+        };
+        commit(&policy);
+        let unit = self.repository.dir.join("places/unit--x");
+        self.repository.git(&[
+            "worktree",
+            "add",
+            "--quiet",
+            "-b",
+            "unit/x",
+            &unit.to_string_lossy(),
+            other,
+        ]);
+        fs::write(unit.join("x.rs"), "unit/x\n").expect("the work written");
+        git(&unit, &["add", "x.rs"]);
+        git(&unit, &["commit", "--quiet", "-m", "unit/x"]);
+        let entry = self.sluice(&unit, &["submit", other, "--no-wait", "--json"]);
+        assert!(entry["id"].is_u64(), "bolt/x's submission: {entry}");
+        commit(&format!(
+            "{policy}\n[[checkout.cache]]\nkey = [\"Cargo.lock\"]\npaths = [\"target\"]\n"
+        ));
+        other.into()
     }
 }
 
@@ -326,7 +400,7 @@ fn a_failed_entry_is_collected_once_with_sluices_notice() {
     harness.will_fail("test x failed");
     harness.seam.submit(&place, &head);
     harness.decide("fix/one");
-    let Inbox::Outcomes { outcomes } = harness.seam.inbox(&place) else {
+    let Inbox::Outcomes { outcomes, .. } = harness.seam.inbox(&place) else {
         panic!("the inbox could not be read");
     };
     match outcomes.as_slice() {
@@ -338,7 +412,10 @@ fn a_failed_entry_is_collected_once_with_sluices_notice() {
     }
     assert_eq!(
         harness.seam.inbox(&place),
-        Inbox::Outcomes { outcomes: vec![] },
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![]
+        },
         "the second collect"
     );
 }
@@ -355,7 +432,11 @@ fn a_queue_nothing_drives_is_decided_by_the_settles_steps() {
             Stepped::Stepped,
             "a step"
         );
-        match harness.seam.read_submission(&place.repository, "fix/one") {
+        match harness
+            .seam
+            .read_submission(&place.repository, "fix/one")
+            .read
+        {
             SubmissionRead::Found { submission } if !submission.state.open() => {
                 assert!(
                     matches!(submission.state, SubmissionState::Landed { .. }),
@@ -386,6 +467,7 @@ fn a_step_beside_a_live_driver_does_nothing_and_answers() {
         .env("HOME", &harness.home)
         .env("XDG_STATE_HOME", harness.home.join("state"))
         .env("XDG_CONFIG_HOME", harness.home.join("config"))
+        .env(USER_SCRATCH, user_scratch(&harness.repository))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -426,7 +508,7 @@ fn a_conflicts_base_revision_and_words_are_sluices() {
     harness.seam.submit(&place, &head);
     harness.decide("fix/one");
     let record = harness.record("fix/one").expect("sluice's entry");
-    let Inbox::Outcomes { outcomes } = harness.seam.inbox(&place) else {
+    let Inbox::Outcomes { outcomes, .. } = harness.seam.inbox(&place) else {
         panic!("the inbox could not be read");
     };
     match outcomes.as_slice() {
@@ -502,7 +584,10 @@ fn a_conflict_sluice_answers_at_the_submit_is_its_outcome_never_a_refusal() {
     assert_eq!(base, expected, "the base revision");
     assert_eq!(
         harness.seam.inbox(&place),
-        Inbox::Outcomes { outcomes: vec![] },
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![]
+        },
         "the inbox, once the answer delivered the outcome"
     );
 }
@@ -533,7 +618,7 @@ fn a_settle_beside_the_stand_ins_submit_collects_nothing_its_answer_delivers() {
         let mut collected = vec![];
         while !submit.is_finished() {
             seam.step(&place.repository, "main");
-            if let Inbox::Outcomes { outcomes } = seam.inbox(&place) {
+            if let Inbox::Outcomes { outcomes, .. } = seam.inbox(&place) {
                 collected.extend(outcomes);
             }
         }
@@ -554,7 +639,10 @@ fn a_settle_beside_the_stand_ins_submit_collects_nothing_its_answer_delivers() {
     );
     assert_eq!(
         harness.seam.inbox(&place),
-        Inbox::Outcomes { outcomes: vec![] },
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![]
+        },
         "the inbox, once the answer delivered the outcome"
     );
 }
@@ -588,7 +676,7 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
     );
     assert_eq!(
         seam.read_submission(&place.repository, &place.branch),
-        SubmissionRead::None,
+        SubmissionRead::None.into(),
         "before it is taken in"
     );
     let mut take_in = Command::new(bin.join("sluice"));
@@ -604,13 +692,14 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
         .env("HOME", &harness.home)
         .env("XDG_STATE_HOME", harness.home.join("state"))
         .env("XDG_CONFIG_HOME", harness.home.join("config"))
+        .env(USER_SCRATCH, user_scratch(&harness.repository))
         .stdin(Stdio::null())
         .output()
         .expect("the stand-in takes the request in");
     assert!(took.status.success(), "{took:?}");
     let entry = harness.record("fix/one").expect("the entry taken in");
     let SubmissionRead::Found { submission } =
-        seam.read_submission(&place.repository, &place.branch)
+        seam.read_submission(&place.repository, &place.branch).read
     else {
         panic!("the entry taken in is not read");
     };
@@ -622,7 +711,7 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
     let landed = harness.record("fix/one").expect("the entry decided");
     assert_eq!(landed["state"], "landed", "{landed}");
     assert_eq!(
-        seam.read_submission(&place.repository, &place.branch),
+        seam.read_submission(&place.repository, &place.branch).read,
         SubmissionRead::Found {
             submission: Submission {
                 state: SubmissionState::Landed {
@@ -635,8 +724,87 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
     );
     assert_eq!(
         seam.inbox(&place),
-        Inbox::Outcomes { outcomes: vec![] },
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![]
+        },
         "the inbox, the outcome delivered to the request"
+    );
+}
+
+#[test]
+fn a_branch_whose_records_sluice_cannot_read_is_passed_over_and_the_landing_collected() {
+    // sluice answers the inbox with every other branch's outcomes and the
+    // branch it could not read in its `unread`, exiting as a failure:
+    // the inbox passes that branch over with sluice's words, and the
+    // place's landing on main is collected once (133).
+    let harness = Harness::new();
+    let (place, head) = harness.place();
+    harness.seam.submit(&place, &head);
+    let other = harness.refuse_another(&place);
+    let records = harness
+        .repository
+        .dir
+        .join(".git/sluice")
+        .join(&other)
+        .join("branch.json");
+    assert!(records.exists(), "{other}'s records at {records:?}");
+    fs::set_permissions(&records, fs::Permissions::from_mode(0o000)).expect("the records locked");
+    *harness.locked.borrow_mut() = Some(records);
+    harness.decide("fix/one");
+    let landed = harness.record("fix/one").expect("the entry decided");
+    assert_eq!(landed["state"], "landed", "{landed}");
+    let commit = Revision::new(landed["landed_as"].as_str().expect("its commit"));
+    let Inbox::Outcomes {
+        outcomes,
+        passed_over,
+    } = harness.seam.inbox(&place)
+    else {
+        panic!("the inbox past {other} could not be read");
+    };
+    assert_eq!(
+        outcomes,
+        vec![SubmissionOutcome::Landed {
+            commit: commit.clone()
+        }],
+        "the landing collected past {other}"
+    );
+    let branches: Vec<&str> = passed_over
+        .iter()
+        .map(|over| over.branch.as_str())
+        .collect();
+    assert_eq!(branches, vec![other.as_str()], "{passed_over:?}");
+    assert!(
+        passed_over[0].words.starts_with("sluice inbox: "),
+        "{passed_over:?}"
+    );
+    let Inbox::Outcomes { outcomes, .. } = harness.seam.inbox(&place) else {
+        panic!("the second inbox past {other} could not be read");
+    };
+    assert_eq!(outcomes, vec![], "the second collect");
+    let across = harness
+        .seam
+        .read_submission(&place.repository, &place.branch);
+    assert_eq!(
+        across
+            .passed_over
+            .iter()
+            .map(|over| over.branch.as_str())
+            .collect::<Vec<_>>(),
+        vec![other.as_str()],
+        "{across:?}"
+    );
+    assert!(
+        matches!(
+            across.read,
+            SubmissionRead::Found {
+                submission: Submission {
+                    state: SubmissionState::Landed { .. },
+                    ..
+                }
+            }
+        ),
+        "{across:?}"
     );
 }
 
@@ -658,13 +826,64 @@ fn a_fetch_that_fails_is_answered_with_its_words() {
 #[test]
 fn what_the_policy_says_of_a_place() {
     let harness = Harness::new();
-    harness.on_main(
+    let repository = harness.repository.name();
+    let launched = harness.on_main(
         ".config/sluice.toml",
         "[tests]\nrunner = \"moon\"\ntoolchain = [\"devenv\", \"print-dev-env\"]\n\n[branches.main]\nremote = \"origin\"\n",
     );
-    let place = for_place(&harness.repository.name(), "main").expect("the policy");
-    assert_eq!(place.toolchain.as_deref(), Some("devenv print-dev-env"));
-    assert_eq!(place.setup.as_deref(), Some("moon setup"));
+    let equip = format!("sluice equip main --at {} --json", launched.0);
+    let place = for_place(&repository, "main", Some(&launched)).expect("the policy");
+    assert_eq!(place.equip.as_deref(), Some(equip.as_str()));
     assert_eq!(place.teardown, "sluice release");
     assert_eq!(place.base_remote.as_deref(), Some("origin"));
+    let data =
+        place_data(&repository, Some("sluice"), "main", Some(&launched)).expect("the place's data");
+    let readiness: Vec<(&str, &str, bool)> = data
+        .readiness
+        .iter()
+        .map(|step| {
+            (
+                step.name.as_str(),
+                step.command.as_str(),
+                step.reading.is_some(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        readiness,
+        vec![(EQUIP, equip.as_str(), true)],
+        "a readiness of more than sluice's equip, read"
+    );
+    let teardown: Vec<&str> = data
+        .teardown
+        .iter()
+        .map(|step| step.command.as_str())
+        .collect();
+    assert_eq!(teardown, vec!["sluice release"]);
+    assert_eq!(data.base_remote.as_deref(), Some("origin"));
+
+    // The pinned sluice equips the place as the step asks it, at the
+    // revision named, and its answer is read as the readiness's steps.
+    let equipping = harness.on_main(
+        ".config/sluice.toml",
+        "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\ntoolchain = [\"printf\", \"export READY=1\\\\n\"]\n\n[branches.main]\n",
+    );
+    let data = place_data(&repository, Some("sluice"), "main", Some(&equipping))
+        .expect("the place's data");
+    let path = std::env::var("PATH").unwrap_or_default();
+    let profile = GitWorktree::with_login(
+        data,
+        Login::given(&[
+            ("HOME", &harness.home.to_string_lossy()),
+            ("PATH", &path),
+            ("LANG", "C"),
+        ]),
+    );
+    let readiness = profile.ready(&harness.place, &equipping);
+    let steps: Vec<(&str, bool)> = readiness
+        .steps
+        .iter()
+        .map(|step| (step.step.as_str(), step.passed))
+        .collect();
+    assert_eq!(steps, vec![("toolchain", true)], "{readiness:?}");
 }

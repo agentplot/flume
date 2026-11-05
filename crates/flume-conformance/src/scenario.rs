@@ -91,6 +91,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         starts_unready: true,
         lands: true,
         agents: KindSettings::default(),
+        label: None,
         stages: vec![Stage {
             name: "code".into(),
             prompt: "{{brief}}\n\n{{needs}}".into(),
@@ -115,6 +116,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             branch: "fix/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: None,
             location: id.0.clone(),
             binding: Binding::default(),
             brief: Some("mend it".into()),
@@ -140,6 +142,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         unwoken: Default::default(),
         moves: vec![],
         unsettled: vec![],
+        uncarried: vec![],
         holds: vec![],
         waiting: None,
         stall_after: STALL_AFTER,

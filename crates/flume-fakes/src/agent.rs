@@ -1,7 +1,7 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
-    Agent, AgentCommand, FolderTrust, Guarded, Identity, Mode, ModeBegan, ModeEntry, Offered,
-    PlaceRef, Reading, Received, Secret, Settings, Spent, Unsettled,
+    Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Mode, ModeBegan, ModeEntry,
+    Offered, PlaceRef, Reading, Received, Secret, Settings, Spent, Unsettled,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -15,7 +15,11 @@ use std::sync::{Arc, Mutex};
 /// there alone: a reading handed another folder is unknown (128). It maps
 /// no mode until its map is scripted, and reads none back until set to,
 /// in its word that it started or at its start's first prompt; its
-/// command passes the value mapped as `--mode <value>` (169).
+/// command passes the value mapped as `--mode <value>` (169). It carries
+/// no conversation until its carry is scripted, by each account's
+/// [`FakeAgent::HOME`]; its command passes the session a start resumes as
+/// `--resume <session>`, and a start's word that it started names the
+/// session it resumes unless scripted otherwise (179).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     state: Mutex<AgentModel>,
@@ -37,6 +41,12 @@ struct AgentModel {
     /// The mode is named at the start's first prompt, never in the word
     /// that it started (161).
     mode_at_prompt: bool,
+    /// The answer of carry to each account, by its [`FakeAgent::HOME`]
+    /// (179).
+    carries: BTreeMap<String, Carry>,
+    /// Each start whose command resumes a session ends before its word
+    /// that it started (S79).
+    carried_starts_end: bool,
 }
 
 #[derive(Clone)]
@@ -55,6 +65,9 @@ struct Record {
     started_without: Option<Unsettled>,
     /// The mode the agent's word says it began in, as scripted (161).
     began_in: Option<String>,
+    /// The session the agent's word that it started names, as scripted
+    /// (161, 179).
+    session: Option<String>,
 }
 
 impl Default for Record {
@@ -73,11 +86,16 @@ impl Default for Record {
             spent: Spent::No,
             started_without: None,
             began_in: None,
+            session: None,
         }
     }
 }
 
 impl FakeAgent {
+    /// The variable of an account's environment by which the fake knows
+    /// the account, as a program knows its configuration home (179).
+    pub const HOME: &'static str = "AGENT_HOME";
+
     pub fn new(terminal: Arc<FakeTerminal>) -> FakeAgent {
         FakeAgent {
             terminal,
@@ -158,6 +176,28 @@ impl FakeAgent {
         self.with(agent, |record| record.began_in = Some(mode));
     }
 
+    /// The agent's word that it started names `session`, which is
+    /// compared with the session its command resumes, where it resumes
+    /// one (161, 179).
+    pub fn set_session(&self, agent: &Identity, session: &str) {
+        let session = session.to_string();
+        self.with(agent, |record| record.session = Some(session));
+    }
+
+    /// The program carries a stopped start's conversation to the account
+    /// whose [`FakeAgent::HOME`] is `home` as `carry` says: yes with the
+    /// session it resumes, or no with the words (179).
+    pub fn carry_to(&self, home: &str, carry: Carry) {
+        lock(&self.state).carries.insert(home.to_string(), carry);
+    }
+
+    /// Each start whose command resumes a session finds no such
+    /// conversation and ends before its word that it started, as a program
+    /// does whose account cannot reach it (146, S79).
+    pub fn carried_starts_end(&self) {
+        lock(&self.state).carried_starts_end = true;
+    }
+
     /// The agent's record is kept in `folder`, as the agent's program
     /// records its session in the place's own folder (128).
     pub fn keep_record_in(&self, agent: &Identity, folder: &str) {
@@ -219,28 +259,64 @@ impl FakeAgent {
     }
 
     /// How the agent began otherwise than its start, as scripted: the
-    /// variables set, and its mode where it began in another, once a
-    /// prompt reached it where it names its mode only then (161, 162).
+    /// variables set, another session than its command resumes, and its
+    /// mode where it began in another, once a prompt reached it where it
+    /// names its mode only then (161, 162, 179).
     fn unsettled(&self, agent: &Identity, record: &Record) -> Option<Unsettled> {
         let at_prompt = lock(&self.state).mode_at_prompt;
         let mode = self
             .began_otherwise(agent, record)
             .filter(|_| !at_prompt || self.prompted(agent));
-        match (record.started_without.clone(), mode) {
+        let mut unsettled = match (record.started_without.clone(), mode) {
             (scripted, None) => scripted,
             (scripted, Some(mode)) => Some(Unsettled {
                 mode: Some(mode),
                 ..scripted.unwrap_or_default()
             }),
+        };
+        if self.in_another_session(agent, record) {
+            unsettled.get_or_insert_with(Unsettled::default).session = true;
         }
+        unsettled
     }
 
     /// Whether its word that it started shows it began otherwise: the
-    /// variables set, or its mode where that word names it (161).
+    /// variables set, another session than its command resumes, or its
+    /// mode where that word names it (161, 179).
     fn unsettled_at_start(&self, agent: &Identity, record: &Record) -> bool {
         let at_prompt = lock(&self.state).mode_at_prompt;
         record.started_without.is_some()
+            || self.in_another_session(agent, record)
             || (!at_prompt && self.began_otherwise(agent, record).is_some())
+    }
+
+    /// The session the agent's command resumes, none where it resumes
+    /// none (179).
+    fn resumed(&self, agent: &Identity) -> Option<String> {
+        let (command, _) = self.terminal.opened(agent)?;
+        command
+            .args
+            .iter()
+            .skip_while(|arg| *arg != "--resume")
+            .nth(1)
+            .cloned()
+    }
+
+    /// Whether its word that it started names another session than the
+    /// one its command resumes; none is compared where it resumes none
+    /// (161, 179).
+    fn in_another_session(&self, agent: &Identity, record: &Record) -> bool {
+        match (self.resumed(agent), &record.session) {
+            (Some(resumed), Some(session)) => resumed != *session,
+            _ => false,
+        }
+    }
+
+    /// Whether the agent resumes a session where carried starts are
+    /// scripted to end before their word that they started (S79).
+    fn ends_unfound(&self, agent: &Identity) -> bool {
+        let end = lock(&self.state).carried_starts_end;
+        end && self.resumed(agent).is_some()
     }
 
     /// Whether its start's first prompt was held back, its program naming
@@ -282,9 +358,13 @@ impl FakeAgent {
     }
 
     /// The agent's record as read in `folder`: none where it is kept in
-    /// another.
+    /// another. A start scripted to end before its word has ended by the
+    /// first reading, its terminal reading it stopped (S79).
     fn read_in(&self, operation: &str, folder: &str, agent: &Identity) -> Option<Record> {
         self.log.push(format!("{operation} {agent} in {folder}"));
+        if self.ends_unfound(agent) {
+            self.terminal.kill(agent);
+        }
         let record = self.record(agent);
         match &record.folder {
             Some(kept) if kept != folder => None,
@@ -296,21 +376,29 @@ impl FakeAgent {
 impl Agent for FakeAgent {
     fn command(
         &self,
+        _folder: &str,
         settings: &Settings,
         mode: Option<&str>,
+        resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
         identity: &Identity,
         secret: &Secret,
         prompt: &str,
     ) -> AgentCommand {
-        self.log.push(format!("command {identity}"));
+        self.log.push(match resume {
+            Some(session) => format!("command {identity} --resume {session}"),
+            None => format!("command {identity}"),
+        });
         let mut args = vec![];
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
         }
         if let Some(mode) = mode {
             args.extend(["--mode".to_string(), mode.to_string()]);
+        }
+        if let Some(session) = resume {
+            args.extend(["--resume".to_string(), session.to_string()]);
         }
         if let Some(instructions) = &settings.instructions {
             args.extend(["--instructions".to_string(), instructions.clone()]);
@@ -339,6 +427,9 @@ impl Agent for FakeAgent {
         let Some(model) = self.read_in("started", folder, agent) else {
             return Reading::Unknown;
         };
+        if self.ends_unfound(agent) {
+            return Reading::No;
+        }
         if model.started.is_none() && self.unsettled_at_start(agent, &model) {
             return Reading::No;
         }
@@ -396,7 +487,13 @@ impl Agent for FakeAgent {
 
     fn ended(&self, folder: &str, agent: &Identity) -> Reading {
         self.read_in("ended", folder, agent)
-            .map_or(Reading::Unknown, |record| record.ended)
+            .map_or(Reading::Unknown, |record| {
+                if self.ends_unfound(agent) {
+                    Reading::Yes
+                } else {
+                    record.ended
+                }
+            })
     }
 
     fn last_words(&self, folder: &str, agent: &Identity) -> Option<String> {
@@ -412,6 +509,50 @@ impl Agent for FakeAgent {
     fn started_without(&self, folder: &str, agent: &Identity) -> Option<Unsettled> {
         self.read_in("started_without", folder, agent)
             .and_then(|record| self.unsettled(agent, &record))
+    }
+
+    /// The answer scripted for the account by its [`FakeAgent::HOME`],
+    /// each logged with its answer: not offered where no account's is
+    /// scripted, as the seam's default; otherwise no, naming the variable,
+    /// to an account none is scripted for, or for a stopped start whose
+    /// record is kept in another folder (128, 179).
+    fn carry(&self, folder: &str, earlier: &Identity, env: &BTreeMap<String, String>) -> Carry {
+        let home = env.get(Self::HOME);
+        let known = self
+            .record(earlier)
+            .folder
+            .is_none_or(|kept| kept == folder);
+        let answer = {
+            let state = lock(&self.state);
+            if state.carries.is_empty() {
+                Carry::NotOffered
+            } else if !known {
+                Carry::No {
+                    why: "the agent that stopped is not known in this place, so its \
+                          conversation is not known"
+                        .into(),
+                }
+            } else {
+                home.and_then(|home| state.carries.get(home))
+                    .cloned()
+                    .unwrap_or_else(|| Carry::No {
+                        why: format!(
+                            "the account's {} reaches no conversation of the fake agent's",
+                            Self::HOME
+                        ),
+                    })
+            }
+        };
+        self.log.push(format!(
+            "carry {earlier} in {folder} to {}: {}",
+            home.map_or("no home", String::as_str),
+            match &answer {
+                Carry::Yes { session } => format!("yes {session}"),
+                Carry::No { .. } => "no".to_string(),
+                Carry::NotOffered => "not offered".to_string(),
+            }
+        ));
+        answer
     }
 
     /// The value scripted for `entry`, or words naming it, each mapping

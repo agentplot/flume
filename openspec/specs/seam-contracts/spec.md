@@ -53,26 +53,33 @@ agent (136).
 
 ### Requirement: The terminal seam's open, tidy and show
 
-The terminal seam's open SHALL answer, beside opened and refused, a
-start held at a question its program asks before it starts and a program
-that did not come up within its bound, each with the screen (94); it
-SHALL tidy what it made for a place gone (138) and show a place's clues
-(139); and every terminal operation SHALL answer within a bound the
-profile states (98).
+The terminal seam's open SHALL take where the agent runs, beside a
+pane, in a session by its name or in the terminal's own, and SHALL
+answer, beside opened and refused, a start held at a question
+its program asks before it starts and a program that did not come up
+within its bound, each with the screen (94, 107); it SHALL tidy what it
+made for a place gone (138) and show a place's clues (139); and every
+terminal operation SHALL answer within a bound the profile states (98).
 
 #### Scenario: Held, tidied and shown
 
 - **WHEN** the fake terminal holds a start at a question, makes a place's tab in its base's workspace, and has a person's pane in that workspace
 - **THEN** open answers held with the screen, tidy closes the place's tab and keeps the workspace naming the person's pane, and show takes the place's clues (94, 138, 139)
 
+#### Scenario: Where an agent opens
+
+- **WHEN** the fake terminal is asked to open one agent beside the pane `operator`, one in the session `work` and one in its own
+- **THEN** its log names each where it was asked, and the open's answer is the same for each (94, 107)
+
 ### Requirement: The base, a change's location and a place's folder
 
 The merge queue seam SHALL answer the revision the base stands at where
 its profile says the base lives, after that profile's fetch, or a
-refusal naming why (126; 9, core.7); the change seam where a change
-lies in a place, for a prompt's change part (127); and the store the
-place's own folder beside its held state, for a report kept there (128,
-123).
+refusal naming why, or that the merge queue lands no such base, which
+the core then reads at origin (126; 9, C.1, core.7); the change seam
+where a change lies in a place, for a prompt's change part (127); and
+the store the place's own folder beside its held state, for a report
+kept there (128, 123).
 
 #### Scenario: The base where the merge queue says it lives
 
@@ -83,6 +90,11 @@ place's own folder beside its held state, for a report kept there (128,
 
 - **WHEN** the fake merge queue refuses to give the base's revision, naming a failed fetch
 - **THEN** the launch is refused naming the fetch, and nothing is made
+
+#### Scenario: A base the merge queue lands not
+
+- **WHEN** the fake merge queue is asked for a base it lands nothing on
+- **THEN** it answers that it lands no such base, and the place's own base at a revision (126)
 
 ### Requirement: The place seam says where a place is made
 
@@ -235,14 +247,21 @@ process on the host (102 to 104, 153).
 
 The seams SHALL pass one type each for a stream, a pool, its strategy
 and its accounts, an account chosen and where from, a move between
-accounts, and a start's record of what its agent runs under, held as
-the start's `start_record` and holding digests and no value; each SHALL
-serialize to JSON and back unchanged (143 to 147, 161).
+accounts, an intent's naming the program whose account moved, an
+intent's affinity with an account for each program, and a start's record
+of what its agent runs under, held as the start's `start_record` and
+holding digests and no value; each SHALL serialize to JSON and back
+unchanged (143 to 147, 153, 161).
 
 #### Scenario: A held state with a stream, an account and a record
 
 - **WHEN** a held state whose place has a stream with `from`, an intent, and a start with an account and a start's record is written and read
 - **THEN** it reads back unchanged, and the record holds each variable's digest and no value (143 to 147, 161)
+
+#### Scenario: An affinity of two programs
+
+- **WHEN** an affinity holding an account for `agent` and one for `other`, and an intent's move for `agent`, is written and read
+- **THEN** it reads back unchanged, and it once left the move's `from` for `agent` and never for `other` (147, 153)
 
 ### Requirement: The agent seam maps a mode and says whether it reads one back
 
@@ -284,3 +303,123 @@ word that is not one of the four SHALL be refused naming it (161, 162,
 
 - **WHEN** a mode is read from the JSON word `"auto"`
 - **THEN** it is refused naming `auto` and saying a program's own value goes under its program's name (169)
+
+### Requirement: The agent seam carries a conversation or says why not
+
+The agent seam SHALL answer, given the start whose agent stopped at its
+account's usage limit and the chosen account's environment, whether its
+program can carry that agent's conversation there, with the session to
+resume, or why not, or that it offers no carry, the default; and its
+command SHALL take the session a start resumes (88, 179).
+
+#### Scenario: A profile that offers no carry
+
+- **WHEN** the seam's scenarios run against a profile that implements no carry
+- **THEN** carry answers that it is not offered, for any start and account (179)
+
+#### Scenario: The fake's carry over the seam's scenarios
+
+- **WHEN** the seam's scenarios run against the fake agent scripted to carry to one account and not to another
+- **THEN** carry answers yes with the scripted session for the first, and no with the scripted words for the second (179)
+
+### Requirement: The types of a carried start
+
+The seams SHALL pass one type each for a stage's wait after a spent
+agent, a start's conversation, a start carried that did not begin, the
+session in a start's record and an unsettled start's other session;
+each SHALL serialize to JSON and back unchanged, and held state written
+before them SHALL read with none (146, 161, 179).
+
+#### Scenario: A held state with a carried start
+
+- **WHEN** a held state whose stage waits after a spent agent, whose start carries a conversation with its record's session, whose move says carried and which lists a start carried that did not begin is written and read
+- **THEN** it reads back unchanged (146, 161, 179)
+
+#### Scenario: A held state written before
+
+- **WHEN** a held state written before this change is read
+- **THEN** it reads with no wait after a spent agent, no conversation, no session and no start carried that did not begin (146)
+
+### Requirement: An affinity written before reads with its one account
+
+An affinity written before SHALL read with its one account and its pool,
+and its intent's moves with no program, and SHALL never be written so
+(147, 153).
+
+#### Scenario: An affinity written before
+
+- **WHEN** the JSON of an affinity with one `pool` and `account` and an intent's move with no program is read, and written again
+- **THEN** it reads with that pool and account, no account for any program and the move with no program, and is written with no `pool` or `account` key once they are taken away (147, 153)
+
+### Requirement: The host's facts give sessions, labels and the layers
+
+The host's facts SHALL give, as its configuration stands when asked,
+each stream's `session` and its labels' shares, each with its
+`reserve`, `keep_free` and any other key its table holds; the label
+the configuration gives a repository's kind or a kind, with where from;
+and every value of the configuration with its layer, whether its local
+layer was taken, and each key passed over with its pin (143, 180, 181,
+C.7).
+
+#### Scenario: The fake host's sessions, labels and layers
+
+- **WHEN** a test scripts the fake host's `work` with the session `office` and `operation`'s reserve of two keeping one free, `[kinds.research] label = "inception"`, and `streams.work.agents` from the local layer
+- **THEN** the core reads `office` for `work`, `operation`'s share, `inception` from `host-kind` for research in any repository, and `streams.work.agents` from `local` (143, 180, 181, C.7)
+
+### Requirement: The types of a session, a label and the layers
+
+The seams SHALL pass one type each for where an agent opens, a session
+and where it came from, a label and where it came from, a label's
+share of its stream, and the configuration's values with their layers;
+each SHALL serialize to JSON and back unchanged, and a held state, a
+kind or settings written before them SHALL read with none (107, 143,
+180, 181, C.7).
+
+#### Scenario: A held state with a session and a label
+
+- **WHEN** a held state whose kind declares a label, whose launch's settings name a session, and whose live start holds its session and label, is written and read
+- **THEN** it reads back unchanged, and one written before reads with no label and no session (107, 180)
+
+### Requirement: The terminal seam gives what its configuration lacks for flume's plugin
+
+The terminal seam SHALL offer `setup`, what the terminal's own configuration lacks for flume's plugin there, each in words a person acts on, none by default, and the fake terminal SHALL script it (122).
+
+#### Scenario: A terminal with no plugin
+
+- **WHEN** a terminal profile that has no plugin, as the printed command, is asked its setup
+- **THEN** it gives none
+
+#### Scenario: The fake's scripted setup
+
+- **WHEN** the fake terminal is scripted with one missing entry and status is asked
+- **THEN** status gives that entry, and the fake recorded no open, send or close (57)
+
+### Requirement: The host gives an account's reading
+
+The host's facts SHALL give the reading in the file at a path, or why
+there is none, and the core SHALL ask it with the account's `usage`
+expanded against the login environment, a `$VAR` that environment lacks
+being no reading whose words name the variable (29, 184).
+
+#### Scenario: The fake host's reading
+
+- **WHEN** a test sets the fake host's reading for `work-1` and a refusal for `work-2`
+- **THEN** the core reads the reading for `work-1`, the refusal's words for `work-2`, and that the file is missing for `work-3` (184)
+
+### Requirement: The types of a reading and a move past a threshold
+
+The seams SHALL pass one type each for a reading and its windows, a
+pool's threshold, an account's `usage`, the strategy `most-left`, and a
+move whose `why` is `threshold` with its window and end; each SHALL
+serialize to JSON and back unchanged, and a move recorded before SHALL
+read with no window and no end (147, 184, 185; core.14).
+
+#### Scenario: A pool and a reading
+
+- **WHEN** a most-left pool with a threshold of 85 and an account naming `usage`, and a reading of two windows, one with no reset, are written and read
+- **THEN** each reads back unchanged, the strategy spelled `most-left` (184, 185)
+
+#### Scenario: A move past a threshold
+
+- **WHEN** an intent's move with `why` `threshold`, `window` `5-hour` and `until` 17:00 is written and read, and a move written before with neither
+- **THEN** the first reads back unchanged and the second with no window and no end (147, 185)

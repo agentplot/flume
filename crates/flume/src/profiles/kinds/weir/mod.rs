@@ -184,14 +184,7 @@ pub fn default_revision(repository: &str) -> Result<Revision, String> {
     if !git.remotes()?.iter().any(|remote| remote == REMOTE) {
         return git.commit(&format!("refs/heads/{branch}")).map(Revision);
     }
-    let tracking = format!("refs/remotes/{REMOTE}/{branch}");
-    git.bytes(&[
-        "fetch",
-        "--quiet",
-        REMOTE,
-        &format!("+refs/heads/{branch}:{tracking}"),
-    ])
-    .map_err(|words| format!("the fetch of {branch} from {REMOTE} failed: {words}"))?;
+    let tracking = git.fetch_branch(REMOTE, &branch)?;
     git.commit(&tracking).map(Revision)
 }
 
@@ -298,6 +291,13 @@ fn refused(refusal: &Refusal) -> String {
         .join("; ")
 }
 
+/// The seam's kind of a kind weir-kinds read, every problem it finds
+/// pushed onto `problems`. Its label is none: a simple kind's label waits
+/// on weir's statement naming the field and weir-kinds reading it, since
+/// weir 52 and C.4 name none and weir 94 gives a statechart kind's
+/// `label` another meaning, and flume reads no field of the format
+/// itself; until then only the host's configuration gives a place a
+/// label (180; record 0033; core.4).
 fn map_kind(
     kind: &weir_kinds::Kind,
     prompt: &impl Fn(&str) -> Result<String, String>,
@@ -321,6 +321,7 @@ fn map_kind(
             .enumerate()
             .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), prompt, problems))
             .collect(),
+        label: None,
     }
 }
 
@@ -439,5 +440,7 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
         instructions,
         beside,
         mode,
+        // A kind names nothing a host owns, a session among it (158).
+        session: None,
     }
 }

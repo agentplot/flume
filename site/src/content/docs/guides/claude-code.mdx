@@ -1,6 +1,6 @@
 ---
 title: The Claude Code plugin
-description: The plugin flume hands every agent it starts, how its hooks tell flume an agent started and received its prompt, and the plugin for your own sessions, with /launch and status over MCP.
+description: The plugin flume hands every agent it starts, how its hooks tell flume an agent started and received its prompt, the place's line it pins under the prompt, and the plugin for your own sessions, with /launch and status over MCP.
 sidebar:
   order: 3
 ---
@@ -20,8 +20,14 @@ under `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>`, and
 starts each agent with it:
 
 ```sh
-claude --plugin-dir <plugin> [--model <model>] [--append-system-prompt <instructions>] '<prompt>'
+claude --plugin-dir <plugin> [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
 ```
+
+`--resume` is there only for a start that carries a spent agent's
+conversation ([a conversation carried](#a-conversation-carried)).
+`--append-system-prompt-file` names a file beside the start's record
+holding the agent's instructions as given, since herdr starts no
+program whose arguments hold a newline.
 
 in the place, with the agent's environment and four variables of
 flume's:
@@ -55,7 +61,7 @@ every hook does nothing.
 
 | Hook | What flume does with it |
 |---|---|
-| SessionStart | the **started ack**: the session, its transcript and the plugin's version, taken only with the start's secret. flume takes it only where the agent's program and environment match its start's record ([the start check](/flume/guides/agent-settings/#the-start-check)) |
+| SessionStart | the **started ack**: the session, its transcript, the transcript's length when the start's first ack came, and the plugin's version, taken only with the start's secret. flume takes it only where the agent's program and environment match its start's record, and, for a start that resumes a session, only in that session ([the start check](/flume/guides/agent-settings/#the-start-check)) |
 | UserPromptSubmit | the **received ack**: a digest of the prompt the agent took, the tags Claude Code may wrap a pasted prompt in taken off and its whitespace collapsed. At the start's first prompt it first compares the mode the session runs in with the one its start passed, and blocks the prompt where it differs ([the start check](/flume/guides/agent-settings/#the-start-check)) |
 | PreToolUse, for Bash | the **guard**: refuses `git push`, `sluice submit`, and worktrunk's `wt submit` and `wt merge`, wherever the line runs them, and records each refusal |
 | PreToolUse, for AskUserQuestion and ExitPlanMode | the **asking mark**: the agent is asking a person, until its transcript holds the answer |
@@ -67,6 +73,10 @@ every hook does nothing.
 
 A subagent's hooks take no ack, and the guard refuses its commands as
 its agent's.
+
+Beside the command hooks the plugin carries one hooks module,
+`hooks/line.ts`, which pins the place's line under the prompt ([the
+status line](#the-status-line)).
 
 **The guard.** flume submits the place once its last stage delivers,
 so an agent never submits, merges or pushes its branch itself. The
@@ -85,6 +95,72 @@ declared thing with no line in `made.jsonl`, and the way to stop short.
 Otherwise it starts `flume settle <place> --on-quiet` in the
 background, which waits up to sixty seconds for the agent to be quiet
 and then moves the place on. A conversation stage is never sent back.
+
+## The status line
+
+Every agent flume starts shows its place's line under its prompt, so a
+pane says which place it serves and where that place stands:
+
+```text
+⚠ flume: change--parser · change@2 · code 1/2 · run 1 · tasks 0/3 · working
+```
+
+The line holds the place, `<kind>--<name>`; its kind and version; the
+current stage, with a repeating stage's group, `code 1/2` for the
+first of two; `run <n>`, how many times that stage started; `tasks
+<t>/<n>`, the change's tasks ticked at the place's head; and the
+place's state in words. A part the place has none of is left out: a
+fix has no tasks, and a landed place shows only `fix--parser · fix@1 ·
+landed`. Claude Code 2.1.296 draws it on the row under the prompt's
+input, with a `⚠` and the plugin's name before it.
+
+The state is the first that holds of these:
+
+| State | When |
+|---|---|
+| `being made` | a launch is making the place |
+| `landed`, `dropped`, `done` | the place's work is over |
+| `stalled` | the place waited on its caller under no hold's words past its stall bound |
+| `held` | a hold stops the place's next stage or its submission |
+| `waiting on an answer` | the stage stopped short and needs an answer, or found work |
+| `asking` | the agent shows a dialog of Claude Code's before its prompt, or, once started, asks a person a question |
+| `lost`, `never begun`, `not ready`, `refused`, `stopped` | the stage's agent stopped with nothing delivered, its prompt never began, the place's readiness failed, the stage was refused, or its caller stopped the agent |
+| `past its bound`, `submission refused` | the place went back more times than its kind allows, or the merge queue refused its submission |
+| `waiting on done` | the last stage of a kind that does not land delivered |
+| `waiting for room` | the stage waits for room on the host, its stream or its pool |
+| `starting` | the agent is opened and has not said it started |
+| `stuck` | the agent is quiet past its stage's limit with nothing delivered |
+| `in conversation`, `working` | the agent works, in a conversation stage or any other |
+| `submitted` | flume submitted the place, and no settle has read the merge queue's outcome yet |
+
+A session that outlived its start, such as a repetition's earlier agent
+still open, shows the place's current stage with
+`· this session is not its agent` at the end of the line.
+
+**How it is drawn.** The plugin's module runs `flume hook status-line`
+at the session's start, after each tool call and at each turn's end.
+It runs it again every ten seconds, so a hold, a stall or a stop-short
+shows while the agent sits idle. It pins the line the hook prints as the plugin's own
+status line, and removes it where the hook prints nothing. The clock
+runs in Claude Code's own process and ends with the session.
+
+**What it reads.** The hook reads the place's held state, the change at
+the place's head and the agent's own record, and nothing else. It calls
+no terminal and no merge queue, settles nothing, writes nothing and
+starts nothing. So `submitted` can stand for up to a settle after the
+merge queue lands the place; `flume status` gives the merge queue's own
+record at once. The words are the ones `flume status --line` prints for
+the place.
+
+**Beside your own.** The line is the plugin's, one among the plugins'
+lines Claude Code pins under the prompt. A status line your settings or
+the repository give stays the session's own, and another plugin's
+pinned line stays beside flume's, with nothing to set. In a session
+flume did not start, one with no `FLUME_PLACE` and `FLUME_AGENT`, the
+module pins nothing and runs nothing.
+
+flume checks the module against the engine the pinned Claude Code
+writes, so a release that changes it fails flume's own checks first.
 
 ## Prompt delivery
 
@@ -134,11 +210,57 @@ starts, ends or moves a stage.
 | `unknown` | flume cannot read it, as under the printed command |
 
 with `started`, `asking` and `own_work`, whether background shells or
-tasks the transcript shows are still running. A stage whose agent
+tasks the transcript shows are still running. Each start reads only its
+own part of the transcript, what follows the length its first started
+ack recorded. So a carried agent never reads the spent agent's turns,
+background tasks or last words as its own. A stage whose agent
 stopped with nothing delivered is **lost**; one quiet past the stage's
 `quiet` limit with nothing delivered is **stuck**; and one working past
 it is said to be. flume ends none of these: a retry or a drop is
 yours.
+
+## A conversation carried
+
+The start after a spent agent carries its conversation where Claude
+Code can find it under the account chosen ([a spent
+account](/flume/guides/agent-settings/#a-spent-account)). Claude Code
+keeps a session's transcript at
+`<home>/projects/<folder>/<session>.jsonl`, `<home>` its configuration
+home, and `--resume <session>` looks for the session under that home's
+`projects` folder alone.
+
+So at the start after a spent agent, flume reads the transcript that
+agent's started ack named. It looks for the file of the same folder and
+name under the chosen account's `projects`, `<home>` its
+`CLAUDE_CONFIG_DIR`, or `~/.claude` where the account sets none. It
+compares the two by device and inode. Where they are one file, as when
+the two homes share their `projects` folder by a link, flume starts
+Claude Code with `--resume <session>`, and the session goes on under
+the same id. A copy of the transcript is another file, so a copy
+carries nothing. flume only reads: it writes, links and copies nothing
+in either home.
+
+Where they are not one file, the start is afresh and status gives why,
+naming `CLAUDE_CONFIG_DIR` and no path:
+
+| Why | When |
+|---|---|
+| its conversation is not known: the agent that stopped never said it started, so no configuration home (`CLAUDE_CONFIG_DIR`) is known to hold it | the spent agent wrote no started ack, or one naming no session |
+| its conversation's transcript, in the stopped account's configuration home (`CLAUDE_CONFIG_DIR`), cannot be read | the spent agent's transcript is gone or unreadable |
+| the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's | the chosen account's `projects` holds another file of that name, or none |
+
+The carried agent's SessionStart hook compares the session it runs in
+with the one its start's record names. One that came up in another
+session acks nothing and records that it began in another
+conversation, naming no session. flume then ends it once it is quiet
+and starts the stage afresh. A session Claude Code cannot find ends the
+program before any hook runs, and flume reads that start as a carried
+start that did not begin, and starts the stage afresh as well.
+
+flume checks the option text of `--resume` and `--fork-session`, where
+2.1.296 keeps its `projects` folder, and its words for a session it
+cannot find, against the release its repository pins. flume never
+passes `--fork-session`, so a resumed session keeps its id.
 
 ## In your own sessions
 

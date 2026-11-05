@@ -4,6 +4,7 @@
 //! queue's data, and the terminal the host's configuration names.
 
 use crate::common::*;
+use crate::place_git_worktree::{equip_answer, stand_in_sluice};
 use flume::host::config::HostConfig;
 use flume::profiles::{core_over, terminal, BuiltIn, DEFAULT_PROGRAM, SEND_BACKS};
 use flume_core::Answer;
@@ -173,14 +174,22 @@ fn a_terminal_the_host_names_is_bound_or_refused() {
 }
 
 #[test]
-fn a_place_is_readied_as_the_merge_queues_policy_says() {
+fn a_place_is_readied_as_the_merge_queue_equips_it() {
     let repository = Repository::new("readied");
-    repository.write(
-        ".config/sluice.toml",
-        "[tests]\ntoolchain = \"printf 'ANSWER=42\\\\n'\"\n",
-    );
+    repository.write(".config/sluice.toml", "[branches.main]\n");
     repository.commit("a policy");
-    let resolver = built_in(&repository.scratch);
+    let (path, _) = stand_in_sluice(
+        &repository.scratch,
+        &equip_answer(&[("toolchain", true)]),
+        0,
+    );
+    let home = repository.scratch.path("home");
+    std::fs::create_dir_all(&home).expect("a scratch home");
+    let resolver = BuiltIn::with_login(&[
+        ("HOME", &home.to_string_lossy()),
+        ("PATH", &path),
+        ("LANG", "C"),
+    ]);
 
     let queued = resolver
         .place(&repository.name(), &binding(Some("sluice")))
@@ -335,4 +344,20 @@ fn the_herdr_terminal_keeps_no_watch_on_a_stale_lease() {
 fn the_herdr_terminal_keeps_no_watch_without_the_plugin() {
     // 119, 122, C.5: no lease, the plugin not installed or never started.
     assert_eq!(herdr_watch("watch-none", None), Watch::None);
+}
+
+#[test]
+fn flumes_own_kinds_declare_no_label() {
+    // 180: a label is the host's to give flume's own kinds, and none of
+    // them declares one.
+    use flume::profiles::kinds::weir::Weir;
+    let own = Weir.flumes_own();
+    assert!(!own.is_empty(), "flume holds no kind of its own");
+    for kind in own {
+        assert_eq!(
+            kind.label, None,
+            "{}@{} declares a label",
+            kind.name, kind.version
+        );
+    }
 }

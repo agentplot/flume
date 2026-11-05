@@ -125,13 +125,30 @@ pub enum SubmissionOutcome {
     },
 }
 
-/// inbox: the outcomes pending for a place, each given once, or why the
-/// merge queue could not be read (133, 68).
+/// A branch the merge queue keeps that it could not read, passed over
+/// with its words: what one branch says, or cannot, decides that branch
+/// alone, and reads every other branch still (99, 133).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PassedOver {
+    pub branch: String,
+    pub words: String,
+}
+
+/// inbox: the outcomes pending for a place, each given once, from every
+/// branch the merge queue could read, and each branch it passed over,
+/// whose outcomes stay pending for a later inbox; or why the merge queue
+/// could not be read (133, 68).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Inbox {
-    Outcomes { outcomes: Vec<SubmissionOutcome> },
-    CouldNotRead { reason: String },
+    Outcomes {
+        outcomes: Vec<SubmissionOutcome>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        passed_over: Vec<PassedOver>,
+    },
+    CouldNotRead {
+        reason: String,
+    },
 }
 
 /// step: one round of the base's queue driven, or that the merge queue
@@ -155,13 +172,35 @@ pub enum SubmissionRead {
     CouldNotRead { reason: String },
 }
 
-/// Where the base's current revision lives, or why it cannot be read (9,
-/// 126, core.7).
+/// read-submission's answer across the branches the merge queue keeps:
+/// what it read of the branch on every one it could read, and each one it
+/// passed over with its words, which decides nothing of the others (99).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadAcross {
+    pub read: SubmissionRead,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub passed_over: Vec<PassedOver>,
+}
+
+impl From<SubmissionRead> for ReadAcross {
+    /// A read that passed no branch over.
+    fn from(read: SubmissionRead) -> ReadAcross {
+        ReadAcross {
+            read,
+            passed_over: vec![],
+        }
+    }
+}
+
+/// Where the base's current revision lives, or why it cannot be read, or
+/// that the merge queue lands no such base, which the core then reads at
+/// origin (9, 126, C.1, core.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BaseRevision {
     At { revision: Revision },
     Refused { reason: String },
+    Unlanded,
 }
 
 /// The merge queue seam (B.6), bound once for each repository. The
@@ -177,14 +216,16 @@ pub trait MergeQueue: Send + Sync {
     /// given once (133).
     fn inbox(&self, place: &crate::PlaceRef) -> Inbox;
 
-    /// The newest submission of `branch`, whoever made it (99).
-    fn read_submission(&self, repository: &str, branch: &str) -> SubmissionRead;
+    /// The newest submission of `branch`, whoever made it, on the
+    /// branches the merge queue could read, passing over each it could
+    /// not (99).
+    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross;
 
     /// One round of `base`'s queue, so it moves where nothing else
     /// drives it (125).
     fn step(&self, repository: &str, base: &str) -> Stepped;
 
-    /// Where `base`'s current revision lives, where work lands on it (9,
-    /// 126, core.7).
+    /// Where `base`'s current revision lives, where work lands on it, or
+    /// that the merge queue lands no such base (9, 126, core.7).
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision;
 }

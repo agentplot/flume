@@ -4,12 +4,14 @@
 //! since, `log -1 --format=%H -- <path>` for the newest
 //! commit touching a path, `log <start>..<head> -- <path>` for a path in
 //! a commit since, `rev-parse --git-common-dir` for the repository's
-//! common git directory, `symbolic-ref` for its default branch, and
-//! `check-ref-format --branch` (24, 25, 33, 132, C.1). A revision git
-//! cannot read holds nothing since and touches nothing.
+//! common git directory, `symbolic-ref` for its default branch,
+//! `check-ref-format --branch`, and `fetch` from `origin` for a branch
+//! as origin holds it, `ls-remote --exit-code` telling a branch origin
+//! lacks from a fetch that failed (9, 24, 25, 33, 132, C.1). A revision
+//! git cannot read holds nothing since and touches nothing.
 
-use crate::git::Git;
-use flume_seams::{History, Revision, Touch};
+use crate::git::{Git, REMOTE};
+use flume_seams::{History, OriginBranch, Revision, Touch};
 
 /// The core's reading of git's history, through git.
 #[derive(Clone, Copy, Debug, Default)]
@@ -28,6 +30,34 @@ impl History for GitHistory {
             .commit(&format!("refs/heads/{branch}"))
             .ok()
             .map(Revision::new)
+    }
+
+    /// `git fetch origin +refs/heads/<branch>:refs/remotes/origin/<branch>`
+    /// and the branch at its tracking ref; where the fetch fails, origin
+    /// lacks the branch only where `ls-remote --exit-code` exits 2, and a
+    /// tracking ref left by an earlier fetch is never read (9, C.1).
+    fn origin_branch(&self, repository: &str, branch: &str) -> OriginBranch {
+        let git = Git::at(repository);
+        match git.remotes() {
+            Ok(remotes) if remotes.iter().any(|remote| remote == REMOTE) => {}
+            Ok(_) => return OriginBranch::NoOrigin,
+            Err(reason) => return OriginBranch::Refused { reason },
+        }
+        let tracking = match git.fetch_branch(REMOTE, branch) {
+            Ok(tracking) => tracking,
+            Err(reason) => {
+                return match git.remote_holds(REMOTE, branch) {
+                    Ok(false) => OriginBranch::Lacks,
+                    Ok(true) | Err(_) => OriginBranch::Refused { reason },
+                }
+            }
+        };
+        match git.commit(&tracking) {
+            Ok(revision) => OriginBranch::At {
+                revision: Revision::new(revision),
+            },
+            Err(reason) => OriginBranch::Refused { reason },
+        }
     }
 
     fn holds_since(&self, repository: &str, head: &Revision, start: &Revision) -> bool {

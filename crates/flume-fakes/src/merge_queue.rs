@@ -1,7 +1,7 @@
 use crate::{lock, FakeGit, Log};
 use flume_seams::{
-    BaseRevision, Inbox, MergeQueue, PlaceRef, Revision, Stepped, Submission, SubmissionOutcome,
-    SubmissionRead, SubmissionState, Submitted,
+    BaseRevision, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross, Revision, Stepped,
+    Submission, SubmissionOutcome, SubmissionRead, SubmissionState, Submitted,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -54,7 +54,10 @@ struct Requested {
 /// queue moves on its own, and its outcome is delivered once through
 /// the place's inbox; or, where submit opens a request, its entry is
 /// made only once `take_in` takes the request in, and its outcome is
-/// delivered to the request. It removes nothing of a place (113).
+/// delivered to the request. A branch it is told it cannot read is passed
+/// over by read-submission and the inbox, with its words, and decides
+/// nothing of the others; the outcomes of submissions to it stay pending
+/// until it reads again (99, 133). It removes nothing of a place (113).
 pub struct FakeMergeQueue {
     git: Arc<FakeGit>,
     state: Mutex<QueueState>,
@@ -68,11 +71,15 @@ struct QueueState {
     submissions: BTreeMap<(String, String), Vec<Submission>>,
     /// Each submission's plan and the place it came from, by id.
     plans: BTreeMap<String, (Plan, Option<String>)>,
-    /// Each place's outcomes not yet delivered, by location.
-    inboxes: BTreeMap<String, Vec<SubmissionOutcome>>,
+    /// Each place's outcomes not yet delivered, by location, each with
+    /// the branch its submission was to, none where it was left pending
+    /// with no branch.
+    inboxes: BTreeMap<String, Vec<(Option<String>, SubmissionOutcome)>>,
     /// Each branch's request, by repository and branch.
     requests: BTreeMap<(String, String), Requested>,
     unreadable: Option<String>,
+    /// The words of each branch it cannot read, by repository and branch.
+    refused: BTreeMap<(String, String), String>,
     moves_on_its_own: bool,
     next: u64,
     next_request: u64,
@@ -107,6 +114,22 @@ impl FakeMergeQueue {
 
     pub fn readable(&self) {
         lock(&self.state).unreadable = None;
+    }
+
+    /// `branch` cannot be read from now on, refused with `words`: read-
+    /// submission and the inbox pass it over, and read every other branch
+    /// still (99, 133).
+    pub fn refuse_branch(&self, repository: &str, branch: &str, words: &str) {
+        lock(&self.state)
+            .refused
+            .insert((repository.into(), branch.into()), words.into());
+    }
+
+    /// `branch` reads again.
+    pub fn read_branch(&self, repository: &str, branch: &str) {
+        lock(&self.state)
+            .refused
+            .remove(&(repository.to_string(), branch.to_string()));
     }
 
     /// The queue moves on its own, as one a driver runs: step drives
@@ -192,8 +215,10 @@ impl FakeMergeQueue {
         lock(&self.state)
             .inboxes
             .get(location)
-            .cloned()
-            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+            .map(|(_, outcome)| outcome.clone())
+            .collect()
     }
 
     /// `outcome` left pending for the place at `location`, as a merge
@@ -203,7 +228,7 @@ impl FakeMergeQueue {
             .inboxes
             .entry(location.into())
             .or_default()
-            .push(outcome);
+            .push((None, outcome));
     }
 
     /// `branch`'s request taken in as an entry, as an intake on whichever
@@ -255,6 +280,19 @@ impl FakeMergeQueue {
             .or_default()
             .push(submission.clone());
         submission
+    }
+
+    /// Each branch of `repository` it cannot read, with its words.
+    fn passed_over(queue: &QueueState, repository: &str) -> Vec<PassedOver> {
+        queue
+            .refused
+            .iter()
+            .filter(|((at, _), _)| at == repository)
+            .map(|((_, branch), words)| PassedOver {
+                branch: branch.clone(),
+                words: words.clone(),
+            })
+            .collect()
     }
 
     fn set_state(&self, repository: &str, submission: &Submission, state: SubmissionState) {
@@ -321,7 +359,7 @@ impl FakeMergeQueue {
                 .inboxes
                 .entry(location)
                 .or_default()
-                .push(outcome);
+                .push((Some(submission.target.clone()), outcome));
         }
     }
 }
@@ -404,30 +442,56 @@ impl MergeQueue for FakeMergeQueue {
                 reason: reason.clone(),
             };
         }
+        let passed_over = Self::passed_over(&queue, &place.repository);
+        let refused = |target: &Option<String>| {
+            target.as_ref().is_some_and(|target| {
+                passed_over
+                    .iter()
+                    .any(|over| over.branch.as_str() == target.as_str())
+            })
+        };
+        let (kept, outcomes): (Vec<_>, Vec<_>) = queue
+            .inboxes
+            .remove(&place.location)
+            .unwrap_or_default()
+            .into_iter()
+            .partition(|(target, _)| refused(target));
+        if !kept.is_empty() {
+            queue.inboxes.insert(place.location.clone(), kept);
+        }
         Inbox::Outcomes {
-            outcomes: queue.inboxes.remove(&place.location).unwrap_or_default(),
+            outcomes: outcomes.into_iter().map(|(_, outcome)| outcome).collect(),
+            passed_over,
         }
     }
 
-    fn read_submission(&self, repository: &str, branch: &str) -> SubmissionRead {
+    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross {
         self.log
             .push(format!("read_submission {repository} {branch}"));
         let queue = lock(&self.state);
         if let Some(reason) = &queue.unreadable {
             return SubmissionRead::CouldNotRead {
                 reason: reason.clone(),
-            };
+            }
+            .into();
         }
-        match queue
+        let passed_over = Self::passed_over(&queue, repository);
+        let read = match queue
             .submissions
             .get(&(repository.to_string(), branch.to_string()))
-            .and_then(|all| all.last())
-        {
+            .and_then(|all| {
+                all.iter().rev().find(|submission| {
+                    !passed_over
+                        .iter()
+                        .any(|over| over.branch == submission.target)
+                })
+            }) {
             Some(submission) => SubmissionRead::Found {
                 submission: submission.clone(),
             },
             None => SubmissionRead::None,
-        }
+        };
+        ReadAcross { read, passed_over }
     }
 
     fn step(&self, repository: &str, base: &str) -> Stepped {

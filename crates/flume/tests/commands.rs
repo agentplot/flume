@@ -21,7 +21,7 @@ use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::{core_over, core_with, BuiltIn};
 use flume_core::Answer;
 use flume_seams::*;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -38,11 +38,18 @@ const STAND_IN_QUEUE: &str = "stand-in-queue";
 /// words in it as a JSON list.
 const AS_FLUME: &str = "FLUME_TEST_AS_FLUME";
 
-/// The stand-in agent: it says it started and received its prompt at
-/// once, never asks or keeps own work, and reads its session ended once
-/// the test writes the mark `stand-in/<stage>-<start>` in the place's
-/// folder. It maps each mode to its own word and reads none back.
-struct StandInAgent;
+/// The stand-in agent's name that never says it started, as a program
+/// the printed command gives a person to run reads until it runs (35).
+const UNSTARTED: &str = "stand-in-unstarted";
+
+/// The stand-in agent: it says it started, where it is `stand-in`, and
+/// received its prompt at once, never asks or keeps own work, and reads
+/// its session ended once the test writes the mark
+/// `stand-in/<stage>-<start>` in the place's folder. It maps each mode to
+/// its own word and reads none back.
+struct StandInAgent {
+    says_started: bool,
+}
 
 fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
     Path::new(folder)
@@ -53,8 +60,10 @@ fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
 impl Agent for StandInAgent {
     fn command(
         &self,
+        _folder: &str,
         settings: &Settings,
         _mode: Option<&str>,
+        _resume: Option<&str>,
         env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
@@ -78,7 +87,11 @@ impl Agent for StandInAgent {
         }
     }
     fn started(&self, _folder: &str, _agent: &Identity) -> Reading {
-        Reading::Yes
+        if self.says_started {
+            Reading::Yes
+        } else {
+            Reading::No
+        }
     }
     fn received(&self, _folder: &str, _agent: &Identity, _text: &str) -> Received {
         Received::Received {
@@ -130,10 +143,13 @@ impl MergeQueue for StandInQueue {
         }
     }
     fn inbox(&self, _place: &PlaceRef) -> Inbox {
-        Inbox::Outcomes { outcomes: vec![] }
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![],
+        }
     }
-    fn read_submission(&self, _repository: &str, _branch: &str) -> SubmissionRead {
-        SubmissionRead::None
+    fn read_submission(&self, _repository: &str, _branch: &str) -> ReadAcross {
+        SubmissionRead::None.into()
     }
     fn step(&self, _repository: &str, _base: &str) -> Stepped {
         Stepped::MovesOnItsOwn
@@ -212,7 +228,12 @@ impl Resolver for StandIn {
         }
     }
     fn agent(&self, program: &str) -> Option<Arc<dyn Agent>> {
-        (program == STAND_IN).then(|| Arc::new(StandInAgent) as Arc<dyn Agent>)
+        let says_started = match program {
+            STAND_IN => true,
+            UNSTARTED => false,
+            _ => return None,
+        };
+        Some(Arc::new(StandInAgent { says_started }))
     }
 }
 
@@ -302,6 +323,12 @@ impl Host {
     fn configure(&self, text: &str) {
         std::fs::write(self.scratch.path("config/flume/config.toml"), text)
             .expect("the configuration");
+    }
+
+    /// Writes the host's local layer, `config.local.toml` (C.7).
+    fn configure_local(&self, text: &str) {
+        std::fs::write(self.scratch.path("config/flume/config.local.toml"), text)
+            .expect("the local layer");
     }
 
     /// The command's process, run in `dir` with `env` set over nothing of
@@ -515,6 +542,179 @@ fn a_launch_naming_no_base_is_cut_from_the_remotes_default_branch() {
             "the place of {name} cut from the remote's main"
         );
     }
+}
+
+/// A clone of `source` through a bare remote beside it, the host's
+/// `origin`, and two commits pushed to that remote after the clone, so
+/// the clone's own `main`, which nothing on the host moves, lags it: the
+/// clone, and origin's `main` (S92).
+fn a_clone_lagging_origin(source: &Repository, label: &str) -> (Repository, String) {
+    let remote = source.bare_remote();
+    let clone = Repository::clone_of(&remote, Scratch::new(label));
+    for file in ["one.rs", "two.rs"] {
+        source.write(file, "landed on origin\n");
+        source.commit(file);
+    }
+    source.git(&["push", "--quiet", &remote.to_string_lossy(), "main"]);
+    assert_ne!(clone.head(), source.head(), "the clone's main is origin's");
+    (clone, source.head())
+}
+
+/// The commit a place's branch was cut at, the branch made by the launch.
+fn cut_at(place: &flume_core::PlaceStatus) -> String {
+    git(
+        Path::new(&place.place.0),
+        &["rev-parse", &format!("{}^{{commit}}", place.branch)],
+    )
+}
+
+#[test]
+fn a_base_no_merge_queue_lands_is_cut_from_origins_copy() {
+    // S92; 9, 56, 126, C.1: in a clone bound to no merge queue, whose own
+    // main lags origin's, a place is cut at origin's after flume's fetch,
+    // the clone's main left where it was; one on a branch origin lacks at
+    // the clone's own; and with origin out of reach, a launch is refused
+    // naming the fetch, nothing made. Status says where each base was
+    // read.
+    let host = Host::new("origin-base");
+    let source = repository("origin-base", None);
+    let (clone, origins) = a_clone_lagging_origin(&source, "origin-base-clone");
+    let own = clone.head();
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), origins, "the place cut at origin's main");
+    assert_eq!(place.base_from, Some(BaseFrom::Origin));
+    assert_eq!(clone.head(), own, "the clone's own main moved");
+    assert_eq!(
+        clone.git(&["rev-parse", "refs/remotes/origin/main"]),
+        origins,
+        "origin's main as the fetch left it"
+    );
+    let status = host.flume(&clone.dir, &["status", &place.place.0, "--json"], &[]);
+    assert_eq!(
+        status.json()["status"]["places"][0]["base_from"],
+        json!("origin")
+    );
+    let person = host.flume(&clone.dir, &["status", &place.place.0], &[]);
+    assert!(
+        person.text.contains("branch fix/one from main (at origin)"),
+        "{}",
+        person.text
+    );
+
+    clone.git(&["branch", "trial"]);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "two", "--base", "trial", "--kinds", &kinds,
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), own, "the place cut at the clone's own trial");
+    assert_eq!(place.base_from, Some(BaseFrom::OriginLacks));
+    let person = host.flume(&clone.dir, &["status", &place.place.0], &[]);
+    assert!(
+        person
+            .text
+            .contains("branch fix/two from trial (the host's own, origin holding none)"),
+        "{}",
+        person.text
+    );
+
+    let gone = clone.scratch.path("gone.git");
+    clone.git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
+    let refused = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "three", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(refused.code, 1, "{}", refused.text);
+    let reason = refused
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .expect("a refusal");
+    assert!(
+        reason.contains("fetch of main from origin failed"),
+        "{reason}"
+    );
+    assert!(
+        !Path::new(&host.place_of(&clone, "fix--three")).exists(),
+        "a place was made"
+    );
+    assert!(
+        clone.git(&["branch", "--list", "fix/three"]).is_empty(),
+        "a branch was made"
+    );
+}
+
+#[test]
+fn a_repository_with_no_origin_is_cut_from_its_own_base() {
+    // 9, 56, C.1: a repository with no remote is cut at its own main, and
+    // status says it has no origin.
+    let host = Host::new("no-origin");
+    let repository = repository("no-origin", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), repository.head());
+    assert_eq!(place.base_from, Some(BaseFrom::NoOrigin));
+}
+
+#[test]
+fn a_base_the_merge_queue_lands_is_read_where_it_says() {
+    // 9, 126, C.1: bound to a merge queue that lands main, here at the
+    // clone's own, a place is cut where the merge queue says, origin's
+    // main past it never read, though the binding's read fetched it (C.2).
+    let host = Host::new("queue-base");
+    let source = repository("queue-base", Some(STAND_IN_QUEUE));
+    let (clone, origins) = a_clone_lagging_origin(&source, "queue-base-clone");
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(
+        cut_at(place),
+        clone.head(),
+        "the place cut where the queue says"
+    );
+    assert_ne!(cut_at(place), origins);
+    assert_eq!(place.base_from, Some(BaseFrom::MergeQueue));
+    assert_eq!(
+        clone.git(&["rev-parse", "refs/remotes/origin/main"]),
+        origins,
+        "origin's main as the binding's read fetched it"
+    );
 }
 
 #[test]
@@ -801,6 +1001,95 @@ fn agent_settings_at_the_launch() {
         refused.text
     );
     assert!(!Path::new(&host.place_of(&repository, "change--two")).exists());
+}
+
+#[test]
+fn a_session_for_every_stage_and_for_one_at_the_launch() {
+    // 7, 32, 107: `--agent session=` for every stage and `verify.session=`
+    // for one, each kept at the launch's layer, and each agent given its
+    // session from the launch.
+    let host = Host::new("agent-session");
+    let repository = repository("agent-session", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "session=review",
+            "--agent",
+            "verify.session=late",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "change--one");
+    let held = held_of(&host, &place).state.place;
+    assert_eq!(held.every_stage.session.as_deref(), Some("review"));
+    assert_eq!(held.settings["verify"].session.as_deref(), Some("late"));
+    for (stage, session) in [
+        ("construct", "review"),
+        ("code", "review"),
+        ("verify", "late"),
+    ] {
+        let agent = current_agent(&host, &repository.dir, &place);
+        assert_eq!(agent["stage"], stage, "{agent}");
+        assert_eq!(agent["settings"]["session"], session, "{agent}");
+        assert_eq!(
+            agent["session"],
+            serde_json::json!({"name": session, "from": "launch"}),
+            "{agent}"
+        );
+        if stage != "verify" {
+            deliver(&host, &repository.dir, &place, stage);
+        }
+    }
+}
+
+#[test]
+fn the_settings_agent_gives_are_named_in_its_refusal() {
+    // 7, 32: a field no setting names is refused, the words naming
+    // session among the settings `--agent` gives, and nothing launched.
+    let host = Host::new("agent-refused");
+    let repository = repository("agent-refused", None);
+    let kinds = kinds_file(&host, false);
+    let refused = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "fix",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "colour=blue",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(refused.code, 1, "{}", refused.text);
+    assert!(
+        refused.text.contains("colour") && refused.text.contains("session"),
+        "{}",
+        refused.text
+    );
+    assert!(!Path::new(&host.place_of(&repository, "fix--one")).exists());
+    let help = host.flume(&repository.dir, &["launch", "--help"], &[]);
+    assert_eq!(help.code, 0, "{}", help.text);
+    assert!(
+        help.text.contains("session"),
+        "--help names no session: {}",
+        help.text
+    );
 }
 
 #[test]
@@ -1336,6 +1625,61 @@ fn status_over_mcp() {
     assert_eq!(files_under(&host.state()), before, "status over MCP wrote");
 }
 
+#[test]
+fn one_places_line_under_the_printed_command() {
+    // 57, 60, 61: `status --line` gives the place's line alone, its JSON
+    // the same line in `lines`, under the printed command, which keeps no
+    // watch, its code agent not yet said started; nothing is written, no
+    // agent started and nothing settled.
+    let host = Host::new("line");
+    let repository = repository("line", None);
+    let kinds = kinds_file(&host, false);
+    let program = format!("program={UNSTARTED}");
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--agent", &program,
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let before = held_of(&host, &place);
+    assert_eq!(before.state.stages[0].starts, 1, "the code stage started");
+    let files = files_under(&host.state());
+
+    let person = host.flume(&repository.dir, &["status", "fix--one", "--line"], &[]);
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert_eq!(person.text, "fix--one · fix@1 · code · run 1 · starting\n");
+    let json = host.flume(
+        &repository.dir,
+        &["status", "fix--one", "--line", "--json"],
+        &[],
+    );
+    assert_eq!(json.code, 0, "{}", json.text);
+    let Answer::Lines { lines } = json.answer() else {
+        panic!("the lines' answer: {}", json.text);
+    };
+    let full: Vec<&str> = lines.iter().map(|line| line.full.as_str()).collect();
+    assert_eq!(full, ["fix--one · fix@1 · code · run 1 · starting"]);
+    let every = host.flume(&repository.dir, &["status", "--line"], &[]);
+    assert_eq!(every.text, person.text);
+
+    let after = held_of(&host, &place);
+    assert_eq!(after.version, before.version, "the line settled");
+    assert_eq!(after.state.stages[0].starts, 1, "the line started an agent");
+    assert_eq!(files_under(&host.state()), files, "the line wrote");
+    let status = host.flume(&repository.dir, &["status", "fix--one"], &[]);
+    assert!(
+        status
+            .text
+            .contains("\n  fix--one · fix@1 · code · run 1 · starting\n"),
+        "{}",
+        status.text
+    );
+}
+
 /// The place's held state as the store holds it.
 fn held_of(host: &Host, place: &str) -> Versioned {
     StateDir::at(host.state())
@@ -1675,4 +2019,186 @@ fn a_wake_of_a_roles_address() {
         0,
     );
     assert_eq!(inbox["inbox"]["recipient"], "madswan/planner", "{inbox}");
+}
+
+/// The value status's JSON form gives `key` of the host's configuration,
+/// with its layer.
+fn config_value(status: &Value, key: &str) -> Option<(String, String)> {
+    status["status"]["host"]["configuration"]["values"]
+        .as_array()?
+        .iter()
+        .find(|value| value["key"] == key)
+        .map(|value| {
+            (
+                value["value"].as_str().unwrap_or_default().to_string(),
+                value["layer"].as_str().unwrap_or_default().to_string(),
+            )
+        })
+}
+
+/// The stream `name` status's JSON form gives.
+fn stream_of(status: &Value, name: &str) -> Value {
+    status["status"]["host"]["streams"]
+        .as_array()
+        .and_then(|streams| streams.iter().find(|stream| stream["name"] == name))
+        .cloned()
+        .unwrap_or_else(|| panic!("status gives no stream {name}: {status}"))
+}
+
+#[test]
+fn s83_the_local_layer_through_the_binary() {
+    // S83, C.7, core.45: the local layer's values over the managed
+    // layer's, each given with its layer, an account's variable by name
+    // and `<set>`; a local file setting a key it may not set taken not
+    // at all, naming the key; a key the managed layer pins passed over,
+    // naming the pin, and the rest taken.
+    let host = Host::new("local-layer");
+    let managed = format!(
+        "[host]\npool = \"work\"\n\n[pools.work]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"work-1\", program = \"{STAND_IN}\", env = {{ TOKEN = \"secret-token\" }} }}]\n\n[streams.work]\nagents = 6\npool = \"work\"\n"
+    );
+    host.configure(&managed);
+    host.configure_local("[streams.work]\nagents = 3\npriority = 30\n");
+    let repository = repository("local-layer", None);
+    let dir = &repository.dir;
+    let status = |json: bool| {
+        let words: &[&str] = if json {
+            &["status", "--json"]
+        } else {
+            &["status"]
+        };
+        let ran = host.flume(dir, words, &[]);
+        assert_eq!(ran.code, 0, "{}", ran.text);
+        assert!(!ran.text.contains("secret-token"), "{}", ran.text);
+        ran
+    };
+    let taken = status(true).json();
+    let configuration = &taken["status"]["host"]["configuration"];
+    assert_eq!(configuration["local"], json!({"state": "taken"}), "{taken}");
+    let given = |key: &str| config_value(&taken, key);
+    assert_eq!(
+        given("streams.work.agents"),
+        Some(("3".into(), "local".into()))
+    );
+    assert_eq!(
+        given("streams.work.priority"),
+        Some(("30".into(), "local".into()))
+    );
+    assert_eq!(
+        given("streams.work.pool"),
+        Some(("\"work\"".into(), "managed".into()))
+    );
+    assert_eq!(
+        given("pools.work.accounts[0].env.TOKEN"),
+        Some(("<set>".into(), "managed".into()))
+    );
+    let work = stream_of(&taken, "work");
+    assert_eq!((&work["bound"], &work["priority"]), (&json!(3), &json!(30)));
+    let person = status(false).text;
+    for line in ["streams.work.agents = 3", "streams.work.priority = 30"] {
+        assert!(person.contains(line), "{person}");
+    }
+
+    host.configure_local(
+        "[streams.work]\nagents = 3\npriority = 30\n\n[pools.work]\nstrategy = \"least-busy\"\n",
+    );
+    let not_taken = status(true).json();
+    assert_eq!(
+        not_taken["status"]["host"]["configuration"]["local"],
+        json!({"state": "not-taken", "keys": ["pools.work"]}),
+        "{not_taken}"
+    );
+    let values = not_taken["status"]["host"]["configuration"]["values"]
+        .as_array()
+        .expect("the values");
+    assert!(
+        values.iter().all(|value| value["layer"] == "managed"),
+        "{not_taken}"
+    );
+    assert_eq!(stream_of(&not_taken, "work")["bound"], json!(6));
+    let person = status(false).text;
+    assert!(person.contains("pools.work"), "{person}");
+
+    host.configure(&managed.replacen("[host]\n", "[host]\npin = [\"streams.work.agents\"]\n", 1));
+    host.configure_local("[streams.work]\nagents = 3\npriority = 30\n");
+    let pinned = status(true).json();
+    let configuration = &pinned["status"]["host"]["configuration"];
+    assert_eq!(
+        configuration["local"],
+        json!({"state": "taken"}),
+        "{pinned}"
+    );
+    assert_eq!(
+        configuration["passed_over"],
+        json!([{"key": "streams.work.agents", "pin": "streams.work.agents"}]),
+        "{pinned}"
+    );
+    assert_eq!(
+        config_value(&pinned, "streams.work.agents"),
+        Some(("6".into(), "managed".into()))
+    );
+    assert_eq!(
+        config_value(&pinned, "streams.work.priority"),
+        Some(("30".into(), "local".into()))
+    );
+    let work = stream_of(&pinned, "work");
+    assert_eq!((&work["bound"], &work["priority"]), (&json!(6), &json!(30)));
+    let person = status(false).text;
+    assert!(
+        person.contains(
+            "streams.work.agents passed over: the managed layer pins streams.work.agents"
+        ),
+        "{person}"
+    );
+}
+
+#[test]
+fn flume_writes_neither_configuration_file() {
+    // C.7, core.16, core.45: a launch, its settles, status and its tidy
+    // leave both layers' files as they were, their content and their
+    // write time.
+    let host = Host::new("neither-file");
+    host.configure("[streams.work]\nagents = 4\n");
+    host.configure_local("[streams.work]\npriority = 30\n");
+    let files = [
+        host.scratch.path("config/flume/config.toml"),
+        host.scratch.path("config/flume/config.local.toml"),
+    ];
+    let read = || {
+        files
+            .iter()
+            .map(|file| {
+                (
+                    std::fs::read(file).expect("the file"),
+                    std::fs::metadata(file)
+                        .and_then(|meta| meta.modified())
+                        .expect("its write time"),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before = read();
+    let repository = repository("neither-file", None);
+    let dir = &repository.dir;
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--stream", "work",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let settled = host.stand_in(dir, &["settle", &place, "--json"], &[]);
+    assert_eq!(settled.code, 0, "{}", settled.text);
+    let status = host.flume(dir, &["status", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    host.end_agent(&place, "code", 1);
+    let dropped = host.stand_in(dir, &["drop", "fix--one", "--json"], &[]);
+    assert_eq!(dropped.code, 0, "{}", dropped.text);
+    let tidied = host.stand_in(dir, &["tidy", "--json"], &[]);
+    assert_eq!(tidied.code, 0, "{}", tidied.text);
+    assert!(!Path::new(&place).exists(), "{}", tidied.text);
+    assert_eq!(read(), before, "a layer's file was written");
 }

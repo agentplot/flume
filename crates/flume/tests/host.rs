@@ -1,8 +1,9 @@
 //! Git's history and the host's facts, read for real (design 11;
 //! history-and-host spec): the history scenarios against git on scratch
 //! repositories, secrets that never repeat, a command's life, a file's
-//! write time, the bound the configuration states, and the room lock
-//! taken by two processes.
+//! write time, an account's reading from its file, the bound the
+//! configuration states, its two layers read by a command of its own and
+//! written by none, and the room lock taken by two processes.
 
 mod common;
 
@@ -51,6 +52,38 @@ impl HistoryHarness for Harness {
 
     fn made_default(&self) -> String {
         "main".into()
+    }
+
+    /// A bare clone beside the repository as its `origin`, and two commits
+    /// pushed to it from a clone elsewhere, which the repository never
+    /// fetches.
+    fn origin_ahead(&self, _repository: &str, branch: &str) -> Revision {
+        let remote = self.repository.bare_remote();
+        self.repository
+            .git(&["remote", "add", "origin", &remote.to_string_lossy()]);
+        let elsewhere = self.repository.scratch.path("elsewhere");
+        git(
+            &self.repository.scratch.root,
+            &[
+                "clone",
+                "--quiet",
+                &remote.to_string_lossy(),
+                &elsewhere.to_string_lossy(),
+            ],
+        );
+        for file in ["one.rs", "two.rs"] {
+            std::fs::write(elsewhere.join(file), "on origin\n").expect("origin's work");
+            git(&elsewhere, &["add", file]);
+            git(&elsewhere, &["commit", "--quiet", "-m", file]);
+        }
+        git(&elsewhere, &["push", "--quiet", "origin", branch]);
+        Revision::new(git(&elsewhere, &["rev-parse", "HEAD"]))
+    }
+
+    fn origin_gone(&self, _repository: &str) {
+        let gone = self.repository.scratch.path("gone.git");
+        self.repository
+            .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
     }
 }
 
@@ -207,6 +240,88 @@ fn a_files_write_time_by_the_hosts_clock() {
     );
 }
 
+/// `text` written whole at `path`: a new file beside it renamed over the
+/// old, as a host's reader writes a reading (C.7).
+fn written_whole(path: &Path, text: &str) {
+    let new = path.with_extension("json.new");
+    std::fs::write(&new, text).unwrap();
+    std::fs::rename(&new, path).unwrap();
+}
+
+/// The store-profile spec's reading read from its file: a scratch file
+/// in C.7's form read as it stands at each asking and never written, and
+/// a missing one, or one not in the form, answered in words that name no
+/// path (184, C.7).
+#[test]
+fn an_accounts_reading_from_its_file() {
+    let scratch = Scratch::new("usage");
+    let host = host(&scratch, HostConfig::default());
+    let dir = scratch.path("state/usage");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("work-1.json");
+    let path = file.to_string_lossy().to_string();
+    let refused = host.usage(&path).unwrap_err();
+    assert_eq!(refused, "the file is missing");
+    written_whole(
+        &file,
+        r#"{ "read_at": "2026-11-05T14:02:11Z", "login": "fine", "windows": [
+            { "name": "5-hour", "used": 42, "resets_at": "2026-11-05T17:00:00Z" },
+            { "name": "7-day", "used": 71.5 }
+        ] }"#,
+    );
+    let before = as_it_stands(&file);
+    assert_eq!(
+        host.usage(&path),
+        Ok(Usage {
+            read_at: 1_793_887_331,
+            windows: vec![
+                Window {
+                    name: "5-hour".into(),
+                    used: 4_200,
+                    resets_at: Some(1_793_898_000),
+                },
+                Window {
+                    name: "7-day".into(),
+                    used: 7_150,
+                    resets_at: None,
+                },
+            ],
+        })
+    );
+    assert_eq!(as_it_stands(&file), before, "the reading was written");
+    written_whole(
+        &file,
+        r#"{ "read_at": "2026-11-05T14:07:11Z", "windows": [{ "name": "5-hour", "used": 48 }] }"#,
+    );
+    assert_eq!(
+        host.usage(&path)
+            .map(|usage| (usage.read_at, usage.windows[0].used)),
+        Ok((1_793_887_631, 4_800)),
+        "the reading as it stands at the next asking"
+    );
+    written_whole(
+        &file,
+        r#"{ "read_at": "2026-11-05T14:07:11", "windows": [] }"#,
+    );
+    let refused = host.usage(&path).unwrap_err();
+    assert_eq!(refused, "read_at is not an RFC 3339 time with its offset");
+    std::fs::write(&file, "half a {").unwrap();
+    let refused = host.usage(&path).unwrap_err();
+    assert!(refused.starts_with("the file is not JSON: "), "{refused}");
+    let root = scratch.root.to_string_lossy().to_string();
+    for words in [
+        host.usage(&path).unwrap_err(),
+        host.usage(&dir.to_string_lossy()).unwrap_err(),
+        host.usage(&scratch.path("nowhere/work-2.json").to_string_lossy())
+            .unwrap_err(),
+    ] {
+        assert!(
+            !words.contains(&root) && !words.contains("work-"),
+            "a path in {words}"
+        );
+    }
+}
+
 #[test]
 fn the_bound_the_configuration_states() {
     let scratch = Scratch::new("bound");
@@ -228,6 +343,159 @@ fn the_bound_the_configuration_states() {
         HostConfig::read(&file).is_err(),
         "a file that is no configuration"
     );
+}
+
+const CHILD_ANSWER: &str = "FLUME_TEST_LAYERS_ANSWER";
+const READER: &str = "a_child_process_reads_the_hosts_layers";
+
+/// The child's half of the layers test: the host as a command finds it,
+/// under the `XDG_CONFIG_HOME` its parent gave it, its configuration and
+/// its streams and a fix's label written as JSON. Run by the test below as a process of its
+/// own; it does nothing otherwise.
+#[test]
+fn a_child_process_reads_the_hosts_layers() {
+    let Some(answer) = std::env::var_os(CHILD_ANSWER) else {
+        return;
+    };
+    let read = match RealHost::of_host() {
+        Ok(host) => serde_json::json!({
+            "configuration": host.configuration(),
+            "bound": host.bound(),
+            "streams": host.streams(),
+            "label": host.label_for("/r", "fix"),
+        }),
+        Err(refused) => serde_json::json!({ "refused": refused }),
+    };
+    std::fs::write(answer, read.to_string()).unwrap();
+}
+
+/// A file's content and write time.
+fn as_it_stands(path: &Path) -> (String, std::time::SystemTime) {
+    (
+        std::fs::read_to_string(path).unwrap(),
+        std::fs::metadata(path).unwrap().modified().unwrap(),
+    )
+}
+
+/// `RealHost` over `config.toml` and `config.local.toml` in a scratch
+/// `XDG_CONFIG_HOME`, as a command of its own reads them: the local layer
+/// taken key by key, a kind's label among it, a pinned key passed over,
+/// an account's variables `<set>`, a local layer setting a pool not
+/// taken, and no local file; and neither file's content or write time
+/// changed by any read (32, 56, 180, C.7, S83; core.16, core.45).
+#[test]
+fn the_host_reads_both_layers_and_writes_neither() {
+    let scratch = Scratch::new("layers");
+    let dir = scratch.path("config/flume");
+    std::fs::create_dir_all(&dir).unwrap();
+    let managed = dir.join("config.toml");
+    let local = dir.join("config.local.toml");
+    std::fs::write(
+        &managed,
+        "[host]\nagents = 8\npin = [\"streams.work.session\"]\n\
+         [streams.work]\nagents = 6\npool = \"work\"\n\
+         [pools.work]\nstrategy = \"fill-first\"\n\
+         accounts = [{ name = \"w\", program = \"agent\", env = { AGENT_HOME = \"~/.agent-w\" } }]\n\
+         [kinds.fix]\nlabel = \"construction\"\n",
+    )
+    .unwrap();
+    let read = || {
+        let answer = scratch.path("answer.json");
+        let _ = std::fs::remove_file(&answer);
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args([READER, "--exact", "--nocapture", "--test-threads=1"])
+            .env("XDG_CONFIG_HOME", scratch.path("config"))
+            .env("XDG_STATE_HOME", scratch.path("state"))
+            .env(CHILD_ANSWER, &answer)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("a child process");
+        assert!(status.success());
+        let answer: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&answer).unwrap()).unwrap();
+        assert_eq!(answer.get("refused"), None, "{answer}");
+        answer
+    };
+    let value = |answer: &serde_json::Value, key: &str| {
+        answer["configuration"]["values"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|value| value["key"] == key)
+            .map(|value| (value["value"].clone(), value["layer"].clone()))
+            .unwrap_or_else(|| panic!("no {key} in {answer}"))
+    };
+
+    std::fs::write(
+        &local,
+        "[streams.work]\nagents = 3\npriority = 30\nsession = \"office\"\n\
+         [kinds.fix]\nlabel = \"operation\"\n",
+    )
+    .unwrap();
+    let before = (as_it_stands(&managed), as_it_stands(&local));
+    let answer = read();
+    assert_eq!(answer["configuration"]["local"]["state"], "taken");
+    assert_eq!(answer["bound"], 8);
+    assert_eq!(answer["streams"]["work"]["agents"], 3);
+    assert_eq!(answer["streams"]["work"]["priority"], 30);
+    assert_eq!(answer["streams"]["work"]["pool"], "work");
+    assert_eq!(
+        answer["label"],
+        serde_json::json!({"name": "operation", "from": "host-kind"})
+    );
+    assert_eq!(
+        value(&answer, "streams.work.agents"),
+        (serde_json::json!("3"), serde_json::json!("local"))
+    );
+    assert_eq!(
+        value(&answer, "streams.work.pool"),
+        (serde_json::json!("\"work\""), serde_json::json!("managed"))
+    );
+    assert_eq!(
+        value(&answer, "pools.work.accounts[0].env.AGENT_HOME"),
+        (serde_json::json!(SET), serde_json::json!("managed"))
+    );
+    assert_eq!(
+        answer["configuration"]["passed_over"],
+        serde_json::json!([{"key": "streams.work.session", "pin": "streams.work.session"}])
+    );
+    assert!(
+        !answer.to_string().contains(".agent-w"),
+        "a variable's value in {answer}"
+    );
+    assert_eq!(
+        (as_it_stands(&managed), as_it_stands(&local)),
+        before,
+        "a read changed a file"
+    );
+
+    std::fs::write(
+        &local,
+        "[streams.work]\nagents = 3\n\
+         [pools.work]\nstrategy = \"least-busy\"\naccounts = [{ name = \"l\", program = \"agent\" }]\n",
+    )
+    .unwrap();
+    let before = (as_it_stands(&managed), as_it_stands(&local));
+    let answer = read();
+    assert_eq!(
+        answer["configuration"]["local"],
+        serde_json::json!({"state": "not-taken", "keys": ["pools.work"]})
+    );
+    assert_eq!(answer["streams"]["work"]["agents"], 6);
+    assert_eq!(answer["label"]["name"], "construction");
+    assert_eq!(
+        value(&answer, "streams.work.agents"),
+        (serde_json::json!("6"), serde_json::json!("managed"))
+    );
+    assert_eq!((as_it_stands(&managed), as_it_stands(&local)), before);
+
+    std::fs::remove_file(&local).unwrap();
+    let before = as_it_stands(&managed);
+    let answer = read();
+    assert_eq!(answer["configuration"]["local"]["state"], "no-file");
+    assert_eq!(answer["streams"]["work"]["agents"], 6);
+    assert_eq!(as_it_stands(&managed), before);
+    assert!(!local.exists(), "a read made the local file");
 }
 
 const CHILD_STATE: &str = "FLUME_TEST_ROOM_STATE";

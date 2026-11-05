@@ -94,3 +94,50 @@ reads what the profile was given (106, 161, 169).
 
 - **WHEN** a test scripts the fake agent to name its mode at its start's first prompt, to map `full` to `all`, and its code start to begin in `ask-each`
 - **THEN** its word that it started is taken, its first prompt is sent once and not received, and the core reads the start started without its settings while started, naming both modes (161)
+
+### Requirement: The fake agent scripts carry and a carried start
+
+The fake agent SHALL script, for each account by its environment,
+whether it carries a stopped start's conversation, with the session or
+the words; the session a start's word names; and a carried start that
+ends before its word that it started; its log naming each `carry` it
+answers (106, 179).
+
+#### Scenario: A scripted carry
+
+- **WHEN** a test scripts the fake agent to carry to work-2 with the session `s-1`, and a start stops at its account's limit with work-2 chosen next
+- **THEN** the core starts the stage resuming `s-1`, and the fake's log shows the `carry` reading for work-2 (146, 179)
+
+#### Scenario: A scripted carried start that ends first
+
+- **WHEN** a test scripts the fake agent's carried start to end before it says it started
+- **THEN** the core starts the stage afresh carrying nothing, and the fake's log shows the second start's command with no session (146, S79)
+
+### Requirement: The fakes script sessions, labels and the layers
+
+The fake host SHALL script each stream's session and labels' shares,
+the labels its configuration gives kinds, and its configuration's
+values with their layers; the fake kinds SHALL script a kind's label;
+and the fake terminal SHALL log where each agent was asked to open;
+none SHALL read a configuration file of the host's (106).
+
+#### Scenario: A scripted session
+
+- **WHEN** a test scripts the fake host's `work` with the session `office` and a fix is launched on `work`
+- **THEN** the fake terminal's log names the fix's agent opened in `office` (107)
+
+#### Scenario: A scripted label
+
+- **WHEN** a test scripts the fake kinds' `deploy` with the label `operation`
+- **THEN** a deploy place's label is `operation` from `kind` where the fake host gives none (180)
+
+### Requirement: The fake host scripts each account's reading
+
+The fake host SHALL hold a reading or a refusal for each path a test
+sets, answer that the file is missing for any other, and pass the
+host's reading scenario; no fake SHALL read a real file (106, 184).
+
+#### Scenario: A scripted reading
+
+- **WHEN** a test sets the fake host's reading for `work-1`, then sets it again with a later `read_at`
+- **THEN** the core reads the later reading at the next choice, and the fake's log shows each reading asked (184)

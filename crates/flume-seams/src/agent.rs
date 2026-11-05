@@ -1,4 +1,4 @@
-//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161), an agent's
+//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161, 179), an agent's
 //! identity and its start's secret (33, 41). Every reading of an agent's
 //! own record is handed the place's own folder with the identity, where
 //! the agent profile keeps its marks (128).
@@ -105,13 +105,27 @@ pub enum Spent {
     Unknown,
 }
 
+/// carry: whether the agent program can carry the conversation of the
+/// start whose agent stopped at its account's usage limit to the account
+/// chosen for the next start, with the session that start resumes; why
+/// not, naming a variable and never its value; or that the program gives
+/// no way to (179; core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Carry {
+    Yes { session: String },
+    No { why: String },
+    NotOffered,
+}
+
 /// started_without: how the agent began otherwise than its start
 /// recorded, as its own word that it started shows it, or, for its mode,
 /// its word at its start's first prompt: each variable the start's record
 /// names that its environment lacks, each it holds with another value,
-/// both by name alone, whether it runs another program, and the mode it
-/// began in where it is not the one its start asked, none in a word
-/// written before (135, 161, 162).
+/// both by name alone, whether it runs another program, whether it came
+/// up in another conversation than the one its start resumes, and the
+/// mode it began in where it is not the one its start asked, none in a
+/// word written before (135, 161, 162, 179).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(default)]
@@ -120,6 +134,8 @@ pub struct Unsettled {
     pub different: Vec<String>,
     #[serde(default)]
     pub program: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub session: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<ModeBegan>,
 }
@@ -135,7 +151,8 @@ pub struct ModeBegan {
 
 impl Unsettled {
     /// How the agent began otherwise, naming each variable and never a
-    /// value, and both modes where it began in another (56, 161, 162).
+    /// value, no session, and both modes where it began in another (56,
+    /// 161, 162).
     pub fn words(&self) -> String {
         let mut words = vec![];
         if !self.missing.is_empty() {
@@ -146,6 +163,9 @@ impl Unsettled {
         }
         if self.program {
             words.push("under another program".to_string());
+        }
+        if self.session {
+            words.push("in another conversation than the one its start resumes".to_string());
         }
         if let Some(ModeBegan { asked, began }) = &self.mode {
             words.push(match began {
@@ -208,12 +228,19 @@ pub trait Agent: Send + Sync {
     /// variables read against the login environment, in the place under
     /// its identity and secret, the prompt in `prompt_args` (88, 29, 144);
     /// `mode` is the value [`Agent::mode`] mapped, passed as its program's
-    /// setting, and nothing is passed where it is none (162, 169).
+    /// setting, and nothing is passed where it is none (162, 169);
+    /// `resume` is the session the start resumes, which [`Agent::carry`]
+    /// answered yes with, so a profile that answers no yes is never given
+    /// one (88, 179); what the start carries by a file, such as a standing
+    /// prompt no terminal can type as an argument, is written beside its
+    /// record in the place's own `folder` (148, C.4, C.5).
     #[allow(clippy::too_many_arguments)]
     fn command(
         &self,
+        folder: &str,
         settings: &crate::Settings,
         mode: Option<&str>,
+        resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &crate::PlaceRef,
         identity: &Identity,
@@ -251,6 +278,18 @@ pub trait Agent: Send + Sync {
     /// limit has reset.
     fn spent(&self, _folder: &str, _agent: &Identity) -> Spent {
         Spent::Unknown
+    }
+
+    /// Whether its program can carry the conversation of `earlier`, the
+    /// start whose agent stopped at its account's usage limit, read in the
+    /// place's own `folder`, to the account whose environment is `env`,
+    /// each value read against the login environment, with the session the
+    /// next start resumes, or why not, naming a variable and never its
+    /// value (128, 146, 179; core.30); not offered by default, for a
+    /// program that carries none. It reads only, so it is safe to ask at
+    /// every claim (core.17).
+    fn carry(&self, _folder: &str, _earlier: &Identity, _env: &BTreeMap<String, String>) -> Carry {
+        Carry::NotOffered
     }
 
     /// How the agent under `agent` began otherwise than its start

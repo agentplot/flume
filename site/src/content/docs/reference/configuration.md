@@ -5,16 +5,27 @@ sidebar:
   order: 2
 ---
 
-flume reads three files: the host's configuration, the repository's
+flume reads the host's configuration, the repository's
 `.config/flume.toml`, and a launch's own declaration of kinds when it
 names one. Every part of each is optional.
 
 ## The host's configuration
 
-`$XDG_CONFIG_HOME/flume/config.toml`, `~/.config/flume/config.toml`
-by default. flume reads it at each command, and its agents' settings at
-each agent's start. A file that is not there is an empty one; a file
-flume cannot read makes every command refuse, naming its fault.
+Two files in `$XDG_CONFIG_HOME/flume/`, `~/.config/flume/` by default,
+read as one at each command, and its agents' settings at each agent's
+start ([two layers](/flume/guides/agent-settings/#two-layers)):
+
+- `config.toml`, the managed layer, written by whoever manages the
+  host. A file that is not there is an empty one. A file flume cannot
+  read makes every command refuse, naming its fault.
+- `config.local.toml`, the local layer, read over the managed one key
+  by key. It sets only a stream's `agents`, `priority` and `session`,
+  a label's `reserve` and `keep_free`, the `stream` and `label` of a
+  repository's kind, a repository or a kind, and the kinds' agents
+  tables. A local file that sets any other key, or that flume cannot
+  read, is not taken at all, and status names each key or the fault.
+
+flume writes neither file.
 
 ```toml
 [host]
@@ -62,6 +73,7 @@ priority = 5
 | `agents` | a whole number from 0 | The bound on agents running at once on the host, every caller's and every stream's counted together. A stage starts only while the host is under it and otherwise waits for room. With none, and no stream's bound, every stage starts at once and the host has no queue. |
 | `terminal` | `"herdr"`, `"printed"` | Where agents run: in herdr panes, or as a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminals there are. |
 | `pool` | a pool's name | The pool of a place whose stream names none. With none, such a place's agents run under no account. |
+| `pin` | a list of dotted keys, such as `"streams.work.agents"` | The keys the local layer may not set over the managed one. Each names a key the local layer could set, or a table of such keys, as `"streams.work"` does. A local key a pin holds is passed over, status naming it with its pin, and the rest of the local file is taken. |
 
 ### `[streams.<stream>]`
 
@@ -75,6 +87,18 @@ for; a `[streams.default]` table gives it keys of its own.
 | `agents` | a whole number above 0 | the bound on the stream's agents running at once, within the host's | the host's bound alone |
 | `priority` | a whole number, negative allowed | the stream's priority: waiting stages start by it first, then by their place's | `0` |
 | `pool` | a pool's name | the pool its places' agents take accounts from | `[host] pool` |
+| `session` | a string herdr takes as a session's name | the herdr session its agents open in ([a stream's session](/flume/guides/agent-settings/#a-streams-session)) | the stream's own name, and flume's own session for `default` |
+
+### `[streams.<stream>.labels.<label>]`
+
+A label's share of the stream's agents
+([labels](/flume/guides/agent-settings/#labels)). The stream holds it
+only where it states `agents`.
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `reserve` | a whole number from 0 | the stream's agents owed to the label: while it runs fewer, its stages start before the stream's others | `0` |
+| `keep_free` | a whole number from 0, no more than `reserve` | the stream's slots kept free for the label while it runs fewer agents than that | `0` |
 
 ### `[pools.<pool>]`
 
@@ -83,7 +107,8 @@ A pool of accounts
 
 | Key | Values | Meaning |
 |---|---|---|
-| `strategy` | `"fill-first"`, `"least-busy"` | how an account is chosen: the first usable one in order, or the usable one running the fewest of flume's agents, equals in order. Required. |
+| `strategy` | `"fill-first"`, `"least-busy"`, `"most-left"` | how an account is chosen. `fill-first`: the first usable one in order. `least-busy`: the usable one running the fewest of flume's agents, equals in order. `most-left`: the usable one with the most of its allowance left by its reading ([an account's reading](/flume/guides/agent-settings/#an-accounts-reading)). Required. |
+| `threshold` | a whole number from 1 to 100 | the percentage of any window of an account's reading at which the account takes no new start until that window resets, under every strategy ([a threshold](/flume/guides/agent-settings/#a-threshold)). `90` where left out. |
 | `accounts` | a list of tables | the pool's accounts, in order, at least one |
 
 Each account:
@@ -91,13 +116,21 @@ Each account:
 | Key | Values | Meaning | Left out |
 |---|---|---|---|
 | `name` | a string | the account's name, unique in its pool | refused |
-| `program` | a string | the program it runs, such as `claude`; it takes only stages of that program | refused |
+| `program` | a string | the program it runs, such as `claude`; it takes only stages of that program, and a pool with no account of a stage's program refuses that stage | refused |
 | `env` | a table of strings | its agents' environment, over the login environment | no variable |
 | `agents` | a whole number above 0 | the bound on agents running under it at once | no bound of its own |
+| `usage` | a path | the file of its reading, written by something of the host's and read by flume, never written | no reading |
 
 In `env`, a leading `~` is your home and `$VAR` or `${VAR}` a variable
 of your login environment, read at each start. A variable the login
 environment lacks refuses that start, naming it and the account.
+
+`usage` reads `~` and `$VAR` the same way, at each choice of an account
+and whenever status is asked. A variable the login environment lacks
+leaves the account with no reading, and status names the variable; it
+refuses no start. A file that is missing or not in the reading's form
+is no reading either, and status says why. Status gives `usage` as
+`<set>`, never its path.
 
 ### `stream`
 
@@ -105,6 +138,13 @@ environment lacks refuses that start, naming it and the account.
 `[repos."<repository>"]` and in `[kinds.<kind>]` names the stream of a
 place of that repository and kind, of that repository, or of that kind,
 in that order, where the launch and the intent name none.
+
+### `label`
+
+`label` in `[repos."<repository>".kinds.<kind>]` and in
+`[kinds.<kind>]` names the label of a place of that repository and
+kind, or of that kind, in that order. It is one word of letters,
+digits, `-` and `_`. A place's label is read at each start.
 
 ### `[kinds.<kind>.agents]`
 
@@ -128,7 +168,9 @@ settings for the kind in every repository.
 
 flume refuses the file, naming the key, for:
 
-- a `strategy` other than `fill-first` and `least-busy`;
+- a `strategy` other than `fill-first`, `least-busy` and `most-left`;
+- a `threshold` that is not a whole number from 1 to 100;
+- a `usage` that is not a string, or is empty;
 - a stream's `pool` or `[host] pool` naming a pool no `[pools]` table
   declares;
 - a pool with no accounts, or two accounts of one name;
@@ -138,10 +180,29 @@ flume refuses the file, naming the key, for:
 - a `mode` in an agents table that is neither one of `plan`, `ask`,
   `edits` and `full` nor a table of programs whose values are strings,
   naming the table and `mode`;
-- a key a stream, a pool or an account does not know.
+- a key a stream, a pool or an account does not know;
+- a `label` that is not one word of letters, digits, `-` and `_`;
+- a `pin` that names no key the local layer could set and no table of
+  such keys.
 
-A file that refuses leaves every launch and every start refused,
-naming its fault, until it is mended.
+A managed file that refuses leaves every launch and every start
+refused, naming its fault, until it is mended. A local file that would
+refuse, or that sets a key it may not set, is not taken: every command
+runs on the managed layer alone, and status says why.
+
+A file flume reads can still refuse a stage. A pool that holds no
+account of the program a stage's layers resolve refuses that stage,
+naming the stage, the pool and the program. It refuses the stage at its
+launch, with nothing made, or at a later start, which reads the file as
+it stands then. A
+stage so refused waits for a retry
+([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)).
+
+A stream's labels can refuse each of its starts, naming the stream and
+why. They refuse where their reserves together pass the stream's
+`agents`, where a label keeps more free than its reserve, and where a
+label's table holds another key, such as a `pool`. A stage so refused
+waits for a retry once the file is mended.
 
 ### `[roles."<group>/<role>"]`
 

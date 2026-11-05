@@ -12,7 +12,7 @@ place, a worktree on a branch of its own, and runs the kind's stages
 there, each with a fresh agent. Once the work lands or is dropped, flume
 tidies the place.
 
-<p align="center"><img src="docs/diagrams/flume.svg" alt="A launch from your session, an inbox or a release tool runs down the flume into a worktree on change/csv-export, made ready by the merge queue's policy; construct, code and verify each start a fresh agent whose prompt its own hook acknowledges and end when their deliverable exists; flume submits the change, sluice lands it and flume tidies the place." width="900"></p>
+<p align="center"><img src="docs/diagrams/flume.svg" alt="Five launches, each naming its kind, its points and its stream, wait for room in one host's streams: work, priority 10, under its bounds on agents and points in flight, and personal, priority 0, under its pace of 8 points a day, each on a pool of accounts. Each launch with room starts in a place of its own, its stages lit in turn with a fresh agent each; its last delivery submits it, sluice lands it on main and flume tidies the place." width="900"></p>
 
 - **The site:** https://agentplot.github.io/flume
 - **The design book:** https://agentplot.github.io/blueprints/flume/
@@ -44,24 +44,64 @@ tidies the place.
   Once it exists and the agent is quiet, the next stage starts. An agent
   that stops short says what it needs, and the place waits for a retry
   or a drop. A quiet pane ends nothing.
+- **One queue for the host.** Every launch on a host joins one queue.
+  A place's first stage starts only while the host, its stream and an
+  account of the stream's pool have room. Waiting places start by their
+  stream's priority, then their own, and flume refuses no launch for
+  want of room. A place's points, and a stream's bound on points in flight and its
+  pace, are decided and wait on their build.
 - **Tidied once it is done.** When the work lands or is dropped, flume
   removes the place. It removes only places it made, and keeps a branch
   that holds commits its base lacks.
 - **Its state, live.** `flume status --json` gives each place's kind,
   its stage, its agent's state, whether the deliverable exists, and its
   submission, with a change's tasks ticked.
+- **A place's line.** Each place has one line: its name, its kind, its
+  stage with how many times it started, a change's tasks ticked and its
+  state, as in `change--parser · change@2 · code 1/2 · run 1 · tasks 0/3 · working`.
+  `flume status --line` prints it, and every agent flume starts under
+  Claude Code shows it under its prompt.
 
-Two things depend on the host's own setup. An instruction with
-characters beyond ASCII reaches the agent whole only when the pane's
-shell has a UTF-8 locale, `LANG` set to one, for instance
-`en_US.UTF-8`. Under herdr, flume reports each workspace's summary of
-its places as a metadata token, `flume`; it shows only where the host's
-herdr sidebar names `$flume` in its rows (record 0018).
+An instruction with characters beyond ASCII reaches the agent whole
+only when the pane's shell has a UTF-8 locale, `LANG` set to one, for
+instance `en_US.UTF-8`.
 
 In a watermill the flume is the channel that carries water from the
 pond to the wheel, a measured flow to where it does work. flume carries
 one piece of work to one worktree, where an agent does it; sluice gates
 what lands.
+
+## Under herdr
+
+flume's herdr plugin moves every place on with no command of yours and
+shows the places in herdr. Each agent's sidebar entry gets its place's
+line less the place's name and kind, such as
+`code 1/2 · run 1 · tasks 2/5 · working`, and each workspace's row a
+count of its places. A popup lists every place in flight by its line,
+with keys that open, tell, stop or retry it.
+
+The plugin changes none of herdr's configuration, and herdr's plugins
+declare no keys. Until herdr's own `config.toml` holds what the plugin
+needs, `flume status` says what it lacks under the line naming the
+watch.
+
+### The popup's key
+
+The popup opens only from a key your herdr configuration binds:
+
+```toml
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "agentplot.flume.places"
+description = "flume: places in flight"
+```
+
+### The sidebar's rows
+
+The sidebar shows flume's rows only where its rows name `$flume`, as
+[the herdr plugin's README](plugins/herdr/README.md#the-sidebars-rows)
+gives them.
 
 ## This repository
 

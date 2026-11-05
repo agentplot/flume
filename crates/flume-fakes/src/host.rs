@@ -1,7 +1,8 @@
 use crate::{lock, Log};
 use flume_seams::{
-    Host, HostSettings, KindSettings, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds,
-    Secret, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
+    ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, KindSettings, LabelFrom,
+    LabelHeld, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Share, Stream,
+    StreamFrom, StreamHeld, Usage, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -9,9 +10,12 @@ use std::sync::{Arc, Condvar, Mutex};
 /// The host: a clock that moves only when a test advances it or a command
 /// sleeps on it, numbered secrets, files' write times, the commands of
 /// flume's that live, the bound on agents and the agents' settings its
-/// configuration states, its streams and pools of accounts, the recipient
-/// the calling command's environment names, the host user's login
-/// environment, and an exclusive room lock.
+/// configuration states, its streams with their sessions and labels'
+/// shares, its pools of accounts, each account's reading by its path, the
+/// labels it gives kinds, its configuration's values with their layers,
+/// the recipient the calling command's environment names, the host user's
+/// login environment, and an exclusive room lock. It reads no
+/// configuration file and no reading's file (106, 184).
 pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
@@ -61,6 +65,15 @@ struct HostState {
     pool: Option<String>,
     /// The pools the configuration declares, by name (144).
     pools: BTreeMap<String, Pool>,
+    /// The reading, or why there is none, by the path it is read at
+    /// (184).
+    usage: BTreeMap<String, Result<Usage, String>>,
+    /// The label named for a repository and kind, or a kind, by the
+    /// repository, none for every repository, and the kind (180).
+    labels_named: BTreeMap<(Option<String>, String), String>,
+    /// The configuration's values with their layers, whether its local
+    /// layer was taken, and the keys passed over (C.7).
+    configuration: HostConfiguration,
 }
 
 impl Default for FakeHost {
@@ -82,6 +95,9 @@ impl Default for FakeHost {
                 streams_named: BTreeMap::new(),
                 pool: None,
                 pools: BTreeMap::new(),
+                usage: BTreeMap::new(),
+                labels_named: BTreeMap::new(),
+                configuration: HostConfiguration::default(),
             }),
             room: Arc::default(),
             log: Log::default(),
@@ -204,6 +220,57 @@ impl FakeHost {
         };
     }
 
+    /// The session the configuration names for the stream `name`'s
+    /// agents, or none, the stream declared where it was not (107, 143).
+    pub fn set_stream_session(&self, name: &str, session: Option<&str>) {
+        lock(&self.state)
+            .streams
+            .entry(name.to_string())
+            .or_default()
+            .session = session.map(str::to_string);
+    }
+
+    /// The share the configuration gives `label` of the stream `name`'s
+    /// agents, or none, the stream declared where it was not (181).
+    pub fn set_share(&self, name: &str, label: &str, share: Option<Share>) {
+        let mut state = lock(&self.state);
+        let labels = &mut state.streams.entry(name.to_string()).or_default().labels;
+        match share {
+            Some(share) => labels.insert(label.to_string(), share),
+            None => labels.remove(label),
+        };
+    }
+
+    /// The label the configuration gives `kind` in `repository`, or in
+    /// every repository where none is named; none removes it (180).
+    pub fn name_label(&self, repository: Option<&str>, kind: &str, label: Option<&str>) {
+        let mut state = lock(&self.state);
+        let key = (repository.map(str::to_string), kind.to_string());
+        match label {
+            Some(label) => state.labels_named.insert(key, label.to_string()),
+            None => state.labels_named.remove(&key),
+        };
+    }
+
+    /// The configuration as it stands: its values with their layers,
+    /// whether its local layer was taken, and the keys passed over (C.7).
+    pub fn set_configuration(&self, configuration: HostConfiguration) {
+        lock(&self.state).configuration = configuration;
+    }
+
+    /// The configuration's value at `key`, as TOML writes it, from
+    /// `layer`, in place of any it gave before (C.7).
+    pub fn set_value(&self, key: &str, value: &str, layer: ConfigLayer) {
+        let mut state = lock(&self.state);
+        let values = &mut state.configuration.values;
+        values.retain(|given| given.key != key);
+        values.push(ConfigValue {
+            key: key.to_string(),
+            value: value.to_string(),
+            layer,
+        });
+    }
+
     /// The host's own pool, or none (144).
     pub fn set_host_pool(&self, pool: Option<&str>) {
         lock(&self.state).pool = pool.map(str::to_string);
@@ -216,6 +283,13 @@ impl FakeHost {
             Some(pool) => state.pools.insert(name.to_string(), pool),
             None => state.pools.remove(name),
         };
+    }
+
+    /// The reading at `path`, or why there is none, in place of any set
+    /// before; every path no test set answers that the file is missing
+    /// (184).
+    pub fn set_usage(&self, path: &str, usage: Result<Usage, String>) {
+        lock(&self.state).usage.insert(path.to_string(), usage);
     }
 
     /// Whether the room lock is held now.
@@ -296,6 +370,30 @@ impl Host for FakeHost {
         })
     }
 
+    fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld> {
+        self.log.push(format!("label_for {repository} {kind}"));
+        let state = lock(&self.state);
+        [
+            (Some(repository.to_string()), LabelFrom::HostRepositoryKind),
+            (None, LabelFrom::HostKind),
+        ]
+        .into_iter()
+        .find_map(|(repository, from)| {
+            state
+                .labels_named
+                .get(&(repository, kind.to_string()))
+                .map(|name| LabelHeld {
+                    name: name.clone(),
+                    from,
+                })
+        })
+    }
+
+    fn configuration(&self) -> HostConfiguration {
+        self.log.push("configuration");
+        lock(&self.state).configuration.clone()
+    }
+
     fn pool_for(&self, stream: &str) -> Option<PoolNamed> {
         self.log.push(format!("pool_for {stream}"));
         let state = lock(&self.state);
@@ -314,6 +412,15 @@ impl Host for FakeHost {
     fn pool(&self, name: &str) -> Option<Pool> {
         self.log.push(format!("pool {name}"));
         lock(&self.state).pools.get(name).cloned()
+    }
+
+    fn usage(&self, path: &str) -> Result<Usage, String> {
+        self.log.push(format!("usage {path}"));
+        lock(&self.state)
+            .usage
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| Err("the file is missing".to_string()))
     }
 
     fn settings(&self, repository: &str, kind: &str) -> HostSettings {

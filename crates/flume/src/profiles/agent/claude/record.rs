@@ -3,7 +3,12 @@
 //! `<folder>/claude/<identity>/`, the started ack, the digests of the
 //! prompts received, the asking mark, the acts the guard refused, the
 //! session's end, a failed turn's reason, its error and when it ran, and
-//! the word that the agent began otherwise than its start recorded.
+//! the word that the agent began otherwise than its start recorded. Each
+//! names the length the session's transcript held when it was first
+//! written, from which every reading of the start's transcript reads, so
+//! a start that carries a conversation reads none of its earlier agent's
+//! records as its own (31, 179). Beside them, the command writes the
+//! standing prompt the start carries (148, C.4).
 
 use flume_seams::Identity;
 use serde::{Deserialize, Serialize};
@@ -22,6 +27,11 @@ pub struct Started {
     pub source: String,
     /// The version of the plugin whose hook acked.
     pub plugin_version: String,
+    /// The transcript's length in bytes when the start's first started ack
+    /// came, 0 where none was written then or in an ack written before
+    /// (91, 179).
+    #[serde(default)]
+    pub from: u64,
 }
 
 /// The asking mark: the call a person is asked to answer, by its id where
@@ -49,13 +59,17 @@ pub struct Failure {
 /// recorded: SessionStart's in place of the started ack, each variable by
 /// its name alone and whether the program differed, and UserPromptSubmit's
 /// in place of the start's first received ack, the mode asked and the mode
-/// begun; with the session it runs and its transcript (161).
+/// begun; with the session it runs, its transcript and the transcript's
+/// length in bytes when the word was written, 0 in a word written before
+/// (161, 179).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unsettled {
     #[serde(flatten)]
     pub unsettled: flume_seams::Unsettled,
     pub session_id: String,
     pub transcript_path: String,
+    #[serde(default)]
+    pub from: u64,
 }
 
 /// One start's record in one folder.
@@ -123,8 +137,16 @@ impl Record {
         serde_json::from_str(&text).ok()
     }
 
+    /// The started ack written, keeping the length an ack already written
+    /// names, so a later SessionStart of the start, a compaction's or a
+    /// clear's, never moves it (91, 179).
     pub fn ack_started(&self, started: &Started) -> std::io::Result<()> {
-        let text = serde_json::to_string_pretty(started).expect("the ack as JSON");
+        let from = self.started().map_or(started.from, |earlier| earlier.from);
+        let started = Started {
+            from,
+            ..started.clone()
+        };
+        let text = serde_json::to_string_pretty(&started).expect("the ack as JSON");
         self.write("started.json", &text)
     }
 
@@ -140,12 +162,27 @@ impl Record {
         self.write("unsettled.json", &text)
     }
 
-    /// The session's transcript, as the started ack named it, else the
-    /// word that the agent began otherwise.
-    pub fn transcript_path(&self) -> Option<String> {
+    /// The file holding the standing prompt the start carries, which its
+    /// command names (148, C.4).
+    pub fn standing_prompt(&self) -> PathBuf {
+        self.file("standing-prompt.md")
+    }
+
+    /// The standing prompt written to its file as given.
+    pub fn set_standing_prompt(&self, text: &str) -> std::io::Result<()> {
+        self.write("standing-prompt.md", text)
+    }
+
+    /// The session's transcript and the length the start's own part of it
+    /// follows, as the started ack named them, else the word that the agent
+    /// began otherwise.
+    pub fn transcript(&self) -> Option<(String, u64)> {
         self.started()
-            .map(|started| started.transcript_path)
-            .or_else(|| self.unsettled().map(|unsettled| unsettled.transcript_path))
+            .map(|started| (started.transcript_path, started.from))
+            .or_else(|| {
+                self.unsettled()
+                    .map(|unsettled| (unsettled.transcript_path, unsettled.from))
+            })
     }
 
     pub fn received_path(&self) -> PathBuf {

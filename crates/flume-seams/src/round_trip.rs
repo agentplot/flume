@@ -18,6 +18,7 @@ fn settings() -> Settings {
         instructions: Some("be brief".into()),
         beside: Some("operator".into()),
         mode: None,
+        session: Some("office".into()),
     }
 }
 
@@ -55,6 +56,7 @@ fn kind() -> Kind {
         lands: true,
         agents: kind_settings(),
         stages: vec![stage()],
+        label: Some("operation".into()),
     }
 }
 
@@ -136,6 +138,7 @@ fn held() -> HeldState {
             branch: "bump/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: Some(BaseFrom::OriginLacks),
             location: "/r/places/bump--one".into(),
             binding: Binding {
                 place: Some("place-tool".into()),
@@ -199,6 +202,14 @@ fn held() -> HeldState {
             room: Some(RoomWait {
                 order: 3,
                 words: Some("the merge queue's words".into()),
+                carry: Some(AfterSpent {
+                    start: Identity {
+                        start: 1,
+                        ..identity()
+                    },
+                    carry: true,
+                    why: None,
+                }),
             }),
             made_from: Some(1),
             start: Some(StartHeld {
@@ -263,6 +274,19 @@ fn held() -> HeldState {
                     words: "New MCP server found in .mcp.json: docs".into(),
                     since: 6,
                 }),
+                conversation: Some(Conversation {
+                    from: 1,
+                    carried: true,
+                    why: None,
+                }),
+                session: Some(SessionHeld {
+                    name: Some("office".into()),
+                    from: SessionFrom::Launch,
+                }),
+                label: Some(LabelHeld {
+                    name: "operation".into(),
+                    from: LabelFrom::Kind,
+                }),
             }),
             since: Some(120),
         }],
@@ -281,6 +305,10 @@ fn held() -> HeldState {
             waiting: Some("withdrawn".into()),
             waiting_since: Some(130),
             unread: Some("the merge queue is down".into()),
+            passed_over: vec![PassedOver {
+                branch: "bolt/x".into(),
+                words: "bolt/x's policy cannot be read".into(),
+            }],
         },
         failures: vec!["the agent did not end".into()],
         priority: -3,
@@ -301,13 +329,21 @@ fn held() -> HeldState {
                 to: "work-2".into(),
                 why: MoveWhy::Spent,
                 at: 110,
+                carried: Some(true),
+                window: None,
+                until: None,
             },
             AccountMove {
-                on: MoveOn::Intent,
+                on: MoveOn::Intent {
+                    program: Some("agent".into()),
+                },
                 from: "work-1".into(),
                 to: "work-2".into(),
                 why: MoveWhy::Full,
                 at: 110,
+                carried: None,
+                window: None,
+                until: None,
             },
         ],
         unsettled: vec![UnsettledStart {
@@ -315,6 +351,12 @@ fn held() -> HeldState {
             start: 1,
             at: 4,
             unsettled: unsettled(),
+        }],
+        uncarried: vec![UncarriedStart {
+            stage: "code".into(),
+            start: 3,
+            at: 8,
+            words: "the start that carried its conversation ended before it said it started".into(),
         }],
         waiting: Some(Waiting {
             on: WaitingOn {
@@ -331,7 +373,8 @@ fn held() -> HeldState {
 }
 
 /// A start's record: the program, the account, two digests, no value,
-/// and the mode its profile passed (161, 162).
+/// the mode its profile passed and the session it resumes (161, 162,
+/// 179).
 fn start_record() -> StartRecord {
     StartRecord {
         program: "agent".into(),
@@ -341,17 +384,19 @@ fn start_record() -> StartRecord {
             ("FLUME_AGENT".into(), "41ab".into()),
         ]),
         mode: Some("careful".into()),
+        session: Some("4e3c05c8-51c4-4449-8577-4f7038e394bf".into()),
     }
 }
 
 /// An agent begun without one variable, with another value of a second,
-/// under another program and in another mode than its start asked (161,
-/// 162).
+/// under another program, in another conversation than its start resumes
+/// and in another mode than its start asked (161, 162, 179).
 fn unsettled() -> Unsettled {
     Unsettled {
         missing: vec!["AGENT_HOME".into()],
         different: vec!["FLUME_STAGE".into()],
         program: true,
+        session: true,
         mode: Some(ModeBegan {
             asked: "careful".into(),
             began: Some("ask-each".into()),
@@ -839,14 +884,312 @@ fn a_start_begun_in_another_mode_in_words() {
     );
 }
 
+#[test]
+fn a_start_begun_in_another_conversation_in_words() {
+    // The words say another conversation and name no session, which the
+    // start's record holds and status never gives (56, 161, 179).
+    let session = start_record().session.expect("a session");
+    let other = Unsettled {
+        session: true,
+        ..Unsettled::default()
+    };
+    assert_eq!(
+        other.words(),
+        "in another conversation than the one its start resumes"
+    );
+    assert!(!other.words().contains(&session), "{}", other.words());
+    assert_eq!(
+        Unsettled {
+            missing: vec!["AGENT_HOME".into()],
+            ..other
+        }
+        .words(),
+        "without AGENT_HOME, in another conversation than the one its start resumes"
+    );
+}
+
+#[test]
+fn a_held_state_with_a_carried_start() {
+    // A stage waits after a spent agent, its start carries a conversation
+    // with its record's session, its move says carried, and the place
+    // lists a start carried that did not begin (146, 161, 179).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let stage = &json["stages"][0];
+    assert_eq!(stage["room"]["carry"]["start"]["start"], 1);
+    assert_eq!(stage["room"]["carry"]["carry"], true);
+    assert!(
+        stage["room"]["carry"].get("why").is_none(),
+        "a why where it may carry"
+    );
+    assert_eq!(
+        stage["start"]["conversation"],
+        serde_json::json!({"from": 1, "carried": true})
+    );
+    assert_eq!(
+        stage["start"]["start_record"]["session"],
+        "4e3c05c8-51c4-4449-8577-4f7038e394bf"
+    );
+    assert_eq!(json["moves"][0]["carried"], true);
+    assert!(
+        json["moves"][1].get("carried").is_none(),
+        "an intent's move"
+    );
+    assert_eq!(json["unsettled"][0]["session"], true);
+    assert_eq!(
+        json["uncarried"][0],
+        serde_json::json!({
+            "stage": "code",
+            "start": 3,
+            "at": 8,
+            "words": "the start that carried its conversation ended before it said it started",
+        })
+    );
+    round_trips(AfterSpent {
+        start: identity(),
+        carry: false,
+        why: Some("the start that carried its conversation ended before it said it started".into()),
+    });
+    round_trips(Conversation {
+        from: 1,
+        carried: false,
+        why: Some("its agent profile carries no conversation".into()),
+    });
+}
+
+#[test]
+fn a_held_state_written_before_carried_starts() {
+    // The same state written before this change reads with no wait after
+    // a spent agent, no conversation, no session, no move carried and no
+    // start carried that did not begin, and writes none back (146).
+    let mut before = serde_json::to_value(held()).expect("held state as JSON");
+    let stage = &mut before["stages"][0];
+    stage["room"].as_object_mut().unwrap().remove("carry");
+    stage["start"]
+        .as_object_mut()
+        .unwrap()
+        .remove("conversation");
+    stage["start"]["start_record"]
+        .as_object_mut()
+        .unwrap()
+        .remove("session");
+    for moved in before["moves"].as_array_mut().unwrap() {
+        moved.as_object_mut().unwrap().remove("carried");
+    }
+    before["unsettled"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("session");
+    before.as_object_mut().unwrap().remove("uncarried");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    let stage = &read.stages[0];
+    assert_eq!(stage.room.as_ref().expect("a room").carry, None);
+    let start = stage.start.as_ref().expect("a start");
+    assert_eq!(start.conversation, None);
+    assert_eq!(start.start_record.session, None);
+    assert!(read.moves.iter().all(|moved| moved.carried.is_none()));
+    assert!(!read.unsettled[0].unsettled.session);
+    assert!(read.uncarried.is_empty());
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "nothing of a carried start written where none is held"
+    );
+}
+
+#[test]
+fn a_held_state_with_a_session_and_a_label() {
+    // A held state whose kind declares a label, whose launch's settings
+    // name a session, and whose live start holds its session and label,
+    // reads back unchanged; one written before reads with no label and no
+    // session, and writes none back (107, 180).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["kind"]["label"], "operation");
+    assert_eq!(json["place"]["every_stage"]["session"], "office");
+    let start = &json["stages"][0]["start"];
+    assert_eq!(
+        start["session"],
+        serde_json::json!({"name": "office", "from": "launch"})
+    );
+    assert_eq!(
+        start["label"],
+        serde_json::json!({"name": "operation", "from": "kind"})
+    );
+    let mut before = json;
+    let without_sessions = |value: &mut serde_json::Value| {
+        value.as_object_mut().unwrap().remove("session");
+    };
+    before["place"]["kind"]
+        .as_object_mut()
+        .unwrap()
+        .remove("label");
+    without_sessions(&mut before["place"]["every_stage"]);
+    without_sessions(&mut before["place"]["settings"]["code"]);
+    without_sessions(&mut before["place"]["kind"]["stages"][0]["agents"][0]);
+    without_sessions(&mut before["place"]["kind"]["agents"]["stages"]["code"]);
+    without_sessions(&mut before["place"]["repository_settings"]["stages"]["code"]);
+    let start = &mut before["stages"][0]["start"];
+    without_sessions(&mut start["settings"]);
+    without_sessions(start);
+    start.as_object_mut().unwrap().remove("label");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(read.place.kind.label, None);
+    assert_eq!(read.place.every_stage.session, None);
+    assert_eq!(read.place.settings["code"].session, None);
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!((&start.session, &start.label), (&None, &None));
+    assert_eq!(start.settings.session, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no session and no label written where none is held"
+    );
+}
+
+#[test]
+fn where_an_agent_opens_and_its_session() {
+    for at in [
+        OpenIn::Beside {
+            pane: "operator".into(),
+        },
+        OpenIn::Session {
+            name: "work".into(),
+        },
+        OpenIn::Own,
+    ] {
+        round_trips(at);
+    }
+    assert_eq!(
+        serde_json::to_value(OpenIn::Session {
+            name: "work".into()
+        })
+        .unwrap(),
+        serde_json::json!({"in": "session", "name": "work"})
+    );
+    for (from, spelled) in [
+        (SessionFrom::Launch, "launch"),
+        (SessionFrom::Stream, "stream"),
+        (SessionFrom::StreamName, "stream-name"),
+        (SessionFrom::Own, "own"),
+    ] {
+        round_trips(from);
+        assert_eq!(serde_json::to_value(from).unwrap(), spelled);
+    }
+    round_trips(SessionHeld {
+        name: Some("work".into()),
+        from: SessionFrom::StreamName,
+    });
+    let own = SessionHeld {
+        name: None,
+        from: SessionFrom::Own,
+    };
+    round_trips(own.clone());
+    assert_eq!(
+        serde_json::to_value(own).unwrap(),
+        serde_json::json!({"from": "own"}),
+        "no name for the terminal's own"
+    );
+}
+
+#[test]
+fn a_label_and_its_share() {
+    for (from, spelled) in [
+        (LabelFrom::HostRepositoryKind, "host-repository-kind"),
+        (LabelFrom::HostKind, "host-kind"),
+        (LabelFrom::Kind, "kind"),
+    ] {
+        round_trips(LabelHeld {
+            name: "inception".into(),
+            from,
+        });
+        assert_eq!(serde_json::to_value(from).unwrap(), spelled);
+    }
+    round_trips(Share::default());
+    let read: Share = serde_json::from_str(r#"{"reserve":2}"#).unwrap();
+    assert_eq!(
+        read,
+        Share {
+            reserve: 2,
+            keep_free: 0,
+            unknown: vec![],
+        },
+        "zero kept free and nothing unknown where its table gives none"
+    );
+    let before: Stream = serde_json::from_str(r#"{"agents":5,"priority":10}"#).unwrap();
+    assert_eq!((before.session, before.labels.len()), (None, 0));
+    let kind: Kind = serde_json::from_value({
+        let mut written = serde_json::to_value(kind()).unwrap();
+        written.as_object_mut().unwrap().remove("label");
+        written
+    })
+    .unwrap();
+    assert_eq!(kind.label, None, "a kind read before has no label");
+}
+
+#[test]
+fn the_hosts_configuration_and_its_layers() {
+    let configuration = HostConfiguration {
+        local: LocalLayer::Taken,
+        values: vec![
+            ConfigValue {
+                key: "streams.work.agents".into(),
+                value: "3".into(),
+                layer: ConfigLayer::Local,
+            },
+            ConfigValue {
+                key: "pools.work.accounts[0].env.AGENT_HOME".into(),
+                value: SET.into(),
+                layer: ConfigLayer::Managed,
+            },
+        ],
+        passed_over: vec![PinnedKey {
+            key: "streams.work.priority".into(),
+            pin: "streams.work".into(),
+        }],
+    };
+    round_trips(configuration.clone());
+    let json = serde_json::to_value(&configuration).unwrap();
+    assert_eq!(json["local"], serde_json::json!({"state": "taken"}));
+    assert_eq!(json["values"][0]["layer"], "local");
+    for local in [
+        LocalLayer::NoFile,
+        LocalLayer::Taken,
+        LocalLayer::NotTaken {
+            keys: vec!["pools.work".into(), "host.agents".into()],
+            fault: None,
+        },
+        LocalLayer::NotTaken {
+            keys: vec![],
+            fault: Some("expected `=` at line 2".into()),
+        },
+    ] {
+        round_trips(local);
+    }
+    assert_eq!(
+        serde_json::to_value(LocalLayer::NotTaken {
+            keys: vec!["pools.work".into()],
+            fault: None,
+        })
+        .unwrap(),
+        serde_json::json!({"state": "not-taken", "keys": ["pools.work"]})
+    );
+    round_trips(HostConfiguration::default());
+    assert_eq!(HostConfiguration::default().local, LocalLayer::NoFile);
+}
+
 /// An agent profile that keeps every default of the agent seam.
 struct Bare;
 
 impl Agent for Bare {
     fn command(
         &self,
+        _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
+        _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
         _identity: &Identity,
@@ -911,6 +1254,18 @@ fn a_profile_that_maps_no_mode() {
         .expect_err("a profile that maps no mode mapped an own value");
     assert!(words.contains("`careful`"), "{words}");
     assert_eq!(Bare.mode_read_back(), Offered::NotOffered);
+}
+
+#[test]
+fn a_profile_that_carries_no_conversation() {
+    // A profile that keeps the seam's default offers no carry, for any
+    // start and account (179).
+    let env = BTreeMap::from([("AGENT_HOME".to_string(), "/scratch/work-2".to_string())]);
+    assert_eq!(Bare.carry("/folder", &identity(), &env), Carry::NotOffered);
+    assert_eq!(
+        Bare.carry("/folder", &identity(), &BTreeMap::new()),
+        Carry::NotOffered
+    );
 }
 
 #[test]
@@ -1012,22 +1367,44 @@ fn streams_and_pools_as_the_configuration_names_them() {
         agents: Some(5),
         priority: 10,
         pool: Some("work".into()),
+        session: Some("office".into()),
+        labels: BTreeMap::from([
+            (
+                "operation".into(),
+                Share {
+                    reserve: 2,
+                    keep_free: 1,
+                    unknown: vec![],
+                },
+            ),
+            (
+                "construction".into(),
+                Share {
+                    reserve: 0,
+                    keep_free: 0,
+                    unknown: vec!["pool".into()],
+                },
+            ),
+        ]),
     });
     round_trips(Stream::default());
     let pool = Pool {
         strategy: Strategy::FillFirst,
+        threshold: None,
         accounts: vec![
             Account {
                 name: "work-1".into(),
                 program: "agent".into(),
                 env: BTreeMap::from([("AGENT_HOME".into(), "~/.agent-work-1".into())]),
                 agents: Some(4),
+                usage: None,
             },
             Account {
                 name: "work-2".into(),
                 program: "agent".into(),
                 env: BTreeMap::new(),
                 agents: None,
+                usage: None,
             },
         ],
     };
@@ -1069,6 +1446,97 @@ fn streams_and_pools_as_the_configuration_names_them() {
             from,
         });
     }
+}
+
+/// The seam-contracts spec's scenario "A pool and a reading" (184, 185).
+#[test]
+fn a_pool_and_a_reading() {
+    let pool = Pool {
+        strategy: Strategy::MostLeft,
+        threshold: Some(85),
+        accounts: vec![Account {
+            name: "work-1".into(),
+            program: "agent".into(),
+            env: BTreeMap::new(),
+            agents: None,
+            usage: Some("~/.local/state/usage/work-1.json".into()),
+        }],
+    };
+    round_trips(pool.clone());
+    let json = serde_json::to_value(&pool).unwrap();
+    assert_eq!(json["strategy"], serde_json::json!("most-left"));
+    assert_eq!(json["threshold"], serde_json::json!(85));
+    assert_eq!(
+        json["accounts"][0]["usage"],
+        serde_json::json!("~/.local/state/usage/work-1.json")
+    );
+    assert_eq!(Strategy::MostLeft.name(), "most-left");
+    let usage = Usage {
+        read_at: 1_000,
+        windows: vec![
+            Window {
+                name: "5-hour".into(),
+                used: 4_200,
+                resets_at: Some(12_000),
+            },
+            Window {
+                name: "7-day".into(),
+                used: 7_150,
+                resets_at: None,
+            },
+        ],
+    };
+    round_trips(usage.clone());
+    let json = serde_json::to_value(&usage).unwrap();
+    assert!(json["windows"][1].get("resets_at").is_none());
+    let unstated = serde_json::to_value(Pool {
+        threshold: None,
+        accounts: vec![Account {
+            usage: None,
+            ..pool.accounts[0].clone()
+        }],
+        ..pool
+    })
+    .unwrap();
+    assert!(unstated.get("threshold").is_none());
+    assert!(unstated["accounts"][0].get("usage").is_none());
+}
+
+/// The seam-contracts spec's scenario "A move past a threshold" (147,
+/// 185).
+#[test]
+fn a_move_past_a_threshold() {
+    let moved = AccountMove {
+        on: MoveOn::Intent {
+            program: Some("agent".into()),
+        },
+        from: "work-1".into(),
+        to: "work-2".into(),
+        why: MoveWhy::Threshold,
+        at: 50_400,
+        carried: None,
+        window: Some("5-hour".into()),
+        until: Some(61_200),
+    };
+    round_trips(moved.clone());
+    let json = serde_json::to_value(&moved).unwrap();
+    assert_eq!(json["why"], serde_json::json!("threshold"));
+    assert_eq!(json["window"], serde_json::json!("5-hour"));
+    assert_eq!(json["until"], serde_json::json!(61_200));
+    assert_eq!(MoveWhy::Threshold.name(), "threshold");
+    let before: AccountMove = serde_json::from_value(serde_json::json!({
+        "on": "intent",
+        "program": "agent",
+        "from": "work-1",
+        "to": "work-2",
+        "why": "spent",
+        "at": 47_400,
+    }))
+    .expect("read");
+    assert_eq!(before.window, None);
+    assert_eq!(before.until, None);
+    let written = serde_json::to_value(&before).unwrap();
+    assert!(written.get("window").is_none() && written.get("until").is_none());
 }
 
 #[test]
@@ -1130,23 +1598,9 @@ fn the_hosts_own_documents_and_their_keys() {
             recorded_at: 47_400,
         }),
     });
-    let affinity = Affinity {
-        stream: "work".into(),
-        pool: "work".into(),
-        account: "work-2".into(),
-        moves: vec![AccountMove {
-            on: MoveOn::Intent,
-            from: "work-1".into(),
-            to: "work-2".into(),
-            why: MoveWhy::Spent,
-            at: 47_400,
-        }],
-        gone: Some(50_000),
-    };
-    assert!(affinity.left("work-1") && !affinity.left("work-2"));
     round_trips(HostVersioned {
         version: 4,
-        document: HostDocument::Intent(affinity),
+        document: HostDocument::Intent(two_programs()),
     });
     assert_eq!(
         HostKey::Account {
@@ -1156,6 +1610,90 @@ fn the_hosts_own_documents_and_their_keys() {
         .to_string(),
         "account work/work-1"
     );
+}
+
+/// An affinity holding an account for `agent` and one for `other`, and
+/// an intent's move for `agent` (147).
+fn two_programs() -> Affinity {
+    Affinity {
+        stream: "work".into(),
+        accounts: BTreeMap::from([
+            (
+                "agent".into(),
+                AffinityAccount {
+                    pool: "work".into(),
+                    account: "agent-2".into(),
+                },
+            ),
+            (
+                "other".into(),
+                AffinityAccount {
+                    pool: "work".into(),
+                    account: "other-1".into(),
+                },
+            ),
+        ]),
+        moves: vec![AccountMove {
+            on: MoveOn::Intent {
+                program: Some("agent".into()),
+            },
+            from: "agent-1".into(),
+            to: "agent-2".into(),
+            why: MoveWhy::Spent,
+            at: 47_400,
+            carried: None,
+            window: None,
+            until: None,
+        }],
+        gone: Some(50_000),
+        pool: None,
+        account: None,
+    }
+}
+
+#[test]
+fn an_affinity_of_two_programs() {
+    let affinity = two_programs();
+    round_trips(affinity.clone());
+    let json = serde_json::to_value(&affinity).unwrap();
+    assert_eq!(json["moves"][0]["program"], serde_json::json!("agent"));
+    assert!(json.get("pool").is_none() && json.get("account").is_none());
+    assert!(affinity.left("agent", "agent-1"));
+    assert!(!affinity.left("other", "agent-1"));
+    assert!(!affinity.left("agent", "agent-2"));
+}
+
+#[test]
+fn an_affinity_written_before() {
+    let json = serde_json::json!({
+        "stream": "work",
+        "pool": "work",
+        "account": "work-2",
+        "moves": [{
+            "on": "intent",
+            "from": "work-1",
+            "to": "work-2",
+            "why": "spent",
+            "at": 47_400,
+        }],
+        "gone": null,
+    });
+    let before: Affinity = serde_json::from_value(json).expect("read");
+    assert_eq!(before.pool.as_deref(), Some("work"));
+    assert_eq!(before.account.as_deref(), Some("work-2"));
+    assert!(before.accounts.is_empty());
+    assert_eq!(before.moves[0].on, MoveOn::Intent { program: None });
+    assert!(!before.left("agent", "work-1"));
+    round_trips(before.clone());
+    let taken = Affinity {
+        pool: None,
+        account: None,
+        ..before
+    };
+    let written = serde_json::to_value(&taken).unwrap();
+    assert!(written.get("pool").is_none() && written.get("account").is_none());
+    assert!(written["moves"][0].get("program").is_none());
+    assert_eq!(written["accounts"], serde_json::json!({}));
 }
 
 #[test]
@@ -1433,6 +1971,14 @@ fn a_submission_and_its_outcomes() {
     round_trips(SubmissionRead::CouldNotRead {
         reason: "down".into(),
     });
+    round_trips(ReadAcross::from(SubmissionRead::None));
+    round_trips(ReadAcross {
+        read: SubmissionRead::None,
+        passed_over: vec![PassedOver {
+            branch: "bolt/x".into(),
+            words: "bolt/x's policy cannot be read".into(),
+        }],
+    });
     for verdict in [
         Verdict::Landed {
             commit: Revision::new("c9"),
@@ -1502,8 +2048,21 @@ fn the_inbox_and_its_outcomes() {
     for outcome in &outcomes {
         round_trips(outcome.clone());
     }
-    round_trips(Inbox::Outcomes { outcomes });
-    round_trips(Inbox::Outcomes { outcomes: vec![] });
+    round_trips(Inbox::Outcomes {
+        outcomes: outcomes.clone(),
+        passed_over: vec![],
+    });
+    round_trips(Inbox::Outcomes {
+        outcomes,
+        passed_over: vec![PassedOver {
+            branch: "bolt/x".into(),
+            words: "bolt/x's records cannot be read".into(),
+        }],
+    });
+    round_trips(Inbox::Outcomes {
+        outcomes: vec![],
+        passed_over: vec![],
+    });
     round_trips(Inbox::CouldNotRead {
         reason: "down".into(),
     });
@@ -1526,6 +2085,42 @@ fn where_the_base_lives() {
     round_trips(BaseRevision::Refused {
         reason: "fetch failed".into(),
     });
+    round_trips(BaseRevision::Unlanded);
+    for branch in [
+        OriginBranch::At {
+            revision: Revision::new("c2"),
+        },
+        OriginBranch::NoOrigin,
+        OriginBranch::Lacks,
+        OriginBranch::Refused {
+            reason: "origin is out of reach".into(),
+        },
+    ] {
+        round_trips(branch);
+    }
+    for from in [
+        BaseFrom::MergeQueue,
+        BaseFrom::Origin,
+        BaseFrom::NoOrigin,
+        BaseFrom::OriginLacks,
+    ] {
+        round_trips(from);
+    }
+}
+
+#[test]
+fn a_place_held_before_it_said_where_its_base_was_read() {
+    // A place launched before flume said where it read the base reads
+    // with none, and writes none back (56, C.1).
+    let mut json = serde_json::to_value(held()).expect("held state as JSON");
+    json["place"]
+        .as_object_mut()
+        .expect("the place")
+        .remove("base_from");
+    let before: HeldState = serde_json::from_value(json).expect("read back");
+    assert_eq!(before.place.base_from, None);
+    let written = serde_json::to_value(&before).expect("written");
+    assert!(written["place"].get("base_from").is_none(), "{written}");
 }
 
 #[test]
@@ -1729,8 +2324,18 @@ fn the_agent_seams_answers() {
     assert_eq!(
         unsettled().words(),
         "without AGENT_HOME, with another FLUME_STAGE, under another program, \
+         in another conversation than the one its start resumes, \
          in the mode `ask-each`, where its start asked `careful`"
     );
+    round_trips(Carry::Yes {
+        session: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+    });
+    round_trips(Carry::No {
+        why: "the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach \
+              its conversation"
+            .into(),
+    });
+    round_trips(Carry::NotOffered);
     round_trips(Offered::Offered);
     round_trips(Offered::NotOffered);
     round_trips(Guarded::Refused {
@@ -1795,8 +2400,12 @@ fn the_terminal_seams_answers() {
         place: Some("tab w1:t2".into()),
         agent: Some("pane w1:p3".into()),
         base: Some("workspace w1".into()),
+        bases: vec!["workspace w1".into(), "workspace w4".into()],
     });
     round_trips(ShownAt::default());
+    let before: ShownAt =
+        serde_json::from_str(r#"{"place":null,"agent":null,"base":"workspace w1"}"#).unwrap();
+    assert!(before.bases.is_empty(), "no workspaces where none written");
     round_trips(Shown::Shown);
     round_trips(Shown::ShowsNone);
     round_trips(Shown::Failed {

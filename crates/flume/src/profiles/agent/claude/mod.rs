@@ -5,24 +5,27 @@
 //! that wrote it by its absolute path; every reading reads the start's
 //! record in the place's own folder, which the plugin's hooks write
 //! (`flume hook <event>`, [`hook`]), and the session's transcript the
-//! started ack recorded (128). Every fact of Claude Code read here is
-//! checked against the release `devenv.nix` pins, 2.1.296: its hook
-//! events and their inputs, its transcript's records, its folder-trust
-//! dialog and the keys that answer it, the words of its usage limits, and
-//! its permission modes ([`mode`]).
+//! started ack recorded (128), past the length it held at that ack. Every
+//! fact of Claude Code read here is checked against the release
+//! `devenv.nix` pins, 2.1.296: its hook events and their inputs, its
+//! transcript's records, its folder-trust dialog and the keys that answer
+//! it, the words of its usage limits, its permission modes ([`mode`]),
+//! and where it keeps a session and how it resumes one ([`carry`]).
 
+pub mod carry;
 pub mod guard;
 pub mod hook;
 pub mod limit;
 pub mod mode;
 pub mod record;
+pub mod status_line;
 pub mod transcript;
 pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
-    Agent, AgentCommand, FolderTrust, Guarded, Identity, ModeEntry, Offered, PlaceRef, Reading,
-    Received, Secret, Settings, Spent, Unsettled,
+    Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, ModeEntry, Offered, PlaceRef,
+    Reading, Received, Secret, Settings, Spent, Unsettled,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -37,6 +40,11 @@ pub const NAME: &str = "claude";
 /// The program's kind, by which a terminal that starts a known agent
 /// program names it (C.4).
 pub const KIND: &str = "claude";
+
+/// The option that names the file of the standing prompt, which 2.1.296
+/// reads as it reads `--append-system-prompt`'s text, though its help
+/// does not list it (148, C.4).
+pub const STANDING_PROMPT_FLAG: &str = "--append-system-prompt-file";
 
 /// The version of flume, which the plugin it writes carries, so a hook
 /// run by a binary of another version is reported (135).
@@ -68,8 +76,9 @@ pub const PLACE: &str = "FLUME_PLACE";
 pub const STAGE: &str = "FLUME_STAGE";
 
 /// The plugin's files, as `plugins/claude` holds them, by their path in
-/// the plugin.
-pub const PLUGIN: [(&str, &str); 4] = [
+/// the plugin: its manifests, its hooks, the module that pins the place's
+/// line under the prompt (design 4) and the /launch command.
+pub const PLUGIN: [(&str, &str); 5] = [
     (
         ".claude-plugin/plugin.json",
         include_str!("../../../../../../plugins/claude/.claude-plugin/plugin.json"),
@@ -77,6 +86,10 @@ pub const PLUGIN: [(&str, &str); 4] = [
     (
         "hooks/hooks.json",
         include_str!("../../../../../../plugins/claude/hooks/hooks.json"),
+    ),
+    (
+        "hooks/line.ts",
+        include_str!("../../../../../../plugins/claude/hooks/line.ts"),
     ),
     (
         ".mcp.json",
@@ -89,13 +102,19 @@ pub const PLUGIN: [(&str, &str); 4] = [
 ];
 
 /// A file of the plugin as the binary writes it for the agents it
-/// starts: each command naming `flume` names the binary by its absolute
-/// path instead (C.4). The manifest carries the binary's version as
-/// `plugins/claude` holds it, the workspace's (135).
+/// starts: each command naming `flume`, a hook's or the module's, names
+/// the binary by its absolute path instead (C.4; design 4). The manifest
+/// carries the binary's version as `plugins/claude` holds it, the
+/// workspace's (135).
 pub fn written(text: &str, binary: &Path) -> String {
     let path = serde_json::to_string(&binary.to_string_lossy()).expect("a path as JSON");
     text.replace("\"command\": \"flume\"", &format!("\"command\": {path}"))
+        .replace(MODULE_FLUME, &format!("const FLUME = {path};"))
 }
+
+/// How the module names the binary in `plugins/claude`, as a JavaScript
+/// string, which a JSON string is too.
+const MODULE_FLUME: &str = "const FLUME = \"flume\";";
 
 /// The hex digest of `text`'s SHA-256.
 pub fn digest(text: &str) -> String {
@@ -239,9 +258,12 @@ impl Claude {
 }
 
 impl Agent for Claude {
-    /// `claude --plugin-dir <plugin> [--model <m>] [--permission-mode
-    /// <mode>] [--append-system-prompt <instructions>]` in the place, the
-    /// mode passed where one is given and none where it is none (162),
+    /// `claude --plugin-dir <plugin> [--resume <session>] [--model <m>]
+    /// [--permission-mode <mode>] [--append-system-prompt-file <file>]`
+    /// in the place, the session resumed where the start carries one (179),
+    /// the mode passed where one is given and none where it is none (162),
+    /// the instructions in the start's own file beside its record, since
+    /// herdr 0.9.5 types no argument holding a newline (148, C.5),
     /// the program the settings name by name or path, or the program it
     /// runs where it is a nix wrapper, with the variables the wrapper
     /// sets ([`wrapper`]), its account's
@@ -252,8 +274,10 @@ impl Agent for Claude {
     /// command.
     fn command(
         &self,
+        folder: &str,
         settings: &Settings,
         mode: Option<&str>,
+        resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
         identity: &Identity,
@@ -265,6 +289,9 @@ impl Agent for Claude {
             "--plugin-dir".to_string(),
             plugin.to_string_lossy().into_owned(),
         ];
+        if let Some(session) = resume {
+            args.extend([carry::FLAG.to_string(), session.to_string()]);
+        }
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
         }
@@ -272,7 +299,15 @@ impl Agent for Claude {
             args.extend([mode::FLAG.to_string(), mode.to_string()]);
         }
         if let Some(instructions) = &settings.instructions {
-            args.extend(["--append-system-prompt".to_string(), instructions.clone()]);
+            // A file that cannot be written is named all the same, as the
+            // plugin is: Claude Code's words that it is missing are the
+            // screen of the start that never came up (35).
+            let record = Record::at(folder, identity);
+            let _ = record.set_standing_prompt(instructions);
+            args.extend([
+                STANDING_PROMPT_FLAG.to_string(),
+                record.standing_prompt().to_string_lossy().into_owned(),
+            ]);
         }
         let mut env: BTreeMap<String, String> = env.clone();
         let mut program = settings.program.clone().unwrap_or_else(|| NAME.into());
@@ -353,7 +388,7 @@ impl Agent for Claude {
             };
         }
         let path = started.transcript_path.clone();
-        match transcript::Transcript::read(Path::new(&path)) {
+        match transcript::Transcript::read_from(Path::new(&path), started.from) {
             transcript::Read::Read(transcript) if transcript.holds_prompt(text) => {
                 Received::Received { record: path }
             }
@@ -365,7 +400,8 @@ impl Agent for Claude {
     }
 
     /// The mark the plugin leaves on a question, a plan or a permission
-    /// prompt for a person, until the transcript holds its answer (90).
+    /// prompt for a person, until the start's own part of the transcript
+    /// holds its answer (90).
     fn asking(&self, folder: &str, agent: &Identity) -> Reading {
         let record = Record::at(folder, agent);
         if !record.readable() {
@@ -376,7 +412,10 @@ impl Agent for Claude {
         };
         let answered = record.started().is_some_and(|started| {
             matches!(
-                transcript::Transcript::read(Path::new(&started.transcript_path)),
+                transcript::Transcript::read_from(
+                    Path::new(&started.transcript_path),
+                    started.from
+                ),
                 transcript::Read::Read(transcript) if transcript.answered(&mark)
             )
         });
@@ -387,22 +426,19 @@ impl Agent for Claude {
         }
     }
 
-    /// Background shells and tasks the transcript shows started and not
-    /// finished, the transcript the started ack named or, for an agent
-    /// begun otherwise than its start recorded, the one its word named; a
-    /// transcript not yet written shows none, since 2.1.296 writes it at
-    /// the session's first message and own work starts only in a turn
-    /// (91, 161).
+    /// Background shells and tasks the start's own part of the transcript
+    /// shows started and not finished, the transcript the started ack named
+    /// or, for an agent begun otherwise than its start recorded, the one
+    /// its word named, each past the length it held then; a transcript not
+    /// yet written shows none, since 2.1.296 writes it at the session's
+    /// first message and own work starts only in a turn (31, 91, 161, 179).
     fn own_work(&self, folder: &str, agent: &Identity) -> Reading {
         let record = Record::at(folder, agent);
-        let Some(transcript) = record
-            .readable()
-            .then(|| record.transcript_path())
-            .flatten()
+        let Some((transcript, from)) = record.readable().then(|| record.transcript()).flatten()
         else {
             return Reading::Unknown;
         };
-        match transcript::Transcript::read(Path::new(&transcript)) {
+        match transcript::Transcript::read_from(Path::new(&transcript), from) {
             transcript::Read::Read(transcript) => {
                 if transcript.background_running().is_empty() {
                     Reading::No
@@ -427,8 +463,8 @@ impl Agent for Claude {
         }
     }
 
-    /// The reason the StopFailure hook recorded, else the transcript's
-    /// last message (43).
+    /// The reason the StopFailure hook recorded, else the last message of
+    /// the start's own part of the transcript (43, 179).
     fn last_words(&self, folder: &str, agent: &Identity) -> Option<String> {
         let record = Record::at(folder, agent);
         if !record.readable() {
@@ -438,7 +474,7 @@ impl Agent for Claude {
             return Some(words);
         }
         let started = record.started()?;
-        match transcript::Transcript::read(Path::new(&started.transcript_path)) {
+        match transcript::Transcript::read_from(Path::new(&started.transcript_path), started.from) {
             transcript::Read::Read(transcript) => transcript.last_message(),
             _ => None,
         }
@@ -460,6 +496,17 @@ impl Agent for Claude {
             },
             _ => Spent::No,
         }
+    }
+
+    /// Yes with the stopped start's session where the chosen account's
+    /// configuration home reaches its transcript, the very file, and no
+    /// otherwise, naming `CLAUDE_CONFIG_DIR` and no path; read only, the
+    /// host user's home its `HOME` ([`carry`]; 179, C.4).
+    fn carry(&self, folder: &str, earlier: &Identity, env: &BTreeMap<String, String>) -> Carry {
+        let login = std::env::var_os("HOME")
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from);
+        carry::carry(&Record::at(folder, earlier), env, login.as_deref())
     }
 
     /// The credentials 2.1.296 keeps from every process it starts, its

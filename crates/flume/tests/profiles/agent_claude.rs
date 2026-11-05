@@ -1,21 +1,26 @@
 //! The agent profile for Claude Code (C.4; design 14; record 0016): the
 //! agent seam's scenarios against it over fixture transcripts and hook
 //! records of Claude Code 2.1.296, the release `devenv.nix` pins; the
-//! command for a code stage and for a stage in a mode; the map of
+//! command for a code stage, its instructions in a file of the start's
+//! own, and for a stage in a mode; the map of
 //! flume's modes and the release's own, and the mode read back; the
 //! plugin an agent loads, written once per version; a prompt queued while
 //! the agent worked; a slash command's
-//! prompt; and the folder-trust dialog the command names, against that
-//! release's screen. The hooks themselves are driven through the built
-//! binary in `hooks_claude.rs`.
+//! prompt; the folder-trust dialog the command names, against that
+//! release's screen; the carry of a stopped start's conversation over
+//! scratch configuration homes, one whose `projects` is a link to
+//! another's and one of its own, and the command that resumes it; and
+//! each reading of a carried start past the length its started ack
+//! recorded. The hooks themselves are driven through the built binary in
+//! `hooks_claude.rs`.
 
 use crate::common::*;
-use flume::profiles::agent::claude::mode;
 use flume::profiles::agent::claude::record::{self, Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
-    as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
-    TRUST_QUESTION, VERSION,
+    as_received, digest, written, Claude, NAME, PLUGIN, STANDING_PROMPT_FLAG, TRUST_CONFIRM,
+    TRUST_FOCUS, TRUST_NEXT, TRUST_QUESTION, VERSION,
 };
+use flume::profiles::agent::claude::{carry, mode, transcript};
 use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::agent::{self, AgentHarness, Modes};
@@ -30,6 +35,14 @@ pub fn fixture(name: &str) -> String {
         .join(name);
     std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
+
+/// The session every fixture's transcript names.
+const SESSION: &str = "4e3c05c8-51c4-4449-8577-4f7038e394bf";
+
+/// The folder under a home's `projects` the harness's transcripts are in,
+/// one as 2.1.296 names a place's: the profile reads the names a started
+/// ack gives, and computes none.
+const PROJECT: &str = "-repository-places-fix--one";
 
 /// The plugin as the repository holds it.
 fn plugin_source() -> PathBuf {
@@ -65,12 +78,104 @@ impl Harness {
         Record::at(&self.folder(), identity)
     }
 
+    /// The start's transcript, in the configuration home of `work-1`, the
+    /// account every start of the harness runs under.
     fn transcript(&self, identity: &Identity) -> PathBuf {
-        self.scratch.path(&format!(
-            "sessions/{}-{}.jsonl",
+        self.home("work-1").join(format!(
+            "projects/{PROJECT}/{}-{}.jsonl",
             identity.stage, identity.start
         ))
     }
+
+    /// The scratch configuration home of the account `name`.
+    fn home(&self, name: &str) -> PathBuf {
+        self.scratch.path(&format!("homes/{name}"))
+    }
+
+    /// The configuration home of `name`, its `projects` a symbolic link to
+    /// `work-1`'s, as a host shares one between its accounts.
+    fn sharing(&self, name: &str) -> PathBuf {
+        let home = self.home(name);
+        if !home.join("projects").exists() {
+            std::fs::create_dir_all(&home).expect("the home");
+            std::os::unix::fs::symlink(self.home("work-1").join("projects"), home.join("projects"))
+                .expect("the link");
+        }
+        home
+    }
+
+    /// The configuration home of `name`, its `projects` a folder of its own
+    /// holding a copy of `earlier`'s transcript under the same names.
+    fn apart(&self, name: &str, earlier: &Identity) -> PathBuf {
+        let home = self.home(name);
+        let copy = home.join(format!(
+            "projects/{PROJECT}/{}",
+            self.transcript(earlier)
+                .file_name()
+                .expect("a file")
+                .to_string_lossy()
+        ));
+        std::fs::create_dir_all(copy.parent().expect("a folder")).expect("the home");
+        std::fs::copy(self.transcript(earlier), &copy).expect("the copy");
+        home
+    }
+
+    /// The carried start after `earlier`, its started ack naming
+    /// `earlier`'s session and transcript, as `--resume` goes on in them,
+    /// and the transcript's length now.
+    fn carried(&self, earlier: &Identity) -> Identity {
+        let next = Identity {
+            start: earlier.start + 1,
+            ..earlier.clone()
+        };
+        let path = self.transcript(earlier);
+        Record::at(&self.folder(), &next)
+            .ack_started(&Started {
+                session_id: SESSION.into(),
+                transcript_path: path.to_string_lossy().into(),
+                source: "resume".into(),
+                plugin_version: VERSION.into(),
+                from: transcript::length(&path),
+            })
+            .expect("the started ack");
+        next
+    }
+}
+
+/// The environment of an account whose configuration home is `home`.
+fn at_home(home: &Path) -> BTreeMap<String, String> {
+    BTreeMap::from([(
+        carry::CONFIG_DIR.to_string(),
+        home.to_string_lossy().into_owned(),
+    )])
+}
+
+/// Every entry under `dir`, by its path: a file's bytes, a link's target,
+/// and a folder as itself.
+fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut found = vec![];
+    let mut todo = vec![dir.to_path_buf()];
+    while let Some(dir) = todo.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let meta = std::fs::symlink_metadata(&path).expect("the entry");
+            let held = if meta.is_symlink() {
+                std::fs::read_link(&path)
+                    .expect("the link")
+                    .to_string_lossy()
+                    .into_owned()
+                    .into_bytes()
+            } else if meta.is_dir() {
+                todo.push(path.clone());
+                b"folder".to_vec()
+            } else {
+                std::fs::read(&path).expect("the file")
+            };
+            found.push((path, held));
+        }
+    }
+    found.sort();
+    found
 }
 
 impl AgentHarness for Harness {
@@ -108,10 +213,11 @@ impl AgentHarness for Harness {
         std::fs::write(&transcript, fixture("session.jsonl")).expect("the transcript");
         Record::at(folder, identity)
             .ack_started(&Started {
-                session_id: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+                session_id: SESSION.into(),
                 transcript_path: transcript.to_string_lossy().into(),
                 source: "startup".into(),
                 plugin_version: VERSION.into(),
+                from: 0,
             })
             .expect("the started ack");
     }
@@ -196,8 +302,9 @@ impl AgentHarness for Harness {
                     missing: vec![variable.to_string()],
                     ..Unsettled::default()
                 },
-                session_id: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+                session_id: SESSION.into(),
                 transcript_path: self.transcript(identity).to_string_lossy().into(),
+                from: 0,
             })
             .expect("the word");
     }
@@ -236,10 +343,22 @@ impl AgentHarness for Harness {
                     }),
                     ..Unsettled::default()
                 },
-                session_id: "4e3c05c8-51c4-4449-8577-4f7038e394bf".into(),
+                session_id: SESSION.into(),
                 transcript_path: self.transcript(identity).to_string_lossy().into(),
+                from: 0,
             })
             .expect("the word");
+    }
+
+    /// `work-2`, whose `projects` is a link to `work-1`'s, where `earlier`
+    /// ran, and `work-3`, whose `projects` is a folder of its own holding a
+    /// copy of its transcript (179, C.4).
+    fn carry_accounts(&self, earlier: &Identity) -> Option<agent::CarryAccounts> {
+        Some(agent::CarryAccounts {
+            reaches: at_home(&self.sharing("work-2")),
+            session: SESSION.into(),
+            reaches_none: at_home(&self.apart("work-3", earlier)),
+        })
     }
 }
 
@@ -260,13 +379,16 @@ fn identity(stage: &str) -> Identity {
 #[test]
 fn the_command_for_a_code_stage() {
     // The command for a code stage: `claude` with the plugin, the model
-    // and the instructions, the four FLUME_* words over its account's
+    // and the instructions, in a file of the start's own beside its record
+    // holding them as given, newlines and all, which no argument may hold
+    // under herdr (148, C.5), the four FLUME_* words over its account's
     // environment, no `--permission-mode` where the settings give no mode,
     // and nothing of the caller's session (29, 32, 88, 144, 162, C.4).
     let harness = Harness::new();
+    let instructions = "Keep each commit small.\n\n- **Before you finish.** List each decision.\n";
     let settings = Settings {
         model: Some("opus".into()),
-        instructions: Some("Keep each commit small.".into()),
+        instructions: Some(instructions.into()),
         ..Settings::default()
     };
     // A `PATH` holding no `claude`, so no wrapper of the host's is read
@@ -277,7 +399,9 @@ fn the_command_for_a_code_stage() {
     ]);
     let who = identity("code");
     let command = harness.seam.command(
+        &harness.folder(),
         &settings,
+        None,
         None,
         &env,
         &harness.place(),
@@ -287,6 +411,7 @@ fn the_command_for_a_code_stage() {
     );
     assert_eq!(command.program, NAME);
     let plugin = harness.seam.plugin_dir().to_string_lossy().into_owned();
+    let file = harness.record(&who).standing_prompt();
     assert_eq!(
         command.args,
         vec![
@@ -294,9 +419,22 @@ fn the_command_for_a_code_stage() {
             plugin,
             "--model".into(),
             "opus".into(),
-            "--append-system-prompt".into(),
-            "Keep each commit small.".into(),
+            STANDING_PROMPT_FLAG.into(),
+            file.to_string_lossy().into_owned(),
         ]
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).expect("the standing prompt's file"),
+        instructions,
+        "the instructions as the file holds them"
+    );
+    assert!(
+        command
+            .args
+            .iter()
+            .all(|arg| !arg.chars().any(char::is_control)),
+        "an argument holds a control character: {:?}",
+        command.args
     );
     assert_eq!(
         command.env,
@@ -325,7 +463,9 @@ fn the_command_for_a_code_stage() {
         ..Settings::default()
     };
     let command = harness.seam.command(
+        &harness.folder(),
         &by_path,
+        None,
         None,
         &env,
         &harness.place(),
@@ -348,8 +488,10 @@ fn the_command_passes_the_mode_it_is_given() {
     };
     let command = |mode: Option<&str>| {
         harness.seam.command(
+            &harness.folder(),
             &settings,
             mode,
+            None,
             &BTreeMap::new(),
             &harness.place(),
             &identity("code"),
@@ -388,8 +530,10 @@ fn the_command_for_a_stage_in_edits() {
     let value = harness.seam.mode(&entry).expect("edits mapped");
     // A `PATH` holding no `claude`, so the program runs by its name.
     let command = harness.seam.command(
+        &harness.folder(),
         &settings,
         Some(&value),
+        None,
         &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
         &harness.place(),
         &identity("code"),
@@ -472,7 +616,9 @@ fn the_plugin_an_agent_loads() {
     let place = harness.place();
     let who = identity("code");
     let first = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
+        None,
         None,
         &BTreeMap::new(),
         &place,
@@ -487,7 +633,9 @@ fn the_plugin_an_agent_loads() {
         .expect("the plugin written");
     std::thread::sleep(std::time::Duration::from_millis(20));
     let second = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
+        None,
         None,
         &BTreeMap::new(),
         &place,
@@ -521,6 +669,13 @@ fn the_plugin_an_agent_loads() {
         "{hooks}"
     );
     assert!(!hooks.contains("\"command\": \"flume\""), "{hooks}");
+    // The module runs the same binary by its path (design 4).
+    let module = std::fs::read_to_string(dir.join("hooks/line.ts")).expect("the module");
+    assert!(
+        module.contains("const FLUME = \"/opt/flume/bin/flume\";"),
+        "{module}"
+    );
+    assert!(!module.contains("const FLUME = \"flume\";"), "{module}");
     // The manifest carries the binary's version, a release's where the
     // repository's says the workspace's, which the started ack reports
     // back (135).
@@ -530,7 +685,9 @@ fn the_plugin_an_agent_loads() {
     assert_eq!(manifest["version"], flume::VERSION, "{manifest}");
 
     // Every file of the plugin is one the binary writes: only the
-    // project's own files are left out.
+    // project's own files are left out, its tasks, its tests, the engine
+    // types it is typed against and its TypeScript configuration, and the
+    // types a session of Claude Code lays beside a plugin it loads.
     let mut files = vec![];
     let mut todo = vec![plugin_source()];
     while let Some(dir) = todo.pop() {
@@ -544,7 +701,15 @@ fn the_plugin_an_agent_loads() {
                 .expect("under the plugin")
                 .to_string_lossy()
                 .into_owned();
-            if relative == "moon.yml" || relative == "tests" {
+            if [
+                "moon.yml",
+                "tests",
+                "engine-types",
+                "tsconfig.json",
+                ".claude-plugin/types",
+            ]
+            .contains(&relative.as_str())
+            {
                 continue;
             }
             if path.is_dir() {
@@ -700,7 +865,9 @@ fn the_trust_screen() {
     // trusting choice before it confirms (34; record 0018).
     let harness = Harness::new();
     let command = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
+        None,
         None,
         &BTreeMap::new(),
         &harness.place(),
@@ -740,4 +907,343 @@ fn the_trust_screen() {
         );
         assert!(!screen.contains("Bypass Permissions"));
     }
+}
+
+#[test]
+fn the_command_of_a_carried_start() {
+    // The command for a start resuming the session `s-1` holds `--resume
+    // s-1` beside `--plugin-dir`, and one resuming none holds no
+    // `--resume` (88, 179).
+    let harness = Harness::new();
+    let command = |resume: Option<&str>| {
+        harness.seam.command(
+            &harness.folder(),
+            &Settings {
+                model: Some("opus".into()),
+                ..Settings::default()
+            },
+            None,
+            resume,
+            &BTreeMap::new(),
+            &harness.place(),
+            &Identity {
+                start: 2,
+                ..identity("code")
+            },
+            &Secret("s".into()),
+            "x",
+        )
+    };
+    let plugin = harness.seam.plugin_dir().to_string_lossy().into_owned();
+    assert_eq!(
+        command(Some("s-1")).args,
+        [
+            "--plugin-dir",
+            &plugin,
+            "--resume",
+            "s-1",
+            "--model",
+            "opus"
+        ]
+    );
+    assert_eq!(
+        command(None).args,
+        ["--plugin-dir", &plugin, "--model", "opus"]
+    );
+}
+
+/// The words of a carry's no, which name `CLAUDE_CONFIG_DIR` and no path
+/// of the harness's (core.30).
+fn no_words(harness: &Harness, answer: Carry) -> String {
+    let Carry::No { why } = answer else {
+        panic!("carry answered {answer:?}");
+    };
+    assert!(why.contains("`CLAUDE_CONFIG_DIR`"), "{why}");
+    let scratch = harness.scratch.path("");
+    assert!(
+        !why.contains('/') && !why.contains(scratch.to_string_lossy().as_ref()),
+        "a path in {why}"
+    );
+    why
+}
+
+#[test]
+fn a_conversation_carried_to_a_home_whose_projects_links_the_firsts() {
+    // The stopped start's transcript is in work-1's home and work-2's
+    // `projects` is a symbolic link to work-1's: carry answers yes with
+    // the ack's session, and the next start's command resumes it. So does
+    // work-1's own home, a pool of one account across its reset, and the
+    // host user's `~/.claude` where the account names no
+    // `CLAUDE_CONFIG_DIR`. Nothing in either home is written (179, C.4;
+    // core.32).
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    harness.hit_usage_limit(&who);
+    let second = harness.sharing("work-2");
+    let before = (tree(&harness.home("work-1")), tree(&second));
+    let yes = Carry::Yes {
+        session: SESSION.into(),
+    };
+    assert_eq!(harness.seam.carry(&folder, &who, &at_home(&second)), yes);
+    assert_eq!(
+        harness
+            .seam
+            .carry(&folder, &who, &at_home(&harness.home("work-1"))),
+        yes
+    );
+    let command = harness.seam.command(
+        &harness.folder(),
+        &Settings::default(),
+        None,
+        Some(SESSION),
+        &at_home(&second),
+        &harness.place(),
+        &Identity {
+            start: 2,
+            ..who.clone()
+        },
+        &Secret("s".into()),
+        "carry on from where you stopped",
+    );
+    assert_eq!(command.args[2..], ["--resume", SESSION]);
+    assert_eq!(
+        (tree(&harness.home("work-1")), tree(&second)),
+        before,
+        "a home was written"
+    );
+
+    // No CLAUDE_CONFIG_DIR: the home is `.claude` under the host user's
+    // own, here a link to work-1's; an empty value is none.
+    let login = harness.scratch.path("login");
+    std::fs::create_dir_all(&login).expect("the login home");
+    std::os::unix::fs::symlink(harness.home("work-1"), login.join(".claude")).expect("the link");
+    let record = Record::at(&folder, &who);
+    assert_eq!(carry::carry(&record, &BTreeMap::new(), Some(&login)), yes);
+    assert_eq!(
+        carry::carry(
+            &record,
+            &BTreeMap::from([(carry::CONFIG_DIR.to_string(), String::new())]),
+            Some(&login)
+        ),
+        yes
+    );
+    no_words(
+        &harness,
+        carry::carry(
+            &record,
+            &BTreeMap::new(),
+            Some(&harness.scratch.path("elsewhere")),
+        ),
+    );
+    no_words(&harness, carry::carry(&record, &BTreeMap::new(), None));
+}
+
+#[test]
+fn two_homes_of_their_own() {
+    // work-2's `projects` is a folder of its own holding no such
+    // transcript, then a copy of it under the same names, which is another
+    // file: carry answers no each time, naming `CLAUDE_CONFIG_DIR` and no
+    // path (179; core.30, core.32).
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    harness.hit_usage_limit(&who);
+    let own = harness.home("work-2");
+    std::fs::create_dir_all(own.join("projects").join(PROJECT)).expect("its own projects");
+    let why = no_words(&harness, harness.seam.carry(&folder, &who, &at_home(&own)));
+    assert_eq!(why, carry::UNREACHED);
+    let copied = harness.apart("work-3", &who);
+    no_words(
+        &harness,
+        harness.seam.carry(&folder, &who, &at_home(&copied)),
+    );
+}
+
+#[test]
+fn a_start_that_never_said_it_started() {
+    // The stopped start has no started ack: carry answers no, saying its
+    // conversation is not known; one whose ack's transcript is gone, that
+    // it cannot be read (179).
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    let second = harness.home("work-2");
+    let why = no_words(
+        &harness,
+        harness.seam.carry(&folder, &who, &at_home(&second)),
+    );
+    assert!(why.starts_with("its conversation is not known"), "{why}");
+
+    harness.start(&AgentCommand::default(), &who, &folder);
+    std::fs::remove_file(harness.transcript(&who)).expect("the transcript removed");
+    let why = no_words(
+        &harness,
+        harness
+            .seam
+            .carry(&folder, &who, &at_home(&harness.sharing("work-2"))),
+    );
+    assert_eq!(why, carry::UNREADABLE);
+}
+
+#[test]
+fn a_background_task_the_stopped_agent_left() {
+    // The stopped agent started a background shell and never finished it,
+    // before the length the carried start's ack recorded: own work reads
+    // no for the carried start, and yes for the stopped one; once the
+    // carried agent starts work of its own, yes (31, 91, 179).
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    harness.start_own_work(&who);
+    let next = harness.carried(&who);
+    assert_eq!(harness.seam.own_work(&folder, &next), Reading::No);
+    assert_eq!(harness.seam.own_work(&folder, &who), Reading::Yes);
+    append(
+        &harness.transcript(&who),
+        &fixture("background-started.jsonl"),
+    );
+    assert_eq!(harness.seam.own_work(&folder, &next), Reading::Yes);
+}
+
+#[test]
+fn last_words_before_the_carried_agent_wrote_any() {
+    // The carried agent stops before it writes a message, and the
+    // transcript's last message is the stopped agent's: the carried
+    // start's last words are none, and the stopped start's its own; once
+    // the carried agent writes one, it is its last words (43, 179).
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    harness.say_last(&who, "half way through the parser");
+    let next = harness.carried(&who);
+    assert_eq!(harness.seam.last_words(&folder, &next), None);
+    assert_eq!(
+        harness.seam.last_words(&folder, &who).as_deref(),
+        Some("half way through the parser")
+    );
+    harness.say_last(&who, "the parser is done");
+    assert_eq!(
+        harness.seam.last_words(&folder, &next).as_deref(),
+        Some("the parser is done")
+    );
+}
+
+#[test]
+fn a_question_and_a_slash_command_of_the_stopped_agent() {
+    // The stopped agent's question was answered and its `/compact`
+    // received before the carried start's length: the carried agent's
+    // mark on the same call is not answered by them, and its own
+    // `/compact` is not received until its own part holds it (89, 90,
+    // 179).
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    append(&harness.transcript(&who), &fixture("question.jsonl"));
+    append(
+        &harness.transcript(&who),
+        &fixture("question-answered.jsonl"),
+    );
+    append(&harness.transcript(&who), &fixture("slash-command.jsonl"));
+    let next = harness.carried(&who);
+    let prompt = "/compact keep the parser's notes";
+    assert!(matches!(
+        harness.seam.received(&folder, &who, prompt),
+        Received::Received { .. }
+    ));
+    assert!(matches!(
+        harness.seam.received(&folder, &next, prompt),
+        Received::NotReceived { .. }
+    ));
+    // The carried agent asks the same call again, in the session it
+    // resumed.
+    append(&harness.transcript(&who), &fixture("question.jsonl"));
+    harness
+        .record(&next)
+        .mark_asking(&Asking {
+            tool_use_id: Some("toolu_01AskWhichParser".into()),
+            tool_name: "AskUserQuestion".into(),
+            tool_input: serde_json::Value::Null,
+        })
+        .expect("the mark");
+    assert_eq!(harness.seam.asking(&folder, &next), Reading::Yes);
+    append(
+        &harness.transcript(&who),
+        &fixture("question-answered.jsonl"),
+    );
+    assert_eq!(harness.seam.asking(&folder, &next), Reading::No);
+    append(&harness.transcript(&who), &fixture("slash-command.jsonl"));
+    assert!(matches!(
+        harness.seam.received(&folder, &next, prompt),
+        Received::Received { .. }
+    ));
+}
+
+#[test]
+fn a_fresh_start_reads_its_whole_transcript() {
+    // A start that carries nothing recorded a length of 0 at its started
+    // ack: every reading reads its whole transcript, as before (91).
+    let harness = Harness::new();
+    let who = identity("code");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    harness.start_own_work(&who);
+    harness.say_last(&who, "working on the parser");
+    harness.ask(&who);
+    append(&harness.transcript(&who), &fixture("slash-command.jsonl"));
+    assert_eq!(
+        harness.seam.own_work(&folder, &who),
+        Reading::Yes,
+        "own work"
+    );
+    assert_eq!(
+        harness.seam.last_words(&folder, &who).as_deref(),
+        Some("working on the parser")
+    );
+    assert_eq!(harness.seam.asking(&folder, &who), Reading::Yes);
+    assert!(matches!(
+        harness
+            .seam
+            .received(&folder, &who, "/compact keep the parser's notes"),
+        Received::Received { .. }
+    ));
+    let record = Record::at(&folder, &who);
+    assert_eq!(record.started().map(|started| started.from), Some(0));
+}
+
+#[test]
+fn a_transcript_read_from_its_length() {
+    // The records that begin at or after the length are read, a line cut
+    // there left out; a file shorter than the length, which Claude Code
+    // wrote again, is read whole (179).
+    let harness = Harness::new();
+    let who = identity("code");
+    harness.start(&AgentCommand::default(), &who, &harness.folder());
+    harness.say_last(&who, "the first");
+    let path = harness.transcript(&who);
+    let length = transcript::length(&path);
+    harness.say_last(&who, "the second");
+    let last = |from: u64| match transcript::Transcript::read_from(&path, from) {
+        transcript::Read::Read(read) => read.last_message(),
+        _ => panic!("the transcript unread"),
+    };
+    assert_eq!(last(0).as_deref(), Some("the second"));
+    assert_eq!(last(length).as_deref(), Some("the second"));
+    assert_eq!(last(length - 1).as_deref(), Some("the second"));
+    assert_eq!(last(length + 1), None, "a line cut at the length was read");
+    assert_eq!(
+        last(transcript::length(&path) + 1).as_deref(),
+        Some("the second"),
+        "a shorter file was not read whole"
+    );
+    assert!(matches!(
+        transcript::Transcript::read_from(&harness.scratch.path("none.jsonl"), 9),
+        transcript::Read::NotWritten
+    ));
+    assert_eq!(transcript::length(&harness.scratch.path("none.jsonl")), 0);
 }

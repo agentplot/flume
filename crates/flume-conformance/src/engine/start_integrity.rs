@@ -12,7 +12,7 @@
 //! and the mode begun; a profile that reads no mode back compares none
 //! (31, 35, 37, 43, 56, 112, 135, 161, 162, 169).
 
-use super::account_pools::pool;
+use super::account_pools::{begun_fix, fill_first_at_homes, home, pool, stops_at_limit};
 use super::agent_modes::{in_mode, passed, the_fakes_map};
 use super::agent_settings::for_every_stage;
 use super::world::*;
@@ -102,6 +102,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["161", "169", "106"],
             run: a_scripted_start_in_another_mode,
         },
+        Scenario {
+            name: "start integrity: a start that carries the conversation of the session s-1 records s-1, and a start of the place that carries none records no session",
+            cites: &["161", "179", "146"],
+            run: the_session_recorded,
+        },
+        Scenario {
+            name: "start integrity: an agent whose record names the session s-1 and whose word names s-2, every variable as recorded, is not taken: started reads no and the start reads begun without its settings in another conversation, naming neither session",
+            cites: &["35", "135", "161", "179"],
+            run: another_session,
+        },
+        Scenario {
+            name: "start integrity: an agent whose record names the session s-1 and whose word names s-1, every variable as recorded, is taken and sent its prompt",
+            cites: &["35", "37", "179"],
+            run: the_session_resumed,
+        },
     ]
 }
 
@@ -123,6 +138,7 @@ fn work_pool(world: &World, env: &[(&str, &str)]) {
                 .map(|(name, value)| (name.to_string(), value.to_string()))
                 .collect(),
             agents: None,
+            usage: None,
         }],
     );
     world.host.set_host_pool(Some("work"));
@@ -912,6 +928,110 @@ fn a_scripted_start_in_another_mode(_: &()) -> Outcome {
         passed(&world, &who)?,
         Some("all".to_string()),
         "the mode the command passed"
+    );
+    Ok(())
+}
+
+/// The fix `one`'s code begun under work-1, its agent stopped at its
+/// usage limit and its stage started on work-2, which the fake agent
+/// carries the conversation to with the session `s-1`; its carried
+/// agent's word names `session` (161, 179).
+fn carried_in(world: &World, session: &str) -> Result<PlaceId, String> {
+    fill_first_at_homes(world);
+    world.agent.carry_to(
+        &home("work-2"),
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    );
+    world
+        .agent
+        .set_session(&World::identity("fix", "one", "code", 2), session);
+    let id = begun_fix(world, "one")?;
+    stops_at_limit(world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    Ok(id)
+}
+
+fn the_session_recorded(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    let id = begun_fix(&world, "one")?;
+    ensure_eq!(
+        code_start(&world, &id)?.start_record.session,
+        None,
+        "the session the start that carries no conversation records"
+    );
+    let world = World::new();
+    let id = carried_in(&world, "s-1")?;
+    let start = code_start(&world, &id)?;
+    ensure_eq!(
+        (start.n, start.start_record.session.as_deref()),
+        (2, Some("s-1")),
+        "the session the carried start records"
+    );
+    Ok(())
+}
+
+fn another_session(_: &()) -> Outcome {
+    let world = World::new();
+    let carried = World::identity("fix", "one", "code", 2);
+    world.agent.set_own_work(&carried, Reading::Yes);
+    let id = carried_in(&world, "s-2")?;
+    ensure_eq!(
+        (
+            world.stage_state(&id, "code"),
+            code_start(&world, &id)?.n,
+            world.terminal.sent_to(&carried)
+        ),
+        (Some(StageState::Starting), 2, vec![]),
+        "code, its carried agent come up in another session, and what that agent was sent"
+    );
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.agent.map(|agent| agent.started),
+        Some(Reading::No),
+        "started"
+    );
+    let read = status
+        .unsettled
+        .iter()
+        .find(|read| read.start == 2)
+        .ok_or("the carried start is not read begun without its settings")?;
+    let words = read.unsettled.words();
+    ensure!(
+        read.unsettled.session
+            && words.contains("in another conversation")
+            && !words.contains("s-1")
+            && !words.contains("s-2"),
+        "the start read begun without its settings does not say another conversation, naming neither session: {words}"
+    );
+    let json = serde_json::to_string(&status.unsettled).map_err(|error| error.to_string())?;
+    ensure!(
+        !json.contains("s-2"),
+        "status names the session the agent came up in: {json}"
+    );
+    Ok(())
+}
+
+fn the_session_resumed(_: &()) -> Outcome {
+    let world = World::new();
+    let id = carried_in(&world, "s-1")?;
+    let carried = World::identity("fix", "one", "code", 2);
+    ensure_eq!(
+        (world.stage_state(&id, "code"), code_start(&world, &id)?.n),
+        (Some(StageState::Begun), 2),
+        "code, its carried agent come up in the session its record names"
+    );
+    ensure!(
+        !world.terminal.sent_to(&carried).is_empty(),
+        "no prompt was sent"
+    );
+    ensure!(
+        world
+            .held(&id)
+            .is_some_and(|held| held.unsettled.is_empty()),
+        "a start read begun without its settings"
     );
     Ok(())
 }

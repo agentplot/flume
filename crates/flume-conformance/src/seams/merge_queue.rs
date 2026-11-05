@@ -41,13 +41,26 @@ pub trait MergeQueueHarness {
     /// Reading where the base lives fails, as a fetch does.
     fn fetch_fails(&self, repository: &str, base: &str);
 
+    /// A branch of the repository the merge queue lands nothing on, as
+    /// one its policy names no table for: its name (126, C.6).
+    fn base_unlanded(&self, repository: &str) -> String;
+
     /// The merge queue cannot be read.
     fn unreadable(&self);
+
+    /// Another branch the merge queue keeps, not the place's base and
+    /// holding a submission of its own, that the merge queue refuses to
+    /// read from now on, as one refuses a branch whose policy it can no
+    /// longer read: its name.
+    fn refuse_another(&self, place: &PlaceRef) -> String;
 }
 
-fn found(read: SubmissionRead) -> Result<Submission, String> {
-    match read {
-        SubmissionRead::Found { submission } => Ok(submission),
+fn found(read: impl Into<ReadAcross>) -> Result<Submission, String> {
+    match read.into() {
+        ReadAcross {
+            read: SubmissionRead::Found { submission },
+            passed_over,
+        } if passed_over.is_empty() => Ok(submission),
         other => Err(format!("read-submission gave {other:?}")),
     }
 }
@@ -68,9 +81,26 @@ fn outcomes<H: MergeQueueHarness>(
     place: &PlaceRef,
 ) -> Result<Vec<SubmissionOutcome>, String> {
     match harness.seam().inbox(place) {
-        Inbox::Outcomes { outcomes } => Ok(outcomes),
+        Inbox::Outcomes { outcomes, .. } => Ok(outcomes),
         other => Err(format!("the inbox answered {other:?}")),
     }
+}
+
+/// That `branch` alone was passed over, with words.
+fn passed_over_alone(passed_over: &[PassedOver], branch: &str) -> Outcome {
+    ensure_eq!(
+        passed_over
+            .iter()
+            .map(|over| over.branch.as_str())
+            .collect::<Vec<_>>(),
+        vec![branch],
+        "the branches passed over"
+    );
+    ensure!(
+        passed_over.iter().all(|over| !over.words.trim().is_empty()),
+        "a branch passed over with no words: {passed_over:?}"
+    );
+    Ok(())
 }
 
 /// Drives the place's base one round, and on until its newest submission
@@ -147,6 +177,16 @@ pub fn scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
             name: "merge queue: the base's revision where work lands, or why not",
             cites: &["9", "126", "15"],
             run: the_base_where_it_lands::<H>,
+        },
+        Scenario {
+            name: "merge queue: a base the merge queue lands not is said so, for the core to read at origin",
+            cites: &["126", "9"],
+            run: a_base_it_lands_not::<H>,
+        },
+        Scenario {
+            name: "merge queue: a branch the merge queue cannot read is passed over with its words, and the place's submission on its base is found, followed and landed past it",
+            cites: &["99", "133", "101", "15", "117"],
+            run: a_refused_branch_decides_itself_alone::<H>,
         },
         Scenario {
             name: "merge queue: a merge queue that cannot be read says so",
@@ -292,7 +332,7 @@ fn read_gives_the_newest<H: MergeQueueHarness>(harness: &H) -> Outcome {
         harness
             .seam()
             .read_submission(&place.repository, &place.branch),
-        SubmissionRead::None,
+        SubmissionRead::None.into(),
         "a branch never submitted"
     );
     let by_hand = harness.open_submission(&place);
@@ -316,7 +356,8 @@ fn landed_only_of_that_branch<H: MergeQueueHarness>(harness: &H) -> Outcome {
         !matches!(
             harness
                 .seam()
-                .read_submission(&place.repository, &place.branch),
+                .read_submission(&place.repository, &place.branch)
+                .read,
             SubmissionRead::Found {
                 submission: Submission {
                     state: SubmissionState::Landed { .. },
@@ -350,6 +391,69 @@ fn the_base_where_it_lands<H: MergeQueueHarness>(harness: &H) -> Outcome {
     Ok(())
 }
 
+fn a_base_it_lands_not<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, _) = harness.place();
+    let base = harness.base_unlanded(&place.repository);
+    ensure_eq!(
+        harness.seam().base_revision(&place.repository, &base),
+        BaseRevision::Unlanded,
+        "a base the merge queue lands not"
+    );
+    ensure!(
+        matches!(
+            harness.seam().base_revision(&place.repository, &place.base),
+            BaseRevision::At { .. }
+        ),
+        "the place's base, which the merge queue lands, is not read"
+    );
+    Ok(())
+}
+
+fn a_refused_branch_decides_itself_alone<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, head) = harness.place();
+    let ours = submitted(harness, &place, &head)?;
+    let other = harness.refuse_another(&place);
+    let across = harness
+        .seam()
+        .read_submission(&place.repository, &place.branch);
+    passed_over_alone(&across.passed_over, &other)?;
+    let read = found(across.read)?;
+    ensure_eq!(
+        read.id,
+        ours.id,
+        format!("the submission read past {other}")
+    );
+    ensure!(read.state.open(), "the open submission read {read:?}");
+    match harness.seam().inbox(&place) {
+        Inbox::Outcomes {
+            outcomes,
+            passed_over,
+        } => {
+            ensure_eq!(outcomes, vec![], "outcomes of an undecided submission");
+            ensure!(
+                passed_over.iter().all(|over| over.branch != place.base),
+                "the inbox passed over the base: {passed_over:?}"
+            );
+        }
+        other => return Err(format!("the inbox past {other:?}")),
+    }
+    decided(harness, &place)?;
+    let commit = match the_one_outcome(harness, &place)? {
+        SubmissionOutcome::Landed { commit } => commit,
+        other => return Err(format!("a clean submission came to {other:?}")),
+    };
+    let across = harness
+        .seam()
+        .read_submission(&place.repository, &place.branch);
+    passed_over_alone(&across.passed_over, &other)?;
+    ensure_eq!(
+        found(across.read)?.state,
+        SubmissionState::Landed { commit },
+        format!("the submission landed past {other}")
+    );
+    Ok(())
+}
+
 fn unreadable_says_so<H: MergeQueueHarness>(harness: &H) -> Outcome {
     let (place, _) = harness.place();
     harness.unreadable();
@@ -368,7 +472,8 @@ fn unreadable_says_so<H: MergeQueueHarness>(harness: &H) -> Outcome {
         matches!(
             harness
                 .seam()
-                .read_submission(&place.repository, &place.branch),
+                .read_submission(&place.repository, &place.branch)
+                .read,
             SubmissionRead::CouldNotRead { .. }
         ),
         "an unreadable merge queue was read"

@@ -1,9 +1,9 @@
 ---
 title: flume
-description: flume carries one piece of work into a worktree of its own, runs each of its kind's stages with a fresh agent, and tidies the place once the work lands.
+description: flume takes every launch on a host into one queue, runs each piece of work in a worktree of its own with a fresh agent for each of its kind's stages, and tidies the place once the work lands.
 template: splash
 hero:
-  tagline: "flume carries one piece of work into a worktree of its own, runs each stage with a fresh agent, and tidies the place once the work lands."
+  tagline: "flume takes every launch on a host into one queue, runs each piece of work in a worktree of its own with a fresh agent for each stage, and tidies the place once the work lands."
   actions:
     - text: New to flume
       link: /flume/guides/new-to-flume/
@@ -19,6 +19,7 @@ hero:
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Diagram from '../../components/Diagram.astro';
 
 ## Why
 
@@ -52,6 +53,35 @@ and any tool that launches work all start it the same way.
   </Card>
 </CardGrid>
 
+## One queue for the host
+
+Every launch on a host joins one queue, whoever launched it. A launch
+names its kind, and may give its points, how much agent work its caller
+judges it to be, and the stream it runs in. The host's configuration
+declares its streams, each with its own bound on agents running, its
+priority and the pool of accounts its agents run under, all beneath the
+host's own bound. A stream may also bound its points in flight, or set
+a pace, such as 8 points a day, so a side project moves at a steady
+rate without taking every free agent. Points, the points bound and the
+pace are decided and wait on their build
+([roadmap](/flume/roadmap/#decided-not-built)).
+
+A place's first stage starts only while the host, its stream and an
+account of its pool have room, and its stream's points bound and pace
+leave room for its points. Until then it waits, and status says what it
+is short of. Waiting places start by their stream's priority, then
+their own. flume takes every launch and refuses none for want of room.
+[Agent settings](/flume/guides/agent-settings/#streams) says how to
+declare streams and pools.
+
+## One place, whole
+
+Once its first stage starts, a place runs its kind through on its own.
+Each stage has a fresh agent, and the next starts once its deliverable
+exists. Then the merge queue lands the work, and flume tidies the place.
+
+<Diagram name="place" caption="One launch from its caller to its tidied place: the place made ready, each stage a fresh agent whose prompt its own hook acknowledges, ended by its deliverable, then landed by sluice and removed." />
+
 ## The name
 
 In a watermill the flume is the channel that carries water from the
@@ -64,7 +94,10 @@ gates what lands.
 flume runs. A fix, a chore and a change are carried from their launch to
 their landing through sluice, and their places tidied, with nobody's
 word between the stages. Under herdr a watch keeps every place moving,
-and each end reaches whoever waits on it. Releases for Linux and macOS
+and each end reaches whoever waits on it. The host's queue runs its
+streams by their bounds and priorities, on pools of accounts; a place's
+points, and a stream's points bound and pace, are decided and wait on
+their build. Releases for Linux and macOS
 are on [GitHub](https://github.com/agentplot/flume/releases), and
 [Install and set up](/flume/install/) says how to start. The
 [roadmap](/flume/roadmap/) says what is decided and not yet built.

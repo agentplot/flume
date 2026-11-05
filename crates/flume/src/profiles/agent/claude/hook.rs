@@ -3,7 +3,8 @@
 //! input Claude Code 2.1.296 hands it on standard input, in an agent flume
 //! started, whose environment names its start (`FLUME_AGENT`), the start's
 //! secret, its place and its stage. SessionStart compares the agent's
-//! program and environment with its start's record before it acks, and
+//! program, its environment and, for a start that resumes a session, the
+//! session it runs with its start's record before it acks, and
 //! UserPromptSubmit, at the start's first prompt, the mode its session
 //! runs in, which 2.1.296 gives no SessionStart input, blocking the prompt
 //! where it is another (161, 162). Outside such an agent every hook does
@@ -13,7 +14,10 @@
 //! blocked prompt's or a stop's.
 
 use super::record::{self, Asking, Failure, Record, Started};
-use super::{as_received, collapsed, digest, guard, mode, wrapper, AGENT, PLACE, SECRET, STAGE};
+use super::{
+    as_received, collapsed, digest, guard, mode, status_line, transcript, wrapper, AGENT, PLACE,
+    SECRET, STAGE,
+};
 use crate::host::process::{parent_executable, program_path};
 use flume_core::{variable_digest, Answer, Engine};
 use flume_seams::{ModeBegan, Secret, StartRecord, Unsettled};
@@ -90,17 +94,20 @@ impl Start {
 
 /// How this process began otherwise than the start's record says its
 /// agent runs: each variable the record names that `variable` finds
-/// unset, each whose digest keyed by `secret` differs, by name alone, and
+/// unset, each whose digest keyed by `secret` differs, by name alone,
 /// whether the program the record names, found on `path` as the command
 /// finds it and run in a nix wrapper's place, is another than `ran`, the
-/// program this process's parent runs. The program is compared only
-/// where both are read (161; core.10, core.30).
+/// program this process's parent runs, and whether `session`, the session
+/// it runs, is another than the one the record names it resumes. The
+/// program is compared only where both are read, and the session only
+/// where the record names one (161, 179; core.10, core.30).
 pub fn compare(
     recorded: &StartRecord,
     secret: &Secret,
     variable: impl Fn(&str) -> Option<String>,
     ran: Option<&Path>,
     path: &str,
+    session: &str,
 ) -> Unsettled {
     let mut unsettled = Unsettled::default();
     for (name, digest) in &recorded.env {
@@ -118,6 +125,10 @@ pub fn compare(
     if let (Some(named), Some(ran)) = (named, ran) {
         unsettled.program = canonical(&named) != canonical(ran);
     }
+    unsettled.session = recorded
+        .session
+        .as_ref()
+        .is_some_and(|resumed| resumed != session);
     unsettled
 }
 
@@ -134,10 +145,13 @@ pub fn compare_mode(recorded: &StartRecord, began: Option<&str>) -> Option<ModeB
     })
 }
 
-/// The started ack: the start's session, its transcript, how it began and
-/// the plugin's version, taken only with the start's secret and only where
-/// this process's parent runs the program the start's record names and
-/// every variable the record names matches it; it clears the asking mark.
+/// The started ack: the start's session, its transcript, how it began, the
+/// plugin's version and the transcript's length now, which an ack already
+/// written keeps ([`Record::ack_started`]), taken only with the start's
+/// secret and only where this process's parent runs the program the
+/// start's record names, every variable the record names matches it and,
+/// where the record names the session the start resumes, the session is
+/// that one; it clears the asking mark.
 /// The mode is compared at the start's first prompt ([`ack_received`]),
 /// since 2.1.296 gives a SessionStart input none. Where anything differs
 /// it is not taken: the agent's record says what differed, a variable by
@@ -163,6 +177,7 @@ pub fn ack_started(
         |name| std::env::var_os(name).map(|value| value.to_string_lossy().into_owned()),
         parent_executable().as_deref(),
         &std::env::var("PATH").unwrap_or_default(),
+        &started.session_id,
     );
     if unsettled != Unsettled::default() {
         return Err(began_otherwise(
@@ -174,8 +189,12 @@ pub fn ack_started(
             binary,
         ));
     }
+    let started = Started {
+        from: transcript::length(Path::new(&started.transcript_path)),
+        ..started.clone()
+    };
     record
-        .ack_started(started)
+        .ack_started(&started)
         .and_then(|()| record.clear_asking())
         .map_err(|error| format!("{}: {error}", record.dir().display()))?;
     Ok(format!("{agent} started in session {}", started.session_id))
@@ -254,9 +273,9 @@ pub fn ack_received(
 }
 
 /// The agent's record told that it began as `unsettled` says, in
-/// `session` with `transcript`, and a settle of the place started
-/// detached; the words saying so, or why the record could not be written
-/// (161).
+/// `session` with `transcript` and the transcript's length now, and a
+/// settle of the place started detached; the words saying so, or why the
+/// record could not be written (161, 179).
 fn began_otherwise(
     start: &Start,
     record: &Record,
@@ -270,6 +289,7 @@ fn began_otherwise(
         unsettled: unsettled.clone(),
         session_id: session.to_string(),
         transcript_path: transcript.to_string(),
+        from: transcript::length(Path::new(transcript)),
     });
     if let Err(error) = written {
         return format!("{}: {error}", record.dir().display());
@@ -300,6 +320,9 @@ pub fn hook(
     build: &dyn Fn() -> Result<Engine, String>,
     binary: &Path,
 ) -> String {
+    if event == status_line::EVENT {
+        return status_line::line(start.place.as_deref(), start.agent.as_deref(), build);
+    }
     if start.agent.is_none() || start.secret.is_none() {
         return String::new();
     }
@@ -315,6 +338,7 @@ pub fn hook(
                 transcript_path: text("transcript_path"),
                 source: text("source"),
                 plugin_version: start.plugin_version(),
+                from: 0,
             };
             let _ = ack_started(start, &started, build, binary);
             String::new()

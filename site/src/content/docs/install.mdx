@@ -81,23 +81,39 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
   in one of the server's panes, and every thirty seconds. A place
   moves on with no command of yours, and the watch reads an agent that
   crashed, hung or was killed within that bound;
-- **a row on each agent's sidebar entry**, such as
-  `change · code · working · 2/5`, and a count on each workspace's row
-  of its places running, asking, waiting on their caller and stalled;
-- **a popup** of every place in flight, where a key opens a place's
-  tab, tells its agent, stops it or retries its stage, each through
-  flume's own commands.
+- **a row on each agent's sidebar entry**, its place's line less the
+  place's name and kind, such as `code 1/2 · run 1 · tasks 2/5 · working`.
+  Each workspace's row counts its places running, asking, waiting on
+  their caller and stalled;
+- **a popup** of every place in flight, each by its line, such as
+  `fix--the-parser-reads-tabs · fix@1 · code · run 1 · working`. A key
+  there opens a place's tab, tells its agent, stops it or retries its
+  stage, each through flume's own commands.
 
-The plugin changes none of herdr's configuration: add its key and the
-sidebar rows to herdr's `config.toml` yourself, as
-[places and herdr](/flume/guides/places-and-herdr/#the-herdr-plugin)
-shows.
+The plugin changes none of herdr's configuration, and herdr's plugins
+declare no keys. The popup opens only from a key you bind, with an
+entry of your own in herdr's `config.toml`:
+
+```toml
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "agentplot.flume.places"
+description = "flume: places in flight"
+```
+
+The sidebar's rows are yours to add too, as
+[setting up herdr](/flume/guides/places-and-herdr/#setting-up-herdr)
+shows. Until herdr's configuration holds the entry and the rows,
+`flume status` names what it lacks under the line naming the watch.
 
 ## The Claude Code plugin
 
 flume writes its plugin itself, for each agent it starts, and hands it
 to the agent with `--plugin-dir`, so an agent's hooks always match the
-binary that started it. Nothing needs installing for that.
+binary that started it. Nothing needs installing for that. The plugin
+also pins the place's line under each agent's prompt, as
+[the status line](/flume/guides/claude-code/#the-status-line) says.
 
 For `/launch` and status in your own sessions, add flume's marketplace
 and install the plugin from it:
