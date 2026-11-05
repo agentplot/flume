@@ -35,7 +35,7 @@ names is a scratch directory or file of the test's own.
 
 ## 4. The status line in a real Claude Code agent's pane
 
-- [ ] 4.1 Add to `crates/flume/tests/profiles/live/walkthroughs.rs` a fix under herdr with the pinned Claude Code. While its code agent works, its pane, read by `pane read <pane> --source visible --format text`, holds `fix--<name> · fix@1 · code · run 1 ·` pinned under the prompt by the plugin's module, and the place lands (design 4, 5; 56, 60, C.4). True when `sluice exec main -- moon run flume:lint` passes, which builds the live harness under `--all-features`. The operator runs `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live` by hand outside the gate, as `CLAUDE.md` says, the token a test account's from `claude setup-token`, and it must pass with this walkthrough and every other live walkthrough.
+- [x] 4.1 Add to `crates/flume/tests/profiles/live/walkthroughs.rs` a fix under herdr with the pinned Claude Code. While its code agent works, its pane, read by `pane read <pane> --source visible --format text`, holds `fix--<name> · fix@1 · code · run 1 ·` pinned under the prompt by the plugin's module, and the place lands (design 4, 5; 56, 60, C.4). True when `sluice exec main -- moon run flume:lint` passes, which builds the live harness under `--all-features`. The operator runs `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live` by hand outside the gate, as `CLAUDE.md` says, the token a test account's from `claude setup-token`, and it must pass with this walkthrough and every other live walkthrough.
 
 ## 5. The herdr plugin
 
