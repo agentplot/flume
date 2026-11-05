@@ -142,6 +142,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["43", "146", "151"],
             run: a_stage_under_no_account,
         },
+        Scenario {
+            name: "account pools: the host gives the reading set for work-1's path, the refusal's words for work-2's, and that the file is missing for work-3's",
+            cites: &["184", "106"],
+            run: the_hosts_reading,
+        },
+        Scenario {
+            name: "account pools: a reading set again with a later read_at is the one the host gives when next asked, and the fake host's log shows each reading asked",
+            cites: &["184", "106"],
+            run: a_scripted_reading,
+        },
     ]
 }
 
@@ -1631,6 +1641,85 @@ fn a_stage_under_no_account(_: &()) -> Outcome {
         world.store.log.of("write_host").is_empty(),
         "an account recorded spent: {:?}",
         world.store.log.of("write_host")
+    );
+    Ok(())
+}
+
+/// The path of `account`'s reading under the fake host's `HOME`.
+fn usage_path(account: &str) -> String {
+    format!("/home/user/.local/state/usage/{account}.json")
+}
+
+/// A reading read at `read_at` of a 5-hour window `used` hundredths used,
+/// resetting five hours after it, and a 7-day window with no reset.
+fn reading(read_at: Seconds, used: u32) -> Usage {
+    Usage {
+        read_at,
+        windows: vec![
+            Window {
+                name: "5-hour".into(),
+                used,
+                resets_at: Some(read_at + 5 * 3600),
+            },
+            Window {
+                name: "7-day".into(),
+                used: 3_000,
+                resets_at: None,
+            },
+        ],
+    }
+}
+
+/// The seam-contracts spec's fake host's reading: the reading set for a
+/// path, the refusal set for another, and no reading for a path nothing
+/// set, each as the core asks the host (184).
+fn the_hosts_reading(_: &()) -> Outcome {
+    let world = World::new();
+    let read = reading(world.host.now(), 4_200);
+    world
+        .host
+        .set_usage(&usage_path("work-1"), Ok(read.clone()));
+    world.host.set_usage(
+        &usage_path("work-2"),
+        Err("the file is not JSON: expected value at line 1 column 1".into()),
+    );
+    let host: &dyn Host = world.host.as_ref();
+    ensure_eq!(
+        host.usage(&usage_path("work-1")),
+        Ok(read),
+        "work-1's reading"
+    );
+    ensure_eq!(
+        host.usage(&usage_path("work-2")),
+        Err("the file is not JSON: expected value at line 1 column 1".to_string()),
+        "work-2's refusal"
+    );
+    ensure_eq!(
+        host.usage(&usage_path("work-3")),
+        Err("the file is missing".to_string()),
+        "work-3, whose path nothing set"
+    );
+    Ok(())
+}
+
+/// The seam-fakes spec's scripted reading: a reading set again with a
+/// later `read_at` is the one given at the next asking, and the fake's
+/// log names each reading asked, in order (184).
+fn a_scripted_reading(_: &()) -> Outcome {
+    let world = World::new();
+    let path = usage_path("work-1");
+    let first = reading(world.host.now(), 4_200);
+    world.host.set_usage(&path, Ok(first.clone()));
+    let host: &dyn Host = world.host.as_ref();
+    ensure_eq!(host.usage(&path), Ok(first), "the reading first set");
+    world.host.advance(300);
+    let later = reading(world.host.now(), 4_800);
+    world.host.set_usage(&path, Ok(later.clone()));
+    ensure_eq!(host.usage(&path), Ok(later), "the later reading");
+    ensure_eq!(
+        world.host.log.of("usage"),
+        vec![format!("usage {path}"), format!("usage {path}")],
+        "each reading asked"
     );
     Ok(())
 }
