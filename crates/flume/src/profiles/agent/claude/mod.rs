@@ -40,6 +40,11 @@ pub const NAME: &str = "claude";
 /// program names it (C.4).
 pub const KIND: &str = "claude";
 
+/// The option that names the file of the standing prompt, which 2.1.296
+/// reads as it reads `--append-system-prompt`'s text, though its help
+/// does not list it (148, C.4).
+pub const STANDING_PROMPT_FLAG: &str = "--append-system-prompt-file";
+
 /// The version of flume, which the plugin it writes carries, so a hook
 /// run by a binary of another version is reported (135).
 pub const VERSION: &str = crate::VERSION;
@@ -242,9 +247,11 @@ impl Claude {
 
 impl Agent for Claude {
     /// `claude --plugin-dir <plugin> [--resume <session>] [--model <m>]
-    /// [--permission-mode <mode>] [--append-system-prompt <instructions>]`
+    /// [--permission-mode <mode>] [--append-system-prompt-file <file>]`
     /// in the place, the session resumed where the start carries one (179),
     /// the mode passed where one is given and none where it is none (162),
+    /// the instructions in the start's own file beside its record, since
+    /// herdr 0.9.5 types no argument holding a newline (148, C.5),
     /// the program the settings name by name or path, or the program it
     /// runs where it is a nix wrapper, with the variables the wrapper
     /// sets ([`wrapper`]), its account's
@@ -255,6 +262,7 @@ impl Agent for Claude {
     /// command.
     fn command(
         &self,
+        folder: &str,
         settings: &Settings,
         mode: Option<&str>,
         resume: Option<&str>,
@@ -279,7 +287,15 @@ impl Agent for Claude {
             args.extend([mode::FLAG.to_string(), mode.to_string()]);
         }
         if let Some(instructions) = &settings.instructions {
-            args.extend(["--append-system-prompt".to_string(), instructions.clone()]);
+            // A file that cannot be written is named all the same, as the
+            // plugin is: Claude Code's words that it is missing are the
+            // screen of the start that never came up (35).
+            let record = Record::at(folder, identity);
+            let _ = record.set_standing_prompt(instructions);
+            args.extend([
+                STANDING_PROMPT_FLAG.to_string(),
+                record.standing_prompt().to_string_lossy().into_owned(),
+            ]);
         }
         let mut env: BTreeMap<String, String> = env.clone();
         let mut program = settings.program.clone().unwrap_or_else(|| NAME.into());

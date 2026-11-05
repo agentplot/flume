@@ -34,6 +34,10 @@
 //!   refuses the mode asked begins in another, so every hook input that
 //!   names the mode names it as its `permission_mode`.
 //!
+//! Where the command passes `--append-system-prompt-file <file>` naming no
+//! file, it prints `Error: Append system prompt file not found: <file>`
+//! and exits 1 before any hook, as that release does.
+//!
 //! Where the command passes `--resume <session>`, it resumes the session
 //! as that release does: it looks for `<home>/projects/<folder>/<session>.jsonl`
 //! alone, `<home>` its configuration home, `CLAUDE_CONFIG_DIR` or else
@@ -92,6 +96,13 @@ fn main() {
             "--plugin-dir" => plugin = words.next().map(PathBuf::from),
             "--permission-mode" => mode = words.next().cloned(),
             "--resume" => resume = words.next().cloned(),
+            "--append-system-prompt-file" => {
+                let file = words.next().cloned().unwrap_or_default();
+                if !Path::new(&file).is_file() {
+                    eprintln!("Error: Append system prompt file not found: {file}");
+                    std::process::exit(1);
+                }
+            }
             "--model" | "--append-system-prompt" | "--settings" => {
                 words.next();
             }

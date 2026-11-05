@@ -53,6 +53,7 @@ fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
 impl Agent for StandInAgent {
     fn command(
         &self,
+        _folder: &str,
         settings: &Settings,
         _mode: Option<&str>,
         _resume: Option<&str>,

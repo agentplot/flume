@@ -579,7 +579,9 @@ impl Engine {
             mode,
             resume,
         } = claim;
+        let folder = self.store.folder(id);
         let command = agent.command(
+            &folder,
             &settings,
             mode.as_deref(),
             resume.as_deref(),
@@ -589,7 +591,6 @@ impl Engine {
             &secret,
             &text,
         );
-        let folder = self.store.folder(id);
         let opened = self.terminal.open(
             &place,
             &folder,
