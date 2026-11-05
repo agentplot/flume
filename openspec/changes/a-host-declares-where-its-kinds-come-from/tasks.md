@@ -69,7 +69,7 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 5. The core resolves an identity and checks the locks
 
-- [ ] 5.1 Have `resolve_kind` in `crates/flume-core/src/launch.rs` do the following, as decisions 3 to 5 have it (design 3 to 5, 8, 11; 4, 19 to 22, 132, 154 to 160; core.4, core.8, core.34):
+- [x] 5.1 Have `resolve_kind` in `crates/flume-core/src/launch.rs` do the following, as decisions 3 to 5 have it (design 3 to 5, 8, 11; 4, 19 to 22, 132, 154 to 160; core.4, core.8, core.34):
   - take the kind's text through `read_named` and drop `named_version`;
   - search as design 3's table says, a bare name as decision 4 says;
   - pick a version named none as decision 5 says;

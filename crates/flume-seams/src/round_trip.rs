@@ -1522,8 +1522,13 @@ fn a_kinds_identity_name_package_source_and_lock() {
         identity: kind_identity(),
         kind: kind(),
         hash: hash(),
+        dir: Some("/kinds/acme/review@2".into()),
     };
     round_trips(package.clone());
+    round_trips(Packaged {
+        dir: None,
+        ..package.clone()
+    });
     round_trips(PackageRead::Read {
         package: Box::new(package),
     });
@@ -1664,6 +1669,12 @@ fn a_kinds_profile_that_reads_no_name_source_package_or_lock() {
     assert!(BareKinds
         .write_lock("/config/flume/flume.lock", &[])
         .is_err());
+    let words = BareKinds
+        .identity_of("repo", "bump", 2)
+        .expect_err("a bare profile spelled an identity");
+    assert!(words.contains("bump@2"), "{words}");
+    assert_eq!(BareKinds.declaration_path(), None);
+    assert_eq!(BareKinds.lock_path(), None);
 }
 
 #[test]

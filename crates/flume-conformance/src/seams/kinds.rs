@@ -1,6 +1,8 @@
 //! The kinds seam's scenarios (B.2, 84, 85), and the binding (105); a
 //! kind's name, a source's listing, a package and a lock, each read twice
-//! to the same answer, and a lock written (154 to 157, 160, 192).
+//! to the same answer, and a lock written (154 to 157, 160, 192); a
+//! declaration's kind's identity spelled, and where a repository keeps its
+//! declaration and its lock (19, 20, 155).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -187,6 +189,11 @@ pub fn scenarios<H: KindsHarness>() -> Vec<Scenario<H>> {
             name: "kinds: a lock written whole reads back as written, written twice the same, and a write that fails leaves the lock as it was",
             cites: &["155"],
             run: write_lock::<H>,
+        },
+        Scenario {
+            name: "kinds: the identity of a declaration's kind is spelled by the seam, the same each time, and the repository's declaration and lock are named by their paths in its tree",
+            cites: &["154", "19", "20", "155"],
+            run: declarations_identity::<H>,
         },
     ]
 }
@@ -432,6 +439,32 @@ fn read_named<H: KindsHarness>(harness: &H) -> Outcome {
             format!("`{text}` refused again")
         );
     }
+    Ok(())
+}
+
+fn declarations_identity<H: KindsHarness>(harness: &H) -> Outcome {
+    let seam = harness.seam();
+    for (source, name, version) in [("repo", "bump", 2), ("launch", "review", 1)] {
+        let first = seam.identity_of(source, name, version);
+        ensure_eq!(
+            first,
+            Ok(identity_of(source, name, version)),
+            format!("the identity of {name}@{version} of {source}")
+        );
+        ensure_eq!(
+            seam.identity_of(source, name, version),
+            first,
+            format!("the identity of {name}@{version} of {source} again")
+        );
+    }
+    ensure_eq!(
+        (seam.declaration_path(), seam.lock_path()),
+        (
+            Some(".config/flume.toml".to_string()),
+            Some(".config/flume.lock".to_string())
+        ),
+        "the repository's declaration and lock"
+    );
     Ok(())
 }
 

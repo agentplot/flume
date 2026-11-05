@@ -3,10 +3,10 @@
 //! random bytes, a file's write time, a command of flume's named by its
 //! process and that process's start, the bound and the agents' settings
 //! the host's configuration states, the role runs, streams and pools it
-//! names, the sources of kinds it declares, the recipient the calling
-//! command's environment names, the host user's login environment, and
-//! the room lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75, 191;
-//! design 6, 10). No tool is named here (core.1).
+//! names, the sources of kinds it declares and its lock of kinds beside
+//! them, the recipient the calling command's environment names, the host
+//! user's login environment, and the room lock at
+//! `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75, 155, 191; design 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
@@ -280,6 +280,18 @@ impl Host for RealHost {
     /// reads them as they stand (159, 191, C.7).
     fn sources(&self) -> BTreeMap<String, HostSource> {
         self.config.sources.clone()
+    }
+
+    /// `sources/` beside `config.toml` (191, C.7).
+    fn sources_dir(&self) -> Option<String> {
+        let dir = self.config.dir.as_ref()?;
+        Some(dir.join(config::SOURCES).to_string_lossy().into_owned())
+    }
+
+    /// `flume.lock` beside `config.toml` (155, C.7).
+    fn kinds_lock(&self) -> Option<String> {
+        let dir = self.config.dir.as_ref()?;
+        Some(dir.join(config::KINDS_LOCK).to_string_lossy().into_owned())
     }
 
     /// A line appended to `$XDG_STATE_HOME/flume/flume.log` with the

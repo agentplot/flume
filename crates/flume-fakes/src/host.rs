@@ -10,7 +10,7 @@ use std::sync::{Arc, Condvar, Mutex};
 /// sleeps on it, numbered secrets, files' write times, the commands of
 /// flume's that live, the bound on agents and the agents' settings its
 /// configuration states, its streams and pools of accounts, the sources
-/// of its kinds, the recipient the calling command's environment names,
+/// of its kinds with where their files and its lock lie, the recipient the calling command's environment names,
 /// the host user's login environment, and an exclusive room lock.
 pub struct FakeHost {
     state: Mutex<HostState>,
@@ -67,6 +67,9 @@ struct HostState {
 
 /// Where the fake host's configuration keeps its sources' files (C.7).
 pub const SOURCES: &str = "/home/user/.config/flume/sources";
+
+/// The fake host's lock of kinds (155, C.7).
+pub const HOST_LOCK: &str = "/home/user/.config/flume/flume.lock";
 
 /// The file that declares the source `name` on the fake host (191, C.7).
 pub fn source_file(name: &str) -> String {
@@ -388,6 +391,14 @@ impl Host for FakeHost {
     fn sources(&self) -> BTreeMap<String, HostSource> {
         self.log.push("sources");
         lock(&self.state).sources.clone()
+    }
+
+    fn sources_dir(&self) -> Option<String> {
+        Some(SOURCES.into())
+    }
+
+    fn kinds_lock(&self) -> Option<String> {
+        Some(HOST_LOCK.into())
     }
 
     fn room(&self) -> RoomGuard {

@@ -18,7 +18,11 @@
 //! reader at its identity, `flume/<name>@<version>`, with its content's
 //! hash over its declaration's and prompts' paths and bytes (156, 157).
 //! A kind as a launch or a role names it is read by weir-kinds' reader of
-//! a kind's name, which spells it back (154; weir C.4).
+//! a kind's name, which spells it back, and the identity of a kind of the
+//! repository's or a launch's, which lies in no package, is read by
+//! weir-kinds' reader of an identity, as is a package's (154; weir C.4).
+//! The repository's declaration is [`DECLARATION`] and its lock [`LOCK`],
+//! each given the core by its path within the tree (20, 155).
 //!
 //! A host's source is read through weir-kinds alone (155 to 160, 192; weir
 //! 88 to 93, C.4; core.4):
@@ -235,6 +239,25 @@ impl Kinds for Weir {
         })
     }
 
+    fn identity_of(&self, source: &str, name: &str, version: u32) -> Result<KindIdentity, String> {
+        let held = held_at(source, &format!("{name}@{version}"))?;
+        let mut problems = vec![];
+        let identity = map_identity(&held, &mut problems);
+        if problems.is_empty() {
+            Ok(identity)
+        } else {
+            Err(problems.join("; "))
+        }
+    }
+
+    fn declaration_path(&self) -> Option<String> {
+        Some(DECLARATION.into())
+    }
+
+    fn lock_path(&self) -> Option<String> {
+        Some(LOCK.into())
+    }
+
     fn read_source(&self, source: &str, kinds_dir: &str) -> SourceRead {
         let dir = Path::new(kinds_dir);
         let unread = |words: String| SourceRead::CouldNotRead {
@@ -322,6 +345,7 @@ impl Kinds for Weir {
                 identity,
                 kind,
                 hash: package.hash.to_string(),
+                dir: Some(dir.to_string_lossy().into_owned()),
             }),
         }
     }
@@ -491,6 +515,7 @@ fn own_package(own: &Own) -> Result<Packaged, String> {
         identity,
         kind,
         hash: package.hash.to_string(),
+        dir: None,
     })
 }
 

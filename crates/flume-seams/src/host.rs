@@ -278,4 +278,17 @@ pub trait Host: Send + Sync {
     fn sources(&self) -> BTreeMap<String, HostSource> {
         BTreeMap::new()
     }
+
+    /// The directory the host's configuration keeps its sources' files in,
+    /// a source named by `<source>.toml` there (191, C.7); none by
+    /// default.
+    fn sources_dir(&self) -> Option<String> {
+        None
+    }
+
+    /// The host's lock of kinds, `$XDG_CONFIG_HOME/flume/flume.lock`, read
+    /// as it stands (155, C.7); none by default, a host that keeps no lock.
+    fn kinds_lock(&self) -> Option<String> {
+        None
+    }
 }

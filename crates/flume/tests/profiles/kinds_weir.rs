@@ -1417,7 +1417,19 @@ fn a_packages_hash_wherever_it_lies() {
     std::os::unix::fs::symlink(scratch.path("there"), &linked).unwrap();
     let first = package_at(&here, "review", 1);
     let second = package_at(&linked.join("kinds"), "review", 1);
-    assert_eq!(first, second, "one package in two places");
+    assert_eq!(
+        (&first.identity, &first.kind, &first.hash),
+        (&second.identity, &second.kind, &second.hash),
+        "one package in two places"
+    );
+    assert_eq!(
+        (first.dir.as_deref(), second.dir.as_deref()),
+        (
+            here.join("review@1").to_str(),
+            linked.join("kinds/review@1").to_str()
+        ),
+        "each package's directory as read"
+    );
     assert_eq!(first.identity.spelled, "acme/review@1");
     assert_eq!(first.kind.stages[0].prompt, "Review {{brief}}.\n");
     assert_eq!(first.hash.len(), "sha256:".len() + 64, "{}", first.hash);

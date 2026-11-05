@@ -378,6 +378,13 @@ pub enum Declared {
     Host,
 }
 
+/// The sources a kind's identity names that no host declares: flume's own
+/// kinds', the repository's and a launch's declaration's (154; weir C.4).
+/// Every other source a launch names is one the host declares (191).
+pub const OWN_SOURCE: &str = "flume";
+pub const REPO_SOURCE: &str = "repo";
+pub const LAUNCH_SOURCE: &str = "launch";
+
 /// A kind's identity, `<source>/<name>@<version>` (154): its parts and its
 /// spelling as the kinds profile's reader gave them, which the core
 /// carries as given and never parses or spells (core.4; weir 88, C.4). It
@@ -417,6 +424,10 @@ pub struct Packaged {
     pub identity: KindIdentity,
     pub kind: Kind,
     pub hash: String,
+    /// The package's directory as read, none for one built into flume
+    /// (19, 159).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dir: Option<String>,
 }
 
 /// read-package: the package at an identity in a source's directory, or
@@ -542,6 +553,28 @@ pub trait Kinds: Send + Sync {
         Err(format!(
             "its kinds profile reads no kind's name, `{text}` among them"
         ))
+    }
+
+    /// The identity of `<name>@<version>` of `source`, as the profile's
+    /// reader spells it, for a kind no package gives one: the
+    /// repository's or a launch's (19, 154; weir C.4); or why it names
+    /// none.
+    fn identity_of(&self, source: &str, name: &str, version: u32) -> Result<KindIdentity, String> {
+        Err(format!(
+            "its kinds profile spells no identity, {name}@{version} of {source} among them"
+        ))
+    }
+
+    /// Where a repository's declaration lies within its tree, as the
+    /// profile reads it at a revision (20); none where it reads none.
+    fn declaration_path(&self) -> Option<String> {
+        None
+    }
+
+    /// Where a repository's lock lies within its tree and a working copy
+    /// (155, C.2); none where the profile reads no lock.
+    fn lock_path(&self) -> Option<String> {
+        None
     }
 
     /// read-source: the identity of every package `kinds_dir`, the

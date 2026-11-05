@@ -492,8 +492,16 @@ same input and changing nothing (85, 160):
 - **`read_lock_file(path)`**: a lock on disk, the host's or a working
   copy's.
 - **`write_lock(path, entries)`**: a lock written whole.
+- **`identity_of(source, name, version)`**: the identity of a kind no
+  package gives one, the repository's or a launch's, as weir-kinds
+  spells it, so the core spells none (core.4).
+- **`declaration_path()`** and **`lock_path()`**: where a repository's
+  declaration and its lock lie in its tree, `.config/flume.toml` and
+  `.config/flume.lock`, which `kind_from` and a refusal name.
 
-`flumes_own` answers packages, each with its identity and hash.
+`flumes_own` answers packages, each with its identity and hash. A
+package read from a source's directory carries that directory as read,
+which `kind_from`'s `kind_dir` gives.
 
 The types are `KindIdentity` (`source`, `name`, `version` and
 `spelled`, weir's spelling), `KindNamed`, `Packaged`, `PackageRead`,
@@ -505,7 +513,10 @@ which keeps its name.
 The host's sources are configuration, read beside `config.toml` by
 `crates/flume/src/host/config.rs` and given to the core by
 `Host::sources()`, by name. Each entry, a `HostSource`, is its file and
-its `kinds_dir`, or its fault. Status's fields are the core's answer's,
+its `kinds_dir`, or its fault. `Host::sources_dir()` names the directory,
+so a refusal of a source the host does not declare names the file it
+lacks, and `Host::kinds_lock()` names the host's lock, beside
+`config.toml`. Status's fields are the core's answer's,
 `PlaceStatus` and the host part's `SourceStatus` in `flume-core`, beside
 the fields they join.
 

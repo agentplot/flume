@@ -310,6 +310,20 @@ impl Kinds for FakeKinds {
         named(text).ok_or_else(|| format!("`{text}` names no kind"))
     }
 
+    fn identity_of(&self, source: &str, name: &str, version: u32) -> Result<KindIdentity, String> {
+        self.log
+            .push(format!("identity_of {source} {name}@{version}"));
+        Ok(kind_identity(source, name, version))
+    }
+
+    fn declaration_path(&self) -> Option<String> {
+        Some(DECLARATION.into())
+    }
+
+    fn lock_path(&self) -> Option<String> {
+        Some(LOCK.into())
+    }
+
     fn read_source(&self, source: &str, kinds_dir: &str) -> SourceRead {
         self.log.push(format!("read_source {source} {kinds_dir}"));
         match lock(&self.state).directories.get(kinds_dir) {
@@ -336,7 +350,10 @@ impl Kinds for FakeKinds {
         match lock(&self.state).directories.get(kinds_dir) {
             Some(Directory::Holds(packages)) => match packages.get(&(name.to_string(), version)) {
                 Some(Ok((kind, hash))) => PackageRead::Read {
-                    package: Box::new(packaged(source, kind.clone(), Some(hash))),
+                    package: Box::new(Packaged {
+                        dir: Some(package_dir(kinds_dir, name, version)),
+                        ..packaged(source, kind.clone(), Some(hash))
+                    }),
                 },
                 Some(Err(reason)) => refused(reason.clone()),
                 None => refused(format!("{kinds_dir} holds no {name}@{version}")),
@@ -431,8 +448,20 @@ pub fn packaged(source: &str, kind: Kind, hash: Option<&str>) -> Packaged {
         identity: kind_identity(source, &kind.name, kind.version),
         kind,
         hash,
+        dir: None,
     }
 }
+
+/// The directory of the package `<name>@<version>` in `kinds_dir`, as the
+/// fake reads it (159).
+pub fn package_dir(kinds_dir: &str, name: &str, version: u32) -> String {
+    format!("{kinds_dir}/{name}@{version}")
+}
+
+/// Where the fake reads a repository's declaration and its lock in its
+/// tree (20, 155).
+pub const DECLARATION: &str = ".config/flume.toml";
+pub const LOCK: &str = ".config/flume.lock";
 
 fn stand_in_hash(kind: &Kind) -> String {
     use std::hash::{DefaultHasher, Hash, Hasher};

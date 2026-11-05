@@ -11,6 +11,7 @@ pub mod carried_conversations;
 pub mod end_delivery;
 pub mod held_state;
 pub mod host_queue;
+pub mod kind_sources;
 pub mod launching;
 pub mod made_things;
 pub mod place_status;
@@ -56,5 +57,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(account_pools::scenarios());
     every.extend(start_integrity::scenarios());
     every.extend(carried_conversations::scenarios());
+    every.extend(kind_sources::scenarios());
     every
 }

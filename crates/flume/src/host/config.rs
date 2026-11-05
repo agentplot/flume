@@ -78,6 +78,10 @@ pub struct HostConfig {
     /// The sources of kinds declared in `sources/` beside the file, by
     /// name, each with its fault where it has one (159, 191, C.7).
     pub sources: BTreeMap<String, HostSource>,
+    /// The directory the file was read in, which holds `sources/` and the
+    /// host's lock of kinds; none for a configuration read from text
+    /// (155, 191, C.7).
+    pub dir: Option<PathBuf>,
 }
 
 /// The streams the configuration names for places: `stream` in
@@ -106,6 +110,7 @@ impl Default for HostConfig {
             pool: None,
             pools: BTreeMap::new(),
             sources: BTreeMap::new(),
+            dir: None,
         }
     }
 }
@@ -123,6 +128,7 @@ impl HostConfig {
             Err(error) => return Err(format!("{}: {error}", path.display())),
         };
         config.sources = read_sources(&path.with_file_name(SOURCES))?;
+        config.dir = path.parent().map(Path::to_path_buf);
         Ok(config)
     }
 
@@ -255,6 +261,9 @@ impl HostConfig {
 /// The directory beside `config.toml` holding a file for each source of
 /// kinds the host declares (191, C.7).
 pub const SOURCES: &str = "sources";
+
+/// The host's lock of kinds, beside `config.toml` (155, C.7).
+pub const KINDS_LOCK: &str = "flume.lock";
 
 /// What ends the name of a source's file.
 const SOURCE_FILE: &str = ".toml";
