@@ -1,8 +1,8 @@
 use crate::{lock, Log};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, KindSettings, LabelFrom,
-    LabelHeld, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Share, Stream,
-    StreamFrom, StreamHeld, DEFAULT_STREAM,
+    LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed, ProfileHeld, RoleRun, RoomGuard, Seconds,
+    Secret, Share, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -395,6 +395,38 @@ impl Host for FakeHost {
             .and_then(|stream| stream.pool.as_ref())
             .map(|name| named(name, PoolFrom::Stream))
             .or_else(|| state.pool.as_ref().map(|name| named(name, PoolFrom::Host)))
+    }
+
+    /// The stream's multiplexer, view and terminal app, each the
+    /// stream's key where it names one, else `fake`, a terminal view and
+    /// `fake-window`, the fakes' own (186, 190).
+    fn display_for(&self, stream: &str) -> StreamDisplay {
+        let state = lock(&self.state);
+        let stream = state.streams.get(stream);
+        let named = |name: Option<&String>, default: &str| match name {
+            Some(name) => ProfileHeld {
+                profile: name.clone(),
+                from: NamedBy::Stream,
+            },
+            None => ProfileHeld {
+                profile: default.to_string(),
+                from: NamedBy::Neither,
+            },
+        };
+        StreamDisplay {
+            multiplexer: named(stream.and_then(|s| s.multiplexer.as_ref()), "fake"),
+            view: match stream.and_then(|s| s.view) {
+                Some(view) => ViewHeld {
+                    view,
+                    from: NamedBy::Stream,
+                },
+                None => ViewHeld {
+                    view: View::Terminal,
+                    from: NamedBy::Neither,
+                },
+            },
+            terminal_app: named(stream.and_then(|s| s.terminal_app.as_ref()), "fake-window"),
+        }
     }
 
     fn pool(&self, name: &str) -> Option<Pool> {

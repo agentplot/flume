@@ -2,7 +2,7 @@
 //! (design 2, 105). The core is built over one; a profile is chosen from
 //! the binding alone (core.3).
 
-use crate::{Agent, Binding, Change, Kinds, MergeQueue, Place};
+use crate::{Agent, Binding, Change, Kinds, MergeQueue, Place, Terminal, Window};
 use std::sync::Arc;
 
 pub trait Resolver: Send + Sync {
@@ -30,4 +30,21 @@ pub trait Resolver: Send + Sync {
     /// The agent profile a stage's settings name by its program (32,
     /// 105).
     fn agent(&self, program: &str) -> Option<Arc<dyn Agent>>;
+
+    /// The terminal profile named `profile`, none where it carries none;
+    /// the one the host's multiplexer names is the terminal the core is
+    /// built with (105, 190).
+    fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>>;
+
+    /// The names of the terminal profiles it carries, so a stream naming
+    /// another is refused naming them (105, 190).
+    fn terminal_profiles(&self) -> Vec<String>;
+
+    /// The window profile named `profile`, none where it carries none
+    /// (105, 188).
+    fn window(&self, profile: &str) -> Option<Arc<dyn Window>>;
+
+    /// The names of the window profiles it carries, so a stream naming
+    /// another is refused naming them (105, 188).
+    fn window_profiles(&self) -> Vec<String>;
 }

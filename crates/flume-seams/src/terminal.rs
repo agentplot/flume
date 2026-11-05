@@ -203,9 +203,10 @@ pub struct ViewCommand {
     pub environment: BTreeMap<String, String>,
 }
 
-/// attach: the command that shows the part, the part started first
-/// where it did not run; the part shown in a window the terminal draws
-/// itself; or a refusal (187).
+/// attach: for a window, the command that shows the part, the part
+/// started first where it did not run; for the terminal's own app, the
+/// app told to show it; or a refusal where the terminal holds no part a
+/// person can be shown or offers no such view (187).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Attached {
@@ -298,6 +299,7 @@ pub trait Terminal: Send + Sync {
     fn session(&self) -> Option<String>;
 
     /// The part named `session`, the terminal's own where none, shown to
-    /// a person under `title` (187).
-    fn attach(&self, session: Option<&str>, title: &str) -> Attached;
+    /// a person in `view`: a terminal view answers a command or a
+    /// refusal, and the app's view shown or a refusal (187).
+    fn attach(&self, session: Option<&str>, view: crate::View) -> Attached;
 }

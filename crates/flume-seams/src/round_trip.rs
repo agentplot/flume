@@ -286,6 +286,10 @@ fn held() -> HeldState {
                     name: "operation".into(),
                     from: LabelFrom::Kind,
                 }),
+                terminal: Some(ProfileHeld {
+                    profile: "fake".into(),
+                    from: NamedBy::Stream,
+                }),
             }),
             since: Some(120),
         }],
@@ -2297,6 +2301,11 @@ fn the_terminal_seams_answers() {
 
 #[test]
 fn a_view_a_window_and_a_stream() {
+    // The seam-contracts spec's view, window and stream's terminal: a
+    // command needing a variable, attach's and show's answers, each view,
+    // a stream's display from each source, a stream with its four keys
+    // and a start with its terminal read back unchanged, and a stream and
+    // a start written before reading with none (143, 187, 188, 190).
     let command = ViewCommand {
         program: "/bin/terminal".into(),
         arguments: vec!["session".into(), "attach".into(), "work".into()],
@@ -2325,13 +2334,94 @@ fn a_view_a_window_and_a_stream() {
     round_trips(WindowShown::Refused {
         reason: "Unable to find application named 'Window.app'".into(),
     });
+    for (view, spelled) in [(View::Terminal, "terminal"), (View::App, "app")] {
+        round_trips(view);
+        assert_eq!(serde_json::to_value(view).unwrap(), spelled);
+        assert_eq!(view.name(), spelled);
+    }
+    for (from, spelled) in [
+        (NamedBy::Stream, "stream"),
+        (NamedBy::Host, "host"),
+        (NamedBy::Neither, "neither"),
+    ] {
+        round_trips(from);
+        assert_eq!(serde_json::to_value(from).unwrap(), spelled);
+        let display = StreamDisplay {
+            multiplexer: ProfileHeld {
+                profile: "terminal".into(),
+                from,
+            },
+            view: ViewHeld {
+                view: View::App,
+                from,
+            },
+            terminal_app: ProfileHeld {
+                profile: "window".into(),
+                from,
+            },
+        };
+        round_trips(display.clone());
+        assert_eq!(
+            serde_json::to_value(&display).unwrap()["view"],
+            serde_json::json!({"view": "app", "from": spelled})
+        );
+    }
     round_trips(Stream {
         title: Some("Work Agents".into()),
         ..Stream::default()
     });
+    let stream = Stream {
+        multiplexer: Some("terminal".into()),
+        view: Some(View::Terminal),
+        terminal_app: Some("window".into()),
+        title: Some("Work Agents".into()),
+        ..Stream::default()
+    };
+    round_trips(stream.clone());
+    assert_eq!(
+        serde_json::to_value(&stream).unwrap(),
+        serde_json::json!({
+            "priority": 0,
+            "multiplexer": "terminal",
+            "view": "terminal",
+            "terminal_app": "window",
+            "title": "Work Agents",
+        })
+    );
     let before: Stream = serde_json::from_str(r#"{"agents":4,"priority":10}"#).unwrap();
     assert_eq!(before.title, None);
-    assert!(!serde_json::to_string(&before).unwrap().contains("title"));
+    assert_eq!(
+        (&before.multiplexer, before.view, &before.terminal_app),
+        (&None, None, &None)
+    );
+    let written = serde_json::to_string(&before).unwrap();
+    for key in ["title", "multiplexer", "view", "terminal_app"] {
+        assert!(!written.contains(key), "{written} gives no {key}");
+    }
+
+    // A start holds the terminal its agent opened in; one written before
+    // reads with none, the host's, and writes none back (56, 190).
+    let state = held();
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["stages"][0]["start"]["terminal"],
+        serde_json::json!({"profile": "fake", "from": "stream"})
+    );
+    let mut before = json;
+    before["stages"][0]["start"]
+        .as_object_mut()
+        .unwrap()
+        .remove("terminal");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(
+        read.stages[0].start.as_ref().expect("a start").terminal,
+        None
+    );
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no terminal written where none is held"
+    );
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use crate::{lock, FakeKinds, Log};
-use flume_seams::{Agent, Binding, Change, Kinds, MergeQueue, Place, Resolver};
+use flume_seams::{Agent, Binding, Change, Kinds, MergeQueue, Place, Resolver, Terminal, Window};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -20,6 +20,10 @@ struct Profiles {
     changes: BTreeMap<String, Arc<dyn Change>>,
     merge_queues: BTreeMap<String, Arc<dyn MergeQueue>>,
     agents: BTreeMap<String, Arc<dyn Agent>>,
+    /// The terminal and window profiles by name, none until a test names
+    /// one (105, 188, 190).
+    terminals: BTreeMap<String, Arc<dyn Terminal>>,
+    windows: BTreeMap<String, Arc<dyn Window>>,
 }
 
 impl FakeResolver {
@@ -86,5 +90,21 @@ impl Resolver for FakeResolver {
 
     fn agent(&self, program: &str) -> Option<Arc<dyn Agent>> {
         lock(&self.state).agents.get(program).cloned()
+    }
+
+    fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>> {
+        lock(&self.state).terminals.get(profile).cloned()
+    }
+
+    fn terminal_profiles(&self) -> Vec<String> {
+        lock(&self.state).terminals.keys().cloned().collect()
+    }
+
+    fn window(&self, profile: &str) -> Option<Arc<dyn Window>> {
+        lock(&self.state).windows.get(profile).cloned()
+    }
+
+    fn window_profiles(&self) -> Vec<String> {
+        lock(&self.state).windows.keys().cloned().collect()
     }
 }

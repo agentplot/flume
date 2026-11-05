@@ -18,7 +18,7 @@
 use crate::shell;
 use flume_seams::{
     AgentCommand, AgentState, Attached, Closed, Clues, Identity, OpenIn, Opened, PlaceRef, Sent,
-    Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
+    Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, Watch,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -195,8 +195,8 @@ impl Terminal for Printed {
     }
 
     /// Its agents run in the commands it printed, so it holds no session
-    /// a person can be shown (187).
-    fn attach(&self, _session: Option<&str>, _title: &str) -> Attached {
+    /// a person can be shown in either view (187).
+    fn attach(&self, _session: Option<&str>, _view: View) -> Attached {
         Attached::Refused {
             reason: "the printed command holds no session a person can be shown; its agents run in the commands it printed".into(),
         }

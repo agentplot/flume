@@ -218,6 +218,18 @@ impl Resolver for StandIn {
     fn agent(&self, program: &str) -> Option<Arc<dyn Agent>> {
         (program == STAND_IN).then(|| Arc::new(StandInAgent) as Arc<dyn Agent>)
     }
+    fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>> {
+        self.0.terminal(profile)
+    }
+    fn terminal_profiles(&self) -> Vec<String> {
+        self.0.terminal_profiles()
+    }
+    fn window(&self, profile: &str) -> Option<Arc<dyn Window>> {
+        self.0.window(profile)
+    }
+    fn window_profiles(&self) -> Vec<String> {
+        self.0.window_profiles()
+    }
 }
 
 /// This test binary as flume, where the test that re-runs it asks: the

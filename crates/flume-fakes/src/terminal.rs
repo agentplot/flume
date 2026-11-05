@@ -1,7 +1,7 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
     AgentCommand, AgentState, Attached, Closed, Clues, Host, Identity, OpenIn, Opened, PlaceRef,
-    Seconds, Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, ViewCommand, Watch,
+    Seconds, Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, ViewCommand, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -20,9 +20,10 @@ use std::sync::{Arc, Mutex};
 /// holds recipients' sessions by name, each with a state a test sets,
 /// and keeps every text sent to each in order; an agent opened under a
 /// session name is that session while it is live (43, 95, 132). Attach
-/// answers a command of its own, `fake-terminal attach <session>` or
-/// `attach own`, with no environment, or as scripted, and logs each
-/// asking with its title (187).
+/// answers a terminal view with a command of its own, `fake-terminal
+/// attach <session>` or `attach own`, with no environment, and the app's
+/// view shown, or either as scripted, and logs each asking with its view
+/// (187).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -750,18 +751,21 @@ impl Terminal for FakeTerminal {
         lock(&self.state).session.clone()
     }
 
-    fn attach(&self, session: Option<&str>, title: &str) -> Attached {
+    fn attach(&self, session: Option<&str>, view: View) -> Attached {
         let part = session.unwrap_or("own");
-        self.log.push(format!("attach {part} titled {title}"));
+        self.log.push(format!("attach {part} for {}", view.name()));
         lock(&self.state)
             .attaches_as
             .clone()
-            .unwrap_or_else(|| Attached::Command {
-                command: ViewCommand {
-                    program: "fake-terminal".into(),
-                    arguments: vec!["attach".into(), part.into()],
-                    environment: Default::default(),
+            .unwrap_or_else(|| match view {
+                View::Terminal => Attached::Command {
+                    command: ViewCommand {
+                        program: "fake-terminal".into(),
+                        arguments: vec!["attach".into(), part.into()],
+                        environment: Default::default(),
+                    },
                 },
+                View::App => Attached::Shown,
             })
     }
 }

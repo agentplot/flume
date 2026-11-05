@@ -549,6 +549,7 @@ impl Engine {
                 conversation: conversation.clone(),
                 session: opens_in.clone(),
                 label: label.clone(),
+                terminal: None,
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {

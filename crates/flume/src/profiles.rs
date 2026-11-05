@@ -10,11 +10,13 @@ use crate::host::{self, RealHost};
 use flume_core::{Defaults, Engine};
 use flume_seams::{
     Agent, Binding, BranchRemoved, Change, Kinds, MakeOutcome, MergeQueue, Place, PlaceRead,
-    PlaceRef, Readiness, ReadyStep, Removed, Resolver, Revision, Settings, Terminal,
+    PlaceRef, Readiness, ReadyStep, Removed, Resolver, Revision, Settings, Terminal, Window,
 };
 use place::git_worktree::{self, GitWorktree, Login, PlaceData, Step};
+use std::collections::BTreeMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 // ---- the place seam's profiles: a profile unit appends its module line below ----
 pub mod place {
@@ -75,14 +77,37 @@ pub fn defaults() -> Defaults {
 /// The resolver from a binding's profile names to the profiles built in
 /// (105, core.3): the kinds through weir's format, the place through
 /// plain `git worktree` bound with the merge queue's data, the change
-/// through OpenSpec, the merge queue through sluice, and the agent by
-/// its program. A name it does not hold resolves to nothing, so the core
-/// refuses naming it.
+/// through OpenSpec, the merge queue through sluice, the agent by its
+/// program, and the terminal by its name. A name it does not hold
+/// resolves to nothing, so the core refuses naming it.
 #[derive(Clone, Debug, Default)]
 pub struct BuiltIn {
     /// The login environment the place's steps run in, the host user's
     /// where none is given.
     login: Option<Vec<(String, String)>>,
+    /// The terminal profiles built for this command, shared by its
+    /// clones.
+    terminals: Arc<Terminals>,
+}
+
+/// The terminal profiles a command built, by name, each at most once, so
+/// the host's own is the very one the core is built with; and flume's
+/// state directory their records go under, none until the core is built
+/// over the resolver (105, 190; design 2).
+#[derive(Default)]
+struct Terminals {
+    state: OnceLock<PathBuf>,
+    built: Mutex<BTreeMap<String, Arc<dyn Terminal>>>,
+}
+
+impl fmt::Debug for Terminals {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let built = self.built.lock().unwrap_or_else(PoisonError::into_inner);
+        f.debug_struct("Terminals")
+            .field("state", &self.state.get())
+            .field("built", &built.keys().collect::<Vec<_>>())
+            .finish()
+    }
 }
 
 impl BuiltIn {
@@ -101,7 +126,31 @@ impl BuiltIn {
                     .map(|(name, value)| (name.to_string(), value.to_string()))
                     .collect(),
             ),
+            terminals: Arc::default(),
         }
+    }
+
+    /// The terminal profile `name` names, the printed command where none,
+    /// its records under flume's state directory `state`: the one built
+    /// before for this command, else built now and kept; or the refusal
+    /// naming the profiles there are (105, 190).
+    fn terminal_named(
+        &self,
+        name: Option<&str>,
+        state: &Path,
+    ) -> Result<Arc<dyn Terminal>, String> {
+        let name = name.unwrap_or(terminal::printed::NAME);
+        let mut built = self
+            .terminals
+            .built
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some(built) = built.get(name) {
+            return Ok(built.clone());
+        }
+        let profile = terminal(Some(name), state, self.login.as_deref())?;
+        built.insert(name.into(), profile.clone());
+        Ok(profile)
     }
 
     /// The login environment's `$XDG_DATA_HOME`, or its
@@ -179,6 +228,31 @@ impl Resolver for BuiltIn {
             }
         };
         Some(Arc::new(claude))
+    }
+
+    /// The terminal profile named `profile`, built at most once for the
+    /// command, the host's own the very one the core is built with; none
+    /// for a name it does not hold, or before the core is built over it,
+    /// with no state directory for the records (105, 190).
+    fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>> {
+        if !terminal_profiles().iter().any(|name| name == profile) {
+            return None;
+        }
+        let state = self.terminals.state.get()?;
+        self.terminal_named(Some(profile), state).ok()
+    }
+
+    fn terminal_profiles(&self) -> Vec<String> {
+        terminal_profiles()
+    }
+
+    /// No window profile is built in yet (188).
+    fn window(&self, _profile: &str) -> Option<Arc<dyn Window>> {
+        None
+    }
+
+    fn window_profiles(&self) -> Vec<String> {
+        vec![]
     }
 }
 
@@ -364,10 +438,12 @@ pub fn core() -> Result<Engine, String> {
     )
 }
 
-/// The core over `resolver`, the terminal `config` binds, the store in
-/// flume's state directory `state`, git's history, and the host with
-/// `config` and `recipient`, and the login environment `resolver` was
-/// given where it was given one, with flume's [`defaults`] (design 16).
+/// The core over `resolver`, the terminal `config` binds, built through
+/// `resolver` so the one it gives by that name is the core's own (190),
+/// the store in flume's state directory `state`, git's history, and the
+/// host with `config` and `recipient`, and the login environment
+/// `resolver` was given where it was given one, with flume's
+/// [`defaults`] (design 16).
 pub fn core_over(
     state: &Path,
     config: HostConfig,
@@ -375,7 +451,16 @@ pub fn core_over(
     resolver: BuiltIn,
 ) -> Result<Engine, String> {
     let login = resolver.login.clone();
-    core_with(state, config, recipient, Arc::new(resolver), login)
+    let _ = resolver.terminals.state.set(state.to_path_buf());
+    let terminal = resolver.terminal_named(config.terminal.as_deref(), state)?;
+    core_built(
+        state,
+        config,
+        recipient,
+        Arc::new(resolver),
+        login,
+        terminal,
+    )
 }
 
 /// The core over any resolver, as [`core_over`] builds it over the
@@ -391,6 +476,19 @@ pub fn core_with(
     login: Option<Vec<(String, String)>>,
 ) -> Result<Engine, String> {
     let terminal = terminal(config.terminal.as_deref(), state, login.as_deref())?;
+    core_built(state, config, recipient, resolver, login, terminal)
+}
+
+/// The core over `resolver` and the host's own `terminal`, as
+/// [`core_with`] builds it.
+fn core_built(
+    state: &Path,
+    config: HostConfig,
+    recipient: Option<String>,
+    resolver: Arc<dyn Resolver>,
+    login: Option<Vec<(String, String)>>,
+    terminal: Arc<dyn Terminal>,
+) -> Result<Engine, String> {
     let mut host = RealHost::new(state, config, recipient);
     if let Some(login) = &login {
         host = host.with_login(login);

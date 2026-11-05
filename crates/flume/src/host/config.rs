@@ -37,12 +37,18 @@
 
 use flume_seams::{
     is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LabelFrom,
-    LabelHeld, LocalLayer, PinnedKey, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Share,
-    Strategy, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM, SET,
+    LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool, PoolFrom, PoolNamed, ProfileHeld, RoleRun,
+    Settings, Share, Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld,
+    DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use toml::{Table, Value};
+
+/// The profile a stream and the host naming none get, for its
+/// multiplexer the printed command and for its terminal app the printed
+/// window (105, 188, 190).
+const PRINTED: &str = "printed";
 
 /// The keys the local layer may set, each a path of segments, `*` any one
 /// name: a stream's `agents`, `priority`, `points`, `pace` and `session`,
@@ -400,6 +406,44 @@ impl HostConfig {
                     .get(kind)
                     .map(|name| held(name, LabelFrom::HostKind))
             })
+    }
+
+    /// The multiplexer, view and terminal app of a place in `stream`:
+    /// each the stream's own, else the host's, else the printed command,
+    /// a terminal view and the printed window (186, 190, C.7).
+    pub fn display_for(&self, stream: &str) -> StreamDisplay {
+        let stream = self.streams.get(stream);
+        let named = |own: Option<&String>, host: Option<&String>| match (own, host) {
+            (Some(name), _) => ProfileHeld {
+                profile: name.clone(),
+                from: NamedBy::Stream,
+            },
+            (None, Some(name)) => ProfileHeld {
+                profile: name.clone(),
+                from: NamedBy::Host,
+            },
+            (None, None) => ProfileHeld {
+                profile: PRINTED.into(),
+                from: NamedBy::Neither,
+            },
+        };
+        StreamDisplay {
+            multiplexer: named(
+                stream.and_then(|stream| stream.multiplexer.as_ref()),
+                self.terminal.as_ref(),
+            ),
+            view: match stream.and_then(|stream| stream.view) {
+                Some(view) => ViewHeld {
+                    view,
+                    from: NamedBy::Stream,
+                },
+                None => ViewHeld {
+                    view: View::Terminal,
+                    from: NamedBy::Neither,
+                },
+            },
+            terminal_app: named(stream.and_then(|stream| stream.terminal_app.as_ref()), None),
+        }
     }
 
     /// The pool of a place in `stream`: the stream's own, else the
@@ -918,7 +962,7 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 pool: text_of(table, "pool", &at)?,
                 session: text_of(table, "session", &at)?,
                 labels: shares_of(table, &at)?,
-                title: None,
+                ..Stream::default()
             },
         );
     }

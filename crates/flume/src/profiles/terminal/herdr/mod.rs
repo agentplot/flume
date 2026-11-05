@@ -81,7 +81,7 @@
 use crate::host::process::{executable, program_path};
 use flume_seams::{
     AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
-    PlaceRef, Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
+    PlaceRef, Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -2179,9 +2179,9 @@ impl Terminal for Herdr {
         self.caller.as_ref().map(Pane::session)
     }
 
-    /// Refused until the change that opens a stream's window builds it on
-    /// the stream's own sessions (187).
-    fn attach(&self, _session: Option<&str>, _title: &str) -> Attached {
+    /// Either view refused until the change that opens a stream's view
+    /// builds it on the stream's own sessions (187).
+    fn attach(&self, _session: Option<&str>, _view: View) -> Attached {
         Attached::Refused {
             reason: "herdr's attach is not yet built".into(),
         }

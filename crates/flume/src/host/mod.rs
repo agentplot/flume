@@ -15,7 +15,7 @@ pub mod process;
 use config::HostConfig;
 use flume_seams::{
     Host, HostConfiguration, HostSettings, LabelHeld, Pool, PoolNamed, RoleRun, RoomGuard, Seconds,
-    Secret, Stream, StreamHeld,
+    Secret, Stream, StreamDisplay, StreamHeld,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -276,6 +276,10 @@ impl Host for RealHost {
 
     fn pool_for(&self, stream: &str) -> Option<PoolNamed> {
         self.config.pool_for(stream)
+    }
+
+    fn display_for(&self, stream: &str) -> StreamDisplay {
+        self.config.display_for(stream)
     }
 
     fn pool(&self, name: &str) -> Option<Pool> {
