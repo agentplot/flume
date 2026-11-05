@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "94b4edb";
+pub const REVISION: &str = "033d887";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -211,7 +211,7 @@ mod tests {
             assert!(!all().contains(&skipped.to_string()), "{skipped} is listed");
         }
         assert!(all().contains(&"S102".to_string()), "S102 is not listed");
-        assert_eq!(REVISION, "94b4edb");
+        assert_eq!(REVISION, "033d887");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
             173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191, 195,
