@@ -58,9 +58,12 @@ This change is the design, on the user's rulings of 2026-11-05: record
 events to it by `flume wake`; the answerer is crew's roles, each a Flume
 kind at its own address; crew's roles are crew's to declare, never
 repeated in each host's configuration; planning is a label of each
-partition's stream; and an address is a role of a stream. It builds
-nothing until the user has read it. Its tasks are the build that
-follows.
+partition's stream; an address is a role of a stream; a role's run
+reads flume's list for its address; the operator may ask the user, in
+the Plannotator Inbox; the roles move in the user's order, the planner
+and the design agent once flume gives an agent's effort; and the word
+label keeps flume's meaning alone. It builds nothing until the user has
+read it. Its tasks are the build that follows.
 
 - **The decision.** Record 0039, written to the rulings. An address is
   a role of a stream. Every main-level role answers as a Flume kind at
@@ -68,8 +71,12 @@ follows.
   it is for, in any stream. The stream's door, its operator, stands
   behind every stall. An answer names the stop-short it answers and is
   taken once. A restarted recipient sees every place that waits on it.
-  A question that is the user's becomes one card, made by the role whose
-  question it is.
+  A question that is the user's is asked once in the user's Plannotator
+  Inbox, by the role whose question it is, in its address's thread under
+  an Inbox identity of the address's that outlives each run; crew's
+  follower and the runner's `flume wake` carry the answer to the role's
+  next run. Plannotator offers no watch and no identity for an address,
+  and the design says how it works around both.
 - **An address is a role of a stream.** `<stream>/<role>`: the role a
   source declares for a stream the host declares (143). `madswan/ops`
   is ops of the stream `madswan`. A role's run runs in its address's
@@ -142,12 +149,15 @@ follows.
   - afterthought/crew: its kinds as packages declaring the label
     `planning`; its roles file, written from its partitions at their
     streams' addresses; the teams file naming each partition's one
-    stream; its turn collecting flume's inbox and holding, answering,
-    passing or carding each question; each brief's part of the routing;
-    the operator behind every stall of its stream; `crew answer`
-    carrying the key and taking any place; a card for a place's question
-    keyed by the place and the end; roles.7 holding as written, and the
-    change `roles-run-as-flume-kinds` Decisions 1, 3 and 6 giving way to
+    stream; its turn reading flume's list for its address and holding,
+    answering, passing or putting each question to the user; each
+    brief's part of the routing; the operator behind every stall of its
+    stream; `crew answer` carrying the key and taking any place; a
+    place's question put to the user in the Plannotator Inbox as its
+    address's identity, keyed by the place and the end; the follower
+    reading each role's Inbox threads at its minute and writing each
+    answer as an ask; roles.7 holding as written, and the change
+    `roles-run-as-flume-kinds` Decisions 1, 3 and 6 giving way to
     flume's launch and crew's roles file.
   - agentplot/boomdrive: the runner wakes a role by `flume wake`, and
     launches and ends no role's run; it passes an answer's key with its
@@ -155,7 +165,12 @@ follows.
   - The host, on deneb: crew declared as a source and its kinds locked,
     and the streams `agentplot`, `madswan` and `swancloud` with
     `planning`'s reserve, with flume's release and the operators' move;
-    each later role moved by crew alone, in the order design 13 gives.
+    each later role moved by crew alone, in the order design 13 gives,
+    the planner and the design agent once flume's change
+    `an-agents-effort-is-a-setting-of-flumes-layers` is released.
+  - Plannotator, outside the family: a watch on replies to a session no
+    host wakes, and an identity for an address, asked of it (design
+    12.5).
 - **The site** says what an address is, who answers a place's question,
   a source's roles, addressing a role of any stream, the answerer behind
   a stream, a role's run's name and its end, the hold on the waiting
@@ -199,8 +214,8 @@ None.
 
 ## Impact
 
-- **Before the build.** The user's read of the design and their answers
-  to its Open Questions. agentplot/blueprints: flume's statement
+- **Before the build.** The user's read of the design and their answer
+  to its open question. agentplot/blueprints: flume's statement
   amended on main as design 12.1 words it (core.19). This repository:
   the change `a-host-declares-where-its-kinds-come-from` landed, since
   a source's declaration is read by it.

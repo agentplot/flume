@@ -7,7 +7,7 @@ through sluice. Every conformance scenario a group adds cites its
 clauses as data (106).
 
 Group 1 is built once the user has read the design and answered its
-Open Questions. The groups after it are built once flume's statement is
+open question. The groups after it are built once flume's statement is
 amended on agentplot/blueprints main as design 12.1 words it, and once
 the change `a-host-declares-where-its-kinds-come-from` has landed on
 this repository's main, since a source's declaration and its packages
@@ -26,8 +26,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Record in record 0039 the user's answers to the design's Open
-  Questions, quoting their words with the date, and lift the proposed
+- [ ] 1.1 Record in record 0039 the user's answer to the design's open
+  question, quoting their words with the date, and lift the proposed
   mark from the parts they read. Its consequences give the
   agentplot/blueprints revision that holds the statement's amendment
   (section 3's address, 4, 7, 8, 28, 41, 42, 43, 49, 56, 130, 132, 143,
@@ -380,8 +380,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
     address's stream, with its settings and intent, its end at its
     delivery;
     the answerer behind a stream; a carried address; and an answering
-    run's way with a question: hold, answer, pass, or one card keyed by
-    the place and the end.
+    run's way with a question: hold, answer, pass, or ask a person once,
+    keyed by the place and the end.
   - `guides/claude-code.mdx`: what SessionStart gives a session of the
     operator's own.
   - `reference/configuration.md`: a source's `roles`, its file's form

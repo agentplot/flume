@@ -11,7 +11,7 @@ it (41, 42, 49, 61, 130).
 
 #### Scenario: The forms
 
-- **WHEN** `flume hold change--x "asked on card req_1" --waiting --for 1h --json` and `flume retry change--x --stage construct --answers stage/construct/1/ended-short --words "yes" --json` run in turn against the fakes
+- **WHEN** `flume hold change--x "asked the user, msg_1" --waiting --for 1h --json` and `flume retry change--x --stage construct --answers stage/construct/1/ended-short --words "yes" --json` run in turn against the fakes
 - **THEN** each answers in the JSON form, the hold with its words and bound, and the retry with the place's status
 
 #### Scenario: A stop-short addressed by its role
