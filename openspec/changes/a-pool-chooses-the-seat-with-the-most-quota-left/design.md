@@ -483,20 +483,24 @@ The JSON form gains, all additive (core.14):
 
 - `pools[].threshold`: the pool's threshold, 90 where it states none.
 - `pools[].accounts[].reading`, where the account names one: `read_at`,
-  `fresh`, and `windows`, each with `name`, `used` as a percentage,
-  `resets_at` and `past`; or `unread`, the words of why there is none.
+  `fresh`, and `windows`, each with `name`, `used` as a percentage, a
+  whole number where it is one, `resets_at` where the reading gives one,
+  and `past`, whether that window holds the account past its threshold;
+  or `unread`, the words of why there is none.
 - `pools[].accounts[].past`, while the account is past its threshold:
   `window` and `until`.
 - On a move, `why` may be `threshold`, with `window` and `until`.
-- `room` `pool`'s `until` counts a threshold's end.
+- `room` `pool`'s `until` counts a threshold's end, and its words say
+  `the soonest back at <time>`.
 
-The person's form prints a pool `pool work, most-left, threshold 90%:`
-and, under each account, its reading: `5-hour 42% (resets 17:00) ·
-7-day 71% (resets Nov 9, 08:00) · read 2 minutes ago`, `stale, read 20
-minutes ago` where not fresh, or `no reading: <words>`; and `past its
-threshold in 5-hour until 17:00`. A move off an account past its
-threshold reads `the intent moved for claude from work-1 to work-2 at
-…, work-1 past its threshold in 5-hour until 17:00`. Status prints no
+The person's form prints every time as status prints a spent account's,
+the host's clock in seconds; 17:00 below stands for that. It prints a
+pool `pool work, most-left, threshold 90%:` and, under each account,
+its reading: `5-hour 42% (resets 17:00) · 7-day 71% · read at 16:58`,
+`stale, read at 16:40` where not fresh, or `no reading: <words>`; and
+`past its threshold in 5-hour until 17:00`. A move off an account past
+its threshold reads `the intent moved for claude from work-1 to work-2
+at …, work-1 past its threshold in 5-hour until 17:00`. Status prints no
 reading's path.
 
 ### 9. How this sits with least-busy, points and pace, and spent marks

@@ -237,9 +237,10 @@ impl MoveStatus {
     }
 
     /// The move as a person reads it, an intent's for the program whose
-    /// account moved where it names one, with whether a stage's
-    /// conversation went with it where its agent stopped at its
-    /// account's usage limit (56, 147, 179).
+    /// account moved where it names one, off an account past its
+    /// threshold with the window that held it and its end, with whether a
+    /// stage's conversation went with it where its agent stopped at its
+    /// account's usage limit (56, 147, 179, 185).
     pub fn words(&self) -> String {
         let moved = &self.moved;
         let what = match &moved.on {
@@ -254,18 +255,17 @@ impl MoveStatus {
             Some(false) => ", its conversation stayed behind",
             None => "",
         };
+        let why = match (moved.why, &moved.window, moved.until) {
+            (MoveWhy::Spent, ..) => "spent".to_string(),
+            (MoveWhy::Threshold, Some(window), Some(until)) => {
+                format!("past its threshold in {window} until {until}")
+            }
+            (MoveWhy::Threshold, ..) => "past its threshold".to_string(),
+            (MoveWhy::Full, ..) => "at its bound".to_string(),
+        };
         format!(
-            "{what} from {} to {} at {}, {} {}{conversation}, its agents after starting without {}'s cache",
-            moved.from,
-            moved.to,
-            moved.at,
-            moved.from,
-            match moved.why {
-                MoveWhy::Spent => "spent",
-                MoveWhy::Threshold => "past its threshold",
-                MoveWhy::Full => "at its bound",
-            },
-            moved.from
+            "{what} from {} to {} at {}, {} {why}{conversation}, its agents after starting without {}'s cache",
+            moved.from, moved.to, moved.at, moved.from, moved.from
         )
     }
 }

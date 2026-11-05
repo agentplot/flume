@@ -110,12 +110,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: an_account_past_its_threshold,
         },
         Scenario {
-            name: "status: an intent whose affinity for agent moved off work-1, past its threshold in 5-hour until 17:00, to work-2 gives the move with why threshold, the window and its end, in the JSON form",
+            name: "status: an intent whose affinity for agent moved off work-1, past its threshold in 5-hour until 17:00, to work-2 gives the move with why threshold, the window and its end, in the JSON form and the person's",
             cites: &["56", "147", "185"],
             run: an_intents_move_past_a_threshold,
         },
         Scenario {
-            name: "status: a move a held state holds as an earlier release wrote it, spent with no window or end, is given as written",
+            name: "status: a move a held state holds as an earlier release wrote it, spent with no window or end, is given as written, in the JSON form and the person's",
             cites: &["56", "61"],
             run: a_move_recorded_before,
         },
@@ -982,6 +982,13 @@ fn an_intents_move_past_a_threshold(_: &()) -> Outcome {
         }]),
         "the place's moves in the JSON form"
     );
+    let words = status.moves[0].words();
+    ensure!(
+        words.starts_with(&format!(
+            "the intent moved for agent from work-1 to work-2 at {now}, work-1 past its threshold in 5-hour until {seventeen},"
+        )),
+        "the move in the person's form: {words}"
+    );
     Ok(())
 }
 
@@ -1009,6 +1016,11 @@ fn a_move_recorded_before(_: &()) -> Outcome {
             .collect::<Vec<_>>(),
         vec![(None, None)],
         "the move's window and end"
+    );
+    let words = status.moves[0].words();
+    ensure!(
+        words.contains("work-1 spent,") && !words.contains("threshold"),
+        "the move in the person's form: {words}"
     );
     let mut given = before;
     given["cache"] = serde_json::json!("lost");
