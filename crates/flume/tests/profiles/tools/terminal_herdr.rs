@@ -250,8 +250,15 @@ impl TestServer {
                 LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             ));
             let _ = fs::remove_file(&link);
-            std::os::unix::fs::symlink(&scratch.root, &link)
-                .unwrap_or_else(|error| panic!("a short link at {}: {error}", link.display()));
+            std::os::unix::fs::symlink(&scratch.root, &link).unwrap_or_else(|error| {
+                crate::could_not_run(&format!(
+                    "the server's socket needs a short link, its scratch {} being {} bytes, \
+                     and {} cannot be made: {error}",
+                    scratch.root.display(),
+                    scratch.root.as_os_str().len(),
+                    link.display()
+                ))
+            });
             (link.join("s"), Some(link))
         } else {
             (scratch.path("s"), None)
@@ -2788,45 +2795,45 @@ impl SessionHome {
             std::process::id(),
             LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         );
-        // The temporary folder where the sessions' sockets fit under it,
-        // else `/tmp` where the run may write there, as a run whose
-        // temporary folder is long needs; else the temporary folder, whose
-        // sockets the check below finds no room for, naming their bytes.
-        let fits = |folder: &Path| {
-            names.iter().all(|name| {
-                let socket = folder
-                    .join(&named)
-                    .join(format!("herdr/sessions/{name}/{CLIENT_SOCKET}"));
-                socket.as_os_str().len() <= limit
-            })
+        let socket = |folder: &Path, name: &str| {
+            folder
+                .join(&named)
+                .join(format!("herdr/sessions/{name}/{CLIENT_SOCKET}"))
         };
-        let linked = |folder: PathBuf| {
+        let fits = |folder: &Path| {
+            names
+                .iter()
+                .all(|name| socket(folder, name).as_os_str().len() <= limit)
+        };
+        let linked = |folder: &Path| {
             let link = folder.join(&named);
             let _ = fs::remove_file(&link);
             std::os::unix::fs::symlink(scratch.path("home"), &link).map(|()| link)
         };
+        // The temporary folder where the sessions' sockets fit under it,
+        // else `/tmp` where the run may write there, as a run whose
+        // temporary folder is long needs.
         let short = short_folder();
-        let tmp = PathBuf::from("/tmp");
-        let link = if !fits(&short) && fits(&tmp) {
-            linked(tmp).or_else(|_| linked(short))
-        } else {
-            linked(short)
-        }
-        .unwrap_or_else(|error| panic!("a short link for the session home: {error}"));
-        for name in names {
-            let socket = link.join(format!("herdr/sessions/{name}/{CLIENT_SOCKET}"));
-            let bytes = socket.as_os_str().len();
-            if bytes > limit {
+        let link = [short.clone(), PathBuf::from("/tmp")]
+            .iter()
+            .filter(|folder| fits(folder))
+            .find_map(|folder| linked(folder).ok())
+            .unwrap_or_else(|| {
+                let sockets = names
+                    .iter()
+                    .map(|name| {
+                        let socket = socket(&short, name);
+                        format!("{}, {} bytes", socket.display(), socket.as_os_str().len())
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
                 crate::could_not_run(&format!(
-                    "herdr's session {name} would bind {}, {bytes} bytes, past the {limit} a \
-                     socket's path holds on this host: the session home {}, {} bytes, leaves \
-                     no room for it",
-                    socket.display(),
-                    link.display(),
-                    link.as_os_str().len()
-                ));
-            }
-        }
+                    "no folder this run may write, {} or /tmp, leaves herdr's sessions {} room \
+                     within the {limit} bytes a socket's path holds on this host: {sockets}",
+                    short.display(),
+                    names.join(", ")
+                ))
+            });
         SessionHome { scratch, link }
     }
 
