@@ -57,7 +57,8 @@ fresh() {
   count=$((count + 1))
   t=$scratch/t$count
   mkdir -p "$t/state" "$t/fake"
-  export HERDR_PLUGIN_STATE_DIR="$t/state" FAKE="$t/fake" FLUME_HERDR_CLOCK="$t/clock"
+  # herdr's configuration a scratch file, none until a test writes it.
+  export HERDR_PLUGIN_STATE_DIR="$t/state" FAKE="$t/fake" FLUME_HERDR_CLOCK="$t/clock" HERDR_CONFIG_PATH="$t/herdr.toml"
   echo 1000 >"$t/clock"
   S=$t/state/servers/$(printf '%s' "$SOCK" | cksum | cut -d' ' -f1)
   mkdir -p "$S"
@@ -134,10 +135,15 @@ fresh 'manifest: the plugin'"'"'s own reads as herdr reads it'
 sh "$here/manifest.sh" >"$t/out" 2>&1 || fail "$(cat "$t/out")"
 pass
 
+# The plugin copied to $t/p, its manifest edited by the sed program $1.
+copied() {
+  mkdir -p "$t/p"
+  cp -R "$plugin/bin" "$plugin/lib" "$plugin/README.md" "$t/p/"
+  sed "$1" "$plugin/herdr-plugin.toml" >"$t/p/herdr-plugin.toml"
+}
+
 fresh 'manifest: a missing script fails it'
-mkdir -p "$t/p/bin"
-sed 's|bin/watch.sh|bin/gone.sh|' "$plugin/herdr-plugin.toml" >"$t/p/herdr-plugin.toml"
-cp "$plugin/bin/places.sh" "$plugin/bin/open.sh" "$t/p/bin/"
+copied 's|bin/watch.sh|bin/gone.sh|'
 if sh "$here/manifest.sh" "$t/p/herdr-plugin.toml" "$plugin/../../Cargo.toml" >"$t/out" 2>&1; then
   fail "a manifest naming a missing script passed"
 fi
@@ -145,13 +151,28 @@ grep -q 'runs bin/gone.sh, which is not in the plugin' "$t/out" || fail "the mis
 pass
 
 fresh 'manifest: a version other than the workspace'"'"'s fails it'
-mkdir -p "$t/p"
-cp -R "$plugin/bin" "$t/p/"
-sed 's/^version = .*/version = "9.9.9"/' "$plugin/herdr-plugin.toml" >"$t/p/herdr-plugin.toml"
+copied 's/^version = .*/version = "9.9.9"/'
 if sh "$here/manifest.sh" "$t/p/herdr-plugin.toml" "$plugin/../../Cargo.toml" >"$t/out" 2>&1; then
   fail "a manifest of another version passed"
 fi
 grep -q "version 9.9.9, and the cargo workspace's is" "$t/out" || fail "the versions not named: $(cat "$t/out")"
+pass
+
+fresh 'manifest: a places action whose description names no entry fails it (122)'
+copied 's/^description = "flume'"'"'s places in flight;.*/description = "the places"/'
+if sh "$here/manifest.sh" "$t/p/herdr-plugin.toml" "$plugin/../../Cargo.toml" >"$t/out" 2>&1; then
+  fail "a places action with no entry described passed"
+fi
+grep -q "the places action's description names no plugin_action entry" "$t/out" || fail "the description not named: $(cat "$t/out")"
+pass
+
+fresh 'manifest: a README whose entry is not the plugin'"'"'s fails it (122)'
+copied ''
+sed 's/^key = "prefix+f"$/key = "prefix+g"/' "$plugin/README.md" >"$t/p/README.md"
+if sh "$here/manifest.sh" "$t/p/herdr-plugin.toml" "$plugin/../../Cargo.toml" >"$t/out" 2>&1; then
+  fail "a README with another entry passed"
+fi
+grep -q "no TOML block of its own is the popup's entry lib/common.sh gives" "$t/out" || fail "the README not named: $(cat "$t/out")"
 pass
 
 ## the watch
@@ -237,6 +258,87 @@ fresh 'watch: herdr not answering stops it'
 touch "$FAKE/down"
 FLUME_HERDR_TICK=1 sh "$plugin/bin/watch.sh" --ticks 5 2>>"$t/log"
 grep -q 'herdr does not answer; stopping' "$t/log" || fail "it kept on: $(cat "$t/log")"
+pass
+
+## what herdr's configuration lacks
+
+# The TOML the README gives, the popup's entry and the sidebar's rows.
+readme_toml() {
+  awk '/^```$/ { inside = 0 } inside { print } /^```toml$/ { inside = 1 }' "$plugin/README.md"
+}
+
+no_notification() {
+  if grep -i 'notif' "$FAKE/herdr-calls"; then
+    fail "the stand-in herdr was asked to notify: $(grep -i 'notif' "$FAKE/herdr-calls" | head -1)"
+  fi
+}
+
+fresh 'setup: a configuration with neither the key nor the rows is said in setup.json and the log (72, 122)'
+# Comments name both, and a key of another plugin's is bound.
+cat >"$HERDR_CONFIG_PATH" <<'TOML'
+# command = "agentplot.flume.places"
+#   ["$flume"],
+[[keys.command]]
+key = "prefix+m"
+type = "plugin_action"
+command = "agentplot.sluice.board"
+TOML
+status_of p1 2 working >"$FAKE/status.json"
+panes p1:working
+FLUME_HERDR_TICK=1 sh "$plugin/bin/watch.sh" --ensure
+within 10 '[ "$(settles)" -ge 1 ] && [ "$(jq length "$S/setup.json" 2>/dev/null)" = 2 ]' ||
+  fail "setup.json holds: $(cat "$S/setup.json" 2>&1)"
+jq -e --arg file "$HERDR_CONFIG_PATH" '.[0] | contains("binds no key to flume'"'"'s places") and contains($file)
+  and contains("[[keys.command]] entry with key = \"prefix+f\", type = \"plugin_action\", command = \"agentplot.flume.places\", description = \"flume: places in flight\"")' \
+  "$S/setup.json" >/dev/null || fail "the key's words: $(jq -r '.[0]' "$S/setup.json")"
+jq -e --arg file "$HERDR_CONFIG_PATH" '.[1] | contains("shows no row of flume'"'"'s in the sidebar: add \"$flume\"") and contains($file)' \
+  "$S/setup.json" >/dev/null || fail "the rows' words: $(jq -r '.[1]' "$S/setup.json")"
+# A settle more: the words written again, and logged at the start alone.
+echo 1100 >"$t/clock"
+within 10 '[ "$(settles)" -ge 2 ]' || fail "the watch did not settle again"
+sleep 1
+jq -r '.[]' "$S/setup.json" >"$t/words"
+while IFS= read -r words; do
+  [ "$(grep -cF "$words" "$S/watch.log")" -eq 1 ] || fail "watch.log does not hold once: $words"
+done <"$t/words"
+no_notification
+no_send
+pass
+
+fresh 'setup: a configuration with the README'"'"'s entry and rows lacks nothing once the watch settles (122)'
+FLUME_HERDR_TICK=1 sh "$plugin/bin/watch.sh" --ensure
+within 10 '[ "$(settles)" -ge 1 ] && [ "$(jq length "$S/setup.json" 2>/dev/null)" = 2 ]' ||
+  fail "with no file, setup.json holds: $(cat "$S/setup.json" 2>&1)"
+readme_toml >"$HERDR_CONFIG_PATH"
+echo 1100 >"$t/clock"
+within 10 '[ "$(jq -c . "$S/setup.json" 2>/dev/null)" = "[]" ]' ||
+  fail "after a settle, setup.json holds: $(cat "$S/setup.json" 2>&1)"
+no_notification
+pass
+
+fresh 'setup: no configuration file lacks both, naming its path (122)'
+tick_at 1000
+jq -e --arg file "$HERDR_CONFIG_PATH" 'length == 2 and all(.[]; contains($file))' "$S/setup.json" >/dev/null ||
+  fail "setup.json holds: $(cat "$S/setup.json" 2>&1)"
+grep -qF "$HERDR_CONFIG_PATH, binds no key to flume's places" "$t/log" || fail "the start logged: $(cat "$t/log")"
+no_notification
+pass
+
+fresh 'setup: herdr'"'"'s file found as herdr finds it'
+(
+  unset HERDR_CONFIG_PATH
+  export XDG_CONFIG_HOME="$t/xdg"
+  tick_at 1000
+)
+jq -e --arg file "$t/xdg/herdr/config.toml" 'all(.[]; contains($file))' "$S/setup.json" >/dev/null ||
+  fail "with XDG_CONFIG_HOME, setup.json names: $(cat "$S/setup.json" 2>&1)"
+(
+  unset HERDR_CONFIG_PATH XDG_CONFIG_HOME
+  export HOME="$t/home"
+  tick_at 1010
+)
+jq -e --arg file "$t/home/.config/herdr/config.toml" 'all(.[]; contains($file))' "$S/setup.json" >/dev/null ||
+  fail "with HOME alone, setup.json names: $(cat "$S/setup.json" 2>&1)"
 pass
 
 ## the clues and the sidebar

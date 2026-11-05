@@ -9,10 +9,11 @@ layer: 'application'
 
 tasks:
   # herdr-plugin.toml as herdr reads it, every script it names present and
-  # parsing under sh, its version the cargo workspace's.
+  # parsing under sh, its version the cargo workspace's, its places action
+  # describing the key's entry, which the README gives as lib/common.sh's.
   manifest:
     command: 'sh tests/manifest.sh'
-    inputs: ['herdr-plugin.toml', 'bin/**/*', 'tests/manifest.sh', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['herdr-plugin.toml', 'README.md', 'bin/**/*', 'lib/**/*', 'tests/manifest.sh', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
   # shellcheck over every script, the stand-ins among them, by the pinned
   # shellcheck.
