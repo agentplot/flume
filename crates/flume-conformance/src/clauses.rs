@@ -96,10 +96,6 @@ pub const STATECHART: &str =
 pub const MCP_SERVERS: &str =
     "the answer to section 10's question on how a host's MCP servers reach an agent";
 
-/// The change that builds record 0036: a place made ready by its merge
-/// queue's equipping of it.
-pub const READINESS: &str = "record 0036's change, a place equipped by its merge queue";
-
 /// The change that builds record 0037: each stream's multiplexer, view
 /// and terminal app, and the window a person opens its agents in.
 pub const MULTIPLEXER: &str =
@@ -152,7 +148,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain((76..=77).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
-    let readiness = std::iter::once(("S89".to_string(), READINESS));
     let multiplexer = (186..=190)
         .map(|clause| clause.to_string())
         .chain((90..=91).map(|scenario| format!("S{scenario}")))
@@ -175,7 +170,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(profiles)
         .chain(statechart)
         .chain(mcp_servers)
-        .chain(readiness)
         .chain(multiplexer)
         .chain(sources)
         .chain(origin)
@@ -227,19 +221,19 @@ mod tests {
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0036_0037_0040_0041_and_0043s_and_183(
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0037_0040_0041_and_0043s_and_183(
     ) {
         let unbuilt = unbuilt();
         assert_eq!(
             unbuilt.len(),
-            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 1 + 7 + 5 + 1 + 5
+            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 7 + 5 + 1 + 5
         );
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
-            "S84", "S85", "184", "185", "S86", "S87", "S88",
+            "S84", "S85", "184", "185", "S86", "S87", "S88", "S89",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
@@ -247,7 +241,6 @@ mod tests {
             );
         }
         for (clause, change) in [
-            ("S89", READINESS),
             ("186", MULTIPLEXER),
             ("190", MULTIPLEXER),
             ("S91", MULTIPLEXER),

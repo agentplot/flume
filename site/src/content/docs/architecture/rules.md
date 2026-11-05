@@ -35,6 +35,7 @@ yet built.
 - **[core.6]** A place is submitted only by the settle that follows its last stage's delivery, through the merge-queue seam, to its base and to no other branch, with no wait held on it; its outcome is read from the merge queue's record by the settles that follow, never from an agent, and the merge queue removes nothing of the place.
 - **[core.7]** A place's branch is cut from the base's current revision: where the merge queue's profile says the base lives, where a merge queue lands the base, and otherwise origin's after flume's own fetch, the host's own branch read only where the repository has no `origin` or origin holds no such branch; a launch that cannot read it is refused, and status says where it was read.
 - **[core.8]** A launch is refused whole, leaving nothing it made, when anything of it already stands or its kind asks for more than flume runs.
+- **[core.47]** A place is made ready only by its merge queue's equipping of it, asked at the revision its launch read; flume runs no readiness step of its own, reads no tool's step from the merge queue's policy, and keeps nothing a step makes.
 
 ### Stages and agents
 
