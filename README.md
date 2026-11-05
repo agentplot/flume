@@ -56,18 +56,52 @@ tidies the place.
 - **Its state, live.** `flume status --json` gives each place's kind,
   its stage, its agent's state, whether the deliverable exists, and its
   submission, with a change's tasks ticked.
+- **A place's line.** Each place has one line: its name, its kind, its
+  stage with how many times it started, a change's tasks ticked and its
+  state, as in `change--parser · change@2 · code 1/2 · run 1 · tasks 0/3 · working`.
+  `flume status --line` prints it, and every agent flume starts under
+  Claude Code shows it under its prompt.
 
-Two things depend on the host's own setup. An instruction with
-characters beyond ASCII reaches the agent whole only when the pane's
-shell has a UTF-8 locale, `LANG` set to one, for instance
-`en_US.UTF-8`. Under herdr, flume reports each workspace's summary of
-its places as a metadata token, `flume`; it shows only where the host's
-herdr sidebar names `$flume` in its rows (record 0018).
+An instruction with characters beyond ASCII reaches the agent whole
+only when the pane's shell has a UTF-8 locale, `LANG` set to one, for
+instance `en_US.UTF-8`.
 
 In a watermill the flume is the channel that carries water from the
 pond to the wheel, a measured flow to where it does work. flume carries
 one piece of work to one worktree, where an agent does it; sluice gates
 what lands.
+
+## Under herdr
+
+flume's herdr plugin moves every place on with no command of yours and
+shows the places in herdr. Each agent's sidebar entry gets its place's
+line less the place's name and kind, such as
+`code 1/2 · run 1 · tasks 2/5 · working`, and each workspace's row a
+count of its places. A popup lists every place in flight by its line,
+with keys that open, tell, stop or retry it.
+
+The plugin changes none of herdr's configuration, and herdr's plugins
+declare no keys. Until herdr's own `config.toml` holds what the plugin
+needs, `flume status` says what it lacks under the line naming the
+watch.
+
+### The popup's key
+
+The popup opens only from a key your herdr configuration binds:
+
+```toml
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "agentplot.flume.places"
+description = "flume: places in flight"
+```
+
+### The sidebar's rows
+
+The sidebar shows flume's rows only where its rows name `$flume`, as
+[the herdr plugin's README](plugins/herdr/README.md#the-sidebars-rows)
+gives them.
 
 ## This repository
 

@@ -4,8 +4,8 @@
 //! spells it.
 
 use flume_core::{
-    group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, Reserves,
-    StageStatus, StreamStatus, Tidied, Woke,
+    group_name, percentage, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued,
+    ReadingStatus, Reserves, StageStatus, StreamStatus, Tidied, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration,
@@ -114,6 +114,9 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Lines { lines: places } => {
+            lines.extend(places.iter().map(|line| line.full.clone()));
+        }
     }
     lines.join("\n")
 }
@@ -133,15 +136,19 @@ fn word(value: Value) -> String {
     }
 }
 
+/// A place's facts under its heading, its one line first (56, 60).
 fn place_lines(place: &PlaceStatus) -> Vec<String> {
-    let mut lines = vec![format!(
-        "{}: {}@{} ({}), {}",
-        place.place,
-        place.kind,
-        place.version,
-        word(json!(place.declared)),
-        word(json!(place.phase))
-    )];
+    let mut lines = vec![
+        format!(
+            "{}: {}@{} ({}), {}",
+            place.place,
+            place.kind,
+            place.version,
+            word(json!(place.declared)),
+            word(json!(place.phase))
+        ),
+        format!("  {}", place.line.full),
+    ];
     let mut facts = vec![format!(
         "branch {} from {}",
         place.branch,
@@ -498,10 +505,17 @@ fn session_words(session: &SessionHeld) -> String {
     format!("the session {name}, {from}")
 }
 
-/// A pool's lines: its strategy, then each account's program, agents
-/// running, bound and spent time (56, 144 to 146).
+/// A pool's lines: its strategy and threshold, then each account's
+/// program, agents running, bound and spent time, its reading under it,
+/// and what holds it past its threshold; never a reading's path (56, 144
+/// to 146, 184, 185).
 fn pool_lines(pool: &PoolStatus) -> Vec<String> {
-    let mut lines = vec![format!("  pool {}, {}:", pool.name, pool.strategy.name())];
+    let mut lines = vec![format!(
+        "  pool {}, {}, threshold {}%:",
+        pool.name,
+        pool.strategy.name(),
+        pool.threshold
+    )];
     for account in &pool.accounts {
         let mut line = match account.bound {
             Some(bound) => format!(
@@ -517,8 +531,48 @@ fn pool_lines(pool: &PoolStatus) -> Vec<String> {
             line.push_str(&format!(", spent until {until}"));
         }
         lines.push(line);
+        if let Some(reading) = &account.reading {
+            lines.push(format!("      {}", reading_line(reading)));
+        }
+        if let Some(past) = &account.past {
+            lines.push(format!(
+                "      past its threshold in {} until {}",
+                past.window, past.until
+            ));
+        }
     }
     lines
+}
+
+/// An account's reading as a person reads it: each window's use and
+/// reset, then when the host read it, stale where it is not fresh; or why
+/// there is none (184).
+fn reading_line(reading: &ReadingStatus) -> String {
+    match reading {
+        ReadingStatus::Read {
+            read_at,
+            fresh,
+            windows,
+        } => {
+            let mut parts: Vec<String> = windows
+                .iter()
+                .map(|window| {
+                    let used = format!("{} {}%", window.name, percentage(window.used));
+                    match window.resets_at {
+                        Some(resets_at) => format!("{used} (resets {resets_at})"),
+                        None => used,
+                    }
+                })
+                .collect();
+            parts.push(if *fresh {
+                format!("read at {read_at}")
+            } else {
+                format!("stale, read at {read_at}")
+            });
+            parts.join(" · ")
+        }
+        ReadingStatus::Unread { unread } => format!("no reading: {unread}"),
+    }
 }
 
 /// A stage's line, a repeating one named with its group's place among
@@ -562,6 +616,8 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
     lines
 }
 
+/// The host's facts, what its terminal's configuration lacks for flume's
+/// plugin under the line naming the watch (72, 122).
 fn host_lines(host: &HostStatus) -> Vec<String> {
     let mut lines = vec![match (host.bound, host.room) {
         (Some(bound), Some(room)) => format!(
@@ -625,6 +681,9 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         ),
         Watch::None => "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".into(),
     });
+    for setup in &host.terminal_setup {
+        lines.push(format!("    {setup}"));
+    }
     lines
 }
 
@@ -789,11 +848,13 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 mod tests {
     use super::*;
     use flume_core::{
-        AccountStatus, AgentSettings, ModeStatus, MoveStatus, RoomWanted, StreamStatus,
+        AccountStatus, AgentSettings, ModeStatus, MoveStatus, Past, PlaceLine, RoomWanted,
+        StreamStatus, WindowStatus,
     };
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, Given, Layer, ModeBegan, MoveOn,
-        MoveWhy, Reading, ReadyStep, Strategy, Unsettled,
+        AccountFrom, AccountHeld, AccountMove, AgentState, Declared, Given, Layer, ModeBegan,
+        MoveOn, MoveWhy, Phase, PlaceId, Reading, ReadyStep, Strategy, StreamFrom, StreamHeld,
+        Unsettled,
     };
     use std::collections::BTreeMap;
 
@@ -1100,6 +1161,8 @@ mod tests {
                 why: MoveWhy::Spent,
                 at: 54_000,
                 carried: Some(carried),
+                window: None,
+                until: None,
             })
         };
         assert_eq!(
@@ -1127,6 +1190,8 @@ mod tests {
             why: MoveWhy::Spent,
             at: 54_000,
             carried: None,
+            window: None,
+            until: None,
         });
         assert_eq!(
             moved.words(),
@@ -1150,6 +1215,8 @@ mod tests {
                 why: MoveWhy::Spent,
                 at: 54_000,
                 carried: None,
+                window: None,
+                until: None,
             })
         };
         assert_eq!(
@@ -1176,6 +1243,7 @@ mod tests {
             pools: vec![PoolStatus {
                 name: "work".into(),
                 strategy: Strategy::FillFirst,
+                threshold: 90,
                 accounts: vec![
                     AccountStatus {
                         name: "work-1".into(),
@@ -1183,6 +1251,8 @@ mod tests {
                         running: 2,
                         bound: Some(4),
                         spent_until: None,
+                        reading: None,
+                        past: None,
                     },
                     AccountStatus {
                         name: "work-2".into(),
@@ -1190,6 +1260,8 @@ mod tests {
                         running: 0,
                         bound: None,
                         spent_until: Some(54_000),
+                        reading: None,
+                        past: None,
                     },
                 ],
             }],
@@ -1199,12 +1271,136 @@ mod tests {
             host_lines(&host),
             vec![
                 "host: 0 agents running, no bound".to_string(),
-                "  pool work, fill-first:".to_string(),
+                "  pool work, fill-first, threshold 90%:".to_string(),
                 "    work-1 (agent): 2 agents running of 4".to_string(),
                 "    work-2 (agent): 0 agents running, no bound of its own, spent until 54000"
                     .to_string(),
                 "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
             ]
+        );
+    }
+
+    /// An unbounded account of `agent`, running none, with `reading` and
+    /// `past`.
+    fn read(name: &str, reading: Option<ReadingStatus>, past: Option<Past>) -> AccountStatus {
+        AccountStatus {
+            name: name.into(),
+            program: "agent".into(),
+            running: 0,
+            bound: None,
+            spent_until: None,
+            reading,
+            past,
+        }
+    }
+
+    #[test]
+    fn a_pools_threshold_and_its_accounts_readings() {
+        let window = |name: &str, used, resets_at, past| WindowStatus {
+            name: name.into(),
+            used,
+            resets_at,
+            past,
+        };
+        let pool = PoolStatus {
+            name: "work".into(),
+            strategy: Strategy::MostLeft,
+            threshold: 80,
+            accounts: vec![
+                read(
+                    "work-1",
+                    Some(ReadingStatus::Read {
+                        read_at: 53_880,
+                        fresh: true,
+                        windows: vec![
+                            window("5-hour", 4_200, Some(61_200), false),
+                            window("7-day", 7_150, None, false),
+                        ],
+                    }),
+                    None,
+                ),
+                read(
+                    "work-2",
+                    Some(ReadingStatus::Read {
+                        read_at: 52_800,
+                        fresh: false,
+                        windows: vec![window("5-hour", 1_000, Some(61_200), false)],
+                    }),
+                    None,
+                ),
+                read(
+                    "work-3",
+                    Some(ReadingStatus::Unread {
+                        unread: "the file is missing".into(),
+                    }),
+                    None,
+                ),
+                read(
+                    "work-4",
+                    Some(ReadingStatus::Read {
+                        read_at: 54_000,
+                        fresh: true,
+                        windows: vec![window("7-day", 9_500, Some(313_200), true)],
+                    }),
+                    Some(Past {
+                        window: "7-day".into(),
+                        until: 313_200,
+                    }),
+                ),
+                read("work-5", None, None),
+            ],
+        };
+        assert_eq!(
+            pool_lines(&pool),
+            vec![
+                "  pool work, most-left, threshold 80%:",
+                "    work-1 (agent): 0 agents running, no bound of its own",
+                "      5-hour 42% (resets 61200) · 7-day 71.5% · read at 53880",
+                "    work-2 (agent): 0 agents running, no bound of its own",
+                "      5-hour 10% (resets 61200) · stale, read at 52800",
+                "    work-3 (agent): 0 agents running, no bound of its own",
+                "      no reading: the file is missing",
+                "    work-4 (agent): 0 agents running, no bound of its own",
+                "      7-day 95% (resets 313200) · read at 54000",
+                "      past its threshold in 7-day until 313200",
+                "    work-5 (agent): 0 agents running, no bound of its own",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_move_off_an_account_past_its_threshold() {
+        let moved = MoveStatus::of(&AccountMove {
+            on: MoveOn::Intent {
+                program: Some("agent".into()),
+            },
+            from: "work-1".into(),
+            to: "work-2".into(),
+            why: MoveWhy::Threshold,
+            at: 54_000,
+            carried: None,
+            window: Some("5-hour".into()),
+            until: Some(61_200),
+        });
+        assert_eq!(
+            moved.words(),
+            "the intent moved for agent from work-1 to work-2 at 54000, work-1 past its threshold in 5-hour until 61200, its agents after starting without work-1's cache"
+        );
+        assert_eq!(
+            serde_json::to_value(&moved).unwrap(),
+            json!({"on": "intent", "program": "agent", "from": "work-1", "to": "work-2", "why": "threshold", "at": 54000, "window": "5-hour", "until": 61200, "cache": "lost"})
+        );
+    }
+
+    #[test]
+    fn a_pool_waited_on_until_an_account_is_back() {
+        assert_eq!(
+            RoomWanted::Pool {
+                pool: "work".into(),
+                until: Some(61_200),
+            }
+            .words(),
+            "a usable account of the pool work, the soonest back at 61200"
         );
     }
 
@@ -1230,6 +1426,112 @@ mod tests {
         assert_eq!(
             host_lines(&host)[1],
             "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes"
+        );
+    }
+
+    #[test]
+    fn a_missing_key_under_the_watch() {
+        // 72, 122: what the terminal lacks, under the line naming the watch.
+        let key = "the terminal's /t/config.toml binds no key to flume's places".to_string();
+        let host = HostStatus {
+            watch: Watch::Bound { seconds: 30 },
+            terminal_setup: vec![key.clone()],
+            ..HostStatus::default()
+        };
+        let lines = host_lines(&host);
+        assert_eq!(
+            lines[lines.len() - 2..],
+            [
+                "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes".to_string(),
+                format!("    {key}"),
+            ]
+        );
+    }
+
+    fn a_line(name: &str, short: &str) -> PlaceLine {
+        PlaceLine {
+            name: name.into(),
+            kind: "fix@1".into(),
+            stage: Some("code".into()),
+            run: Some(1),
+            tasks: None,
+            state: "working".into(),
+            full: format!("{name} · fix@1 · {short}"),
+            short: short.into(),
+        }
+    }
+
+    #[test]
+    fn a_line_each() {
+        // 60, 61: each line's full form on a line of its own.
+        let lines = Answer::Lines {
+            lines: vec![
+                a_line("fix--one", "code · run 1 · working"),
+                a_line("fix--two", "code · run 2 · stuck"),
+            ],
+        };
+        assert_eq!(
+            person(&lines),
+            "fix--one · fix@1 · code · run 1 · working\nfix--two · fix@1 · code · run 2 · stuck"
+        );
+    }
+
+    #[test]
+    fn a_places_heading_with_its_line() {
+        // 56, 60: the place's line under its heading.
+        let place = PlaceStatus {
+            place: PlaceId::new("/d/places/1/fix--one"),
+            repository: "/r".into(),
+            kind: "fix".into(),
+            version: 1,
+            declared: Declared::Flume,
+            name: "one".into(),
+            branch: "fix/one".into(),
+            base: "main".into(),
+            base_from: None,
+            mark: None,
+            lands: true,
+            phase: Phase::Live,
+            readiness: Readiness::default(),
+            stages: vec![],
+            current: Some("code".into()),
+            agent: None,
+            head: None,
+            delivered: None,
+            tasks: None,
+            submission: None,
+            refused_acts: vec![],
+            cannot_read: vec![],
+            failures: vec![],
+            recipients: vec![],
+            hold_words: BTreeMap::new(),
+            waiting_on: None,
+            stalled: false,
+            holds: vec![],
+            priority: 0,
+            stream: StreamHeld {
+                name: "default".into(),
+                from: StreamFrom::Default,
+            },
+            label: None,
+            intent: IntentKey::Launch {
+                name: "i".into(),
+                digest: "d".into(),
+            },
+            moves: vec![],
+            unsettled: vec![],
+            uncarried: vec![],
+            ends: vec![],
+            role: None,
+            clues: None,
+            line: a_line("fix--one", "code · run 1 · working"),
+        };
+        assert_eq!(
+            place_lines(&place)[..2],
+            [
+                "/d/places/1/fix--one: fix@1 (flume), live".to_string(),
+                "  fix--one · fix@1 · code · run 1 · working".to_string(),
+            ]
         );
     }
 

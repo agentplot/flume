@@ -1,6 +1,6 @@
 ---
 title: The Claude Code plugin
-description: The plugin flume hands every agent it starts, how its hooks tell flume an agent started and received its prompt, and the plugin for your own sessions, with /launch and status over MCP.
+description: The plugin flume hands every agent it starts, how its hooks tell flume an agent started and received its prompt, the place's line it pins under the prompt, and the plugin for your own sessions, with /launch and status over MCP.
 sidebar:
   order: 3
 ---
@@ -74,6 +74,10 @@ every hook does nothing.
 A subagent's hooks take no ack, and the guard refuses its commands as
 its agent's.
 
+Beside the command hooks the plugin carries one hooks module,
+`hooks/line.ts`, which pins the place's line under the prompt ([the
+status line](#the-status-line)).
+
 **The guard.** flume submits the place once its last stage delivers,
 so an agent never submits, merges or pushes its branch itself. The
 guard reads the shell line as the commands it runs, after `&&`, in a
@@ -91,6 +95,72 @@ declared thing with no line in `made.jsonl`, and the way to stop short.
 Otherwise it starts `flume settle <place> --on-quiet` in the
 background, which waits up to sixty seconds for the agent to be quiet
 and then moves the place on. A conversation stage is never sent back.
+
+## The status line
+
+Every agent flume starts shows its place's line under its prompt, so a
+pane says which place it serves and where that place stands:
+
+```text
+⚠ flume: change--parser · change@2 · code 1/2 · run 1 · tasks 0/3 · working
+```
+
+The line holds the place, `<kind>--<name>`; its kind and version; the
+current stage, with a repeating stage's group, `code 1/2` for the
+first of two; `run <n>`, how many times that stage started; `tasks
+<t>/<n>`, the change's tasks ticked at the place's head; and the
+place's state in words. A part the place has none of is left out: a
+fix has no tasks, and a landed place shows only `fix--parser · fix@1 ·
+landed`. Claude Code 2.1.296 draws it on the row under the prompt's
+input, with a `⚠` and the plugin's name before it.
+
+The state is the first that holds of these:
+
+| State | When |
+|---|---|
+| `being made` | a launch is making the place |
+| `landed`, `dropped`, `done` | the place's work is over |
+| `stalled` | the place waited on its caller under no hold's words past its stall bound |
+| `held` | a hold stops the place's next stage or its submission |
+| `waiting on an answer` | the stage stopped short and needs an answer, or found work |
+| `asking` | the agent shows a dialog of Claude Code's before its prompt, or, once started, asks a person a question |
+| `lost`, `never begun`, `not ready`, `refused`, `stopped` | the stage's agent stopped with nothing delivered, its prompt never began, the place's readiness failed, the stage was refused, or its caller stopped the agent |
+| `past its bound`, `submission refused` | the place went back more times than its kind allows, or the merge queue refused its submission |
+| `waiting on done` | the last stage of a kind that does not land delivered |
+| `waiting for room` | the stage waits for room on the host, its stream or its pool |
+| `starting` | the agent is opened and has not said it started |
+| `stuck` | the agent is quiet past its stage's limit with nothing delivered |
+| `in conversation`, `working` | the agent works, in a conversation stage or any other |
+| `submitted` | flume submitted the place, and no settle has read the merge queue's outcome yet |
+
+A session that outlived its start, such as a repetition's earlier agent
+still open, shows the place's current stage with
+`· this session is not its agent` at the end of the line.
+
+**How it is drawn.** The plugin's module runs `flume hook status-line`
+at the session's start, after each tool call and at each turn's end.
+It runs it again every ten seconds, so a hold, a stall or a stop-short
+shows while the agent sits idle. It pins the line the hook prints as the plugin's own
+status line, and removes it where the hook prints nothing. The clock
+runs in Claude Code's own process and ends with the session.
+
+**What it reads.** The hook reads the place's held state, the change at
+the place's head and the agent's own record, and nothing else. It calls
+no terminal and no merge queue, settles nothing, writes nothing and
+starts nothing. So `submitted` can stand for up to a settle after the
+merge queue lands the place; `flume status` gives the merge queue's own
+record at once. The words are the ones `flume status --line` prints for
+the place.
+
+**Beside your own.** The line is the plugin's, one among the plugins'
+lines Claude Code pins under the prompt. A status line your settings or
+the repository give stays the session's own, and another plugin's
+pinned line stays beside flume's, with nothing to set. In a session
+flume did not start, one with no `FLUME_PLACE` and `FLUME_AGENT`, the
+module pins nothing and runs nothing.
+
+flume checks the module against the engine the pinned Claude Code
+writes, so a release that changes it fails flume's own checks first.
 
 ## Prompt delivery
 

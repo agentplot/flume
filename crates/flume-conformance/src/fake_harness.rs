@@ -564,7 +564,17 @@ impl TerminalHarness for FakeTerminalHarness {
     fn no_session(&self) -> String {
         "nobody".into()
     }
+
+    fn setup(&self) -> Vec<String> {
+        self.terminal.set_setup(&[SETUP]);
+        vec![SETUP.to_string()]
+    }
 }
+
+/// What the fake terminal's configuration is scripted to lack for
+/// flume's plugin (122).
+pub const SETUP: &str =
+    "no key opens flume's places: bind one to the plugin's places in the terminal's configuration";
 
 pub struct FakeMergeQueueHarness {
     pub git: Arc<FakeGit>,

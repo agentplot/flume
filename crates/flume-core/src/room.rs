@@ -17,7 +17,7 @@
 //! stream's the host's; a host that states no bound, in a stream that
 //! states none, has no queue.
 
-use crate::accounts::{AccountRoom, PoolRoom, Usable};
+use crate::accounts::{AccountRoom, PoolRoom, Usable, THRESHOLD};
 use crate::answer::and_list;
 use crate::{
     AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
@@ -528,7 +528,8 @@ impl Engine {
             })
     }
 
-    /// The host's queue as the store holds it now.
+    /// The host's queue as the store holds it now, each account of each
+    /// pool with its reading as the host's file holds it now (184).
     pub(crate) fn queue(&self) -> Queue {
         let every = self.store.read_every();
         let mut streams: BTreeMap<String, StreamRoom> = self
@@ -580,6 +581,7 @@ impl Engine {
             let Some(pool) = self.host.pool(name) else {
                 continue;
             };
+            let threshold = pool.threshold.unwrap_or(THRESHOLD);
             let accounts = pool
                 .accounts
                 .into_iter()
@@ -595,13 +597,17 @@ impl Engine {
                         }) if spent.until > now => Some(spent.until),
                         _ => None,
                     };
+                    let running = on_accounts
+                        .get(&(name.clone(), account.name.clone()))
+                        .copied()
+                        .unwrap_or(0);
                     AccountRoom {
-                        running: on_accounts
-                            .get(&(name.clone(), account.name.clone()))
-                            .copied()
-                            .unwrap_or(0),
+                        reading: self.reading(&account),
                         account,
+                        running,
                         spent_until,
+                        threshold,
+                        now,
                     }
                 })
                 .collect();
@@ -609,6 +615,7 @@ impl Engine {
                 name.clone(),
                 PoolRoom {
                     strategy: pool.strategy,
+                    threshold,
                     accounts,
                 },
             );
@@ -789,6 +796,7 @@ impl Engine {
             .map(|(name, pool)| PoolStatus {
                 name: name.clone(),
                 strategy: pool.strategy,
+                threshold: pool.threshold,
                 accounts: pool
                     .accounts
                     .iter()
@@ -798,6 +806,8 @@ impl Engine {
                         running: room.running,
                         bound: room.account.agents,
                         spent_until: room.spent_until,
+                        reading: room.reading_status(),
+                        past: room.past(),
                     })
                     .collect(),
             })
@@ -813,6 +823,7 @@ impl Engine {
             addresses: self.addresses(),
             watch: self.terminal.watch(),
             bases: self.bases(),
+            terminal_setup: self.terminal.setup(),
             configuration: self.host.configuration(),
         }
     }
