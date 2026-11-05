@@ -4,12 +4,13 @@
 //! spells it.
 
 use flume_core::{
-    group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, StageStatus,
-    Tidied, Woke,
+    group_name, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued, Reserves,
+    StageStatus, StreamStatus, Tidied, Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, Conversation, HoldOn, IntentKey, Made, Readiness, SessionFrom, SessionHeld,
-    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
+    AccountFrom, Act, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration, IntentKey,
+    LabelHeld, LocalLayer, Made, Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead,
+    UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
 };
 use serde_json::{json, Value};
 
@@ -152,11 +153,10 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         facts.push(format!("head {head}"));
     }
     lines.push(format!("  {}", facts.join(", ")));
-    lines.push(format!(
-        "  stream {} (from {}), {}",
-        place.stream.name,
-        word(json!(place.stream.from)),
-        intent_words(&place.intent)
+    lines.push(stream_line(
+        &place.stream,
+        place.label.as_ref(),
+        &place.intent,
     ));
     lines.extend(readiness_lines(&place.readiness));
     for stage in &place.stages {
@@ -394,6 +394,20 @@ fn plain(words: &str) -> String {
     plain
 }
 
+/// A place's stream, its label where it has one, each with where it came
+/// from, and its intent (56, 143, 147, 180).
+fn stream_line(stream: &StreamHeld, label: Option<&LabelHeld>, intent: &IntentKey) -> String {
+    let label = label
+        .map(|label| format!(", label {} (from {})", label.name, word(json!(label.from))))
+        .unwrap_or_default();
+    format!(
+        "  stream {} (from {}){label}, {}",
+        stream.name,
+        word(json!(stream.from)),
+        intent_words(intent)
+    )
+}
+
 /// The intent a place serves, as a person reads it (147).
 fn intent_words(intent: &IntentKey) -> String {
     match intent {
@@ -558,6 +572,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             "    its agents open in {}",
             session_words(&stream.session)
         ));
+        lines.extend(label_lines(stream));
         for queued in &stream.queue {
             lines.push(format!("    {}", queued_line(queued)));
         }
@@ -565,6 +580,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     for pool in &host.pools {
         lines.extend(pool_lines(pool));
     }
+    lines.extend(configuration_lines(&host.configuration));
     for kept in &host.terminal_kept {
         lines.push(format!("  the terminal keeps {kept}"));
     }
@@ -636,17 +652,90 @@ fn uncarried_line(uncarried: &UncarriedStart) -> String {
     )
 }
 
-/// A stage waiting for room, with its stream, its priority and the room
-/// it is short of (56, 70, 143).
+/// A stage waiting for room, with its stream, its label where it has
+/// one, its priority and the room it is short of (56, 70, 143, 180).
 fn queued_line(queued: &Queued) -> String {
+    let label = queued
+        .label
+        .as_ref()
+        .map(|label| format!(" as {label}"))
+        .unwrap_or_default();
     format!(
-        "waiting for room: {}'s {} in {}, priority {}, short of {}",
+        "waiting for room: {}'s {} in {}{label}, priority {}, short of {}",
         queued.place,
         queued.stage,
         queued.stream,
         queued.priority,
         queued.wants.words()
     )
+}
+
+/// A stream's labels, each with its reserve, what it keeps free, its
+/// agents running and its stages waiting; its reserves passed over where
+/// it states no bound; and what it refuses (56, 181, 182).
+fn label_lines(stream: &StreamStatus) -> Vec<String> {
+    let mut lines: Vec<String> = stream
+        .labels
+        .iter()
+        .map(|label| {
+            format!(
+                "    label {}: a reserve of {}, keeping {} free, {} agents running, {} waiting",
+                label.name, label.reserve, label.keep_free, label.running, label.waiting
+            )
+        })
+        .collect();
+    if stream.reserves == Reserves::PassedOver {
+        lines.push("    its labels' reserves are passed over: it states no bound".into());
+    }
+    if let Some(refused) = &stream.refused {
+        lines.push(format!("    it starts no stage: {refused}"));
+    }
+    lines
+}
+
+/// The host's local layer: taken, with each value it set and each key
+/// passed over with its pin, or not taken, naming each key or its fault;
+/// nothing where the host has no local file. A value is as status gives
+/// it, an account's variable `<set>` (56, C.7; core.30, core.45).
+fn configuration_lines(configuration: &HostConfiguration) -> Vec<String> {
+    match &configuration.local {
+        LocalLayer::NoFile => vec![],
+        LocalLayer::Taken => {
+            let set: Vec<&ConfigValue> = configuration
+                .values
+                .iter()
+                .filter(|value| value.layer == ConfigLayer::Local)
+                .collect();
+            let mut lines = vec![if set.is_empty() {
+                "  the host's local layer is taken, setting nothing".to_string()
+            } else {
+                "  the host's local layer is taken, setting:".to_string()
+            }];
+            for value in set {
+                lines.push(format!("    {} = {}", value.key, value.value));
+            }
+            for passed in &configuration.passed_over {
+                lines.push(format!(
+                    "    {} passed over: the managed layer pins {}",
+                    passed.key, passed.pin
+                ));
+            }
+            lines
+        }
+        LocalLayer::NotTaken { keys, fault } => {
+            let mut lines = vec![];
+            if !keys.is_empty() {
+                lines.push(format!(
+                    "  the host's local layer is not taken: it sets {}, which the local layer may not set",
+                    keys.join(", ")
+                ));
+            }
+            if let Some(fault) = fault {
+                lines.push(format!("  the host's local layer is not taken: {fault}"));
+            }
+            lines
+        }
+    }
 }
 
 fn tidy_lines(tidy: &Tidied) -> Vec<String> {
@@ -1164,6 +1253,7 @@ mod tests {
             place: flume_seams::PlaceId::new(place),
             stage: "code".into(),
             stream: stream.into(),
+            label: None,
             priority: 0,
             since: Some(5),
             wants,
@@ -1194,6 +1284,9 @@ mod tests {
                     bound: Some(4),
                     room: Some(0),
                     queue: vec![work],
+                    labels: vec![],
+                    reserves: Reserves::None,
+                    refused: None,
                 },
                 StreamStatus {
                     name: "personal".into(),
@@ -1206,6 +1299,9 @@ mod tests {
                     bound: Some(3),
                     room: Some(1),
                     queue: vec![personal],
+                    labels: vec![],
+                    reserves: Reserves::None,
+                    refused: None,
                 },
                 StreamStatus {
                     name: "default".into(),
@@ -1218,6 +1314,9 @@ mod tests {
                     bound: None,
                     room: None,
                     queue: vec![],
+                    labels: vec![],
+                    reserves: Reserves::None,
+                    refused: None,
                 },
             ],
             ..HostStatus::default()
@@ -1242,6 +1341,184 @@ mod tests {
                 "    its agents open in the terminal's own session".to_string(),
                 "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn a_places_label() {
+        let stream = StreamHeld {
+            name: "work".into(),
+            from: flume_seams::StreamFrom::HostRepository,
+        };
+        let intent = IntentKey::Launch {
+            name: "ship".into(),
+            digest: "d1".into(),
+        };
+        let label = LabelHeld {
+            name: "construction".into(),
+            from: flume_seams::LabelFrom::HostRepositoryKind,
+        };
+        assert_eq!(
+            stream_line(&stream, Some(&label), &intent),
+            "  stream work (from host-repository), label construction (from host-repository-kind), intent ship (from the launch)"
+        );
+        assert_eq!(
+            stream_line(&stream, None, &intent),
+            "  stream work (from host-repository), intent ship (from the launch)"
+        );
+    }
+
+    #[test]
+    fn a_streams_labels() {
+        let research = Queued {
+            place: flume_seams::PlaceId::new("/r/places/research--one"),
+            stage: "work".into(),
+            stream: "work".into(),
+            label: None,
+            priority: 0,
+            since: Some(5),
+            wants: RoomWanted::KeptFree {
+                stream: "work".into(),
+                labels: vec!["operation".into()],
+            },
+        };
+        let deploy = Queued {
+            place: flume_seams::PlaceId::new("/r/places/deploy--two"),
+            label: Some("operation".into()),
+            wants: RoomWanted::Stream {
+                stream: "work".into(),
+                bound: 5,
+            },
+            ..research.clone()
+        };
+        let stream = |name: &str, bound, reserves, refused: Option<&str>| StreamStatus {
+            name: name.into(),
+            session: SessionHeld {
+                name: Some(name.into()),
+                from: SessionFrom::StreamName,
+            },
+            priority: 0,
+            running: 5,
+            bound,
+            room: bound.map(|_| 0),
+            queue: vec![],
+            labels: vec![flume_core::LabelStatus {
+                name: "operation".into(),
+                reserve: 2,
+                keep_free: 1,
+                running: 1,
+                waiting: 1,
+            }],
+            reserves,
+            refused: refused.map(str::to_string),
+        };
+        let host = HostStatus {
+            streams: vec![
+                StreamStatus {
+                    queue: vec![research, deploy],
+                    ..stream("work", Some(5), Reserves::Held, None)
+                },
+                stream("personal", None, Reserves::PassedOver, None),
+                stream(
+                    "nightly",
+                    Some(1),
+                    Reserves::Held,
+                    Some("the label operation of the stream nightly keeps 2 free of a reserve of 1, and a reserve is at least what it keeps free"),
+                ),
+            ],
+            ..HostStatus::default()
+        };
+        let operation =
+            "    label operation: a reserve of 2, keeping 1 free, 1 agents running, 1 waiting";
+        assert_eq!(
+            host_lines(&host)[1..host_lines(&host).len() - 1],
+            [
+                "  stream work, priority 0: 5 agents running of 5, room for 0".to_string(),
+                "    its agents open in the session work, the stream's name".to_string(),
+                operation.to_string(),
+                "    waiting for room: /r/places/research--one's work in work, priority 0, short of the stream work's room, the rest kept free for operation".to_string(),
+                "    waiting for room: /r/places/deploy--two's work in work as operation, priority 0, short of the stream work's room, at its bound of 5".to_string(),
+                "  stream personal, priority 0: 5 agents running, no bound of its own".to_string(),
+                "    its agents open in the session personal, the stream's name".to_string(),
+                operation.to_string(),
+                "    its labels' reserves are passed over: it states no bound".to_string(),
+                "  stream nightly, priority 0: 5 agents running of 1, room for 0".to_string(),
+                "    its agents open in the session nightly, the stream's name".to_string(),
+                operation.to_string(),
+                "    it starts no stage: the label operation of the stream nightly keeps 2 free of a reserve of 1, and a reserve is at least what it keeps free".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_hosts_local_layer() {
+        let value = |key: &str, value: &str, layer| ConfigValue {
+            key: key.into(),
+            value: value.into(),
+            layer,
+        };
+        let values = vec![
+            value(
+                "pools.work.accounts[0].env.TOKEN",
+                "<set>",
+                ConfigLayer::Managed,
+            ),
+            value("streams.work.agents", "3", ConfigLayer::Local),
+            value("streams.work.pool", "\"work\"", ConfigLayer::Managed),
+            value("streams.work.priority", "30", ConfigLayer::Local),
+        ];
+        let lines = |configuration: HostConfiguration| configuration_lines(&configuration);
+        assert_eq!(
+            lines(HostConfiguration {
+                local: LocalLayer::Taken,
+                values: values.clone(),
+                passed_over: vec![flume_seams::PinnedKey {
+                    key: "streams.work.bound".into(),
+                    pin: "streams.work".into(),
+                }],
+            }),
+            vec![
+                "  the host's local layer is taken, setting:".to_string(),
+                "    streams.work.agents = 3".to_string(),
+                "    streams.work.priority = 30".to_string(),
+                "    streams.work.bound passed over: the managed layer pins streams.work"
+                    .to_string(),
+            ]
+        );
+        assert_eq!(
+            lines(HostConfiguration {
+                local: LocalLayer::Taken,
+                values: values[..1].to_vec(),
+                passed_over: vec![],
+            }),
+            vec!["  the host's local layer is taken, setting nothing".to_string()]
+        );
+        assert_eq!(
+            lines(HostConfiguration {
+                local: LocalLayer::NotTaken {
+                    keys: vec!["pools.work".into(), "streams.work.pool".into()],
+                    fault: None,
+                },
+                values: values.clone(),
+                passed_over: vec![],
+            }),
+            vec!["  the host's local layer is not taken: it sets pools.work, streams.work.pool, which the local layer may not set".to_string()]
+        );
+        assert_eq!(
+            lines(HostConfiguration {
+                local: LocalLayer::NotTaken {
+                    keys: vec![],
+                    fault: Some("expected `=` at line 2".into()),
+                },
+                values: values.clone(),
+                passed_over: vec![],
+            }),
+            vec!["  the host's local layer is not taken: expected `=` at line 2".to_string()]
+        );
+        assert_eq!(
+            lines(HostConfiguration::default()),
+            Vec::<String>::new(),
+            "a host with no local file"
         );
     }
 

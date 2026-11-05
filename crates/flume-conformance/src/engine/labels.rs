@@ -14,7 +14,7 @@
 use super::settling::{construct_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, HostStatus, Retry, RoomWanted};
+use flume_core::{Answer, HostStatus, LabelStatus, Reserves, Retry, RoomWanted};
 use flume_fakes::place_location;
 use flume_seams::*;
 
@@ -74,6 +74,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "labels: a start refused for its stream's labels starts once the configuration is mended and its stage retried",
             cites: &["181", "4"],
             run: the_configuration_mended,
+        },
+        Scenario {
+            name: "labels: status gives each place's label with where it came from, and each stream's labels with their reserves, what they keep free, their agents running and their stages waiting, in the JSON form",
+            cites: &["S85", "56", "180", "181"],
+            run: the_labels_in_status,
+        },
+        Scenario {
+            name: "labels: a place waiting on a slot another label keeps free wants that room, in the JSON form and in words, and waits on the host, never on its caller",
+            cites: &["56", "70", "181"],
+            run: waiting_on_a_slot_kept_free,
         },
     ]
 }
@@ -581,6 +591,119 @@ fn the_configuration_mended(_: &()) -> Outcome {
             .stage_state(&id, "code")
             .is_some_and(StageState::running),
         "the fix's code did not start once mended"
+    );
+    Ok(())
+}
+
+fn the_labels_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    labelled_kinds(&world);
+    world.host.name_label(None, "research", Some("inception"));
+    world
+        .host
+        .name_label(Some(REPOSITORY), "deploy", Some("construction"));
+    shared(
+        &world,
+        "work",
+        Some(5),
+        &[("operation", 2, 1), ("construction", 1, 0)],
+    );
+    let research = placed(&world, "work", "research", "r1", 0)?;
+    let deploy = placed(&world, "work", "deploy", "d1", 0)?;
+    ensure_eq!(
+        world.status(&research)?.label,
+        held("inception", LabelFrom::HostKind),
+        "the research place's label"
+    );
+    ensure_eq!(
+        world.status(&deploy)?.label,
+        held("construction", LabelFrom::HostRepositoryKind),
+        "the deploy place's label"
+    );
+    let host = host(&world)?;
+    let work = host
+        .streams
+        .iter()
+        .find(|stream| stream.name == "work")
+        .ok_or("status gives no stream work")?;
+    ensure_eq!(
+        work.labels,
+        vec![
+            LabelStatus {
+                name: "construction".into(),
+                reserve: 1,
+                keep_free: 0,
+                running: 1,
+                waiting: 0,
+            },
+            LabelStatus {
+                name: "operation".into(),
+                reserve: 2,
+                keep_free: 1,
+                running: 0,
+                waiting: 0,
+            },
+        ],
+        "work's labels"
+    );
+    ensure_eq!(work.reserves, Reserves::Held, "work's reserves");
+    ensure_eq!(work.refused, None, "what work refuses");
+    let json = serde_json::to_value(&work.labels).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json[1],
+        serde_json::json!({
+            "name": "operation",
+            "reserve": 2,
+            "keep_free": 1,
+            "running": 0,
+            "waiting": 0,
+        }),
+        "operation in the JSON form"
+    );
+    Ok(())
+}
+
+fn waiting_on_a_slot_kept_free(_: &()) -> Outcome {
+    let world = World::new();
+    labelled_kinds(&world);
+    shared(
+        &world,
+        "work",
+        Some(5),
+        &[("operation", 2, 1), ("construction", 2, 0)],
+    );
+    for name in ["b1", "b2", "b3", "b4"] {
+        placed(&world, "work", "build", name, 0)?;
+    }
+    let research = placed(&world, "work", "research", "r1", 0)?;
+    let queued = host(&world)?
+        .queue
+        .into_iter()
+        .find(|queued| queued.place == research)
+        .ok_or("the research place is not in the queue")?;
+    ensure_eq!(
+        serde_json::to_value(&queued.wants).map_err(|error| error.to_string())?,
+        serde_json::json!({
+            "room": "kept-free",
+            "stream": "work",
+            "labels": ["operation"],
+        }),
+        "what it wants in the JSON form"
+    );
+    ensure_eq!(
+        queued.wants.words(),
+        "the stream work's room, the rest kept free for operation".to_string(),
+        "what it wants in words"
+    );
+    let status = world.status(&research)?;
+    ensure_eq!(status.waiting_on, None, "what it waits on its caller for");
+    ensure!(!status.stalled, "the research place is said stalled");
+    world.host.advance(600);
+    world.settle(&research);
+    let status = world.status(&research)?;
+    ensure!(
+        status.waiting_on.is_none() && !status.stalled,
+        "the research place waits on its caller once ten minutes pass"
     );
     Ok(())
 }

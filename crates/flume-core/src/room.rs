@@ -20,8 +20,8 @@
 use crate::accounts::{AccountRoom, PoolRoom, Usable};
 use crate::answer::and_list;
 use crate::{
-    AccountStatus, Act, Answer, Engine, HostStatus, PoolStatus, Queued, RoomWanted, Step,
-    StreamStatus,
+    AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
+    RoomWanted, Step, StreamStatus,
 };
 use flume_seams::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -735,6 +735,7 @@ impl Engine {
                 place: waiting.place.clone(),
                 stage: waiting.stage.clone(),
                 stream: waiting.stream.clone(),
+                label: waiting.label.clone(),
                 priority: waiting.priority,
                 since: waiting.since,
                 wants: waiting.wants(&queue).unwrap_or(RoomWanted::Host),
@@ -755,6 +756,30 @@ impl Engine {
                     .filter(|queued| &queued.stream == name)
                     .cloned()
                     .collect(),
+                labels: stream
+                    .labels
+                    .iter()
+                    .map(|(label, room)| LabelStatus {
+                        name: label.clone(),
+                        reserve: room.reserve,
+                        keep_free: room.keep_free,
+                        running: room.running,
+                        waiting: queued
+                            .iter()
+                            .filter(|queued| {
+                                &queued.stream == name && queued.label.as_ref() == Some(label)
+                            })
+                            .count()
+                            .try_into()
+                            .unwrap_or(u32::MAX),
+                    })
+                    .collect(),
+                reserves: match (stream.labels.is_empty(), stream.bound) {
+                    (true, _) => Reserves::None,
+                    (false, None) => Reserves::PassedOver,
+                    (false, Some(_)) => Reserves::Held,
+                },
+                refused: stream.fault.clone(),
             })
             .collect();
         streams.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.name.cmp(&b.name)));
@@ -788,6 +813,7 @@ impl Engine {
             addresses: self.addresses(),
             watch: self.terminal.watch(),
             bases: self.bases(),
+            configuration: self.host.configuration(),
         }
     }
 
