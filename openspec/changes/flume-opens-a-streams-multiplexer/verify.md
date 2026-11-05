@@ -1,65 +1,22 @@
 # Verify: flume-opens-a-streams-multiplexer
 
-Read on 2026-11-05 at `b618a99`, the branch
+Read on 2026-11-05 at `f2077ab`, the branch
 `change/flume-opens-a-streams-multiplexer`, against the change's
 proposal, design, twelve delta specs and tasks, with main at `c9d58df`,
 which origin's main still is.
 
 ## Verdict
 
-**Falls short; not archived.** Every task is ticked, every scenario of
-the twelve delta specs is held by a test that asserts its THEN, and an
-archive on a copy of the tree leaves `openspec validate --specs
---strict` passing 41 of 41. Group 11's mend holds: under the place's
-short scratch every named-session test ran and passed. The gate does
-not pass. Under `sluice exec main`, `flume:tools` failed one test,
-`terminal_herdr::a_watchs_setup_is_given_by_status_while_its_lease_is_fresh`.
-The race behind it is in flume's herdr plugin's watch, and sluice now
-holds that fail under `flume:tools`' key for this content. A submission
-of this content would read the check flaky, as #108 did.
-
-## What fails
-
-`sluice exec main` at `b618a99`, run on 2026-11-05 from 23:24 UTC: of
-its 37 checks, 36 passed and `flume:tools` failed, 92 of its 93 tests
-passing in 261.96 s (moon: 37 completed, 1 failed). sluice recorded all
-37 results under their keys. The failing assertion is the test's last,
-`terminal_herdr.rs:2757`. After `drop(watch)`,
-`flume status --json` still gave the host's terminal setup as the two
-lines the watch wrote, where the test expects none:
-
-```text
-left: Array [String("herdr's configuration, …/flume-test-setup-63379-58/herdr.toml, binds no key to flume's places: …"), String("herdr's configuration, …/herdr.toml, shows no row of flume's in the sidebar: …")]
-right: Array []
-```
-
-The test and the watch are main's (`f3172a17`), and this change leaves
-both as main has them. The test passed in group 11's run and in #108's.
-It fails when the timing falls wrong, as it did under this run's load.
-
-**The cause, read from the code.** `plugins/herdr/bin/watch.sh` writes
-its lease and then `setup.json` (`write_lease`, `setup said`, lines 103
-to 106). It starts its renewer, and only then installs `trap 'stop; exit
-0' INT TERM` (line 133). The test reads `setup.json` beside a lease as
-the watch being up. It checks the words and runs one `flume status`,
-then sends SIGTERM. A SIGTERM that comes before line 133 ends the shell
-by its default action, so `stop` never runs and the lease is never
-removed. The herdr profile's `watched_servers`
-(`crates/flume/src/profiles/terminal/herdr/mod.rs`) reads a lease as
-fresh by its renewal time alone, for `LEASE_TERM`, a minute, so the
-dead watch's setup stays in status. On a host, the same window leaves a
-stopped watch read as live for up to a minute.
-
-**What would mend it**, for the code stage to weigh: have the watch
-install its trap before it writes the lease, so that every TERM after
-the lease is visible runs `stop`. `/plugins/herdr/**` is among
-`flume:tools`' inputs (`crates/flume/moon.yml`), so the mend also gives
-the check a new key. The fail this run recorded then reaches no
-landing. `plugin-herdr`'s own tasks hold the watch under sh and dash.
+**Holds; archived.** Every task is ticked, every scenario of the twelve
+delta specs is held by a test that asserts its THEN, and `sluice exec
+main` passes all 37 of its checks, `flume:tools` passing 93 of 93. On
+the branch, `openspec archive flume-opens-a-streams-multiplexer --yes`
+applies 32 requirements added and 7 modified, and `openspec validate
+--specs --strict` then passes 41 of 41.
 
 ## Tasks
 
-All 36 tasks of groups 1 to 11 are ticked, and `openspec validate
+All 37 tasks of groups 1 to 12 are ticked, and `openspec validate
 flume-opens-a-streams-multiplexer --strict` passes. Record 0037 is
 `accepted` and quotes the user's words of 2026-11-05. Record 0047 is
 `proposed`, as the code stage wrote it, and waits on the user's yes at
@@ -68,50 +25,76 @@ and core.51 in `docs/architecture/core.md` are mirrored word for word
 in `site/src/content/docs/architecture/rules.md`. `git grep
 'view-and-terminal[-]app' -- docs openspec` finds nothing (1.4).
 
-Group 11, read against its tasks:
+Groups 1 to 11 are as the reports at `70dc992`, `6f92dc8` and `4bfba81`
+read them. Since `b618a99`, the branch changes `plugins/herdr/bin/watch.sh`,
+`plugins/herdr/tests/run.sh` and the tasks, and nothing else. No crate,
+no doc, no site page and no delta has changed.
 
-- **11.1.** `b2fb0a6` reverts `90373ac` whole. The tree at `b2fb0a6`
-  equals the tree at `e5c596d`, and `openspec/specs` at `b618a99`
-  equals both.
-- **11.2.** `could_not_run` in `crates/flume/tests/profiles/tools/main.rs`
-  writes its words to stderr and exits 77. `SessionHome::new` links the
-  session home in the first of two folders, the temporary folder and
-  `/tmp`, that leaves every named session's socket room and that the
-  run may write. Where neither does, it ends the run naming each
-  socket's bytes. `TestServer`'s short link and the open's `Host::new`
-  do the same where no link can be made. The diff from `b2fb0a6`
-  touches these setups alone and no assertion of any test.
-  `.config/sluice.toml`'s `[tests]` gains `not_run = [77]`. Record 0047
-  and core.51 cite sluice's clauses 19, 35, 56 and 114 to 116 and its
-  record 0074.
-- **11.3.** Holds for what it names: under the place's scratch, every
-  named-session test ran and passed. The gate as a whole fails, as
-  "What fails" says.
+Group 12, read against its task:
 
-## The archive
-
-On a copy of the tree's `openspec/`, `openspec archive
-flume-opens-a-streams-multiplexer --yes` applied 32 requirements added
-and 7 modified, and `openspec validate --specs --strict`, the command
-`root:specs` runs, passed 41 of 41. Nothing is archived on the branch.
+- **12.1.** `089d423` moves `stop` and the watch's `INT`, `TERM` and
+  `EXIT` traps ahead of `write_lease`. They are set after the watch takes
+  the lock and finds no lease of its own, and before it writes its lease.
+  `stop` ends the renewer only where `renewer` is set. It takes the lock
+  only where `holds_lock` says the watch does not hold it already. It
+  removes the watch's `lease.tmp.$$` and, where the lease's holder is the
+  watch, the lease. The renewer's subshell runs `trap - TERM EXIT` first,
+  since its `$$` is the watch's and a `stop` of its own would take the
+  watch's lease. So a SIGTERM at any moment after the lease can be read
+  runs `stop`. A watch ended while it holds the lock gives the lock back.
+  `tests/run.sh`'s new test makes `HERDR_CONFIG_PATH` a fifo, so the
+  watch blocks in `setup said` once its lease is written. The test sends
+  SIGTERM, opens the fifo for writing so the read ends, and asserts the
+  lease is gone within ten seconds. On a copy of the plugin with the
+  watch as it stood at `b618a99`, that test fails under the system's sh
+  and under dash, "the ended watch left its lease". The copy's manifest
+  test also failed, as the copy held no `Cargo.toml`; no other test
+  failed. `crates/flume/moon.yml` names `/plugins/herdr/**/*` among
+  `flume:tools`' inputs, so the check takes a new key.
 
 ## Checks
 
-The other 36 checks of `sluice exec main` at `b618a99` passed. Among
-them are seams, core, fakes and conformance (lint, test and coverage),
-flume:format, flume:lint and flume:test, the plugins' tasks, site:prose,
-site:build, root:format, root:adrs, root:changes, root:specs and
-root:hooks. `flume:tools` ran all 93 of its tests, the 11 that start a
-named herdr session among them, and 92 passed.
+`sluice exec main` at `f2077ab`, run on 2026-11-05 from 23:47 UTC,
+checked the branch against main at `c9d58df`. moon completed 38 tasks in
+5 min 14 s. sluice said "passed: 37 tasks" and "recorded 1 result under
+its key for f2077ab", and exited 0.
+
+- `flume:tools` ran its 93 tests in 290.99 s and passed 93, among them
+  `terminal_herdr::a_watchs_setup_is_given_by_status_while_its_lease_is_fresh`
+  and the 11 that start a named herdr session.
+- `plugin-herdr:test` passed all 34 tests under the system's sh and all
+  34 under dash, the new test among them. `plugin-herdr:manifest`,
+  `plugin-herdr:lint` (shellcheck) and `plugin-herdr:install` passed.
+- seams, core, fakes and conformance passed their format, lint and test
+  tasks, and `conformance:coverage` passed. `flume:format`, `flume:lint`
+  and `flume:test` passed. The Claude Code plugin's tasks passed.
+  `site:prose` and `site:build` passed. `root:format`, `root:adrs`,
+  `root:changes`, `root:specs` (38 of 38 before the archive),
+  `root:hooks`, `root:layers`, `root:toolchain` and `root:marketplace`
+  passed.
+
+## The archive
+
+On the branch, `openspec archive flume-opens-a-streams-multiplexer
+--yes` moves the change, this report with it, to
+`openspec/changes/archive/2026-11-05-flume-opens-a-streams-multiplexer`.
+It adds the specs stream-terminals, stream-views and window-profiles. It
+syncs streams, terminal-profiles, seam-contracts, seam-fakes,
+command-line, launching, settling, host-configuration and
+clause-coverage. That is 32 requirements added and 7 modified, and
+`openspec validate --specs --strict`, the command `root:specs` runs,
+passes 41 of 41. The same archive on a copy of the tree at `f2077ab`
+gave the same counts before it was run here.
 
 ## Scenarios
 
 The reports at `70dc992` and `6f92dc8` matched each scenario to the
 test that holds it and read each test's assertions against its THEN.
 The deltas, the proposal and the design have not changed since
-`6f92dc8`. The only code change is group 11's, to the setups of the
-tools tests that start a named herdr session, and it changes no
-assertion. That reading stands whole:
+`6f92dc8`. Group 11's code changes the setups of the tools tests that
+start a named herdr session and changes no assertion. Group 12 changes
+the herdr plugin's watch and adds a plugin test. That reading stands
+whole:
 
 - **stream-terminals**: `a_place_in_two_terminals` asserts one tidy of
   `other` and one of `fake`, and the answer's terminals as
@@ -129,18 +112,16 @@ assertion. That reading stands whole:
   holds 180 to 186 and 190, Part B holds 187 to 189, the scenarios run
   S1 to S91, and the unbuilt list is as the delta's scenario gives it.
 - **terminal-profiles and stream-views through herdr**: the 11 tests
-  that start a named session now run under the gate itself, since the
-  place's scratch leaves their sockets room. The earlier reports held
-  them by a direct run, on the operator's ruling.
+  that start a named session ran and passed under the gate itself.
 
 ## Observations
 
 None of these fails a THEN or a requirement. Each is left for a later
 change to weigh.
 
-- **The proposal's Impact names neither `.config/sluice.toml` nor
-  record 0047 and core.51.** Group 11 and the tasks' preamble say them;
-  the proposal and the design do not.
+- **The proposal's Impact names neither `.config/sluice.toml`, record
+  0047 and core.51, nor the herdr plugin's watch.** Groups 11 and 12 and
+  the tasks' preamble say them; the proposal and the design do not.
 - **One test's exit ends the whole tools binary.** A test running beside
   the one that exits 77 is cut off with no outcome. Record 0047 weighs
   this and accepts it, and sluice ends the run's process group.
@@ -167,3 +148,7 @@ change to weigh.
   members, then the unbuilt list's count with every built clause absent
   from it. They do not check each part, or each unbuilt clause's owner,
   entry for entry. The list itself matches the spec.
+- **The watch's renewer resets `TERM` and `EXIT` but not `INT`.** A
+  POSIX shell resets caught traps in a subshell and an asynchronous list
+  ignores `INT` where job control is off. So the renewer never runs the
+  watch's `stop`, and the reset is a guard the shells do not need.
