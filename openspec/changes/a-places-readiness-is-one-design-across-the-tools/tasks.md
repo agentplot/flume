@@ -165,7 +165,7 @@ layer, where sluice is the one the tree pins.
 
 ## 3. The site
 
-- [ ] 3.1 Write design 5's readiness into the site, to any host's
+- [x] 3.1 Write design 5's readiness into the site, to any host's
   operator, naming sluice, proto and moon as tools flume integrates with
   and no host, team or word of ours (core.35):
   - `guides/places-and-herdr.mdx`: a place's readiness is
@@ -182,7 +182,7 @@ layer, where sluice is the one the tree pins.
 
   True when `sluice exec main -- moon run site:prose site:build`
   passes.
-- [ ] 3.2 Run the checks of the project this group touched. True when
+- [x] 3.2 Run the checks of the project this group touched. True when
   `sluice exec main -- moon run site:prose site:build root:format`
   passes.
 

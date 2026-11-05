@@ -51,25 +51,39 @@ name. Nothing is left behind by a refused launch.
 
 ## Making a place ready
 
-What a worktree needs before an agent works in it is the merge queue's
-policy to say. With sluice bound, flume reads `.config/sluice.toml` at
-the base's revision and runs, in the new place:
+A place is made ready by its merge queue, as the merge queue makes
+ready the working copies of its own runs. flume runs no step of its
+own. With sluice bound, flume runs one command in the new place:
 
-1. `[tests] toolchain`, when it names one, such as
-   `["devenv", "print-dev-env"]`. Its output is the environment every
-   later step runs under, kept in the place's own git directory.
-2. `proto install --config-mode upwards`, when `[tests] runner = "moon"`
-   and the base holds a `.prototools`. It installs the versions the
-   repository pins, under the toolchain's environment, as sluice's moon
-   runner does before any moon command. A toolchain that only activates
-   those versions leaves them uninstalled in a fresh clone.
-3. `moon setup`, when `[tests] runner = "moon"`.
+```sh
+sluice equip <base> --at <revision> --json
+```
 
-Each step runs with the host user's login environment, nothing of the
-caller's session. A step that fails leaves the place made: a fix or a
-chore starts anyway and its prompt names the failed step, and a change
-waits with the step in `flume status`. A repository with no such steps
-is ready at once, and the prompt says it declares no readiness.
+`<revision>` is the base's revision the launch read, which the place's
+branch was cut from. sluice reads `.config/sluice.toml` at that
+revision and runs in the place what it runs before a run of its own:
+the `[tests] toolchain` the policy names, then, with
+`[tests] runner = "moon"`, `proto install` of what the place's
+`.prototools` pins, `moon --version` and `moon setup`. It answers each
+step with whether it passed and what it printed, and stops at the first
+that fails. Those steps are the place's readiness. flume keeps nothing
+a step makes.
+
+`sluice equip` runs with the host user's login environment, nothing of
+the caller's session, so the sluice it runs is the one that
+environment's `PATH` finds. sluice 0.67.0 is the first with
+`sluice equip`. An older one fails the readiness at its one step,
+`sluice equip`, with sluice's words, as does a refusal or an answer
+flume cannot read.
+
+A step that fails leaves the place made: a fix or a chore starts anyway
+and its prompt names the failed step, and a change waits with the step
+in `flume status`. A retry of that first stage runs `sluice equip` again
+at the launch's revision, so sluice reads the policy as the launch read
+it and installs what the place holds then, its agent's commits among
+them. A repository whose merge queue equips it with no step, or that
+binds none, is ready at once, and the prompt says it declares no
+readiness.
 
 `flume status` gives each step in one line, passed or failed, and under
 a failed step the last ten lines it printed, its terminal escapes
@@ -82,6 +96,8 @@ $ flume status change--tabs-in-quotes
   branch change/tabs-in-quotes from main, head 84130b3cd2adae9a0ac2117884849d513da80181
   …
   readiness toolchain: passed
+  readiness proto install: passed
+  readiness moon --version: passed
   readiness moon setup: failed
     Installing node 22.11.0
     Error: node 22.11.0 could not be downloaded: the connection timed out
