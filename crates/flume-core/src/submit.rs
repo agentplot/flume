@@ -245,10 +245,20 @@ impl Engine {
 
     /// Acts on an outcome of the place's submission, or its refusal at
     /// submit: a failure or a conflict starts the kind's fix round with
-    /// the merge queue's words (112, 113, 131).
+    /// the merge queue's words (112, 113, 131). A failure or a conflict
+    /// is acted on once for the submission flume made, decided in the
+    /// write itself: two settles that read it at once, or one that
+    /// reads it again from the record or the inbox, find the verdict
+    /// held and change nothing, so it is counted once toward the kind's
+    /// bound and never sends back over the fix round's agent (74, 75).
     pub(crate) fn verdict(&self, id: &PlaceId, verdict: Verdict) {
         let limit = self.defaults.send_backs;
         let back = self.update(id, |held| {
+            if matches!(verdict, Verdict::Failed { .. } | Verdict::Conflict { .. })
+                && held.submission.verdict.is_some()
+            {
+                return Step::Keep(None);
+            }
             held.submission.verdict = Some(verdict.clone());
             let (cause, words) = match &verdict {
                 Verdict::Landed { commit, .. } => {

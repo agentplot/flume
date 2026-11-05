@@ -10,7 +10,7 @@ use super::settling::{
 };
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Waits};
+use flume_core::{Act, Retry, Waits};
 use flume_fakes::Plan;
 use flume_seams::*;
 
@@ -60,6 +60,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "fix round: a finding then a failure past the kind's bound sends nothing more back, and status gives the move and the words",
             cites: &["112", "131", "23", "130", "56"],
             run: a_finding_then_a_failure_past_the_bound,
+        },
+        Scenario {
+            name: "fix round: a conflict two settles read at once, of a change whose held submission a retry released, starts code once with the merge queue's words and counts once toward the kind's bound, the change sent back never or once before; one sent back to its bound waits on its caller saying so",
+            cites: &["47", "49", "111", "112", "131", "74", "75"],
+            run: a_released_conflict_read_at_once,
         },
         Scenario {
             name: "fix round: construct finding work starts nothing, and waits on an answer, status saying it found work",
@@ -464,6 +469,172 @@ fn a_finding_then_a_failure_past_the_bound(_: &()) -> Outcome {
             .words
             .as_deref()
             .is_some_and(|words| words.contains("check test-y failed")),
+        "the merge queue's words are not given: {:?}",
+        waiting.words
+    );
+    Ok(())
+}
+
+/// The words the merge queue gives the released change's conflict.
+const CONFLICT: &str = "conflict on main: workers/control-plane/moon.yml";
+
+/// A change@2 launched with its submission held, sent back `findings`
+/// times by verify's finding work, its last verify delivered, and the
+/// hold released by a retry naming the submission; the request that
+/// opened is taken in and found in conflict with its base, unsettled.
+fn released_in_conflict(world: &World, findings: u32) -> Result<PlaceId, String> {
+    let mut change = launch("change@2", "plan", Some("plan it"));
+    change.hold_submission = true;
+    launched(&world.engine.launch(&change))?;
+    let id = World::id("change", "plan");
+    world.settle(&id);
+    write_change(world, "plan");
+    world.settle(&id);
+    world.settle(&id);
+    world.tick("change/plan", "plan", 1, 1);
+    world.settle(&id);
+    world.settle(&id);
+    for finding in 0..findings {
+        let verify = World::identity("change", "plan", "verify", finding + 1);
+        let answer = world.engine.needs(
+            &verify.to_string(),
+            &secret(world, &id, 2)?.0,
+            "a case is left out",
+            StopKind::FoundWork,
+        );
+        ensure!(answer.refusal().is_none(), "the stop-short was refused");
+        world.settle(&id);
+        world.tick("change/plan", "plan", 1, 1);
+        world.settle(&id);
+        world.settle(&id);
+    }
+    ensure!(
+        world
+            .stage_state(&id, "verify")
+            .is_some_and(StageState::running),
+        "verify did not run"
+    );
+    archive(world, "plan");
+    world.settle(&id);
+    ensure_eq!(
+        world.queue.log.count("submit"),
+        0,
+        "a held submission was made"
+    );
+    world.queue.plan_submits(vec![request(
+        Plan::Conflict(
+            vec!["workers/control-plane/moon.yml".into()],
+            CONFLICT.into(),
+        ),
+        false,
+    )]);
+    world.queue.moves_on_its_own();
+    let retried = world.engine.retry(&id, Retry::Submission, None, false);
+    ensure!(retried.refusal().is_none(), "the retry was refused");
+    world
+        .queue
+        .take_in(REPOSITORY, "change/plan")
+        .ok_or("no request to take in")?;
+    world.queue.run_round(REPOSITORY, "main");
+    Ok(id)
+}
+
+/// Two settles of the place at once, as the terminal's watch and an
+/// agent going quiet settle it together: the second runs whole just
+/// before the first's first write, which then reads again.
+fn two_settles_at_once(world: &World, id: &PlaceId) -> Outcome {
+    let other = world.engine();
+    let at = id.clone();
+    world.store.before_next_write(move || {
+        let _ = other.settle(Some(&at));
+    });
+    world.store.log.clear();
+    world.settle(id);
+    ensure!(
+        world
+            .store
+            .log
+            .calls()
+            .iter()
+            .any(|call| call.ends_with("moved")),
+        "the two settles did not meet at one write"
+    );
+    Ok(())
+}
+
+fn a_released_conflict_read_at_once(_: &()) -> Outcome {
+    for findings in [0, 1] {
+        let world = World::new();
+        let id = released_in_conflict(&world, findings)?;
+        let opened = world.terminal.log.count("open");
+        two_settles_at_once(&world, &id)?;
+        let code = World::identity("change", "plan", "code", findings + 2);
+        let prompt = world.prompt(&id, &code).ok_or("code did not start again")?;
+        ensure!(prompt.contains(CONFLICT), "{CONFLICT} is not in {prompt}");
+        ensure!(
+            world
+                .stage_state(&id, "code")
+                .is_some_and(StageState::running),
+            "code, sent back after {findings} findings: {:?}",
+            world.stage_state(&id, "code")
+        );
+        ensure_eq!(
+            world.terminal.log.count("open"),
+            opened + 1,
+            "agents opened for the fix round"
+        );
+        let status = world.status(&id)?;
+        let submission = status.submission.ok_or("no submission")?;
+        ensure_eq!(submission.send_backs, findings + 1, "goings-back");
+        ensure_eq!(submission.waiting, None, "what the submission waits on");
+        ensure!(
+            status.waiting_on.is_none(),
+            "the place waits on its caller: {:?}",
+            status.waiting_on
+        );
+        world.settle(&id);
+        ensure_eq!(
+            world.held(&id).map(|held| held.submission.send_backs),
+            Some(findings + 1),
+            "goings-back after a later settle"
+        );
+        ensure_eq!(
+            world.terminal.log.count("open"),
+            opened + 1,
+            "agents opened after a later settle"
+        );
+    }
+    let world = World::new();
+    let id = released_in_conflict(&world, 2)?;
+    let opened = world.terminal.log.count("open");
+    two_settles_at_once(&world, &id)?;
+    ensure_eq!(
+        world.terminal.log.count("open"),
+        opened,
+        "agents opened past the bound"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Delivered),
+        "code, past the bound"
+    );
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.submission.map(|submission| submission.send_backs),
+        Some(2),
+        "goings-back"
+    );
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage.as_deref(), waiting.why),
+        (Act::Retry, Some("code"), Waits::PastBound),
+        "the move the place waits on"
+    );
+    ensure!(
+        waiting
+            .words
+            .as_deref()
+            .is_some_and(|words| words.contains(CONFLICT)),
         "the merge queue's words are not given: {:?}",
         waiting.words
     );
