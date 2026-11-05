@@ -1232,7 +1232,7 @@ mod tests {
     #[test]
     fn a_missing_key_under_the_watch() {
         // 72, 122: what the terminal lacks, under the line naming the watch.
-        let key = "herdr's /h/config.toml binds no key to flume's popup".to_string();
+        let key = "the terminal's /t/config.toml binds no key to flume's places".to_string();
         let host = HostStatus {
             watch: Watch::Bound { seconds: 30 },
             terminal_setup: vec![key.clone()],
