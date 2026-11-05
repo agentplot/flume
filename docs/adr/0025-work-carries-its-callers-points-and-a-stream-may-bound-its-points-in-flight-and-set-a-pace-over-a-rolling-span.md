@@ -55,4 +55,4 @@ Option 2.
 - Clauses 4, 7, 8, 56, 70, 99, 143, 152, 153, C.4, C.6 and C.7 of flume's statement are amended, and 165 to 168, S69 and S70 added, with section 3's points, pace, room, in flight and waiting for room, at blueprints 9c7490c. Rule core.26 is amended and core.38 drawn from this record.
 - Built after the mode (record 0024), with the rest of flume's first build: `--points`, the streams' `points` and `pace`, the stream documents, the two bounds in `Queue`'s settle, and status.
 - What the sluice profile reads for a submission's times, its `submitted` and the times of its decision and its runs, is checked against the pinned sluice at the build; any it does not give is reported unknown.
-- A caller that balances across hosts, Flywheel's later, reads points queued and in flight from each host's status; flume balances nothing across hosts (1, 70).
+- A caller that balances across hosts, Boomdrive's later, reads points queued and in flight from each host's status; flume balances nothing across hosts (1, 70).

@@ -11,6 +11,8 @@ decision-makers:
 
 Status: accepted by the user on 2026-10-31, on their Pending You card (req_bb4ef39d8d4c419780f3, "Every place under flume's data folder").
 
+Amended 2026-11-02, following C.1 as blueprints 92afa99 amended it: its make column holds this record, and the last consequence says so.
+
 Deciders: the user, in the brief of the fix `a-place-is-never-inside-a-working-tree` on 2026-10-31: "a place is never made inside a working tree of its repository. [...] Places that already exist where they are now are read and tidied as before."; and on their card the same day, which asked whether a bare repository's places stay beside its worktrees while a clone's go under flume's own data directory, or every place goes there: "Every place under flume's data folder", for a bare repository as for a clone, one rule. The directory's layout and how a place is found by its kind and name are the fixing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` at 56bd21b: section 3's repository, clauses 2, 3, 8, 9, 78, 83, 132, C.1 (the make column, `<repository>/places/<kind>--<name>`), C.4 (an agent's identity names its repository by the id of its common git directory), C.7 (kinds' packages under `$XDG_DATA_HOME/flume/kinds/`), and section 9's storage rule, host state under the host's own directories "for config, state, data and cache, by its kind"; `agentplot/blueprints:design/capture/design.md`, "Where state lives" (data is what cannot be fetched again; flume's worktree layer is the place); records 0006 and 0014; `agentplot/sluice` record 0013 (a place is a plain git worktree, under `<common>/sluice/.places/`); rules core.3, core.8, core.16, core.17, core.18, core.19; `crates/flume-core/src/launch.rs` (the location built as `{repository}/places/{kind}--{name}`), `crates/flume/src/commands/place.rs` (the repository as the directory holding a bare repository beside its worktrees, or the main worktree).
 
@@ -43,4 +45,4 @@ Option 3, for every repository.
 - Every place lies under the host's data directory, backed up where the host backs data up, and away from the repository's checkouts. `flume status` names each place's location.
 - A place made before this record at `<repository>/places/<kind>--<name>` stays there until it is tidied, and a launch of the same kind and name is refused while it stands, its branch standing (3).
 - Rule core.40 holds it.
-- C.1 says `<repository>/places/<kind>--<name>` for every repository. Its make column is to be amended in the statement to say every place is under flume's own data directory (core.19). Until it is, the code stands ahead of C.1, an item in `docs/architecture/_open.md`.
+- C.1's make column says every place is made at `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>`, under flume's own data directory and inside no working tree, and a place made before at `<repository>/places/<kind>--<name>` is read and tidied where it stands (blueprints 92afa99; core.19).

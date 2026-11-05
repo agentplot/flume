@@ -133,6 +133,10 @@ impl PlaceHarness for LaxPlace {
         self.0.readiness(repository, steps)
     }
 
+    fn pinned(&self, repository: &str) -> Option<place::Pinned> {
+        self.0.pinned(repository)
+    }
+
     fn untracked(&self, place: &PlaceRef, file: &str) {
         self.0.untracked(place, file)
     }

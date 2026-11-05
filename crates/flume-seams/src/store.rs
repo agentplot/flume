@@ -1,8 +1,9 @@
 //! The store seam's answers (102 to 104), and the host's own documents
 //! it keeps beside the places' held state (153).
 
-use crate::{AccountMove, HeldState, Seconds};
+use crate::{AccountMove, HeldState, MoveOn, Seconds};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// A place's held state with the version it was read at (102).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,22 +99,43 @@ pub struct AccountSpent {
     pub recorded_at: Seconds,
 }
 
-/// An intent's affinity: the stream, pool and account its agents keep
-/// to, each move it made between accounts, and when its last place went,
-/// none while a place of it stands (147).
+/// An intent's affinity: the stream its agents keep to, the pool and
+/// account they keep to for each program they run, each move it made
+/// between accounts, and when its last place went, none while a place of
+/// it stands (147).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Affinity {
     pub stream: String,
-    pub pool: String,
-    pub account: String,
+    /// For each program the intent's agents run, as its accounts name
+    /// it, the account the first of them on that program started on, as
+    /// moved since (147).
+    #[serde(default)]
+    pub accounts: BTreeMap<String, AffinityAccount>,
     pub moves: Vec<AccountMove>,
     pub gone: Option<Seconds>,
+    /// The one account a document written before an intent kept one
+    /// per program holds, and its pool; read and never written (147).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+}
+
+/// The account an intent's agents on one program keep to, and its pool
+/// (147).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AffinityAccount {
+    pub pool: String,
+    pub account: String,
 }
 
 impl Affinity {
-    /// Whether the affinity once left `account` (147).
-    pub fn left(&self, account: &str) -> bool {
-        self.moves.iter().any(|moved| moved.from == account)
+    /// Whether the affinity for `program` once left `account` (147).
+    pub fn left(&self, program: &str, account: &str) -> bool {
+        self.moves.iter().any(|moved| {
+            moved.from == account
+                && matches!(&moved.on, MoveOn::Intent { program: Some(moved) } if moved == program)
+        })
     }
 }
 

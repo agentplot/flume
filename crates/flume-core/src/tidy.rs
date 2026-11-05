@@ -76,9 +76,10 @@ impl Engine {
         let at = place.place_ref();
         if let Phase::Over { .. } = held.phase {
             if let (true, Some(queue)) = (place.kind.lands, &bound.merge_queue) {
-                if let SubmissionRead::CouldNotRead { reason } =
-                    queue.read_submission(&place.repository, &place.branch)
-                {
+                if let SubmissionRead::CouldNotRead { reason } = crate::submit::on_base(
+                    &place.base,
+                    queue.read_submission(&place.repository, &place.branch),
+                ) {
                     return self.keep(id, Kept::Unreadable { reason }, tidied);
                 }
             }

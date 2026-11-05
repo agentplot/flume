@@ -290,6 +290,7 @@ fn the_agents_modes_are_scripted() {
         let command = agent.command(
             &Settings::default(),
             mode,
+            None,
             &BTreeMap::new(),
             &place_ref(),
             who,
@@ -386,6 +387,7 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
         let command = agent.command(
             &Settings::default(),
             Some("all"),
+            None,
             &BTreeMap::new(),
             &place_ref(),
             who,
@@ -439,6 +441,200 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
 }
 
 #[test]
+fn the_agents_carry_is_scripted_by_each_accounts_home() {
+    // Unscripted, the fake carries nothing, as the seam's default; scripted,
+    // it answers yes with the session to one account and no with the words
+    // to another, no naming the variable to an account none is scripted
+    // for and for a start kept in another folder, and logs each answer
+    // (128, 179).
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host));
+    let agent = FakeAgent::new(terminal);
+    let folder = "/state/fix--one";
+    let stopped = identity("code", 1);
+    let home = |home: &str| BTreeMap::from([(FakeAgent::HOME.to_string(), home.to_string())]);
+    assert_eq!(
+        agent.carry(folder, &stopped, &home("/scratch/work-2")),
+        Carry::NotOffered
+    );
+    agent.carry_to(
+        "/scratch/work-2",
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    );
+    agent.carry_to(
+        "/scratch/work-3",
+        Carry::No {
+            why: "work-3 shares nothing".into(),
+        },
+    );
+    assert_eq!(
+        agent.carry(folder, &stopped, &home("/scratch/work-2")),
+        Carry::Yes {
+            session: "s-1".into()
+        }
+    );
+    assert_eq!(
+        agent.carry(folder, &stopped, &home("/scratch/work-3")),
+        Carry::No {
+            why: "work-3 shares nothing".into()
+        }
+    );
+    match agent.carry(folder, &stopped, &home("/scratch/work-4")) {
+        Carry::No { why } => {
+            assert!(why.contains(FakeAgent::HOME), "{why}");
+            assert!(!why.contains("/scratch"), "{why}");
+        }
+        other => panic!("an account none is scripted for: {other:?}"),
+    }
+    assert!(matches!(
+        agent.carry(folder, &stopped, &BTreeMap::new()),
+        Carry::No { .. }
+    ));
+    agent.keep_record_in(&stopped, folder);
+    assert!(matches!(
+        agent.carry("/state/fix--two", &stopped, &home("/scratch/work-2")),
+        Carry::No { .. }
+    ));
+    assert_eq!(
+        agent.log.of("carry"),
+        vec![
+            format!("carry {stopped} in {folder} to /scratch/work-2: not offered"),
+            format!("carry {stopped} in {folder} to /scratch/work-2: yes s-1"),
+            format!("carry {stopped} in {folder} to /scratch/work-3: no"),
+            format!("carry {stopped} in {folder} to /scratch/work-4: no"),
+            format!("carry {stopped} in {folder} to no home: no"),
+            format!("carry {stopped} in /state/fix--two to /scratch/work-2: no"),
+        ]
+    );
+}
+
+#[test]
+fn the_agents_command_resumes_the_session_it_is_given() {
+    // The command passes `--resume <session>` where it is given one, and
+    // its log names it (88, 179).
+    let host = Arc::new(FakeHost::default());
+    let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
+    let command = |who: &Identity, resume: Option<&str>| {
+        agent.command(
+            &Settings::default(),
+            None,
+            resume,
+            &BTreeMap::new(),
+            &place_ref(),
+            who,
+            &Secret("s".into()),
+            "go",
+        )
+    };
+    let carried = identity("code", 2);
+    let args = command(&carried, Some("s-1")).args;
+    assert!(
+        args.windows(2).any(|pair| pair == ["--resume", "s-1"]),
+        "{args:?}"
+    );
+    let fresh = identity("code", 3);
+    let args = command(&fresh, None).args;
+    assert!(!args.iter().any(|arg| arg == "--resume"), "{args:?}");
+    assert_eq!(
+        agent.log.of("command"),
+        vec![
+            format!("command {carried} --resume s-1"),
+            format!("command {fresh}")
+        ]
+    );
+}
+
+#[test]
+fn the_agents_word_names_the_session_it_resumes() {
+    // A start that resumes a session says it started in that session
+    // unless scripted otherwise; in another, it says it started nothing
+    // and began in another conversation; a start that resumes none
+    // compares none (161, 179).
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host));
+    let agent = FakeAgent::new(terminal.clone());
+    let folder = "/state/fix--one";
+    let opened = |who: &Identity, resume: Option<&str>| {
+        let command = agent.command(
+            &Settings::default(),
+            None,
+            resume,
+            &BTreeMap::new(),
+            &place_ref(),
+            who,
+            &Secret("s".into()),
+            "go",
+        );
+        terminal.open(&place_ref(), folder, &command, who, None, None);
+    };
+    let carried = identity("code", 2);
+    opened(&carried, Some("s-1"));
+    assert_eq!(agent.started(folder, &carried), Reading::Yes);
+    assert_eq!(agent.started_without(folder, &carried), None);
+    agent.set_session(&carried, "s-1");
+    assert_eq!(agent.started(folder, &carried), Reading::Yes);
+    agent.set_session(&carried, "s-2");
+    assert_eq!(
+        agent.started_without(folder, &carried),
+        Some(Unsettled {
+            session: true,
+            ..Unsettled::default()
+        })
+    );
+    assert_eq!(
+        agent.started(folder, &carried),
+        Reading::No,
+        "an agent begun in another session says it started nothing"
+    );
+
+    let fresh = identity("code", 3);
+    opened(&fresh, None);
+    agent.set_session(&fresh, "s-2");
+    assert_eq!(agent.started_without(folder, &fresh), None);
+    assert_eq!(agent.started(folder, &fresh), Reading::Yes);
+}
+
+#[test]
+fn a_carried_start_scripted_to_end_before_its_word() {
+    // Scripted so, a start that resumes a session ends before its word
+    // that it started: it reads not started and ended, and the terminal
+    // reads it stopped; a start that resumes none is not touched (146,
+    // S79).
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host));
+    let agent = FakeAgent::new(terminal.clone());
+    agent.carried_starts_end();
+    let folder = "/state/fix--one";
+    let opened = |who: &Identity, resume: Option<&str>| {
+        let command = agent.command(
+            &Settings::default(),
+            None,
+            resume,
+            &BTreeMap::new(),
+            &place_ref(),
+            who,
+            &Secret("s".into()),
+            "go",
+        );
+        terminal.open(&place_ref(), folder, &command, who, None, None);
+    };
+    let carried = identity("code", 2);
+    opened(&carried, Some("s-1"));
+    assert_ne!(terminal.state(&carried), AgentState::Stopped);
+    assert_eq!(agent.started(folder, &carried), Reading::No);
+    assert_eq!(terminal.state(&carried), AgentState::Stopped);
+    assert_eq!(agent.ended(folder, &carried), Reading::Yes);
+
+    let fresh = identity("code", 3);
+    opened(&fresh, None);
+    assert_eq!(agent.started(folder, &fresh), Reading::Yes);
+    assert_eq!(agent.ended(folder, &fresh), Reading::No);
+    assert_ne!(terminal.state(&fresh), AgentState::Stopped);
+}
+
+#[test]
 fn the_agent_gives_both_stop_shorts() {
     let host = Arc::new(FakeHost::default());
     let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
@@ -486,7 +682,7 @@ fn submitted(answer: Submitted) -> Submission {
 
 fn outcomes(answer: Inbox) -> Vec<SubmissionOutcome> {
     match answer {
-        Inbox::Outcomes { outcomes } => outcomes,
+        Inbox::Outcomes { outcomes, .. } => outcomes,
         other => panic!("the inbox answered {other:?}"),
     }
 }
@@ -554,7 +750,7 @@ fn the_merge_queues_outcomes_are_planned() {
         "a withdrawal is never in the inbox"
     );
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::Found {
             submission: Submission {
                 state: SubmissionState::Withdrawn,
@@ -585,7 +781,7 @@ fn the_merge_queues_outcomes_are_planned() {
         Stepped::CouldNotRead { .. }
     ));
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::CouldNotRead { .. }
     ));
     queue.set_base(
@@ -629,7 +825,7 @@ fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
         }
     );
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::Found { submission: found } if found == submission
     ));
     queue.step("/r", "main");
@@ -658,11 +854,14 @@ fn a_request_is_an_entry_only_once_taken_in_and_its_outcome_goes_to_the_request(
             request: "1".into()
         }
     );
-    assert_eq!(queue.read_submission("/r", "fix/one"), SubmissionRead::None);
+    assert_eq!(
+        queue.read_submission("/r", "fix/one"),
+        SubmissionRead::None.into()
+    );
     queue.step("/r", "main");
     assert_eq!(
         queue.read_submission("/r", "fix/one"),
-        SubmissionRead::None,
+        SubmissionRead::None.into(),
         "a round takes no request in"
     );
     let entry = queue.take_in("/r", "fix/one").expect("the request");
@@ -686,7 +885,7 @@ fn a_request_is_an_entry_only_once_taken_in_and_its_outcome_goes_to_the_request(
     queue.take_in("/r", "fix/one").expect("the request again");
     queue.step("/r", "main");
     assert!(matches!(
-        queue.read_submission("/r", "fix/one"),
+        queue.read_submission("/r", "fix/one").read,
         SubmissionRead::Found { submission }
             if matches!(submission.state, SubmissionState::Landed { .. })
                 && submission.request.as_deref() == Some("1")

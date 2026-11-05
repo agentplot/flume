@@ -1,12 +1,16 @@
 //! The fix and change walkthroughs of the check-tools layer with the
 //! pinned Claude Code under herdr in place of the stand-in, a code stage
-//! waiting on its suite with its pane quiet (39, S3), and a fix begun in
-//! the mode its host gives (162, S66). Each brief asks for what the
+//! waiting on its suite with its pane quiet (39, S3), a fix begun in
+//! the mode its host gives (162, S66), and a fix whose code agent stops
+//! at its account's usage limit going on in its own conversation under
+//! the pool's other account (S78). Each brief asks for what the
 //! stand-in's script acted; the kinds' own prompts say the rest.
 
-use super::walk::stage;
+use super::walk::{now, session_limit_after, stage};
 use super::Live;
-use serde_json::json;
+use flume::profiles::agent::claude::record::Record;
+use flume::profiles::terminal::herdr::herdr_name;
+use serde_json::{json, Value};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -219,4 +223,210 @@ fn s66_a_fix_begins_in_the_mode_its_host_gives_over_the_repositorys_own() {
     assert_eq!(submissions[0]["state"], "landed", "{}", submissions[0]);
     let parser = live.walk.on_remote("parser.rs").unwrap_or_default();
     assert!(parser.contains("fn parse()"), "parser.rs: {parser:?}");
+}
+
+/// The records of the transcript at `path`, none where it is not written.
+fn records(path: &str) -> Vec<Value> {
+    std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect()
+}
+
+/// A turn's text: its content's string, or its text blocks joined.
+fn text(content: &Value) -> Option<String> {
+    match content {
+        Value::String(text) => Some(text.clone()),
+        Value::Array(blocks) => Some(
+            blocks
+                .iter()
+                .filter_map(|block| block["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+        _ => None,
+    }
+}
+
+/// The id of a foreground Bash call running `step.sh` whose result the
+/// transcript at `path` does not hold yet: the agent waits in its step.
+fn stepping(path: &str) -> Option<String> {
+    let records = records(path);
+    let blocks = || {
+        records
+            .iter()
+            .filter_map(|record| record["message"]["content"].as_array())
+            .flatten()
+    };
+    blocks()
+        .filter(|block| block["type"] == "tool_use" && block["name"] == "Bash")
+        .filter(|call| call["input"]["run_in_background"] != true)
+        .filter(|call| {
+            call["input"]["command"]
+                .as_str()
+                .is_some_and(|line| line.contains("step.sh"))
+        })
+        .find(|call| {
+            !blocks()
+                .any(|block| block["type"] == "tool_result" && block["tool_use_id"] == call["id"])
+        })
+        .and_then(|call| call["id"].as_str().map(str::to_string))
+}
+
+#[test]
+fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
+    // S78, 146, 161, 179, C.4: on a fill-first pool of two accounts signed
+    // in by the test account's token, each with a scratch configuration
+    // home, the second's `projects` a link to the first's, the fix's code
+    // agent starts under the first and, in its first turn, waits a minute
+    // in one foreground call on the repository's `step.sh`, since the
+    // pinned release refuses a bare `sleep` there. No test account reaches
+    // its limit on demand, so the test ends that turn while the call runs
+    // as a usage limit ends one: it runs the plugin's StopFailure hook for
+    // that start with the input 2.1.296 builds for a session limit, and
+    // interrupts the turn, which runs no Stop hook, as a turn the API
+    // failed runs none. Once the agent is quiet flume ends it and starts
+    // code under the second account, resuming the first's session: the
+    // carried agent says it started in that session, its prompt is flume's
+    // carry words alone, status gives the conversation carried and the
+    // move with it, and the agent goes on in the first's transcript from
+    // what the brief asked, which its prompt does not hold, and the place
+    // lands.
+    let live = Live::sharing_projects("live-carry");
+    let place = live.walk.launch(
+        "fix",
+        "one",
+        &[
+            "--brief",
+            "Do this in two steps, in order. First run `sh step.sh` with the Bash tool in the foreground, never in the background: it takes about a minute, so wait for it to end. Only then create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
+        ],
+    );
+    // Settled until code has begun, its prompt received: the launch sends
+    // the prompt only where the agent said it started by the time herdr
+    // read it ready, and a settle that read no started ack leaves it to
+    // the next, which no watch makes here (35, 38, 119).
+    let status = live.until(&place, "its code stage begun", 5, |status| {
+        status["agent"]["started"] == "yes" && stage(status, "code")["state"] == "begun"
+    });
+    assert_eq!(
+        status["agent"]["account"]["name"], "test-account",
+        "{status}"
+    );
+    let folder = live.folder(&place);
+    let first = live.live_start(&place);
+    let started = Record::at(&folder, &first.identity)
+        .started()
+        .expect("the first start's started ack");
+    // The agent is in its step once one call to it still runs ten seconds
+    // after it was first read: a call the program refused, or put in the
+    // background, is answered at once.
+    let began = Instant::now();
+    let mut seen: Option<(String, Instant)> = None;
+    loop {
+        let call = stepping(&started.transcript_path);
+        match &seen {
+            Some((was, at)) if call.as_ref() == Some(was) => {
+                if at.elapsed() >= Duration::from_secs(10) {
+                    break;
+                }
+            }
+            _ => seen = call.map(|call| (call, Instant::now())),
+        }
+        assert!(
+            began.elapsed() < Duration::from_secs(300),
+            "the code agent never came to its step: {}",
+            live.walk.status(&place)
+        );
+        std::thread::sleep(Duration::from_secs(1));
+    }
+
+    // The turn ends at the session limit: StopFailure, as 2.1.296 builds
+    // its input, and the turn interrupted, so its agent waits.
+    let (_, limit) = session_limit_after(now());
+    live.hook(
+        &place,
+        &first,
+        "stop-failure",
+        &json!({
+            "session_id": started.session_id,
+            "transcript_path": started.transcript_path,
+            "cwd": place,
+            "hook_event_name": "StopFailure",
+            "error": "rate_limit",
+            "last_assistant_message": limit,
+        }),
+    );
+    live.herdr(&["agent", "send-keys", &herdr_name(&first.identity), "esc"]);
+
+    // Read each second, as the carried agent may deliver within seconds
+    // of its start.
+    let status = live.until_every(
+        &place,
+        "code started again and begun",
+        10,
+        Duration::from_secs(1),
+        |status| stage(status, "code")["starts"] == 2 && status["agent"]["started"] == "yes",
+    );
+    assert_eq!(
+        status["agent"]["account"]["name"], "test-account-2",
+        "{status}"
+    );
+    assert_eq!(
+        status["agent"]["conversation"],
+        json!({ "from": 1, "carried": true }),
+        "{status}"
+    );
+    let moved = status["moves"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|moved| moved["on"] == "stage")
+        .unwrap_or_else(|| panic!("no move of code: {status}"));
+    assert_eq!(
+        (
+            &moved["from"],
+            &moved["to"],
+            &moved["why"],
+            &moved["carried"]
+        ),
+        (
+            &json!("test-account"),
+            &json!("test-account-2"),
+            &json!("spent"),
+            &json!(true)
+        ),
+        "{status}"
+    );
+    let carried = live.live_start(&place);
+    assert_ne!(carried.identity, first.identity);
+    let resumed = Record::at(&folder, &carried.identity)
+        .started()
+        .expect("the carried start's started ack");
+    assert_eq!(
+        (resumed.session_id.as_str(), resumed.source.as_str()),
+        (started.session_id.as_str(), "resume"),
+        "the carried agent began in the first's session"
+    );
+    for home in &live.homes {
+        assert!(
+            !status.to_string().contains(&*home.to_string_lossy()),
+            "status holds a configuration home's path: {status}"
+        );
+    }
+    live.until_landed(&place, 20);
+
+    let parser = live.walk.on_remote("parser.rs").unwrap_or_default();
+    assert!(parser.contains("fn parse()"), "parser.rs: {parser:?}");
+    let turns: Vec<String> = records(&started.transcript_path)
+        .iter()
+        .filter(|record| record["type"] == "user")
+        .filter_map(|record| text(&record["message"]["content"]))
+        .collect();
+    assert!(
+        turns
+            .iter()
+            .any(|turn| turn.contains("Your last turn stopped at your account's usage limit")),
+        "the carried prompt is not in the first's transcript: {turns:?}"
+    );
 }

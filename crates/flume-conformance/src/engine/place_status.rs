@@ -2,7 +2,10 @@
 //! at one head per place, from one core, and nothing written, sent or
 //! started.
 
-use super::account_pools::{account, fix_in, host, pool, spent};
+use super::account_pools::{
+    account, begun_fix, code_delivered, fill_first_at_homes, fix_in, home, host, of_the_surfaces,
+    pool, spent, stops_at_limit, two_programs, UNREACHED,
+};
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::for_every_stage;
 use super::world::*;
@@ -61,6 +64,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: status_mid_stage,
         },
         Scenario {
+            name: "status: a place whose code start 2 carries start 1's conversation under work-2 gives the agent's conversation from start 1, carried, and code's move from work-1 to work-2 carried, in the JSON and the person's form",
+            cites: &["56", "146", "S78"],
+            run: a_carried_agent,
+        },
+        Scenario {
+            name: "status: a place whose code start 2 started afresh because work-2's CLAUDE_CONFIG_DIR does not reach start 1's conversation gives the agent's conversation from start 1, not carried, and why by the variable's name and no path, and the move not carried",
+            cites: &["56", "S55", "179"],
+            run: a_conversation_that_stayed,
+        },
+        Scenario {
+            name: "status: a place whose carried start 2 ended before it said it started and whose start 3 started afresh lists start 2 carried and not begun with why, and start 3's agent from start 1, not carried, and why",
+            cites: &["56", "S79", "146"],
+            run: a_carried_start_that_did_not_begin,
+        },
+        Scenario {
             name: "status: a repetition adding a fourth group to a change of three gives the count as 4, read at the head",
             cites: &["58", "142"],
             run: a_group_added_mid_stage,
@@ -69,6 +87,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: a stage that moved from a spent account gives its agent's account from the strategy, and the move with why, when and the cache lost",
             cites: &["56", "145", "147"],
             run: a_stage_that_moved,
+        },
+        Scenario {
+            name: "status: a place whose code started after the intent moved for one program, and whose review started on another program's account from the affinity, gives the intent's move with its program and the review's account from the affinity for its program",
+            cites: &["56", "147", "S80"],
+            run: an_intent_that_moved_for_one_program,
         },
         Scenario {
             name: "status: the host's pools give each pool's strategy and each account's agents running, bound and spent time, and no value of an account's environment",
@@ -665,6 +688,7 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             to: "work-2".into(),
             why: MoveWhy::Spent,
             at,
+            carried: None,
         },
         cache: Cache::Lost,
     };
@@ -674,9 +698,57 @@ fn a_stage_that_moved(_: &()) -> Outcome {
             moved(MoveOn::Stage {
                 stage: "code".into()
             }),
-            moved(MoveOn::Intent)
+            moved(MoveOn::Intent {
+                program: Some("agent".into())
+            })
         ],
         "the place's moves"
+    );
+    Ok(())
+}
+
+fn an_intent_that_moved_for_one_program(_: &()) -> Outcome {
+    let world = World::new();
+    two_programs(&world, None);
+    let first = of_the_surfaces(&world, "two", "a", None)?;
+    code_delivered(&world, &first, "a")?;
+    spent(&world, "work", "agent-1", world.host.now() + 3600);
+    let id = of_the_surfaces(&world, "two", "b", None)?;
+    code_delivered(&world, &id, "b")?;
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["moves"],
+        serde_json::json!([{
+            "on": "intent",
+            "program": "agent",
+            "from": "agent-1",
+            "to": "agent-2",
+            "why": "spent",
+            "at": world.host.now(),
+            "cache": "lost",
+        }]),
+        "the place's moves in the JSON form"
+    );
+    ensure_eq!(
+        (
+            json["agent"]["stage"].as_str(),
+            json["agent"]["program"].as_str(),
+            json["agent"]["account"]["name"].as_str(),
+            json["agent"]["account"]["from"].as_str(),
+        ),
+        (
+            Some("review"),
+            Some("other"),
+            Some("other-1"),
+            Some("affinity")
+        ),
+        "the review's agent and its account in the JSON form"
+    );
+    let words = status.moves[0].words();
+    ensure!(
+        words.starts_with("the intent moved for agent from agent-1 to agent-2"),
+        "the move's words: {words}"
     );
     Ok(())
 }
@@ -727,6 +799,140 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
     ensure!(
         !answer.contains("a-token-of-the-account"),
         "status gives a value of an account's environment"
+    );
+    Ok(())
+}
+
+/// The fix `one`'s code under work-1 stopped at its usage limit and
+/// started again on work-2, where the fake agent answers `carry`; its
+/// status and that status in the JSON form.
+fn moved_to_work_2(
+    world: &World,
+    carry: Carry,
+) -> Result<(PlaceStatus, serde_json::Value), String> {
+    fill_first_at_homes(world);
+    world.agent.carry_to(&home("work-2"), carry);
+    let id = begun_fix(world, "one")?;
+    stops_at_limit(world, "one", 1, Some(world.host.now() + 3600));
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    Ok((status, json))
+}
+
+/// The move of code in a place's status.
+fn code_moved(status: &PlaceStatus) -> Result<&MoveStatus, String> {
+    status
+        .moves
+        .iter()
+        .find(|moved| {
+            moved.moved.on
+                == MoveOn::Stage {
+                    stage: "code".into(),
+                }
+        })
+        .ok_or_else(|| "status gives no move of code".to_string())
+}
+
+fn a_carried_agent(_: &()) -> Outcome {
+    let world = World::new();
+    let (status, json) = moved_to_work_2(
+        &world,
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    )?;
+    ensure_eq!(
+        json["agent"]["conversation"],
+        serde_json::json!({"from": 1, "carried": true}),
+        "the agent's conversation in the JSON form"
+    );
+    ensure_eq!(
+        json["moves"][0]["carried"],
+        serde_json::json!(true),
+        "code's move in the JSON form"
+    );
+    let words = code_moved(&status)?.words();
+    ensure!(
+        words.starts_with("code moved from work-1 to work-2")
+            && words.contains("its conversation with it"),
+        "code's move in the person's form: {words}"
+    );
+    ensure!(
+        !json.to_string().contains("/homes"),
+        "status gives a configuration home's path"
+    );
+    Ok(())
+}
+
+fn a_conversation_that_stayed(_: &()) -> Outcome {
+    let world = World::new();
+    let (status, json) = moved_to_work_2(
+        &world,
+        Carry::No {
+            why: UNREACHED.into(),
+        },
+    )?;
+    ensure_eq!(
+        json["agent"]["conversation"],
+        serde_json::json!({"from": 1, "carried": false, "why": UNREACHED}),
+        "the agent's conversation in the JSON form"
+    );
+    ensure!(
+        UNREACHED.contains("CLAUDE_CONFIG_DIR") && !UNREACHED.contains('/'),
+        "the why names no variable or names a path"
+    );
+    ensure_eq!(
+        json["moves"][0]["carried"],
+        serde_json::json!(false),
+        "code's move in the JSON form"
+    );
+    let words = code_moved(&status)?.words();
+    ensure!(
+        words.contains("its conversation stayed behind"),
+        "code's move in the person's form: {words}"
+    );
+    ensure!(
+        !json.to_string().contains("/homes"),
+        "status gives a configuration home's path"
+    );
+    Ok(())
+}
+
+fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.carried_starts_end();
+    let (status, json) = moved_to_work_2(
+        &world,
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    )?;
+    let ended = "the start that carried its conversation ended before it said it started";
+    ensure_eq!(
+        status
+            .uncarried
+            .iter()
+            .map(|read| (read.stage.as_str(), read.start, read.words.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("code", 2, ended)],
+        "the place's carried starts that did not begin"
+    );
+    ensure_eq!(
+        (
+            json["agent"]["identity"].clone(),
+            json["agent"]["conversation"].clone()
+        ),
+        (
+            serde_json::json!(World::identity("fix", "one", "code", 3).to_string()),
+            serde_json::json!({"from": 1, "carried": false, "why": ended})
+        ),
+        "the agent of start 3 and its conversation in the JSON form"
+    );
+    ensure_eq!(
+        json["uncarried"][0]["words"],
+        serde_json::json!(ended),
+        "the place's carried start that did not begin in the JSON form"
     );
     Ok(())
 }

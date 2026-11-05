@@ -12,7 +12,7 @@ place, a worktree on a branch of its own, and runs the kind's stages
 there, each with a fresh agent. Once the work lands or is dropped, flume
 tidies the place.
 
-<p align="center"><img src="docs/diagrams/flume.svg" alt="A launch from your session, an inbox or a release tool runs down the flume into a worktree on change/csv-export, made ready by the merge queue's policy; construct, code and verify each start a fresh agent whose prompt its own hook acknowledges and end when their deliverable exists; flume submits the change, sluice lands it and flume tidies the place." width="900"></p>
+<p align="center"><img src="docs/diagrams/flume.svg" alt="Five launches, each naming its kind, its points and its stream, wait for room in one host's streams: work, priority 10, under its bounds on agents and points in flight, and personal, priority 0, under its pace of 8 points a day, each on a pool of accounts. Each launch with room starts in a place of its own, its stages lit in turn with a fresh agent each; its last delivery submits it, sluice lands it on main and flume tidies the place." width="900"></p>
 
 - **The site:** https://agentplot.github.io/flume
 - **The design book:** https://agentplot.github.io/blueprints/flume/
@@ -44,6 +44,12 @@ tidies the place.
   Once it exists and the agent is quiet, the next stage starts. An agent
   that stops short says what it needs, and the place waits for a retry
   or a drop. A quiet pane ends nothing.
+- **One queue for the host.** Every launch on a host joins one queue.
+  A place's first stage starts only while the host, its stream and an
+  account of the stream's pool have room. Waiting places start by their
+  stream's priority, then their own, and flume refuses no launch for
+  want of room. A place's points, and a stream's bound on points in flight and its
+  pace, are decided and wait on their build.
 - **Tidied once it is done.** When the work lands or is dropped, flume
   removes the place. It removes only places it made, and keeps a branch
   that holds commits its base lacks.

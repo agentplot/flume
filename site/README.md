@@ -35,10 +35,11 @@ which says a tool is designed and not built, is not used: flume runs.
 
 Each SVG diagram uses CSS keyframes only, so it animates with no script
 and follows the theme toggle through the `--dg-*` variables. Each makes
-one claim, and its animation shows the mechanism moving: the hero a launch
-from its caller to its tidied place, `kinds` the three kinds as tracks of
-stages, `tidy` what tidying removes and keeps, and `herdr` the plugin's
-sidebar and keys. A reader who asks for less motion sees one still frame
+one claim, and its animation shows the mechanism moving: the hero a host's
+launches waiting in their streams for room, running in places and landing,
+`place` one launch from its caller to its tidied place, `kinds` the three
+kinds as tracks of stages, `tidy` what tidying removes and keeps, and
+`herdr` the plugin's sidebar and keys. A reader who asks for less motion sees one still frame
 chosen to hold the whole claim. Every diagram is drawn twice, a wide
 layout for a column of 600 pixels or more and a narrow one for a phone.
 

@@ -7,6 +7,7 @@ pub mod agent_settings;
 pub mod answers;
 pub mod caller_acts;
 pub mod caller_waits;
+pub mod carried_conversations;
 pub mod end_delivery;
 pub mod held_state;
 pub mod host_queue;
@@ -54,5 +55,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(streams::scenarios());
     every.extend(account_pools::scenarios());
     every.extend(start_integrity::scenarios());
+    every.extend(carried_conversations::scenarios());
     every
 }

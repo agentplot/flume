@@ -130,21 +130,29 @@ impl Engine {
                 last_words,
                 notes,
                 mode,
+                conversation: start.conversation.clone(),
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);
         let submission = match (&bound, place.kind.lands) {
             (Some(bound), true) if read_facts => bound.merge_queue.as_ref().map(|queue| {
-                let read = crate::submit::own_read(
-                    held,
-                    queue.read_submission(&place.repository, &place.branch),
-                );
-                if let SubmissionRead::CouldNotRead { reason } = &read {
+                let across = queue.read_submission(&place.repository, &place.branch);
+                if let SubmissionRead::CouldNotRead { reason } = &across.read {
                     cannot_read.push(format!("the merge queue: {reason}"));
+                }
+                for over in &across.passed_over {
+                    cannot_read.push(format!("the merge queue's {}: {}", over.branch, over.words));
                 }
                 if let Some(reason) = &held.submission.unread {
                     cannot_read.push(format!("the merge queue's inbox: {reason}"));
                 }
+                for over in &held.submission.passed_over {
+                    cannot_read.push(format!(
+                        "the merge queue's inbox, of {}: {}",
+                        over.branch, over.words
+                    ));
+                }
+                let read = crate::submit::own_read(held, across);
                 SubmissionStatus {
                     read,
                     request: held.submission.request.clone(),
@@ -210,6 +218,7 @@ impl Engine {
             intent: place.intent.clone(),
             moves: held.moves.iter().map(MoveStatus::of).collect(),
             unsettled: held.unsettled.clone(),
+            uncarried: held.uncarried.clone(),
             ends: held
                 .ends
                 .iter()

@@ -7,6 +7,7 @@
 use crate::room::Queue;
 use crate::Engine;
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 /// A pool as the queue reads it: its strategy and its accounts in order.
 #[derive(Clone, Debug)]
@@ -65,10 +66,15 @@ impl PoolRoom {
             .filter(move |room| room.account.program == program)
     }
 
+    /// Whether the pool holds an account that runs `program`, spent, full
+    /// or neither (145).
+    pub fn runs(&self, program: &str) -> bool {
+        self.running_program(program).next().is_some()
+    }
+
     /// Whether a start of `program` may take an account of the pool.
     pub fn usable(&self, program: &str) -> Usable {
-        let mut of_program = self.running_program(program).peekable();
-        if of_program.peek().is_none() {
+        if !self.runs(program) {
             return Usable::NoProgram;
         }
         if self.accounts.iter().any(|room| room.usable(program)) {
@@ -120,18 +126,35 @@ pub(crate) enum Choice {
     Wait,
     /// The pool named is not declared, naming it.
     Undeclared(String),
+    /// The pool holds no account that runs the stage's program, in
+    /// [`no_account`]'s words: the stage is refused, since no room the pool
+    /// gives could start it (4, 32, 145).
+    NoAccount(String),
+}
+
+/// Why a stage whose agent runs `program` cannot start on the pool `pool`,
+/// which holds no account of that program: the words a launch and a start
+/// refuse it in (4, 32, 145).
+pub(crate) fn no_account(stage: &str, pool: &str, program: &str) -> String {
+    format!(
+        "the stage {stage}'s agent runs {program}, and the pool {pool} holds no account of {program}, so no room it gives could start it (145)"
+    )
 }
 
 impl Engine {
-    /// The account a start of `place`'s stage whose agent runs `program`
-    /// takes: the intent's affinity's while it is usable, else the
-    /// strategy's choice over its pool's usable accounts, in order; and,
-    /// where the strategy chose because the affinity's account was spent
-    /// or full, the intent's move to it, unless it is an account the
-    /// affinity once left (144, 145, 147; core.32).
+    /// The account a start of `place`'s stage `stage` whose agent runs
+    /// `program` takes: the intent's affinity's for `program` while it is
+    /// usable, else the strategy's choice over its pool's usable accounts,
+    /// in order; and, where the strategy chose because the affinity's
+    /// account for `program` was spent or full, the intent's move to it for
+    /// `program`, unless it is an account the affinity for `program` once
+    /// left. A program the affinity keeps no account for moves nothing, and
+    /// a pool that holds no account of `program` refuses the stage (4, 32,
+    /// 144, 145, 147; core.32).
     pub(crate) fn choose_account(
         &self,
         place: &PlaceRecord,
+        stage: &str,
         program: Option<&str>,
         affinity: Option<&Affinity>,
         queue: &Queue,
@@ -152,9 +175,13 @@ impl Engine {
         let Some(program) = program else {
             return (Choice::Wait, None);
         };
+        if let Usable::NoProgram = room.usable(program) {
+            return (Choice::NoAccount(no_account(stage, pool, program)), None);
+        }
         let kept = affinity
-            .filter(|affinity| affinity.pool == pool)
-            .and_then(|affinity| room.account(&affinity.account));
+            .and_then(|affinity| affinity.accounts.get(program))
+            .filter(|kept| kept.pool == pool)
+            .and_then(|kept| room.account(&kept.account));
         let chose = |chosen: &AccountRoom, from| Choice::Chose {
             held: AccountHeld {
                 pool: pool.to_string(),
@@ -171,58 +198,107 @@ impl Engine {
         };
         let moved = kept.zip(affinity).and_then(|(kept, affinity)| {
             let why = kept.short()?;
-            (!affinity.left(&chosen.account.name)).then(|| AccountMove {
-                on: MoveOn::Intent,
+            (!affinity.left(program, &chosen.account.name)).then(|| AccountMove {
+                on: MoveOn::Intent {
+                    program: Some(program.to_string()),
+                },
                 from: kept.account.name.clone(),
                 to: chosen.account.name.clone(),
                 why,
                 at: now,
+                carried: None,
             })
         });
         (chose(chosen, AccountFrom::Strategy), moved)
     }
 
-    /// The intent's affinity after a start of `place` under `account`:
-    /// written at the intent's first start with a pool, moved by `moved`,
+    /// The intent's affinity after a start of `place` whose agent runs
+    /// `program` under `account`: written at the intent's first start
+    /// with a pool, its account for `program` kept at the first start on
+    /// `program` and moved by `moved`, every other program's as it stands,
     /// and no longer gone (147).
     pub(crate) fn affinity_after(
         &self,
         place: &PlaceRecord,
+        program: &str,
         account: &AccountHeld,
         moved: Option<&AccountMove>,
     ) {
+        let kept = AffinityAccount {
+            pool: account.pool.clone(),
+            account: account.name.clone(),
+        };
         self.write_affinity(&place.intent, |standing| {
-            Some(match standing {
-                None => Affinity {
-                    stream: place.stream.name.clone(),
-                    pool: account.pool.clone(),
-                    account: account.name.clone(),
-                    moves: vec![],
-                    gone: None,
-                },
-                Some(mut affinity) => {
-                    if let Some(moved) = moved {
-                        affinity.stream = place.stream.name.clone();
-                        affinity.account = moved.to.clone();
-                        affinity.moves.push(moved.clone());
-                    }
-                    affinity.gone = None;
-                    affinity
-                }
-            })
+            let mut affinity = standing.unwrap_or_else(|| Affinity {
+                stream: place.stream.name.clone(),
+                accounts: BTreeMap::new(),
+                moves: vec![],
+                gone: None,
+                pool: None,
+                account: None,
+            });
+            if let Some(moved) = moved {
+                affinity.stream = place.stream.name.clone();
+                affinity.accounts.insert(
+                    program.to_string(),
+                    AffinityAccount {
+                        account: moved.to.clone(),
+                        ..kept.clone()
+                    },
+                );
+                affinity.moves.push(moved.clone());
+            }
+            affinity
+                .accounts
+                .entry(program.to_string())
+                .or_insert_with(|| kept.clone());
+            affinity.gone = None;
+            Some(affinity)
         });
+    }
+}
+
+impl Engine {
+    /// Refuses a launch's stage `stage` of a place in `stream` whose agent
+    /// runs `program` where the pool the host's configuration names for
+    /// the stream, as it stands now, declares no account of that program;
+    /// a stream with no pool, or with one the host does not declare, is
+    /// refused nothing here (4, 32, 145; core.8, core.30).
+    pub(crate) fn pool_runs(
+        &self,
+        stream: &str,
+        stage: &str,
+        program: Option<&str>,
+    ) -> Result<(), String> {
+        let (Some(named), Some(program)) = (self.host.pool_for(stream), program) else {
+            return Ok(());
+        };
+        let Some(pool) = self.host.pool(&named.name) else {
+            return Ok(());
+        };
+        if pool
+            .accounts
+            .iter()
+            .any(|account| account.program == program)
+        {
+            return Ok(());
+        }
+        Err(no_account(stage, &named.name, program))
     }
 }
 
 impl Engine {
     /// The move of the stage at `index` from the account its last start
     /// ran under to `to`, in the same pool, where that account is spent or
-    /// at its own bound now; none otherwise (56, 145, 146).
+    /// at its own bound now, with whether its conversation went with it,
+    /// `carried`, where its agent stopped at its account's usage limit;
+    /// none otherwise (56, 145, 146, 179).
     pub(crate) fn stage_moved(
         &self,
         held: &HeldState,
         index: usize,
         to: Option<&AccountHeld>,
+        carried: Option<bool>,
         queue: &Queue,
         now: Seconds,
     ) -> Option<AccountMove> {
@@ -241,6 +317,7 @@ impl Engine {
             to: to.name.clone(),
             why,
             at: now,
+            carried,
         })
     }
 }
@@ -261,7 +338,12 @@ impl Engine {
 
     /// The intent's affinity and the version it was read at, none where
     /// it has none; one whose last place went an hour ago or more is
-    /// removed by compare-and-set and read as none (147).
+    /// removed by compare-and-set and read as none (147). A document
+    /// written before an intent kept an account per program reads as the
+    /// affinity for its account's program, as the host's configuration
+    /// declares that account now, and with its stream alone where it
+    /// declares it no more; it is written in the new shape at its next
+    /// change (147, 153).
     pub(crate) fn affinity(&self, intent: &IntentKey) -> Option<(u64, Affinity)> {
         let key = Self::intent_key(intent);
         let read = self.store.read_host(&key)?;
@@ -274,7 +356,42 @@ impl Engine {
                 return None;
             }
         }
-        Some((read.version, affinity))
+        Some((read.version, self.folded(affinity)))
+    }
+
+    /// A document written before an intent kept an account per program,
+    /// its one account given its program, as the host's configuration
+    /// declares the account in its pool now: the account kept for that
+    /// program unless one is kept for it already, and every intent move
+    /// with no program given it; the account dropped where the pool no
+    /// longer declares it (147).
+    fn folded(&self, mut affinity: Affinity) -> Affinity {
+        let (Some(pool), Some(account)) = (affinity.pool.take(), affinity.account.take()) else {
+            return affinity;
+        };
+        let program = self.host.pool(&pool).and_then(|declared| {
+            declared
+                .accounts
+                .into_iter()
+                .find(|declared| declared.name == account)
+                .map(|declared| declared.program)
+        });
+        let Some(program) = program else {
+            return affinity;
+        };
+        for moved in &mut affinity.moves {
+            if let MoveOn::Intent {
+                program: none @ None,
+            } = &mut moved.on
+            {
+                *none = Some(program.clone());
+            }
+        }
+        affinity
+            .accounts
+            .entry(program)
+            .or_insert(AffinityAccount { pool, account });
+        affinity
     }
 
     /// Writes the intent's affinity as `change` makes it of what stands,

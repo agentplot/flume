@@ -16,11 +16,11 @@ Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 18 to 24, 8
 
 ## Context and problem statement
 
-flume, sounding and later Flywheel each run work through stages. If each declared stages its own way, a repository would declare the same work three times, and a kind written for one tool would mean nothing to the next. And flume meets five tools at its seams; if it guessed which from their files, a repository that uses none of them could not launch at all.
+flume, sounding and later Boomdrive each run work through stages. If each declared stages its own way, a repository would declare the same work three times, and a kind written for one tool would mean nothing to the next. And flume meets five tools at its seams; if it guessed which from their files, a repository that uses none of them could not launch at all.
 
 ## Considered options
 
-1. flume's own kind format, with sounding and Flywheel translating theirs.
+1. flume's own kind format, with sounding and Boomdrive translating theirs.
 2. One kind format defined and read once in the family's shared crates (weir), of which flume runs the places-and-stages part and ignores every section it does not know; a repository binds each seam's profile in the `[profiles]` table of `.config/flume.toml`, read at its default branch, with the profiles that need no tool where it binds none: plain `git worktree`, no change profile, no merge queue.
 3. flume detects its profiles from the repository's files (`.config/sluice.toml`, `openspec/`, `.config/wt.toml`).
 
