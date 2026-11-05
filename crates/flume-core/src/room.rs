@@ -249,6 +249,21 @@ impl Queue {
 }
 
 impl Engine {
+    /// A place's label as it resolves now: the one the host's
+    /// configuration gives its repository's kind, else its kind, else
+    /// the label its kind declares, as the launch read the kind, else
+    /// none (21, 32, 180).
+    pub(crate) fn label_of(&self, place: &PlaceRecord) -> Option<LabelHeld> {
+        self.host
+            .label_for(&place.repository, &place.kind.name)
+            .or_else(|| {
+                place.kind.label.as_ref().map(|name| LabelHeld {
+                    name: name.clone(),
+                    from: LabelFrom::Kind,
+                })
+            })
+    }
+
     /// The host's queue as the store holds it now.
     pub(crate) fn queue(&self) -> Queue {
         let every = self.store.read_every();

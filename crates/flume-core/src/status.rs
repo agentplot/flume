@@ -216,6 +216,7 @@ impl Engine {
             holds: held.holds.clone(),
             priority: held.priority,
             stream: place.stream.clone(),
+            label: self.label_of(place),
             intent: place.intent.clone(),
             moves: held.moves.iter().map(MoveStatus::of).collect(),
             unsettled: held.unsettled.clone(),

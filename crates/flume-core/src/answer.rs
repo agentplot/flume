@@ -185,6 +185,10 @@ pub struct PlaceStatus {
     /// The stream the place runs in, fixed at its launch, and where it
     /// came from (56, 143).
     pub stream: StreamHeld,
+    /// The place's label as it would resolve at a start now, with where
+    /// it came from, none where nothing gives one (56, 180).
+    #[serde(default)]
+    pub label: Option<LabelHeld>,
     /// The intent the place serves, and where it came from (56, 147).
     pub intent: IntentKey,
     /// Each move of a stage of the place, or of its intent at a start of

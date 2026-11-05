@@ -364,6 +364,7 @@ impl Engine {
             _ => None,
         };
         let made_from = self.store.made(id).len();
+        let label = self.label_of(place);
         let claimed = self.update(id, |held| {
             if let Admit::Waiting(_) = admit {
                 if held.phase != Phase::Live
@@ -536,7 +537,7 @@ impl Engine {
                 dialog: None,
                 conversation: conversation.clone(),
                 session: opens_in.clone(),
-                label: None,
+                label: label.clone(),
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {

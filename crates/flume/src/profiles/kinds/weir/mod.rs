@@ -298,6 +298,13 @@ fn refused(refusal: &Refusal) -> String {
         .join("; ")
 }
 
+/// The seam's kind of a kind weir-kinds read, every problem it finds
+/// pushed onto `problems`. Its label is none: a simple kind's label waits
+/// on weir's statement naming the field and weir-kinds reading it, since
+/// weir 52 and C.4 name none and weir 94 gives a statechart kind's
+/// `label` another meaning, and flume reads no field of the format
+/// itself; until then only the host's configuration gives a place a
+/// label (180; record 0033; core.4).
 fn map_kind(
     kind: &weir_kinds::Kind,
     prompt: &impl Fn(&str) -> Result<String, String>,
@@ -321,7 +328,6 @@ fn map_kind(
             .enumerate()
             .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), prompt, problems))
             .collect(),
-        // weir-kinds reads no label of a simple kind (180; core.4).
         label: None,
     }
 }
