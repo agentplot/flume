@@ -13,19 +13,17 @@ and the program's transcript.
 
 The agent profile SHALL start an agent as `claude` in the place, with
 the plugin of the flume that started it loaded by `--plugin-dir`, the
-settings' model, their instructions in a file of the start's own beside
-its record named by `--append-system-prompt-file`, so no argument holds
-a newline, an environment of the host user's
+settings' model and instructions, an environment of the host user's
 login environment with its account's variables over it, and
 `FLUME_AGENT`, `FLUME_SECRET`, `FLUME_PLACE` and `FLUME_STAGE`, the
 identity naming the repository by an id from its common git directory;
 and the prompt as its argument under the printed command (29, 32, 33,
-88, 144, 148, C.4, C.5).
+88, 144, C.4).
 
 #### Scenario: The command for a code stage
 
 - **WHEN** the profile gives the command for a stage with a model and instructions under an account giving `CLAUDE_CONFIG_DIR`
-- **THEN** it runs `claude` with `--plugin-dir`, `--model` and `--append-system-prompt-file`, the file holding the instructions as given, newlines and all, the account's `CLAUDE_CONFIG_DIR`, the four `FLUME_*` words, and nothing of the caller's session
+- **THEN** it runs `claude` with `--plugin-dir`, `--model` and `--append-system-prompt-file`, naming a file of the start's own beside its record that holds the instructions as given, newlines and all, so no argument holds a newline, the account's `CLAUDE_CONFIG_DIR`, the four `FLUME_*` words, and nothing of the caller's session
 
 ### Requirement: Readings from the agent's own record
 
