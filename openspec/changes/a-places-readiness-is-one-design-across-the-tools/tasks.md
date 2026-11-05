@@ -70,8 +70,8 @@ layer, where sluice is the one the tree pins.
   - Have `for_place` give the place's readiness as design 5 has it: one
     step, `sluice equip <base> --at <revision> --json`, built for the
     revision `ready` is given, with the reading `equipped`. `ForPlace`
-    loses `toolchain` and `setup`, and no `[tests]` key is read for a
-    place.
+    loses `toolchain`, #96's `install` and `setup`, `PINS` goes, and no
+    `[tests]` key and no `.prototools` is read for a place.
   - Have `equipped` read `steps[]` as `ReadyStep`s, each one's words cut
     as `git_worktree`'s `tail` cuts them.
   - Have it read a refusal, an answer it cannot read, or a sluice that
@@ -85,7 +85,9 @@ layer, where sluice is the one the tree pins.
   sluice equipped with" and "An answer with no steps". It must also
   pass `sluice exec main -- moon run flume:tools`, with
   `tools/merge_queue_sluice.rs`'s `what_the_policy_says_of_a_place`
-  holding the spec's scenario of that name against the pinned sluice.
+  holding the spec's scenario of that name against the pinned sluice,
+  in place of #96's test of the install under the command runner and
+  with no pins.
 - [ ] 2.3 In `crates/flume/src/profiles/place/git_worktree/mod.rs` and
   `crates/flume/src/profiles.rs`:
   - Have `Step` carry an optional reading of what the step printed, and
@@ -95,8 +97,8 @@ layer, where sluice is the one the tree pins.
     Where the step has a reading, the readiness is the steps the reading
     gives.
   - Have `BoundPlace::ready` build the place's data for the revision it
-    is given, and bind it through a public `place_data(repository,
-    merge_queue, base, revision)` that the profile tests bind with, as
+    is given, through `place_data`, which takes that revision beside its
+    repository, merge queue and base. The profile tests bind with it, as
     the binary does.
   - Update both modules' comments, and C.1's and C.7's citations in them
     (11, 12, 20, 79, C.1, C.7; core.2, core.17).
@@ -109,8 +111,13 @@ layer, where sluice is the one the tree pins.
   over a stand-in `sluice` on the login path that records what it was
   asked, with the scratch repository's main moved on; and "Nothing kept
   in the place's git directory", which replaces
-  `the_toolchain_environment_is_kept_in_the_places_git_directory`. The
-  place seam's scenarios must pass unchanged.
+  `the_toolchain_environment_is_kept_in_the_places_git_directory`.
+  #96's `pins_that_cannot_be_installed_stop_the_readiness_at_the_install_with_its_words`
+  and `a_repository_that_pins_nothing_runs_no_install` go, since whether
+  to install is sluice's to decide. The harness's `pinned` gives none
+  here, where no sluice runs, and 2.5 holds it under the pinned sluice.
+  The place seam's scenarios, `ready_installs_the_pins` among them, must
+  pass unchanged over the fake (design 5).
 - [ ] 2.4 Add to `crates/flume-conformance/src/engine/launching.rs` the
   launching spec's scenarios:
   - "A retry readies at the launch's revision", citing 12 and 20, which
@@ -152,7 +159,9 @@ layer, where sluice is the one the tree pins.
     example status shows sluice's four steps.
   - `guides/merge-queue.md`: the policy rows say sluice equips each new
     place, the toolchain and the runner's install and setup, and flume
-    reads no `[tests]` key itself.
+    reads no `[tests]` key itself. This replaces #96's line on the
+    install, and the places guide's step 2 that #96 added goes the same
+    way.
   - `reference/state.md`: loses the `flume/toolchain.sh` row.
   - `architecture/overview.md`: says what the merge queue's profile gives
     a place.

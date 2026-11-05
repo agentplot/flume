@@ -8,9 +8,11 @@ activates its system tools. Then come the install of the tools its
 `.prototools` pins, the runner's check of its own version, and the
 runner's setup. sluice already runs all four, in that order, before
 every candidate's run and every `sluice exec` of the gate's checks
-(`moon.rs`, `plan`). flume runs two of them, copied by hand into its
+(`moon.rs`, `plan`). flume ran two of them, copied by hand into its
 sluice profile. The install it left out is what deneb's place was
-missing.
+missing. A point fix copied the install as well, and landed on main as
+#96 while this design was being written. flume now runs three copied
+steps.
 
 The design gives each part one owner:
 
@@ -29,9 +31,11 @@ The design gives each part one owner:
 - **crew and Boomdrive** make nothing ready. They ask flume for places
   and sluice for branches, as they do today.
 
-The held point fix is dropped unlanded. sluice's change comes first,
-then flume's pin moves to the release that has `sluice equip`, and then
-this change is built.
+The landed fix stays until this change's build replaces its install,
+along with the other two copied steps, with `sluice equip`. Until then
+it is what keeps a fresh clone's place from failing as deneb's did.
+sluice's change comes first, then flume's pin moves to the release that
+has `sluice equip`, and then this change is built.
 
 ## Context
 
@@ -42,9 +46,10 @@ fresh, and flume launched a place there. Its readiness ran
 `devenv print-dev-env`, which passed: that command activates what
 `.prototools` pins and installs none. It then ran `moon setup`, which
 failed because the moon `.prototools` pins was not installed. The place
-`fix--a-places-readiness-installs-its-repositorys-pinned-tools` holds a
+`fix--a-places-readiness-installs-its-repositorys-pinned-tools` made a
 fix that copies sluice's install into flume (0a3f138 and the commits
-after it). It is held, and the user asked for the analysis:
+after it). It was held when this design was asked for, and the user
+asked for the analysis:
 
 > The thing is, Flume's job is to make the place ready. Sluice creates
 > the branch, I believe, right? Flume was actually creating the work
@@ -55,6 +60,14 @@ after it). It is held, and the user asked for the analysis:
 > and we're getting the solutions wrong ... We can't just be myopic,
 > thinking about the one repo. We need to look at the related tools as
 > a whole.
+
+The fix then landed through sluice, as #96 at d81d258, on 2026-11-05 at
+04:26Z, after this change's place was cut from 6c38bfb. This change is
+merged with main at d81d258, and its deltas stand on main as the fix
+left it. CLAUDE.md, also landed since, asks the same thing as the
+user's words: "Where two tools do one thing, reconcile them into one
+design with one owner the others call or cite, and say so in the
+design."
 
 ### What each tool makes, and what it runs to make it ready
 
@@ -73,16 +86,22 @@ that revision is `origin/<base>` after one fetch
 (`place/git_worktree/mod.rs`, `make`; C.1). Its readiness is a list of
 steps that the sluice profile declares (`merge_queue/sluice/mod.rs`,
 `for_place`) and the resolver hands to the place profile
-(`profiles.rs`, `BoundPlace::data`). There are two: `[tests] toolchain`,
-whose output is kept at `<git-dir>/flume/toolchain.sh` and sourced
-before each later step, and `moon setup`, where `[tests] runner` is
-`moon`. Each runs under `bash -c`, with the environment cleared to the
-host user's login environment (`git_worktree/mod.rs`, `run`, `Login`).
+(`profiles.rs`, `place_data`). There are three:
+
+- `[tests] toolchain`, whose output is kept at
+  `<git-dir>/flume/toolchain.sh` and sourced before each later step;
+- since #96, `proto install --config-mode upwards`, where `[tests]
+  runner` is `moon` and the revision the policy was read at holds a
+  `.prototools` (`PINS`);
+- `moon setup`, where `[tests] runner` is `moon`.
+
+Each runs under `bash -c`, with the environment cleared to the host
+user's login environment (`git_worktree/mod.rs`, `run`, `Login`).
 Teardown is `sluice release` in the place. The core passes the launch's
 base revision to `ready` (`launch.rs`, `acts.rs`), but the profile
-ignores it (`ready(&self, place, _revision)`): `policy()` reads
-`.config/sluice.toml` at the local `refs/heads/<base>` first, then at
-each remote's tracking copy, at the moment of each call.
+ignores it (`ready(&self, place, _revision)`): `policy_at` reads
+`.config/sluice.toml`, and the pins, at the local `refs/heads/<base>`
+first, then at each remote's tracking copy, at the moment of each call.
 
 **sluice.** sluice makes no branch for a place. Its candidates are bare
 commits (`local_refs.rs`, `form`). It moves its base only at a landing.
@@ -203,7 +222,7 @@ does not say who installs the pins.
 
 | working copy | its branch | the working copy | made ready by, today |
 |---|---|---|---|
-| a flume place | flume: `worktree add -b` at the base's revision; sluice pushes it to the forge at the submission where the base takes pull requests | flume's place profile | flume: the toolchain and `moon setup`, copied from sluice; no install |
+| a flume place | flume: `worktree add -b` at the base's revision; sluice pushes it to the forge at the submission where the base takes pull requests | flume's place profile | flume: the toolchain, the install (since #96, the pins read at the base) and `moon setup`, copied from sluice; no version check |
 | sluice's candidate | none: a bare commit; the base moves at the landing | sluice: a detached worktree | sluice: toolchain, install, version, queries, setup |
 | sluice's reading tree | none | sluice: a detached worktree | sluice: toolchain, install, version, queries |
 | a session's worktree under `sluice exec` | its maker's | its maker: flume, a person, an agent | sluice, at each run: the whole sequence; under `-- <command>`, the toolchain alone |
@@ -224,11 +243,15 @@ disagree:
 1. sluice's whole sequence, for candidates and session runs.
 2. sluice's toolchain alone, for previews and `exec -- <command>`.
 3. sluice's sequence without setup, at a submission.
-4. flume's toolchain and setup, without the install.
+4. flume's copy. Before #96 that was the toolchain and setup, without
+   the install. Since #96 it has the install too, with the pins read at
+   the base rather than in the working copy, and still no version check.
 5. Each repository's `devenv.nix`, which installs in a task or in
    `enterShell`.
 
-deneb's place failed in the gap between the first and the fourth.
+deneb's place failed in the gap between the first and the fourth. #96
+narrowed that gap by copying one more step, and the copy now differs
+from sluice in where it reads the pins.
 
 ### Rules relied on
 
@@ -341,9 +364,9 @@ flume's readiness gains no step of its own (13).
   read (20). flume names that revision to sluice as `--at <revision>`,
   so a retry of the first stage reads the steps as its launch did (12).
   This is what the code fails to do today. The core passes the revision,
-  but `policy()` reads whatever the local base holds at the moment of the
-  call, and the local base can lag the `origin/<base>` the place was cut
-  from.
+  but `policy_at` reads whatever the local base holds at the moment of
+  the call, and the local base can lag the `origin/<base>` the place was
+  cut from.
 - **What each step installs** is what the place holds: its
   `devenv.nix`, `devenv.lock`, `.prototools` and
   `.moon/toolchains.yml`. At the launch that is the same revision. At a
@@ -351,9 +374,11 @@ flume's readiness gains no step of its own (13).
   readied with the pin it works under. sluice does the same with a
   candidate: its policy comes from the branch, and its toolchain runs in
   the candidate's tree (sluice 56; `moon.rs` reads a change to
-  `.prototools` or `devenv.*` as touching every check). The held fix
-  instead reads `.prototools` from the base at each call. At a retry
-  that installs pins the place may no longer use.
+  `.prototools` or `devenv.*` as touching every check). The landed fix
+  instead reads `.prototools` from the base at each call (`for_place`,
+  `PINS`), so it decides whether to install from the base, and proto
+  then installs what the place pins. At a retry, a place whose agent
+  added a `.prototools` that the base lacks is given no install.
 - **How the runner equips** is sluice's code, at the release flume pins
   (core.22).
 
@@ -400,16 +425,18 @@ every run, offered for a working copy sluice did not make.
 - **The sluice profile.** `for_place` gives the place's readiness as
   one step, `sluice equip <base> --at <revision> --json`, with the
   profile's reading of its answer, `equipped`. It no longer gives the
-  toolchain or a setup, or reads `[tests] toolchain` or
-  `[tests] runner`. `equipped` reads `steps[]` as the readiness's steps,
+  toolchain, #96's install or a setup, or reads `[tests] toolchain`,
+  `[tests] runner` or `.prototools`, so `ForPlace`'s `toolchain`,
+  `install` and `setup` go, with `PINS`. `equipped` reads `steps[]` as the readiness's steps,
   each with its `step`, `passed` and `words`, and the words are cut as
   flume cuts any step's. An answer with no `steps` is one failed step,
   `sluice equip`, with sluice's `error.message`, or its errors where it
   gave none. A sluice that cannot run is one failed step with the reason.
   `teardown` and `base_remote` stay.
-- **The resolver** (`BoundPlace` in `profiles.rs`) hands the place
-  profile the readiness step with its reading, built for the revision
-  `ready` is given, as it hands the teardown today. Neither profile
+- **The resolver** (`place_data` and `BoundPlace` in `profiles.rs`)
+  hands the place profile the readiness step with its reading, built for
+  the revision `ready` is given, as it hands the teardown today.
+  `place_data` takes that revision. Neither profile
   calls the other (core.2). The reading is a function the sluice profile
   owns, handed as data, so the place profile reads nothing of sluice's
   form. The paths not taken: the resolver running `sluice equip` itself
@@ -428,6 +455,16 @@ every run, offered for a working copy sluice did not make.
 - **The core** is unchanged. `launch.rs` and `acts.rs` already pass the
   launch's base revision, and `Readiness`, `ReadyStep`, `{{unready}}`
   and `StageState::WaitingOnReadiness` keep their shape (core.14).
+- **#96's tests.** The place seam's scenario `ready_installs_the_pins`
+  is generic and stays: a readiness names the install, with its words,
+  before the step that runs what it installed. The fake's harness keeps
+  holding it. The git worktree profile's harness in check-fast, where no
+  sluice runs, gives no pins, and the tools layer holds it under the
+  pinned sluice as S89. `place_git_worktree.rs`'s
+  `pins_that_cannot_be_installed_stop_the_readiness_at_the_install_with_its_words`
+  and `a_repository_that_pins_nothing_runs_no_install` go, because
+  whether to install is sluice's to decide. #96's policy test in
+  `tools/merge_queue_sluice.rs` becomes `what_the_policy_says_of_a_place`.
 - **Status and prompts.** The person's form prints a line per step, as
   it does today, now `toolchain`, `proto install`, `moon --version`,
   `moon setup`. `{{unready}}` names the step that failed and its words
@@ -437,7 +474,7 @@ every run, offered for a working copy sluice did not make.
 
 | tool | stops | starts |
 |---|---|---|
-| flume | reading `[tests] toolchain` and `[tests] runner`; naming `moon setup`; keeping `flume/toolchain.sh`; reading the policy at the local base at each call | asking `sluice equip <base> --at <revision> --json` as a place's readiness; reading its steps |
+| flume | reading `[tests] toolchain`, `[tests] runner` and `.prototools`; naming `proto install` and `moon setup`; keeping `flume/toolchain.sh`; reading the policy at the local base at each call | asking `sluice equip <base> --at <revision> --json` as a place's readiness; reading its steps |
 | sluice | readying a preview and `exec -- <command>` with the toolchain alone; keeping the sequence in three variants | one `equip` for every working copy it runs in; offering it as `sluice equip` |
 | crew | its records and spec saying crew readies a worktree; its `enterShell` installing pins | nothing new: its landing worktree is a submitter's |
 | Boomdrive | nothing | nothing; its record 0009 says a host's setup installs the host's tools, never a repository's pins |
@@ -583,28 +620,31 @@ copy sluice or flume readies, and by a devenv task on entering the shell
 for a person's or an agent's command." Its details rule out an
 `enterShell` that runs `proto install`, citing crew's `devenv.nix`.
 
-### 8. The held point fix
+### 8. The point fix, landed as #96
 
-The place `fix--a-places-readiness-installs-its-repositorys-pinned-tools`
-is dropped and never landed, with its branch on origin. It is Option 1
-of the alternatives below: a third copy of sluice's sequence, reading
-`.prototools` at the local base at each call (decision 3). Its
-`_open.md` edits are moot, since `_open.md` is gone. Its scenario lives
-on as S89: a fresh clone whose pins nothing installed, its toolchain
-passing and installing nothing. This change's tests hold it against the
-pinned sluice, with a stand-in proto and moon on the login path, as the
-fix's own test did.
+The fix landed on main as #96, at d81d258, after this design was asked
+for. It is Option 1 of the alternatives below: a copy of one more of
+sluice's steps, deciding from the pins at the local base at each call
+(decision 3).
 
-Until flume's build lands, a place on a fresh clone whose readiness
-fails at `moon setup` can be retried once the repository's pins are
-installed (12). One way is to enter the repository's devenv shell in
-any worktree of it: proto's home is the repository's, shared by every
-worktree (kit:toolchain.4), and the kit's `devenv shell` installs the
-pins on entering. A fix's place starts unready anyway, and its agent's
-first `devenv shell --` installs them. Landing the held fix as a
-stopgap is the one path that departs from this design. It is the
-user's to choose, and is not recommended: it ships the copy this
-design removes.
+It stays, and nothing of it is reverted ahead of this change. Until
+this change's build, it is what keeps a place on a fresh clone from
+failing as deneb's did. Reverting it first would bring that failure
+back for the months between.
+
+This change's build replaces it. The install leaves `for_place` with
+the toolchain and the setup, and `sluice equip` takes all three. Its
+requirement "A moon repository's pins installed before its setup"
+leaves merge-queue-profile, removed by this change's delta, its
+scenarios carried as S89 and the steps sluice answers. Its tests go as
+decision 5 says. Its site lines are rewritten by group 3. Its
+`_open.md` edits are moot, since `_open.md` is gone. Its three
+questions for the user, whether C.1, C.2 and C.6 should name its
+install, are answered by decision 7's amendment of those clauses, which
+names `sluice equip` in their place.
+
+Its place, `fix--a-places-readiness-installs-its-repositorys-pinned-tools`,
+is tidied as any landed place is.
 
 ### 9. Order across the repositories
 
@@ -621,10 +661,12 @@ design removes.
 
 ## Alternatives considered
 
-1. **Copy sluice's steps into flume, as the held fix does.** The code
-   shows the copy drifting. `for_place` (`merge_queue/sluice/mod.rs`)
-   took the toolchain and `moon setup` from sluice's `Moon::plan` and
-   missed `install` and `check_version`, which deneb found. sluice keeps
+1. **Copy sluice's steps into flume, as #96 does.** The code shows the
+   copy drifting. `for_place` (`merge_queue/sluice/mod.rs`) took the
+   toolchain and `moon setup` from sluice's `Moon::plan` and missed
+   `install` and `check_version`, which deneb found. #96 copied
+   `install`, deciding from the pins at the base where sluice decides
+   from the working copy, and still lacks `check_version`. sluice keeps
    three variants of its own sequence (`plan`, `kept_out`,
    `preview_request`), so even sluice's own copies differ. Every change
    to sluice's runner, such as another runner, or a step before setup,
@@ -679,39 +721,44 @@ design removes.
 ## Where the statements and the code disagree
 
 1. flume's C.1 says a place is readied "as sluice readies its own
-   places". The code runs two of sluice's steps, and not the install or
-   the version check (`for_place`).
-2. flume's 12 and 20 read readiness at the base's revision at the launch,
+   places". The code runs three of sluice's steps: the install since
+   #96, which decides from the pins at the base, and not the version
+   check (`for_place`).
+2. flume's C.1 ready column and C.6's place row name the toolchain and
+   the runner's setup alone. Since #96 the code also runs the install,
+   standing ahead of them, as #96's own commit says. The three questions
+   it carried for the user were never put.
+3. flume's 12 and 20 read readiness at the base's revision at the launch,
    and a retry "as its launch read it". The profile ignores the revision
-   it is given, and reads the policy at the local base at each call
-   (`git_worktree/mod.rs`, `ready`; `merge_queue/sluice/mod.rs`,
-   `policy`).
-3. flume's C.6 describes sluice 0.55.0. The tree pins 0.57.1
+   it is given, and reads the policy and the pins at the local base at
+   each call (`git_worktree/mod.rs`, `ready`;
+   `merge_queue/sluice/mod.rs`, `policy_at`).
+4. flume's C.6 describes sluice 0.55.0. The tree pins 0.57.1
    (`devenv.nix`, `sluiceVersion`), and sluice is at 0.65.3.
-4. sluice's C.1 says of its git worktree place, "nothing run in it". Its
+5. sluice's C.1 says of its git worktree place, "nothing run in it". Its
    code runs the toolchain, the install, the version check, the queries
    and the setup there before the checks (`Checks::start`, `Moon::plan`).
-5. sluice's C.2 moon row names no install and no setup. The code runs
+6. sluice's C.2 moon row names no install and no setup. The code runs
    both (`moon.rs`).
-6. sluice's 33 materializes a place "with the environment the repository
+7. sluice's 33 materializes a place "with the environment the repository
    declares", and its 84 says sluice runs "no readiness command the
    repository writes". The code agrees with both, but neither names the
    runner's own install and setup, which it runs.
-7. sluice's section 9 says "Places are managed by worktrunk, which runs a
+8. sluice's section 9 says "Places are managed by worktrunk, which runs a
    repository's hooks". sluice's record 0013 dropped that, and its code
    uses worktrunk for no place.
-8. sluice's own previews and `exec -- <command>` run the toolchain alone
+9. sluice's own previews and `exec -- <command>` run the toolchain alone
    (`preview.rs`, `session.rs`). Its candidates and session runs run the
    whole sequence. A preview of a moon repository on a fresh clone would
    fail as deneb's place did.
-9. crew's records 0023 (point 4: "When crew makes a bolt's, unit's or
-   fix's worktree, it runs the toolchain step and then the test adapter's
-   setup there") and 0024 (point 4), its `kit-toolchain` spec and its
-   policy's comment say crew readies a worktree. Its code readies none
-   (`kit.py`), and its rule plan.17 is retired.
-10. Boomdrive's record 0009 says setup covers "installing the tools".
+10. crew's records 0023 (point 4: "When crew makes a bolt's, unit's or
+    fix's worktree, it runs the toolchain step and then the test adapter's
+    setup there") and 0024 (point 4), its `kit-toolchain` spec and its
+    policy's comment say crew readies a worktree. Its code readies none
+    (`kit.py`), and its rule plan.17 is retired.
+11. Boomdrive's record 0009 says setup covers "installing the tools".
     There is no setup command, and nothing says whose tools.
-11. The kit standard says where proto's home is and how an agent runs
+12. The kit standard says where proto's home is and how an agent runs
     tools (kit:toolchain.4, toolchain.5), but not who installs the pins.
     The repositories answer differently: in a task (flume, sluice,
     Boomdrive) or in `enterShell` (crew).
@@ -738,12 +785,12 @@ change does not touch them.
 - **A readiness needs sluice's release first.** flume's build waits on
   sluice's change, its release and the pin's chore. The pin moves eight
   minor versions, and C.6's tables are checked again against it. Until
-  then deneb keeps its workaround (decision 8).
+  then #96's copy is what readies a fresh clone's place (decision 8).
 - **A launch takes as long as sluice's equip.** On a fresh clone that is
   devenv's evaluation, proto's downloads and moon's setup, as long as a
-  first `sluice exec` takes. Today's readiness already runs the toolchain
-  and the setup synchronously in the launch, so only the install is new
-  time.
+  first `sluice exec` takes. Today's readiness already runs the toolchain,
+  #96's install and the setup synchronously in the launch, so only the
+  version check is new time.
 - **proto's install of a language toolchain may leave out what the
   language's own file asks for.** This repository installs Rust with
   `rustup toolchain install` in its devenv task, because proto's install
@@ -753,9 +800,10 @@ change does not touch them.
   toolchain needs more declares it where its runner's setup reads it,
   `.moon/toolchains.yml`. That is the kit's to rule, and its rule
   toolchain.8 is the place.
-- **Status's step names change** from `toolchain` and `moon setup` to
-  sluice's four. The JSON shape is kept (core.14). A reader that matched
-  on `moon setup` still finds it.
+- **Status's step names change** from flume's `toolchain`,
+  `proto install --config-mode upwards` and `moon setup` to sluice's
+  four. The JSON shape is kept (core.14). A reader that matched on
+  `moon setup` still finds it.
 - **The sluice profile's reading of `equip`'s answer is checked against
   the pinned sluice**, in the tools layer, as every other command it
   reads is (C.6).
@@ -770,6 +818,5 @@ change does not touch them.
 
 ## Open Questions
 
-None for the build. What is the user's: their yes on this design and
-record 0036, and whether to land the held fix as a stopgap (decision 8,
-not recommended).
+None for the build. The user's yes on this design and record 0036 is
+theirs to give, and #96 stands on main until the build (decision 8).

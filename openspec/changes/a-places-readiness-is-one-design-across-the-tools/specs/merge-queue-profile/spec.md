@@ -34,3 +34,17 @@ key for a place (9, 11, 20, 126, C.1, C.6, core.3).
 
 - **WHEN** `sluice equip` answers a refusal with its `error.message`, or nothing the profile can read, or cannot be run
 - **THEN** the reading gives one failed step, `sluice equip`, with sluice's message, its errors, or why it could not run (12, C.6)
+
+## REMOVED Requirements
+
+### Requirement: A moon repository's pins installed before its setup
+
+**Reason**: sluice equips a place, the install of what it pins among
+its steps, by `sluice equip`, and the profile names no step of sluice's
+runner (record 0036; 11, C.1, C.6). The copy read the pins at the base
+where sluice reads them in the working copy.
+
+**Migration**: The install is the `proto install` step `sluice equip`
+answers, named in status with its words. A fresh clone's pins are held
+by the place-profile scenario "A fresh clone's pins installed by the
+pinned sluice" (S89).
