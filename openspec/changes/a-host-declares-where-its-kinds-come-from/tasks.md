@@ -83,7 +83,7 @@ identities, hashes and locks (design, *What this change rests on*).
   - `engine/role_waking.rs` the role-waking spec's;
   - the seam-contracts spec's *A kind's text read by the seam* and *Sources scripted on the fake host*, and the seam-fakes spec's *A scripted package edited after a launch*;
   - each citing its clauses, S59 to S63 among them, and every existing scenario passing unchanged.
-- [ ] 5.2 Have status give a place's `identity` and `kind_from` as its held state holds them, the source from `declared` where it holds none, and `declared` `host`. Have the host part give `sources` from `Host::sources()` and `read_source`, read when asked (design 8, 9; 19, 21, 56; core.14, core.15). True when `sluice exec main -- moon run core:test conformance:test` passes with `engine/place_status.rs` gaining each scenario of the place-status spec.
+- [x] 5.2 Have status give a place's `identity` and `kind_from` as its held state holds them, the source from `declared` where it holds none, and `declared` `host`. Have the host part give `sources` from `Host::sources()` and `read_source`, read when asked (design 8, 9; 19, 21, 56; core.14, core.15). True when `sluice exec main -- moon run core:test conformance:test` passes with `engine/place_status.rs` gaining each scenario of the place-status spec.
 - [ ] 5.3 Add `crates/flume-core/src/kinds_lock.rs`, `Engine::lock_kinds`, as design 6 has it (design 6; 74, 155, 156; core.16, core.17):
   - each whole identity read through `read_named` and resolved to its content;
   - its hash checked against `--hash`;
