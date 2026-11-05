@@ -57,4 +57,4 @@ or the fake.
 ## 7. Coverage and the gate
 
 - [x] 7.1 Have the suite's clause list name nothing of this change unbuilt, its constant gone, and 184, 185 and S86 to S88 cited by this change's scenarios, as the clause-coverage spec's scenarios have them (core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 7.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools site:prose site:build root:format root:adrs root:changes root:specs` passes.
+- [x] 7.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools site:prose site:build root:format root:adrs root:changes root:specs` passes.
