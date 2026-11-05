@@ -654,9 +654,14 @@ gives a pool's threshold and an account's reading.
 `threshold` and an account's `usage`, and the refusals.
 `reference/state.md`, in "Elsewhere on the host", gives an account's
 reading as the host's file flume reads and never writes, and, in the
-answer of `flume status --json`, the new fields. Each is written to any
-host's operator, naming no host, team, tool or word of ours, "seat"
-among them (core.35).
+answer of `flume status --json`, the new fields. The guide's streams
+example gives work's accounts `usage` and its closing words as C.7's
+example does, S86 is told as a story under "An account's reading", and
+"What status shows" quotes the person's form of section 8. The
+roadmap's "Built" table gains a row for a pool choosing by the reading
+and starting nothing past its threshold. Each is written to any host's
+operator, naming no host, team, tool or word of ours, "seat" among them
+(core.35).
 
 ## Risks / Trade-offs
 
