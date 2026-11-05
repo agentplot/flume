@@ -273,9 +273,12 @@ for `--help`.
   command's environment over it and nothing else. It is not waited on:
   a start that fails to spawn is `Refused` with the error, and any
   other is `Opened`.
-- `Ghostty::new()` runs `open` and `ghostty` by name. A test builds it
-  with `with_programs(open, ghostty)` naming stand-ins of its own, and
-  `with_login(variables)` as `Herdr::with_login` does.
+- `Ghostty::new()` runs `open` and `ghostty` by name, on the path of
+  the system it runs on. `for_system(System::MacOs)` and
+  `for_system(System::Other)` build either path, so a test on any host
+  holds both. A test builds it with `with_programs(open, ghostty)`
+  naming stand-ins of its own, and `with_login(variables)` as
+  `Herdr::with_login` does.
 
 The profile's flags are checked against Ghostty 1.4.0 (C.8). Ghostty is
 not pinned by the tree: it is a program of the host's display, and no
