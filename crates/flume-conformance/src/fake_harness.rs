@@ -55,6 +55,7 @@ pub fn flumes_own() -> Vec<Kind> {
         starts_unready: false,
         lands: true,
         agents: KindSettings::default(),
+        label: None,
         stages: vec![
             stage(
                 "construct",
@@ -81,6 +82,7 @@ pub fn flumes_own() -> Vec<Kind> {
             starts_unready: true,
             lands: true,
             agents: KindSettings::default(),
+            label: None,
             stages: vec![code.clone()],
         },
         Kind {
@@ -90,6 +92,7 @@ pub fn flumes_own() -> Vec<Kind> {
             starts_unready: true,
             lands: true,
             agents: KindSettings::default(),
+            label: None,
             stages: vec![code],
         },
         change,
@@ -352,7 +355,7 @@ impl AgentHarness for FakeAgentHarness {
 
     fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str) {
         self.terminal
-            .open(&a_place(), folder, command, identity, None, None);
+            .open(&a_place(), folder, command, identity, &OpenIn::Own, None);
         self.agent.keep_record_in(identity, folder);
     }
 
@@ -561,7 +564,17 @@ impl TerminalHarness for FakeTerminalHarness {
     fn no_session(&self) -> String {
         "nobody".into()
     }
+
+    fn setup(&self) -> Vec<String> {
+        self.terminal.set_setup(&[SETUP]);
+        vec![SETUP.to_string()]
+    }
 }
+
+/// What the fake terminal's configuration is scripted to lack for
+/// flume's plugin (122).
+pub const SETUP: &str =
+    "no key opens flume's places: bind one to the plugin's places in the terminal's configuration";
 
 pub struct FakeMergeQueueHarness {
     pub git: Arc<FakeGit>,

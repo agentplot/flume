@@ -57,6 +57,10 @@ enum Command {
     Status {
         /// A location, or `<kind>--<name>` in the repository.
         place: Option<String>,
+        /// Each place's one line alone, reading only what a line holds
+        /// (57, 60).
+        #[arg(long)]
+        line: bool,
     },
     /// The exact prompt a stage would be sent at its next start (29).
     Prompt { place: String, stage: String },
@@ -136,7 +140,8 @@ enum Command {
     },
     /// From an agent program's hook: what the hook for `event` does with
     /// the input on standard input, in an agent flume started; nothing
-    /// elsewhere. It always exits 0 (C.4).
+    /// elsewhere. `status-line` reads no input and prints the place's
+    /// line. It always exits 0 (C.4).
     Hook {
         /// One of the plugin's hooks; any other does nothing.
         event: String,
@@ -268,9 +273,10 @@ struct LaunchArgs {
     #[arg(long, value_name = "TIME")]
     stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
-    /// field one of program, model, instructions, beside and mode, the
-    /// mode one of plan, ask, edits and full, or `mode.<program>` for one
-    /// program's entry of a mode (162, 169).
+    /// field one of program, model, instructions, beside, session and
+    /// mode, `session` the terminal's session its agents open in, the mode
+    /// one of plan, ask, edits and full, or `mode.<program>` for one
+    /// program's entry of a mode (107, 162, 169).
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
     agent: Vec<String>,
     /// The stream the place runs in, one the host's configuration
@@ -326,7 +332,9 @@ where
     match &cli.command {
         Command::Hook { event } => {
             let mut input = String::new();
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            if crate::profiles::hook_reads_input(event) {
+                let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            }
             return Outcome {
                 text: crate::profiles::hook(event, &input, build),
                 usage: false,
@@ -411,9 +419,14 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let launch = launch_of(args, given)?;
             build()?.launch(&launch)
         }
-        Command::Status { place } => {
+        Command::Status { place, line } => {
             let place = maybe(place)?;
-            build()?.status(place.as_ref())
+            let core = build()?;
+            if *line {
+                core.lines(place.as_ref())
+            } else {
+                core.status(place.as_ref())
+            }
         }
         Command::Prompt { place, stage } => {
             let place = named(place)?;

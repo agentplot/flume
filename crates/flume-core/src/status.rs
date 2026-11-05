@@ -131,9 +131,14 @@ impl Engine {
                 notes,
                 mode,
                 conversation: start.conversation.clone(),
+                session: start.session.clone(),
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);
+        let asking = agent
+            .as_ref()
+            .is_some_and(|agent| agent.asking == Reading::Yes);
+        let line = Engine::place_line(held, change, asking, None);
         let submission = match (&bound, place.kind.lands) {
             (Some(bound), true) if read_facts => bound.merge_queue.as_ref().map(|queue| {
                 let across = queue.read_submission(&place.repository, &place.branch);
@@ -215,6 +220,7 @@ impl Engine {
             holds: held.holds.clone(),
             priority: held.priority,
             stream: place.stream.clone(),
+            label: self.label_of(place),
             intent: place.intent.clone(),
             moves: held.moves.iter().map(MoveStatus::of).collect(),
             unsettled: held.unsettled.clone(),
@@ -229,6 +235,7 @@ impl Engine {
                 .collect(),
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),
+            line,
         }
     }
 }

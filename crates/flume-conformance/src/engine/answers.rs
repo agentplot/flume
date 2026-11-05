@@ -23,6 +23,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_field_removed,
         },
         Scenario {
+            name: "answers: a status written before the host gave its terminal's setup reads with none",
+            cites: &["61", "122"],
+            run: a_status_before_terminal_setup,
+        },
+        Scenario {
             name: "answers: a refusal is an answer of the same form",
             cites: &["2", "61"],
             run: a_refusal_is_an_answer,
@@ -81,6 +86,7 @@ fn settings() -> Settings {
             ("agent".into(), "careful".into()),
             ("other".into(), "edits".into()),
         ]))),
+        session: Some("review".into()),
     }
 }
 
@@ -198,6 +204,10 @@ fn place_status() -> PlaceStatus {
                 carried: false,
                 why: Some("its agent profile carries no conversation".into()),
             }),
+            session: Some(SessionHeld {
+                name: Some("review".into()),
+                from: SessionFrom::Launch,
+            }),
         }),
         head: Some(Revision::new("c3")),
         delivered: Some(false),
@@ -259,6 +269,10 @@ fn place_status() -> PlaceStatus {
             name: "work".into(),
             from: StreamFrom::HostRepository,
         },
+        label: Some(LabelHeld {
+            name: "construction".into(),
+            from: LabelFrom::HostKind,
+        }),
         intent: IntentKey::Base {
             repository: "/r".into(),
             base: "main".into(),
@@ -356,8 +370,24 @@ fn place_status() -> PlaceStatus {
                 place: Some("tab w1:t2".into()),
                 agent: Some("pane w1:p3".into()),
                 base: None,
+                bases: vec![],
             },
         }),
+        line: line(),
+    }
+}
+
+/// A place's line, every part present.
+fn line() -> PlaceLine {
+    PlaceLine {
+        name: "fix--one".into(),
+        kind: "fix@1".into(),
+        stage: Some("code".into()),
+        run: Some(2),
+        tasks: Some("1/3".into()),
+        state: "working".into(),
+        full: "fix--one · fix@1 · code · run 2 · tasks 1/3 · working".into(),
+        short: "code · run 2 · tasks 1/3 · working".into(),
     }
 }
 
@@ -366,6 +396,7 @@ fn queued() -> Queued {
         place: PlaceId::new("/r/places/fix--two"),
         stage: "code".into(),
         stream: "work".into(),
+        label: Some("operation".into()),
         priority: 1,
         since: Some(60),
         wants: RoomWanted::Stream {
@@ -383,11 +414,24 @@ fn host_status() -> HostStatus {
         queue: vec![queued()],
         streams: vec![StreamStatus {
             name: "work".into(),
+            session: SessionHeld {
+                name: Some("work".into()),
+                from: SessionFrom::StreamName,
+            },
             priority: 10,
             running: 2,
             bound: Some(2),
             room: Some(0),
             queue: vec![queued()],
+            labels: vec![LabelStatus {
+                name: "operation".into(),
+                reserve: 2,
+                keep_free: 1,
+                running: 1,
+                waiting: 1,
+            }],
+            reserves: Reserves::Held,
+            refused: Some("the stream work's reserves, operation 3 and construction 3, 6 in all, pass its bound of 5".into()),
         }],
         pools: vec![PoolStatus {
             name: "work".into(),
@@ -432,6 +476,19 @@ fn host_status() -> HostStatus {
             line: "1 running · 0 asking · 1 waiting on caller · 0 stalled".into(),
             shown_at: Some("workspace w1".into()),
         }],
+        terminal_setup: vec![crate::fake_harness::SETUP.into()],
+        configuration: HostConfiguration {
+            local: LocalLayer::Taken,
+            values: vec![ConfigValue {
+                key: "streams.work.agents".into(),
+                value: "3".into(),
+                layer: ConfigLayer::Local,
+            }],
+            passed_over: vec![PinnedKey {
+                key: "streams.work.priority".into(),
+                pin: "streams.work".into(),
+            }],
+        },
     }
 }
 
@@ -545,6 +602,12 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                 place: place_status(),
             },
         ),
+        (
+            "lines",
+            Answer::Lines {
+                lines: vec![line()],
+            },
+        ),
     ]
 }
 
@@ -578,6 +641,23 @@ fn a_field_removed(_: &()) -> Outcome {
         vec!["the answer launched lacks its field launched.place.branch".to_string()],
         "the fields missed"
     );
+    Ok(())
+}
+
+fn a_status_before_terminal_setup(_: &()) -> Outcome {
+    let (_, answer) = full().remove(0);
+    let mut json: Value =
+        serde_json::from_str(&answer.to_json()).map_err(|error| error.to_string())?;
+    json["status"]["host"]
+        .as_object_mut()
+        .ok_or("no host")?
+        .remove("terminal_setup")
+        .ok_or("no terminal_setup")?;
+    let back: Answer = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    let Answer::Status { host, .. } = back else {
+        return Err(format!("read back as {back:?}"));
+    };
+    ensure_eq!(host.terminal_setup, Vec::<String>::new(), "the setup read");
     Ok(())
 }
 
@@ -629,7 +709,18 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.bases[].repository",
             "status.host.bases[].shown_at",
             "status.host.bound",
+            "status.host.configuration",
+            "status.host.configuration.local",
+            "status.host.configuration.local.state",
+            "status.host.configuration.passed_over",
+            "status.host.configuration.passed_over[].key",
+            "status.host.configuration.passed_over[].pin",
+            "status.host.configuration.values",
+            "status.host.configuration.values[].key",
+            "status.host.configuration.values[].layer",
+            "status.host.configuration.values[].value",
             "status.host.queue",
+            "status.host.queue[].label",
             "status.host.queue[].place",
             "status.host.queue[].priority",
             "status.host.queue[].since",
@@ -643,9 +734,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.running",
             "status.host.streams",
             "status.host.streams[].bound",
+            "status.host.streams[].labels",
+            "status.host.streams[].labels[].keep_free",
+            "status.host.streams[].labels[].name",
+            "status.host.streams[].labels[].reserve",
+            "status.host.streams[].labels[].running",
+            "status.host.streams[].labels[].waiting",
             "status.host.streams[].name",
             "status.host.streams[].priority",
             "status.host.streams[].queue",
+            "status.host.streams[].queue[].label",
             "status.host.streams[].queue[].place",
             "status.host.streams[].queue[].priority",
             "status.host.streams[].queue[].since",
@@ -655,8 +753,13 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.streams[].queue[].wants.bound",
             "status.host.streams[].queue[].wants.room",
             "status.host.streams[].queue[].wants.stream",
+            "status.host.streams[].refused",
+            "status.host.streams[].reserves",
             "status.host.streams[].room",
             "status.host.streams[].running",
+            "status.host.streams[].session",
+            "status.host.streams[].session.from",
+            "status.host.streams[].session.name",
             "status.host.pools",
             "status.host.pools[].accounts",
             "status.host.pools[].accounts[].bound",
@@ -666,6 +769,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.pools[].accounts[].spent_until",
             "status.host.pools[].name",
             "status.host.pools[].strategy",
+            "status.host.terminal_setup",
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",
@@ -688,6 +792,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].agent.own_work",
             "status.places[].agent.past_limit",
             "status.places[].agent.program",
+            "status.places[].agent.session",
+            "status.places[].agent.session.from",
+            "status.places[].agent.session.name",
             "status.places[].agent.settings",
             "status.places[].agent.settings.beside",
             "status.places[].agent.settings.env",
@@ -696,6 +803,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].agent.settings.mode",
             "status.places[].agent.settings.model",
             "status.places[].agent.settings.program",
+            "status.places[].agent.settings.session",
             "status.places[].agent.stage",
             "status.places[].agent.state",
             "status.places[].base",
@@ -710,6 +818,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].clues.stage",
             "status.places[].clues.state",
             "status.places[].clues.title",
+            "status.places[].line",
+            "status.places[].line.full",
+            "status.places[].line.kind",
+            "status.places[].line.name",
+            "status.places[].line.run",
+            "status.places[].line.short",
+            "status.places[].line.stage",
+            "status.places[].line.state",
+            "status.places[].line.tasks",
             "status.places[].current",
             "status.places[].declared",
             "status.places[].delivered",
@@ -746,6 +863,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].holds[].stage",
             "status.places[].holds[].words",
             "status.places[].kind",
+            "status.places[].label",
+            "status.places[].label.from",
+            "status.places[].label.name",
             "status.places[].lands",
             "status.places[].mark",
             "status.places[].name",
@@ -881,6 +1001,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.agent.own_work",
             "launched.place.agent.past_limit",
             "launched.place.agent.program",
+            "launched.place.agent.session",
+            "launched.place.agent.session.from",
+            "launched.place.agent.session.name",
             "launched.place.agent.settings",
             "launched.place.agent.settings.beside",
             "launched.place.agent.settings.env",
@@ -889,6 +1012,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.agent.settings.mode",
             "launched.place.agent.settings.model",
             "launched.place.agent.settings.program",
+            "launched.place.agent.settings.session",
             "launched.place.agent.stage",
             "launched.place.agent.state",
             "launched.place.base",
@@ -903,6 +1027,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.clues.stage",
             "launched.place.clues.state",
             "launched.place.clues.title",
+            "launched.place.line",
+            "launched.place.line.full",
+            "launched.place.line.kind",
+            "launched.place.line.name",
+            "launched.place.line.run",
+            "launched.place.line.short",
+            "launched.place.line.stage",
+            "launched.place.line.state",
+            "launched.place.line.tasks",
             "launched.place.current",
             "launched.place.declared",
             "launched.place.delivered",
@@ -939,6 +1072,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.holds[].stage",
             "launched.place.holds[].words",
             "launched.place.kind",
+            "launched.place.label",
+            "launched.place.label.from",
+            "launched.place.label.name",
             "launched.place.lands",
             "launched.place.mark",
             "launched.place.name",
@@ -1074,6 +1210,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.agent.own_work",
             "acted.status.agent.past_limit",
             "acted.status.agent.program",
+            "acted.status.agent.session",
+            "acted.status.agent.session.from",
+            "acted.status.agent.session.name",
             "acted.status.agent.settings",
             "acted.status.agent.settings.beside",
             "acted.status.agent.settings.env",
@@ -1082,6 +1221,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.agent.settings.mode",
             "acted.status.agent.settings.model",
             "acted.status.agent.settings.program",
+            "acted.status.agent.settings.session",
             "acted.status.agent.stage",
             "acted.status.agent.state",
             "acted.status.base",
@@ -1096,6 +1236,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.clues.stage",
             "acted.status.clues.state",
             "acted.status.clues.title",
+            "acted.status.line",
+            "acted.status.line.full",
+            "acted.status.line.kind",
+            "acted.status.line.name",
+            "acted.status.line.run",
+            "acted.status.line.short",
+            "acted.status.line.stage",
+            "acted.status.line.state",
+            "acted.status.line.tasks",
             "acted.status.current",
             "acted.status.declared",
             "acted.status.delivered",
@@ -1132,6 +1281,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.holds[].stage",
             "acted.status.holds[].words",
             "acted.status.kind",
+            "acted.status.label",
+            "acted.status.label.from",
+            "acted.status.label.name",
             "acted.status.lands",
             "acted.status.mark",
             "acted.status.name",
@@ -1372,6 +1524,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.agent.own_work",
             "woken.place.agent.past_limit",
             "woken.place.agent.program",
+            "woken.place.agent.session",
+            "woken.place.agent.session.from",
+            "woken.place.agent.session.name",
             "woken.place.agent.settings",
             "woken.place.agent.settings.beside",
             "woken.place.agent.settings.env",
@@ -1380,6 +1535,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.agent.settings.mode",
             "woken.place.agent.settings.model",
             "woken.place.agent.settings.program",
+            "woken.place.agent.settings.session",
             "woken.place.agent.stage",
             "woken.place.agent.state",
             "woken.place.base",
@@ -1394,6 +1550,15 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.clues.stage",
             "woken.place.clues.state",
             "woken.place.clues.title",
+            "woken.place.line",
+            "woken.place.line.full",
+            "woken.place.line.kind",
+            "woken.place.line.name",
+            "woken.place.line.run",
+            "woken.place.line.short",
+            "woken.place.line.stage",
+            "woken.place.line.state",
+            "woken.place.line.tasks",
             "woken.place.current",
             "woken.place.declared",
             "woken.place.delivered",
@@ -1430,6 +1595,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.holds[].stage",
             "woken.place.holds[].words",
             "woken.place.kind",
+            "woken.place.label",
+            "woken.place.label.from",
+            "woken.place.label.name",
             "woken.place.lands",
             "woken.place.mark",
             "woken.place.name",
@@ -1532,6 +1700,21 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waiting_on.why",
             "woken.place.waiting_on.words",
             "woken.woke",
+        ],
+    ),
+    (
+        "lines",
+        &[
+            "lines",
+            "lines.lines",
+            "lines.lines[].full",
+            "lines.lines[].kind",
+            "lines.lines[].name",
+            "lines.lines[].run",
+            "lines.lines[].short",
+            "lines.lines[].stage",
+            "lines.lines[].state",
+            "lines.lines[].tasks",
         ],
     ),
 ];

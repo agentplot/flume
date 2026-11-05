@@ -351,7 +351,8 @@ pub fn terminal(
 
 /// The core over the profiles built in, for one command on this host:
 /// flume's state in `$XDG_STATE_HOME/flume`, the host's configuration in
-/// `$XDG_CONFIG_HOME/flume/config.toml`, and the recipient
+/// `$XDG_CONFIG_HOME/flume/config.toml` and `config.local.toml` over it,
+/// and the recipient
 /// `$FLUME_RECIPIENT` names; a configuration that cannot be read is
 /// refused, naming its fault (C.7; design 16).
 pub fn core() -> Result<Engine, String> {
@@ -405,12 +406,20 @@ pub fn core_with(
 }
 
 /// The words `flume hook` takes, one per hook of the agent program's
-/// plugin (C.4).
+/// plugin, and the status line its module pins (C.4; design 5).
 pub fn hook_events() -> Vec<&'static str> {
     agent::claude::hook::EVENTS
         .iter()
         .map(|(word, _)| *word)
+        .chain([agent::claude::status_line::EVENT])
         .collect()
+}
+
+/// Whether the hook for `event` reads its input on standard input: every
+/// hook of the agent program's does, and the status line reads none
+/// (design 5).
+pub fn hook_reads_input(event: &str) -> bool {
+    event != agent::claude::status_line::EVENT
 }
 
 /// What the agent program's hook for `event` answers to `input`, in the

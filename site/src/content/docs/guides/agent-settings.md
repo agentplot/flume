@@ -17,7 +17,7 @@ account with what chose it.
 |---|---|
 | `program` | the agent program: `claude`, or a path to Claude Code |
 | `model` | the model, passed as `--model` |
-| `instructions` | text appended to the agent's system prompt, passed as `--append-system-prompt` |
+| `instructions` | text appended to the agent's system prompt, written to a file of the start's own and passed as `--append-system-prompt-file`, so it may hold newlines |
 | `beside` | a pane the agent's pane opens beside, under herdr |
 | `mode` | how far the agent may act in its place without asking a person: one of flume's four modes, or a table of programs ([the mode](#the-mode)) |
 
@@ -101,6 +101,58 @@ A repository's key is its location, with a leading `~` read as your
 home. Settings for a kind or a stage the place does not run are
 ignored. Each agent runs under whichever account its stage's pool
 gives.
+
+### Two layers
+
+The host's configuration is two files read as one. `config.toml` is
+the managed layer, written by whoever manages the host.
+`config.local.toml` beside it is the local layer, yours or a control
+plane's. flume reads it over the managed one key by key at each
+command: a key it sets replaces the managed one's, and an agents
+table's `mode` table is taken whole. flume writes neither file.
+
+The local layer sets only what runs the host's work from hour to hour:
+
+- a stream's `agents`, `priority` and `session`, and its labels'
+  `reserve` and `keep_free`;
+- the `stream` and the `label` a repository's kind, a repository or a
+  kind is given;
+- a kind's agents tables, `[kinds.<kind>.agents]` and
+  `[repos."<repository>".kinds.<kind>.agents]`, with their stages'.
+
+The accounts, the pools, a stream's `pool`, `[host]` and `[roles]` are
+the managed layer's alone. A local file that sets any of them, or that
+is not TOML, is not taken at all. flume then reads the managed layer
+alone, and status names each key the file may not set, or its fault,
+until you mend it. The local layer may name a stream the managed one
+does not, and that stream's places take `[host] pool`.
+
+The managed layer may pin a key the local layer could set, by `pin`
+under `[host]`:
+
+```toml
+# config.toml
+[host]
+pin = ["streams.work.agents"]
+
+[streams.work]
+agents = 6
+pool = "work"
+```
+
+```toml
+# config.local.toml
+[streams.work]
+agents = 3
+priority = 30
+```
+
+The local priority is taken, and `work` ranks at 30. Its agents are
+passed over, so `work` keeps six, and status names the key with its
+pin. A pin names a key or a table of keys, as `"streams.work"` does.
+A pin that names neither makes the managed file refuse. Status gives
+every value of the configuration with the layer it came from, and an
+account's variables by name and `<set>`.
 
 ## In the repository
 
@@ -281,6 +333,87 @@ passes over a stream at its bound, or one whose pool has no usable
 account. Its stages keep their order and start first once it has room,
 and they never hold the host's room from another stream's stages. flume ends no
 agent to make room.
+
+### A stream's session
+
+Under herdr, a stream's agents open in a herdr session of the
+stream's: the one its `session` names, else the one named by the
+stream's name. The `default` stream's agents open in flume's own
+session, `flume`, unless `[streams.default]` names one. So `herdr
+--session work` shows every agent of the `work` stream.
+
+```toml
+[streams.work]
+agents = 5
+session = "office"
+```
+
+A launch's `--agent session=<name>` opens its place's agents in that
+session whatever their stream, and `--agent <stage>.session=<name>`
+one stage's. An agent whose settings name a pane to open beside opens
+beside it, in whatever session that pane is. No other layer gives a
+session. A stream's session is read at each start, and an agent stays
+where it opened.
+
+### Labels
+
+A place's label gives it a share of its stream's agents, and nothing
+else. A stream owes a label a `reserve` of its agents, and may keep
+some of its slots free for it:
+
+```toml
+[streams.work]
+agents = 5
+
+[streams.work.labels.operation]
+reserve = 2
+keep_free = 1
+
+[streams.work.labels.construction]
+reserve = 2
+
+[kinds.fix]
+label = "construction"
+
+[repos."~/src/acme".kinds.deploy]
+label = "operation"
+```
+
+Within its stream, a stage of a label running fewer agents than its
+reserve starts before every stage of a label running its reserve or
+more, whatever their priorities. A label keeps `keep_free` of its
+stream's slots free while it runs fewer agents than that: no stage of
+another label, and no stage of no label, starts in them. flume ends no
+agent for a reserve. A reserve another label borrowed comes back as
+that label's agents end.
+
+Take `work` above with no operation place waiting. Four construction
+places run, and a place of no label waits, since the one slot left is
+kept free for operation. An operation place launched then starts at
+once in it. A second operation place waits until the next agent ends,
+then starts before the place of no label and every construction place
+waiting, whatever their priorities.
+
+A place's label is read at each start, from the first of:
+
+| Source | Status names it |
+|---|---|
+| `label` in the host's `[repos."<repository>".kinds.<kind>]` | `host-repository-kind` |
+| `label` in the host's `[kinds.<kind>]` | `host-kind` |
+
+An agent counts toward the label it started under until it ends, so a
+label changed while it runs takes the place's next start. A label is
+one word of letters, digits, `-` and `_`. flume's own kinds declare
+none.
+
+A stream holds its labels' reserves only where it states a bound, and
+in one that states none status says they are passed over. A stream
+starts no stage while its labels' reserves together pass its bound, a
+label keeps more free than its reserve, or a label's table holds any
+key but `reserve` and `keep_free`. Each of its starts is refused,
+naming the stream and why, until the configuration is mended and the
+stage retried. A label has no pool, account or bound of its own: those
+are its stream's.
 
 ## Pools of accounts
 
@@ -508,15 +641,17 @@ program differed and the modes asked and begun, never a value.
 ## What status shows
 
 ```text
-  stream work (from host-repository), intent of /home/you/src/acme on main
+  stream work (from host-repository), label construction (from host-kind), intent of /home/you/src/acme on main
   agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude) on the account work-1 of work (from the strategy): working, in the mode edits (from host-kind) passed as acceptEdits
+    in the session work, the stream's name
     env.CLAUDE_CONFIG_DIR = <set> (from account)
     mode = edits (from host-kind)
     model = sonnet (from host-kind)
     program = claude (from default)
 ```
 
-A place gives its stream with where it came from, and its intent. Its
+A place gives its stream and its label, each with where it came from,
+and its intent. Its current agent gives the session it opened in. Its
 current agent gives its account, with `from` saying whether the
 intent's affinity for the agent's program or the pool's strategy chose
 it, and each variable `env.<NAME>` from `account` as `<set>`, and its
@@ -555,7 +690,25 @@ Where it went, the agent's line reads `carries the conversation of
 start 1` and the move `its conversation with it`. A carried start that
 did not begin is listed with what happened, `carried and not begun:
 code's start 2 at 1793291340: the start that carried its conversation
-ended before it said it started, and its stage started afresh`. The host gives its `streams`, each with its
-running agents, bound, room and queue, and its `pools`, each account
-with its running agents, its bound and the time it is spent until. The
-[state reference](/flume/reference/state/) lists the JSON fields.
+ended before it said it started, and its stage started afresh`.
+
+The host gives its `streams`, each with its running agents, bound,
+room, queue, session and labels, and its `pools`, each account with its
+running agents, its bound and the time it is spent until. A stream
+gives each label's reserve, what it keeps free, its agents running and
+its stages waiting, and a stage waiting gives its label. Then comes the
+local layer, with each value it set and each key passed over with its
+pin, or, where it was not taken, each key it may not set or its fault:
+
+```text
+  stream work, priority 30: 5 agents running of 5, room for 0
+    its agents open in the session work, the stream's name
+    label construction: a reserve of 2, keeping 0 free, 4 agents running, 0 waiting
+    label operation: a reserve of 2, keeping 1 free, 1 agents running, 1 waiting
+    waiting for room: /home/you/.local/share/flume/places/f5f5e14159a8/deploy--rollout's code in work as operation, priority 0, short of the stream work's room, at its bound of 5
+  the host's local layer is taken, setting:
+    streams.work.priority = 30
+    streams.work.agents passed over: the managed layer pins streams.work.agents
+```
+
+The [state reference](/flume/reference/state/) lists the JSON fields.

@@ -75,6 +75,14 @@ pub trait TerminalHarness {
 
     /// A session name the terminal holds no session by.
     fn no_session(&self) -> String;
+
+    /// What the harness has the terminal's own configuration lack for
+    /// flume's plugin, each in the profile's words, and so what setup is
+    /// to give; none for a terminal with no plugin of flume's, as the
+    /// printed command, by default (122).
+    fn setup(&self) -> Vec<String> {
+        vec![]
+    }
 }
 
 fn identity(start: u32) -> Identity {
@@ -93,7 +101,7 @@ fn opened<H: TerminalHarness>(harness: &H, start: u32) -> Result<Identity, Strin
         &harness.folder(),
         &harness.command(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     ) {
         Opened::Opened { .. } => Ok(who),
@@ -190,6 +198,11 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             cites: &["94", "98", "43", "107", "132"],
             run: an_agent_under_a_session_name::<H>,
         },
+        Scenario {
+            name: "terminal: setup gives what its configuration lacks for flume's plugin, each in words, and none for a terminal with no plugin of flume's",
+            cites: &["122", "72"],
+            run: setup_gives_what_is_lacking::<H>,
+        },
     ]
 }
 
@@ -241,7 +254,7 @@ fn an_agent_under_a_session_name<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &harness.command(),
         &first,
-        None,
+        &OpenIn::Own,
         Some(name),
     );
     ensure!(
@@ -268,7 +281,7 @@ fn an_agent_under_a_session_name<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &harness.command(),
         &identity(2),
-        None,
+        &OpenIn::Own,
         Some(name),
     );
     ensure!(
@@ -288,7 +301,7 @@ fn open_answers_held<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &command,
         &who,
-        None,
+        &OpenIn::Own,
         None,
     ) {
         Opened::Held { screen } => {
@@ -311,7 +324,7 @@ fn open_answers_not_come_up<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &command,
         &who,
-        None,
+        &OpenIn::Own,
         None,
     ) {
         Opened::NotComeUp { .. } => Ok(()),
@@ -476,7 +489,7 @@ fn no_second_agent<H: TerminalHarness>(harness: &H) -> Outcome {
                 &harness.folder(),
                 &harness.command(),
                 &who,
-                None,
+                &OpenIn::Own,
                 None
             ),
             Opened::Refused { .. }
@@ -533,6 +546,18 @@ fn close_never_lies<H: TerminalHarness>(harness: &H) -> Outcome {
         harness.seam().state(&who) != AgentState::Stopped,
         "an agent that did not end reads stopped"
     );
+    Ok(())
+}
+
+fn setup_gives_what_is_lacking<H: TerminalHarness>(harness: &H) -> Outcome {
+    let lacking = harness.setup();
+    let setup = harness.seam().setup();
+    ensure_eq!(setup, lacking, "what the configuration lacks");
+    ensure!(
+        setup.iter().all(|words| !words.trim().is_empty()),
+        "a setup with no words: {setup:?}"
+    );
+    ensure_eq!(harness.seam().setup(), setup, "setup asked again");
     Ok(())
 }
 

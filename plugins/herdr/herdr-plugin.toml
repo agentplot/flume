@@ -10,9 +10,12 @@ platforms = ["linux", "macos"]
 [[startup]]
 command = ["sh", "bin/watch.sh", "--ensure"]
 
+# herdr 0.9.5's action declares no key: the description names the
+# host's entry that binds one (122; design 8).
 [[actions]]
 id = "places"
 title = "flume: the places in flight"
+description = "flume's places in flight; bind it with a [[keys.command]] entry of type plugin_action and command agentplot.flume.places in herdr's config.toml"
 contexts = ["global", "pane"]
 command = ["sh", "bin/open.sh", "places"]
 

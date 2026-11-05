@@ -25,15 +25,23 @@
 //! sending its agent's prompt with no settle, a dialog that holds a start
 //! waiting on a person, and an agent that began after its start was read
 //! never begun, which a retry leaves be; a nix-wrapped Claude Code
-//! started from the agent profile, a role run's pane reached by its
+//! started from the agent profile, instructions of many lines that herdr
+//! refuses as an argument started from the agent profile by a file, a
+//! role run's pane reached by its
 //! address after a move, and a recipient on another server reached
-//! through its own socket.
+//! through its own socket; and what flume's herdr plugin's own watch
+//! writes herdr's configuration lacks, given by status while its lease
+//! is fresh. Under a scratch home of herdr's named sessions: two
+//! streams' sessions (S82), a session name herdr refuses, a place tidied
+//! in two sessions, and records written before they were kept by server.
 
 use crate::common::*;
 use flume::host::config::HostConfig;
 use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
-use flume::profiles::terminal::herdr::{herdr_name, Herdr, Pane, Server, START_TIMEOUT};
+use flume::profiles::terminal::herdr::{
+    herdr_name, Herdr, Pane, Server, SESSION_HOME, START_TIMEOUT,
+};
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
@@ -516,7 +524,20 @@ fn opened_in(
     who: &Identity,
     command: &AgentCommand,
 ) -> Pane {
-    let opened = profile.open(place, &server.folder(), command, who, None, None);
+    opened_at(server, profile, place, who, command, &OpenIn::Own)
+}
+
+/// An agent opened in `place` under `who` where `at` says, and waiting,
+/// and its pane.
+fn opened_at(
+    server: &TestServer,
+    profile: &Herdr,
+    place: &PlaceRef,
+    who: &Identity,
+    command: &AgentCommand,
+    at: &OpenIn,
+) -> Pane {
+    let opened = profile.open(place, &server.folder(), command, who, at, None);
     assert!(
         matches!(opened, Opened::Opened { .. }),
         "open gave {opened:?}"
@@ -551,7 +572,8 @@ impl Harness {
         let seam = server
             .profile()
             .with_start_timeout(HARNESS_START)
-            .with_caller(Some(caller.clone()));
+            .with_caller(Some(caller.clone()))
+            .with_plugin(Some(server.scratch.path("plugin")));
         Harness {
             server,
             seam,
@@ -709,6 +731,29 @@ impl TerminalHarness for Harness {
         }
         .session()
     }
+
+    /// The plugin's watch on this server, its lease renewed now, having
+    /// written that herdr's configuration binds no key to the popup.
+    fn setup(&self) -> Vec<String> {
+        let words = "herdr's configuration, /h/config.toml, binds no key to flume's places";
+        let watched = self.server.scratch.path("plugin/servers/1");
+        fs::create_dir_all(&watched).expect("the plugin's server state");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the clock")
+            .as_secs();
+        fs::write(
+            watched.join("watch.lease"),
+            format!("{} {now}\n", std::process::id()),
+        )
+        .expect("the lease");
+        fs::write(
+            watched.join("setup.json"),
+            serde_json::json!([words]).to_string(),
+        )
+        .expect("setup.json");
+        vec![words.to_string()]
+    }
 }
 
 impl Harness {
@@ -804,7 +849,7 @@ fn s39_a_folder_trust_question_drawn_after_the_open_is_answered_at_a_settle() {
         &server.folder(),
         &server.command(&[("STAND_IN_TRUST", "after")]),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     assert!(
@@ -862,7 +907,7 @@ fn s40_the_bypass_warning_holds_the_start_with_its_lines() {
         &server.folder(),
         &server.command(&[("STAND_IN_WARNING", warning)]),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     let Opened::Held { screen } = answer else {
@@ -888,7 +933,7 @@ fn s45_a_program_that_never_comes_up_is_not_come_up_with_the_screen() {
         &server.folder(),
         &command,
         &identity(1),
-        None,
+        &OpenIn::Own,
         None,
     );
     assert!(
@@ -916,7 +961,7 @@ fn a_role_runs_pane_moved_to_another_workspace_is_reached_by_its_address() {
         &server.folder(),
         &server.command(&[]),
         &who,
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(
@@ -1109,6 +1154,7 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
     let place = server.place("fix--one");
     let who = identity(1);
     let command = claude.command(
+        &server.folder(),
         &settings,
         None,
         None,
@@ -1134,6 +1180,83 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
     assert!(
         !listed["pane"]["agent"].is_null(),
         "herdr lists no agent in the pane: {listed}"
+    );
+}
+
+/// Instructions of many lines, as a host's that holds a whole document
+/// (deneb, 2026-11-05): as an argument herdr refuses them as
+/// `invalid_agent_argument`, a newline or a tab being a control
+/// character, and the refused start leaves no pane; from the agent
+/// profile they go by a file of the start's own, which the agent starts
+/// naming and which holds them whole (148, C.4, C.5; record 0038).
+#[test]
+fn instructions_of_many_lines_start_under_herdr_by_the_agent_profiles_file() {
+    use flume::profiles::agent::claude::{Claude, STANDING_PROMPT_FLAG};
+    let server = TestServer::start("herdr-lines");
+    let profile = server.profile();
+    let instructions =
+        "## Capture\n\n- **What counts.** A decision the person makes.\n\t- and its record\n";
+    let refused = identity(1);
+    let mut command = server.command(&[]);
+    command.args = vec!["--append-system-prompt".into(), instructions.into()];
+    let answer = profile.open(
+        &server.place("fix--one"),
+        &server.folder(),
+        &command,
+        &refused,
+        &OpenIn::Own,
+        None,
+    );
+    assert!(
+        matches!(&answer, Opened::Refused { reason } if reason.contains("invalid_agent_argument")),
+        "instructions of many lines as an argument gave {answer:?}"
+    );
+    assert_eq!(
+        profile.pane(&refused),
+        None,
+        "the refused start's pane kept"
+    );
+    assert!(
+        !server.tabs().contains(&"fix--one".to_string()),
+        "the refused start's pane stands"
+    );
+
+    let claude = Claude::new(
+        &server.scratch.path("data"),
+        &server.scratch.path("bin/flume"),
+    );
+    let stand_in = server.command(&[]);
+    let settings = Settings {
+        program: Some(stand_in.program.clone()),
+        instructions: Some(instructions.into()),
+        ..Settings::default()
+    };
+    let who = identity(2);
+    let command = claude.command(
+        &server.folder(),
+        &settings,
+        None,
+        None,
+        &stand_in.env,
+        &server.place("fix--one"),
+        &who,
+        &Secret("s".into()),
+        "go",
+    );
+    let pane = opened(&server, &profile, &who, &command);
+    let argv = fs::read(server.scratch.path("log").join(&pane.id).join("argv"))
+        .expect("the arguments the agent started with");
+    let argv = String::from_utf8_lossy(&argv).into_owned();
+    let words: Vec<&str> = argv.split_terminator('\0').collect();
+    let file = words
+        .iter()
+        .position(|word| *word == STANDING_PROMPT_FLAG)
+        .and_then(|at| words.get(at + 1))
+        .unwrap_or_else(|| panic!("the agent started with no standing prompt's file: {words:?}"));
+    assert_eq!(
+        fs::read_to_string(file).expect("the standing prompt's file"),
+        instructions,
+        "the instructions the file holds"
     );
 }
 
@@ -1191,7 +1314,7 @@ fn a_program_that_runs_another_in_its_place_is_refused_naming_it() {
         &server.folder(),
         &command,
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     let other = server
@@ -1226,7 +1349,7 @@ fn a_herdr_name_taken_refuses_the_open() {
         &server.folder(),
         &server.command(&[]),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     assert!(
@@ -1435,7 +1558,9 @@ fn a_conversation_opens_beside_a_named_pane() {
             &server.folder(),
             &server.command(&[]),
             &who,
-            Some(named),
+            &OpenIn::Beside {
+                pane: named.to_string(),
+            },
             None,
         );
         assert!(
@@ -1463,7 +1588,9 @@ fn a_conversation_opens_beside_a_named_pane() {
         &server.folder(),
         &server.command(&[]),
         &identity(4),
-        Some("nobody"),
+        &OpenIn::Beside {
+            pane: "nobody".into(),
+        },
         None,
     );
     assert!(
@@ -1704,7 +1831,8 @@ fn opened_once_let_go(
     let place = server.place("fix--one");
     let folder = server.folder();
     std::thread::scope(|scope| {
-        let opening = scope.spawn(|| profile.open(&place, &folder, command, who, None, None));
+        let opening =
+            scope.spawn(|| profile.open(&place, &folder, command, who, &OpenIn::Own, None));
         server.within(
             "open made no pane whose held shell shows what it says",
             || {
@@ -1833,7 +1961,7 @@ fn a_shell_never_at_its_prompt_is_not_come_up_and_never_refused() {
         &server.folder(),
         &command,
         &identity(1),
-        None,
+        &OpenIn::Own,
         None,
     );
     let took = began.elapsed();
@@ -1900,6 +2028,7 @@ impl StandIn {
 impl Agent for StandIn {
     fn command(
         &self,
+        _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
         _resume: Option<&str>,
@@ -2448,4 +2577,522 @@ fn an_agent_that_began_after_its_start_read_never_begun_is_begun_and_a_retry_lea
             .is_none(),
         "a second agent was opened"
     );
+}
+
+/// flume's herdr plugin's own watch, run on a server of the test's own,
+/// ended with the test.
+struct PluginWatch(Child);
+
+impl Drop for PluginWatch {
+    fn drop(&mut self) {
+        // SAFETY: a signal to the watch this test started, whose trap
+        // ends its renewer and removes its lease.
+        unsafe { libc::kill(self.0.id() as libc::pid_t, libc::SIGTERM) };
+        let _ = self.0.wait();
+    }
+}
+
+/// `flume status --json` under the scratch host, the herdr terminal
+/// bound, its terminal setup.
+fn terminal_setup(server: &TestServer, flume: &Path) -> Value {
+    let mut command = Command::new(flume);
+    for (name, _) in std::env::vars_os() {
+        let name = name.to_string_lossy().into_owned();
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+            command.env_remove(name);
+        }
+    }
+    let output = command
+        .args(["status", "--json"])
+        .current_dir(server.scratch.path("home"))
+        .env("HOME", server.scratch.path("home"))
+        .env("XDG_STATE_HOME", server.scratch.path("state"))
+        .env("XDG_CONFIG_HOME", server.scratch.path("config"))
+        .env("XDG_DATA_HOME", server.scratch.path("data"))
+        .stdin(Stdio::null())
+        .output()
+        .expect("flume runs");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "flume status: {text}");
+    let answer: Value = serde_json::from_str(text.trim()).expect("status's JSON");
+    answer["status"]["host"]["terminal_setup"].clone()
+}
+
+#[test]
+fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
+    // 122, C.5, design 8: the plugin's watch, on the pinned herdr's
+    // server, reads a herdr configuration that binds no key to the popup
+    // and names no row of flume's, and writes what it lacks beside its
+    // lease; `flume status --json` gives those words as the host's
+    // terminal setup, and none once the watch has stopped.
+    let server = TestServer::start("setup");
+    let flume = Path::new(env!("CARGO_BIN_EXE_flume"));
+    let plugin = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../plugins/herdr")
+        .canonicalize()
+        .expect("the herdr plugin");
+    let plugin_state = server.scratch.path("state/herdr/plugins/agentplot.flume");
+    fs::create_dir_all(server.scratch.path("config/flume")).expect("flume's configuration");
+    fs::write(
+        server.scratch.path("config/flume/config.toml"),
+        "[host]\nterminal = \"herdr\"\n",
+    )
+    .expect("flume's configuration");
+    let herdr_config = server.scratch.path("herdr.toml");
+    fs::write(
+        &herdr_config,
+        "[[keys.command]]\nkey = \"prefix+m\"\ntype = \"plugin_action\"\ncommand = \"agentplot.sluice.board\"\n",
+    )
+    .expect("herdr's configuration");
+    let path = format!(
+        "{}:{}",
+        flume.parent().expect("flume's folder").display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let log = server.scratch.path("log/watch.log");
+    let mut command = Command::new("sh");
+    for (name, _) in std::env::vars_os() {
+        let name = name.to_string_lossy().into_owned();
+        if name.starts_with("FLUME_") || name.starts_with("HERDR_") {
+            command.env_remove(name);
+        }
+    }
+    let watch = PluginWatch(
+        command
+            .arg(plugin.join("bin/watch.sh"))
+            .current_dir(server.scratch.path("home"))
+            .env("PATH", path)
+            .env("HOME", server.scratch.path("home"))
+            .env("XDG_STATE_HOME", server.scratch.path("state"))
+            .env("XDG_CONFIG_HOME", server.scratch.path("config"))
+            .env("XDG_DATA_HOME", server.scratch.path("data"))
+            .env("HERDR_PLUGIN_ROOT", &plugin)
+            .env("HERDR_PLUGIN_STATE_DIR", &plugin_state)
+            .env("HERDR_SOCKET_PATH", &server.socket)
+            .env("HERDR_BIN_PATH", herdr_program())
+            .env("HERDR_CONFIG_PATH", &herdr_config)
+            .env("FLUME_HERDR_TICK", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(fs::File::create(&log).expect("the watch's log"))
+            .spawn()
+            .expect("the watch starts"),
+    );
+    let written = || -> Option<Value> {
+        let servers = fs::read_dir(plugin_state.join("servers")).ok()?;
+        servers
+            .filter_map(Result::ok)
+            .find(|server| server.path().join("watch.lease").exists())
+            .and_then(|server| fs::read_to_string(server.path().join("setup.json")).ok())
+            .and_then(|text| serde_json::from_str(&text).ok())
+    };
+    server.within("the watch wrote no setup.json beside its lease", || {
+        written().is_some()
+    });
+    let lacking = written().expect("setup.json");
+    let file = herdr_config.display().to_string();
+    let words: Vec<&str> = lacking
+        .as_array()
+        .expect("an array")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(
+        words.len(),
+        2,
+        "{lacking}; the watch logged: {}",
+        fs::read_to_string(&log).unwrap_or_default()
+    );
+    assert!(
+        words[0].contains(&file) && words[0].contains("binds no key to flume's places"),
+        "{}",
+        words[0]
+    );
+    assert!(
+        words[1].contains(&file) && words[1].contains("\"$flume\""),
+        "{}",
+        words[1]
+    );
+    assert_eq!(terminal_setup(&server, flume), lacking);
+    drop(watch);
+    assert_eq!(terminal_setup(&server, flume), Value::Array(vec![]));
+}
+
+/// The longer of the two sockets the pinned herdr binds in a named
+/// session's folder, `herdr/sessions/<name>` under the session home,
+/// beside `herdr.sock`, whatever `HERDR_SOCKET_PATH` or
+/// `HERDR_CLIENT_SOCKET_PATH` says.
+const CLIENT_SOCKET: &str = "herdr-client.sock";
+
+/// The longest path a socket's address holds on this host, its closing
+/// nul left out.
+fn socket_path_limit() -> usize {
+    // SAFETY: an address of all zeros is a valid `sockaddr_un`.
+    let address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    address.sun_path.len() - 1
+}
+
+/// A test's own scratch home of herdr's named sessions, never the host's:
+/// a short link in the run's own scratch (`short_folder`), `SLUICE_TMP`
+/// under sluice, to a folder of the test's, so two tests may each name a
+/// session `work`. Its servers are stopped and its link removed when it
+/// is dropped.
+struct SessionHome {
+    scratch: Scratch,
+    link: PathBuf,
+}
+
+impl SessionHome {
+    /// The home for a test that starts the sessions `names`: refused, with
+    /// the bytes, where a session's socket would not fit a socket's
+    /// address.
+    fn new(names: &[&str]) -> SessionHome {
+        let scratch = Scratch::new("herdr-sessions");
+        fs::create_dir_all(scratch.path("home")).expect("the session home");
+        let link = short_folder().join(format!(
+            "c{}-{}",
+            std::process::id(),
+            LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = fs::remove_file(&link);
+        std::os::unix::fs::symlink(scratch.path("home"), &link)
+            .unwrap_or_else(|error| panic!("a short link at {}: {error}", link.display()));
+        let limit = socket_path_limit();
+        for name in names {
+            let socket = link.join(format!("herdr/sessions/{name}/{CLIENT_SOCKET}"));
+            let bytes = socket.as_os_str().len();
+            assert!(
+                bytes <= limit,
+                "herdr's session {name} would bind {}, {bytes} bytes, past the {limit} a \
+                 socket's path holds on this host: the session home {}, {} bytes, leaves \
+                 no room for it",
+                socket.display(),
+                link.display(),
+                link.as_os_str().len()
+            );
+        }
+        SessionHome { scratch, link }
+    }
+
+    fn path(&self) -> &Path {
+        &self.link
+    }
+
+    /// herdr's answer for `args`, run under this home, on the server at
+    /// `socket` where one is named.
+    fn herdr(&self, socket: Option<&Path>, args: &[&str]) -> Value {
+        self.try_herdr(socket, args)
+            .unwrap_or_else(|words| panic!("herdr {}: {words}", args.join(" ")))
+    }
+
+    /// herdr's answer for `args`, run under this home, on the server at
+    /// `socket` where one is named, or its words.
+    fn try_herdr(&self, socket: Option<&Path>, args: &[&str]) -> Result<Value, String> {
+        let mut command = Command::new("herdr");
+        command.args(args);
+        for (name, _) in std::env::vars_os() {
+            if name.to_string_lossy().starts_with("HERDR_") {
+                command.env_remove(name);
+            }
+        }
+        command
+            .env(SESSION_HOME, &self.link)
+            .env("HOME", self.scratch.path("home"));
+        if let Some(socket) = socket {
+            command.env("HERDR_SOCKET_PATH", socket);
+        }
+        let output = command
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|error| error.to_string())?;
+        let text = String::from_utf8_lossy(&output.stdout).into_owned();
+        match serde_json::from_str::<Value>(text.trim()) {
+            Ok(answer) if answer.get("result").is_some() => Ok(answer["result"].clone()),
+            Ok(answer) => Ok(answer),
+            _ if output.status.success() => Ok(Value::String(text)),
+            _ => Err(format!("{text}{}", String::from_utf8_lossy(&output.stderr))),
+        }
+    }
+
+    /// The sessions herdr lists running under this home, by name, with
+    /// their sockets.
+    fn running(&self) -> BTreeMap<String, PathBuf> {
+        self.try_herdr(None, &["session", "list", "--json"])
+            .unwrap_or_default()["sessions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|session| session["running"] == Value::Bool(true))
+            .filter_map(|session| {
+                Some((
+                    session["name"].as_str()?.to_string(),
+                    PathBuf::from(session["socket_path"].as_str()?),
+                ))
+            })
+            .collect()
+    }
+
+    /// The labels herdr lists of `what`, `workspace` or `tab`, on the
+    /// server at `socket`.
+    fn labels(&self, socket: &Path, what: &str) -> Vec<String> {
+        self.herdr(Some(socket), &[what, "list"])[format!("{what}s")]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|listed| listed["label"].as_str().map(str::to_string))
+            .collect()
+    }
+}
+
+impl Drop for SessionHome {
+    fn drop(&mut self) {
+        for socket in self.running().values() {
+            let _ = self.try_herdr(Some(socket), &["server", "stop"]);
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !self.running().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let _ = fs::remove_file(&self.link);
+    }
+}
+
+/// The first twelve hex digits of `text`'s SHA-256, as the profile names
+/// its records.
+fn digest(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(text.as_bytes())
+        .iter()
+        .take(6)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+#[test]
+fn the_pinned_herdr_keeps_its_named_sessions_under_the_session_home() {
+    // core.29: the variable `with_session_home` sets is the one the pinned
+    // herdr reads its named sessions' home from.
+    let home = SessionHome::new(&[]);
+    let listed = home.herdr(None, &["session", "list", "--json"]);
+    let default = listed["sessions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|session| session["default"] == Value::Bool(true))
+        .unwrap_or_else(|| panic!("no default session in {listed}"));
+    assert_eq!(
+        default["session_dir"].as_str().map(PathBuf::from),
+        Some(home.path().join("herdr")),
+        "{listed}"
+    );
+}
+
+#[test]
+fn s82_two_streams_sessions_under_herdr() {
+    // 107, S82: each fix's agent in the session the core names, each
+    // session's server started headless, its workspace of the base
+    // holding the fix's tab and its agent's pane.
+    let server = TestServer::start("herdr-streams");
+    let home = SessionHome::new(&["work", "personal"]);
+    let profile = server.profile().with_session_home(home.path());
+    let mut panes = BTreeMap::new();
+    for (session, short) in [("work", "fix--one"), ("personal", "fix--two")] {
+        let who = identity_of(short, 1);
+        let pane = opened_at(
+            &server,
+            &profile,
+            &server.place(short),
+            &who,
+            &server.command(&[]),
+            &OpenIn::Session {
+                name: session.into(),
+            },
+        );
+        panes.insert(session, (short, pane));
+    }
+    let running = home.running();
+    for (session, (short, pane)) in &panes {
+        let socket = running
+            .get(*session)
+            .unwrap_or_else(|| panic!("herdr lists no session {session} running: {running:?}"));
+        assert_eq!(&pane.socket, socket, "{short}'s pane's server");
+        assert_eq!(
+            home.labels(socket, "workspace"),
+            vec!["repository main".to_string()],
+            "{session}'s workspaces"
+        );
+        assert_eq!(
+            home.labels(socket, "tab"),
+            vec![short.to_string()],
+            "{session}'s tabs"
+        );
+        assert_eq!(
+            home.herdr(Some(socket), &["pane", "get", &pane.id])["pane"]["pane_id"].as_str(),
+            Some(pane.id.as_str()),
+            "{short}'s agent's pane in {session}"
+        );
+    }
+    assert!(
+        !server.tabs().iter().any(|tab| tab.starts_with("fix--")),
+        "a fix's tab in flume's own session: {:?}",
+        server.tabs()
+    );
+}
+
+#[test]
+fn a_session_name_herdr_refuses_refuses_the_open_in_its_words() {
+    // 98, core.29: the name is herdr's to refuse, and nothing of flume's
+    // is left open.
+    let server = TestServer::start("herdr-bad-session");
+    let home = SessionHome::new(&[]);
+    let profile = server.profile().with_session_home(home.path());
+    let place = server.place("fix--one");
+    let who = identity(1);
+    let opened = profile.open(
+        &place,
+        &server.folder(),
+        &server.command(&[]),
+        &who,
+        &OpenIn::Session { name: "a/b".into() },
+        None,
+    );
+    let Opened::Refused { reason } = opened else {
+        panic!("open gave {opened:?}");
+    };
+    assert!(
+        reason.contains("session name may only contain"),
+        "the refusal is not herdr's: {reason}"
+    );
+    assert_eq!(profile.pane(&who), None, "the agent's pane recorded");
+    assert_eq!(profile.tabs(&place), vec![], "a tab recorded");
+    assert_eq!(profile.workspaces(&place), vec![], "a workspace recorded");
+    assert_eq!(home.running().get("a/b"), None, "a session left running");
+    assert!(
+        !server.tabs().contains(&"fix--one".to_string()),
+        "a tab made in flume's own session"
+    );
+}
+
+#[test]
+fn a_place_tidied_in_two_sessions_closes_its_tab_and_workspace_in_each() {
+    // 137, 138: a place whose first agent opened in flume's own session
+    // and its next in its stream's, `work`.
+    let server = TestServer::start("herdr-two-tidy");
+    let home = SessionHome::new(&["work"]);
+    let profile = server.profile().with_session_home(home.path());
+    let place = server.place("fix--one");
+    opened_in(
+        &server,
+        &profile,
+        &place,
+        &identity(1),
+        &server.command(&[]),
+    );
+    let pane = opened_at(
+        &server,
+        &profile,
+        &place,
+        &identity(2),
+        &server.command(&[]),
+        &OpenIn::Session {
+            name: "work".into(),
+        },
+    );
+    assert_eq!(profile.tabs(&place).len(), 2, "the place's tabs");
+    assert_eq!(profile.workspaces(&place).len(), 2, "the base's workspaces");
+    let tidy = profile.tidy(&place);
+    assert!(tidy.kept.is_empty(), "kept: {tidy:?}");
+    let mut closed = tidy.closed.clone();
+    closed.sort();
+    assert_eq!(
+        closed,
+        vec![
+            "the tab fix--one".to_string(),
+            "the tab fix--one".to_string(),
+            "the workspace repository main".to_string(),
+            "the workspace repository main".to_string(),
+        ],
+        "{tidy:?}"
+    );
+    assert!(
+        !server.workspaces().contains(&"repository main".to_string())
+            && !server.tabs().contains(&"fix--one".to_string()),
+        "flume's own session keeps the place: {:?} {:?}",
+        server.workspaces(),
+        server.tabs()
+    );
+    assert!(
+        home.labels(&pane.socket, "workspace").is_empty(),
+        "work keeps the place's workspace"
+    );
+    assert_eq!(profile.tabs(&place), vec![], "the tabs' records");
+    assert_eq!(
+        profile.workspaces(&place),
+        vec![],
+        "the workspaces' records"
+    );
+    assert_eq!(profile.kept(), Vec::<String>::new(), "kept");
+}
+
+#[test]
+fn a_place_recorded_before_records_were_kept_by_server_is_tidied_as_before() {
+    // 138, design 2: a tab and a workspace at the keys flume used before
+    // are the records of the server they name.
+    let server = TestServer::start("herdr-before");
+    let profile = server.profile();
+    let place = server.place("fix--one");
+    opened_in(
+        &server,
+        &profile,
+        &place,
+        &identity(1),
+        &server.command(&[]),
+    );
+    let records = server.scratch.path("records");
+    let socket = server.socket.display().to_string();
+    let moves = [
+        (
+            records.join("tabs").join(format!(
+                "{}.json",
+                digest(&format!("{}\n{socket}", place.location))
+            )),
+            records
+                .join("tabs")
+                .join(format!("{}.json", digest(&place.location))),
+        ),
+        (
+            records.join("workspaces").join(format!(
+                "{}.json",
+                digest(&format!("{socket}\n{}\n{}", place.repository, place.base))
+            )),
+            records.join("workspaces").join(format!(
+                "{}.json",
+                digest(&format!("{}\n{}", place.repository, place.base))
+            )),
+        ),
+    ];
+    for (now, before) in &moves {
+        fs::rename(now, before).unwrap_or_else(|error| panic!("{} moved: {error}", now.display()));
+    }
+    assert_eq!(
+        profile.tab(&place).map(|(_, socket)| socket),
+        Some(server.socket.clone()),
+        "the tab written before"
+    );
+    let tidy = profile.tidy(&place);
+    assert_eq!(
+        tidy.closed,
+        vec![
+            "the tab fix--one".to_string(),
+            "the workspace repository main".to_string()
+        ],
+        "{tidy:?}"
+    );
+    assert!(
+        !server.workspaces().contains(&"repository main".to_string()),
+        "the workspace stands"
+    );
+    for (_, before) in &moves {
+        assert!(!before.exists(), "{} is kept", before.display());
+    }
 }

@@ -336,3 +336,19 @@ fn the_herdr_terminal_keeps_no_watch_without_the_plugin() {
     // 119, 122, C.5: no lease, the plugin not installed or never started.
     assert_eq!(herdr_watch("watch-none", None), Watch::None);
 }
+
+#[test]
+fn flumes_own_kinds_declare_no_label() {
+    // 180: a label is the host's to give flume's own kinds, and none of
+    // them declares one.
+    use flume::profiles::kinds::weir::Weir;
+    let own = Weir.flumes_own();
+    assert!(!own.is_empty(), "flume holds no kind of its own");
+    for kind in own {
+        assert_eq!(
+            kind.label, None,
+            "{}@{} declares a label",
+            kind.name, kind.version
+        );
+    }
+}

@@ -33,7 +33,7 @@ tasks:
     options: {runFromWorkspaceRoot: true}
   tools:
     command: 'cargo test -p flume --features tools --test tools'
-    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/plugins/claude/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
+    inputs: ['/crates/flume/**/*', '/crates/flume-seams/**/*', '/crates/flume-core/**/*', '/crates/flume-fakes/**/*', '/crates/flume-conformance/**/*', '/plugins/claude/**/*', '/plugins/herdr/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-tools]
     options: {runFromWorkspaceRoot: true}
   live:
