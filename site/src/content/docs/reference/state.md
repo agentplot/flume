@@ -8,9 +8,10 @@ sidebar:
 flume keeps the live state of each place it runs on the host, as plain
 files, and nothing in any repository's content. A place's state goes
 when the place is tidied. Each spent account and each intent's
-affinity is a document of the host's own beside them. Everything else a reader needs, a stage's
-deliverable, a change's tasks, a submission's outcome, flume reads
-where it lives each time it is asked, and keeps no copy between asks.
+affinity is a document of the host's own beside them. Everything else
+a reader needs, a stage's deliverable, a change's tasks, a submission's
+outcome, an account's reading, flume reads where it lives each time it
+is asked, and keeps no copy between asks.
 
 ## On the host
 
@@ -61,7 +62,7 @@ flume process on the host reads them.
 | Document | What it holds |
 |---|---|
 | `accounts/<pool>/<account>.json` | the account spent: `until`, the time it is spent until; `words`, the usage limit's words; `recorded_at`, when flume recorded it. A later time already recorded stands. |
-| `intents/<digest>.json` | the intent's affinity: its `stream`; `accounts`, for each program its agents run, keyed by the program as an account's `program` names it, the `pool` and `account` the first of them on that program started on, as moved since; each move between accounts, with `on` `intent`, `program`, the program whose account moved, `from`, `to`, `why`, `spent` or `full`, and `at`; and `gone`, when its last place went. flume removes it on a read an hour after `gone`. |
+| `intents/<digest>.json` | the intent's affinity: its `stream`; `accounts`, for each program its agents run, keyed by the program as an account's `program` names it, the `pool` and `account` the first of them on that program started on, as moved since; each move between accounts, with `on` `intent`, `program`, the program whose account moved, `from`, `to`, `why`, `spent`, `threshold` or `full`, `at`, and, where `why` is `threshold`, `window` and `until`, the window that held the account and until when; and `gone`, when its last place went. flume removes it on a read an hour after `gone`. |
 
 `<digest>` is the SHA-256, in hex, of `name:<name>` for an intent the
 launch named, else of `base:<repository id>:<base>`.
@@ -100,8 +101,8 @@ lists each start whose agent began otherwise than its record says
 | `$XDG_CONFIG_HOME/flume/config.toml` | the host's configuration ([configuration](/flume/reference/configuration/#the-hosts-configuration)) |
 | `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>/` | the Claude Code plugin flume hands its agents, written once per version and binary |
 | `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>/` | a place, a worktree of its repository outside the repository's own directory; `<id>` is the repository's, as its agents' identities carry it |
-| `<place's git directory>/flume/toolchain.sh` | the environment the place's toolchain step printed, which later steps run under; it goes with the worktree |
-| `$XDG_STATE_HOME/herdr/plugins/agentplot.flume/` | the herdr plugin's lease, its last status and `watch.log`, one directory per herdr server |
+| the file an account's `usage` names | the account's reading, which something of the host's writes whole and flume reads at each choice of an account and whenever status is asked, and never writes, keeps or renews ([an account's reading](/flume/guides/agent-settings/#an-accounts-reading)) |
+| `$XDG_STATE_HOME/herdr/plugins/agentplot.flume/` | the herdr plugin's lease, its last status, `watch.log`, and `setup.json`, what herdr's configuration lacks for the plugin, one directory per herdr server |
 
 ## In the repository
 
@@ -163,11 +164,12 @@ Each place:
 | `stream` | the stream the place runs in, `name` and `from`: `launch`, `intent`, `host-repository-kind`, `host-repository`, `host-kind` or `default` |
 | `label` | the place's label as it would resolve at a start now, `name` and `from`: `host-repository-kind`, `host-kind` or `kind`; `null` where nothing gives one |
 | `intent` | the intent the place serves: `from` `launch` with its `name`, or `base` with its `repository` and `base`; and its `digest` |
-| `moves` | each move between accounts, of a stage (`on` `stage` with its `stage`) or of the intent (`on` `intent` with its `program`, the program whose account moved, none on a move an earlier release recorded): `from`, `to`, `why`, `at`, and `cache`, `lost`; and `carried`, whether a stage's conversation went with it, where its agent was spent |
+| `moves` | each move between accounts, of a stage (`on` `stage` with its `stage`) or of the intent (`on` `intent` with its `program`, the program whose account moved, none on a move an earlier release recorded): `from`, `to`, `why`, `spent`, `threshold` or `full`, `at`, and `cache`, `lost`; `window` and `until`, where `why` is `threshold`, the window that held the account and until when; and `carried`, whether a stage's conversation went with it, where its agent was spent |
 | `unsettled` | each start whose agent began without its settings: `stage`, `start`, `at`, the variables `missing` and `different` by name, `program`, whether the program differed, `session`, `true` where it came up in another session than the one its start resumes, and `mode`, where the mode did, with `asked` and `began` |
 | `uncarried` | each start that carried a spent agent's conversation and did not begin: `stage`, `start`, `at` and `words`, what happened; its stage started afresh after it |
 | `ends` | each end, with whom it was delivered to, when and by what, `notice`, `wait` or `inbox`, and whom it is pending for |
 | `clues` | the display hints: the stage, the state, the pane's title and name, and where herdr shows them |
+| `line` | the place's one line: `name`, `<kind>--<name>`; `kind`, `<kind>@<version>`; `stage`, the current stage with a repeating stage's group, as `code 1/2`; `run`, how many times that stage started; `tasks`, the change's tasks ticked at the head, as `2/5`; `state`, the place's state in words; `full`, the parts joined by ` · `; and `short`, `full` less `name` and `kind`, as the herdr sidebar shows it. `stage`, `run` and `tasks` are `null` where the place has none, and `full` and `short` leave them out. It is the line `flume status --line` gives, read from the place's held state, its change and its agent's own record alone ([the status line](/flume/guides/claude-code/#the-status-line) lists the states) |
 
 A stage's `state` is one of `not_reached`, `waiting_on_readiness`,
 `on_hold`, `waiting_for_room`, `starting`, `started`, `begun`, `delivered`,
@@ -181,14 +183,15 @@ The host:
 |---|---|
 | `running` | agents running on the host, every caller's |
 | `bound`, `room` | the host's bound, and how many more may start; `null` with no bound |
-| `queue` | the stages waiting for room, in the order they start, each with its stream, its `label`, its priority and the room it wants. That room, by `room`, is the host's, `host`; its stream's, `stream`, at its `bound`; its stream's past what other labels keep free, `kept-free`, naming those `labels`; or a usable account of its pool, `pool`. A stage whose pool holds no account of its program waits for none: it is refused ([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)). |
+| `queue` | the stages waiting for room, in the order they start, each with its stream, its `label`, its priority and the room it wants. That room, by `room`, is the host's, `host`; its stream's, `stream`, at its `bound`; its stream's past what other labels keep free, `kept-free`, naming those `labels`; or a usable account of its pool, `pool`, with `until`, the soonest time an account of the pool is neither spent nor past its threshold, `null` where each is only at its bound. A stage whose pool holds no account of its program waits for none: it is refused ([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)). |
 | `streams` | each stream: `name`, `session`, the herdr session its agents open in with `from`, `stream`, `stream-name` or `own`; `multiplexer` and `terminal_app`, each its `profile` and `from`, `stream`, `host` or `neither`; `view`, its `view`, `terminal` or `app`, and `from`; `title`, its `title` and `from`, `stream` or `stream-name`; `priority`, `running`, `bound`, `room` and `queue`, `bound` and `room` `null` where the stream has no bound of its own; `labels`, each with its `name`, `reserve`, `keep_free`, `running` and `waiting`; `reserves`, `held`, `passed-over` where the stream states no bound, or `none` where it gives no label a share; `refused`, why its labels, its multiplexer or its terminal app refuse it, `null` where none does; and `view_refused`, the terminal app's refusal alone, which refuses its `flume open` and none of its stages, left out where it holds none |
-| `pools` | each pool: `name`, `strategy` and `accounts`, each account's `name`, `program`, `running`, `bound` and `spent_until`, `null` where it is not spent |
+| `pools` | each pool: `name`, `strategy`, `threshold`, `90` where the pool states none, and `accounts`, each account's `name`, `program`, `running`, `bound` and `spent_until`, `null` where it is not spent; `reading`, where the account names a `usage`; and `past`, while it is past its threshold, `window`, the window that holds it, and `until`, when that window resets, or, for a window that names no reset, when its reading stops being fresh. A `reading` is `read_at`, when the host read the allowance, `fresh`, whether that was less than fifteen minutes ago, and `windows`, each with its `name`, `used`, the percentage the reading gives, `resets_at` where it gives one, and `past`, whether that window holds the account past its threshold now; or `unread`, why there is none, naming no path |
 | `watch` | the host's own multiplexer's watch, `{"bound":{"seconds":…}}`, or `none` with no herdr plugin running |
 | `terminals` | each multiplexer the host binds, the host's own first, then each stream's by the stream's name, each once: `profile`, `kept`, what a tidy kept there, and `watch`. Where any keeps no watch, every command of flume's that acts settles every place first |
 | `bases` | for each repository and base, its places running, asking, waiting on their caller and stalled, and the line shown in herdr |
 | `addresses` | each role's address with ends pending, and why its run was not woken |
 | `terminal_kept` | what a tidy kept in the host's own multiplexer because something flume did not make holds it |
+| `terminal_setup` | what the host's own multiplexer's configuration lacks for flume's plugin there, each in words a person acts on, naming the file read: under herdr, the popup's `[[keys.command]]` entry or the sidebar rows' `$flume`, as the plugin's watch last read herdr's configuration; empty where nothing is missing, there is no watch or the terminal reads none |
 | `configuration` | the host's configuration: `local`, its local layer's `state`, `no-file`, `taken` or `not-taken` with each of its `keys` the local layer may not set or its `fault`; `values`, every value by its dotted `key`, as TOML writes it, with its `layer`, `managed` or `local`, an account's variables `<set>`; and `passed_over`, each local `key` a `pin` holds |
 
 The JSON only ever gains fields, so a tool reading it keeps working

@@ -619,7 +619,9 @@ impl Engine {
             mode,
             resume,
         } = claim;
+        let folder = self.store.folder(id);
         let command = agent.command(
+            &folder,
             &settings,
             mode.as_deref(),
             resume.as_deref(),
@@ -629,7 +631,6 @@ impl Engine {
             &secret,
             &text,
         );
-        let folder = self.store.folder(id);
         let at = match (&settings.beside, opens_in) {
             (Some(pane), _) => OpenIn::Beside { pane: pane.clone() },
             (

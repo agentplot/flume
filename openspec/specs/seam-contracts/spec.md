@@ -75,10 +75,11 @@ terminal operation SHALL answer within a bound the profile states (98).
 
 The merge queue seam SHALL answer the revision the base stands at where
 its profile says the base lives, after that profile's fetch, or a
-refusal naming why (126; 9, core.7); the change seam where a change
-lies in a place, for a prompt's change part (127); and the store the
-place's own folder beside its held state, for a report kept there (128,
-123).
+refusal naming why, or that the merge queue lands no such base, which
+the core then reads at origin (126; 9, C.1, core.7); the change seam
+where a change lies in a place, for a prompt's change part (127); and
+the store the place's own folder beside its held state, for a report
+kept there (128, 123).
 
 #### Scenario: The base where the merge queue says it lives
 
@@ -89,6 +90,11 @@ place's own folder beside its held state, for a report kept there (128,
 
 - **WHEN** the fake merge queue refuses to give the base's revision, naming a failed fetch
 - **THEN** the launch is refused naming the fetch, and nothing is made
+
+#### Scenario: A base the merge queue lands not
+
+- **WHEN** the fake merge queue is asked for a base it lands nothing on
+- **THEN** it answers that it lands no such base, and the place's own base at a revision (126)
 
 ### Requirement: The place seam says where a place is made
 
@@ -373,3 +379,47 @@ kind or settings written before them SHALL read with none (107, 143,
 
 - **WHEN** a held state whose kind declares a label, whose launch's settings name a session, and whose live start holds its session and label, is written and read
 - **THEN** it reads back unchanged, and one written before reads with no label and no session (107, 180)
+
+### Requirement: The terminal seam gives what its configuration lacks for flume's plugin
+
+The terminal seam SHALL offer `setup`, what the terminal's own configuration lacks for flume's plugin there, each in words a person acts on, none by default, and the fake terminal SHALL script it (122).
+
+#### Scenario: A terminal with no plugin
+
+- **WHEN** a terminal profile that has no plugin, as the printed command, is asked its setup
+- **THEN** it gives none
+
+#### Scenario: The fake's scripted setup
+
+- **WHEN** the fake terminal is scripted with one missing entry and status is asked
+- **THEN** status gives that entry, and the fake recorded no open, send or close (57)
+
+### Requirement: The host gives an account's reading
+
+The host's facts SHALL give the reading in the file at a path, or why
+there is none, and the core SHALL ask it with the account's `usage`
+expanded against the login environment, a `$VAR` that environment lacks
+being no reading whose words name the variable (29, 184).
+
+#### Scenario: The fake host's reading
+
+- **WHEN** a test sets the fake host's reading for `work-1` and a refusal for `work-2`
+- **THEN** the core reads the reading for `work-1`, the refusal's words for `work-2`, and that the file is missing for `work-3` (184)
+
+### Requirement: The types of a reading and a move past a threshold
+
+The seams SHALL pass one type each for a reading and its windows, a
+pool's threshold, an account's `usage`, the strategy `most-left`, and a
+move whose `why` is `threshold` with its window and end; each SHALL
+serialize to JSON and back unchanged, and a move recorded before SHALL
+read with no window and no end (147, 184, 185; core.14).
+
+#### Scenario: A pool and a reading
+
+- **WHEN** a most-left pool with a threshold of 85 and an account naming `usage`, and a reading of two windows, one with no reset, are written and read
+- **THEN** each reads back unchanged, the strategy spelled `most-left` (184, 185)
+
+#### Scenario: A move past a threshold
+
+- **WHEN** an intent's move with `why` `threshold`, `window` `5-hour` and `until` 17:00 is written and read, and a move written before with neither
+- **THEN** the first reads back unchanged and the second with no window and no end (147, 185)

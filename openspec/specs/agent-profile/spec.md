@@ -23,7 +23,7 @@ and the prompt as its argument under the printed command (29, 32, 33,
 #### Scenario: The command for a code stage
 
 - **WHEN** the profile gives the command for a stage with a model and instructions under an account giving `CLAUDE_CONFIG_DIR`
-- **THEN** it runs `claude` with `--plugin-dir`, `--model` and `--append-system-prompt`, the account's `CLAUDE_CONFIG_DIR`, the four `FLUME_*` words, and nothing of the caller's session
+- **THEN** it runs `claude` with `--plugin-dir`, `--model` and `--append-system-prompt-file`, naming a file of the start's own beside its record that holds the instructions as given, newlines and all, so no argument holds a newline, the account's `CLAUDE_CONFIG_DIR`, the four `FLUME_*` words, and nothing of the caller's session
 
 ### Requirement: Readings from the agent's own record
 

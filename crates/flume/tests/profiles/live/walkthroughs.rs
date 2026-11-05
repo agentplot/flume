@@ -1,10 +1,11 @@
 //! The fix and change walkthroughs of the check-tools layer with the
 //! pinned Claude Code under herdr in place of the stand-in, a code stage
 //! waiting on its suite with its pane quiet (39, S3), a fix begun in
-//! the mode its host gives (162, S66), and a fix whose code agent stops
-//! at its account's usage limit going on in its own conversation under
-//! the pool's other account (S78). Each brief asks for what the
-//! stand-in's script acted; the kinds' own prompts say the rest.
+//! the mode its host gives (162, S66), a fix whose code agent stops at
+//! its account's usage limit going on in its own conversation under the
+//! pool's other account (S78), and a fix whose code agent's pane holds the
+//! place's line under its prompt (56, 60, C.4). Each brief asks for what
+//! the stand-in's script acted; the kinds' own prompts say the rest.
 
 use super::walk::{now, session_limit_after, stage};
 use super::Live;
@@ -13,6 +14,11 @@ use flume::profiles::terminal::herdr::herdr_name;
 use serde_json::{json, Value};
 use std::path::Path;
 use std::time::{Duration, Instant};
+
+/// A fix's brief whose agent, in its first turn, waits a minute in one
+/// foreground call on the repository's `step.sh`, since the pinned release
+/// refuses a bare `sleep` there, before it commits.
+const STEP_FIRST: &str = "Do this in two steps, in order. First run `sh step.sh` with the Bash tool in the foreground, never in the background: it takes about a minute, so wait for it to end. Only then create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.";
 
 /// The label of the workspace of the walkthrough's repository and main.
 fn workspace(live: &Live) -> String {
@@ -294,14 +300,7 @@ fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
     // what the brief asked, which its prompt does not hold, and the place
     // lands.
     let live = Live::sharing_projects("live-carry");
-    let place = live.walk.launch(
-        "fix",
-        "one",
-        &[
-            "--brief",
-            "Do this in two steps, in order. First run `sh step.sh` with the Bash tool in the foreground, never in the background: it takes about a minute, so wait for it to end. Only then create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
-        ],
-    );
+    let place = live.walk.launch("fix", "one", &["--brief", STEP_FIRST]);
     // Settled until code has begun, its prompt received: the launch sends
     // the prompt only where the agent said it started by the time herdr
     // read it ready, and a settle that read no started ack leaves it to
@@ -429,4 +428,65 @@ fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
             .any(|turn| turn.contains("Your last turn stopped at your account's usage limit")),
         "the carried prompt is not in the first's transcript: {turns:?}"
     );
+}
+
+/// The rows of a pane's screen beneath the last that holds the prompt's
+/// input, `❯`: what the agent program pins under its prompt.
+fn under_the_prompt(screen: &str) -> Vec<&str> {
+    let rows: Vec<&str> = screen.lines().collect();
+    rows.iter()
+        .rposition(|row| row.trim_start().starts_with('❯'))
+        .map(|at| rows[at + 1..].to_vec())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_fix_agents_pane_holds_its_place_line_under_the_prompt() {
+    // Design 4, 5; 56, 60, C.4: the fix's code agent, in its first turn,
+    // waits a minute in one foreground call on the repository's
+    // `step.sh`. While it works, its pane, read by herdr as the screen
+    // shows it, holds the place's line beneath the prompt's input, pinned
+    // there by flume's plugin's module from `flume hook status-line`,
+    // which the module runs at the session's start, after each tool call
+    // and every ten seconds. Then the agent commits and the place lands.
+    let live = Live::new("live-line");
+    let place = live.walk.launch("fix", "one", &["--brief", STEP_FIRST]);
+    live.until(&place, "its code stage begun", 5, |status| {
+        status["agent"]["started"] == "yes" && stage(status, "code")["state"] == "begun"
+    });
+    let start = live.live_start(&place);
+    let agent = live.herdr(&["agent", "get", &herdr_name(&start.identity)]);
+    let pane = agent["agent"]["pane_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("herdr lists no pane for the code agent: {agent}"))
+        .to_string();
+
+    let line = "fix--one · fix@1 · code · run 1 ·";
+    let began = Instant::now();
+    loop {
+        let screen = live.screen(&pane);
+        if under_the_prompt(&screen)
+            .iter()
+            .any(|row| row.contains(line))
+        {
+            break;
+        }
+        assert!(
+            began.elapsed() < Duration::from_secs(60),
+            "the code agent's pane holds no `{line}` under its prompt:\n{screen}"
+        );
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    // Read while code works on: its agent live, nothing delivered.
+    let status = live.walk.status(&place);
+    assert_eq!(status["current"], "code", "{status}");
+    assert_eq!(stage(&status, "code")["state"], "begun", "{status}");
+    assert!(!status["agent"].is_null(), "{status}");
+    live.until_landed(&place, 20);
+
+    let submissions = live.walk.submissions();
+    assert_eq!(submissions.len(), 1, "{submissions:?}");
+    assert_eq!(submissions[0]["state"], "landed", "{}", submissions[0]);
+    let parser = live.walk.on_remote("parser.rs").unwrap_or_default();
+    assert!(parser.contains("fn parse()"), "parser.rs: {parser:?}");
 }

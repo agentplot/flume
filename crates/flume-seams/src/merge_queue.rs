@@ -192,13 +192,15 @@ impl From<SubmissionRead> for ReadAcross {
     }
 }
 
-/// Where the base's current revision lives, or why it cannot be read (9,
-/// 126, core.7).
+/// Where the base's current revision lives, or why it cannot be read, or
+/// that the merge queue lands no such base, which the core then reads at
+/// origin (9, 126, C.1, core.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BaseRevision {
     At { revision: Revision },
     Refused { reason: String },
+    Unlanded,
 }
 
 /// The merge queue seam (B.6), bound once for each repository. The
@@ -223,7 +225,7 @@ pub trait MergeQueue: Send + Sync {
     /// drives it (125).
     fn step(&self, repository: &str, base: &str) -> Stepped;
 
-    /// Where `base`'s current revision lives, where work lands on it (9,
-    /// 126, core.7).
+    /// Where `base`'s current revision lives, where work lands on it, or
+    /// that the merge queue lands no such base (9, 126, core.7).
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision;
 }

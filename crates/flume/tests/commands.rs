@@ -38,11 +38,18 @@ const STAND_IN_QUEUE: &str = "stand-in-queue";
 /// words in it as a JSON list.
 const AS_FLUME: &str = "FLUME_TEST_AS_FLUME";
 
-/// The stand-in agent: it says it started and received its prompt at
-/// once, never asks or keeps own work, and reads its session ended once
-/// the test writes the mark `stand-in/<stage>-<start>` in the place's
-/// folder. It maps each mode to its own word and reads none back.
-struct StandInAgent;
+/// The stand-in agent's name that never says it started, as a program
+/// the printed command gives a person to run reads until it runs (35).
+const UNSTARTED: &str = "stand-in-unstarted";
+
+/// The stand-in agent: it says it started, where it is `stand-in`, and
+/// received its prompt at once, never asks or keeps own work, and reads
+/// its session ended once the test writes the mark
+/// `stand-in/<stage>-<start>` in the place's folder. It maps each mode to
+/// its own word and reads none back.
+struct StandInAgent {
+    says_started: bool,
+}
 
 fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
     Path::new(folder)
@@ -53,6 +60,7 @@ fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
 impl Agent for StandInAgent {
     fn command(
         &self,
+        _folder: &str,
         settings: &Settings,
         _mode: Option<&str>,
         _resume: Option<&str>,
@@ -79,7 +87,11 @@ impl Agent for StandInAgent {
         }
     }
     fn started(&self, _folder: &str, _agent: &Identity) -> Reading {
-        Reading::Yes
+        if self.says_started {
+            Reading::Yes
+        } else {
+            Reading::No
+        }
     }
     fn received(&self, _folder: &str, _agent: &Identity, _text: &str) -> Received {
         Received::Received {
@@ -216,7 +228,12 @@ impl Resolver for StandIn {
         }
     }
     fn agent(&self, program: &str) -> Option<Arc<dyn Agent>> {
-        (program == STAND_IN).then(|| Arc::new(StandInAgent) as Arc<dyn Agent>)
+        let says_started = match program {
+            STAND_IN => true,
+            UNSTARTED => false,
+            _ => return None,
+        };
+        Some(Arc::new(StandInAgent { says_started }))
     }
     fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>> {
         self.0.terminal(profile)
@@ -540,6 +557,179 @@ fn a_launch_naming_no_base_is_cut_from_the_remotes_default_branch() {
             "the place of {name} cut from the remote's main"
         );
     }
+}
+
+/// A clone of `source` through a bare remote beside it, the host's
+/// `origin`, and two commits pushed to that remote after the clone, so
+/// the clone's own `main`, which nothing on the host moves, lags it: the
+/// clone, and origin's `main` (S92).
+fn a_clone_lagging_origin(source: &Repository, label: &str) -> (Repository, String) {
+    let remote = source.bare_remote();
+    let clone = Repository::clone_of(&remote, Scratch::new(label));
+    for file in ["one.rs", "two.rs"] {
+        source.write(file, "landed on origin\n");
+        source.commit(file);
+    }
+    source.git(&["push", "--quiet", &remote.to_string_lossy(), "main"]);
+    assert_ne!(clone.head(), source.head(), "the clone's main is origin's");
+    (clone, source.head())
+}
+
+/// The commit a place's branch was cut at, the branch made by the launch.
+fn cut_at(place: &flume_core::PlaceStatus) -> String {
+    git(
+        Path::new(&place.place.0),
+        &["rev-parse", &format!("{}^{{commit}}", place.branch)],
+    )
+}
+
+#[test]
+fn a_base_no_merge_queue_lands_is_cut_from_origins_copy() {
+    // S92; 9, 56, 126, C.1: in a clone bound to no merge queue, whose own
+    // main lags origin's, a place is cut at origin's after flume's fetch,
+    // the clone's main left where it was; one on a branch origin lacks at
+    // the clone's own; and with origin out of reach, a launch is refused
+    // naming the fetch, nothing made. Status says where each base was
+    // read.
+    let host = Host::new("origin-base");
+    let source = repository("origin-base", None);
+    let (clone, origins) = a_clone_lagging_origin(&source, "origin-base-clone");
+    let own = clone.head();
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), origins, "the place cut at origin's main");
+    assert_eq!(place.base_from, Some(BaseFrom::Origin));
+    assert_eq!(clone.head(), own, "the clone's own main moved");
+    assert_eq!(
+        clone.git(&["rev-parse", "refs/remotes/origin/main"]),
+        origins,
+        "origin's main as the fetch left it"
+    );
+    let status = host.flume(&clone.dir, &["status", &place.place.0, "--json"], &[]);
+    assert_eq!(
+        status.json()["status"]["places"][0]["base_from"],
+        json!("origin")
+    );
+    let person = host.flume(&clone.dir, &["status", &place.place.0], &[]);
+    assert!(
+        person.text.contains("branch fix/one from main (at origin)"),
+        "{}",
+        person.text
+    );
+
+    clone.git(&["branch", "trial"]);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "two", "--base", "trial", "--kinds", &kinds,
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), own, "the place cut at the clone's own trial");
+    assert_eq!(place.base_from, Some(BaseFrom::OriginLacks));
+    let person = host.flume(&clone.dir, &["status", &place.place.0], &[]);
+    assert!(
+        person
+            .text
+            .contains("branch fix/two from trial (the host's own, origin holding none)"),
+        "{}",
+        person.text
+    );
+
+    let gone = clone.scratch.path("gone.git");
+    clone.git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
+    let refused = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "three", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(refused.code, 1, "{}", refused.text);
+    let reason = refused
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .expect("a refusal");
+    assert!(
+        reason.contains("fetch of main from origin failed"),
+        "{reason}"
+    );
+    assert!(
+        !Path::new(&host.place_of(&clone, "fix--three")).exists(),
+        "a place was made"
+    );
+    assert!(
+        clone.git(&["branch", "--list", "fix/three"]).is_empty(),
+        "a branch was made"
+    );
+}
+
+#[test]
+fn a_repository_with_no_origin_is_cut_from_its_own_base() {
+    // 9, 56, C.1: a repository with no remote is cut at its own main, and
+    // status says it has no origin.
+    let host = Host::new("no-origin");
+    let repository = repository("no-origin", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(cut_at(place), repository.head());
+    assert_eq!(place.base_from, Some(BaseFrom::NoOrigin));
+}
+
+#[test]
+fn a_base_the_merge_queue_lands_is_read_where_it_says() {
+    // 9, 126, C.1: bound to a merge queue that lands main, here at the
+    // clone's own, a place is cut where the merge queue says, origin's
+    // main past it never read, though the binding's read fetched it (C.2).
+    let host = Host::new("queue-base");
+    let source = repository("queue-base", Some(STAND_IN_QUEUE));
+    let (clone, origins) = a_clone_lagging_origin(&source, "queue-base-clone");
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &clone.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let answer = launched.answer();
+    let place = the_place(&answer);
+    assert_eq!(
+        cut_at(place),
+        clone.head(),
+        "the place cut where the queue says"
+    );
+    assert_ne!(cut_at(place), origins);
+    assert_eq!(place.base_from, Some(BaseFrom::MergeQueue));
+    assert_eq!(
+        clone.git(&["rev-parse", "refs/remotes/origin/main"]),
+        origins,
+        "origin's main as the binding's read fetched it"
+    );
 }
 
 #[test]
@@ -1448,6 +1638,61 @@ fn status_over_mcp() {
     assert_eq!(replies[4]["result"]["isError"], true);
     assert_eq!(replies[5]["error"]["code"], -32601);
     assert_eq!(files_under(&host.state()), before, "status over MCP wrote");
+}
+
+#[test]
+fn one_places_line_under_the_printed_command() {
+    // 57, 60, 61: `status --line` gives the place's line alone, its JSON
+    // the same line in `lines`, under the printed command, which keeps no
+    // watch, its code agent not yet said started; nothing is written, no
+    // agent started and nothing settled.
+    let host = Host::new("line");
+    let repository = repository("line", None);
+    let kinds = kinds_file(&host, false);
+    let program = format!("program={UNSTARTED}");
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--agent", &program,
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let before = held_of(&host, &place);
+    assert_eq!(before.state.stages[0].starts, 1, "the code stage started");
+    let files = files_under(&host.state());
+
+    let person = host.flume(&repository.dir, &["status", "fix--one", "--line"], &[]);
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert_eq!(person.text, "fix--one · fix@1 · code · run 1 · starting\n");
+    let json = host.flume(
+        &repository.dir,
+        &["status", "fix--one", "--line", "--json"],
+        &[],
+    );
+    assert_eq!(json.code, 0, "{}", json.text);
+    let Answer::Lines { lines } = json.answer() else {
+        panic!("the lines' answer: {}", json.text);
+    };
+    let full: Vec<&str> = lines.iter().map(|line| line.full.as_str()).collect();
+    assert_eq!(full, ["fix--one · fix@1 · code · run 1 · starting"]);
+    let every = host.flume(&repository.dir, &["status", "--line"], &[]);
+    assert_eq!(every.text, person.text);
+
+    let after = held_of(&host, &place);
+    assert_eq!(after.version, before.version, "the line settled");
+    assert_eq!(after.state.stages[0].starts, 1, "the line started an agent");
+    assert_eq!(files_under(&host.state()), files, "the line wrote");
+    let status = host.flume(&repository.dir, &["status", "fix--one"], &[]);
+    assert!(
+        status
+            .text
+            .contains("\n  fix--one · fix@1 · code · run 1 · starting\n"),
+        "{}",
+        status.text
+    );
 }
 
 /// The place's held state as the store holds it.

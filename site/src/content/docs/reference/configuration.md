@@ -129,7 +129,8 @@ A pool of accounts
 
 | Key | Values | Meaning |
 |---|---|---|
-| `strategy` | `"fill-first"`, `"least-busy"` | how an account is chosen: the first usable one in order, or the usable one running the fewest of flume's agents, equals in order. Required. |
+| `strategy` | `"fill-first"`, `"least-busy"`, `"most-left"` | how an account is chosen. `fill-first`: the first usable one in order. `least-busy`: the usable one running the fewest of flume's agents, equals in order. `most-left`: the usable one with the most of its allowance left by its reading ([an account's reading](/flume/guides/agent-settings/#an-accounts-reading)). Required. |
+| `threshold` | a whole number from 1 to 100 | the percentage of any window of an account's reading at which the account takes no new start until that window resets, under every strategy ([a threshold](/flume/guides/agent-settings/#a-threshold)). `90` where left out. |
 | `accounts` | a list of tables | the pool's accounts, in order, at least one |
 
 Each account:
@@ -140,10 +141,18 @@ Each account:
 | `program` | a string | the program it runs, such as `claude`; it takes only stages of that program, and a pool with no account of a stage's program refuses that stage | refused |
 | `env` | a table of strings | its agents' environment, over the login environment | no variable |
 | `agents` | a whole number above 0 | the bound on agents running under it at once | no bound of its own |
+| `usage` | a path | the file of its reading, written by something of the host's and read by flume, never written | no reading |
 
 In `env`, a leading `~` is your home and `$VAR` or `${VAR}` a variable
 of your login environment, read at each start. A variable the login
 environment lacks refuses that start, naming it and the account.
+
+`usage` reads `~` and `$VAR` the same way, at each choice of an account
+and whenever status is asked. A variable the login environment lacks
+leaves the account with no reading, and status names the variable; it
+refuses no start. A file that is missing or not in the reading's form
+is no reading either, and status says why. Status gives `usage` as
+`<set>`, never its path.
 
 ### `stream`
 
@@ -181,7 +190,9 @@ settings for the kind in every repository.
 
 flume refuses the file, naming the key, for:
 
-- a `strategy` other than `fill-first` and `least-busy`;
+- a `strategy` other than `fill-first`, `least-busy` and `most-left`;
+- a `threshold` that is not a whole number from 1 to 100;
+- a `usage` that is not a string, or is empty;
 - a stream's `pool` or `[host] pool` naming a pool no `[pools]` table
   declares;
 - a pool with no accounts, or two accounts of one name;

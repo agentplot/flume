@@ -2,10 +2,11 @@
 //! each seam's scenarios against its profile, on a server or a scratch
 //! repository each test makes, never the host's own (106, core.22,
 //! core.29), the usage-limit words the Claude Code profile reads, found
-//! in the pinned release's program, the walkthroughs, the built binary
-//! with the stand-in for Claude Code (design 18), and a stream's view
-//! opened through the binary under the pinned herdr (S90, S91). Built
-//! only with the `tools` feature.
+//! in the pinned release's program, a fresh clone's place equipped by the
+//! pinned sluice, the walkthroughs, the built binary with the stand-in
+//! for Claude Code (design 18), and a stream's view opened through the
+//! binary under the pinned herdr (S90, S91). Built only with the `tools`
+//! feature.
 
 #[path = "../../common/mod.rs"]
 mod common;
@@ -13,6 +14,7 @@ mod common;
 mod claude_words;
 mod merge_queue_sluice;
 mod open;
+mod place_git_worktree;
 mod stand_in;
 mod terminal_herdr;
 mod walk;

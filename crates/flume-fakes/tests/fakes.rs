@@ -288,6 +288,7 @@ fn the_agents_modes_are_scripted() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, mode: Option<&str>| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             mode,
             None,
@@ -385,6 +386,7 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             Some("all"),
             None,
@@ -518,6 +520,7 @@ fn the_agents_command_resumes_the_session_it_is_given() {
     let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
     let command = |who: &Identity, resume: Option<&str>| {
         agent.command(
+            "/state/fix--one",
             &Settings::default(),
             None,
             resume,
@@ -558,6 +561,7 @@ fn the_agents_word_names_the_session_it_resumes() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, resume: Option<&str>| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             None,
             resume,
@@ -609,6 +613,7 @@ fn a_carried_start_scripted_to_end_before_its_word() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, resume: Option<&str>| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             None,
             resume,
@@ -1352,11 +1357,13 @@ fn a_streams_pool_and_the_hosts() {
     );
     let pool = Pool {
         strategy: Strategy::FillFirst,
+        threshold: None,
         accounts: vec![Account {
             name: "work-1".into(),
             program: "agent".into(),
             env: BTreeMap::from([("AGENT_HOME".into(), "/scratch/work-1".into())]),
             agents: Some(4),
+            usage: None,
         }],
     };
     host.set_pool("work", Some(pool.clone()));

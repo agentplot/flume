@@ -1,7 +1,8 @@
 #!/bin/sh
-# shellcheck disable=SC1091,SC2154,SC2016 # common.sh, sourced, sets state, status and rows_jq; jq programs.
+# shellcheck disable=SC1091,SC2154,SC2016 # common.sh, sourced, sets state and status; jq programs.
 # The popup: every place in flight, drawn from the status the watch last
-# wrote, each row the sidebar's, and the keys that act on one: open
+# wrote, each its number and its line, the status line's words, with its
+# location beneath (56, 60; S14), and the keys that act on one: open
 # focuses its tab, tell, stop and retry each run one flume command, the
 # words or the force asked for first (53, 56, 60, 107; core.14). No key
 # sends to, opens or closes an agent's pane. Each key acts at once, as
@@ -26,10 +27,10 @@ draw() {
     n=$(count)
     [ "$sel" -le "$n" ] || sel=$n
     [ "$sel" -ge 1 ] || sel=1
-    jq -r --argjson sel "$sel" "$rows_jq"'
+    jq -r --argjson sel "$sel" '
       .status.places | to_entries[]
       | (if .key + 1 == $sel then "▶ " else "  " end) as $mark
-      | "\($mark)\(.key + 1)  \(.value.name)  \(.value | row)\n     \(.value.place)"' "$status"
+      | "\($mark)\(.key + 1)  \(.value.line.full // .value.name)\n     \(.value.place)"' "$status"
   fi
   echo
   echo "↑↓, j/k or a number to choose · o open · t tell · s stop · r retry · q close"

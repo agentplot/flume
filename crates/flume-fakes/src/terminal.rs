@@ -58,6 +58,9 @@ struct TerminalState {
     /// the fake's own answer where none.
     attaches_terminal: Option<Attached>,
     attaches_app: Option<Attached>,
+    /// What the terminal's configuration lacks for flume's plugin, as
+    /// scripted.
+    setup: Vec<String>,
 }
 
 /// What the next opens answer.
@@ -190,6 +193,7 @@ impl FakeTerminal {
                 notices: vec![],
                 attaches_terminal: None,
                 attaches_app: None,
+                setup: vec![],
             }),
             log: Log::default(),
         }
@@ -366,6 +370,12 @@ impl FakeTerminal {
 
     pub fn set_watch(&self, watch: Watch) {
         lock(&self.state).watch = watch;
+    }
+
+    /// What the terminal's configuration lacks for flume's plugin, each
+    /// in its words, until set otherwise (122).
+    pub fn set_setup(&self, setup: &[&str]) {
+        lock(&self.state).setup = setup.iter().map(|words| words.to_string()).collect();
     }
 
     /// The session the calling command runs in, as the terminal names it.
@@ -752,6 +762,12 @@ impl Terminal for FakeTerminal {
 
     fn watch(&self) -> Watch {
         lock(&self.state).watch
+    }
+
+    /// What was scripted, logged so a reading that asks none is seen to.
+    fn setup(&self) -> Vec<String> {
+        self.log.push("setup");
+        lock(&self.state).setup.clone()
     }
 
     fn session(&self) -> Option<String> {

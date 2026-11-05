@@ -1,10 +1,11 @@
-//! Launching (1 to 12, 19 to 23, 154): one place made and its first
-//! stage started, held or waiting, its kind named with its version or
-//! with none; or the launch refused whole, naming why.
+//! Launching (1 to 12, 19 to 23, 154): one place made, made ready at the
+//! revision its launch read, and its first stage started, held or
+//! waiting, its kind named with its version or with none; or the launch
+//! refused whole, naming why.
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, WaitingOn, Waits};
+use flume_core::{Act, Retry, WaitingOn, Waits};
 use flume_fakes::Log;
 use flume_seams::*;
 
@@ -29,6 +30,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "launch: readiness fails; a change's place waits, a fix's starts with the step in its prompt",
             cites: &["S16", "11", "12"],
             run: readiness_fails,
+        },
+        Scenario {
+            name: "launch: a retry of a first stage whose readiness failed readies the place at the revision its launch read, not the base's as it moved on",
+            cites: &["12", "20"],
+            run: a_retry_readies_at_the_launchs_revision,
+        },
+        Scenario {
+            name: "launch: each step of the merge queue's equipping is named in status as it passed, in order, and the first stage starts",
+            cites: &["S89", "12"],
+            run: each_step_named_as_it_passed,
         },
         Scenario {
             name: "launch: a kind no declaration holds is refused, nothing made",
@@ -79,6 +90,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "launch: a base whose revision cannot be read refuses the launch",
             cites: &["9", "2"],
             run: no_base_revision,
+        },
+        Scenario {
+            name: "launch: a base no merge queue lands is cut at origin's after flume's fetch, the host's own lagging it, bound to a merge queue or to none, and status says so",
+            cites: &["9", "56", "126"],
+            run: a_base_no_queue_lands,
+        },
+        Scenario {
+            name: "launch: a base origin lacks, or of a repository with no origin, is cut at the host's own, and status says which",
+            cites: &["9", "56", "126"],
+            run: a_base_origin_lacks,
+        },
+        Scenario {
+            name: "launch: a fetch of a base from origin that fails refuses the launch, nothing made",
+            cites: &["9", "2", "126"],
+            run: a_fetch_from_origin_fails,
         },
         Scenario {
             name: "launch: a change name the base or a live place holds refuses the launch",
@@ -193,6 +219,10 @@ fn a_fix_launched(_: &()) -> Outcome {
             revision: remote.clone(),
         },
     );
+    // origin's main, elsewhere again, is not read where the merge queue
+    // lands the base (126, C.1).
+    let origins = world.git.commit(REPOSITORY, "origin-main", &["origin.rs"]);
+    world.git.set_origin(REPOSITORY, "main", &origins);
     world.terminal.comes_up(AgentState::Unknown);
     let answer = world
         .engine
@@ -203,6 +233,16 @@ fn a_fix_launched(_: &()) -> Outcome {
         world.git.branch_head(REPOSITORY, "fix/one"),
         Some(remote),
         "the place's revision"
+    );
+    ensure_eq!(
+        place.base_from,
+        Some(BaseFrom::MergeQueue),
+        "where the base was read"
+    );
+    ensure_eq!(
+        world.history.log.count("origin_branch"),
+        0,
+        "origin asked where the merge queue lands the base"
     );
     ensure_eq!(world.place.log.count("ready"), 1, "readiness runs");
     ensure_eq!(
@@ -324,6 +364,75 @@ fn readiness_fails(_: &()) -> Outcome {
         "the fix's prompt lacks the step and its words: {prompt}"
     );
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    Ok(())
+}
+
+fn a_retry_readies_at_the_launchs_revision(_: &()) -> Outcome {
+    let world = World::new();
+    let launched_at = world
+        .git
+        .branch_head(REPOSITORY, "main")
+        .ok_or("main has no revision")?;
+    world
+        .place
+        .set_readiness(REPOSITORY, &[("toolchain", false, "offline")]);
+    let change = launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    ensure_eq!(
+        change.stages[0].state,
+        StageState::WaitingOnReadiness,
+        "construct at the launch"
+    );
+    let moved = world.git.commit(REPOSITORY, "main", &["moved.rs"]);
+    world
+        .place
+        .set_readiness(REPOSITORY, &[("toolchain", true, "installed")]);
+    let id = World::id("change", "plan");
+    if let Some(reason) = world
+        .engine
+        .retry(&id, Retry::Stage("construct".into()), None, false)
+        .refusal()
+    {
+        return Err(format!("the retry was refused: {reason}"));
+    }
+    let readied = world.place.log.of("ready");
+    ensure_eq!(readied.len(), 2, "readiness runs");
+    ensure!(
+        readied
+            .iter()
+            .all(|line| line.ends_with(&format!(" {launched_at}"))),
+        "the place was not readied at the launch's revision {launched_at}, main now {moved}: {readied:?}"
+    );
+    ensure!(
+        world
+            .stage_state(&id, "construct")
+            .is_some_and(StageState::running),
+        "construct did not start"
+    );
+    Ok(())
+}
+
+fn each_step_named_as_it_passed(_: &()) -> Outcome {
+    let world = World::new();
+    let equipped = [
+        ("toolchain", true, "activated"),
+        ("proto install", true, "installed moon 2.6.1"),
+        ("moon --version", true, "moon 2.6.1"),
+        ("moon setup", true, "set up"),
+    ];
+    world.place.set_readiness(REPOSITORY, &equipped);
+    let change = launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    let named: Vec<(&str, bool, &str)> = change
+        .readiness
+        .steps
+        .iter()
+        .map(|step| (step.step.as_str(), step.passed, step.words.as_str()))
+        .collect();
+    ensure_eq!(named, equipped.to_vec(), "the steps status names");
+    ensure!(
+        change.stages[0].state.running(),
+        "construct did not start: {:?}",
+        change.stages[0].state
+    );
     Ok(())
 }
 
@@ -554,6 +663,147 @@ fn no_base_revision(_: &()) -> Outcome {
     ensure!(
         reason.contains("fetch"),
         "the refusal names no fetch: {reason}"
+    );
+    nothing_made(&world)
+}
+
+/// The repository's main at a first commit, and origin's two commits past
+/// it, which the host's own main lacks (S92).
+fn origin_ahead(world: &World) -> Result<(Revision, Revision), String> {
+    let local = world.git.branch_head(REPOSITORY, "main").ok_or("main")?;
+    world.git.set_branch(REPOSITORY, "origin-main", &local);
+    world.git.commit(REPOSITORY, "origin-main", &["one.rs"]);
+    let origins = world.git.commit(REPOSITORY, "origin-main", &["two.rs"]);
+    world.git.set_origin(REPOSITORY, "main", &origins);
+    Ok((local, origins))
+}
+
+fn a_base_no_queue_lands(_: &()) -> Outcome {
+    // A merge queue bound that lands no such base.
+    let world = World::new();
+    let (local, origins) = origin_ahead(&world)?;
+    world
+        .queue
+        .set_base(REPOSITORY, "main", BaseRevision::Unlanded);
+    let place = launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure_eq!(
+        world.git.branch_head(REPOSITORY, "fix/one"),
+        Some(origins.clone()),
+        "the place's revision, under a merge queue that lands no main"
+    );
+    ensure_eq!(
+        place.base_from,
+        Some(BaseFrom::Origin),
+        "where the base was read"
+    );
+    ensure_eq!(
+        world.git.branch_head(REPOSITORY, "main"),
+        Some(local.clone()),
+        "the host's own main, moved"
+    );
+    let status = world.engine.status(Some(&World::id("fix", "one")));
+    let flume_core::Answer::Status { places, .. } = status else {
+        return Err(format!("status answered {status:?}"));
+    };
+    ensure_eq!(
+        places.first().and_then(|place| place.base_from),
+        Some(BaseFrom::Origin),
+        "where status says the base was read"
+    );
+    // No merge queue bound at all, a kind that does not land.
+    let world = World::new();
+    let (local, origins) = origin_ahead(&world)?;
+    world.kinds.set_binding(
+        REPOSITORY,
+        Binding {
+            place: Some("trees".into()),
+            change: None,
+            merge_queue: None,
+        },
+    );
+    world.kinds.set_kinds(
+        REPOSITORY,
+        vec![kind(
+            "tweak",
+            false,
+            vec![stage("code", Some(Deliverable::Commits), "{{brief}}")],
+        )],
+    );
+    let place = launched(&world.engine.launch(&launch("tweak", "one", Some("x"))))?;
+    ensure_eq!(
+        world.git.branch_head(REPOSITORY, "tweak/one"),
+        Some(origins),
+        "the place's revision, under no merge queue"
+    );
+    ensure_eq!(
+        place.base_from,
+        Some(BaseFrom::Origin),
+        "where the base was read"
+    );
+    ensure_eq!(
+        world.git.branch_head(REPOSITORY, "main"),
+        Some(local),
+        "the host's own main, moved"
+    );
+    ensure_eq!(world.queue.log.calls().len(), 0, "merge queue calls");
+    Ok(())
+}
+
+fn a_base_origin_lacks(_: &()) -> Outcome {
+    let world = World::new();
+    let main = world.git.branch_head(REPOSITORY, "main").ok_or("main")?;
+    world.git.set_branch(REPOSITORY, "trial", &main);
+    let trial = world.git.commit(REPOSITORY, "trial", &["trial.rs"]);
+    world.git.set_origin(REPOSITORY, "main", &main);
+    world
+        .queue
+        .set_base(REPOSITORY, "trial", BaseRevision::Unlanded);
+    let place = launched(&world.engine.launch(&Launch {
+        base: "trial".into(),
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    ensure_eq!(
+        world.git.branch_head(REPOSITORY, "fix/one"),
+        Some(trial),
+        "the place's revision, origin holding no trial"
+    );
+    ensure_eq!(
+        place.base_from,
+        Some(BaseFrom::OriginLacks),
+        "where the base was read"
+    );
+    let world = World::new();
+    let main = world.git.branch_head(REPOSITORY, "main").ok_or("main")?;
+    world
+        .queue
+        .set_base(REPOSITORY, "main", BaseRevision::Unlanded);
+    let place = launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure_eq!(
+        world.git.branch_head(REPOSITORY, "fix/one"),
+        Some(main),
+        "the place's revision, the repository having no origin"
+    );
+    ensure_eq!(
+        place.base_from,
+        Some(BaseFrom::NoOrigin),
+        "where the base was read"
+    );
+    Ok(())
+}
+
+fn a_fetch_from_origin_fails(_: &()) -> Outcome {
+    let world = World::new();
+    world
+        .queue
+        .set_base(REPOSITORY, "main", BaseRevision::Unlanded);
+    world.git.origin_fails(
+        REPOSITORY,
+        "the fetch of main from origin failed: unreachable",
+    );
+    let reason = refused(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    ensure!(
+        reason.contains("fetch") && reason.contains("main"),
+        "the refusal names not the fetch and the base: {reason}"
     );
     nothing_made(&world)
 }

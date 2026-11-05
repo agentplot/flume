@@ -9,10 +9,11 @@ layer: 'application'
 
 tasks:
   # herdr-plugin.toml as herdr reads it, every script it names present and
-  # parsing under sh, its version the cargo workspace's.
+  # parsing under sh, its version the cargo workspace's, its places action
+  # describing the key's entry, which the README gives as lib/common.sh's.
   manifest:
     command: 'sh tests/manifest.sh'
-    inputs: ['herdr-plugin.toml', 'bin/**/*', 'tests/manifest.sh', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['herdr-plugin.toml', 'README.md', 'bin/**/*', 'lib/**/*', 'tests/manifest.sh', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
   # shellcheck over every script, the stand-ins among them, by the pinned
   # shellcheck.
@@ -27,8 +28,9 @@ tasks:
     inputs: ['herdr-plugin.toml', 'bin/**/*', 'lib/**/*', 'tests/**/*', '/Cargo.toml', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-fast]
   # The plugin linked into the pinned herdr under a scratch configuration,
-  # herdr's list of plugins naming it.
+  # herdr's list of plugins naming it; the README's entry and rows passed
+  # by the pinned herdr's config check.
   install:
     command: 'sh tests/install.sh'
-    inputs: ['herdr-plugin.toml', 'bin/**/*', 'tests/install.sh', '/devenv.nix', '/devenv.lock', '/.prototools']
+    inputs: ['herdr-plugin.toml', 'README.md', 'bin/**/*', 'tests/install.sh', '/devenv.nix', '/devenv.lock', '/.prototools']
     tags: [check-tools]
