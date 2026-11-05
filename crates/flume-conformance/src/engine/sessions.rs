@@ -18,7 +18,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         Scenario {
             name: "sessions: two streams naming no session open their agents each in the session of its name, and the default stream's in the terminal's own, each start holding where it opened",
             cites: &["S82", "107", "143"],
-            run: each_stream_in_its_own_session,
+            run: s82_each_stream_in_its_own_session,
         },
         Scenario {
             name: "sessions: a stream that names its session opens its agents in it",
@@ -106,7 +106,7 @@ fn held_session(
     Ok(start.session.clone())
 }
 
-fn each_stream_in_its_own_session(_: &()) -> Outcome {
+fn s82_each_stream_in_its_own_session(_: &()) -> Outcome {
     let world = World::new();
     two_streams(&world);
     let work = fix_on(&world, Some("work"), "one")?;

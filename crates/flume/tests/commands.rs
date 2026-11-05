@@ -1801,7 +1801,7 @@ fn stream_of(status: &Value, name: &str) -> Value {
 }
 
 #[test]
-fn the_local_layer_through_the_binary() {
+fn s83_the_local_layer_through_the_binary() {
     // S83, C.7, core.45: the local layer's values over the managed
     // layer's, each given with its layer, an account's variable by name
     // and `<set>`; a local file setting a key it may not set taken not

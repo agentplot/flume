@@ -2643,7 +2643,7 @@ fn the_pinned_herdr_keeps_its_named_sessions_under_the_session_home() {
 }
 
 #[test]
-fn two_streams_sessions_under_herdr() {
+fn s82_two_streams_sessions_under_herdr() {
     // 107, S82: each fix's agent in the session the core names, each
     // session's server started headless, its workspace of the base
     // holding the fix's tab and its agent's pane.

@@ -15,7 +15,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         Scenario {
             name: "host layers: status gives each value with its layer, the local layer taken and a key passed over with its pin, and the next start finds room for the bound the layers give",
             cites: &["S83", "56", "70"],
-            run: both_layers_in_status,
+            run: s83_both_layers_in_status,
         },
         Scenario {
             name: "host layers: status gives a local layer not taken with each key it may not set, and every value from the managed layer",
@@ -64,7 +64,7 @@ fn fix_on_work(world: &World, name: &str) -> Result<PlaceId, String> {
     Ok(id)
 }
 
-fn both_layers_in_status(_: &()) -> Outcome {
+fn s83_both_layers_in_status(_: &()) -> Outcome {
     let world = World::new();
     let mut values = managed();
     values.push(value("streams.work.agents", "3", ConfigLayer::Local));

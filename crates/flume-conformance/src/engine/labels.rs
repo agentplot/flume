@@ -23,7 +23,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         Scenario {
             name: "labels: a place's label is the host's for its repository's kind, else for its kind, else its kind's own, each with where it came from",
             cites: &["S85", "180", "56"],
-            run: each_source_of_a_label,
+            run: s85_each_source_of_a_label,
         },
         Scenario {
             name: "labels: a label changed between starts leaves the start that ran under the label it started with and the next start under the new one",
@@ -233,7 +233,7 @@ fn held_label(
     Ok(start.label.clone())
 }
 
-fn each_source_of_a_label(_: &()) -> Outcome {
+fn s85_each_source_of_a_label(_: &()) -> Outcome {
     let world = World::new();
     world.git.init(SECOND, "main");
     world
