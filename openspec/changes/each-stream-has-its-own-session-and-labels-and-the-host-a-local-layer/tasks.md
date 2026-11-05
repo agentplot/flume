@@ -42,8 +42,8 @@ scratch environment `crates/flume/tests/common` gives.
 
 ## 5. Through the binary
 
-- [ ] 5.1 Add to `tests/commands.rs` S83 through the built binary over a scratch `XDG_CONFIG_HOME` (design 9). The managed `config.toml` gives `work` six agents. The local file gives it three and a priority of 30: `flume status --json` gives both from `local` and the pool from `managed`, and the person's form the two local values. The local file then also sets `[pools.work]`: no key of it is taken, and both forms name `pools.work`. Mended, with the managed layer pinning `"streams.work.agents"`: the priority is taken, the agents passed over, and the pin named. Add the host-configuration spec's scenario that flume writes neither file: a launch, its settles, status and its tidy leave both files' content and write time as they were (32, 56, C.7, S83; core.16, core.45). True when `sluice exec main -- moon run flume:test` passes with both.
-- [ ] 5.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test` passes.
+- [x] 5.1 Add to `tests/commands.rs` S83 through the built binary over a scratch `XDG_CONFIG_HOME` (design 9). The managed `config.toml` gives `work` six agents. The local file gives it three and a priority of 30: `flume status --json` gives both from `local` and the pool from `managed`, and the person's form the two local values. The local file then also sets `[pools.work]`: no key of it is taken, and both forms name `pools.work`. Mended, with the managed layer pinning `"streams.work.agents"`: the priority is taken, the agents passed over, and the pin named. Add the host-configuration spec's scenario that flume writes neither file: a launch, its settles, status and its tidy leave both files' content and write time as they were (32, 56, C.7, S83; core.16, core.45). True when `sluice exec main -- moon run flume:test` passes with both.
+- [x] 5.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test` passes.
 
 ## 6. The site
 
