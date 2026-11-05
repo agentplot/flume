@@ -103,11 +103,11 @@ profile binds (kit:specs.3, kit:testing.5).
 
 ### 1. The statement's clauses
 
-The user approves these before anything is built. They are written
-against agentplot/blueprints main at 4ec26f7, where the last clause is
-183 and the last scenario S85; 184, 185, S86, S87 and S88 are the next
-free. Each amendment is surgical: the sentence named is replaced, and
-the rest of the clause stands.
+The user approves these before anything is built. They are numbered
+184, 185 and S86 to S88, which agentplot/blueprints main leaves free
+between 183 and 186 and between S85 and S89. Each amendment is
+surgical: the sentence named is replaced, and the rest of the clause
+stands.
 
 **The vocabulary.**
 

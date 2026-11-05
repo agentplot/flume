@@ -11,7 +11,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the revision of agentplot/blueprints main that states 184, 185 and S86 to S88, or the later one the build read; Part A holds every clause it held before and 184 and 185; Part B holds what it held before; the scenarios run S1 to S88 as that revision holds them; and it names as unbuilt what it named before this change, and nothing of 184, 185 or S86 to S88
+- **THEN** it names the revision of agentplot/blueprints main that states 184, 185 and S86 to S88, or the later one the build read; Parts A and B hold every clause that revision states, 184 and 185 in Part A; the scenarios run from S1 to the last that revision holds; and it names as unbuilt what it named before this change and each clause of that revision another change has not yet built, by that change, and nothing of 184, 185 or S86 to S88
 
 ### Requirement: A clause cited by nothing fails the suite
 
@@ -28,4 +28,4 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and S1 to S88 but those named as unbuilt is cited, 184, 185 and S86 to S88 by this change's scenarios
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario of section 11 but those named as unbuilt is cited, 184, 185 and S86 to S88 by this change's scenarios
