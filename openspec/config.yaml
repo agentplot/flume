@@ -27,9 +27,8 @@ context: |
   Rules: flume's own are docs/architecture/ (core.md binds every change;
   an area page, when one exists, binds the paths its frontmatter names),
   with the decisions behind them in docs/adr/, one MADR record each
-  (adrs.toml), and what still waits on a decision in
-  docs/architecture/_open.md. Where docs/architecture/ and the narrative
-  docs disagree, docs/architecture/ wins. Where flume has no rule of its
+  (adrs.toml). Where docs/architecture/ and the narrative docs disagree,
+  docs/architecture/ wins. Where flume has no rule of its
   own, the kit standard binds as its code profile says (.config/kit.toml),
   cited as kit:<id> (kit:specs.3): its rules are docs/architecture/ in
   afterthought/kit-standard (local:

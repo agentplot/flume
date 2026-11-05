@@ -12,10 +12,8 @@ at a diff and say which rule it breaks. The narrative is the statement
 in agentplot/blueprints, `design/flume/requirements.md`; a rule names
 the clause it enforces and never restates it. The binding copy gives
 each rule's details: what it rules out, what it leaves open, and its
-sources. Where the code does not yet keep a rule,
-[docs/architecture/_open.md](https://github.com/agentplot/flume/blob/main/docs/architecture/_open.md)
-says so, and the [roadmap](/flume/roadmap/) names what is decided and
-not yet built.
+sources. The [roadmap](/flume/roadmap/) names what is decided and not
+yet built.
 
 <!-- The rules below are the binding copy's words, mirrored as written. -->
 <!-- vale off -->
