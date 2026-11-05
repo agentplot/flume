@@ -46,7 +46,7 @@ or the fake.
 
 ## 5. The walkthrough
 
-- [ ] 5.1 Add to `crates/flume/tests/profiles/tools/walkthroughs.rs` design 11's walkthrough under the printed command: a most-left pool of two of the stand-in's accounts, each `usage` a scratch file written whole by the test; a fix starting on the account whose reading leaves more; its reading then written past ninety percent and a second fix starting on the other; and `flume status --json` giving both readings and the first account past its threshold, with no path (145, 184, 185). True when `sluice exec main -- moon run flume:tools` passes with it, and every existing walkthrough passes unchanged.
+- [x] 5.1 Add to `crates/flume/tests/profiles/tools/walkthroughs.rs` design 11's walkthrough under the printed command: a most-left pool of two of the stand-in's accounts, each `usage` a scratch file written whole by the test; a fix starting on the account whose reading leaves more; its reading then written past ninety percent and a second fix starting on the other; and `flume status --json` giving both readings and the first account past its threshold, with no path (145, 184, 185). True when `sluice exec main -- moon run flume:tools` passes with it, and every existing walkthrough passes unchanged.
 - [ ] 5.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test flume:tools` passes.
 
 ## 6. The site

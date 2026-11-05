@@ -630,10 +630,16 @@ accepted on their words, and group 1 of the tasks amends the rule:
   account past its threshold, and a move off one.
 - `crates/flume/tests/profiles/tools/walkthroughs.rs`: under the
   printed command, a most-left pool of two of the stand-in's accounts,
-  each `usage` a scratch file written whole. A fix starts on the
-  account whose reading leaves more. Its reading is then written past
-  ninety percent, and a second fix starts on the other. `flume status
-  --json` gives both readings and the first account past its threshold.
+  each `usage` a scratch file written whole, named by `~` under the
+  walk's home, the second in the pool's order leaving more. A fix starts
+  on the account whose reading leaves more. Its reading is then written
+  past ninety percent, and a second fix of the same intent starts on the
+  other: the intent's affinity would keep it on the first account but
+  for its threshold, so the intent's move gives `why` `threshold` with
+  the window and its reset. `flume status --json` and the person's form
+  give the pool's threshold, both readings and the first account past
+  its threshold, with no reading's path. The fix running on the account
+  past its threshold lands under it, and neither reading is written.
 
 ### 12. The site
 

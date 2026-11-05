@@ -155,8 +155,6 @@ impl Walk {
     }
 
     /// The walkthrough's home.
-    // The check-live layer's, which the tools layer does not use.
-    #[allow(dead_code)]
     pub fn home(&self) -> &Path {
         &self.home
     }
