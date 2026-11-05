@@ -121,11 +121,34 @@ pub(crate) fn past(usage: &Usage, threshold: u32, now: Seconds) -> Option<Past> 
         })
 }
 
+/// What the account whose reading is `usage` has left at `now`, in
+/// hundredths of a percent: 10000 less the most use now of its windows,
+/// for a fresh reading with a window; none otherwise (145, 184).
+pub(crate) fn left(usage: &Usage, now: Seconds) -> Option<u32> {
+    if !fresh(usage, now) {
+        return None;
+    }
+    usage
+        .windows
+        .iter()
+        .map(|window| used_now(window, now))
+        .max()
+        .map(|most| 10_000u32.saturating_sub(most))
+}
+
 impl AccountRoom {
     /// What holds it past its threshold, none where nothing does (185).
     pub fn past(&self) -> Option<Past> {
         match &self.reading {
             Reading::Read(usage) => past(usage, self.threshold, self.now),
+            Reading::None | Reading::Unread(_) => None,
+        }
+    }
+
+    /// What it has left by a fresh reading, none where it has none (184).
+    pub fn left(&self) -> Option<u32> {
+        match &self.reading {
+            Reading::Read(usage) => left(usage, self.now),
             Reading::None | Reading::Unread(_) => None,
         }
     }
@@ -205,16 +228,29 @@ impl PoolRoom {
     }
 
     /// The account the strategy chooses for a start of `program`: under
-    /// fill-first the first usable in order, under least-busy the usable
-    /// one with fewest of flume's agents, equals in order; under most-left,
-    /// with no account's reading read, as least-busy (145, 184).
+    /// fill-first the first usable in order; under least-busy the usable
+    /// one with fewest of flume's agents, equals in order; under most-left
+    /// the usable one with the most left by a fresh reading, then each with
+    /// no fresh reading, equals in either by fewest of flume's agents and
+    /// then in order, so that with no fresh reading anywhere it chooses as
+    /// least-busy does (145, 184).
     pub fn strategy(&self, program: &str) -> Option<&AccountRoom> {
         let mut usable = self.accounts.iter().filter(|room| room.usable(program));
         match self.strategy {
             Strategy::FillFirst => usable.next(),
-            Strategy::LeastBusy | Strategy::MostLeft => {
+            Strategy::LeastBusy => {
                 usable.fold(None, |least: Option<&AccountRoom>, room| match least {
                     Some(least) if least.running <= room.running => Some(least),
+                    _ => Some(room),
+                })
+            }
+            Strategy::MostLeft => {
+                let rank = |room: &AccountRoom| {
+                    let left = room.left();
+                    (left.is_some(), left, std::cmp::Reverse(room.running))
+                };
+                usable.fold(None, |most: Option<&AccountRoom>, room| match most {
+                    Some(most) if rank(most) >= rank(room) => Some(most),
                     _ => Some(room),
                 })
             }
@@ -689,6 +725,24 @@ mod tests {
                 until: NOW + 3 * 24 * 3600
             })
         );
+    }
+
+    #[test]
+    fn what_a_fresh_reading_leaves() {
+        let read = |read_at| {
+            usage(
+                read_at,
+                vec![
+                    window("5-hour", 4_000, Some(NOW + 3600)),
+                    window("7-day", 8_000, Some(NOW + 3 * 24 * 3600)),
+                ],
+            )
+        };
+        assert_eq!(left(&read(NOW - 120), NOW), Some(2_000), "20 left");
+        assert_eq!(left(&read(NOW - 20 * 60), NOW), None, "stale");
+        assert_eq!(left(&usage(NOW, vec![]), NOW), None, "no window");
+        let reset = usage(NOW, vec![window("5-hour", 9_000, Some(NOW))]);
+        assert_eq!(left(&reset, NOW), Some(10_000), "a window reset");
     }
 
     fn room(spent_until: Option<Seconds>, reading: Reading, agents: Option<u32>) -> AccountRoom {

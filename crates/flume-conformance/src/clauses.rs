@@ -133,7 +133,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain((76..=77).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
-    let most_left = std::iter::once(("S86".to_string(), MOST_LEFT));
     let readiness = std::iter::once(("S89".to_string(), READINESS));
     let multiplexer = (186..=190)
         .map(|clause| clause.to_string())
@@ -146,7 +145,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(profiles)
         .chain(statechart)
         .chain(mcp_servers)
-        .chain(most_left)
         .chain(readiness)
         .chain(multiplexer)
         .collect()
@@ -195,16 +193,13 @@ mod tests {
     fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0035_0036_and_0037s_and_183(
     ) {
         let unbuilt = unbuilt();
-        assert_eq!(
-            unbuilt.len(),
-            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 1 + 1 + 7
-        );
+        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 1 + 7);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
-            "S84", "S85", "184", "185", "S87", "S88",
+            "S84", "S85", "184", "185", "S86", "S87", "S88",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
@@ -212,7 +207,6 @@ mod tests {
             );
         }
         for (clause, change) in [
-            ("S86", MOST_LEFT),
             ("S89", READINESS),
             ("186", MULTIPLEXER),
             ("190", MULTIPLEXER),

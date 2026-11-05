@@ -213,6 +213,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["146", "153", "185"],
             run: a_reading_at_its_limit,
         },
+        Scenario {
+            name: "account pools: a most-left pool's account reading 40% and 80% used two minutes ago has 20 left, taking a start before one with 19 left and after one with 21",
+            cites: &["184", "145"],
+            run: a_fresh_reading,
+        },
+        Scenario {
+            name: "account pools: a most-left pool ranks an account whose reading is twenty minutes old with the accounts that have no reading, after every account with a fresh one",
+            cites: &["184", "145"],
+            run: a_stale_reading,
+        },
+        Scenario {
+            name: "account pools: four places of four intents on a most-left pool start on the account with most left, twice while its reading stands, then on the one fresh reading once that one's is twenty minutes old, then on the account with no reading running fewest once the fresh one is spent",
+            cites: &["S86", "145", "147", "184"],
+            run: s86_four_places_of_four_intents,
+        },
+        Scenario {
+            name: "account pools: a most-left pool whose accounts give no reading chooses as least-busy does",
+            cites: &["145", "S54"],
+            run: most_left_with_no_reading_anywhere,
+        },
+        Scenario {
+            name: "account pools: an intent's next start on a most-left pool stays on its affinity's account while it is usable, though another's reading leaves more",
+            cites: &["147", "145"],
+            run: most_left_after_the_affinity,
+        },
     ]
 }
 
@@ -2379,6 +2404,180 @@ fn a_reading_at_its_limit(_: &()) -> Outcome {
         spent_until(&world, "work", "work-1"),
         None,
         "work-1's spent time"
+    );
+    Ok(())
+}
+
+/// The window of a reading leaving `left` hundredths, resetting an hour
+/// after `now`.
+fn leaving(now: Seconds, left: u32) -> Vec<Window> {
+    vec![window("5-hour", 10_000 - left, Some(now + 3600))]
+}
+
+fn a_fresh_reading(_: &()) -> Outcome {
+    for (other, expected) in [(1_900, "work-1"), (2_100, "work-2")] {
+        let world = World::new();
+        let now = world.host.now();
+        read_pool(&world, Strategy::MostLeft, &["work-2", "work-1"]);
+        reads(
+            &world,
+            "work-1",
+            now - 120,
+            vec![
+                window("5-hour", 4_000, Some(now + 3600)),
+                window("7-day", 8_000, Some(now + 3 * 24 * 3600)),
+            ],
+        );
+        reads(&world, "work-2", now - 120, leaving(now, other));
+        let id = fix_in(&world, None, "one")?;
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", expected),
+            format!("the start, work-2 leaving {other} hundredths")
+        );
+    }
+    Ok(())
+}
+
+fn a_stale_reading(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    pool_at(
+        &world,
+        "work",
+        Strategy::MostLeft,
+        None,
+        vec![
+            reading_at(account("work-1", None)),
+            reading_at(account("work-2", None)),
+            reading_at(account("work-3", Some(1))),
+        ],
+    );
+    reads(&world, "work-1", now - 20 * 60, leaving(now, 9_000));
+    reads(&world, "work-3", now - 120, leaving(now, 1_500));
+    for (name, expected) in [("one", "work-3"), ("two", "work-1"), ("three", "work-2")] {
+        let id = fix_in(&world, None, name)?;
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", expected),
+            format!("{name}'s account")
+        );
+    }
+    Ok(())
+}
+
+fn s86_four_places_of_four_intents(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    pool_at(
+        &world,
+        "work",
+        Strategy::MostLeft,
+        None,
+        vec![
+            reading_at(account("work-1", None)),
+            reading_at(account("work-2", None)),
+            account("work-3", None),
+        ],
+    );
+    let work_1 = |read_at| {
+        reads(
+            &world,
+            "work-1",
+            read_at,
+            vec![
+                window("5-hour", 4_000, Some(now + 5 * 3600)),
+                window("7-day", 8_000, Some(now + 3 * 24 * 3600)),
+            ],
+        );
+    };
+    work_1(now - 120);
+    reads(
+        &world,
+        "work-2",
+        now - 120,
+        vec![
+            window("5-hour", 6_000, Some(now + 5 * 3600)),
+            window("7-day", 3_000, Some(now + 3 * 24 * 3600)),
+        ],
+    );
+    let first = fix_in(&world, None, "one")?;
+    let second = fix_in(&world, None, "two")?;
+    for (id, name) in [(&first, "the first"), (&second, "the second")] {
+        ensure_eq!(
+            chosen(&world, id, "code"),
+            by("work-2", AccountFrom::Strategy),
+            format!("{name} place's account")
+        );
+    }
+    world.host.advance(18 * 60);
+    work_1(world.host.now());
+    let third = fix_in(&world, None, "three")?;
+    ensure_eq!(
+        account_of(&world, &third, "code"),
+        on("work", "work-1"),
+        "the third, work-2's reading twenty minutes old"
+    );
+    spent(&world, "work", "work-1", world.host.now() + 3600);
+    let fourth = fix_in(&world, None, "four")?;
+    ensure_eq!(
+        account_of(&world, &fourth, "code"),
+        on("work", "work-3"),
+        "the fourth, work-1 spent"
+    );
+    for id in [&first, &second, &third, &fourth] {
+        ensure_eq!(
+            world.held(id).map(|held| held.moves),
+            Some(vec![]),
+            format!("{id}'s moves")
+        );
+    }
+    Ok(())
+}
+
+fn most_left_with_no_reading_anywhere(_: &()) -> Outcome {
+    let world = World::new();
+    read_pool(&world, Strategy::MostLeft, &["work-1", "work-2"]);
+    for (name, expected) in [("one", "work-1"), ("two", "work-2"), ("three", "work-1")] {
+        let id = fix_in(&world, None, name)?;
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", expected),
+            format!("{name}'s account")
+        );
+    }
+    Ok(())
+}
+
+fn most_left_after_the_affinity(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    read_pool(&world, Strategy::MostLeft, &["work-1", "work-2"]);
+    reads(&world, "work-1", now, leaving(now, 9_000));
+    reads(&world, "work-2", now, leaving(now, 5_000));
+    let first = fix_of(&world, None, "a", Some("the-surfaces"))?;
+    ensure_eq!(
+        chosen(&world, &first, "code"),
+        by("work-1", AccountFrom::Strategy),
+        "the intent's first start"
+    );
+    reads(&world, "work-2", now, leaving(now, 9_500));
+    let next = fix_of(&world, None, "b", Some("the-surfaces"))?;
+    ensure_eq!(
+        chosen(&world, &next, "code"),
+        by("work-1", AccountFrom::Affinity),
+        "the intent's next start, work-2 leaving more"
+    );
+    ensure_eq!(
+        world.held(&next).map(|held| held.moves),
+        Some(vec![]),
+        "the next start's moves"
+    );
+    let other = fix_in(&world, None, "c")?;
+    ensure_eq!(
+        account_of(&world, &other, "code"),
+        on("work", "work-2"),
+        "a place of another intent"
     );
     Ok(())
 }
