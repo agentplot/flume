@@ -5,8 +5,10 @@
 //! the host's configuration states, the role runs, streams and pools it
 //! names, the sources of kinds it declares and its lock of kinds beside
 //! them, the recipient the calling command's environment names, the host
-//! user's login environment, and the room lock at
-//! `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75, 155, 191; design 6, 10). No tool is named here (core.1).
+//! user's login environment, the room lock at
+//! `$XDG_STATE_HOME/flume/room.lock`, and the lock `flume kinds lock`
+//! holds while it writes a lock of kinds, at
+//! `$XDG_STATE_HOME/flume/kinds-lock.lock` (41, 70, 75, 155, 191; design 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
@@ -89,6 +91,30 @@ impl RealHost {
     pub fn room_lock(&self) -> PathBuf {
         self.state.join("room.lock")
     }
+}
+
+/// The file of the advisory lock `flume kinds lock` holds, under flume's
+/// state directory (155; design 6).
+pub const WRITING_KINDS_LOCK: &str = "kinds-lock.lock";
+
+/// The advisory lock `flume kinds lock` holds while it reads and writes a
+/// lock of kinds, the host's or a working copy's, so two writers on the
+/// host never lose each other's entry; it lies under flume's state
+/// directory, so nothing but the lock is written in a working copy, and
+/// is held while the file lives (74, 155; design 6; core.16, core.17).
+pub fn writing_kinds_lock() -> Result<File, String> {
+    let path = config::flume_state()?.join(WRITING_KINDS_LOCK);
+    path.parent()
+        .map_or(Ok(()), fs::create_dir_all)
+        .and_then(|()| {
+            OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(&path)
+        })
+        .and_then(|file| file.lock().map(|()| file))
+        .map_err(|error| format!("the lock {} cannot be taken: {error}", path.display()))
 }
 
 /// The host user's login environment: what their login shell sets,

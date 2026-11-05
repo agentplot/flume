@@ -96,7 +96,7 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 6. The command line
 
-- [ ] 6.1 Have `flume launch --kind` and a role's `kind` pass the text whole. Add `flume kinds lock [--host] [--remove] [--hash <hash>] <identity>…` to `commands/mod.rs`, answering through the core in the JSON and person's forms. Without `--host` it writes the lock of the working copy it runs in. It holds an advisory lock kept under flume's state directory while it reads and writes the lock, and leaves nothing else in the working copy (design 6; 74, 155; core.14, core.16, core.17). True when `sluice exec main -- moon run flume:test` passes with `crates/flume/tests/commands.rs` holding, through the binary over a scratch repository and a scratch host:
+- [x] 6.1 Have `flume launch --kind` and a role's `kind` pass the text whole. Add `flume kinds lock [--host] [--remove] [--hash <hash>] <identity>…` to `commands/mod.rs`, answering through the core in the JSON and person's forms. Without `--host` it writes the lock of the working copy it runs in. It holds an advisory lock kept under flume's state directory while it reads and writes the lock, and leaves nothing else in the working copy (design 6; 74, 155; core.14, core.16, core.17). True when `sluice exec main -- moon run flume:test` passes with `crates/flume/tests/commands.rs` holding, through the binary over a scratch repository and a scratch host:
   - the kind-sources spec's five scenarios of *flume kinds lock records a kind's content*, the two writers run as two processes at once;
   - its *Unlocked, then locked by the repository*;
   - its *A lock that cannot be read*;

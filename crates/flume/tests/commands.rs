@@ -16,6 +16,7 @@ mod common;
 use common::{git, Container, Repository, Scratch};
 use flume::commands;
 use flume::host::config::{self, HostConfig};
+use flume::profiles::kinds::weir::{Weir, LOCK};
 use flume::profiles::place::git_worktree;
 use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::{core_over, core_with, BuiltIn};
@@ -1679,4 +1680,590 @@ fn a_wake_of_a_roles_address() {
         0,
     );
     assert_eq!(inbox["inbox"]["recipient"], "madswan/planner", "{inbox}");
+}
+
+/// The directory the host's source `source` holds its packages in, a
+/// scratch directory of the host's own.
+fn kinds_dir_of(host: &Host, source: &str) -> PathBuf {
+    host.scratch.path(&format!("packages/{source}"))
+}
+
+/// The host's sources directory, beside its configuration (191, C.7).
+fn sources_of(host: &Host) -> PathBuf {
+    host.scratch.path("config/flume/sources")
+}
+
+/// The host's lock of kinds, beside its configuration (155, C.7).
+fn host_lock(host: &Host) -> PathBuf {
+    host.scratch.path("config/flume/flume.lock")
+}
+
+/// Declares the host's source `source` by its file, `kinds_dir` its
+/// directory (191, C.7).
+fn declare_source(host: &Host, source: &str, kinds_dir: &Path) {
+    std::fs::create_dir_all(sources_of(host)).expect("the sources directory");
+    std::fs::write(
+        sources_of(host).join(format!("{source}.toml")),
+        format!("kinds_dir = \"{}\"\n", kinds_dir.display()),
+    )
+    .expect("the source's file");
+}
+
+/// Writes the package `<name>@<version>` in `kinds_dir`: a one-stage
+/// kind whose agent is the stand-in and whose deliverable commits, its
+/// prompt saying `says`; it lands where `lands` (157, 159).
+fn write_package(kinds_dir: &Path, name: &str, version: u32, lands: bool, says: &str) {
+    let dir = kinds_dir.join(format!("{name}@{version}"));
+    std::fs::create_dir_all(dir.join("prompts")).expect("the package's directory");
+    std::fs::write(
+        dir.join("kind.toml"),
+        format!(
+            "[kinds.{name}]\nversion = {version}\nbranch = \"{name}\"\nstarts_unready = false\nlands = {lands}\n\n\
+             [[kinds.{name}.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+             deliverables = [\"commits\"]\nagents = [{{ program = \"{STAND_IN}\" }}]\n"
+        ),
+    )
+    .expect("the package's declaration");
+    std::fs::write(
+        dir.join("prompts/code.md"),
+        format!("{says} {{{{name}}}} in {{{{place}}}}. To stop short: {{{{needs}}}}\n"),
+    )
+    .expect("the package's prompt");
+}
+
+/// The hash of the package `<name>@<version>` of `source` in `kinds_dir`,
+/// as the kinds profile reads it (156).
+fn hash_of(source: &str, kinds_dir: &Path, name: &str, version: u32) -> String {
+    match Weir.read_package(source, &kinds_dir.to_string_lossy(), name, version) {
+        PackageRead::Read { package } => package.hash,
+        PackageRead::CouldNotRead { reason } => panic!("{name}@{version} not read: {reason}"),
+    }
+}
+
+/// The hash flume carries for its own `<name>@<version>` (156).
+fn own_hash(name: &str, version: u32) -> String {
+    Weir.flumes_own()
+        .into_iter()
+        .find(|own| own.identity.name == name && own.identity.version == version)
+        .map(|own| own.hash)
+        .unwrap_or_else(|| panic!("flume holds no {name}@{version}"))
+}
+
+/// Each entry of the lock at `path`, `(identity, hash)`, as the kinds
+/// profile reads it; none where there is no lock.
+fn lock_at(path: &Path) -> Vec<(String, String)> {
+    match Weir.read_lock_file(&path.to_string_lossy()) {
+        LockRead::None => vec![],
+        LockRead::Read { entries } => entries
+            .into_iter()
+            .map(|entry| (entry.kind.spelled, entry.hash))
+            .collect(),
+        LockRead::CouldNotRead { reason } => panic!("{} not read: {reason}", path.display()),
+    }
+}
+
+/// The lock's bytes, none where there is no lock.
+fn bytes_of(path: &Path) -> Option<Vec<u8>> {
+    std::fs::read(path).ok()
+}
+
+/// The reason of a refusal's JSON.
+fn reason_of(ran: &Ran) -> String {
+    let refused = answered(ran, 1);
+    refused["refused"]["refusal"]["reason"]
+        .as_str()
+        .unwrap_or_else(|| panic!("a refusal: {refused}"))
+        .to_string()
+}
+
+/// A host whose source acme holds `review@1` and `lint@1`, with the
+/// repository it runs in.
+fn acme_host(label: &str) -> (Host, PathBuf) {
+    let host = Host::new(label);
+    let acme = kinds_dir_of(&host, "acme");
+    write_package(&acme, "review", 1, false, "Review");
+    write_package(&acme, "lint", 1, false, "Lint");
+    declare_source(&host, "acme", &acme);
+    (host, acme)
+}
+
+#[test]
+fn kinds_lock_writes_the_hosts_lock() {
+    // 155, C.2: `flume kinds lock --host` on a host with no lock records
+    // a host's source's kind and flume's own, each at its content's
+    // hash, and answers the lock's file and each entry, in the JSON form
+    // and the person's.
+    let (host, acme) = acme_host("lock-host");
+    let repository = repository("lock-host", None);
+    let ran = host.flume(
+        &repository.dir,
+        &[
+            "kinds",
+            "lock",
+            "--host",
+            "acme/review@1",
+            "flume/change@1",
+            "--json",
+        ],
+        &[],
+    );
+    let locked = answered(&ran, 0);
+    let review = hash_of("acme", &acme, "review", 1);
+    let change = own_hash("change", 1);
+    let lock = host_lock(&host);
+    assert_eq!(
+        locked,
+        serde_json::json!({"locked": {
+            "lock_file": lock.to_string_lossy(),
+            "recorded": [
+                {"kind": "acme/review@1", "hash": review},
+                {"kind": "flume/change@1", "hash": change},
+            ],
+            "removed": [],
+        }})
+    );
+    let mut recorded = vec![
+        ("acme/review@1".to_string(), review.clone()),
+        ("flume/change@1".to_string(), change),
+    ];
+    recorded.sort();
+    let mut read = lock_at(&lock);
+    read.sort();
+    assert_eq!(read, recorded, "the host's lock");
+    let person = host.flume(
+        &repository.dir,
+        &["kinds", "lock", "--host", "acme/review@1"],
+        &[],
+    );
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert_eq!(
+        person.text.trim(),
+        format!("recorded acme/review@1 at {review} in {}", lock.display())
+    );
+    assert_eq!(read.len(), lock_at(&lock).len(), "run twice, the same lock");
+    assert!(
+        host.state().join("kinds-lock.lock").exists(),
+        "the advisory lock under flume's state directory"
+    );
+}
+
+#[test]
+fn kinds_lock_writes_a_working_copys_lock() {
+    // 155, core.16: run in a scratch repository, `flume kinds lock`
+    // writes its `.config/flume.lock`, commits nothing, and writes
+    // nothing else in the working copy, from its top or a directory
+    // within it.
+    let (host, acme) = acme_host("lock-copy");
+    let repository = repository("lock-copy", None);
+    repository.write("src/lib.txt", "a file\n");
+    let head = repository.commit("a directory");
+    let ran = host.flume(
+        &repository.dir.join("src"),
+        &["kinds", "lock", "acme/review@1", "--json"],
+        &[],
+    );
+    let locked = answered(&ran, 0);
+    let lock = repository.dir.join(LOCK);
+    assert_eq!(
+        locked["locked"]["lock_file"],
+        lock.to_string_lossy().as_ref(),
+        "{locked}"
+    );
+    assert_eq!(
+        lock_at(&lock),
+        vec![(
+            "acme/review@1".to_string(),
+            hash_of("acme", &acme, "review", 1)
+        )]
+    );
+    assert_eq!(repository.head(), head, "nothing committed");
+    assert_eq!(
+        repository.git(&["status", "--porcelain", "--untracked-files=all"]),
+        format!("?? {LOCK}"),
+        "nothing else written in the working copy"
+    );
+    assert!(!host_lock(&host).exists(), "the host's lock is not written");
+    let nowhere = host.scratch.path("nowhere");
+    std::fs::create_dir_all(&nowhere).unwrap();
+    let reason =
+        reason_of(&host.flume(&nowhere, &["kinds", "lock", "acme/review@1", "--json"], &[]));
+    assert!(reason.contains("is in no working copy"), "{reason}");
+    assert!(reason.contains("--host"), "{reason}");
+}
+
+#[test]
+fn kinds_lock_refuses_a_hash_the_content_does_not_have() {
+    // 155, 156: `--hash` names a hash acme/review@1's content does not
+    // have, and is refused naming both, the host's lock as it was; the
+    // hash it has records it.
+    let (host, acme) = acme_host("lock-hash");
+    let repository = repository("lock-hash", None);
+    answered(
+        &host.flume(
+            &repository.dir,
+            &["kinds", "lock", "--host", "acme/lint@1", "--json"],
+            &[],
+        ),
+        0,
+    );
+    let before = bytes_of(&host_lock(&host));
+    let review = hash_of("acme", &acme, "review", 1);
+    let reason = reason_of(&host.flume(
+        &repository.dir,
+        &[
+            "kinds",
+            "lock",
+            "--host",
+            "--hash",
+            "sha256:00",
+            "acme/review@1",
+            "--json",
+        ],
+        &[],
+    ));
+    assert!(reason.contains(&review), "{reason}");
+    assert!(reason.contains("sha256:00"), "{reason}");
+    assert_eq!(
+        bytes_of(&host_lock(&host)),
+        before,
+        "the host's lock as it was"
+    );
+    let locked = answered(
+        &host.flume(
+            &repository.dir,
+            &[
+                "kinds",
+                "lock",
+                "--host",
+                "--hash",
+                &review,
+                "acme/review@1",
+                "--json",
+            ],
+            &[],
+        ),
+        0,
+    );
+    assert_eq!(
+        locked["locked"]["recorded"],
+        serde_json::json!([{"kind": "acme/review@1", "hash": review}])
+    );
+    let two = reason_of(&host.flume(
+        &repository.dir,
+        &[
+            "kinds",
+            "lock",
+            "--host",
+            "--hash",
+            &review,
+            "acme/review@1",
+            "acme/lint@1",
+            "--json",
+        ],
+        &[],
+    ));
+    assert!(two.contains("one kind"), "{two}");
+}
+
+#[test]
+fn kinds_lock_refuses_an_identity_no_lock_records() {
+    // 155: the repository's kind needs no lock, and a kind not named
+    // whole is refused naming the whole identity, the host's lock left
+    // as it was: here, none.
+    let (host, _) = acme_host("lock-unrecorded");
+    let repository = repository("lock-unrecorded", None);
+    let repos = reason_of(&host.flume(
+        &repository.dir,
+        &["kinds", "lock", "--host", "repo/bump@1", "--json"],
+        &[],
+    ));
+    assert!(repos.contains("runs with no lock"), "{repos}");
+    let bare = reason_of(&host.flume(
+        &repository.dir,
+        &["kinds", "lock", "--host", "acme/review", "--json"],
+        &[],
+    ));
+    assert!(bare.contains("<source>/<name>@<version>"), "{bare}");
+    assert!(!host_lock(&host).exists(), "the host's lock as it was");
+}
+
+#[test]
+fn kinds_lock_two_writers_at_once_and_a_removal() {
+    // 74, 155: two `flume kinds lock --host` run at once as two
+    // processes, each recording one kind, and both are recorded; then
+    // `--remove` twice leaves acme/review@1 alone, the second changing
+    // nothing.
+    let (host, acme) = acme_host("lock-writers");
+    let repository = repository("lock-writers", None);
+    let flume = Path::new(env!("CARGO_BIN_EXE_flume"));
+    for round in 0..4 {
+        let _ = std::fs::remove_file(host_lock(&host));
+        let writers: Vec<_> = ["acme/review@1", "acme/lint@1"]
+            .into_iter()
+            .map(|kind| {
+                host.command(flume, &repository.dir, &[])
+                    .args(["kinds", "lock", "--host", kind, "--json"])
+                    .stdout(std::process::Stdio::null())
+                    .spawn()
+                    .expect("a writer runs")
+            })
+            .collect();
+        for mut writer in writers {
+            assert!(
+                writer.wait().expect("a writer's end").success(),
+                "round {round}"
+            );
+        }
+        let mut read = lock_at(&host_lock(&host));
+        read.sort();
+        assert_eq!(
+            read,
+            vec![
+                ("acme/lint@1".to_string(), hash_of("acme", &acme, "lint", 1)),
+                (
+                    "acme/review@1".to_string(),
+                    hash_of("acme", &acme, "review", 1)
+                ),
+            ],
+            "both recorded, round {round}"
+        );
+    }
+    let removed = answered(
+        &host.flume(
+            &repository.dir,
+            &[
+                "kinds",
+                "lock",
+                "--host",
+                "--remove",
+                "acme/lint@1",
+                "--json",
+            ],
+            &[],
+        ),
+        0,
+    );
+    assert_eq!(
+        removed["locked"]["removed"],
+        serde_json::json!(["acme/lint@1"])
+    );
+    let after = bytes_of(&host_lock(&host));
+    assert_eq!(
+        lock_at(&host_lock(&host)),
+        vec![(
+            "acme/review@1".to_string(),
+            hash_of("acme", &acme, "review", 1)
+        )]
+    );
+    std::fs::remove_dir_all(acme.join("lint@1")).expect("lint@1's directory removed");
+    let again = host.flume(
+        &repository.dir,
+        &["kinds", "lock", "--host", "--remove", "acme/lint@1"],
+        &[],
+    );
+    assert_eq!(again.code, 0, "{}", again.text);
+    assert_eq!(
+        again.text.trim(),
+        format!("{} is as it was", host_lock(&host).display())
+    );
+    assert_eq!(
+        bytes_of(&host_lock(&host)),
+        after,
+        "the second removal changes nothing"
+    );
+}
+
+/// Whether the launch of `<kind>--<name>` made nothing: no place, no
+/// branch, nothing in the host's store.
+fn made_nothing(host: &Host, repository: &Repository, place: &str, branch: &str) {
+    let location = host.place_of(repository, place);
+    assert!(!Path::new(&location).exists(), "{location} made");
+    assert!(
+        !git_holds(&repository.dir, &format!("refs/heads/{branch}")),
+        "{branch} made"
+    );
+    assert!(
+        StateDir::at(host.state())
+            .read(&PlaceId::new(&location))
+            .is_none(),
+        "{location} held"
+    );
+}
+
+/// Whether git holds `reference` in `dir`.
+fn git_holds(dir: &Path, reference: &str) -> bool {
+    Command::new("git")
+        .current_dir(dir)
+        .args(["rev-parse", "--verify", "--quiet", reference])
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+#[test]
+fn unlocked_then_locked_by_the_repository() {
+    // S60, 155: acme holds review@1 and the repository locks nothing; a
+    // launch of `acme/review` is refused naming acme/review@1 as recorded
+    // in no lock and both ways to lock it, and makes nothing; once
+    // `flume kinds lock acme/review@1` runs in the repository and its
+    // lock is committed on the base, the launch runs it, status naming
+    // its hash and the repository's lock.
+    let (host, acme) = acme_host("unlocked");
+    let repository = repository("unlocked", None);
+    let launch = ["launch", "--kind", "acme/review", "--name", "one", "--json"];
+    let reason = reason_of(&host.stand_in(&repository.dir, &launch, &[]));
+    assert!(
+        reason.contains("acme/review@1 is recorded in no lock"),
+        "{reason}"
+    );
+    assert!(
+        reason.contains("`flume kinds lock acme/review@1`"),
+        "{reason}"
+    );
+    assert!(
+        reason.contains("`flume kinds lock --host acme/review@1`"),
+        "{reason}"
+    );
+    made_nothing(&host, &repository, "review--one", "review/one");
+
+    answered(
+        &host.flume(
+            &repository.dir,
+            &["kinds", "lock", "acme/review@1", "--json"],
+            &[],
+        ),
+        0,
+    );
+    repository.commit("the lock of kinds");
+    let launched = answered(&host.stand_in(&repository.dir, &launch, &[]), 0);
+    let place = host.place_of(&repository, "review--one");
+    assert_eq!(launched["launched"]["place"]["place"], place.as_str());
+    let status = answered(
+        &host.flume(&repository.dir, &["status", &place, "--json"], &[]),
+        0,
+    );
+    let status = &status["status"]["places"][0];
+    assert_eq!(status["identity"], "acme/review@1", "{status}");
+    assert_eq!(status["declared"], "host", "{status}");
+    let from = &status["kind_from"];
+    assert_eq!(from["hash"], hash_of("acme", &acme, "review", 1), "{from}");
+    assert_eq!(from["lock_file"], LOCK, "{from}");
+    assert_eq!(
+        from["kind_dir"],
+        acme.join("review@1").to_string_lossy().as_ref(),
+        "{from}"
+    );
+}
+
+#[test]
+fn a_lock_that_cannot_be_read() {
+    // 155: the host's lock is not TOML; launches of `acme/review@1` and
+    // flume's own `change` are refused naming the host's lock and its
+    // fault, and makes nothing, and one of the repository's own `bump`,
+    // which reads no lock, is made.
+    let (host, _) = acme_host("unreadable-lock");
+    let repository = Repository::new("unreadable-lock");
+    repository.write(
+        ".config/flume.toml",
+        &format!(
+            "[profiles]\nplace = \"git-worktree\"\n\n[kinds.bump]\nversion = 2\nbranch = \"bump\"\nstarts_unready = false\nlands = false\n\n[[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/bump.md\"\ndeliverables = [\"commits\"]\nagents = [{{ program = \"{STAND_IN}\" }}]\n"
+        ),
+    );
+    repository.write(".config/prompts/bump.md", "Bump {{name}}.\n");
+    repository.commit("the binding and bump");
+    std::fs::write(host_lock(&host), "[[kinds]\nnot a lock").expect("the host's lock");
+    for (kind, place, branch) in [
+        ("acme/review@1", "review--one", "review/one"),
+        ("change", "change--one", "change/one"),
+    ] {
+        let reason = reason_of(&host.stand_in(
+            &repository.dir,
+            &["launch", "--kind", kind, "--name", "one", "--json"],
+            &[],
+        ));
+        assert!(
+            reason.contains(&format!(
+                "the host's lock {} could not be read",
+                host_lock(&host).display()
+            )),
+            "{kind}: {reason}"
+        );
+        made_nothing(&host, &repository, place, branch);
+    }
+    let launched = answered(
+        &host.stand_in(
+            &repository.dir,
+            &["launch", "--kind", "bump", "--name", "one", "--json"],
+            &[],
+        ),
+        0,
+    );
+    assert_eq!(
+        launched["launched"]["place"]["identity"], "repo/bump@2",
+        "{launched}"
+    );
+}
+
+#[test]
+fn a_source_file_with_no_kinds_dir() {
+    // S96, 4, 191: the host's sources hold `bad.toml` with no `kinds_dir`
+    // beside acme's, whose review@1 the host locks; a launch of `bad/x@1`
+    // is refused naming the file and `kinds_dir`, and makes nothing, and
+    // launches of flume's own `fix` and of `acme/review@1` are made;
+    // status names the fault.
+    let (host, _) = acme_host("bad-source");
+    let repository = repository("bad-source", Some(STAND_IN_QUEUE));
+    std::fs::write(sources_of(&host).join("bad.toml"), "# no kinds_dir\n").expect("bad.toml");
+    answered(
+        &host.flume(
+            &repository.dir,
+            &["kinds", "lock", "--host", "acme/review@1", "--json"],
+            &[],
+        ),
+        0,
+    );
+    let bad = sources_of(&host).join("bad.toml");
+    let reason = reason_of(&host.stand_in(
+        &repository.dir,
+        &["launch", "--kind", "bad/x@1", "--name", "one", "--json"],
+        &[],
+    ));
+    assert!(reason.contains(&*bad.to_string_lossy()), "{reason}");
+    assert!(reason.contains("kinds_dir"), "{reason}");
+    made_nothing(&host, &repository, "x--one", "x/one");
+    for (kind, identity) in [("fix", "flume/fix@1"), ("acme/review@1", "acme/review@1")] {
+        let launched = answered(
+            &host.stand_in(
+                &repository.dir,
+                &[
+                    "launch",
+                    "--kind",
+                    kind,
+                    "--name",
+                    "one",
+                    "--brief",
+                    "Mend what is broken.",
+                    "--agent",
+                    &format!("program={STAND_IN}"),
+                    "--json",
+                ],
+                &[],
+            ),
+            0,
+        );
+        assert_eq!(
+            launched["launched"]["place"]["identity"], identity,
+            "{launched}"
+        );
+    }
+    let status = answered(&host.flume(&repository.dir, &["status", "--json"], &[]), 0);
+    let sources = &status["status"]["host"]["sources"];
+    assert_eq!(sources[0]["name"], "acme", "{sources}");
+    assert_eq!(sources[1]["name"], "bad", "{sources}");
+    assert_eq!(sources[1]["source_file"], bad.to_string_lossy().as_ref());
+    assert!(
+        sources[1]["cannot_read"]
+            .as_str()
+            .is_some_and(|fault| fault.contains("kinds_dir")),
+        "{sources}"
+    );
 }
