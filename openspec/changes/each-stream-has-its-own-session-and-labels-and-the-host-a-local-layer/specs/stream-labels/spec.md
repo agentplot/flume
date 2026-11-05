@@ -1,3 +1,11 @@
+## Purpose
+
+A stream's agents shared among labels: a place's label from the host's
+configuration or its kind, a label below its reserve started first
+within its stream and the slots it keeps free held from the others, a
+stream whose labels are at fault starting no stage, and status giving
+each place's label and each stream's labels (180 to 182).
+
 ## ADDED Requirements
 
 ### Requirement: A place's label

@@ -1,3 +1,11 @@
+## Purpose
+
+The host's configuration in two layers: the managed `config.toml` and
+the local `config.local.toml` read over it key by key at each reading,
+the local layer setting only C.7's keys and none the managed layer
+pins, a local layer at fault not taken, flume writing neither file, and
+status giving every value with its layer (32, C.7).
+
 ## ADDED Requirements
 
 ### Requirement: A managed layer and a local layer over it

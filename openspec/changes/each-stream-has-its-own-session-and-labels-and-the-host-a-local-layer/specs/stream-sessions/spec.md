@@ -1,3 +1,11 @@
+## Purpose
+
+Where a stream's agents open in the terminal: each stream's in its own
+session, the one the host names for it else the stream's name, a
+launch's session or a pane its settings name before it, read at each
+start, and status giving each agent's session and each stream's with
+where it came from (32, 107, 143).
+
 ## ADDED Requirements
 
 ### Requirement: A stream's agents open in its own session
