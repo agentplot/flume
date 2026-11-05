@@ -1038,8 +1038,8 @@ should take:
 
 ### 18. The statement, the record and the rules
 
-The statement at blueprints bc72003, on the branch
-`design/flume-an-agents-program-settings` cut from main at 9f1f0fd,
+The statement at blueprints 94b4edb, on the branch
+`design/flume-an-agents-program-settings` with main at 1b0275f merged in,
 holds this change (core.19):
 
 - **195** (A.4), an agent's own settings: a table of programs in every

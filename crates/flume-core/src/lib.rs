@@ -17,6 +17,7 @@ mod end;
 mod ends;
 mod held;
 mod launch;
+mod line;
 mod own;
 mod prompt;
 mod reading;
@@ -34,10 +35,12 @@ mod unsettled;
 mod wait;
 mod wake;
 
+pub use accounts::{FRESH, THRESHOLD};
 pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
+pub use line::NOT_ITS_AGENT;
 pub use own::shaped_as_credential;
 pub use prompt::group_name;
 pub use start_record::{

@@ -16,6 +16,7 @@ pub mod labels;
 pub mod launching;
 pub mod made_things;
 pub mod own_settings;
+pub mod place_line;
 pub mod place_status;
 pub mod places;
 pub mod repeating_stages;
@@ -44,6 +45,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(starts::scenarios());
     every.extend(caller_acts::scenarios());
     every.extend(place_status::scenarios());
+    every.extend(place_line::scenarios());
     every.extend(tidying::scenarios());
     every.extend(restart::scenarios());
     every.extend(answers::scenarios());

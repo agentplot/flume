@@ -29,6 +29,7 @@ the same answers you do.
 | Labels sharing a stream's agents, each with a reserve and slots kept free for it | ✓ | ✓ |
 | Pools of accounts, a spent account paused and its agent's conversation carried to another where the host shares it, else its stage started afresh | ✓ | ✓ |
 | An intent's agents kept to one account while it is usable | ✓ | ✓ |
+| A pool choosing the account with the most of its allowance left by the host's reading, and starting nothing on an account past its threshold | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
 | The herdr plugin's watch, sidebar rows and popup | ✓ | ✓ |

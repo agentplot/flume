@@ -115,7 +115,25 @@ for pair in session-start:session-start.json user-prompt-submit:user-prompt-subm
   [ "$code" -eq 0 ] || fail "${pair%%:*} outside flume's agent exited $code"
   [ -z "$out" ] || fail "${pair%%:*} outside flume's agent answered: $out"
 done
+out=$("$flume" hook status-line </dev/null)
+code=$?
+[ "$code" -eq 0 ] || fail "status-line outside flume's agent exited $code"
+[ -z "$out" ] || fail "status-line outside flume's agent printed: $out"
 [ "$(state)" = "$before" ] || fail "a hook outside flume's agent wrote flume's state"
+
+# The status line in the code agent's environment, as the plugin's module
+# runs it: the place's line as status gives it asked alone, one line, and
+# every file under flume's state as it was (56, 57; design 5).
+before=$(state)
+line=$(cd "$repo" && "$flume" status "$place" --line)
+[ "$line" = "fix--one · fix@1 · code · run 1 · starting" ] || fail "status --line: $line"
+for _ in 1 2 3; do
+  out=$(env "${agent[@]}" "$flume" hook status-line </dev/null)
+  code=$?
+  [ "$code" -eq 0 ] || fail "status-line exited $code"
+  [ "$out" = "$line" ] || fail "status-line printed '$out', status --line '$line'"
+done
+[ "$(state)" = "$before" ] || fail "status-line wrote flume's state"
 
 # The started ack.
 [ "$(status | jq -r .agent.started)" = no ] || fail "started before the ack"

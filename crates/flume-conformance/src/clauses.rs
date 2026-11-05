@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "bc72003";
+pub const REVISION: &str = "94b4edb";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -19,8 +19,8 @@ pub fn part_a() -> Vec<u32> {
         .chain(161..=163)
         .chain(165..=173)
         .chain(175..=177)
-        .chain(180..=183)
-        .chain([186, 195])
+        .chain(180..=186)
+        .chain([190, 191, 195])
         .collect()
 }
 
@@ -36,7 +36,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(151..=153)
         .chain([160, 164, 174, 178, 179])
         .chain(187..=189)
-        .chain([196])
+        .chain([192, 196])
         .collect()
 }
 
@@ -62,7 +62,7 @@ pub const SCENARIOS: u32 = 102;
 
 /// The numbers section 11 skips at the revision, which designs the
 /// statement does not hold yet keep for their own scenarios.
-pub const SKIPPED: [u32; 12] = [86, 87, 88, 91, 92, 93, 94, 95, 96, 97, 98, 99];
+pub const SKIPPED: [u32; 4] = [93, 94, 98, 99];
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -97,12 +97,20 @@ pub const MCP_SERVERS: &str =
     "the answer to section 10's question on how a host's MCP servers reach an agent";
 
 /// The change that builds record 0036: a place made ready by its merge
-/// queue's equipping.
-pub const READINESS: &str = "a-places-readiness-is-one-design-across-the-tools, record 0036";
+/// queue's equipping of it.
+pub const READINESS: &str = "record 0036's change, a place equipped by its merge queue";
 
-/// The change that builds record 0037: a stream's agents shown in a
-/// window flume opens.
-pub const WINDOW: &str = "flume-opens-a-streams-multiplexer, record 0037";
+/// The change that builds record 0037: each stream's multiplexer, view
+/// and terminal app, and the window a person opens its agents in.
+pub const MULTIPLEXER: &str =
+    "record 0037's change, each stream's multiplexer, view and terminal app";
+
+/// The change that builds record 0040: the sources of a host's kinds.
+pub const SOURCES: &str = "a-host-declares-where-its-kinds-come-from, record 0040";
+
+/// The change that builds record 0041: a place cut from origin's copy of
+/// its base.
+pub const ORIGIN: &str = "a-place-is-cut-from-origins-copy-of-its-base, record 0041";
 
 /// The change that builds record 0043: an agent's program settings from
 /// flume's layers, until its scenarios cite them.
@@ -143,10 +151,16 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
     let readiness = std::iter::once(("S89".to_string(), READINESS));
-    let window = (186..=189)
+    let multiplexer = (186..=190)
         .map(|clause| clause.to_string())
-        .chain(["S90".to_string()])
-        .map(|clause| (clause, WINDOW));
+        .chain((90..=91).map(|scenario| format!("S{scenario}")))
+        .map(|clause| (clause, MULTIPLEXER));
+    let sources = [191, 192]
+        .map(|clause| clause.to_string())
+        .into_iter()
+        .chain((95..=97).map(|scenario| format!("S{scenario}")))
+        .map(|clause| (clause, SOURCES));
+    let origin = std::iter::once(("S92".to_string(), ORIGIN));
     let own_settings = [195, 196]
         .map(|clause| clause.to_string())
         .into_iter()
@@ -160,7 +174,9 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(statechart)
         .chain(mcp_servers)
         .chain(readiness)
-        .chain(window)
+        .chain(multiplexer)
+        .chain(sources)
+        .chain(origin)
         .chain(own_settings)
         .collect()
 }
@@ -173,9 +189,9 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 4 + 2);
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 1);
-        for gap in [100, 150, 184, 185, 190, 191, 192, 193, 194] {
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 3);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 2);
+        for gap in [100, 150, 193, 194] {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
         }
         assert!(a.iter().all(|clause| !b.contains(clause)));
@@ -184,48 +200,64 @@ mod tests {
         assert_eq!(
             every,
             (1..=196)
-                .filter(|clause| ![100, 150, 184, 185, 190, 191, 192, 193, 194].contains(clause))
+                .filter(|clause| ![100, 150, 193, 194].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 187 + 8 + 90);
+        assert_eq!(all().len(), 192 + 8 + 98);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        for skipped in ["S86", "S88", "S91", "S94", "S95", "S99"] {
+        for skipped in ["S93", "S94", "S98", "S99"] {
             assert!(!all().contains(&skipped.to_string()), "{skipped} is listed");
         }
         assert!(all().contains(&"S102".to_string()), "S102 is not listed");
-        assert_eq!(REVISION, "bc72003");
+        assert_eq!(REVISION, "94b4edb");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
-            173, 175, 176, 177, 180, 181, 182, 183, 186, 195,
+            173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191, 195,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [
             126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179, 187,
-            189, 196,
+            188, 189, 192, 196,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0036_0037_and_0043s_and_183(
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0036_0037_0040_0041_and_0043s_and_183(
     ) {
         let unbuilt = unbuilt();
         assert_eq!(
             unbuilt.len(),
-            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 1 + 5 + 5
+            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 1 + 7 + 5 + 1 + 5
         );
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
-            "S84", "S85",
+            "S84", "S85", "184", "185", "S86", "S87", "S88",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
                 "{built} is named unbuilt"
+            );
+        }
+        for (clause, change) in [
+            ("S89", READINESS),
+            ("186", MULTIPLEXER),
+            ("190", MULTIPLEXER),
+            ("S91", MULTIPLEXER),
+            ("191", SOURCES),
+            ("S97", SOURCES),
+            ("S92", ORIGIN),
+            ("195", OWN_SETTINGS),
+            ("S102", OWN_SETTINGS),
+        ] {
+            assert!(
+                unbuilt.contains(&(clause.to_string(), change)),
+                "{clause} is not named unbuilt by {change}"
             );
         }
     }

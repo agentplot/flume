@@ -2,7 +2,7 @@ use crate::{lock, Log};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, KindSettings, LabelFrom,
     LabelHeld, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Settings, Share,
-    Stream, StreamFrom, StreamHeld, DEFAULT_STREAM,
+    Stream, StreamFrom, StreamHeld, Usage, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -11,10 +11,11 @@ use std::sync::{Arc, Condvar, Mutex};
 /// sleeps on it, numbered secrets, files' write times, the commands of
 /// flume's that live, the bound on agents and the agents' settings its
 /// configuration states, its streams with their sessions and labels'
-/// shares, its pools of accounts, the labels it gives kinds, its
-/// configuration's values with their layers, the recipient the calling
-/// command's environment names, the host user's login environment, and
-/// an exclusive room lock. It reads no configuration file (106).
+/// shares, its pools of accounts, each account's reading by its path, the
+/// labels it gives kinds, its configuration's values with their layers,
+/// the recipient the calling command's environment names, the host user's
+/// login environment, and an exclusive room lock. It reads no
+/// configuration file and no reading's file (106, 184).
 pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
@@ -71,6 +72,9 @@ struct HostState {
     pool: Option<String>,
     /// The pools the configuration declares, by name (144).
     pools: BTreeMap<String, Pool>,
+    /// The reading, or why there is none, by the path it is read at
+    /// (184).
+    usage: BTreeMap<String, Result<Usage, String>>,
     /// The label named for a repository and kind, or a kind, by the
     /// repository, none for every repository, and the kind (180).
     labels_named: BTreeMap<(Option<String>, String), String>,
@@ -101,6 +105,7 @@ impl Default for FakeHost {
                 streams_named: BTreeMap::new(),
                 pool: None,
                 pools: BTreeMap::new(),
+                usage: BTreeMap::new(),
                 labels_named: BTreeMap::new(),
                 configuration: HostConfiguration::default(),
             }),
@@ -319,6 +324,13 @@ impl FakeHost {
         };
     }
 
+    /// The reading at `path`, or why there is none, in place of any set
+    /// before; every path no test set answers that the file is missing
+    /// (184).
+    pub fn set_usage(&self, path: &str, usage: Result<Usage, String>) {
+        lock(&self.state).usage.insert(path.to_string(), usage);
+    }
+
     /// Whether the room lock is held now.
     pub fn room_taken(&self) -> bool {
         *lock(&self.room.taken)
@@ -439,6 +451,15 @@ impl Host for FakeHost {
     fn pool(&self, name: &str) -> Option<Pool> {
         self.log.push(format!("pool {name}"));
         lock(&self.state).pools.get(name).cloned()
+    }
+
+    fn usage(&self, path: &str) -> Result<Usage, String> {
+        self.log.push(format!("usage {path}"));
+        lock(&self.state)
+            .usage
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| Err("the file is missing".to_string()))
     }
 
     fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings {

@@ -168,7 +168,7 @@ host's `[repos."<repository>"]` table (32, 195, C.2, C.7).
 
 - agentplot/blueprints: the statement gains 195, 196, S100, S101 and S102
   and amends 4, 32, 56, 88, 143, 158, 171, 173, C.2, C.4, C.7 and
-  section 3's settings, at blueprints bc72003 on the branch
+  section 3's settings, at blueprints 94b4edb on the branch
   `design/flume-an-agents-program-settings` (design 18). Clause 143's
   "a stream gives its agents no settings" and core.30's rule against a
   stream's settings change first (core.19). weir's C.4 names `programs`

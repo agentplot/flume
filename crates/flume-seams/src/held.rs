@@ -858,7 +858,9 @@ pub enum AccountFrom {
 /// why, and when. The agents after it start without the earlier
 /// account's cache (56, 145 to 147). A stage's move after its agent
 /// stopped at its account's usage limit says whether its conversation
-/// went with it, none for any other (56, 179).
+/// went with it, none for any other (56, 179). A move off an account past
+/// its threshold names the window that held it and when that window
+/// resets, none for any other and on a move recorded before (185).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountMove {
     #[serde(flatten)]
@@ -869,6 +871,10 @@ pub struct AccountMove {
     pub at: Seconds,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carried: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<Seconds>,
 }
 
 /// What moved between accounts: a stage, or the intent's affinity for
@@ -886,12 +892,13 @@ pub enum MoveOn {
     },
 }
 
-/// Why a start went to another account: the one before was spent, or at
-/// its own bound (145, 146).
+/// Why a start went to another account: the one before was spent, past
+/// its threshold, or at its own bound (145, 146, 185).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MoveWhy {
     Spent,
+    Threshold,
     Full,
 }
 
@@ -899,6 +906,7 @@ impl MoveWhy {
     pub fn name(self) -> &'static str {
         match self {
             MoveWhy::Spent => "spent",
+            MoveWhy::Threshold => "threshold",
             MoveWhy::Full => "full",
         }
     }

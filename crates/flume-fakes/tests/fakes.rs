@@ -1250,11 +1250,13 @@ fn a_streams_pool_and_the_hosts() {
     );
     let pool = Pool {
         strategy: Strategy::FillFirst,
+        threshold: None,
         accounts: vec![Account {
             name: "work-1".into(),
             program: "agent".into(),
             env: BTreeMap::from([("AGENT_HOME".into(), "/scratch/work-1".into())]),
             agents: Some(4),
+            usage: None,
         }],
     };
     host.set_pool("work", Some(pool.clone()));
