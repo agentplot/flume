@@ -380,9 +380,10 @@ parser, already a dependency of `crates/flume`. It refuses, in words:
 - a document that is not JSON, or not an object;
 - no `read_at`, or a `read_at` or `resets_at` that is not RFC 3339 with
   an offset, naming the key;
-- `windows` that is not a list, or a window with no `name`, or a `used`
-  that is not a number from 0 to 100, naming the window by its place in
-  the list.
+- no `windows`, or `windows` that is not a list, or a window with no
+  `name`, or a `used` that is not a number from 0 to 100, naming the
+  window by its place in the list, `windows[<n>]` from 0, as the
+  configuration's refusals name an account.
 
 Every other key is ignored, at the top and in each window. A refusal
 fails nothing (184): the core reads the account as having no reading.
@@ -471,7 +472,10 @@ It refuses, naming the key:
 
 These are pool and account keys, the managed layer's alone (C.7): the
 local layer's keys gain nothing, and a local layer that sets one is not
-taken, as for every pool key today.
+taken, as for every pool key today. The configuration's values give an
+account's `usage` as `<set>`, as they give an `env` value, so status,
+which gives every value with its layer, prints no reading's path
+(section 8; core.30, core.32).
 
 ### 8. Status
 
