@@ -35,9 +35,13 @@
 //! agent in the mode the host gave and lands, as does a fix no layer gives
 //! a mode, passing none (S66; 162); a fix whose agent begins in another
 //! mode than its start asked at both its starts is never begun, naming
-//! both modes (S67; 161, 162); and an agent run only after its start was
+//! both modes (S67; 161, 162); an agent run only after its start was
 //! read never begun acks its start and its prompt, its stage is read
-//! begun, and a retry leaves it be (35, 38, 50).
+//! begun, and a retry leaves it be (35, 38, 50); and a fix's code agent's
+//! line, asked by `flume hook status-line` in its environment as the
+//! plugin's module asks it, is status's line asked alone and in full, and
+//! the fix lands, while a change@2 code agent's names its group, its run
+//! and the change's tasks (56, 60, 142; S14).
 
 use super::walk::*;
 use flume::profiles::agent::claude::carry::UNREACHED;
@@ -157,6 +161,121 @@ fn a_fix_lands_when_its_prompt_is_submitted_inside_paste_tags() {
         walk.on_remote("parser.rs").as_deref(),
         Some("fn parse() {}\n")
     );
+}
+
+/// The variables the place's printed command gives its agent, from the
+/// file the command names, as the agent program's process holds them.
+fn agents_environment(walk: &Walk, place: &str) -> Vec<(String, String)> {
+    let printed = walk.printed(place);
+    let file = printed
+        .split(' ')
+        .map(|word| word.trim_matches('\''))
+        .find(|word| word.ends_with(".env"))
+        .unwrap_or_else(|| panic!("no environment file in {printed}"));
+    std::fs::read_to_string(file)
+        .expect("the command's environment")
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(name, value)| {
+            let value = value.strip_prefix('\'').unwrap_or(value);
+            let value = value.strip_suffix('\'').unwrap_or(value);
+            (name.to_string(), value.replace("'\\''", "'"))
+        })
+        .collect()
+}
+
+/// `flume hook status-line` run in the place in its agent's environment,
+/// as the plugin's module runs it in the agent's session (design 4, 5).
+fn status_line(walk: &Walk, place: &str) -> String {
+    let output = walk
+        .command(env!("CARGO_BIN_EXE_flume"), Path::new(place))
+        .envs(agents_environment(walk, place))
+        .args(["hook", "status-line"])
+        .output()
+        .expect("flume runs");
+    assert!(output.status.success(), "status-line exits 0");
+    let line = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert_eq!(line.lines().count(), 1, "one line: {line}");
+    line.trim_end().to_string()
+}
+
+#[test]
+fn a_fix_agents_line_is_status_line_and_the_fix_lands() {
+    // While the fix's code agent waits on a file, the line the hook
+    // prints in its environment, as the plugin's module runs it, is the
+    // place's line status --line gives and status's JSON gives in full;
+    // then the agent commits and the fix lands (56, 60; S14).
+    let walk = Walk::new("walk-line");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let go = walk.signal("go");
+    let mut acts = vec![json!({ "wait_for": go })];
+    acts.extend(
+        commits("parser.rs", "fn parse() {}\n")
+            .as_array()
+            .cloned()
+            .expect("the acts"),
+    );
+    let agent = walk.start_agent(&place, Value::Array(acts));
+    walk.until(&place, "its code agent working", |status| {
+        status["line"]["state"] == "working"
+    });
+
+    let line = status_line(&walk, &place);
+    assert_eq!(line, "fix--one · fix@1 · code · run 1 · working");
+    assert_eq!(walk.person(&["status", &place, "--line"]).trim_end(), line);
+    assert_eq!(walk.status(&place)["line"]["full"], line.as_str());
+
+    std::fs::write(&go, "").expect("the signal");
+    let ran = finish(agent);
+    assert_eq!(ran.code, 0, "{}", ran.out);
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+}
+
+/// A change of two task groups, two tasks and one, none ticked.
+const TWO_GROUPS: &str = "## 1. Parser\n\n- [ ] 1.1 Write the parser\n- [ ] 1.2 Test the parser\n\n## 2. Reader\n\n- [ ] 2.1 Read the input\n";
+
+#[test]
+fn a_change_code_agents_line_names_its_group_its_run_and_its_tasks() {
+    // change@2's code agent on the first of two groups, waiting on a
+    // file: its line names the stage with its group, its run and the
+    // change's tasks ticked at the head (56, 60, 140, 142; S14).
+    let walk = Walk::new("walk-line-groups");
+    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    walk.agent(&place, construct_tasks("add-parser", TWO_GROUPS));
+    walk.until(&place, "code on group 1", |status| {
+        status["current"] == "code" && !status["agent"].is_null()
+    });
+    let go = walk.signal("go");
+    let agent = walk.start_agent(
+        &place,
+        json!([
+            { "wait_for": go },
+            { "tick": { "path": "openspec/changes/add-parser/tasks.md", "count": 2 } },
+            { "bash": "git add -A && git commit --quiet -m 'group 1 built'" },
+        ]),
+    );
+    let status = walk.until(&place, "its code agent working", |status| {
+        status["line"]["state"] == "working"
+    });
+    assert_eq!(
+        status["line"]["short"], "code 1/2 · run 1 · tasks 0/3 · working",
+        "{status}"
+    );
+    let line = status_line(&walk, &place);
+    assert_eq!(
+        line,
+        "change--add-parser · change@2 · code 1/2 · run 1 · tasks 0/3 · working"
+    );
+    assert_eq!(walk.person(&["status", &place, "--line"]).trim_end(), line);
+    assert_eq!(walk.status(&place)["line"]["full"], line.as_str());
+
+    std::fs::write(&go, "").expect("the signal");
+    let ran = finish(agent);
+    assert_eq!(ran.code, 0, "{}", ran.out);
 }
 
 #[test]
