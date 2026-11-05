@@ -107,7 +107,7 @@ pub enum LocalLayer {
 /// A key the local layer set that the managed layer pins, passed over,
 /// with the pin that holds it (C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PassedOver {
+pub struct PinnedKey {
     pub key: String,
     pub pin: String,
 }
@@ -121,7 +121,7 @@ pub struct HostConfiguration {
     #[serde(default)]
     pub values: Vec<ConfigValue>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub passed_over: Vec<PassedOver>,
+    pub passed_over: Vec<PinnedKey>,
 }
 
 /// How a pool chooses among its usable accounts: the first in order, or

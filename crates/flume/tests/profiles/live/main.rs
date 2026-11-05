@@ -72,6 +72,11 @@ const SETTINGS: &str = r#"{
 /// A suite that takes two minutes, as a slow one does.
 const SUITE: &str = "sleep 120\necho 'the suite passed'\n";
 
+/// A step that takes a minute, which an agent waits on in one foreground
+/// call of its Bash tool: the pinned release refuses a bare `sleep` run
+/// there, and runs a script whatever it holds.
+const STEP: &str = "sleep 60\necho 'the step is done'\n";
+
 /// One live walkthrough: its host, its herdr session's server stopped
 /// and its home's short link removed when it ends.
 pub struct Live {
@@ -187,7 +192,8 @@ impl Live {
         let repository = &walk.repository;
         repository.write(".claude/settings.json", SETTINGS);
         repository.write("suite.sh", SUITE);
-        repository.commit("Claude Code's settings and the slow suite");
+        repository.write("step.sh", STEP);
+        repository.commit("Claude Code's settings, the slow suite and the minute's step");
         repository.git(&["push", "--quiet", "origin", "main"]);
         Live {
             walk,

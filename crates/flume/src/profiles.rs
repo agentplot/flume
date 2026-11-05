@@ -202,27 +202,43 @@ struct BoundPlace {
 /// could not be read.
 const POLICY_STEP: &str = "the merge queue's policy";
 
+/// What the merge queue named `merge_queue` declares for the places of
+/// `repository` on `base`, as the resolver binds the place profile with
+/// it: the toolchain, the install of what the repository pins, and the
+/// runner's setup, each a step of its own (79); none of it where no merge
+/// queue is bound (11).
+pub fn place_data(
+    repository: &str,
+    merge_queue: Option<&str>,
+    base: &str,
+) -> Result<PlaceData, String> {
+    match merge_queue {
+        Some(merge_queue::sluice::NAME) => {
+            let declared = merge_queue::sluice::for_place(repository, base)?;
+            let mut readiness = vec![];
+            if let Some(toolchain) = &declared.toolchain {
+                readiness.push(Step::toolchain("toolchain", toolchain));
+            }
+            if let Some(install) = &declared.install {
+                readiness.push(Step::run(install, install));
+            }
+            if let Some(setup) = &declared.setup {
+                readiness.push(Step::run(setup, setup));
+            }
+            Ok(PlaceData {
+                readiness,
+                teardown: vec![Step::run(&declared.teardown, &declared.teardown)],
+                base_remote: declared.base_remote,
+            })
+        }
+        _ => Ok(PlaceData::default()),
+    }
+}
+
 impl BoundPlace {
     /// What the merge queue declares for the places on `base`.
     fn data(&self, base: &str) -> Result<PlaceData, String> {
-        match self.merge_queue.as_deref() {
-            Some(merge_queue::sluice::NAME) => {
-                let declared = merge_queue::sluice::for_place(&self.repository, base)?;
-                let mut readiness = vec![];
-                if let Some(toolchain) = &declared.toolchain {
-                    readiness.push(Step::toolchain("toolchain", toolchain));
-                }
-                if let Some(setup) = &declared.setup {
-                    readiness.push(Step::run(setup, setup));
-                }
-                Ok(PlaceData {
-                    readiness,
-                    teardown: vec![Step::run(&declared.teardown, &declared.teardown)],
-                    base_remote: declared.base_remote,
-                })
-            }
-            _ => Ok(PlaceData::default()),
-        }
+        place_data(&self.repository, self.merge_queue.as_deref(), base)
     }
 
     /// The profile bound with `data`.

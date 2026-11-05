@@ -131,10 +131,13 @@ impl MergeQueue for StandInQueue {
         }
     }
     fn inbox(&self, _place: &PlaceRef) -> Inbox {
-        Inbox::Outcomes { outcomes: vec![] }
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![],
+        }
     }
-    fn read_submission(&self, _repository: &str, _branch: &str) -> SubmissionRead {
-        SubmissionRead::None
+    fn read_submission(&self, _repository: &str, _branch: &str) -> ReadAcross {
+        SubmissionRead::None.into()
     }
     fn step(&self, _repository: &str, _base: &str) -> Stepped {
         Stepped::MovesOnItsOwn

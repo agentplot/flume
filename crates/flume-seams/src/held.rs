@@ -4,9 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, LabelHeld, PlaceId, PlaceRef,
-    Prompt, Readiness, Revision, Seconds, Secret, SessionHeld, Settings, StopKind, StreamHeld,
-    Unsettled, Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, LabelHeld, PassedOver, PlaceId,
+    PlaceRef, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld, Settings, StopKind,
+    StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -935,4 +935,9 @@ pub struct SubmissionHeld {
     /// acted on nothing (133, 68).
     #[serde(default)]
     pub unread: Option<String>,
+    /// Each branch the place's inbox passed over at the last settle, with
+    /// its words, its outcomes left pending for a later one; the
+    /// outcomes of every other branch were acted on (133).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub passed_over: Vec<PassedOver>,
 }

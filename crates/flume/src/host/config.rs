@@ -37,7 +37,7 @@
 
 use flume_seams::{
     is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LabelFrom,
-    LabelHeld, LocalLayer, PassedOver, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Share,
+    LabelHeld, LocalLayer, PinnedKey, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Share,
     Strategy, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
@@ -208,7 +208,7 @@ impl HostConfig {
         for (path, value) in found.units {
             let read = as_read(&path);
             match pins.iter().find(|(_, pin)| read.starts_with(pin)) {
-                Some((pin, _)) => passed_over.push(PassedOver {
+                Some((pin, _)) => passed_over.push(PinnedKey {
                     key: dotted(&path),
                     pin: pin.clone(),
                 }),
@@ -239,7 +239,7 @@ impl HostConfig {
         table: &Table,
         local: LocalLayer,
         taken: &[Vec<String>],
-        passed_over: Vec<PassedOver>,
+        passed_over: Vec<PinnedKey>,
     ) -> HostConfig {
         let mut values = vec![];
         for (name, value) in table {
@@ -2099,7 +2099,7 @@ label = "inception"
         assert_eq!((work.agents, work.priority), (Some(6), 30));
         assert_eq!(
             config.configuration.passed_over,
-            vec![PassedOver {
+            vec![PinnedKey {
                 key: "streams.work.agents".into(),
                 pin: "streams.work.agents".into(),
             }]
@@ -2199,7 +2199,7 @@ label = "inception"
             .unwrap();
             assert_eq!(
                 config.configuration.passed_over,
-                vec![PassedOver {
+                vec![PinnedKey {
                     key: format!("repos.\"{local}\".stream"),
                     pin: format!("repos.\"{pinned}\".stream"),
                 }],

@@ -304,6 +304,10 @@ fn held() -> HeldState {
             waiting: Some("withdrawn".into()),
             waiting_since: Some(130),
             unread: Some("the merge queue is down".into()),
+            passed_over: vec![PassedOver {
+                branch: "bolt/x".into(),
+                words: "bolt/x's policy cannot be read".into(),
+            }],
         },
         failures: vec!["the agent did not end".into()],
         priority: -3,
@@ -1136,7 +1140,7 @@ fn the_hosts_configuration_and_its_layers() {
                 layer: ConfigLayer::Managed,
             },
         ],
-        passed_over: vec![PassedOver {
+        passed_over: vec![PinnedKey {
             key: "streams.work.priority".into(),
             pin: "streams.work".into(),
         }],
@@ -1865,6 +1869,14 @@ fn a_submission_and_its_outcomes() {
     round_trips(SubmissionRead::CouldNotRead {
         reason: "down".into(),
     });
+    round_trips(ReadAcross::from(SubmissionRead::None));
+    round_trips(ReadAcross {
+        read: SubmissionRead::None,
+        passed_over: vec![PassedOver {
+            branch: "bolt/x".into(),
+            words: "bolt/x's policy cannot be read".into(),
+        }],
+    });
     for verdict in [
         Verdict::Landed {
             commit: Revision::new("c9"),
@@ -1934,8 +1946,21 @@ fn the_inbox_and_its_outcomes() {
     for outcome in &outcomes {
         round_trips(outcome.clone());
     }
-    round_trips(Inbox::Outcomes { outcomes });
-    round_trips(Inbox::Outcomes { outcomes: vec![] });
+    round_trips(Inbox::Outcomes {
+        outcomes: outcomes.clone(),
+        passed_over: vec![],
+    });
+    round_trips(Inbox::Outcomes {
+        outcomes,
+        passed_over: vec![PassedOver {
+            branch: "bolt/x".into(),
+            words: "bolt/x's records cannot be read".into(),
+        }],
+    });
+    round_trips(Inbox::Outcomes {
+        outcomes: vec![],
+        passed_over: vec![],
+    });
     round_trips(Inbox::CouldNotRead {
         reason: "down".into(),
     });

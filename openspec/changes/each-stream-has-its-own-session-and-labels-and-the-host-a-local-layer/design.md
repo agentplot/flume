@@ -333,11 +333,11 @@ pub enum LocalLayer {
     Taken,
     NotTaken { keys: Vec<String>, fault: Option<String> },
 }
-pub struct PassedOver { pub key: String, pub pin: String }
+pub struct PinnedKey { pub key: String, pub pin: String }
 pub struct HostConfiguration {
     pub local: LocalLayer,
     pub values: Vec<ConfigValue>,
-    pub passed_over: Vec<PassedOver>,
+    pub passed_over: Vec<PinnedKey>,
 }
 ```
 
