@@ -55,6 +55,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["4", "190"],
             run: a_stream_changed_to_rex_while_it_waits,
         },
+        Scenario {
+            name: "stream terminals: a place whose stages ran in two terminals is tidied in each once, and the tidy's answer names what each closed",
+            cites: &["137", "190"],
+            run: a_place_in_two_terminals,
+        },
+        Scenario {
+            name: "stream terminals: a caller under a stream's terminal is a launch's recipient, and its end is sent to it through that terminal",
+            cites: &["7", "43", "190"],
+            run: a_caller_under_a_streams_terminal,
+        },
+        Scenario {
+            name: "stream terminals: one stream under a terminal that keeps no watch has a caller's act settle every place first, and a wait drive its settles",
+            cites: &["119", "122", "S91"],
+            run: one_stream_under_a_terminal_with_no_watch,
+        },
+        Scenario {
+            name: "stream terminals: S91, a stream under a terminal of its own beside the host's, flume attended while it keeps no watch, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
+            cites: &["S91", "4", "119", "143", "190"],
+            run: s91_a_stream_under_its_own_terminal,
+        },
     ]
 }
 
@@ -364,5 +384,230 @@ fn a_stream_changed_to_rex_while_it_waits(_: &()) -> Outcome {
         "the refused setting: {setting:?}"
     );
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    Ok(())
+}
+
+/// The repository's kind `pair`, which lands, of two stages each
+/// delivering commits.
+fn pair(world: &World) {
+    world.kinds.set_kinds(
+        REPOSITORY,
+        vec![kind(
+            "pair",
+            true,
+            vec![
+                stage("one", Some(Deliverable::Commits), "{{brief}}"),
+                stage("two", Some(Deliverable::Commits), "{{brief}}"),
+            ],
+        )],
+    );
+}
+
+fn a_place_in_two_terminals(_: &()) -> Outcome {
+    let world = World::new();
+    let other = work_and_trial(&world);
+    pair(&world);
+    launched(&world.engine.launch(&Launch {
+        stream: Some("trial".into()),
+        ..launch("pair", "one", Some("x"))
+    }))?;
+    let id = World::id("pair", "one");
+    let one = World::identity("pair", "one", "one", 1);
+    let two = World::identity("pair", "one", "two", 1);
+    ensure!(
+        other.opened(&one).is_some(),
+        "stage one did not open in other"
+    );
+    world.host.set_display("trial", Some("fake"), None, None);
+    world.commit("pair/one", &["one.rs"]);
+    world.settle(&id);
+    ensure!(
+        world.terminal.opened(&two).is_some(),
+        "stage two did not open in fake"
+    );
+    world.commit("pair/one", &["two.rs"]);
+    let mut tidied = vec![];
+    for _ in 0..3 {
+        if let flume_core::Answer::Settled { tidy, .. } = world.engine().settle(Some(&id)) {
+            tidied.extend(tidy.terminal);
+        }
+    }
+    ensure!(world.held(&id).is_none(), "the landed place still stands");
+    ensure_eq!(
+        (other.log.count("tidy"), world.terminal.log.count("tidy")),
+        (1, 1),
+        "the tidies asked of other and of fake"
+    );
+    ensure_eq!(
+        tidied
+            .iter()
+            .map(|tidied| tidied.closed.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            vec![
+                "the tab pair--one in trial".to_string(),
+                "the workspace repository main in trial".to_string()
+            ];
+            2
+        ],
+        "what each terminal closed, in the tidy's answer"
+    );
+    Ok(())
+}
+
+fn a_caller_under_a_streams_terminal(_: &()) -> Outcome {
+    let world = World::new();
+    let other = work_and_trial(&world);
+    other.set_session(Some("caller-1"));
+    other.add_session("caller-1", AgentState::Waiting);
+    let fix = fix_on(&world, "work", "one")?;
+    let id = World::id("fix", "one");
+    ensure_eq!(
+        world.held(&id).ok_or("no held state")?.place.recipients,
+        vec!["caller-1".to_string()],
+        "the fix's recipients"
+    );
+    ensure!(
+        world.terminal.opened(&fix).is_some(),
+        "the work fix's agent did not open in fake"
+    );
+    world.commit("fix/one", &["fix.rs"]);
+    world.settle(&id);
+    let notices = other.notices("caller-1");
+    ensure!(
+        notices
+            .first()
+            .is_some_and(|notice| notice.contains("code delivered")),
+        "the notices through other: {notices:?}"
+    );
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "fake was sent notices: {:?}",
+        world.terminal.every_notice()
+    );
+    Ok(())
+}
+
+fn one_stream_under_a_terminal_with_no_watch(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    work_and_trial(&world);
+    world.terminal.add_session("ops", AgentState::Working);
+    let id = World::id("fix", "one");
+    launched(&world.engine.launch(&Launch {
+        stream: Some("work".into()),
+        recipients: vec!["ops".into()],
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    fix_on(&world, "work", "two")?;
+    world
+        .terminal
+        .kill(&World::identity("fix", "one", "code", 1));
+    let waited = world.engine().wait(
+        &id,
+        &flume_core::WaitFor::Stage("code".into()),
+        "ops",
+        Some(10),
+    );
+    ensure!(
+        matches!(&waited, flume_core::Answer::Waited { end: Some(_), .. }),
+        "the wait answered no end: {waited:?}"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Lost),
+        "the stage once the wait settled it"
+    );
+    world
+        .terminal
+        .kill(&World::identity("fix", "two", "code", 1));
+    let two = World::id("fix", "two");
+    ensure_eq!(
+        world.status(&two)?.stages[0].state,
+        StageState::Begun,
+        "the second stage before a command acts"
+    );
+    let dropped = world.engine.drop_place(&id, true);
+    ensure!(
+        dropped.refusal().is_none(),
+        "the drop was refused: {dropped:?}"
+    );
+    ensure_eq!(
+        world.status(&two)?.stages[0].state,
+        StageState::Lost,
+        "the second stage once a command acted"
+    );
+    Ok(())
+}
+
+fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    let other = work_and_trial(&world);
+    let work = fix_on(&world, "work", "one")?;
+    ensure_eq!(
+        world.terminal.opened_at(&work),
+        Some(OpenIn::Session {
+            name: "work".into()
+        }),
+        "the work fix's agent"
+    );
+    launched(&world.engine.launch(&Launch {
+        stream: Some("trial".into()),
+        ..launch("change", "two", Some("plan it"))
+    }))?;
+    let change = World::id("change", "two");
+    world.settle(&change);
+    let construct = World::identity("change", "two", "construct", 1);
+    ensure_eq!(
+        other.opened_at(&construct),
+        Some(OpenIn::Session {
+            name: "trial".into()
+        }),
+        "the trial change's construct agent"
+    );
+    world.terminal.kill(&work);
+    let moved = world.engine.priority(&change, 1);
+    ensure!(
+        moved.refusal().is_none(),
+        "the priority was refused: {moved:?}"
+    );
+    ensure_eq!(
+        world.stage_state(&World::id("fix", "one"), "code"),
+        Some(StageState::Lost),
+        "the work fix's stage once a caller acted, trial keeping no watch"
+    );
+    world.host.set_display("trial", Some("fake"), None, None);
+    write_change(&world, "two");
+    world.settle(&change);
+    world.settle(&change);
+    ensure!(
+        other.log.count("close") == 1 && !heard_of(&world.terminal, &construct),
+        "the construct agent was not ended where it opened: {:?}",
+        other.log.calls()
+    );
+    let code = World::identity("change", "two", "code", 1);
+    ensure_eq!(
+        world.terminal.opened_at(&code),
+        Some(OpenIn::Session {
+            name: "trial".into()
+        }),
+        "the trial change's code agent"
+    );
+    world.host.set_display("lab", Some("rex"), None, None);
+    let reason = refused(&world.engine.launch(&Launch {
+        stream: Some("lab".into()),
+        ..launch("fix", "three", Some("x"))
+    }))?;
+    ensure!(reason.contains("rex"), "the refusal: {reason}");
+    fix_on(&world, "work", "four")?;
+    fix_on(&world, "trial", "five")?;
+    for name in ["four", "five"] {
+        ensure_eq!(
+            world.stage_state(&World::id("fix", name), "code"),
+            Some(StageState::Begun),
+            "the {name} fix's code stage"
+        );
+    }
     Ok(())
 }

@@ -34,7 +34,8 @@ impl Engine {
     /// The recipient a command that takes one acts as where it names
     /// none: the caller's environment's, else the role of the place
     /// `here` names where that place is a role's run, else the calling
-    /// session as the terminal names it (7, 132; design 7).
+    /// session as the first terminal the host binds that names one names
+    /// it (7, 132, 190; design 7).
     pub fn recipient(&self, here: Option<&PlaceId>) -> Option<String> {
         if let Some(recipient) = self.host.recipient() {
             return Some(recipient);
@@ -45,7 +46,7 @@ impl Engine {
         {
             return Some(role);
         }
-        self.terminal.session()
+        self.caller_session()
     }
 
     /// Waits on the place's stage or submission as `recipient`, for up to
@@ -57,7 +58,7 @@ impl Engine {
         recipient: &str,
         timeout: Option<Seconds>,
     ) -> Answer {
-        let watched = self.terminal.watch() != Watch::None;
+        let watched = !self.attended();
         let deadline = timeout.map(|timeout| self.host.now() + timeout);
         loop {
             match self.waited(place, of, recipient) {

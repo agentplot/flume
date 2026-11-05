@@ -286,7 +286,7 @@ impl Engine {
         } else if launch.recipients.is_empty() {
             self.host
                 .recipient()
-                .or_else(|| self.terminal.session())
+                .or_else(|| self.caller_session())
                 .into_iter()
                 .collect()
         } else {
