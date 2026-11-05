@@ -15,5 +15,5 @@ and the fake host SHALL script a stream's title (106, 143, 187, 188).
 
 #### Scenario: A scripted title
 
-- **WHEN** a test scripts the fake host's `work` with the title `Work Herdr`
-- **THEN** status gives `work`'s title `Work Herdr` from `stream` (143)
+- **WHEN** a test scripts the fake host's `work` with the title `Work Agents`
+- **THEN** status gives `work`'s title `Work Agents` from `stream` (143)

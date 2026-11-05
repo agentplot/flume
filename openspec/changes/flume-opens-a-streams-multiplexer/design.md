@@ -154,7 +154,7 @@ pub enum WindowOutcome {
 
 `TitleFrom` serializes as `stream` and `stream-name`, as `SessionFrom`
 does. The person's form says, for instance, `opened a window titled
-"Work Herdr" (the stream's title) on the session work (the stream's
+"Work Agents" (the stream's title) on the session work (the stream's
 name)`, and for the printed window, `run: <line>` on a line of its
 own, so `flume open work` can be pasted or read by a person's own
 launcher.
@@ -317,7 +317,7 @@ person runs it: `/nix/store/…/bin/herdr session attach work` (core.30).
 
 `StreamStatus` gains `title: TitleHeld`, resolved as `open_stream`
 resolves it, so status gives each stream's title with where it came
-from in the JSON form, and in the person's form as `title "Work Herdr"
+from in the JSON form, and in the person's form as `title "Work Agents"
 (the stream's title)` beside its session (56, 143; core.14).
 
 ### 9. The fakes

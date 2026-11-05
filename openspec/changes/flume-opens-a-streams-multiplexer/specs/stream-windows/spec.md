@@ -10,8 +10,8 @@ the command, then the window seam's show running it under that title
 
 #### Scenario: A stream's window
 
-- **WHEN** the fake host declares `work` with the title `Work Herdr` and no session, and `open_stream` is asked for `work`
-- **THEN** the fake terminal's log names `attach work titled Work Herdr`, the fake window's log names its command under `Work Herdr`, and the answer gives `work` from `stream-name`, `Work Herdr` from `stream` and the window opened (186, S90)
+- **WHEN** the fake host declares `work` with the title `Work Agents` and no session, and `open_stream` is asked for `work`
+- **THEN** the fake terminal's log names `attach work titled Work Agents`, the fake window's log names its command under `Work Agents`, and the answer gives `work` from `stream-name`, `Work Agents` from `stream` and the window opened (186, S90)
 
 #### Scenario: A stream that names its session and no title
 

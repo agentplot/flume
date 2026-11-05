@@ -9,8 +9,8 @@ where it came from, `stream` or `stream-name` (56, 143, 186, C.7).
 
 #### Scenario: A title and none
 
-- **WHEN** the host's configuration gives `[streams.work]` with `title = "Work Herdr"` and `[streams.personal]` with none
-- **THEN** status gives `work`'s title `Work Herdr` from `stream` and `personal`'s `personal` from `stream-name`, in the JSON form and the person's (56, 143)
+- **WHEN** the host's configuration gives `[streams.work]` with `title = "Work Agents"` and `[streams.personal]` with none
+- **THEN** status gives `work`'s title `Work Agents` from `stream` and `personal`'s `personal` from `stream-name`, in the JSON form and the person's (56, 143)
 
 #### Scenario: A title that is no text
 

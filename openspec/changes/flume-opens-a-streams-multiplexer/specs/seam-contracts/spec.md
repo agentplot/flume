@@ -32,7 +32,7 @@ that the terminal showed it in a window of its own; or a refusal (187).
 
 #### Scenario: Attach over the fake
 
-- **WHEN** the fake terminal is asked to attach `work` under `Work Herdr`, then its own session, then is scripted to refuse
+- **WHEN** the fake terminal is asked to attach `work` under `Work Agents`, then its own session, then is scripted to refuse
 - **THEN** it answers a command for `work`, then one for its own session, then the refusal, and logs each asking with its title (187)
 
 ### Requirement: The window seam's show
@@ -45,7 +45,7 @@ window at each asking (188, 189).
 
 #### Scenario: Show over the fake
 
-- **WHEN** the fake window is asked to show a command under `Work Herdr` twice, then is scripted to answer printed and then refused
+- **WHEN** the fake window is asked to show a command under `Work Agents` twice, then is scripted to answer printed and then refused
 - **THEN** it answers opened twice, logging two shows with the command and the title, then the printed line, then the refusal (188, 189)
 
 ### Requirement: The types of a view and a window
@@ -57,5 +57,5 @@ before reading with no title (143, 187, 188).
 
 #### Scenario: A view, a window and a stream round-trip
 
-- **WHEN** a command needing `XDG_CONFIG_HOME`, each of attach's and show's answers, and a stream with the title `Work Herdr` are written to JSON and read back, and a stream written with no `title` key is read
+- **WHEN** a command needing `XDG_CONFIG_HOME`, each of attach's and show's answers, and a stream with the title `Work Agents` are written to JSON and read back, and a stream written with no `title` key is read
 - **THEN** each equals the value written, and the last stream reads with no title (143, 187, 188)
