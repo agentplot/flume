@@ -22,28 +22,6 @@ brought to the rule.
   agentplot/blueprints `design/flume/requirements.md` at 4cb8c59, a change the
   operator rules (Part C's preamble; core.19). The item leaves when it
   lands.
-- **A moon repository's readiness installs what its base pins.** On
-  deneb, 2026-11-05, a place launched from a fresh clone passed its
-  toolchain, `devenv print-dev-env`, which activates proto's pins in
-  the git common directory and installs none, then failed `moon setup`
-  with `moon: command not found` until a person entered the clone's
-  devenv shell. Where `[tests] runner` is `moon` and the base's revision
-  the policy is read at holds a `.prototools`, the place's readiness now
-  runs `proto install --config-mode upwards` under the toolchain's
-  environment, a step of its own before `moon setup`, as sluice's moon
-  runner does before any moon command, and status names it with its
-  words. The pins are read with the policy at the base's revision (20),
-  never from the place's tree, where sluice's runner reads its own
-  checkout's. 11 holds as the code reads it: the install is the
-  repository's readiness as its merge queue reads it, the core names
-  nothing of it, and the versions are the repository's own. The code
-  stands ahead of C.1's ready column and C.6's place row, which name the
-  toolchain and the runner's setup alone, and of C.6's paragraph that
-  reads readiness from `.config/sluice.toml`; C.2's `merge_queue =
-  "sluice"` line names only where the base lives, though the profile
-  reads a place's readiness and teardown there too. They say so once
-  the operator rules the change (core.19). The item leaves when it
-  lands.
 - **Clause 117 has submit answered before the merge queue decides.**
   sluice 0.57.1, on a base that takes pull requests, can answer a
   no-wait submit with the record of an entry it found decided as it
