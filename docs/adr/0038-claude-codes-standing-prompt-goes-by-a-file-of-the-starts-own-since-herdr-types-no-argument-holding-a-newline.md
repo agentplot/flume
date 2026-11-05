@@ -36,7 +36,7 @@ Option 1.
 2. **Nothing else changes.** The text reaches Claude Code's system prompt byte for byte as it did, so 148's layers and the prompt cache are as they were. Under the printed command the line a person runs names the file in place of the text.
 3. **herdr's refusal stands.** herdr refuses by design what it cannot type into every shell it supports, and says so before it types anything. The open reads `invalid_agent_argument` as refused in herdr's words, as it reads `invalid_agent_timeout` (C.5), and nothing of flume's checks herdr's rule ahead of it.
 
-Option 2 changes the text the agent reads, and a document's lists and code blocks with it. Option 3 does not work: herdr quotes each argument, so the shell expands no variable in it, and a variable holding a newline would put it back in the line. Option 4 runs a program of flume's in place of the one the settings name, which the foreground check reads as another program unless it execs, and adds a script where the program already reads a file. Option 5 leaves every start that holds a standing prompt of several lines refused until herdr changes, and herdr's rule is a sound one for a tool that types into a shell.
+Option 2 changes the text the agent reads, and a document's lists and code blocks with it. Option 3 does not work: herdr quotes each argument in single quotes, so the shell expands no variable in it. Option 4 runs a program of flume's in place of the one the settings name, which the foreground check reads as another program unless it execs, and adds a script where the program already reads a file. Option 5 leaves every start that holds a standing prompt of several lines refused until herdr changes, and herdr's rule is a sound one for a tool that types into a shell.
 
 ### Consequences
 
