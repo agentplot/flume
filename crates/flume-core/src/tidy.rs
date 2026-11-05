@@ -146,9 +146,9 @@ impl Engine {
         // Each terminal its agents opened in tidies what it made for the
         // place, whatever the configuration names by now (137, 190).
         let (terminals, unreached) = self.tidy_terminals(&held);
-        let answers: Vec<TerminalTidy> = terminals
+        let answers: Vec<(Option<String>, TerminalTidy)> = terminals
             .iter()
-            .map(|terminal| terminal.tidy(&at))
+            .map(|(profile, terminal)| (profile.clone(), terminal.tidy(&at)))
             .collect();
         for reason in unreached {
             self.host.log(&format!(
@@ -162,10 +162,11 @@ impl Engine {
         }
         if self.remove_held(id) {
             tidied.removed.push(id.clone());
-            for terminal in answers {
+            for (profile, terminal) in answers {
                 if !terminal.closed.is_empty() || !terminal.kept.is_empty() {
                     tidied.terminal.push(TerminalTidied {
                         place: id.clone(),
+                        profile,
                         closed: terminal.closed,
                         kept: terminal.kept,
                     });

@@ -32,6 +32,11 @@ pub(crate) type HeldIn = (Arc<dyn Terminal>, AgentState);
 /// Some terminals, each once.
 pub(crate) type Terminals = Vec<Arc<dyn Terminal>>;
 
+/// A terminal a place's tidy runs on, with the name of the profile that
+/// gives it; none for the host's own where no profile the resolver
+/// carries gives it (137, 190).
+pub(crate) type PlaceTerminal = (Option<String>, Arc<dyn Terminal>);
+
 /// Whether `a` and `b` are one terminal.
 fn same(a: &Arc<dyn Terminal>, b: &Arc<dyn Terminal>) -> bool {
     std::ptr::addr_eq(Arc::as_ptr(a), Arc::as_ptr(b))
@@ -41,6 +46,14 @@ fn same(a: &Arc<dyn Terminal>, b: &Arc<dyn Terminal>) -> bool {
 pub(crate) fn add(terminals: &mut Terminals, terminal: Arc<dyn Terminal>) {
     if !terminals.iter().any(|other| same(other, &terminal)) {
         terminals.push(terminal);
+    }
+}
+
+/// `terminal`, by the name `profile`, among `terminals`, added where it
+/// is not, the first name it is added by kept.
+fn put(terminals: &mut Vec<PlaceTerminal>, profile: Option<String>, terminal: Arc<dyn Terminal>) {
+    if !terminals.iter().any(|(_, other)| same(other, &terminal)) {
+        terminals.push((profile, terminal));
     }
 }
 
@@ -262,17 +275,21 @@ impl Engine {
         self.host_terminals()
             .into_iter()
             .map(|bound| crate::TerminalStatus {
-                profile: bound.profile.or_else(|| {
-                    self.resolver.terminal_profiles().into_iter().find(|name| {
-                        self.resolver
-                            .terminal(name)
-                            .is_some_and(|terminal| same(&terminal, &bound.terminal))
-                    })
-                }),
+                profile: bound.profile.or_else(|| self.profile_of(&bound.terminal)),
                 kept: bound.terminal.kept(),
                 watch: bound.terminal.watch(),
             })
             .collect()
+    }
+
+    /// The name of the first profile the resolver gives `terminal` by;
+    /// none where it gives it by none (190).
+    fn profile_of(&self, terminal: &Arc<dyn Terminal>) -> Option<String> {
+        self.resolver.terminal_profiles().into_iter().find(|name| {
+            self.resolver
+                .terminal(name)
+                .is_some_and(|other| same(&other, terminal))
+        })
     }
 
     /// Whether flume runs attended: a terminal the host binds, its own or
@@ -323,13 +340,15 @@ impl Engine {
     /// place's opened its agent in, each its stages' starts record, the
     /// host's for a start that records none, and its stream's as the
     /// host's configuration stands where it has no start; and why each
-    /// the tidy cannot reach does not answer (137, 190).
-    pub(crate) fn tidy_terminals(&self, held: &HeldState) -> (Terminals, Vec<String>) {
+    /// the tidy cannot reach does not answer; each by the name of the
+    /// profile it was recorded or named by, the host's own by the one the
+    /// resolver gives it by (137, 190).
+    pub(crate) fn tidy_terminals(&self, held: &HeldState) -> (Vec<PlaceTerminal>, Vec<String>) {
         let mut terminals = vec![];
         let mut unreached = vec![];
         for opened in &held.terminals {
             match self.resolver.terminal(&opened.profile) {
-                Some(terminal) => add(&mut terminals, terminal),
+                Some(terminal) => put(&mut terminals, Some(opened.profile.clone()), terminal),
                 None => unreached.push(format!(
                     "the place {} opened an agent in the terminal {}, and no terminal profile is named {} now",
                     held.place.id, opened.profile, opened.profile
@@ -340,13 +359,19 @@ impl Engine {
         for start in held.stages.iter().filter_map(|stage| stage.start.as_ref()) {
             started = true;
             match self.terminal_of(start) {
-                Ok(terminal) => add(&mut terminals, terminal),
+                Ok(terminal) => {
+                    let profile = match &start.terminal {
+                        Some(recorded) => Some(recorded.profile.clone()),
+                        None => self.profile_of(&terminal),
+                    };
+                    put(&mut terminals, profile, terminal)
+                }
                 Err(reason) => unreached.push(reason),
             }
         }
         if !started {
             match self.stream_terminal(&held.place.stream.name) {
-                Ok((terminal, _)) => add(&mut terminals, terminal),
+                Ok((terminal, named)) => put(&mut terminals, Some(named.profile), terminal),
                 Err(reason) => unreached.push(reason),
             }
         }

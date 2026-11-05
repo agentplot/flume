@@ -227,10 +227,13 @@ terminal's own, which for herdr stays `flume`.
 - **Tidy.** `tidy(place)` runs on each distinct terminal the place's
   starts recorded, the host's for a start recording none, and on its
   stream's as the configuration stands where it has no start; each
-  answer is one `TerminalTidied`, as the list holds today (137). The
-  place's held state keeps `terminals`, each terminal a start of its
-  opened an agent in, once, so a stage started again elsewhere leaves
-  its first terminal in the list; a place written before keeps none.
+  answer is one `TerminalTidied`, which gains `profile`, the name the
+  terminal was recorded or named by, the host's own by the name the
+  resolver gives it, and the person's form says it after each line it
+  closed or kept (137; core.14). The place's held state keeps
+  `terminals`, each terminal a start of its opened an agent in, once,
+  so a stage started again elsewhere leaves its first terminal in the
+  list; a place written before keeps none.
 - **The terminals the host binds.** The host's own, then each declared
   stream's that a profile carries, by the stream's name, each once.
   `kept()` and `watch()` are read of each. `HostStatus` keeps

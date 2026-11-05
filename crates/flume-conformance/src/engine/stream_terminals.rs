@@ -56,7 +56,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_stream_changed_to_rex_while_it_waits,
         },
         Scenario {
-            name: "stream terminals: a place whose stages ran in two terminals is tidied in each once, and the tidy's answer names what each closed",
+            name: "stream terminals: a place whose stages ran in two terminals is tidied in each once, and the tidy's answer names each terminal with what it closed",
             cites: &["137", "190"],
             run: a_place_in_two_terminals,
         },
@@ -467,19 +467,20 @@ fn a_place_in_two_terminals(_: &()) -> Outcome {
         (1, 1),
         "the tidies asked of other and of fake"
     );
+    let closed = vec![
+        "the tab pair--one in trial".to_string(),
+        "the workspace repository main in trial".to_string(),
+    ];
     ensure_eq!(
         tidied
             .iter()
-            .map(|tidied| tidied.closed.clone())
+            .map(|tidied| (tidied.profile.clone(), tidied.closed.clone()))
             .collect::<Vec<_>>(),
         vec![
-            vec![
-                "the tab pair--one in trial".to_string(),
-                "the workspace repository main in trial".to_string()
-            ];
-            2
+            (Some("other".to_string()), closed.clone()),
+            (Some("fake".to_string()), closed)
         ],
-        "what each terminal closed, in the tidy's answer"
+        "which terminal closed what, in the tidy's answer"
     );
     Ok(())
 }

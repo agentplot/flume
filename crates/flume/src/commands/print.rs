@@ -905,11 +905,15 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
         lines.push(format!("{place}'s work is not over"));
     }
     for terminal in &tidy.terminal {
+        let within = match &terminal.profile {
+            Some(profile) => format!("in the terminal {profile}"),
+            None => "in the host's own terminal".into(),
+        };
         for closed in &terminal.closed {
-            lines.push(format!("closed {closed} of {}", terminal.place));
+            lines.push(format!("closed {closed} of {} {within}", terminal.place));
         }
         for kept in &terminal.kept {
-            lines.push(format!("kept {kept} of {}", terminal.place));
+            lines.push(format!("kept {kept} of {} {within}", terminal.place));
         }
     }
     lines
@@ -1196,6 +1200,37 @@ mod tests {
             "    its terminal printed, the default"
         );
         assert_eq!(terminal_line(&agent(None)), "    its terminal the host's");
+    }
+
+    #[test]
+    fn each_terminal_a_tidy_closed_in() {
+        // 137, 190: what each terminal closed and kept of a place, named
+        // by its profile, the host's own where no profile gives it.
+        let place = flume_seams::PlaceId::new("/r/places/pair--one");
+        let tidy = Tidied {
+            terminal: vec![
+                flume_core::TerminalTidied {
+                    place: place.clone(),
+                    profile: Some("other".into()),
+                    closed: vec!["the tab pair--one".into()],
+                    kept: vec![],
+                },
+                flume_core::TerminalTidied {
+                    place,
+                    profile: None,
+                    closed: vec![],
+                    kept: vec!["the workspace r main, held by the pane w1:p3".into()],
+                },
+            ],
+            ..Tidied::default()
+        };
+        assert_eq!(
+            tidy_lines(&tidy),
+            vec![
+                "closed the tab pair--one of /r/places/pair--one in the terminal other",
+                "kept the workspace r main, held by the pane w1:p3 of /r/places/pair--one in the host's own terminal",
+            ]
+        );
     }
 
     /// An agent at work under `mode`, as `layer` wrote it, its start's

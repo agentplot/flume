@@ -261,12 +261,14 @@ or is done and whose agent stopped:
 
 It keeps a place
 holding uncommitted or unignored work, and a branch with commits the
-base lacks, naming each.
+base lacks, naming each. What it closed or kept in a multiplexer is
+named with that multiplexer, `profile` in the JSON form.
 
 ```console
 $ flume tidy
 removed ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme
 kept the branch chore/tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme, 1 commits not landed
+closed the tab chore--tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme in the terminal herdr
 ```
 
 ## `flume settle`

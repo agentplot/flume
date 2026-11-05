@@ -825,8 +825,8 @@ pub struct Tidied {
     pub branches_kept: Vec<BranchKept>,
     /// Places asked of whose work is not over.
     pub not_over: Vec<PlaceId>,
-    /// What the terminal closed and kept of what it made for each place
-    /// removed (137, 138).
+    /// What each terminal closed and kept of what it made for each place
+    /// removed, by the terminal (137, 138, 190).
     #[serde(default)]
     pub terminal: Vec<TerminalTidied>,
 }
@@ -841,11 +841,15 @@ impl Tidied {
     }
 }
 
-/// What the terminal closed of what it made for a place removed, and what
-/// it kept, each named with what holds it (137, 138).
+/// What a terminal closed of what it made for a place removed, and what
+/// it kept, each named with what holds it, under the name of the
+/// terminal's profile: none for the host's own where no profile the
+/// resolver carries gives it (137, 138, 190).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalTidied {
     pub place: PlaceId,
+    #[serde(default)]
+    pub profile: Option<String>,
     pub closed: Vec<String>,
     pub kept: Vec<String>,
 }
