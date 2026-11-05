@@ -96,10 +96,12 @@ the rest of this site says.
   stream's tokens.
 
 - **A kind's own label.** A kind's declaration may give its places a
-  label, which the host's configuration can override. It waits on the
-  kind format naming the field. Until then only the host's
-  configuration gives a place a label.
+  label, `label` in its table, which the host's configuration can
+  override. It waits on the kind format's reader taking the field.
+  Until then only the host's configuration gives a place a label.
 
-- **An MCP server's labels.** A server the host gives its agents may
-  name the labels whose places may have it. It waits on how a host's
-  servers reach an agent, which is not yet decided.
+- **An MCP server's labels.** The host's configuration declares each
+  MCP server its agents may have, under `[mcp.<server>]`, with the
+  labels whose places may have it. At each agent's start flume hands
+  the agent the servers its place's label may have. The servers an
+  account or a repository lists still load beside them.
