@@ -4,20 +4,26 @@
 
 A place waiting on its caller under no hold's words for five minutes, or
 for the launch's bound where it sets one, SHALL be stalled: status SHALL
-say so, and the settle that reads it SHALL deliver to each recipient,
-and to the host's answerer where it is none of them, once each, that it
-is stalled, which move is theirs, and the words and key of the
-stop-short it waits on (43, 130, 190).
+say so, and the settle that reads it SHALL deliver to each recipient, to
+the role the stop-short it waits on named, and to the answerer behind
+its stream where it is none of them, once each, that it is stalled,
+which move is theirs, and the words, key and addressee of the
+stop-short it waits on (43, 130, 191).
 
 #### Scenario: Stalled after five minutes
 
 - **WHEN** a construct ends short needing an answer and no retry comes for five minutes of the fake clock under a watch, on a host that names no answerer
 - **THEN** the watch's settle reads the place stalled, status says so, and each recipient gets one notice naming the retry of construct as the move, and none at later settles
 
-#### Scenario: The stall reaches the host's answerer
+#### Scenario: The stall reaches the answerer
 
-- **WHEN** the same place, launched from the pane `ops`, stalls on a host whose configuration names `ops/answerer` its answerer with a run, and no run of it stands
-- **THEN** the stall is delivered once to `ops` and stands pending for `ops/answerer`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (190, S92)
+- **WHEN** the same place, launched from the pane `ops`, stalls on a host whose configuration names `acme/operator` its answerer with a run, and no run of it stands
+- **THEN** the stall is delivered once to `ops` and stands pending for `acme/operator`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (191, S93)
+
+#### Scenario: The role a question named
+
+- **WHEN** a construct of a place whose recipient is `acme/planner` stopped short naming `acme/ops`, and no one holds or answers it for five minutes
+- **THEN** the stall is delivered to `acme/planner`, to `acme/ops` and to `acme/operator`, the answerer, once each
 
 #### Scenario: The answerer is the recipient
 
@@ -40,21 +46,20 @@ stop-short it waits on (43, 130, 190).
 
 A caller SHALL be able to hold the move a place waits on it for, with
 words and an optional bound, by `flume hold <place> <words> --waiting
-[--for <time>]`. The place SHALL not stall while it holds. A retry
-naming the stage or the submission, or a drop, SHALL end it. Past its
-bound the settle SHALL lapse it and the place SHALL stall at once. It
-SHALL be refused on a place that waits on no move of its caller's (47,
-130).
+[--for <time>]`. A later hold on the move SHALL replace its words and
+bound. The place SHALL not stall while it holds. A retry naming the
+stage or the submission, or a drop, SHALL end it. It SHALL be refused
+on a place that waits on no move of its caller's (47, 130).
 
-#### Scenario: The answerer holds the question
+#### Scenario: A role takes the question
 
-- **WHEN** a construct ended short needing an answer, and a caller holds the waiting move with "asked the user on card req_1" and no bound
-- **THEN** status gives the hold with its words and since when, and the place is never stalled while it holds (S91)
+- **WHEN** a construct ended short needing an answer, and a role's run holds the waiting move with "acme-planner has it" for an hour
+- **THEN** status gives the hold with its words, since when and its bound, and the place is not stalled while it holds
 
-#### Scenario: A hold's bound passes
+#### Scenario: Passed on
 
-- **WHEN** the hold gives `--for 1h` and the fake clock passes an hour under a watch with no retry
-- **THEN** the watch's settle lapses the hold, status says it lapsed and when, and the place's stall is delivered to each recipient and to the host's answerer
+- **WHEN** the same run then holds the move with "passed to acme/design" for an hour
+- **THEN** status gives the new words and bound in place of the first
 
 #### Scenario: The move made
 
@@ -66,14 +71,26 @@ SHALL be refused on a place that waits on no move of its caller's (47,
 - **WHEN** a caller holds the waiting move of a place whose code stage works
 - **THEN** the hold is refused naming the place and that it waits on no move of its caller's, and nothing changes
 
+### Requirement: A hold on the waiting move lapses at its bound
+
+Once a hold on the waiting move has stood past its bound, the settle
+that reads it SHALL lapse it, and the place SHALL stall again at once,
+its stall a new end with a key of its own, naming the lapsed hold's
+words (130, 191).
+
+#### Scenario: A hold's bound passes
+
+- **WHEN** the hold's hour passes on the fake clock under a watch with no retry
+- **THEN** the watch's settle lapses the hold, status says it lapsed and when, and the place's stall, naming the lapsed hold's words, is delivered to each recipient, to the role the stop-short named and to the answerer (S94)
+
 ### Requirement: A stall recorded before reaches the answerer
 
 A stall an earlier flume recorded, which names no answerer, SHALL be
-read at the first settle after the build as the host's answerer's too,
-where the place still waits on its caller under no hold's words, and
-delivered once (130, 190).
+read at the first settle after the build as the answerer's too, where
+the place still waits on its caller under no hold's words, and
+delivered once (130, 191).
 
 #### Scenario: A stall from the earlier release
 
-- **WHEN** a place's held state, written by an earlier flume, holds a stall delivered to nobody, and the host's configuration now names `ops/answerer`
-- **THEN** the next settle delivers the stall to `ops/answerer` once, and later settles deliver it again to no one
+- **WHEN** a place's held state, written by an earlier flume, holds a stall delivered to nobody, and the host's configuration now names `acme/operator`
+- **THEN** the next settle delivers the stall to `acme/operator` once, and later settles deliver it again to no one

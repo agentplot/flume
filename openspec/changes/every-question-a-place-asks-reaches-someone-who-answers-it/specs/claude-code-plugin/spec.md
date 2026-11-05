@@ -19,27 +19,27 @@ flume did not start (C.4, section 9; record 0016).
 
 ### Requirement: SessionStart gives a caller's session what waits on it
 
-In a session flume did not start, SessionStart SHALL run `flume serve`
-of the address `$FLUME_RECIPIENT` names, else `flume inbox` as the
-session the terminal names, and SHALL give the agent, as added context,
-each end and each waiting place it answers with the key and how to
-answer, hold or leave it; or nothing where it answers nothing, no
-session is named, or flume does not answer (43, 132, C.4).
+In a session flume did not start, SessionStart SHALL run `flume inbox`
+as the session the terminal names, never as a role's address, and SHALL
+give the agent, as added context, each end and each waiting place it
+answers with the key and how to answer, hold or leave it; or nothing
+where it answers nothing, no session is named, or flume does not answer
+(43, C.4).
 
 #### Scenario: A restarted pane
 
 - **WHEN** a session flume did not start begins in the pane `ops`, a place whose recipient is `ops` waits on a retry of construct with a stop-short delivered before, and SessionStart runs
-- **THEN** the hook's output gives the agent the place, the stop-short's words, its key and the three ways on, and exits 0 (S92)
+- **THEN** the hook's output gives the agent the place, the stop-short's words, its key and the three ways on, and exits 0 (S93)
 
 #### Scenario: Nothing waits
 
 - **WHEN** the same hook runs for a session nothing is pending for and nothing waits on
 - **THEN** it gives no output and exits 0
 
-#### Scenario: A standing role's session
+#### Scenario: An address in the environment
 
-- **WHEN** SessionStart runs in a session flume did not start with `FLUME_RECIPIENT=madswan/planner`
-- **THEN** the session serves `madswan/planner`, and the hook gives what that serve answers
+- **WHEN** SessionStart runs in a session flume did not start with `FLUME_RECIPIENT=acme/planner`, and an end stands pending for `acme/planner`
+- **THEN** the hook collects as the session the terminal names, and the end stays pending for `acme/planner`
 
 #### Scenario: flume unreachable
 

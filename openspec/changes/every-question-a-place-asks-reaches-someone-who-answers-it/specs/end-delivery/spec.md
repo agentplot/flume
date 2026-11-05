@@ -17,21 +17,27 @@ another recipient SHALL mark nothing delivered (43, core.25).
 ### Requirement: The inbox gives what waits on its recipient
 
 `flume inbox` SHALL also give, as `waiting`, every place that waits on
-its caller and that the recipient is a recipient of, or the host's
-answerer was given a stall of, delivered or not, with its kind, name
-and brief's first line, the move and since when, a stop-short's words,
-needs and key, and a hold's words, since and bound. It SHALL mark
-nothing for them (43, 130, 190; core.25).
+its caller and that the recipient is a recipient of, was named by the
+stop-short the place waits on, or was given a stall of as the answerer,
+delivered or not, with its kind, name and brief's first line, the move
+and since when, a stop-short's words, needs, key and addressee, and a
+hold's words, since and bound. It SHALL mark nothing for them (43, 130,
+191; core.25).
 
 #### Scenario: A question collected, then a restart
 
 - **WHEN** `ops` collected a construct's stop-short by `flume inbox`, did nothing with it, and its restarted session runs `flume inbox` again
 - **THEN** `ends` is empty, and `waiting` gives the place with the retry of construct as its move, since the stop-short, the agent's words and the key `stage/construct/1/ended-short`
 
+#### Scenario: A question addressed to a role
+
+- **WHEN** a place whose recipient is `acme/planner` waits on a stop-short that named `acme/ops`, and `acme/ops`'s run runs `flume inbox`
+- **THEN** `waiting` gives that place, naming `acme/ops` as the stop-short's addressee
+
 #### Scenario: The answerer's waiting places
 
-- **WHEN** a pane-launched place stalled and its stall was delivered to the host's answerer `ops/answerer`, and the answerer's run runs `flume inbox`
-- **THEN** `waiting` gives that place, though `ops/answerer` is not among its recipients (190)
+- **WHEN** a pane-launched place stalled and its stall was delivered to the answerer `acme/operator`, and the answerer's run runs `flume inbox`
+- **THEN** `waiting` gives that place, though `acme/operator` is not among its recipients (191)
 
 #### Scenario: A held question
 
@@ -48,7 +54,7 @@ for, and `flume status <place>` for any other (43; core.11, core.25).
 #### Scenario: A stop-short's notice
 
 - **WHEN** a change whose brief begins "Every question a place asks reaches someone who answers it" ends short needing an answer at construct, and the settle delivers it to a pane
-- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short` and `flume inbox` (S92)
+- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short` and `flume inbox` (S93)
 
 #### Scenario: A delivery's notice
 

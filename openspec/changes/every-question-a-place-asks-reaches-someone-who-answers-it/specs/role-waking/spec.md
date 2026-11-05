@@ -1,72 +1,114 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: A role's run is a place named by the role`
+- TO: `### Requirement: A role's run is a place named per address`
+
 ## MODIFIED Requirements
 
-### Requirement: A role's run is a place named by the role
+### Requirement: The host's configuration names each role's run
+
+flume SHALL read the roles a host wakes from the `[roles]` table of the
+host's own configuration, each address `<partition>/<role>` with the
+repository, kind, priority, base (the repository's default branch where
+it names none), and the optional brief, name, intent, settings of its
+agents under `agents`, and `answers`, the words of what the role
+answers, of its run; or `carried = true` alone, for an address whose
+run is on another host. It SHALL take the run's settings as a launch's,
+in their layers, and SHALL choose none of them of its own (7, 32, 70,
+132, 147, C.7).
+
+#### Scenario: A role configured
+
+- **WHEN** the host's configuration names `madswan/planner` with a repository, the kind `planner` and priority 5
+- **THEN** a wake of `madswan/planner` launches a place of kind `planner` in that repository at priority 5, cut from the repository's default branch, with no brief
+
+#### Scenario: A base and a brief
+
+- **WHEN** the table gives `madswan/planner` the base `next` and a brief
+- **THEN** the woken place is cut from `next` and its stages that ask for the brief get it whole
+
+#### Scenario: The run's intent and settings
+
+- **WHEN** the table gives `madswan/planner` the intent `madswan-planner` and, under `agents`, `model = "opus"`
+- **THEN** the woken place serves the intent `madswan-planner`, and its agent starts with the model `opus`, which status gives as from the launch (32, 147)
+
+#### Scenario: An address with no kind
+
+- **WHEN** an end is pending for `madswan/ops` and the table names nothing for it
+- **THEN** nothing is launched, and status names the end pending for `madswan/ops` and that the address wakes nothing
+
+#### Scenario: A carried address
+
+- **WHEN** the table gives `wldn/planner` `carried = true` and an end stands pending for it
+- **THEN** nothing is launched, the end stays pending, and status names the address carried
+
+#### Scenario: A carried address with a kind
+
+- **WHEN** the table gives `wldn/planner` both `carried = true` and a kind
+- **THEN** every command of flume's says the host's configuration is unreadable, naming `wldn/planner`
+
+### Requirement: A role's run is a place named per address
 
 A role's run SHALL be a place of its configured kind and repository,
-named by its whole address, `<partition>-<role>`, its agent's session
-named by the address, so at most one run of an address is live at once
-and two partitions' runs of one role are two places; a run standing
-under its role alone SHALL be found by its role (3, 132).
+named by the entry's `name`, else `<partition>-<role>`, its agent's
+session named by the address, so at most one run of an address is live
+at once and two partitions' runs of one role are two places. A host's
+configuration in which two addresses would make one place, of one
+repository, kind and name, SHALL be unreadable, naming both. A run an
+earlier flume named by the role alone SHALL be found by its role (3,
+132, C.7).
 
 #### Scenario: The run's session
 
-- **WHEN** a wake launches `madswan/planner`'s run and its first stage starts
+- **WHEN** a wake launches `madswan/planner`'s run, whose entry names no name, and its first stage starts
 - **THEN** the place is `planner--madswan-planner`, the fake terminal opens the agent under the session name `madswan/planner`, and status names the place's role address
 
 #### Scenario: Two partitions' planners
 
-- **WHEN** ends come at once for `madswan/planner` and `swancloud/planner`, whose runs the host's configuration names in one repository and the kind `planner`
-- **THEN** two places are launched, `planner--madswan-planner` and `planner--swancloud-planner`, and each run's `flume inbox` gives its own address's ends (S94)
+- **WHEN** ends come at once for `madswan/planner` and `swancloud/planner`, whose runs the host's configuration names in one repository and the kind `crew-planner`, named `madswan` and `swancloud`
+- **THEN** two places are launched, `crew-planner--madswan` and `crew-planner--swancloud`, and each run's `flume inbox` gives its own address's ends (S95)
+
+#### Scenario: Two addresses, one place
+
+- **WHEN** the configuration names `madswan/planner` and `swancloud/planner` in one repository and one kind, both named `planner`
+- **THEN** every command of flume's says the host's configuration is unreadable, naming both addresses
 
 #### Scenario: A run an earlier flume named
 
 - **WHEN** a run of `madswan/planner` stands as `planner--planner`, made by an earlier flume, and an end comes for the address
 - **THEN** no run is launched, and the end is delivered into that run's pane
 
-### Requirement: A carrier may wake an address
-
-`flume wake <address>` SHALL launch the address's run where none is
-live or waiting for room and no live session serves it, and SHALL do
-nothing, answering so and naming the run or the session, where one is
-(132).
-
-#### Scenario: A wake while the run waits for room
-
-- **WHEN** crew's card carrier wakes `madswan/planner` while its run waits for room
-- **THEN** the wake answers that the run waits, and no second place is made (S38)
-
-#### Scenario: A wake of a served address
-
-- **WHEN** a carrier wakes `madswan/planner` while a live session serves it
-- **THEN** the wake answers naming that session, and no place is made
-
 ## ADDED Requirements
 
-### Requirement: A session serves an address
+### Requirement: A role's run is over at its delivery
 
-`flume serve <address>`, run in a session the terminal names, SHALL
-record in the host's state that the session serves the address, with
-since when, and SHALL answer what `flume inbox --recipient <address>`
-answers. While the terminal reads that session live and no run of the
-address is live, the address's ends SHALL be delivered into it, and no
-run SHALL be woken for one it can be delivered (43, 132).
+Once a role's run's last stage delivers, the settle that reads it SHALL
+declare the run done, with no caller's word, and tidy it, so a later end
+pending for the address wakes another run (114, 132).
 
-#### Scenario: A standing planner serves its address
+#### Scenario: A turn delivers
 
-- **WHEN** a session runs `flume serve madswan/planner`, and a place naming the address delivers construct
-- **THEN** the notice is delivered into that session, and no run is launched (S93)
+- **WHEN** the run of `madswan/planner` delivers its one stage's report and its agent is quiet
+- **THEN** the settle declares it done and tidies the place, and status gives no run of `madswan/planner` standing (S95)
 
-#### Scenario: The serving session ends
+#### Scenario: The next end
 
-- **WHEN** the fake terminal reads that session stopped, and the place's next end is read on a host whose `[roles]` names nothing for the address
-- **THEN** the end stands pending, nothing is woken, and status gives the address with no run and no session serving it (S93)
+- **WHEN** an end for `madswan/planner` comes after that run was tidied
+- **THEN** the settle that reads it launches a new run (S95)
 
-#### Scenario: A later session serves
+### Requirement: A role's run's stall reaches the answerer behind it
 
-- **WHEN** a second session runs `flume serve madswan/planner` while the first is live
-- **THEN** the second serves from then, and status gives it and since when
+A role's run that waits on its caller, lost, never begun or stopped
+short, SHALL be stalled as any place is, and its stall SHALL be
+delivered to the answerer behind its stream, else the host's, and never
+to the run's own address (130, 132, 191).
 
-#### Scenario: Serving outside a session
+#### Scenario: A planner's run is lost
 
-- **WHEN** `flume serve madswan/planner` runs where the terminal names no session
-- **THEN** it is refused naming that no session is named, and records nothing
+- **WHEN** the run of `madswan/planner`, in the stream `planning` whose answerer is `madswan/operator`, is reported lost and nobody retries it for five minutes
+- **THEN** its stall is delivered to `madswan/operator`, whose run is woken
+
+#### Scenario: The door's own run
+
+- **WHEN** the run of `madswan/operator`, the answerer of its stream and of the host, is reported lost and stalls
+- **THEN** its stall is delivered to no address, and status names it under the host's addresses
