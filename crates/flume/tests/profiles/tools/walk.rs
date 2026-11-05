@@ -159,10 +159,9 @@ impl Walk {
             .expect("a walkthrough with the stand-in")
     }
 
-    /// The walkthrough's home at `home`, a path to the same folder, as a
-    /// short link is where a socket beneath the home must fit.
-    // The check-live layer's, which the tools layer does not use.
-    #[allow(dead_code)]
+    /// The walkthrough's home at `home`: a path to the same folder, as a
+    /// short link is where a socket beneath the home must fit, or another
+    /// walkthrough's, so its repositories share one host.
     pub fn with_home(mut self, home: PathBuf) -> Walk {
         self.home = home;
         self
@@ -391,23 +390,33 @@ impl Walk {
         after.split_whitespace().next().map(str::to_string)
     }
 
+    /// The file the printed command names by `--settings`, none where it
+    /// passes no own settings (195, 196).
+    pub fn own_settings(&self, place: &str) -> Option<PathBuf> {
+        let printed = self.printed(place);
+        let (_, after) = printed.split_once(" --settings ")?;
+        after
+            .split_whitespace()
+            .next()
+            .map(|file| PathBuf::from(file.trim_matches('\'')))
+    }
+
     /// The prompt the printed command carries, its last word, which
-    /// follows the plugin's folder and the session it resumes, if any,
-    /// unquoted.
+    /// follows the plugin's folder, the own settings' file and the session
+    /// it resumes, if any, unquoted.
     pub fn prompt(&self, place: &str) -> String {
         let printed = self.printed(place);
         let (_, after) = printed
             .split_once(" --plugin-dir ")
             .unwrap_or_else(|| panic!("no plugin in {printed}"));
-        let (_, quoted) = after
+        let (_, mut quoted) = after
             .split_once(' ')
             .unwrap_or_else(|| panic!("no prompt in {printed}"));
-        let quoted = match quoted.strip_prefix("--resume ") {
-            Some(resumed) => resumed
-                .split_once(' ')
-                .map_or(resumed, |(_, quoted)| quoted),
-            None => quoted,
-        };
+        for flag in ["--settings ", "--resume "] {
+            if let Some(given) = quoted.strip_prefix(flag) {
+                quoted = given.split_once(' ').map_or(given, |(_, quoted)| quoted);
+            }
+        }
         quoted
             .strip_prefix('\'')
             .and_then(|quoted| quoted.strip_suffix('\''))
