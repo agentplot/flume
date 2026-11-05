@@ -25,6 +25,7 @@ $XDG_STATE_HOME/flume/              ~/.local/state/flume by default
     <place>/                        the place's own folder
       made.jsonl                    what a stage's run made, a JSON line each
       claude/<identity>/            the plugin's record of one agent's start
+        own-settings.json           the agent's own settings as the layers resolved them, which --settings names
         started.json                the started ack: session, transcript, its length at the first ack, plugin version
         received                    the digests of the prompts the agent received
         asking.json                 the asking mark, while a question is open
@@ -51,6 +52,13 @@ takes `<place>.lock`, reads the document's version, and writes a new
 document over it only at that version. So two commands acting on one
 place at once leave it as one or the other would have. A tidy removes
 the document and the folder together, `made.jsonl` with it.
+
+`own-settings.json` is one JSON object, the agent's own settings for
+its program as the layers resolved them, each key as its layer or its
+file gave it and never a key left out. flume writes it whole before
+the terminal opens the agent, a new file renamed over the old,
+readable by the host's user alone (mode `0600`), and only where the
+layers give a key. It is never a file a layer named.
 
 ### The host's own documents
 
@@ -89,6 +97,18 @@ Every start after a spent agent records `conversation` in the held
 state, as status gives it. The place's `unsettled` lists each start whose agent began
 otherwise than its record says ([the start
 check](/flume/guides/agent-settings/#the-start-check)).
+
+A start whose program a layer gave own settings also holds `own`.
+Its `files` are each file a layer named for the program, most specific
+first, with its `layer` and its path as `written` and as `read`. Each
+file's `left_out` gives the keys its program's profile reserves that
+flume left out of it, unread, by their paths alone. Its `passed` is the
+arguments of its command that name the file it wrote, as `--settings
+<file>`. The record compares no own setting, since no release of the
+program reads them back. The place's held state keeps the launch's
+`settings`, each program's file with its keys as the launch read it,
+and `repository_agents`, the repository's `[agents]` as the launch read
+it.
 
 ## Elsewhere on the host
 
@@ -146,7 +166,7 @@ Each place:
 | `readiness` | each readiness step, whether it passed and what it printed |
 | `stages` | each stage: `name`, `state`, `starts`, `end`, `conversation`, and the part or setting it was refused for |
 | `current` | the current stage's name |
-| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; `account`, its `pool`, `name` and `from`, `affinity`, the intent's affinity for the agent's `program`, or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; `session`, the herdr session it opened in, `name`, `null` for the terminal's own, and `from`: `launch`, `stream`, `stream-name` or `own`, none where it opened beside a pane; and, for the agent of a start after a spent agent, `conversation`: `from`, the spent agent's start, `carried`, and `why` where it was not carried, naming a variable and never a path |
+| `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; in `settings`, `programs` with the agent's program's entry alone, and in `from` each of its own settings, `programs.<program>.settings.<key>`, with its `layer`, its `value` as written and its `file` where it came from one; `own`, where a layer gave its program own settings, with `passed`, the arguments that named the file its start wrote, `read_back`, `false`, and `files`, each file a layer named with its `layer`, `written`, `read` and `left_out`, each key left out with its `key` and its `owner`; `account`, its `pool`, `name` and `from`, `affinity`, the intent's affinity for the agent's `program`, or `strategy`; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; `session`, the herdr session it opened in, `name`, `null` for the terminal's own, and `from`: `launch`, `stream`, `stream-name` or `own`, none where it opened beside a pane; and, for the agent of a start after a spent agent, `conversation`: `from`, the spent agent's start, `carried`, and `why` where it was not carried, naming a variable and never a path |
 | `head` | the place's branch head |
 | `delivered` | whether the current stage's deliverable exists |
 | `tasks` | a change's tasks ticked and in all |

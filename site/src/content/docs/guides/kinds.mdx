@@ -199,12 +199,40 @@ none of the lines once the place is tidied.
 
 A kind's `agents` table, and a stage's one agent table, give the
 agent's `program`, `model` and `instructions`, `beside` for where its
-pane opens, and `mode`. The mode says how far the agent may act without
-asking a person: one of `plan`, `ask`, `edits` and `full`, or a table of
-programs such as `{ claude = "auto" }`
+pane opens, `mode` and `programs`. The mode says how far the agent may
+act without asking a person: one of `plan`, `ask`, `edits` and `full`,
+or a table of programs such as `{ claude = "auto" }`
 ([the mode](/flume/guides/agent-settings/#the-mode)).
-A `mode` that is neither refuses the launch, naming the field. A
-repository may also give settings to a kind it does not declare,
+A `mode` that is neither refuses the launch, naming the field.
+
+`programs` gives each program's own settings, in that program's own
+words: a settings file the table names, `file`, and keys it gives
+inline, `settings`
+([a program's own settings](/flume/guides/agent-settings/#a-programs-own-settings)).
+A kind's file lies beside its prompts, by a path relative to the
+declaration's own folder. flume reads it where it reads them: at the
+launch's revision for a repository's kind, and from disk for a
+launch's:
+
+```toml
+[kinds.spike.agents.programs.claude.settings]
+tui = "fullscreen"
+
+[[kinds.spike.stages]]
+name = "explore"
+prompt = "prompts/spike.md"
+deliverables = ["committed:notes/spike.md"]
+agents = [{ programs = { claude = { file = "claude-explore.json" } } }]
+```
+
+Here every stage's agent gets `tui`, and `explore`'s gets the keys of
+`.config/claude-explore.json` as well, its file coming before the
+kind's inline keys since a stage's table comes first. A file outside
+the repository, by `..`, an absolute path or a link, refuses the
+launch. So does a file the revision does not hold or that does not
+parse, and an entry with any key but `file` and `settings`.
+
+A repository may also give settings to a kind it does not declare,
 flume's own among them, with a table that holds only `agents`:
 
 ```toml
@@ -212,6 +240,28 @@ flume's own among them, with a table that holds only `agents`:
 model = "opus"
 mode = "edits"
 ```
+
+A repository gives settings to every kind it runs, its own and
+flume's, in `[agents]`, flume's own table beside `[profiles]`, which no
+kind holds. This repository's agents write its own words into every
+commit and pull request ([what a commit says about who made
+it](/flume/guides/agent-settings/#what-a-commit-says-about-who-made-it)):
+
+```toml
+# .config/flume.toml
+[profiles]
+merge_queue = "sluice"
+
+[agents.programs.claude.settings]
+attribution = { commit = "Assisted-by: Claude Code", pr = "" }
+```
+
+`[agents]` gives what a kind's table gives, and names no stage, no
+stream, no environment and no pane beside: a `stages`, a `streams`, an
+`env` or a `beside` there refuses the launch, naming the field. A
+repository's table for one kind comes before its `[agents]`, and
+`[agents]` before a kind the repository declares. A launch's
+declaration is not read for `[agents]`, as it is not for `[profiles]`.
 
 A declaration gives no environment: an `env` in any agents table
 refuses the launch, naming the field, since an agent's environment is
