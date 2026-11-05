@@ -57,6 +57,10 @@ enum Command {
     Status {
         /// A location, or `<kind>--<name>` in the repository.
         place: Option<String>,
+        /// Each place's one line alone, reading only what a line holds
+        /// (57, 60).
+        #[arg(long)]
+        line: bool,
     },
     /// The exact prompt a stage would be sent at its next start (29).
     Prompt { place: String, stage: String },
@@ -411,9 +415,14 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let launch = launch_of(args, given)?;
             build()?.launch(&launch)
         }
-        Command::Status { place } => {
+        Command::Status { place, line } => {
             let place = maybe(place)?;
-            build()?.status(place.as_ref())
+            let core = build()?;
+            if *line {
+                core.lines(place.as_ref())
+            } else {
+                core.status(place.as_ref())
+            }
         }
         Command::Prompt { place, stage } => {
             let place = named(place)?;

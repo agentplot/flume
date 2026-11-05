@@ -38,11 +38,18 @@ const STAND_IN_QUEUE: &str = "stand-in-queue";
 /// words in it as a JSON list.
 const AS_FLUME: &str = "FLUME_TEST_AS_FLUME";
 
-/// The stand-in agent: it says it started and received its prompt at
-/// once, never asks or keeps own work, and reads its session ended once
-/// the test writes the mark `stand-in/<stage>-<start>` in the place's
-/// folder. It maps each mode to its own word and reads none back.
-struct StandInAgent;
+/// The stand-in agent's name that never says it started, as a program
+/// the printed command gives a person to run reads until it runs (35).
+const UNSTARTED: &str = "stand-in-unstarted";
+
+/// The stand-in agent: it says it started, where it is `stand-in`, and
+/// received its prompt at once, never asks or keeps own work, and reads
+/// its session ended once the test writes the mark
+/// `stand-in/<stage>-<start>` in the place's folder. It maps each mode to
+/// its own word and reads none back.
+struct StandInAgent {
+    says_started: bool,
+}
 
 fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
     Path::new(folder)
@@ -79,7 +86,11 @@ impl Agent for StandInAgent {
         }
     }
     fn started(&self, _folder: &str, _agent: &Identity) -> Reading {
-        Reading::Yes
+        if self.says_started {
+            Reading::Yes
+        } else {
+            Reading::No
+        }
     }
     fn received(&self, _folder: &str, _agent: &Identity, _text: &str) -> Received {
         Received::Received {
@@ -216,7 +227,12 @@ impl Resolver for StandIn {
         }
     }
     fn agent(&self, program: &str) -> Option<Arc<dyn Agent>> {
-        (program == STAND_IN).then(|| Arc::new(StandInAgent) as Arc<dyn Agent>)
+        let says_started = match program {
+            STAND_IN => true,
+            UNSTARTED => false,
+            _ => return None,
+        };
+        Some(Arc::new(StandInAgent { says_started }))
     }
 }
 
@@ -1338,6 +1354,61 @@ fn status_over_mcp() {
     assert_eq!(replies[4]["result"]["isError"], true);
     assert_eq!(replies[5]["error"]["code"], -32601);
     assert_eq!(files_under(&host.state()), before, "status over MCP wrote");
+}
+
+#[test]
+fn one_places_line_under_the_printed_command() {
+    // 57, 60, 61: `status --line` gives the place's line alone, its JSON
+    // the same line in `lines`, under the printed command, which keeps no
+    // watch, its code agent not yet said started; nothing is written, no
+    // agent started and nothing settled.
+    let host = Host::new("line");
+    let repository = repository("line", None);
+    let kinds = kinds_file(&host, false);
+    let program = format!("program={UNSTARTED}");
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--agent", &program,
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let before = held_of(&host, &place);
+    assert_eq!(before.state.stages[0].starts, 1, "the code stage started");
+    let files = files_under(&host.state());
+
+    let person = host.flume(&repository.dir, &["status", "fix--one", "--line"], &[]);
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert_eq!(person.text, "fix--one · fix@1 · code · run 1 · starting\n");
+    let json = host.flume(
+        &repository.dir,
+        &["status", "fix--one", "--line", "--json"],
+        &[],
+    );
+    assert_eq!(json.code, 0, "{}", json.text);
+    let Answer::Lines { lines } = json.answer() else {
+        panic!("the lines' answer: {}", json.text);
+    };
+    let full: Vec<&str> = lines.iter().map(|line| line.full.as_str()).collect();
+    assert_eq!(full, ["fix--one · fix@1 · code · run 1 · starting"]);
+    let every = host.flume(&repository.dir, &["status", "--line"], &[]);
+    assert_eq!(every.text, person.text);
+
+    let after = held_of(&host, &place);
+    assert_eq!(after.version, before.version, "the line settled");
+    assert_eq!(after.state.stages[0].starts, 1, "the line started an agent");
+    assert_eq!(files_under(&host.state()), files, "the line wrote");
+    let status = host.flume(&repository.dir, &["status", "fix--one"], &[]);
+    assert!(
+        status
+            .text
+            .contains("\n  fix--one · fix@1 · code · run 1 · starting\n"),
+        "{}",
+        status.text
+    );
 }
 
 /// The place's held state as the store holds it.
