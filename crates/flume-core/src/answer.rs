@@ -326,6 +326,11 @@ pub struct HostStatus {
     /// The watch the terminal keeps, with its bound, or none (122).
     #[serde(default = "no_watch")]
     pub watch: Watch,
+    /// Each terminal the host binds, its own first, then each stream's
+    /// by the stream's name, each once: its profile, what it made and
+    /// keeps for what it did not make, and its watch (56, 119, 190).
+    #[serde(default)]
+    pub terminals: Vec<TerminalStatus>,
     /// Each repository's base a live place stands on, with the count of
     /// its places show gives and where the terminal shows it (139).
     #[serde(default)]
@@ -354,6 +359,7 @@ impl Default for HostStatus {
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
+            terminals: vec![],
             bases: vec![],
             configuration: HostConfiguration::default(),
         }
@@ -484,16 +490,24 @@ impl RoomWanted {
 }
 
 /// A stream of the host (143): the session its agents open in where
-/// their launch names none, with where it came from, its priority among
-/// streams, its agents running, the bound it states, none where the
-/// host's alone holds it, its room, none where it states no bound, its
-/// stages waiting for room in the order they would start, its labels'
-/// shares, whether their reserves are held, and why its labels refuse
-/// its starts, none where they do not (56, 70, 107, 181, 182).
+/// their launch names none, with where it came from, its multiplexer,
+/// view and terminal app, each with where it came from, and the title a
+/// window on it carries, its priority among streams, its agents running,
+/// the bound it states, none where the host's alone holds it, its room,
+/// none where it states no bound, its stages waiting for room in the
+/// order they would start, its labels' shares, whether their reserves
+/// are held, and why it refuses: its labels' fault, its multiplexer
+/// naming a terminal profile flume does not carry, or, for a terminal
+/// view, its terminal app naming a window profile flume does not carry;
+/// none where none holds (56, 70, 107, 181, 182, 186, 188, 190).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
     pub session: SessionHeld,
+    pub multiplexer: ProfileHeld,
+    pub view: ViewHeld,
+    pub terminal_app: ProfileHeld,
+    pub title: TitleHeld,
     pub priority: i64,
     pub running: u32,
     pub bound: Option<u32>,
@@ -505,6 +519,33 @@ pub struct StreamStatus {
     pub reserves: Reserves,
     #[serde(default)]
     pub refused: Option<String>,
+}
+
+/// The title a window on a stream's part of its terminal carries, and
+/// where it came from: the stream's `title`, else its name (143, 186).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TitleHeld {
+    pub title: String,
+    pub from: TitleFrom,
+}
+
+/// Where a stream's title came from (143, 186).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TitleFrom {
+    Stream,
+    StreamName,
+}
+
+/// A terminal the host binds (119, 190): the profile a stream takes it
+/// by, none for the host's own where no profile flume carries is it,
+/// what it made and keeps for what it did not make, each named with what
+/// holds it, and the watch it keeps.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalStatus {
+    pub profile: Option<String>,
+    pub kept: Vec<String>,
+    pub watch: Watch,
 }
 
 /// A label of a stream (181): its reserve, the slots of the stream it
@@ -662,6 +703,11 @@ pub struct AgentStatus {
     /// 107, 143).
     #[serde(default)]
     pub session: Option<SessionHeld>,
+    /// The terminal the agent opened in, with where it came from; none
+    /// for a start written before, whose agent is in the host's (56,
+    /// 190).
+    #[serde(default)]
+    pub terminal: Option<ProfileHeld>,
 }
 
 /// An agent's mode at its start: `passed`, the value its profile passed,

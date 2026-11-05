@@ -61,6 +61,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_place_in_two_terminals,
         },
         Scenario {
+            name: "stream terminals: a stage retried after its stream's multiplexer changed is tidied in the terminal of each of its starts",
+            cites: &["137", "190"],
+            run: a_stage_retried_in_another_terminal,
+        },
+        Scenario {
             name: "stream terminals: a caller under a stream's terminal is a launch's recipient, and its end is sent to it through that terminal",
             cites: &["7", "43", "190"],
             run: a_caller_under_a_streams_terminal,
@@ -74,6 +79,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "stream terminals: S91, a stream under a terminal of its own beside the host's, flume attended while it keeps no watch, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
             cites: &["S91", "4", "119", "143", "190"],
             run: s91_a_stream_under_its_own_terminal,
+        },
+        Scenario {
+            name: "stream terminals: status gives each stream's multiplexer with where it came from, each agent's terminal, and each terminal the host binds with what it keeps and its watch, in the JSON form",
+            cites: &["56", "190", "S91"],
+            run: the_terminals_in_status,
         },
     ]
 }
@@ -312,6 +322,13 @@ fn a_start_written_before(_: &()) -> Outcome {
     world
         .host
         .set_display(DEFAULT_STREAM, Some("other"), None, None);
+    let agent = world.status(&id)?.agent.ok_or("no agent")?;
+    let json = serde_json::to_value(&agent).map_err(|error| error.to_string())?;
+    ensure!(
+        agent.terminal.is_none() && json["terminal"].is_null(),
+        "status's terminal of a start written before: {:?}",
+        agent.terminal
+    );
     world.terminal.log.clear();
     world.commit("fix/one", &["src/lib.rs"]);
     world.settle(&id);
@@ -353,6 +370,18 @@ fn a_stream_naming_rex(_: &()) -> Outcome {
         "the work fix's agent did not open"
     );
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    let refused = host_stream(&world, "trial")?.refused;
+    ensure!(
+        refused
+            .as_deref()
+            .is_some_and(|words| words.contains("trial") && words.contains("rex")),
+        "status's refusal of trial: {refused:?}"
+    );
+    ensure_eq!(
+        host_stream(&world, "work")?.refused,
+        None,
+        "status's refusal of work"
+    );
     Ok(())
 }
 
@@ -594,6 +623,14 @@ fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
         }),
         "the trial change's code agent"
     );
+    ensure_eq!(
+        world
+            .status(&change)?
+            .agent
+            .and_then(|agent| agent.terminal),
+        profile("fake", NamedBy::Stream),
+        "status's terminal of the trial change's code agent"
+    );
     world.host.set_display("lab", Some("rex"), None, None);
     let reason = refused(&world.engine.launch(&Launch {
         stream: Some("lab".into()),
@@ -609,5 +646,125 @@ fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
             "the {name} fix's code stage"
         );
     }
+    Ok(())
+}
+
+/// The stream `name` of status's host part.
+fn host_stream(world: &World, name: &str) -> Result<flume_core::StreamStatus, String> {
+    let flume_core::Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    host.streams
+        .into_iter()
+        .find(|stream| stream.name == name)
+        .ok_or_else(|| format!("the host's streams give no {name}"))
+}
+
+fn the_terminals_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    work_and_trial(&world);
+    fix_on(&world, "work", "one")?;
+    fix_on(&world, "trial", "two")?;
+    ensure_eq!(
+        (
+            Some(host_stream(&world, "work")?.multiplexer),
+            Some(host_stream(&world, "trial")?.multiplexer)
+        ),
+        (
+            profile("fake", NamedBy::Host),
+            profile("other", NamedBy::Stream)
+        ),
+        "each stream's multiplexer"
+    );
+    for (name, expected) in [
+        ("one", profile("fake", NamedBy::Host)),
+        ("two", profile("other", NamedBy::Stream)),
+    ] {
+        let agent = world
+            .status(&World::id("fix", name))?
+            .agent
+            .ok_or_else(|| format!("the {name} fix has no agent"))?;
+        ensure_eq!(
+            agent.terminal,
+            expected,
+            "the {name} fix's agent's terminal"
+        );
+    }
+    let flume_core::Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    ensure_eq!(
+        host.terminals,
+        vec![
+            flume_core::TerminalStatus {
+                profile: Some("fake".into()),
+                kept: vec![],
+                watch: Watch::Bound { seconds: 30 },
+            },
+            flume_core::TerminalStatus {
+                profile: Some("other".into()),
+                kept: vec![],
+                watch: Watch::None,
+            },
+        ],
+        "the host's terminals"
+    );
+    let json = serde_json::to_value(&host).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        (
+            json["terminals"][1]["profile"].as_str(),
+            json["terminals"][0]["watch"]["bound"]["seconds"].as_u64()
+        ),
+        (Some("other"), Some(30)),
+        "the host's terminals in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_stage_retried_in_another_terminal(_: &()) -> Outcome {
+    let world = World::new();
+    let other = work_and_trial(&world);
+    let first = fix_on(&world, "trial", "one")?;
+    let id = World::id("fix", "one");
+    ensure!(
+        other.opened(&first).is_some(),
+        "the first start did not open in other"
+    );
+    other.kill(&first);
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Lost),
+        "the first start's stage"
+    );
+    world.host.set_display("trial", Some("fake"), None, None);
+    let retried = world
+        .engine()
+        .retry(&id, flume_core::Retry::Current, None, false);
+    ensure!(
+        retried.refusal().is_none(),
+        "the retry was refused: {retried:?}"
+    );
+    let second = World::identity("fix", "one", "code", 2);
+    ensure!(
+        world.terminal.opened(&second).is_some(),
+        "the retry did not open in fake"
+    );
+    world.commit("fix/one", &["fix.rs"]);
+    for _ in 0..3 {
+        world.settle(&id);
+    }
+    ensure!(world.held(&id).is_none(), "the landed place still stands");
+    ensure_eq!(
+        (other.log.count("tidy"), world.terminal.log.count("tidy")),
+        (1, 1),
+        "the tidies asked of other and of fake"
+    );
+    ensure_eq!(
+        other.made(),
+        (vec![], vec![]),
+        "what other still holds of the place"
+    );
     Ok(())
 }

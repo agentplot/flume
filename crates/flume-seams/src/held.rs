@@ -75,6 +75,12 @@ pub struct HeldState {
     /// afresh after it (56, 146, S79).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub uncarried: Vec<UncarriedStart>,
+    /// Each terminal a start of the place's opened its agent in, each
+    /// once, as it was first opened in, so the place is tidied in each
+    /// whatever later starts of its stages record; none in a place
+    /// written before, whose stages' starts say theirs (137, 190).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub terminals: Vec<ProfileHeld>,
 }
 
 /// A start whose agent began without the settings its start recorded:

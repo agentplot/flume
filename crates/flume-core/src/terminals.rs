@@ -44,21 +44,45 @@ pub(crate) fn add(terminals: &mut Terminals, terminal: Arc<dyn Terminal>) {
     }
 }
 
-/// Why the stream `stream` runs no agent: its multiplexer, `named`,
-/// names a terminal profile none of `carried` is (4, 190).
-pub(crate) fn uncarried(stream: &str, named: &ProfileHeld, carried: &[String]) -> String {
+/// A stream's setting that names a profile, and the seam whose profiles
+/// it names (188, 190).
+#[derive(Clone, Copy)]
+pub(crate) enum Setting {
+    /// Its multiplexer, a terminal profile.
+    Multiplexer,
+    /// Its terminal app, a window profile.
+    TerminalApp,
+}
+
+impl Setting {
+    fn words(self) -> (&'static str, &'static str) {
+        match self {
+            Setting::Multiplexer => ("multiplexer", "terminal"),
+            Setting::TerminalApp => ("terminal app", "window"),
+        }
+    }
+}
+
+/// Why the stream `stream` cannot use its `setting`, `named`, which
+/// names a profile none of `carried` is (4, 188, 190).
+pub(crate) fn uncarried(
+    stream: &str,
+    setting: Setting,
+    named: &ProfileHeld,
+    carried: &[String],
+) -> String {
+    let (key, seam) = setting.words();
     let profile = &named.profile;
     let names = match named.from {
-        NamedBy::Stream => format!("the stream {stream} names the multiplexer {profile}"),
-        NamedBy::Host => {
-            format!("the stream {stream} takes the host's multiplexer {profile}")
-        }
-        NamedBy::Neither => format!("the stream {stream} takes the multiplexer {profile}"),
+        NamedBy::Stream => format!("the stream {stream} names the {key} {profile}"),
+        NamedBy::Host => format!("the stream {stream} takes the host's {key} {profile}"),
+        NamedBy::Neither => format!("the stream {stream} takes the {key} {profile}"),
     };
-    format!(
-        "{names}, and no terminal profile is named {profile}; the terminal profiles there are: {}",
-        carried.join(", ")
-    )
+    let there = match carried {
+        [] => format!("no {seam} profile is carried"),
+        _ => format!("the {seam} profiles there are: {}", carried.join(", ")),
+    };
+    format!("{names}, and no {seam} profile is named {profile}; {there}")
 }
 
 /// A start's agent on the terminal it opened in, or why no profile
@@ -147,6 +171,7 @@ impl Engine {
             Some(terminal) => Ok((terminal, named)),
             None => Err(uncarried(
                 stream,
+                Setting::Multiplexer,
                 &named,
                 &self.resolver.terminal_profiles(),
             )),
@@ -179,6 +204,66 @@ impl Engine {
             }
         }
         bound
+    }
+
+    /// Why the stream `stream`, whose labels are at `fault` and whose
+    /// display is `display`, refuses: its labels' fault, its multiplexer
+    /// naming a terminal profile the resolver does not carry, and, for a
+    /// terminal view, its terminal app naming a window profile it does
+    /// not carry, each in turn; none where none holds (4, 182, 188, 190).
+    pub(crate) fn stream_refused(
+        &self,
+        stream: &str,
+        fault: Option<&String>,
+        display: &StreamDisplay,
+    ) -> Option<String> {
+        let mut refused: Vec<String> = fault.cloned().into_iter().collect();
+        if self
+            .resolver
+            .terminal(&display.multiplexer.profile)
+            .is_none()
+        {
+            refused.push(uncarried(
+                stream,
+                Setting::Multiplexer,
+                &display.multiplexer,
+                &self.resolver.terminal_profiles(),
+            ));
+        }
+        if display.view.view == View::Terminal
+            && self
+                .resolver
+                .window(&display.terminal_app.profile)
+                .is_none()
+        {
+            refused.push(uncarried(
+                stream,
+                Setting::TerminalApp,
+                &display.terminal_app,
+                &self.resolver.window_profiles(),
+            ));
+        }
+        (!refused.is_empty()).then(|| refused.join("; "))
+    }
+
+    /// The terminals the host binds as status gives them, the host's own
+    /// named by the profile the resolver gives it by where no stream
+    /// takes it (56, 119, 190).
+    pub(crate) fn terminals_status(&self) -> Vec<crate::TerminalStatus> {
+        self.host_terminals()
+            .into_iter()
+            .map(|bound| crate::TerminalStatus {
+                profile: bound.profile.or_else(|| {
+                    self.resolver.terminal_profiles().into_iter().find(|name| {
+                        self.resolver
+                            .terminal(name)
+                            .is_some_and(|terminal| same(&terminal, &bound.terminal))
+                    })
+                }),
+                kept: bound.terminal.kept(),
+                watch: bound.terminal.watch(),
+            })
+            .collect()
     }
 
     /// Whether flume runs attended: a terminal the host binds, its own or
@@ -225,13 +310,23 @@ impl Engine {
         }
     }
 
-    /// The terminals a place's tidy asks, each once: each its stages'
-    /// starts recorded, the host's for a start that records none, and its
-    /// stream's as the host's configuration stands where it has no start;
-    /// and why each the tidy cannot reach does not answer (137, 190).
+    /// The terminals a place's tidy asks, each once: each a start of the
+    /// place's opened its agent in, each its stages' starts record, the
+    /// host's for a start that records none, and its stream's as the
+    /// host's configuration stands where it has no start; and why each
+    /// the tidy cannot reach does not answer (137, 190).
     pub(crate) fn tidy_terminals(&self, held: &HeldState) -> (Terminals, Vec<String>) {
         let mut terminals = vec![];
         let mut unreached = vec![];
+        for opened in &held.terminals {
+            match self.resolver.terminal(&opened.profile) {
+                Some(terminal) => add(&mut terminals, terminal),
+                None => unreached.push(format!(
+                    "the place {} opened an agent in the terminal {}, and no terminal profile is named {} now",
+                    held.place.id, opened.profile, opened.profile
+                )),
+            }
+        }
         let mut started = false;
         for start in held.stages.iter().filter_map(|stage| stage.start.as_ref()) {
             started = true;

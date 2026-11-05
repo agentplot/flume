@@ -561,6 +561,13 @@ impl Engine {
                 label: label.clone(),
                 terminal: Some(named.clone()),
             });
+            if !held
+                .terminals
+                .iter()
+                .any(|opened| opened.profile == named.profile)
+            {
+                held.terminals.push(named.clone());
+            }
             held.current = Some(index);
             Step::Write(Ok(Claim {
                 identity,

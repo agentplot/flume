@@ -70,6 +70,11 @@ The writing agent's choices, and the paths not taken:
 - `[host] terminal` refused would stop every host written before.
 - Terminal.app opened by a `.command` file carries no title. AppleScript given the command and the title inside its own text would quote them there, where `osascript`'s arguments carry them as written.
 - A title passed to an app that titles its own window.
+- A stage that waits for room on a stream whose multiplexer names no profile is refused at the next settle, whatever room the host has, as one whose stream's labels are at fault is. Left waiting, it would hold out for room that no room could end (4, 145).
+- A place keeps each terminal its starts opened an agent in, so a stage started again in another terminal, a retry's or a send-back's, leaves the first terminal tidied too. Reading only each stage's newest start would leave the earlier terminal's tab open (137, 190).
+- Status gives a stream's refusal as one answer: its labels' fault, then its multiplexer's, then, for a terminal view, its terminal app's. A field for each would split one question, why the stream refuses, across three.
+- A base's clues in status are asked of each terminal its live places run in, so a base whose places run in two terminals is shown in both (139).
+- In status, the host's own terminal is named by the profile a stream takes it by, else by the one the resolver gives as it, and by none where neither does.
 
 `flume open <stream>` was chosen over `flume stream open <stream>`, which would begin a group of stream commands with one member. A later `flume open` of a place's own tab can take a flag. The name is cheap to change before it lands.
 

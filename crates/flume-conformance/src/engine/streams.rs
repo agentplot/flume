@@ -11,7 +11,10 @@
 use super::settling::{construct_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::{Answer, TitleFrom, TitleHeld};
+use flume_fakes::FakeWindow;
 use flume_seams::*;
+use std::sync::Arc;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
@@ -59,6 +62,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "streams: the host's facts give a stream's session and its labels' shares, a kind's label in any repository with where it came from, and each value of the configuration with its layer, as the core reads them",
             cites: &["143", "180", "181"],
             run: the_hosts_sessions_labels_and_layers,
+        },
+        Scenario {
+            name: "streams: status gives each stream's multiplexer, view, terminal app and title with where each came from, in the JSON form",
+            cites: &["56", "143", "186", "190"],
+            run: the_display_in_status,
         },
     ]
 }
@@ -407,6 +415,95 @@ fn the_hosts_sessions_labels_and_layers(_: &()) -> Outcome {
             .map(|value| (value.value.as_str(), value.layer)),
         Some(("3", ConfigLayer::Local)),
         "streams.work.agents and its layer"
+    );
+    Ok(())
+}
+
+fn the_display_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    world
+        .resolver
+        .with_window("office-window", Arc::new(FakeWindow::default()));
+    world
+        .host
+        .set_host_display(Some("fake"), None, Some("fake-window"));
+    world
+        .host
+        .set_display("office", None, None, Some("office-window"));
+    world.host.set_title("office", Some("Office Agents"));
+    world.host.set_stream("personal", Some(Stream::default()));
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let stream = |name: &str| {
+        host.streams
+            .iter()
+            .find(|stream| stream.name == name)
+            .cloned()
+            .ok_or_else(|| format!("the host's streams give no {name}"))
+    };
+    let (office, personal) = (stream("office")?, stream("personal")?);
+    let profile = |name: &str, from| ProfileHeld {
+        profile: name.into(),
+        from,
+    };
+    ensure_eq!(
+        (office.terminal_app.clone(), office.title.clone()),
+        (
+            profile("office-window", NamedBy::Stream),
+            TitleHeld {
+                title: "Office Agents".into(),
+                from: TitleFrom::Stream,
+            }
+        ),
+        "office's terminal app and title"
+    );
+    ensure_eq!(
+        (
+            personal.multiplexer.clone(),
+            personal.terminal_app.clone(),
+            personal.view.clone(),
+            personal.title.clone()
+        ),
+        (
+            profile("fake", NamedBy::Host),
+            profile("fake-window", NamedBy::Host),
+            ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Neither,
+            },
+            TitleHeld {
+                title: "personal".into(),
+                from: TitleFrom::StreamName,
+            }
+        ),
+        "personal's display and title"
+    );
+    ensure!(
+        office.refused.is_none() && personal.refused.is_none(),
+        "a stream refused: {:?}, {:?}",
+        office.refused,
+        personal.refused
+    );
+    let json = serde_json::to_value(&personal).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        (
+            json["multiplexer"]["from"].as_str(),
+            json["view"]["view"].as_str(),
+            json["view"]["from"].as_str(),
+            json["terminal_app"]["profile"].as_str(),
+            json["title"]["title"].as_str(),
+            json["title"]["from"].as_str()
+        ),
+        (
+            Some("host"),
+            Some("terminal"),
+            Some("neither"),
+            Some("fake-window"),
+            Some("personal"),
+            Some("stream-name")
+        ),
+        "personal's display in the JSON form"
     );
     Ok(())
 }

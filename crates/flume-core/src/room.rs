@@ -21,7 +21,7 @@ use crate::accounts::{AccountRoom, PoolRoom, Usable};
 use crate::answer::and_list;
 use crate::{
     AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
-    RoomWanted, Step, StreamStatus,
+    RoomWanted, Step, StreamStatus, TitleFrom, TitleHeld,
 };
 use flume_seams::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -740,6 +740,7 @@ impl Engine {
     /// 130, 143).
     pub(crate) fn host_status(&self) -> HostStatus {
         let queue = self.queue();
+        let declared = self.host.streams();
         let queued: Vec<Queued> = queue
             .waiting
             .iter()
@@ -756,9 +757,28 @@ impl Engine {
         let mut streams: Vec<StreamStatus> = queue
             .streams
             .iter()
-            .map(|(name, stream)| StreamStatus {
+            .map(|(name, stream)| {
+                let display = self.host.display_for(name);
+                let title = match declared.get(name).and_then(|stream| stream.title.clone()) {
+                    Some(title) => TitleHeld {
+                        title,
+                        from: TitleFrom::Stream,
+                    },
+                    None => TitleHeld {
+                        title: name.clone(),
+                        from: TitleFrom::StreamName,
+                    },
+                };
+                (name, stream, display, title)
+            })
+            .map(|(name, stream, display, title)| StreamStatus {
                 name: name.clone(),
                 session: stream.session(name),
+                refused: self.stream_refused(name, stream.fault.as_ref(), &display),
+                multiplexer: display.multiplexer,
+                view: display.view,
+                terminal_app: display.terminal_app,
+                title,
                 priority: stream.priority,
                 running: stream.running,
                 bound: stream.bound,
@@ -791,7 +811,6 @@ impl Engine {
                     (false, None) => Reserves::PassedOver,
                     (false, Some(_)) => Reserves::Held,
                 },
-                refused: stream.fault.clone(),
             })
             .collect();
         streams.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.name.cmp(&b.name)));
@@ -824,6 +843,7 @@ impl Engine {
             terminal_kept: self.terminal.kept(),
             addresses: self.addresses(),
             watch: self.terminal.watch(),
+            terminals: self.terminals_status(),
             bases: self.bases(),
             configuration: self.host.configuration(),
         }

@@ -142,6 +142,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         moves: vec![],
         unsettled: vec![],
         uncarried: vec![],
+        terminals: vec![],
         holds: vec![],
         waiting: None,
         stall_after: STALL_AFTER,

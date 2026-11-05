@@ -130,6 +130,7 @@ impl Engine {
                 mode,
                 conversation: start.conversation.clone(),
                 session: start.session.clone(),
+                terminal: start.terminal.clone(),
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);

@@ -357,6 +357,10 @@ fn held() -> HeldState {
             at: 8,
             words: "the start that carried its conversation ended before it said it started".into(),
         }],
+        terminals: vec![ProfileHeld {
+            profile: "printed".into(),
+            from: NamedBy::Host,
+        }],
         waiting: Some(Waiting {
             on: WaitingOn {
                 act: Act::Retry,
@@ -981,6 +985,7 @@ fn a_held_state_written_before_carried_starts() {
         .unwrap()
         .remove("session");
     before.as_object_mut().unwrap().remove("uncarried");
+    before.as_object_mut().unwrap().remove("terminals");
     let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
     let stage = &read.stages[0];
     assert_eq!(stage.room.as_ref().expect("a room").carry, None);
@@ -990,6 +995,7 @@ fn a_held_state_written_before_carried_starts() {
     assert!(read.moves.iter().all(|moved| moved.carried.is_none()));
     assert!(!read.unsettled[0].unsettled.session);
     assert!(read.uncarried.is_empty());
+    assert!(read.terminals.is_empty());
     assert_eq!(
         serde_json::to_value(&read).expect("written again"),
         before,

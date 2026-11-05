@@ -772,11 +772,12 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 mod tests {
     use super::*;
     use flume_core::{
-        AccountStatus, AgentSettings, ModeStatus, MoveStatus, RoomWanted, StreamStatus,
+        AccountStatus, AgentSettings, ModeStatus, MoveStatus, RoomWanted, StreamStatus, TitleFrom,
+        TitleHeld,
     };
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, Given, Layer, ModeBegan, MoveOn,
-        MoveWhy, Reading, ReadyStep, Strategy, Unsettled,
+        MoveWhy, NamedBy, ProfileHeld, Reading, ReadyStep, Strategy, Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -805,6 +806,7 @@ mod tests {
             mode: None,
             conversation: None,
             session: None,
+            terminal: None,
         };
         assert_eq!(
             agent_line(&agent),
@@ -923,6 +925,7 @@ mod tests {
             mode: Some(status),
             conversation: None,
             session: None,
+            terminal: None,
         }
     }
 
@@ -1275,6 +1278,22 @@ mod tests {
             streams: vec![
                 StreamStatus {
                     name: "work".into(),
+                    multiplexer: ProfileHeld {
+                        profile: "printed".into(),
+                        from: NamedBy::Host,
+                    },
+                    view: ViewHeld {
+                        view: View::Terminal,
+                        from: NamedBy::Neither,
+                    },
+                    terminal_app: ProfileHeld {
+                        profile: "printed".into(),
+                        from: NamedBy::Neither,
+                    },
+                    title: TitleHeld {
+                        title: "work".into(),
+                        from: TitleFrom::StreamName,
+                    },
                     session: SessionHeld {
                         name: Some("office".into()),
                         from: SessionFrom::Stream,
@@ -1290,6 +1309,22 @@ mod tests {
                 },
                 StreamStatus {
                     name: "personal".into(),
+                    multiplexer: ProfileHeld {
+                        profile: "printed".into(),
+                        from: NamedBy::Host,
+                    },
+                    view: ViewHeld {
+                        view: View::Terminal,
+                        from: NamedBy::Neither,
+                    },
+                    terminal_app: ProfileHeld {
+                        profile: "printed".into(),
+                        from: NamedBy::Neither,
+                    },
+                    title: TitleHeld {
+                        title: "personal".into(),
+                        from: TitleFrom::StreamName,
+                    },
                     session: SessionHeld {
                         name: Some("personal".into()),
                         from: SessionFrom::StreamName,
@@ -1305,6 +1340,22 @@ mod tests {
                 },
                 StreamStatus {
                     name: "default".into(),
+                    multiplexer: ProfileHeld {
+                        profile: "printed".into(),
+                        from: NamedBy::Host,
+                    },
+                    view: ViewHeld {
+                        view: View::Terminal,
+                        from: NamedBy::Neither,
+                    },
+                    terminal_app: ProfileHeld {
+                        profile: "printed".into(),
+                        from: NamedBy::Neither,
+                    },
+                    title: TitleHeld {
+                        title: "default".into(),
+                        from: TitleFrom::StreamName,
+                    },
                     session: SessionHeld {
                         name: None,
                         from: SessionFrom::Own,
@@ -1393,6 +1444,22 @@ mod tests {
         };
         let stream = |name: &str, bound, reserves, refused: Option<&str>| StreamStatus {
             name: name.into(),
+            multiplexer: ProfileHeld {
+                profile: "printed".into(),
+                from: NamedBy::Host,
+            },
+            view: ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Neither,
+            },
+            terminal_app: ProfileHeld {
+                profile: "printed".into(),
+                from: NamedBy::Neither,
+            },
+            title: TitleHeld {
+                title: name.into(),
+                from: TitleFrom::StreamName,
+            },
             session: SessionHeld {
                 name: Some(name.into()),
                 from: SessionFrom::StreamName,
