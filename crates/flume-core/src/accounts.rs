@@ -1,13 +1,22 @@
 //! A pool's accounts as the queue reads them under the room lock (144,
 //! 145): each account's agents of flume's running, the time it stays
-//! spent until where the host's own document records it spent, and the
-//! choice of an account at a start, the strategy over the usable accounts
-//! in order (core.32).
+//! spent until where the host's own document records it spent, its
+//! reading as the host last wrote it and the threshold that reading holds
+//! it past, and the choice of an account at a start, the strategy over
+//! the usable accounts in order (184, 185; core.32).
 
 use crate::room::Queue;
-use crate::Engine;
+use crate::{settings, Engine};
 use flume_seams::*;
 use std::collections::BTreeMap;
+
+/// The whole percentage of a window past which an account takes no new
+/// start, where its pool states none (185, C.7).
+pub const THRESHOLD: u32 = 90;
+
+/// How long a reading is fresh from when the host read it, by the host's
+/// clock (184).
+pub const FRESH: Seconds = 15 * 60;
 
 /// A pool as the queue reads it: its strategy and its accounts in order.
 #[derive(Clone, Debug)]
@@ -17,21 +26,118 @@ pub(crate) struct PoolRoom {
 }
 
 /// An account of a pool: as the configuration declares it, flume's
-/// agents running on it, and the time it is spent until, none where it is
-/// not spent at the host's clock (144, 146).
+/// agents running on it, the time it is spent until, none where it is
+/// not spent at the host's clock, and its reading, with the host's clock
+/// and its pool's threshold, 90 where the pool states none, the queue
+/// read it at (144, 146, 184, 185).
 #[derive(Clone, Debug)]
 pub(crate) struct AccountRoom {
     pub account: Account,
     pub running: u32,
     pub spent_until: Option<Seconds>,
+    pub reading: Reading,
+    pub threshold: u32,
+    pub now: Seconds,
+}
+
+/// An account's reading as the queue reads it (184).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Reading {
+    /// The account names no reading.
+    None,
+    /// It names one that cannot be read, with why, in words that name no
+    /// path.
+    Unread(String),
+    /// Its reading, as read now.
+    Read(Usage),
+}
+
+/// What holds an account past its threshold: the window, and when it
+/// stops holding it, its reset, or, where it names none, when the reading
+/// stops being fresh (185).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Past {
+    pub window: String,
+    pub until: Seconds,
+}
+
+/// The window's use now in hundredths of a percent: none where its reset
+/// has passed at `now`, its `used` otherwise (184).
+pub(crate) fn used_now(window: &Window, now: Seconds) -> u32 {
+    match window.resets_at {
+        Some(resets_at) if resets_at <= now => 0,
+        _ => window.used,
+    }
+}
+
+/// When the host read the reading, a time later than `now` read as `now`
+/// (184).
+fn read_at(usage: &Usage, now: Seconds) -> Seconds {
+    usage.read_at.min(now)
+}
+
+/// Whether the reading is fresh at `now`: less than [`FRESH`] past when
+/// the host read it (184).
+pub(crate) fn fresh(usage: &Usage, now: Seconds) -> bool {
+    now < read_at(usage, now).saturating_add(FRESH)
+}
+
+/// Until when `window` of `usage` holds its account past `threshold`, a
+/// whole percentage, at `now`: where its use now is at the threshold or
+/// past it, until its reset whatever the reading's age, and, where it
+/// names none, until the reading stops being fresh, while it is; none
+/// otherwise (185).
+pub(crate) fn holds_until(
+    usage: &Usage,
+    window: &Window,
+    threshold: u32,
+    now: Seconds,
+) -> Option<Seconds> {
+    if used_now(window, now) < threshold.saturating_mul(100) {
+        return None;
+    }
+    match window.resets_at {
+        Some(resets_at) => Some(resets_at),
+        None => fresh(usage, now).then(|| read_at(usage, now).saturating_add(FRESH)),
+    }
+}
+
+/// What holds the account whose reading is `usage` past `threshold` at
+/// `now`: of the windows that hold it, the one that holds it latest,
+/// equals in the reading's order; none where none holds it (185).
+pub(crate) fn past(usage: &Usage, threshold: u32, now: Seconds) -> Option<Past> {
+    usage
+        .windows
+        .iter()
+        .filter_map(|window| {
+            holds_until(usage, window, threshold, now).map(|until| Past {
+                window: window.name.clone(),
+                until,
+            })
+        })
+        .fold(None, |latest: Option<Past>, past| match latest {
+            Some(latest) if latest.until >= past.until => Some(latest),
+            _ => Some(past),
+        })
 }
 
 impl AccountRoom {
+    /// What holds it past its threshold, none where nothing does (185).
+    pub fn past(&self) -> Option<Past> {
+        match &self.reading {
+            Reading::Read(usage) => past(usage, self.threshold, self.now),
+            Reading::None | Reading::Unread(_) => None,
+        }
+    }
+
     /// Why the account cannot take a start now, none where it can: spent,
-    /// or at its own bound (145).
+    /// past its threshold, or at its own bound (145, 146, 185).
     pub fn short(&self) -> Option<MoveWhy> {
         if self.spent_until.is_some() {
             return Some(MoveWhy::Spent);
+        }
+        if self.past().is_some() {
+            return Some(MoveWhy::Threshold);
         }
         self.account
             .agents
@@ -39,10 +145,21 @@ impl AccountRoom {
             .then_some(MoveWhy::Full)
     }
 
-    /// Whether a start of `program` may take it: not spent, under its own
-    /// bound, and running that program (144, 145).
+    /// Whether a start of `program` may take it: not spent, not past its
+    /// threshold, under its own bound, and running that program (144,
+    /// 145, 185).
     pub fn usable(&self, program: &str) -> bool {
         self.account.program == program && self.short().is_none()
+    }
+
+    /// When it is back: the latest of the time it is spent until and the
+    /// end of what holds it past its threshold, where it has either; none
+    /// where it is only full (145, 146, 185).
+    pub fn back(&self) -> Option<Seconds> {
+        self.spent_until
+            .into_iter()
+            .chain(self.past().map(|past| past.until))
+            .max()
     }
 }
 
@@ -52,9 +169,9 @@ pub(crate) enum Usable {
     Some,
     /// No account of the pool runs the program (144).
     NoProgram,
-    /// Every account of the pool that runs the program is spent or full;
-    /// the soonest time one stops being spent, none where none is spent
-    /// (145, 146).
+    /// Every account of the pool that runs the program is spent, past its
+    /// threshold or full; the soonest time one is back, none where each is
+    /// only full (145, 146, 185).
     None(Option<Seconds>),
 }
 
@@ -82,7 +199,7 @@ impl PoolRoom {
         }
         Usable::None(
             self.running_program(program)
-                .filter_map(|room| room.spent_until)
+                .filter_map(AccountRoom::back)
                 .min(),
         )
     }
@@ -258,6 +375,29 @@ impl Engine {
             affinity.gone = None;
             Some(affinity)
         });
+    }
+}
+
+impl Engine {
+    /// The account's reading as the host's file holds it now: none where
+    /// it names none, and where its `usage`, its `~` and `$VAR` read
+    /// against the host user's login environment, names a variable that
+    /// environment lacks, or a file the host gives no reading of, why, in
+    /// words that name no path; flume writes, keeps and renews nothing of
+    /// it (29, 184; core.30, core.32).
+    pub(crate) fn reading(&self, account: &Account) -> Reading {
+        let Some(usage) = &account.usage else {
+            return Reading::None;
+        };
+        match settings::expand(usage, |variable| self.host.login(variable)) {
+            Err(variable) => Reading::Unread(format!(
+                "its usage names ${variable}, which the host user's login environment lacks"
+            )),
+            Ok(path) => match self.host.usage(&path) {
+                Ok(usage) => Reading::Read(usage),
+                Err(why) => Reading::Unread(why),
+            },
+        }
     }
 }
 
@@ -449,5 +589,149 @@ impl Engine {
                 ..affinity
             })
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NOW: Seconds = 1_000_000;
+
+    fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
+        Window {
+            name: name.into(),
+            used,
+            resets_at,
+        }
+    }
+
+    fn usage(read_at: Seconds, windows: Vec<Window>) -> Usage {
+        Usage { read_at, windows }
+    }
+
+    #[test]
+    fn a_window_past_its_reset_reads_as_nothing_used() {
+        let passed = window("5-hour", 9_500, Some(NOW - 3600));
+        assert_eq!(used_now(&passed, NOW), 0);
+        assert_eq!(used_now(&window("5-hour", 9_500, Some(NOW)), NOW), 0);
+        assert_eq!(
+            used_now(&window("5-hour", 9_500, Some(NOW + 1)), NOW),
+            9_500
+        );
+        assert_eq!(used_now(&window("7-day", 9_500, None), NOW), 9_500);
+        let read = usage(NOW - 2 * 3600, vec![passed]);
+        assert_eq!(past(&read, THRESHOLD, NOW), None);
+    }
+
+    #[test]
+    fn a_reading_is_fresh_for_fifteen_minutes() {
+        assert!(fresh(&usage(NOW - 120, vec![]), NOW));
+        assert!(fresh(&usage(NOW - FRESH + 1, vec![]), NOW));
+        assert!(!fresh(&usage(NOW - FRESH, vec![]), NOW));
+        assert!(!fresh(&usage(NOW - 20 * 60, vec![]), NOW));
+        assert!(fresh(&usage(NOW + 3600, vec![]), NOW), "a read_at to come");
+    }
+
+    #[test]
+    fn a_window_with_a_reset_holds_until_it_whatever_the_readings_age() {
+        let monday = NOW + 3 * 24 * 3600;
+        let old = usage(NOW - 3 * 3600, vec![window("7-day", 9_500, Some(monday))]);
+        assert_eq!(
+            past(&old, THRESHOLD, NOW),
+            Some(Past {
+                window: "7-day".into(),
+                until: monday
+            })
+        );
+        assert_eq!(past(&old, THRESHOLD, monday), None);
+    }
+
+    #[test]
+    fn a_window_with_no_reset_holds_while_the_reading_is_fresh() {
+        let read = usage(NOW, vec![window("weekly", 9_500, None)]);
+        assert_eq!(
+            past(&read, THRESHOLD, NOW + 60),
+            Some(Past {
+                window: "weekly".into(),
+                until: NOW + FRESH
+            })
+        );
+        assert_eq!(past(&read, THRESHOLD, NOW + FRESH), None);
+    }
+
+    #[test]
+    fn the_threshold_is_held_at_its_own_share() {
+        let at = |used| usage(NOW, vec![window("5-hour", used, Some(NOW + 3600))]);
+        assert!(past(&at(9_000), THRESHOLD, NOW).is_some(), "90% at 90");
+        assert!(past(&at(8_999), THRESHOLD, NOW).is_none(), "89.99% at 90");
+        assert!(past(&at(9_900), 100, NOW).is_none(), "99% at 100");
+        assert!(past(&at(10_000), 100, NOW).is_some(), "100% at 100");
+        assert!(past(&at(5_000), 50, NOW).is_some(), "50% at 50");
+        assert!(past(&at(4_999), 50, NOW).is_none(), "49.99% at 50");
+    }
+
+    #[test]
+    fn the_window_that_holds_latest_is_named() {
+        let read = usage(
+            NOW,
+            vec![
+                window("5-hour", 9_200, Some(NOW + 3600)),
+                window("7-day", 9_600, Some(NOW + 3 * 24 * 3600)),
+                window("other", 9_900, Some(NOW + 3 * 24 * 3600)),
+                window("under", 1_000, Some(NOW + 9 * 24 * 3600)),
+            ],
+        );
+        assert_eq!(
+            past(&read, THRESHOLD, NOW),
+            Some(Past {
+                window: "7-day".into(),
+                until: NOW + 3 * 24 * 3600
+            })
+        );
+    }
+
+    fn room(spent_until: Option<Seconds>, reading: Reading, agents: Option<u32>) -> AccountRoom {
+        AccountRoom {
+            account: Account {
+                name: "work-1".into(),
+                program: "agent".into(),
+                env: BTreeMap::new(),
+                agents,
+                usage: Some("~/.local/state/usage/work-1.json".into()),
+            },
+            running: 1,
+            spent_until,
+            reading,
+            threshold: THRESHOLD,
+            now: NOW,
+        }
+    }
+
+    #[test]
+    fn short_answers_spent_then_threshold_then_full() {
+        let past = Reading::Read(usage(NOW, vec![window("5-hour", 9_200, Some(NOW + 3600))]));
+        let under = Reading::Read(usage(NOW, vec![window("5-hour", 4_000, Some(NOW + 3600))]));
+        let spent = Some(NOW + 600);
+        assert_eq!(
+            room(spent, past.clone(), Some(1)).short(),
+            Some(MoveWhy::Spent)
+        );
+        assert_eq!(
+            room(None, past.clone(), Some(1)).short(),
+            Some(MoveWhy::Threshold)
+        );
+        assert_eq!(
+            room(None, under.clone(), Some(1)).short(),
+            Some(MoveWhy::Full)
+        );
+        assert_eq!(room(None, under, None).short(), None);
+        assert_eq!(
+            room(None, Reading::Unread("the file is missing".into()), None).short(),
+            None
+        );
+        assert_eq!(room(spent, past.clone(), None).back(), Some(NOW + 3600));
+        assert_eq!(room(Some(NOW + 7200), past, None).back(), Some(NOW + 7200));
+        assert_eq!(room(None, Reading::None, Some(1)).back(), None);
     }
 }
