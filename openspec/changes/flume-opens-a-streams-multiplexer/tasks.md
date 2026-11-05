@@ -35,7 +35,7 @@ whose socket's path leaves no room fails naming its bytes.
 
 - [x] 3.1 Give `flume-fakes` design 13's fake terminal attach by view, its log line and its scripts; `FakeWindow` in `window.rs`, logging each show and answering as scripted; the fake host's `set_title`, `set_display`, `set_host_display` and `display_for`; and the fake resolver's named terminals and windows, `with_terminal` and `with_window`. `FakeWindow`, `FakeHost::set_title` and their tests stand staged in the place; keep them where they fit. Add to `crates/flume-fakes/tests/fakes.rs` the seam-fakes spec's four scenarios (106, 143, 187, 188, 190). True when `sluice exec main -- moon run fakes:test` passes.
 - [x] 3.2 Add to `flume-conformance` `seams/window.rs`, the window seam's scenarios generic over `Window` below a marker of its own, run against the fake; to `seams/terminal.rs` attach's scenario by view over the fake; and the resolver's scenario of named terminals and windows, as the seam-contracts spec has them. Change "seven seams" to eight in `One interface per seam`'s test, and add `ghostty` and `osascript` to `no_tool.rs`'s words (105, 106, 187 to 190; core.1). True when `sluice exec main -- moon run conformance:test` passes, the no-tool scenario finding neither word outside a `profiles` directory.
-- [ ] 3.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run fakes:format fakes:lint fakes:test conformance:format conformance:lint conformance:test` passes.
+- [x] 3.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run fakes:format fakes:lint fakes:test conformance:format conformance:lint conformance:test` passes.
 
 ## 4. The core runs each stream under its own terminal
 
