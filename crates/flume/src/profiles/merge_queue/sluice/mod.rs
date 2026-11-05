@@ -38,7 +38,12 @@
 //! otherwise (9, 126, C.1). What the same policy at the base's revision
 //! says of a place, its toolchain, its runner's setup, its teardown and
 //! the base's remote, is read for the resolver to hand the place profile
-//! (C.1, C.6, core.3).
+//! (C.1, C.6, core.3). Under the moon runner, as sluice's moon runner
+//! does before any moon command, where the same revision holds a
+//! `.prototools` the place cut from it has the versions it pins installed
+//! by `proto install --config-mode upwards` under the toolchain, a step of
+//! its own before moon's setup, since a toolchain may activate proto's
+//! pins and install none (11, 20, 79).
 
 use crate::git::Git;
 use crate::shell;
@@ -358,6 +363,11 @@ fn branch_table<'a>(policy: &'a toml::Table, base: &str) -> Option<&'a toml::Tab
 /// The policy at the base's revision: the local base's, else a remote's
 /// tracking copy's; none where neither holds one.
 fn policy(repository: &str, base: &str) -> Result<Option<toml::Table>, String> {
+    Ok(policy_at(repository, base)?.map(|(_, policy)| policy))
+}
+
+/// The policy at the base's revision, with the revision it was read at.
+fn policy_at(repository: &str, base: &str) -> Result<Option<(String, toml::Table)>, String> {
     let git = Git::at(repository);
     let mut revisions = vec![format!("refs/heads/{base}")];
     revisions.extend(
@@ -372,7 +382,7 @@ fn policy(repository: &str, base: &str) -> Result<Option<toml::Table>, String> {
         if let Some(text) = git.file(&revision, POLICY)? {
             return text
                 .parse::<toml::Table>()
-                .map(Some)
+                .map(|policy| Some((revision.clone(), policy)))
                 .map_err(|error| format!("{POLICY} at {revision}: {error}"));
         }
     }
@@ -402,16 +412,23 @@ fn line(value: &toml::Value) -> Option<String> {
     }
 }
 
+/// The file a place pins its tools' versions in, which proto reads.
+pub const PINS: &str = ".prototools";
+
 /// What the policy says of a place where sluice is the merge queue, for
 /// the resolver to hand the place profile, which no profile calls
-/// (core.2): the toolchain, then the runner's setup, that ready a place
-/// as sluice readies its own; `sluice release`, its teardown; and the
-/// remote the base lands on (C.1, C.6, core.3).
+/// (core.2): the toolchain, then the install of what the base pins and
+/// the runner's setup, that ready a place as sluice readies its own;
+/// `sluice release`, its teardown; and the remote the base lands on (C.1,
+/// C.6, core.3).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ForPlace {
     /// The shell line whose output is the environment the steps after it
     /// run under.
     pub toolchain: Option<String>,
+    /// The install of the versions the base's revision pins in [`PINS`],
+    /// as a shell line; none where it pins none.
+    pub install: Option<String>,
     /// The runner's setup, as a shell line.
     pub setup: Option<String>,
     /// The teardown, as a shell line.
@@ -419,18 +436,23 @@ pub struct ForPlace {
     pub base_remote: Option<String>,
 }
 
-/// What the policy at the base's revision says of a place.
+/// What the policy at the base's revision says of a place, and whether
+/// the same revision pins its tools in [`PINS`], which the place cut from
+/// it holds (20).
 pub fn for_place(repository: &str, base: &str) -> Result<ForPlace, String> {
-    let policy = policy(repository, base)?.unwrap_or_default();
+    let (revision, policy) = policy_at(repository, base)?.unwrap_or_default();
     let tests = policy.get("tests").and_then(toml::Value::as_table);
-    let runner = tests
+    let moon = tests
         .and_then(|tests| tests.get("runner"))
-        .and_then(toml::Value::as_str);
+        .and_then(toml::Value::as_str)
+        == Some("moon");
+    let pins = moon && Git::at(repository).file(&revision, PINS)?.is_some();
     Ok(ForPlace {
         toolchain: tests
             .and_then(|tests| tests.get("toolchain"))
             .and_then(line),
-        setup: (runner == Some("moon")).then(|| "moon setup".to_string()),
+        install: pins.then(|| "proto install --config-mode upwards".to_string()),
+        setup: moon.then(|| "moon setup".to_string()),
         teardown: "sluice release".into(),
         base_remote: branch_table(&policy, base)
             .and_then(|table| table.get("remote"))

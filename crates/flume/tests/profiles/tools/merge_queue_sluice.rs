@@ -658,12 +658,25 @@ fn a_fetch_that_fails_is_answered_with_its_words() {
 #[test]
 fn what_the_policy_says_of_a_place() {
     let harness = Harness::new();
+    let commanded = for_place(&harness.repository.name(), "main").expect("the policy");
+    assert_eq!(
+        commanded.install, None,
+        "an install under the command runner"
+    );
+    assert_eq!(commanded.setup, None, "a setup under the command runner");
     harness.on_main(
         ".config/sluice.toml",
         "[tests]\nrunner = \"moon\"\ntoolchain = [\"devenv\", \"print-dev-env\"]\n\n[branches.main]\nremote = \"origin\"\n",
     );
+    let unpinned = for_place(&harness.repository.name(), "main").expect("the policy");
+    assert_eq!(unpinned.install, None, "an install of no pins");
+    harness.on_main(".prototools", "moon = \"2.6.1\"\n");
     let place = for_place(&harness.repository.name(), "main").expect("the policy");
     assert_eq!(place.toolchain.as_deref(), Some("devenv print-dev-env"));
+    assert_eq!(
+        place.install.as_deref(),
+        Some("proto install --config-mode upwards")
+    );
     assert_eq!(place.setup.as_deref(), Some("moon setup"));
     assert_eq!(place.teardown, "sluice release");
     assert_eq!(place.base_remote.as_deref(), Some("origin"));
