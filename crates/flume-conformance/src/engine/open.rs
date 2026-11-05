@@ -83,7 +83,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "open: a stream whose terminal app names kitty is refused naming kitty and the window profiles carried, before any attach",
-            cites: &["188", "C.8"],
+            cites: &["4", "186", "188"],
             run: a_terminal_app_no_profile_carries,
         },
         Scenario {

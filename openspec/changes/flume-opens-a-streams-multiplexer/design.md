@@ -564,12 +564,18 @@ Every page speaks to any host's operator (core.35).
 
 ### 16. The clause list
 
-`clauses.rs` reads the statement at the revision of blueprints main
-the amendment lands at: Part A gains 186 and 190, Part B 187 to 189,
-and the scenarios run to S91. A clause of that revision another change
-builds and has not built, 184, 185 and S86 to S89 among them where they
-stand there unbuilt, stays named unbuilt by that change. 186 to 190, S90
-and S91 are cited by this change's scenarios.
+`clauses.rs` reads the statement at 6188a10, the revision of
+blueprints main after the amendment's 36cfd06 that flume's main reads
+too: Part A gains 184 to 186 and 190, Part B 187 to 189, and the
+scenarios run to S91 with no gap. 184, 185 and S86 to S88 stay named
+unbuilt by record 0035's change, and S89 by record 0036's, since
+neither has been built on this branch. 186 to 190, S90 and S91 are
+cited by this change's scenarios.
+
+At 36cfd06 itself the scenarios would run S1 to S85 and S89 to S91,
+a gap `SCENARIOS` does not hold, and a later main states 191, 192 and
+S92 to S97, whose changes this branch does not name. 6188a10 leaves
+the merge with main to differ in the unbuilt clauses alone.
 
 ## Risks / Trade-offs
 
