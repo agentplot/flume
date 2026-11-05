@@ -18,6 +18,7 @@ pub mod hook;
 pub mod limit;
 pub mod mode;
 pub mod record;
+pub mod status_line;
 pub mod transcript;
 pub mod withheld;
 pub mod wrapper;
@@ -75,8 +76,9 @@ pub const PLACE: &str = "FLUME_PLACE";
 pub const STAGE: &str = "FLUME_STAGE";
 
 /// The plugin's files, as `plugins/claude` holds them, by their path in
-/// the plugin.
-pub const PLUGIN: [(&str, &str); 4] = [
+/// the plugin: its manifests, its hooks, the module that pins the place's
+/// line under the prompt (design 4) and the /launch command.
+pub const PLUGIN: [(&str, &str); 5] = [
     (
         ".claude-plugin/plugin.json",
         include_str!("../../../../../../plugins/claude/.claude-plugin/plugin.json"),
@@ -84,6 +86,10 @@ pub const PLUGIN: [(&str, &str); 4] = [
     (
         "hooks/hooks.json",
         include_str!("../../../../../../plugins/claude/hooks/hooks.json"),
+    ),
+    (
+        "hooks/line.ts",
+        include_str!("../../../../../../plugins/claude/hooks/line.ts"),
     ),
     (
         ".mcp.json",
@@ -96,13 +102,19 @@ pub const PLUGIN: [(&str, &str); 4] = [
 ];
 
 /// A file of the plugin as the binary writes it for the agents it
-/// starts: each command naming `flume` names the binary by its absolute
-/// path instead (C.4). The manifest carries the binary's version as
-/// `plugins/claude` holds it, the workspace's (135).
+/// starts: each command naming `flume`, a hook's or the module's, names
+/// the binary by its absolute path instead (C.4; design 4). The manifest
+/// carries the binary's version as `plugins/claude` holds it, the
+/// workspace's (135).
 pub fn written(text: &str, binary: &Path) -> String {
     let path = serde_json::to_string(&binary.to_string_lossy()).expect("a path as JSON");
     text.replace("\"command\": \"flume\"", &format!("\"command\": {path}"))
+        .replace(MODULE_FLUME, &format!("const FLUME = {path};"))
 }
+
+/// How the module names the binary in `plugins/claude`, as a JavaScript
+/// string, which a JSON string is too.
+const MODULE_FLUME: &str = "const FLUME = \"flume\";";
 
 /// The hex digest of `text`'s SHA-256.
 pub fn digest(text: &str) -> String {

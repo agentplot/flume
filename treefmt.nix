@@ -41,6 +41,9 @@ in
     # formatter would rewrite what the readings are checked against.
     "crates/flume/tests/profiles/fixtures/**"
     "plugins/claude/tests/fixtures/**"
+    # The engine's own declarations, as the pinned Claude Code writes them,
+    # compared byte for byte (plugins/claude/tests/engine-types.sh).
+    "plugins/claude/engine-types/**"
     # Build outputs and caches.
     "target/**"
     ".devenv/**"

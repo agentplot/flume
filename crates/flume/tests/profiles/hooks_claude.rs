@@ -290,6 +290,50 @@ impl Host {
         ran
     }
 
+    /// `flume hook status-line` in `env`, as the plugin's module runs it,
+    /// its standard input held open and never written: it reads none, so
+    /// it ends with it open (design 5).
+    fn status_line(&self, env: &[(String, String)]) -> Ran {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_flume"));
+        command.current_dir(&self.repository.dir);
+        for (name, _) in std::env::vars() {
+            if ["FLUME_", "HERDR_", "CLAUDE"]
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
+            {
+                command.env_remove(name);
+            }
+        }
+        command
+            .env("XDG_STATE_HOME", self.path("state"))
+            .env("XDG_CONFIG_HOME", self.path("config"))
+            .env("XDG_DATA_HOME", self.path("data"))
+            .env("HOME", self.path("home"))
+            .envs(env.iter().map(|(name, value)| (name, value)))
+            .args(["hook", "status-line"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command.spawn().expect("flume runs");
+        let input = child.stdin.take();
+        let began = Instant::now();
+        while child.try_wait().expect("flume's status").is_none() {
+            assert!(
+                began.elapsed() < Duration::from_secs(30),
+                "status-line waited on its input"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        drop(input);
+        let output = child.wait_with_output().expect("flume ends");
+        let ran = Ran {
+            out: String::from_utf8_lossy(&output.stdout).into_owned(),
+            code: output.status.code().unwrap_or(-1),
+        };
+        assert_eq!(ran.code, 0, "status-line exits 0: {}", ran.out);
+        ran
+    }
+
     /// Every file under flume's state directory and its text.
     fn state(&self) -> Vec<(PathBuf, Vec<u8>)> {
         let mut found = vec![];
@@ -1198,6 +1242,80 @@ fn a_session_the_operator_started() {
         assert_eq!(decision(&ran), None, "{word}");
     }
     assert_eq!(host.state(), before, "a hook wrote outside flume's agent");
+}
+
+#[test]
+fn the_status_line_of_a_code_agent() {
+    // In a code agent's session the hook prints the place's line asked
+    // alone, one line, the same as status --line, and a session under an
+    // identity that is not the stage's live start says so (35, 56, 57,
+    // 60; S14; design 5).
+    let host = Host::new("status-line");
+    let agent = host.launch("fix");
+    let line = host.flume(&["status", "fix--one", "--line"], &[], "");
+    assert_eq!(line.code, 0, "status --line: {}", line.out);
+    assert_eq!(line.out, "fix--one · fix@1 · code · run 1 · starting\n");
+    assert_eq!(host.status_line(&agent.env()).out, line.out);
+
+    // Working once a settle reads the started ack and the prompt
+    // received.
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    first_prompt(&host, &agent, None);
+    assert_eq!(host.flume(&["settle", &agent.place], &[], "").code, 0);
+    assert_eq!(
+        host.status_line(&agent.env()).out,
+        "fix--one · fix@1 · code · run 1 · working\n"
+    );
+
+    let mut later = agent.env();
+    later[0].1 = agent.identity.replace(":code:1", ":code:2");
+    assert_ne!(later[0].1, agent.identity, "another start's identity");
+    assert_eq!(
+        host.status_line(&later).out,
+        "fix--one · fix@1 · code · run 1 · working · this session is not its agent\n"
+    );
+}
+
+#[test]
+fn the_status_line_outside_an_agent_flume_started() {
+    // Outside an agent flume started, or for a place the core cannot
+    // read, it prints nothing and exits 0 (C.4; design 5).
+    let host = Host::new("status-line-outside");
+    let agent = host.launch("fix");
+    assert_eq!(host.status_line(&[]).out, "");
+    let env = agent.env();
+    let without = |name: &str| -> Vec<(String, String)> {
+        env.iter()
+            .filter(|(given, _)| given != name)
+            .cloned()
+            .collect()
+    };
+    assert_eq!(host.status_line(&without("FLUME_PLACE")).out, "");
+    assert_eq!(host.status_line(&without("FLUME_AGENT")).out, "");
+    let mut gone = agent.env();
+    gone[2].1 = format!("{}-gone", agent.place);
+    assert_eq!(host.status_line(&gone).out, "");
+    let mut unspelled = agent.env();
+    unspelled[0].1 = "not-an-identity".into();
+    assert_eq!(host.status_line(&unspelled).out, "");
+}
+
+#[test]
+fn the_status_line_writes_nothing() {
+    // Ten runs in a code agent's environment leave every file under the
+    // scratch state directory as it was, the place's held state at its
+    // version among them (57; core.16).
+    let host = Host::new("status-line-reads");
+    let agent = host.launch("fix");
+    host.hook(&agent, "session-start", json!({ "source": "startup" }));
+    let before = host.state();
+    for _ in 0..10 {
+        assert!(host
+            .status_line(&agent.env())
+            .out
+            .starts_with("fix--one · "));
+    }
+    assert_eq!(host.state(), before, "status-line wrote flume's state");
 }
 
 /// The session the fixtures' inputs name.

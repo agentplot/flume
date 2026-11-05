@@ -669,6 +669,13 @@ fn the_plugin_an_agent_loads() {
         "{hooks}"
     );
     assert!(!hooks.contains("\"command\": \"flume\""), "{hooks}");
+    // The module runs the same binary by its path (design 4).
+    let module = std::fs::read_to_string(dir.join("hooks/line.ts")).expect("the module");
+    assert!(
+        module.contains("const FLUME = \"/opt/flume/bin/flume\";"),
+        "{module}"
+    );
+    assert!(!module.contains("const FLUME = \"flume\";"), "{module}");
     // The manifest carries the binary's version, a release's where the
     // repository's says the workspace's, which the started ack reports
     // back (135).
@@ -678,7 +685,9 @@ fn the_plugin_an_agent_loads() {
     assert_eq!(manifest["version"], flume::VERSION, "{manifest}");
 
     // Every file of the plugin is one the binary writes: only the
-    // project's own files are left out.
+    // project's own files are left out, its tasks, its tests, the engine
+    // types it is typed against and its TypeScript configuration, and the
+    // types a session of Claude Code lays beside a plugin it loads.
     let mut files = vec![];
     let mut todo = vec![plugin_source()];
     while let Some(dir) = todo.pop() {
@@ -692,7 +701,15 @@ fn the_plugin_an_agent_loads() {
                 .expect("under the plugin")
                 .to_string_lossy()
                 .into_owned();
-            if relative == "moon.yml" || relative == "tests" {
+            if [
+                "moon.yml",
+                "tests",
+                "engine-types",
+                "tsconfig.json",
+                ".claude-plugin/types",
+            ]
+            .contains(&relative.as_str())
+            {
                 continue;
             }
             if path.is_dir() {

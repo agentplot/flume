@@ -114,6 +114,9 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Lines { lines: places } => {
+            lines.extend(places.iter().map(|line| line.full.clone()));
+        }
     }
     lines.join("\n")
 }
@@ -133,15 +136,19 @@ fn word(value: Value) -> String {
     }
 }
 
+/// A place's facts under its heading, its one line first (56, 60).
 fn place_lines(place: &PlaceStatus) -> Vec<String> {
-    let mut lines = vec![format!(
-        "{}: {}@{} ({}), {}",
-        place.place,
-        place.kind,
-        place.version,
-        word(json!(place.declared)),
-        word(json!(place.phase))
-    )];
+    let mut lines = vec![
+        format!(
+            "{}: {}@{} ({}), {}",
+            place.place,
+            place.kind,
+            place.version,
+            word(json!(place.declared)),
+            word(json!(place.phase))
+        ),
+        format!("  {}", place.line.full),
+    ];
     let mut facts = vec![format!("branch {} from {}", place.branch, place.base)];
     if let Some(mark) = &place.mark {
         facts.push(format!("mark {mark}"));
@@ -545,6 +552,8 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
     lines
 }
 
+/// The host's facts, what its terminal's configuration lacks for flume's
+/// plugin under the line naming the watch (72, 122).
 fn host_lines(host: &HostStatus) -> Vec<String> {
     let mut lines = vec![match (host.bound, host.room) {
         (Some(bound), Some(room)) => format!(
@@ -608,6 +617,9 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         ),
         Watch::None => "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".into(),
     });
+    for setup in &host.terminal_setup {
+        lines.push(format!("    {setup}"));
+    }
     lines
 }
 
@@ -772,11 +784,12 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 mod tests {
     use super::*;
     use flume_core::{
-        AccountStatus, AgentSettings, ModeStatus, MoveStatus, RoomWanted, StreamStatus,
+        AccountStatus, AgentSettings, ModeStatus, MoveStatus, PlaceLine, RoomWanted, StreamStatus,
     };
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, Given, Layer, ModeBegan, MoveOn,
-        MoveWhy, Reading, ReadyStep, Strategy, Unsettled,
+        AccountFrom, AccountHeld, AccountMove, AgentState, Declared, Given, Layer, ModeBegan,
+        MoveOn, MoveWhy, Phase, PlaceId, Reading, ReadyStep, Strategy, StreamFrom, StreamHeld,
+        Unsettled,
     };
     use std::collections::BTreeMap;
 
@@ -1213,6 +1226,111 @@ mod tests {
         assert_eq!(
             host_lines(&host)[1],
             "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes"
+        );
+    }
+
+    #[test]
+    fn a_missing_key_under_the_watch() {
+        // 72, 122: what the terminal lacks, under the line naming the watch.
+        let key = "the terminal's /t/config.toml binds no key to flume's places".to_string();
+        let host = HostStatus {
+            watch: Watch::Bound { seconds: 30 },
+            terminal_setup: vec![key.clone()],
+            ..HostStatus::default()
+        };
+        let lines = host_lines(&host);
+        assert_eq!(
+            lines[lines.len() - 2..],
+            [
+                "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes".to_string(),
+                format!("    {key}"),
+            ]
+        );
+    }
+
+    fn a_line(name: &str, short: &str) -> PlaceLine {
+        PlaceLine {
+            name: name.into(),
+            kind: "fix@1".into(),
+            stage: Some("code".into()),
+            run: Some(1),
+            tasks: None,
+            state: "working".into(),
+            full: format!("{name} · fix@1 · {short}"),
+            short: short.into(),
+        }
+    }
+
+    #[test]
+    fn a_line_each() {
+        // 60, 61: each line's full form on a line of its own.
+        let lines = Answer::Lines {
+            lines: vec![
+                a_line("fix--one", "code · run 1 · working"),
+                a_line("fix--two", "code · run 2 · stuck"),
+            ],
+        };
+        assert_eq!(
+            person(&lines),
+            "fix--one · fix@1 · code · run 1 · working\nfix--two · fix@1 · code · run 2 · stuck"
+        );
+    }
+
+    #[test]
+    fn a_places_heading_with_its_line() {
+        // 56, 60: the place's line under its heading.
+        let place = PlaceStatus {
+            place: PlaceId::new("/d/places/1/fix--one"),
+            repository: "/r".into(),
+            kind: "fix".into(),
+            version: 1,
+            declared: Declared::Flume,
+            name: "one".into(),
+            branch: "fix/one".into(),
+            base: "main".into(),
+            mark: None,
+            lands: true,
+            phase: Phase::Live,
+            readiness: Readiness::default(),
+            stages: vec![],
+            current: Some("code".into()),
+            agent: None,
+            head: None,
+            delivered: None,
+            tasks: None,
+            submission: None,
+            refused_acts: vec![],
+            cannot_read: vec![],
+            failures: vec![],
+            recipients: vec![],
+            hold_words: BTreeMap::new(),
+            waiting_on: None,
+            stalled: false,
+            holds: vec![],
+            priority: 0,
+            stream: StreamHeld {
+                name: "default".into(),
+                from: StreamFrom::Default,
+            },
+            label: None,
+            intent: IntentKey::Launch {
+                name: "i".into(),
+                digest: "d".into(),
+            },
+            moves: vec![],
+            unsettled: vec![],
+            uncarried: vec![],
+            ends: vec![],
+            role: None,
+            clues: None,
+            line: a_line("fix--one", "code · run 1 · working"),
+        };
+        assert_eq!(
+            place_lines(&place)[..2],
+            [
+                "/d/places/1/fix--one: fix@1 (flume), live".to_string(),
+                "  fix--one · fix@1 · code · run 1 · working".to_string(),
+            ]
         );
     }
 
