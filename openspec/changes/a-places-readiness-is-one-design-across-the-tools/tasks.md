@@ -193,6 +193,6 @@ layer, where sluice is the one the tree pins.
   the clause-coverage spec's scenarios have it (core.19). True when
   `sluice exec main -- moon run conformance:test conformance:coverage`
   passes.
-- [ ] 4.2 Run the checks of the projects this change touched. True when
+- [x] 4.2 Run the checks of the projects this change touched. True when
   `sluice exec main -- moon run core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools site:prose site:build root:format root:adrs root:changes root:specs`
   passes.
