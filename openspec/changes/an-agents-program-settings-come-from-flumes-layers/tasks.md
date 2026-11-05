@@ -8,7 +8,7 @@ cites its clauses as data (106). Tests reach no real account and no
 configuration directory of the user's: every git call in a test runs
 under the scratch environment `crates/flume/tests/common` gives; an
 agent in a test is the stand-in (`crates/flume/tests/profiles/stand-in/`)
-or the fake, but in the one live walkthrough of group 7; and every
+or the fake, but in the one live walkthrough of group 10; and every
 `CLAUDE_CONFIG_DIR`, Claude Code settings file, named settings file and
 host configuration a test names is a scratch directory or file of the
 test's own. No value a test gives that is shaped as a credential
@@ -56,7 +56,7 @@ appears in any answer, log line, held state or panic.
 
 ## 7. Own settings reaching a real Claude Code agent
 
-- [ ] 7.1 Add to `crates/flume/tests/profiles/live/walkthroughs.rs` design 15's fix under herdr with the pinned Claude Code, on a walkthrough host whose `[agents.programs.claude]` names a scratch settings file giving `tui = "fullscreen"` and a SessionStart hook that writes a file of the scratch directory's, and whose `[repos."<the scratch repository>".agents.programs.claude.settings]` gives `attribution = { commit = "", pr = "", sessionUrl = false }`. The hook's file is written, the code agent's started ack is taken, the code agent's commit holds no `Co-Authored-By` trailer, status names `programs.claude.settings.hooks` and `programs.claude.settings.tui` from `host` with the file and `programs.claude.settings.attribution` from `host-repository`, and the place lands (design 15, 16; S100, S102; 195, C.4). True when `sluice exec main -- moon run flume:lint` passes, which builds the live harness under `--all-features`, and `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live` passes with it and every other live walkthrough, run by the operator by hand outside the gate as `CLAUDE.md` says, the token a test account's from `claude setup-token`.
+- [x] 7.1 Move the live walkthrough of own settings, written at ff2d659 with `flume:lint` passing, into group 10, the live check, after the gate's group: the operator's run of `flume:live` at ff2d659 on 2026-11-05 stopped every live walkthrough at the test account's weekly limit, before any reached this change's code, and the account is spent until 2026-11-08T05:00Z. Group 10 stays unticked until the operator's run passes, and a repetition that finds it the only group left stops short saying the live run waits on the test account. True when `openspec validate an-agents-program-settings-come-from-flumes-layers --strict` and `sluice exec main -- moon run root:changes` pass.
 
 ## 8. The site
 
@@ -67,3 +67,7 @@ appears in any answer, log line, held state or panic.
 
 - [ ] 9.1 Cite 195, 196, S100, S101 and S102 from this change's scenarios and walkthroughs, and take them off the suite's list of unbuilt clauses (clause-coverage spec). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
 - [ ] 9.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools site:prose site:build root:format root:adrs root:changes root:specs` passes, and `openspec archive an-agents-program-settings-come-from-flumes-layers --yes` over a copy of `openspec/` leaves `openspec validate --specs --strict` passing.
+
+## 10. The live check
+
+- [ ] 10.1 Add to `crates/flume/tests/profiles/live/walkthroughs.rs` design 15's fix under herdr with the pinned Claude Code, on a walkthrough host whose `[agents.programs.claude]` names a scratch settings file giving `tui = "fullscreen"` and a SessionStart hook that writes a file of the scratch directory's, and whose `[repos."<the scratch repository>".agents.programs.claude.settings]` gives `attribution = { commit = "", pr = "", sessionUrl = false }`. The hook's file is written, the code agent's started ack is taken, the code agent's commit holds no `Co-Authored-By` trailer, status names `programs.claude.settings.hooks` and `programs.claude.settings.tui` from `host` with the file and `programs.claude.settings.attribution` from `host-repository`, and the place lands (design 15, 16; S100, S102; 195, C.4). True when `sluice exec main -- moon run flume:lint` passes, which builds the live harness under `--all-features`, and `FLUME_LIVE_CLAUDE_CODE_OAUTH_TOKEN=<token> devenv shell -- moon run flume:live` passes with it and every other live walkthrough, run by the operator by hand outside the gate as `CLAUDE.md` says, the token a test account's from `claude setup-token`.
