@@ -382,13 +382,15 @@ label as it would resolve now (56).
 BTreeMap<String, LabelRoom { reserve, keep_free, running }>`, `held`
 and `fault`. A label's `running` counts the live starts of the stream
 whose `StartHeld::label` names it, so an agent counts toward the label
-it started under until it ends (180). `held` is true where the stream
+it started under until it ends (180). A label the stream states no
+table for is owed nothing and counted nowhere. `held` is true where the stream
 states a bound and has no fault. Where it states none its reserves are
 passed over (181). `fault` is the first of:
 
-- a label's table holding another key: `[streams.work.labels.operation]
-  pool: a label's table holds its reserve and what it keeps free alone;
-  its stream's pool, points and pace are its budget` (182);
+- a label's table holding another key, named by its dotted key as the
+  stream-labels spec has it: `streams.work.labels.operation.pool: a
+  label's table holds its reserve and what it keeps free alone; its
+  stream's pool, points and pace are its budget` (182);
 - a label keeping more free than its reserve: `the label operation of
   the stream work keeps 2 free of a reserve of 1, and a reserve is at
   least what it keeps free` (181);
@@ -437,7 +439,10 @@ The JSON form gains, and loses nothing (core.14):
 - `AgentStatus::session: Option<SessionHeld>`.
 - `StreamStatus::session: SessionHeld`, `labels: Vec<LabelStatus { name,
   reserve, keep_free, running, waiting }>`, `reserves: held |
-  passed-over | none`, and `refused: Option<String>`.
+  passed-over | none`, and `refused: Option<String>`. `reserves` is
+  `none` where the stream gives no label a share, `passed-over` where
+  it states no bound, and `held` otherwise. A fault is given by
+  `refused` alone.
 - `Queued::label`, and `RoomWanted::KeptFree`.
 - `HostStatus::configuration: HostConfiguration`.
 - `BaseClues` once per workspace (section 2).
@@ -448,7 +453,10 @@ its labels with their reserves, what they keep free, running and
 waiting, the reserves passed over and what the stream refuses, and the
 configuration's local layer: taken, with each value it set, or not
 taken, naming each key or the fault, and each key passed over with its
-pin. It names no variable's value (core.30).
+pin; nothing where the host has no local file, so a host with one
+layer prints as before. A place's label goes on its stream's line, a
+stream's labels after its session's line, and the local layer after
+the pools. It names no variable's value (core.30).
 
 ### 8. The command line
 
