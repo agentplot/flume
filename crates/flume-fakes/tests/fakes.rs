@@ -652,7 +652,7 @@ fn the_agents_own_settings_are_scripted() {
     // by its path, takes them, and its command lists them as one JSON
     // object in a file under the place's own folder named by `--own
     // <file>`; every command given own settings logs their keys, and one
-    // given none lists nothing (191, 192).
+    // given none lists nothing (195, 196).
     let host = Arc::new(FakeHost::default());
     let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
     let given = BTreeMap::from([

@@ -11,7 +11,7 @@
 //! 57, C.4); which declaration they join, and whether the stages they
 //! name exist, are the core's to say. Every agents table's `programs`,
 //! each program's own settings, is read by flume's one reader of them, a
-//! file it names read as a prompt is (191). A prompt is a path relative
+//! file it names read as a prompt is (195). A prompt is a path relative
 //! to its declaration's file, read beside it: at the same revision for a
 //! repository's, on disk for a launch's, and from the binary for flume's
 //! own, whose versions are each a declaration of its own with its prompts
@@ -25,7 +25,7 @@
 //! of its declaration and no part of any kind: its settings for every
 //! kind it runs, read from the sections weir returns unnamed with the
 //! kinds at their revision, as a kind's agents table is but naming no
-//! stage, stream, environment or pane (21, 32, 191, C.2). A launch's
+//! stage, stream, environment or pane (21, 32, 195, C.2). A launch's
 //! declaration and flume's own are not read for it.
 
 use crate::git::{tree_path, Git, REMOTE};
@@ -325,7 +325,7 @@ fn read(text: &str, whose: Whose, beside: Reader) -> KindsRead {
 /// the declaration's `sections`: read as a kind's agents table is, with a
 /// `stages`, a `streams`, an `env` or a `beside` failing it naming the
 /// field, since a stage's name is its kind's, a stream and an environment
-/// the host's and a pane the launch's (21, 32, 107, 144, 191, C.2).
+/// the host's and a pane the launch's (21, 32, 107, 144, 195, C.2).
 fn every_kind(sections: &Table, beside: Reader, problems: &mut Vec<String>) -> Settings {
     let Some(agents) = sections.get("agents") else {
         return Settings::default();
@@ -477,13 +477,13 @@ fn map_agents(
 }
 
 /// An agent's settings, its table as written: `program`, `model`,
-/// `instructions`, `beside`, `mode` and `programs` (32, 107, 162, 191),
+/// `instructions`, `beside`, `mode` and `programs` (32, 107, 162, 195),
 /// the mode one of flume's four or a table of programs, read as the
 /// host's configuration reads it, any other failing it naming the field
 /// (169, C.2), and `programs` each program's own settings, read by
 /// flume's one reader of them, a file an entry names read by `beside` as
 /// a prompt is, so never outside the repository, any part not as it
-/// reads them failing it naming the field (157, 191, C.2; core.34); an
+/// reads them failing it naming the field (157, 195, C.2; core.34); an
 /// `env` fails it, naming the field, since an agent's environment is its
 /// account's alone (144, C.2); every other key is the runner's, and
 /// ignored.

@@ -250,7 +250,7 @@ impl Agent for Claude {
     /// resolved own settings written as one JSON object to the file it
     /// lists beside the start's record and named by `--settings`, nothing
     /// passed and no file listed where they are empty, and never a file a
-    /// layer named (191, 192; [`settings`]), the session resumed where the
+    /// layer named (195, 196; [`settings`]), the session resumed where the
     /// start carries one (179), the mode passed where one is given and none
     /// where it is none (162), the program the settings name by name or
     /// path, or the program it runs where it is a nix wrapper, with the
@@ -528,7 +528,7 @@ impl Agent for Claude {
 
     /// Every entry, taken as written: `--settings` passes any keys of
     /// 2.1.296's settings, and the release reads them as it reads its own
-    /// (191, 192, C.4).
+    /// (195, 196, C.4).
     fn own(&self, _given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
         Ok(())
     }

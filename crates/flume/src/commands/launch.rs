@@ -1,5 +1,5 @@
 //! What a launch's words give the core (2 to 8, 32, 70, 107, 130, 162,
-//! 191; design 5a, 16a): each `--agent [<stage>.]<field>=<value>` one
+//! 195; design 5a, 16a): each `--agent [<stage>.]<field>=<value>` one
 //! setting of every stage's agent or one stage's,
 //! `[<stage>.]mode.<program>=<value>` one entry of its mode's table of
 //! programs, `[<stage>.]programs.<program>.settings.<key>=<value>` one of a
@@ -10,14 +10,14 @@
 //! as a word and as a table, one of a program's own settings or its file
 //! given twice for one stage, and a file flume cannot read: the core
 //! refuses the rest, a value shaped as a credential among it (4, 169,
-//! 191).
+//! 195).
 
 use flume_seams::{ModeSetting, Settings};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// The fields `--agent` sets (32, 107, 162, 191).
+/// The fields `--agent` sets (32, 107, 162, 195).
 const FIELDS: [&str; 7] = [
     "program",
     "model",
@@ -37,7 +37,7 @@ const SETTINGS: &str =
 /// entries for programs build one table, which a mode given as a word
 /// refuses, and the word it (169); a program's own settings build one
 /// entry, its file read now, relative to `directory`, the command's
-/// working directory (21, 191).
+/// working directory (21, 195).
 pub fn agent(
     given: &str,
     directory: &Path,
@@ -116,7 +116,7 @@ pub fn agent(
 /// top-level key whose `value` is read as JSON where it parses as JSON and
 /// as the text written otherwise, or its settings file, made absolute
 /// against `directory` and read now by flume's one reader of them; one
-/// given twice for `whose` refused naming it (7, 21, 191).
+/// given twice for `whose` refused naming it (7, 21, 195).
 fn own(
     given: &str,
     field: &str,
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn own_settings_at_the_launch() {
-        // 7, 32, 191: one key for every stage and one for a stage, each
+        // 7, 32, 195: one key for every stage and one for a stage, each
         // read as JSON where it parses and as the text written otherwise,
         // several building one entry.
         let (every, stages) = given(&[
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn a_file_at_the_launch() {
-        // 7, 21, 191: named relative to the working directory or
+        // 7, 21, 195: named relative to the working directory or
         // absolutely, read now, and kept by its absolute path with its
         // keys as read; one flume cannot read refused naming it.
         let scratch = Scratch::new("file");
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn words_naming_no_own_setting_are_refused_naming_programs() {
-        // 191, C.2: programs is named among the settings.
+        // 195, C.2: programs is named among the settings.
         for (words, named) in [
             ("programs=x", "no setting is named programs;"),
             ("programs.agent=x", "names no program"),

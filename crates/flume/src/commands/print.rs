@@ -405,7 +405,7 @@ fn intent_words(intent: &IntentKey) -> String {
 /// 169).
 /// The current agent, where it opened, each setting with its layer, its
 /// own settings' files and how they were passed, and what its record
-/// says (56, 191).
+/// says (56, 195).
 fn agent_lines(agent: &AgentStatus) -> Vec<String> {
     let mut lines = vec![agent_line(agent)];
     lines.extend(where_line(agent));
@@ -432,12 +432,12 @@ fn agent_lines(agent: &AgentStatus) -> Vec<String> {
 
 /// The widest line an own setting's value is printed whole on in the
 /// person's form; past it a table prints as `{…}` and a list as `[…]`,
-/// and the JSON form gives every value whole (56, 191).
+/// and the JSON form gives every value whole (56, 195).
 const SETTING_LINE: usize = 100;
 
 /// A setting with its value as written, its layer, and the file it came
 /// from where it came from one, an own setting's table or list that runs
-/// past [`SETTING_LINE`] printed as `{…}` or `[…]` (56, 191).
+/// past [`SETTING_LINE`] printed as `{…}` or `[…]` (56, 195).
 fn setting_line(setting: &str, given: &Given) -> String {
     let layer = word(json!(given.layer));
     let from = match &given.file {
@@ -458,7 +458,7 @@ fn setting_line(setting: &str, given: &Given) -> String {
 
 /// An agent's own settings beyond their keys: each file a layer named for
 /// its program with the keys left out of it and their owners, how they
-/// were passed, and that they were not read back (56, 191).
+/// were passed, and that they were not read back (56, 195).
 fn own_lines(own: &OwnStatus) -> Vec<String> {
     let mut lines = vec![];
     for file in &own.files {

@@ -9,7 +9,7 @@
 //! (design 9 of record 0020's amendment's change), and how it takes its
 //! own settings by `--settings`, the keys the profile reserves and the
 //! `attribution` the docs give as their example (design 9 of record
-//! 0040's change). A release that
+//! 0043's change). A release that
 //! changes any of them, or only renames what its minifier names in those
 //! fragments, fails here until the reading is made again. No agent runs.
 

@@ -278,7 +278,7 @@ pub struct FakeAgentHarness {
     /// leaves it carrying none, as a profile that offers no carry (179).
     carries: bool,
     /// How the harness scripted the fake to take own settings, by
-    /// [`fake_own`], or left it keeping the seam's defaults (191, 192).
+    /// [`fake_own`], or left it keeping the seam's defaults (195, 196).
     own: OwnWay,
 }
 
@@ -293,7 +293,7 @@ impl FakeAgentHarness {
     }
 
     /// The fake left taking no own settings and reserving no key, as a
-    /// profile that keeps the seam's defaults (191, 192).
+    /// profile that keeps the seam's defaults (195, 196).
     pub fn taking_no_own() -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
@@ -309,7 +309,7 @@ impl FakeAgentHarness {
 
 /// The fake agent's own settings the seam's scenarios run with: taken by
 /// a file, `env` reserved for the account and `permissions.default`, by
-/// its path, for flume's mode (191, 192).
+/// its path, for flume's mode (195, 196).
 pub fn fake_own() -> OwnWay {
     OwnWay {
         takes: true,
@@ -327,7 +327,7 @@ pub fn fake_own() -> OwnWay {
 }
 
 /// `agent` scripted with [`fake_modes`], reading the mode back, and
-/// taking own settings as `own` says (161, 169, 191).
+/// taking own settings as `own` says (161, 169, 195).
 fn scripted(agent: FakeAgent, own: &OwnWay) -> FakeAgent {
     let modes = fake_modes();
     for (mode, value) in &modes.four {
@@ -363,7 +363,7 @@ pub fn fake_modes() -> Modes {
 
 impl Default for FakeAgentHarness {
     /// The fake agent scripted with [`fake_modes`], reading the mode
-    /// back, and with [`fake_own`] (161, 169, 191).
+    /// back, and with [`fake_own`] (161, 169, 195).
     fn default() -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
@@ -505,7 +505,7 @@ impl AgentHarness for FakeAgentHarness {
 
     /// The JSON object of the file the command names by `--own`, read
     /// from the files it lists; an empty one where it lists no such file,
-    /// and none where it names none (192).
+    /// and none where it names none (196).
     fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>> {
         let file = command
             .args

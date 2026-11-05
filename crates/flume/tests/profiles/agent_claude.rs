@@ -366,8 +366,8 @@ impl AgentHarness for Harness {
         })
     }
 
-    /// Taken by `--settings <file>`, with design 6's reserved keys (191,
-    /// 192).
+    /// Taken by `--settings <file>`, with design 6's reserved keys (195,
+    /// 196).
     fn own_way(&self) -> OwnWay {
         OwnWay {
             takes: true,
@@ -377,7 +377,7 @@ impl AgentHarness for Harness {
 
     /// The JSON object of the file the command names by `--settings`, as
     /// the release reads one, from the files the command lists; none where
-    /// it names none (191, C.4).
+    /// it names none (195, C.4).
     fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>> {
         let file = command
             .args
@@ -595,7 +595,7 @@ fn the_command_for_a_stage_with_own_settings() {
     // Keys resolved from a named file and a table's `settings` are
     // written as one JSON object to the file beside the start's record,
     // which `--settings` names right after `--plugin-dir`; the named
-    // file's path is never on the line (S95, 191, 192).
+    // file's path is never on the line (S100, 195, 196).
     let harness = Harness::new();
     let named = "/host/agent-launcher/claude-settings.json";
     let line = json!({ "type": "command", "command": "~/bin/line" });
@@ -639,7 +639,7 @@ fn the_command_for_a_stage_with_own_settings() {
 
 #[test]
 fn the_command_for_a_stage_with_none() {
-    // No key for `claude`: no `--settings`, and no file (191).
+    // No key for `claude`: no `--settings`, and no file (195).
     let harness = Harness::new();
     let command = with_own(&harness, &BTreeMap::new());
     assert!(
@@ -654,7 +654,7 @@ fn the_command_for_a_stage_with_none() {
 fn each_reserved_key() {
     // Each key 2.1.296's settings hold that another setting, the account
     // or a person owns, `permissions.defaultMode` by its path, with its
-    // owner (34, 144, 162, 172, 191).
+    // owner (34, 144, 162, 172, 195).
     let reserved: Vec<(String, String)> = Harness::new()
         .seam
         .reserved()
@@ -691,7 +691,7 @@ fn a_peoples_settings_file() {
     // the command's file holds its status line, renderer, hooks and
     // permissions' rules, and none of its `env`, its
     // `permissions.defaultMode` or its acceptance of the bypass warning,
-    // which status names left out with their owners (S95, 191).
+    // which status names left out with their owners (S100, 195).
     let repository = Repository::new("peoples-file");
     let scratch = &repository.scratch;
     let line = json!({ "type": "command", "command": "~/bin/line" });
@@ -813,7 +813,7 @@ agents = [{}]
 #[test]
 fn keys_taken_as_written() {
     // Keys no setting of flume's owns are taken, and the command's file
-    // holds each as written (191).
+    // holds each as written (195).
     let harness = Harness::new();
     let given = BTreeMap::from([
         (
@@ -839,7 +839,7 @@ fn keys_taken_as_written() {
 fn a_repositorys_tagline_written_as_given() {
     // `attribution = { commit = "", pr = "", sessionUrl = false }` among
     // the resolved keys reaches the file exactly as the layer wrote it,
-    // nothing of flume's added to it (S97, 191, C.4).
+    // nothing of flume's added to it (S102, 195, C.4).
     let harness = Harness::new();
     let attribution = json!({ "commit": "", "pr": "", "sessionUrl": false });
     let own = BTreeMap::from([

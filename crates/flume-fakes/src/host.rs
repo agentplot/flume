@@ -52,7 +52,7 @@ struct HostState {
     kinds: BTreeMap<String, KindSettings>,
     /// The agents' settings by repository and kind.
     repos: BTreeMap<(String, String), KindSettings>,
-    /// The agents' settings for every kind, by repository (32, 191).
+    /// The agents' settings for every kind, by repository (32, 195).
     repos_agents: BTreeMap<String, Settings>,
     /// The agents' settings for every agent in a stream, by the stream
     /// (32, 143).
@@ -186,7 +186,7 @@ impl FakeHost {
 
     /// The settings the configuration gives every kind's agents in
     /// `repository`, its `[repos."<repository>".agents]`; empty settings
-    /// remove them (32, 191).
+    /// remove them (32, 195).
     pub fn set_every_kind(&self, repository: &str, settings: Settings) {
         let mut state = lock(&self.state);
         if settings == Settings::default() {

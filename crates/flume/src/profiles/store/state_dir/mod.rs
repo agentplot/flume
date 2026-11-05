@@ -14,7 +14,7 @@
 //! lock, readable by the host's user alone (153, C.7). A file an agent's
 //! command lists is written into the place's folder whole, beside and
 //! renamed over, readable by the host's user alone, and goes with the
-//! folder (192). Nothing is written into a repository (104, core.16).
+//! folder (196). Nothing is written into a repository (104, core.16).
 
 use flume_seams::{
     HeldState, HostDocument, HostKey, HostVersioned, PlaceId, Store, Versioned, Written, MADE,

@@ -42,7 +42,7 @@ const AS_FLUME: &str = "FLUME_TEST_AS_FLUME";
 /// once, never asks or keeps own work, and reads its session ended once
 /// the test writes the mark `stand-in/<stage>-<start>` in the place's
 /// folder. It maps each mode to its own word and reads none back, and
-/// takes its program's own settings, passing them nowhere (191).
+/// takes its program's own settings, passing them nowhere (195).
 struct StandInAgent;
 
 fn ended_mark(folder: &str, agent: &Identity) -> PathBuf {
@@ -993,7 +993,7 @@ fn a_mode_and_a_table_at_the_launch() {
 
 #[test]
 fn own_settings_and_a_file_at_the_launch() {
-    // 7, 21, 32, 191: a program's own settings for every stage and for
+    // 7, 21, 32, 195: a program's own settings for every stage and for
     // one, and its settings file named relative to the working directory,
     // read at the launch and kept in the place's held settings as
     // Settings writes them, the file by its absolute path; the file

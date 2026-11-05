@@ -1,5 +1,5 @@
 //! An agent's settings, resolved at its start from the eight layers
-//! clause 32 orders and from nothing else (design 3; records 0017, 0040;
+//! clause 32 orders and from nothing else (design 3; records 0017, 0043;
 //! core.30): the launch's, the host's for the repository, for its kind
 //! and then for every kind, the host's for the kind, the host's for the
 //! place's stream, the host's for every agent, the repository's, for a
@@ -9,7 +9,7 @@
 //! every kind, and every setting is taken whole. A program's own
 //! settings are taken key by key, each top-level key whole from the
 //! first table that gives it, a table's `settings` before its file, and
-//! only the agent's program's (191). The host's layers are read as they
+//! only the agent's program's (195). The host's layers are read as they
 //! stand at the start, their own settings checked then, every other
 //! layer as the launch read it. An agent's environment is its account's
 //! alone, each value's `~` and variables read against the host user's
@@ -17,7 +17,7 @@
 //! mapped by its agent profile to its program's setting, or the stage
 //! refused naming the mode, the program, the stage and the layer (162,
 //! 169); and its own settings are taken by its profile, or the stage
-//! refused naming each key with its layer and its file (191, 192).
+//! refused naming each key with its layer and its file (195, 196).
 
 use crate::own::{fold, Table};
 use crate::Engine;
@@ -37,14 +37,14 @@ type Tables = (Layer, Vec<Settings>);
 /// A stage's settings with each value as its layer wrote it, and the
 /// layer of each, by `program`, `model`, `mode`, `instructions` or
 /// `programs.<program>.settings.<key>`, an own setting's with its file
-/// (32, 56, 191); the agent's program's own settings; and the layers
+/// (32, 56, 195); the agent's program's own settings; and the layers
 /// they were folded from.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Resolved {
     pub settings: Settings,
     pub from: BTreeMap<String, Given>,
     /// The agent's program's own settings, none where no layer gives its
-    /// program an entry (191).
+    /// program an entry (195).
     pub own: Option<Own>,
     layers: Vec<Tables>,
 }
@@ -52,7 +52,7 @@ pub(crate) struct Resolved {
 /// A program's own settings as the layers resolved them: each key whole,
 /// its value as written, with its layer and its file where it came from
 /// one, and each file a layer named for the program, most specific first
-/// (191).
+/// (195).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Own {
     pub keys: BTreeMap<String, Value>,
@@ -70,7 +70,7 @@ impl Resolved {
 
     /// `program`'s own settings as the layers give them, by its name, key
     /// by key from the most general table to the most specific; none
-    /// where no table gives it an entry (32, 191; design 4).
+    /// where no table gives it an entry (32, 195; design 4).
     pub(crate) fn own_for(&self, program: &str) -> Option<Own> {
         let program = program_name(program);
         let mut own: Option<Own> = None;
@@ -119,7 +119,7 @@ pub(crate) struct Resolution {
 
 impl Resolution {
     /// The agent's program's own settings as the layers resolved them,
-    /// which its profile takes; none where they give none (191, 192).
+    /// which its profile takes; none where they give none (195, 196).
     pub(crate) fn own_keys(&self) -> BTreeMap<String, Value> {
         self.resolved
             .own
@@ -132,7 +132,7 @@ impl Resolution {
 /// Why `agent` refuses `stage`'s own settings for `program` as `own`
 /// resolved them, each key named with its layer and its file where it
 /// came from one, in the profile's words; none where it takes them or
-/// they are empty (191, 192; design 13).
+/// they are empty (195, 196; design 13).
 pub(crate) fn own_refused(
     agent: &dyn Agent,
     stage: &str,
@@ -289,7 +289,7 @@ impl Engine {
     /// The eight layers of `stage`'s settings in `place`, most specific
     /// first, each its tables most specific first (design 3). The host's
     /// configuration is read here, at each start, and nowhere else, its
-    /// own settings checked as they stand, or the refusal (32, 191, C.7).
+    /// own settings checked as they stand, or the refusal (32, 195, C.7).
     fn layers(&self, place: &PlaceRecord, stage: &Stage) -> Result<Vec<Tables>, String> {
         let host = self
             .host
@@ -358,7 +358,7 @@ impl Engine {
     /// `stage`'s settings in `place` as each layer wrote them, folded
     /// from the most general layer to the most specific, keeping the
     /// layer of every setting and every variable, and its program's own
-    /// settings key by key (32, 191).
+    /// settings key by key (32, 195).
     pub(crate) fn resolve(&self, place: &PlaceRecord, stage: &Stage) -> Result<Resolved, String> {
         let mut resolved = Resolved {
             layers: self.layers(place, stage)?,
@@ -462,7 +462,7 @@ impl Engine {
     /// The stage's agent at a start: its settings resolved, the agent
     /// profile that runs its program, the value it passes for its mode,
     /// and its program's own settings, which the profile takes; or why the
-    /// stage is refused (27, 32, 169, 191).
+    /// stage is refused (27, 32, 169, 195).
     pub(crate) fn resolution(
         &self,
         place: &PlaceRecord,

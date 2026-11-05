@@ -1,5 +1,5 @@
 //! A program's own settings as the core takes them from one table of a
-//! layer (191; design 6, 7). Each key the program's agent profile
+//! layer (195; design 6, 7). Each key the program's agent profile
 //! reserves is left out of the table's named file unread, a nested key
 //! out of the table that holds it, its path kept in the file's
 //! `left_out`, and refused where the table's `settings` gives it. Then
@@ -254,7 +254,7 @@ fn holds(keys: &BTreeMap<String, Value>, path: &str) -> bool {
 /// its `settings` give, naming the key, the program, the table, the
 /// layer and the key's owner, or a string shaped as a credential, naming
 /// its key's path, the layer and the file where it came from one, and
-/// never the value (29, 191; design 6, 7).
+/// never the value (29, 195; design 6, 7).
 pub(crate) fn checked(
     program: &str,
     entry: &ProgramSettings,
@@ -304,7 +304,7 @@ pub(crate) struct Folded<'a> {
 }
 
 /// `entry`'s keys, its `settings` over its file key by key, each key
-/// taken whole (32, 191; design 2, 4).
+/// taken whole (32, 195; design 2, 4).
 pub(crate) fn fold(entry: &ProgramSettings) -> BTreeMap<&str, Folded<'_>> {
     let mut keys = BTreeMap::new();
     if let Some(file) = &entry.file {
@@ -326,7 +326,7 @@ pub(crate) fn fold(entry: &ProgramSettings) -> BTreeMap<&str, Folded<'_>> {
 
 impl Engine {
     /// The keys the agent profile binding `program` reserves, none where
-    /// no profile binds it (191; design 7).
+    /// no profile binds it (195; design 7).
     pub(crate) fn reserved_of(&self, program: &str) -> Vec<Reserved> {
         self.agent(program)
             .map(|agent| agent.reserved())
@@ -335,7 +335,7 @@ impl Engine {
 
     /// `settings` with every program's entry checked as `table`'s, each
     /// against its own profile's reserved keys, or why the table cannot
-    /// be taken (191; design 7).
+    /// be taken (195; design 7).
     pub(crate) fn own_checked(
         &self,
         settings: &Settings,
@@ -356,7 +356,7 @@ impl Engine {
     }
 
     /// A kind's table of `layer` checked, for every stage and each stage
-    /// it names (191).
+    /// it names (195).
     pub(crate) fn own_checked_kind(
         &self,
         settings: &KindSettings,
@@ -377,7 +377,7 @@ impl Engine {
     }
 
     /// `kind` with its declaration's own settings checked, its table for
-    /// every stage and each stage's own (158, 191).
+    /// every stage and each stage's own (158, 195).
     pub(crate) fn own_checked_declaration(&self, kind: &Kind) -> Result<Kind, String> {
         let mut kind = kind.clone();
         kind.agents = self.own_checked_kind(&kind.agents, Layer::Kind)?;

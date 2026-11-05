@@ -28,7 +28,7 @@ upstream project refused the user's pull requests over Claude Code's
 `Generated with Claude Code` line. A fork of someone else's project is
 to carry none while the host's own repositories keep theirs, each
 repository's word given by its own `.config/flume.toml` or by the
-host's `[repos."<repository>"]` table (32, 191, C.2, C.7).
+host's `[repos."<repository>"]` table (32, 195, C.2, C.7).
 
 ## What Changes
 
@@ -39,14 +39,14 @@ host's `[repos."<repository>"]` table (32, 191, C.2, C.7).
   `[agents.programs.claude] file = "~/.config/agent-launcher/claude-settings.json"`
   and `[agents.programs.claude.settings] tui = "fullscreen"`. Only the
   entry for the agent's program is taken, so a setting for one program
-  never reaches another. flume translates nothing in them (191).
+  never reaches another. flume translates nothing in them (195).
 - **A named file in every layer.** A file is JSON or TOML by its name,
   read where its layer lives: the host's on the host at each start,
   relative to the configuration's directory, absolute or under `~/`;
   the repository's and the kind's within their repository or package,
   at the launch's revision, beside the kind's prompts; the launch's at
   the launch. Its keys lie beneath its table's `settings`, and a stage's
-  table comes before every stage's (21, 157, 191; core.34).
+  table comes before every stage's (21, 157, 195; core.34).
 - **Two host layers.** `[agents]` gives settings for every agent on the
   host, and `[agents.streams.<stream>]` for every agent in one stream.
   They come after the host's tables for a repository and for a kind,
@@ -68,23 +68,23 @@ host's `[repos."<repository>"]` table (32, 191, C.2, C.7).
   every agent's commits and pull requests in the fork free of a
   tagline, and a repository's own `.config/flume.toml` gives its own
   words for every kind. A test reads that layer's value in the agent's
-  `--settings` file, and a walkthrough, S97, in what the program read
-  (191).
+  `--settings` file, and a walkthrough, S102, in what the program read
+  (195).
 - **Key by key.** Each top-level key of a program's settings is one
   setting, taken whole from the first layer that gives it, and within a
   layer from its `settings` before its file. A layer never merges inside
   a key and never removes a key; `hooks = {}` replaces a file's hooks
-  (32, 191).
+  (32, 195).
 - **None where none is given.** With no key for the agent's program in
   any layer, nothing is passed, and the account's own configuration
-  decides as today (162, 191).
+  decides as today (162, 195).
 - **Passed as the program takes them.** Each agent profile passes its
   program's settings its own way or refuses them. Claude Code's takes
   them by `--settings <file>`: a JSON file flume writes in the start's
   folder, holding the keys the layers resolved and never a named file
   as it stands, which the release lays over the user's, the project's
   and the local settings. Every other program refuses them until its
-  entry names its way, checked against its release (88, 170, 192, C.4).
+  entry names its way, checked against its release (88, 170, 196, C.4).
 - **Keys another setting owns.** Each profile names its program's keys
   that a flume setting, the account or a person owns. Written in a
   layer's `settings`, one is refused, naming the key and its owner.
@@ -161,14 +161,14 @@ host's `[repos."<repository>"]` table (32, 191, C.2, C.7).
   repository's settings for every kind among them.
 - `seam-fakes`: the fake agent scripts its way, its reserved keys and
   none.
-- `clause-coverage`: the list at the statement's revision holding 191,
-  192, S95, S96 and S97.
+- `clause-coverage`: the list at the statement's revision holding 195,
+  196, S100, S101 and S102.
 
 ## Impact
 
-- agentplot/blueprints: the statement gains 191, 192, S95, S96 and S97
+- agentplot/blueprints: the statement gains 195, 196, S100, S101 and S102
   and amends 4, 32, 56, 88, 143, 158, 171, 173, C.2, C.4, C.7 and
-  section 3's settings, at blueprints 068cbc0 on the branch
+  section 3's settings, at blueprints bc72003 on the branch
   `design/flume-an-agents-program-settings` (design 18). Clause 143's
   "a stream gives its agents no settings" and core.30's rule against a
   stream's settings change first (core.19). weir's C.4 names `programs`
@@ -177,7 +177,7 @@ host's `[repos."<repository>"]` table (32, 191, C.2, C.7).
   row give the store a file written into the place's folder, at
   blueprints 352aa32 on the branch
   `design/flume-the-store-writes-a-starts-files` (design 8).
-- `docs/adr`: record 0040, amending records 0017, 0020 and 0024;
+- `docs/adr`: record 0043, amending records 0017, 0020 and 0024;
   core.30 amended and core.50 drawn with it.
 - `crates/flume-seams`: `Settings::programs` with `ProgramSettings` and
   `NamedFile`, `Layer::HostStream` and `Layer::Host`, `KindsRead::Read`'s

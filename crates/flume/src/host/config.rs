@@ -17,12 +17,12 @@
 //! repository, its `[agents]` for every agent on the host and its
 //! `[agents.streams.<stream>]` for every agent in one stream the host
 //! declares, none of the three naming a program, an environment, a pane
-//! beside or a stage, and the first no stream (32, 143, 191; record
-//! 0040). Every agents table gives `programs`, each program's own
+//! beside or a stage, and the first no stream (32, 143, 195; record
+//! 0043). Every agents table gives `programs`, each program's own
 //! settings, read by flume's one reader of them; a file an entry names is
 //! read on the host with the configuration, absolute, under `~/` read as
 //! the home as a repository's key is, or relative to the configuration's
-//! own directory, where a link leads, and never with a `$VAR` read (191,
+//! own directory, where a link leads, and never with a `$VAR` read (195,
 //! C.7; core.30). Its
 //! `[roles."<partition>/<role>"]` tables are the runs the host wakes for
 //! each role's address, with `repository`, `kind`, `priority`, `base`,
@@ -64,7 +64,7 @@ use toml::{Table, Value};
 /// one stage's, a repository's for every kind, a stream's and every
 /// agent's, each of its settings and in its `programs` each program's
 /// `file` and each of its own settings a key of its own (32, 107, 143,
-/// 166, 167, 180, 181, 191, C.7; record 0040). Each is one unit, its
+/// 166, 167, 180, 181, 195, C.7; record 0043). Each is one unit, its
 /// value taken whole. A change that gives the local layer another key
 /// adds it here.
 pub const LOCAL_KEYS: &[&[&str]] = &[
@@ -131,7 +131,7 @@ pub struct HostConfig {
     /// location and the kind's name (32).
     pub repos: BTreeMap<String, BTreeMap<String, KindSettings>>,
     /// The settings given every kind's agents in one repository, by its
-    /// location, its `[repos."<repository>".agents]` (32, 191).
+    /// location, its `[repos."<repository>".agents]` (32, 195).
     pub repos_agents: BTreeMap<String, Settings>,
     /// The settings given every agent in one stream, by the stream's
     /// name, its `[agents.streams.<stream>]` (32, 143).
@@ -245,7 +245,7 @@ impl HostConfig {
 
     /// The configuration `managed` and `local` state, as [`HostConfig::layers`]
     /// reads them, a settings file read relative to `directory`, the one
-    /// both files share (191, C.7).
+    /// both files share (195, C.7).
     pub fn layers_in(
         managed: &str,
         local: Option<&str>,
@@ -793,7 +793,7 @@ fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<Co
 /// `…programs.<program>.settings.<key>…`, holding a string shaped as a
 /// credential, which status never gives as written: the launch and the
 /// start refuse it, and the configuration's values give it as `<set>`
-/// (191; design 7; core.50).
+/// (195; design 7; core.50).
 fn own_credential(path: &[String], value: &Value) -> bool {
     let own = path
         .windows(3)
@@ -1168,7 +1168,7 @@ fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
 /// `[agents.streams.<stream>]`, every agent's in a stream `streams`
 /// declares, by the stream's name; a `program`, an `env`, a `beside` or a
 /// `stages` in either, or a stream no `[streams]` table declares, refused
-/// naming the table and the key (32, 143, 191, C.7; record 0040).
+/// naming the table and the key (32, 143, 195, C.7; record 0043).
 fn every_agent(
     agents: &Value,
     streams: &BTreeMap<String, Stream>,
@@ -1201,8 +1201,8 @@ fn every_agent(
 
 /// A repository's `[repos."<repository>".agents]` at `at`, the host's
 /// settings for every kind in it; a `program`, an `env`, a `beside`, a
-/// `stages` or a `streams` refused naming the table and the key (32, 191,
-/// C.7; record 0040).
+/// `stages` or a `streams` refused naming the table and the key (32, 195,
+/// C.7; record 0043).
 fn every_kind(agents: &Value, at: &str, directory: &Path) -> Result<Settings, String> {
     let agents = agents
         .as_table()
@@ -1240,7 +1240,7 @@ fn refuse(table: &Table, at: &str, whose: &str, names: &[&str]) -> Result<(), St
 /// One agents table's `model`, `instructions`, `mode` and `programs`,
 /// each as written, the mode read as a declaration's is (162, 169), and
 /// `programs` by flume's one reader of them, a file read by
-/// [`host_file`] (191); any other key, `stages` among them, is not a
+/// [`host_file`] (195); any other key, `stages` among them, is not a
 /// setting of the host's (32, C.7; record 0020).
 fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings, String> {
     let text = |name: &str| match table.get(name) {
@@ -1270,7 +1270,7 @@ fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings,
 /// A settings file a host's agents table names at `written`, read on the
 /// host now: absolute, beginning `~/` read against the home as a
 /// repository's key is, or relative to `directory`, the configuration's,
-/// read where it leads when it is a link, and with no `$VAR` read (191,
+/// read where it leads when it is a link, and with no `$VAR` read (195,
 /// C.7; core.30). Its path read and its text, or why it cannot be read,
 /// naming it.
 fn host_file(directory: &Path, written: &str) -> Result<(String, String), String> {
@@ -2171,7 +2171,7 @@ label = "inception"
 
     #[test]
     fn an_own_setting_shaped_as_a_credential_is_given_as_set() {
-        // 191, core.50: an own setting's value is given as written where
+        // 195, core.50: an own setting's value is given as written where
         // it passes design 7's check, and as `<set>` where it does not,
         // at any depth and under any agents table.
         let config = HostConfig::layers(
@@ -2524,7 +2524,7 @@ label = "inception"
 
     #[test]
     fn settings_for_every_agent_and_for_a_stream() {
-        // 32, 143, 191, C.7: `[agents]` and `[agents.streams.<stream>]`
+        // 32, 143, 195, C.7: `[agents]` and `[agents.streams.<stream>]`
         // give `model`, `mode`, `instructions` and `programs`, a file
         // under the home read on the host; the host's settings for a
         // place's repository, stream and every agent as the caller names
@@ -2623,7 +2623,7 @@ label = "inception"
 
     #[test]
     fn own_settings_for_a_kind_and_for_a_repositorys_stage() {
-        // 32, 191, C.7: every agents table of the host's gives
+        // 32, 195, C.7: every agents table of the host's gives
         // `programs`, a file relative to the configuration's directory.
         let scratch = Scratch::new("kind-own");
         scratch.write(
@@ -2657,7 +2657,7 @@ label = "inception"
 
     #[test]
     fn a_programs_that_is_no_table_of_entries() {
-        // 191, C.7: refused naming the table and `programs`; a program's
+        // 195, C.7: refused naming the table and `programs`; a program's
         // key beside its file, and a date, refused naming the key.
         for (text, named) in [
             ("[agents]\nprograms = \"agent\"\n", "agents.programs:"),
@@ -2682,7 +2682,7 @@ label = "inception"
 
     #[test]
     fn a_hosts_file_flume_cannot_read() {
-        // 191, C.7: a name neither `.json` nor `.toml`, a file that does
+        // 195, C.7: a name neither `.json` nor `.toml`, a file that does
         // not exist or does not parse, refused naming the field and the
         // file; no `$VAR` read in a path (core.30).
         let scratch = Scratch::new("bad-file");
@@ -2710,7 +2710,7 @@ label = "inception"
 
     #[test]
     fn a_hosts_file_read_where_its_link_leads() {
-        // 191, C.7: a link its configurer keeps, read where it leads, at
+        // 195, C.7: a link its configurer keeps, read where it leads, at
         // each reading of the configuration.
         let scratch = Scratch::new("linked");
         let first = scratch.write("first.json", r#"{ "tui": "fullscreen" }"#);
@@ -2736,7 +2736,7 @@ label = "inception"
 
     #[test]
     fn a_forks_table_for_every_kind() {
-        // S97, 32, 191, C.7: `[repos."<repository>".agents]` by the
+        // S102, 32, 195, C.7: `[repos."<repository>".agents]` by the
         // repository's location, `~` the home.
         let config = HostConfig::parse(
             "[repos.\"~/Code/upstream-fork\".agents.programs.agent.settings]\n\

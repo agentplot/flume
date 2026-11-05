@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex};
 /// of its settings and takes no own settings until scripted to; once it
 /// takes them, its command lists them as one JSON object in a file under
 /// the place's own folder, [`FakeAgent::own_file`], and names it by `--own
-/// <file>`, and every command given own settings logs their keys (191,
-/// 192).
+/// <file>`, and every command given own settings logs their keys (195,
+/// 196).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     state: Mutex<AgentModel>,
@@ -53,13 +53,13 @@ struct AgentModel {
     /// that it started (S79).
     carried_starts_end: bool,
     /// The program takes its own settings, by a file its command names
-    /// (191, 192).
+    /// (195, 196).
     takes_own: bool,
     /// The keys of its settings the program reserves, each with its
-    /// owner, a nested key by its path (191, 192).
+    /// owner, a nested key by its path (195, 196).
     reserved: Vec<Reserved>,
     /// The file its command lists its own settings in where scripted
-    /// apart from its own under the place's folder (192).
+    /// apart from its own under the place's folder (196).
     own_at: Option<String>,
 }
 
@@ -260,15 +260,15 @@ impl FakeAgent {
     }
 
     /// The program takes its own settings, by a file under the place's
-    /// own folder its command lists and names by `--own <file>` (191,
-    /// 192).
+    /// own folder its command lists and names by `--own <file>` (195,
+    /// 196).
     pub fn take_own(&self) {
         lock(&self.state).takes_own = true;
     }
 
     /// The program's setting `key`, a nested key by its path as
-    /// `permissions.default`, is `owner`'s, so the fake reserves it (191,
-    /// 192).
+    /// `permissions.default`, is `owner`'s, so the fake reserves it (195,
+    /// 196).
     pub fn reserve(&self, key: &str, owner: &str) {
         lock(&self.state).reserved.push(Reserved {
             key: key.to_string(),
@@ -278,13 +278,13 @@ impl FakeAgent {
 
     /// The program's own settings go to the file at `path`, wherever it
     /// lies, as a profile that lists a file outside the place's folder
-    /// would (192).
+    /// would (196).
     pub fn own_file_at(&self, path: &str) {
         lock(&self.state).own_at = Some(path.to_string());
     }
 
     /// The file under the place's own `folder` that a command for `agent`
-    /// lists its own settings in (192).
+    /// lists its own settings in (196).
     pub fn own_file(folder: &str, agent: &Identity) -> String {
         format!(
             "{folder}/agent/{}/own.json",
@@ -663,7 +663,7 @@ impl Agent for FakeAgent {
 
     /// Every entry where the fake is scripted to take own settings; a
     /// non-empty one refused in the seam's default words otherwise (170,
-    /// 191).
+    /// 195).
     fn own(&self, given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
         if given.is_empty() || lock(&self.state).takes_own {
             Ok(())

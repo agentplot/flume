@@ -227,7 +227,7 @@ impl std::fmt::Debug for RoomGuard {
 /// The settings the host's configuration gives a kind's agents in one
 /// repository and one stream, each value as the configuration wrote it,
 /// each table none where the configuration gives none, and in settings
-/// written before (32, 143, 191, C.7).
+/// written before (32, 143, 195, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostSettings {
     /// For the kind in one repository.

@@ -665,7 +665,7 @@ pub struct AgentStatus {
     /// Its program's own settings beyond the keys its settings give: how
     /// its profile passed them, that they were not read back, and each
     /// file a layer named for its program; none where no layer gave its
-    /// program an entry (56, 191).
+    /// program an entry (56, 195).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own: Option<OwnStatus>,
 }
@@ -674,7 +674,7 @@ pub struct AgentStatus {
 /// command's arguments naming the files it lists, none where it passed
 /// no key; `read_back`, whether its program read them back, which no
 /// release does; and `files`, each file a layer named for its program,
-/// most specific first (56, 191, 192).
+/// most specific first (56, 195, 196).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OwnStatus {
     pub passed: Option<String>,
@@ -686,7 +686,7 @@ pub struct OwnStatus {
 /// A file a layer named for an agent's program: its layer, its path as
 /// written and as read, and each key its program's profile reserves left
 /// out of it, unread, with the setting or the account that owns it (56,
-/// 191).
+/// 195).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OwnFileStatus {
     pub layer: Layer,

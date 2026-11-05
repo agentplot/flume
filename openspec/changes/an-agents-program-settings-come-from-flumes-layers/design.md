@@ -144,13 +144,13 @@ rule, the kit standard's code profile binds (kit:specs.3, kit:testing.5).
 - A host, a stream, a repository, a kind or a launch gives an agent
   program's own settings in that program's own words, inline, from a
   settings file it names, or both, and they reach that program and no
-  other (191).
+  other (195).
 - A host names the file its people's sessions get, and its agents get
-  the same keys, all but those another setting or a person owns (191).
+  the same keys, all but those another setting or a person owns (195).
 - A host says once what every agent gets, and a stream says what its
   agents get differently (32, 143).
 - A host that says nothing changes nothing: nothing is passed, and the
-  account's own configuration decides (162, 191).
+  account's own configuration decides (162, 195).
 - No own setting carries a credential, an environment variable, a
   model, a mode or a person's acceptance past the setting that owns it
   (29, 34, 144, 162, 172; core.12, core.30).
@@ -193,7 +193,7 @@ rule, the kit standard's code profile binds (kit:specs.3, kit:testing.5).
   reports the settings it loaded to a hook, so the start's record names
   none and status says they are not read back.
 - Translating a setting from one program's words to another's, or
-  merging inside a value (191; core.50).
+  merging inside a value (195; core.50).
 
 ## Decisions
 
@@ -410,7 +410,7 @@ can say. Nor does it hold for the model as it did. The kind table says
 its word for every stream and the stream's for every kind, and a stream
 is where an allowance is spent, through its pool, which is why the
 user ruled that the new tables give the model, the mode and the
-instructions too. Record 0040 amends record 0020, 143 and core.30
+instructions too. Record 0043 amends record 0020, 143 and core.30
 together (core.19).
 
 **The managed and local layers.** The host's configuration is read as
@@ -609,7 +609,7 @@ command reaches the program as written and its shell reads it there.
 
 ### 8. The agent seam
 
-The agent seam gains the part **own settings** (192):
+The agent seam gains the part **own settings** (196):
 
 - `Agent::reserved(&self) -> Vec<Reserved>`: each key of its program's
   settings that another setting or the account owns, by its path, with
@@ -853,7 +853,7 @@ Its doc comment names this beside its acts.
 Walkthroughs in `crates/flume/tests/profiles/tools/walkthroughs.rs`,
 with the stand-in under the printed command:
 
-- S95: a host whose `[agents.programs.claude]` names a scratch file,
+- S100: a host whose `[agents.programs.claude]` names a scratch file,
   `people-settings.json`, as a host's launcher would pass its people.
   The file gives `tui = "fullscreen"`, a `statusLine` running
   `people-line`, `env = { PEOPLE = "1" }`, `permissions = { allow =
@@ -876,7 +876,7 @@ with the stand-in under the printed command:
   in `default` read `host-line` and the file's `tui`. A fix on a host
   and a repository that give no entry prints no `--settings`, writes no
   file, and lands.
-- S96: launches refused, each naming the key and its layer, and the
+- S101: launches refused, each naming the key and its layer, and the
   file where there is one, with no value in the refusal or in status,
   and nothing made: `--agent programs.claude.settings.env={"X":"1"}`; a
   host whose `[agents.programs.claude.settings]` gives `apiKeyHelper`; a
@@ -885,7 +885,7 @@ with the stand-in under the printed command:
   a status line whose command holds a value shaped as a token; a host
   file whose `statusLine` command holds one; a host whose file does not
   exist; and a repository whose `file` is `../../claude.json`, past the repository's root.
-- S97: three scratch repositories on one host. The host's
+- S102: three scratch repositories on one host. The host's
   `[repos."<fork>".agents.programs.claude.settings]` gives `attribution
   = { commit = "", pr = "", sessionUrl = false }`, for a fork of a
   project that refuses a tagline; the repository `ours` commits a
@@ -1038,11 +1038,11 @@ should take:
 
 ### 18. The statement, the record and the rules
 
-The statement at blueprints 068cbc0, on the branch
+The statement at blueprints bc72003, on the branch
 `design/flume-an-agents-program-settings` cut from main at 9f1f0fd,
 holds this change (core.19):
 
-- **191** (A.4), an agent's own settings: a table of programs in every
+- **195** (A.4), an agent's own settings: a table of programs in every
   layer of 32, each entry a named file and keys in its program's own
   words, the file read where its layer lives and its keys beneath the
   layer's own, each top-level key taken whole, only the agent's
@@ -1050,7 +1050,7 @@ holds this change (core.19):
   reserved key refused where written and left out of a named file, a
   value shaped as a credential refused before anything holds it, and
   status giving each key with its layer and its file.
-- **192** (B.4), the agent seam's **own settings** part: a program's
+- **196** (B.4), the agent seam's **own settings** part: a program's
   reserved keys with their owners, and how its program is started with
   the keys resolved, or that it gives no way.
 - **32**: eight layers, as design 3 orders them, the host's tables for
@@ -1071,11 +1071,11 @@ holds this change (core.19):
   `[agents.streams.<stream>]`, `[repos."<repository>".agents]`, the
   host's file paths, and every agents table of the host's one the local
   layer may set, each own setting and named file a key of its own.
-- **S95** and **S96**, design 14's first two walkthroughs, and **S97**,
+- **S100** and **S101**, design 14's first two walkthroughs, and **S102**,
   the tagline across a fork and a repository of the host's own.
 - **weir C.4**: `programs` in an agents table, the reader's to check.
 
-Record 0040 states decisions 1 to 7 and 16 as the user ruled, and
+Record 0043 states decisions 1 to 7 and 16 as the user ruled, and
 amends records 0017, 0020 and 0024. **core.30**'s text reads "the
 layers clause 32 orders"; its details rule out a program or a pool
 chosen by any host table and the new tables' forbidden keys, and leave
@@ -1135,7 +1135,7 @@ answer to each of its two questions:
   leaves the pull request's text to the account or the release's
   default, since the key is taken whole and the release fills what it
   leaves out. The docs give both texts and `sessionUrl = false` for
-  none, and S97 tests that form.
+  none, and S102 tests that form.
 - **A repository's `[agents]` comes before its own kind.** A
   repository whose own kind should differ from its `[agents]` on a key
   moves the key into each kind's table (design 3).

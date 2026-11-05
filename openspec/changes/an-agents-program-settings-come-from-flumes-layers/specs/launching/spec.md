@@ -15,7 +15,7 @@ host's for every agent; the repository's, for a kind it does not
 declare and then for every kind; the kind's declaration; flume's
 default. The host's four SHALL give no program. Within each, a stage's
 own SHALL come first, then the kind's for every stage, then a
-repository's for every kind, each setting taken whole (32, 191).
+repository's for every kind, each setting taken whole (32, 195).
 
 #### Scenario: Settings from four layers
 

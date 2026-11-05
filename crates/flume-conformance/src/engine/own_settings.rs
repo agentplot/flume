@@ -1,4 +1,4 @@
-//! A program's own settings (record 0040; core.50): a table of programs
+//! A program's own settings (record 0043; core.50): a table of programs
 //! in every layer, each entry a named file and keys in its program's own
 //! words, only the agent's program's given its profile; each top-level
 //! key taken whole from the first of the eight layers that gives it, a

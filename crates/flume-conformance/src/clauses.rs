@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "068cbc0";
+pub const REVISION: &str = "bc72003";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -20,7 +20,7 @@ pub fn part_a() -> Vec<u32> {
         .chain(165..=173)
         .chain(175..=177)
         .chain(180..=183)
-        .chain([186, 191])
+        .chain([186, 195])
         .collect()
 }
 
@@ -36,7 +36,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(151..=153)
         .chain([160, 164, 174, 178, 179])
         .chain(187..=189)
-        .chain([192])
+        .chain([196])
         .collect()
 }
 
@@ -58,11 +58,11 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11.
-pub const SCENARIOS: u32 = 97;
+pub const SCENARIOS: u32 = 102;
 
 /// The numbers section 11 skips at the revision, which designs the
 /// statement does not hold yet keep for their own scenarios.
-pub const SKIPPED: [u32; 7] = [86, 87, 88, 91, 92, 93, 94];
+pub const SKIPPED: [u32; 12] = [86, 87, 88, 91, 92, 93, 94, 95, 96, 97, 98, 99];
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -82,7 +82,7 @@ pub const POINTS: &str = "record 0025's change, points, built after the mode";
 /// parts of the agent seam. With 173 it carries the own-settings spec's
 /// scenario "A pool of two programs": an account of a pool usable for a
 /// stage whose layers name no program only where its program's profile
-/// takes the stage's own settings for it (record 0040).
+/// takes the stage's own settings for it (record 0043).
 pub const PROFILES: &str = "record 0026's change, every program the terminal starts, once accepted";
 
 /// The change that builds records 0028 and 0029: statechart kinds, run
@@ -104,9 +104,9 @@ pub const READINESS: &str = "a-places-readiness-is-one-design-across-the-tools, 
 /// window flume opens.
 pub const WINDOW: &str = "flume-opens-a-streams-multiplexer, record 0037";
 
-/// The change that builds record 0040: an agent's program settings from
+/// The change that builds record 0043: an agent's program settings from
 /// flume's layers, until its scenarios cite them.
-pub const OWN_SETTINGS: &str = "an-agents-program-settings-come-from-flumes-layers, record 0040";
+pub const OWN_SETTINGS: &str = "an-agents-program-settings-come-from-flumes-layers, record 0043";
 
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
@@ -147,10 +147,10 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| clause.to_string())
         .chain(["S90".to_string()])
         .map(|clause| (clause, WINDOW));
-    let own_settings = [191, 192]
+    let own_settings = [195, 196]
         .map(|clause| clause.to_string())
         .into_iter()
-        .chain((95..=97).map(|scenario| format!("S{scenario}")))
+        .chain((100..=102).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, OWN_SETTINGS));
     standing
         .chain(packages)
@@ -175,7 +175,7 @@ mod tests {
         let b = part_b();
         assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 4 + 2);
         assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 1);
-        for gap in [100, 150, 184, 185, 190] {
+        for gap in [100, 150, 184, 185, 190, 191, 192, 193, 194] {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
         }
         assert!(a.iter().all(|clause| !b.contains(clause)));
@@ -183,33 +183,33 @@ mod tests {
         every.sort();
         assert_eq!(
             every,
-            (1..=192)
-                .filter(|clause| ![100, 150, 184, 185, 190].contains(clause))
+            (1..=196)
+                .filter(|clause| ![100, 150, 184, 185, 190, 191, 192, 193, 194].contains(clause))
                 .collect::<Vec<_>>()
         );
         assert_eq!(all().len(), 187 + 8 + 90);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        for skipped in ["S86", "S88", "S91", "S94"] {
+        for skipped in ["S86", "S88", "S91", "S94", "S95", "S99"] {
             assert!(!all().contains(&skipped.to_string()), "{skipped} is listed");
         }
-        assert!(all().contains(&"S97".to_string()), "S97 is not listed");
-        assert_eq!(REVISION, "068cbc0");
+        assert!(all().contains(&"S102".to_string()), "S102 is not listed");
+        assert_eq!(REVISION, "bc72003");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
-            173, 175, 176, 177, 180, 181, 182, 183, 186, 191,
+            173, 175, 176, 177, 180, 181, 182, 183, 186, 195,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [
             126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179, 187,
-            189, 192,
+            189, 196,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0036_0037_and_0040s_and_183(
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0036_0037_and_0043s_and_183(
     ) {
         let unbuilt = unbuilt();
         assert_eq!(

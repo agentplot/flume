@@ -761,7 +761,7 @@ fn could_not_read(repository: &Repository) -> String {
 
 #[test]
 fn own_settings_for_every_stage_and_for_one() {
-    // 23, 157, 191, C.2: a kind's agents table, a stage's agents and a
+    // 23, 157, 195, C.2: a kind's agents table, a stage's agents and a
     // repository's table for a kind it does not declare each give
     // `programs`, kept as JSON values, a stage's file read beside the
     // declaration at the revision, not as the working tree holds it.
@@ -822,7 +822,7 @@ agents = [{ programs = { claude = { file = "claude-bump.json" } } }]
 
 #[test]
 fn a_launchs_declaration_reads_its_settings_file_on_disk() {
-    // 157, 191, C.2: a launch's declaration's file is read beside it on
+    // 157, 195, C.2: a launch's declaration's file is read beside it on
     // disk, as its prompts are.
     let scratch = Scratch::new("launch-own");
     let dir = scratch.path("launch");
@@ -848,7 +848,7 @@ fn a_launchs_declaration_reads_its_settings_file_on_disk() {
 
 #[test]
 fn an_entry_flume_cannot_take_refuses_the_launch_naming_the_field() {
-    // 4, 191, C.2: an entry that is no table, and a program's own key
+    // 4, 195, C.2: an entry that is no table, and a program's own key
     // beside its file rather than under `settings`, each fail the read
     // naming the field, and the launch is refused with nothing made.
     let repository = Repository::new("own-entry");
@@ -929,7 +929,7 @@ deliverables = ["commits"]
 
 #[test]
 fn a_repositorys_agents_for_every_kind() {
-    // S97, 21, 32, 191, C.2: the repository's `[agents]`, beside
+    // S102, 21, 32, 195, C.2: the repository's `[agents]`, beside
     // `[profiles]` and no part of any kind, gives its settings for every
     // kind, apart from its settings for one kind; a launch's declaration
     // is not read for it.

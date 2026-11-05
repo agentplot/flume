@@ -49,7 +49,7 @@ pub trait Store: Send + Sync {
     /// The file at `path`, an absolute path under the place's own folder,
     /// holding `text` whole: written beside and renamed over, readable by
     /// the host's user alone, so writing it again is the same act; or why
-    /// it could not be written. It goes with the folder (62, 192; core.16,
+    /// it could not be written. It goes with the folder (62, 196; core.16,
     /// core.17).
     fn write_file(&self, place: &crate::PlaceId, path: &str, text: &str) -> Result<(), String>;
 

@@ -5,7 +5,7 @@
 //! terminal, never while another of the place's is live, and only under
 //! the host's bound (70). Each file the command lists is written into
 //! the place's folder before the terminal opens the agent, and a start
-//! whose command lists one outside it is not opened (192).
+//! whose command lists one outside it is not opened (196).
 
 use crate::accounts::Choice;
 use crate::prompt::{asks, group_text, notes_path, render};
@@ -42,7 +42,7 @@ pub(crate) struct Claim {
     /// start whose agent stopped at its account's usage limit (146, 179).
     resume: Option<String>,
     /// Its program's own settings as the layers resolved them, which its
-    /// profile takes, none where they give none (191, 192).
+    /// profile takes, none where they give none (195, 196).
     own: BTreeMap<String, serde_json::Value>,
 }
 
@@ -708,7 +708,7 @@ impl Engine {
     /// Writes each file `command` lists into the place's own `folder`
     /// through the store, written beside and renamed over, readable by
     /// the host's user alone; or, writing nothing, why not: a file
-    /// outside the folder, named, or the store's words (192; core.16,
+    /// outside the folder, named, or the store's words (196; core.16,
     /// core.17).
     fn write_files(
         &self,
@@ -771,7 +771,7 @@ impl Engine {
 }
 
 /// Whether `path` is a file under `folder`, by its components, none of
-/// them `..` (192).
+/// them `..` (196).
 fn under(folder: &str, path: &str) -> bool {
     let path = std::path::Path::new(path);
     path.starts_with(folder)
@@ -783,7 +783,7 @@ fn under(folder: &str, path: &str) -> bool {
 
 /// How `command` passed its program's own settings: each of its
 /// arguments naming a file it lists, with the argument before it; none
-/// where it names none (191, 192; design 12).
+/// where it names none (195, 196; design 12).
 fn passed(command: &AgentCommand) -> Option<String> {
     let words: Vec<String> = command
         .args

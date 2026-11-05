@@ -43,7 +43,7 @@ impl Engine {
     /// over flume's own (19, 20), the settings the repository gives a
     /// kind of that name it does not declare, which join whichever
     /// declaration the name resolves to, and those it gives every kind
-    /// (32, 191, C.2). The launch's and the
+    /// (32, 195, C.2). The launch's and the
     /// repository's declarations hold one version of a name, and a version
     /// named that the resolved one does not hold refuses the launch; among
     /// flume's own the version named is taken, else the newest, and a
@@ -213,7 +213,7 @@ impl Engine {
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
         // Every layer's own settings the launch read are checked before
         // anything is made or held, and kept as checked; the host's are
-        // checked as each stage's agent is resolved below (191, core.8).
+        // checked as each stage's agent is resolved below (195, core.8).
         let settings = launch
             .settings
             .iter()

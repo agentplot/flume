@@ -1,4 +1,4 @@
-//! Claude Code's own settings (191, 192, C.4; design 6, 9): the keys of
+//! Claude Code's own settings (195, 196, C.4; design 6, 9): the keys of
 //! 2.1.296's settings another of flume's settings, the account or a
 //! person owns, each by its path with its owner, which the core refuses
 //! where a table's `settings` gives one and leaves out of a named file;
@@ -110,7 +110,7 @@ const RESERVED: [(&str, &str, &str); 13] = [
 ];
 
 /// The keys the profile reserves, by their paths, each with its owner
-/// (191, 192; design 6).
+/// (195, 196; design 6).
 pub fn reserved() -> Vec<Reserved> {
     RESERVED
         .iter()

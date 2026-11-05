@@ -403,7 +403,7 @@ pub struct PlaceRecord {
     pub repository_settings: KindSettings,
     /// The repository's settings for every kind, its `[agents]`, as the
     /// launch read them at the base's revision; none in a held state
-    /// written before (21, 32, 191).
+    /// written before (21, 32, 195).
     #[serde(default)]
     pub repository_agents: Settings,
     pub hold: Vec<String>,
@@ -773,7 +773,7 @@ pub struct StartHeld {
     /// Its program's own settings beyond the keys its settings hold: each
     /// file a layer named for its program, and how its command passed the
     /// keys; none where no layer gave its program an entry, and in a start
-    /// written before (56, 191, 192).
+    /// written before (56, 195, 196).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own: Option<OwnHeld>,
 }
@@ -781,7 +781,7 @@ pub struct StartHeld {
 /// A start's own settings beyond its keys: each file a layer named for
 /// its program, most specific first, and how its command passed the keys,
 /// its arguments naming the files it lists, none where it passed none or
-/// until it is opened (56, 191, 192).
+/// until it is opened (56, 195, 196).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OwnHeld {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

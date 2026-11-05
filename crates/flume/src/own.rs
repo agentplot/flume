@@ -1,5 +1,5 @@
 //! An agents table's `programs`, read alike from a declaration of kinds,
-//! from the host's configuration and from a launch's words (191, C.2,
+//! from the host's configuration and from a launch's words (195, C.2,
 //! C.7; design 1, 2, 11): a table of programs by name, each entry
 //! flume's, giving `file`, the path of a settings file in the program's
 //! own words, `settings`, the program's own keys as written, or both,

@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151, 161, 162, 169, 179, 192).
+//! 135, 151, 161, 162, 169, 179, 196).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -65,18 +65,18 @@ pub trait AgentHarness {
     fn carry_accounts(&self, earlier: &Identity) -> Option<CarryAccounts>;
 
     /// How the profile takes its program's own settings, as its program's
-    /// release has it or the harness scripted it (191, 192).
+    /// release has it or the harness scripted it (195, 196).
     fn own_way(&self) -> OwnWay;
 
     /// The own settings `command` passes its program, read as the program
     /// reads them, from a file the command lists, its arguments or its
-    /// environment; none where it passes none (191, 192).
+    /// environment; none where it passes none (195, 196).
     fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>>;
 }
 
 /// How a profile takes its program's own settings: whether it passes
 /// them, none by the seam's default, and the keys of its program's
-/// settings it reserves, each with its owner (191, 192).
+/// settings it reserves, each with its owner (195, 196).
 #[derive(Clone, Debug, Default)]
 pub struct OwnWay {
     pub takes: bool,
@@ -247,7 +247,7 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
 }
 
 /// A program's own settings as the seam's scenarios give them, one key
-/// inline (191).
+/// inline (195).
 fn a_line() -> BTreeMap<String, serde_json::Value> {
     BTreeMap::from([("line".to_string(), serde_json::json!("a"))])
 }
@@ -334,7 +334,7 @@ fn the_command_passes_own_settings<H: AgentHarness>(harness: &H) -> Outcome {
         "own settings passed by a command given none"
     );
     // A profile that passes none is never given any: the core asks own
-    // first (192).
+    // first (196).
     if !harness.own_way().takes {
         return Ok(());
     }

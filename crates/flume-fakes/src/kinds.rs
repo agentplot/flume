@@ -23,7 +23,7 @@ struct KindsState {
     settings: BTreeMap<(String, Option<Revision>), BTreeMap<String, KindSettings>>,
     /// The settings a repository gives every kind run in it, its
     /// `[agents]`, by repository and the revision they are set apart at
-    /// or none for every other (191).
+    /// or none for every other (195).
     every_kind: BTreeMap<(String, Option<Revision>), Settings>,
     own: Vec<Kind>,
     bindings: BTreeMap<String, BindingRead>,
@@ -123,7 +123,7 @@ impl FakeKinds {
     }
 
     /// The settings `repository` gives every kind run in it, at every
-    /// revision not set apart (32, 191).
+    /// revision not set apart (32, 195).
     pub fn set_every_kind(&self, repository: &str, settings: Settings) {
         lock(&self.state)
             .every_kind

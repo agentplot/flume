@@ -25,7 +25,7 @@ struct StoreState {
     /// The lines of each place's `made.jsonl`, which go with its folder.
     made: BTreeMap<PlaceId, Vec<String>>,
     /// The files written into each place's folder, by path, each with its
-    /// text and its mode, which go with the folder (192).
+    /// text and its mode, which go with the folder (196).
     files: BTreeMap<PlaceId, BTreeMap<String, (String, u32)>>,
     /// The host's own documents, by key (153).
     host: BTreeMap<HostKey, HostVersioned>,
@@ -76,7 +76,7 @@ impl FakeStore {
     }
 
     /// The text of the file at `path` in a place's folder and its mode,
-    /// as the last write left it; none where none was written (192).
+    /// as the last write left it; none where none was written (196).
     pub fn file(&self, path: &str) -> Option<(String, u32)> {
         lock(&self.state)
             .files
@@ -193,7 +193,7 @@ impl Store for FakeStore {
     }
 
     /// Refuses a path outside the place's folder, and otherwise keeps the
-    /// text whole, readable by the host's user alone (192).
+    /// text whole, readable by the host's user alone (196).
     fn write_file(&self, place: &PlaceId, path: &str, text: &str) -> Result<(), String> {
         self.log.push(format!("write_file {place} {path}"));
         let under = format!("{}/", self.folder(place));

@@ -25,7 +25,7 @@ fn settings() -> Settings {
 
 /// Own settings for two programs: one's keys given inline over a named
 /// file whose `env` and nested `permissions.default` its profile
-/// reserved and left out, the other's given inline alone (191).
+/// reserved and left out, the other's given inline alone (195).
 fn own_programs() -> BTreeMap<String, ProgramSettings> {
     BTreeMap::from([
         (
@@ -60,7 +60,7 @@ fn own_programs() -> BTreeMap<String, ProgramSettings> {
 }
 
 /// A repository's settings for every kind run in it: what its agents'
-/// commits and pull requests say of who made them (191).
+/// commits and pull requests say of who made them (195).
 fn every_kind() -> Settings {
     Settings {
         programs: BTreeMap::from([(
@@ -1151,7 +1151,7 @@ fn a_held_state_with_own_settings() {
     // by a named file whose `env` its profile left out, and whose start
     // took a key from the host's table for its stream, reads back
     // unchanged, holding `env` by name alone; one written before reads
-    // with none, and writes none back (191).
+    // with none, and writes none back (195).
     let state = held();
     round_trips(state.clone());
     let json = serde_json::to_value(&state).expect("held state as JSON");
@@ -1207,7 +1207,7 @@ fn a_held_state_with_own_settings() {
 fn a_held_state_with_a_repositorys_settings_for_every_kind() {
     // A kinds read and a held state whose repository gave its agents'
     // attribution for every kind read back unchanged; each written before
-    // reads with none (21, 32, 191, C.2).
+    // reads with none (21, 32, 195, C.2).
     let read = KindsRead::Read {
         kinds: vec![kind()],
         settings: BTreeMap::from([("change".into(), kind_settings())]),
@@ -1455,7 +1455,7 @@ fn a_profile_that_maps_no_mode() {
 fn a_profile_that_passes_no_own_settings() {
     // A profile that keeps the seam's defaults reserves no key, refuses
     // its program's keys, saying it passes none, and takes an empty entry
-    // (170, 191, 192).
+    // (170, 195, 196).
     assert_eq!(Bare.reserved(), vec![]);
     let given = BTreeMap::from([("line".to_string(), serde_json::json!("a"))]);
     let words = Bare
@@ -1504,7 +1504,7 @@ fn settings_under_others_take_the_mode_whole() {
 fn settings_under_others_take_own_settings_whole() {
     // Own settings over own settings are taken whole, the more specific
     // table's where it gives any; their fold key by key is the core's
-    // (191).
+    // (195).
     let under = Settings {
         programs: own_programs(),
         ..Settings::default()
