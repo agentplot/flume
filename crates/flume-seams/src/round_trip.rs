@@ -18,6 +18,7 @@ fn settings() -> Settings {
         instructions: Some("be brief".into()),
         beside: Some("operator".into()),
         mode: None,
+        session: Some("office".into()),
     }
 }
 
@@ -55,6 +56,7 @@ fn kind() -> Kind {
         lands: true,
         agents: kind_settings(),
         stages: vec![stage()],
+        label: Some("operation".into()),
     }
 }
 
@@ -275,6 +277,14 @@ fn held() -> HeldState {
                     from: 1,
                     carried: true,
                     why: None,
+                }),
+                session: Some(SessionHeld {
+                    name: Some("office".into()),
+                    from: SessionFrom::Launch,
+                }),
+                label: Some(LabelHeld {
+                    name: "operation".into(),
+                    from: LabelFrom::Kind,
                 }),
             }),
             since: Some(120),
@@ -983,6 +993,188 @@ fn a_held_state_written_before_carried_starts() {
     );
 }
 
+#[test]
+fn a_held_state_with_a_session_and_a_label() {
+    // A held state whose kind declares a label, whose launch's settings
+    // name a session, and whose live start holds its session and label,
+    // reads back unchanged; one written before reads with no label and no
+    // session, and writes none back (107, 180).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["kind"]["label"], "operation");
+    assert_eq!(json["place"]["every_stage"]["session"], "office");
+    let start = &json["stages"][0]["start"];
+    assert_eq!(
+        start["session"],
+        serde_json::json!({"name": "office", "from": "launch"})
+    );
+    assert_eq!(
+        start["label"],
+        serde_json::json!({"name": "operation", "from": "kind"})
+    );
+    let mut before = json;
+    let without_sessions = |value: &mut serde_json::Value| {
+        value.as_object_mut().unwrap().remove("session");
+    };
+    before["place"]["kind"]
+        .as_object_mut()
+        .unwrap()
+        .remove("label");
+    without_sessions(&mut before["place"]["every_stage"]);
+    without_sessions(&mut before["place"]["settings"]["code"]);
+    without_sessions(&mut before["place"]["kind"]["stages"][0]["agents"][0]);
+    without_sessions(&mut before["place"]["kind"]["agents"]["stages"]["code"]);
+    without_sessions(&mut before["place"]["repository_settings"]["stages"]["code"]);
+    let start = &mut before["stages"][0]["start"];
+    without_sessions(&mut start["settings"]);
+    without_sessions(start);
+    start.as_object_mut().unwrap().remove("label");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(read.place.kind.label, None);
+    assert_eq!(read.place.every_stage.session, None);
+    assert_eq!(read.place.settings["code"].session, None);
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!((&start.session, &start.label), (&None, &None));
+    assert_eq!(start.settings.session, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no session and no label written where none is held"
+    );
+}
+
+#[test]
+fn where_an_agent_opens_and_its_session() {
+    for at in [
+        OpenIn::Beside {
+            pane: "operator".into(),
+        },
+        OpenIn::Session {
+            name: "work".into(),
+        },
+        OpenIn::Own,
+    ] {
+        round_trips(at);
+    }
+    assert_eq!(
+        serde_json::to_value(OpenIn::Session {
+            name: "work".into()
+        })
+        .unwrap(),
+        serde_json::json!({"in": "session", "name": "work"})
+    );
+    for (from, spelled) in [
+        (SessionFrom::Launch, "launch"),
+        (SessionFrom::Stream, "stream"),
+        (SessionFrom::StreamName, "stream-name"),
+        (SessionFrom::Own, "own"),
+    ] {
+        round_trips(from);
+        assert_eq!(serde_json::to_value(from).unwrap(), spelled);
+    }
+    round_trips(SessionHeld {
+        name: Some("work".into()),
+        from: SessionFrom::StreamName,
+    });
+    let own = SessionHeld {
+        name: None,
+        from: SessionFrom::Own,
+    };
+    round_trips(own.clone());
+    assert_eq!(
+        serde_json::to_value(own).unwrap(),
+        serde_json::json!({"from": "own"}),
+        "no name for the terminal's own"
+    );
+}
+
+#[test]
+fn a_label_and_its_share() {
+    for (from, spelled) in [
+        (LabelFrom::HostRepositoryKind, "host-repository-kind"),
+        (LabelFrom::HostKind, "host-kind"),
+        (LabelFrom::Kind, "kind"),
+    ] {
+        round_trips(LabelHeld {
+            name: "inception".into(),
+            from,
+        });
+        assert_eq!(serde_json::to_value(from).unwrap(), spelled);
+    }
+    round_trips(Share::default());
+    let read: Share = serde_json::from_str(r#"{"reserve":2}"#).unwrap();
+    assert_eq!(
+        read,
+        Share {
+            reserve: 2,
+            keep_free: 0,
+            unknown: vec![],
+        },
+        "zero kept free and nothing unknown where its table gives none"
+    );
+    let before: Stream = serde_json::from_str(r#"{"agents":5,"priority":10}"#).unwrap();
+    assert_eq!((before.session, before.labels.len()), (None, 0));
+    let kind: Kind = serde_json::from_value({
+        let mut written = serde_json::to_value(kind()).unwrap();
+        written.as_object_mut().unwrap().remove("label");
+        written
+    })
+    .unwrap();
+    assert_eq!(kind.label, None, "a kind read before has no label");
+}
+
+#[test]
+fn the_hosts_configuration_and_its_layers() {
+    let configuration = HostConfiguration {
+        local: LocalLayer::Taken,
+        values: vec![
+            ConfigValue {
+                key: "streams.work.agents".into(),
+                value: "3".into(),
+                layer: ConfigLayer::Local,
+            },
+            ConfigValue {
+                key: "pools.work.accounts[0].env.AGENT_HOME".into(),
+                value: SET.into(),
+                layer: ConfigLayer::Managed,
+            },
+        ],
+        passed_over: vec![PinnedKey {
+            key: "streams.work.priority".into(),
+            pin: "streams.work".into(),
+        }],
+    };
+    round_trips(configuration.clone());
+    let json = serde_json::to_value(&configuration).unwrap();
+    assert_eq!(json["local"], serde_json::json!({"state": "taken"}));
+    assert_eq!(json["values"][0]["layer"], "local");
+    for local in [
+        LocalLayer::NoFile,
+        LocalLayer::Taken,
+        LocalLayer::NotTaken {
+            keys: vec!["pools.work".into(), "host.agents".into()],
+            fault: None,
+        },
+        LocalLayer::NotTaken {
+            keys: vec![],
+            fault: Some("expected `=` at line 2".into()),
+        },
+    ] {
+        round_trips(local);
+    }
+    assert_eq!(
+        serde_json::to_value(LocalLayer::NotTaken {
+            keys: vec!["pools.work".into()],
+            fault: None,
+        })
+        .unwrap(),
+        serde_json::json!({"state": "not-taken", "keys": ["pools.work"]})
+    );
+    round_trips(HostConfiguration::default());
+    assert_eq!(HostConfiguration::default().local, LocalLayer::NoFile);
+}
+
 /// An agent profile that keeps every default of the agent seam.
 struct Bare;
 
@@ -1169,6 +1361,25 @@ fn streams_and_pools_as_the_configuration_names_them() {
         agents: Some(5),
         priority: 10,
         pool: Some("work".into()),
+        session: Some("office".into()),
+        labels: BTreeMap::from([
+            (
+                "operation".into(),
+                Share {
+                    reserve: 2,
+                    keep_free: 1,
+                    unknown: vec![],
+                },
+            ),
+            (
+                "construction".into(),
+                Share {
+                    reserve: 0,
+                    keep_free: 0,
+                    unknown: vec!["pool".into()],
+                },
+            ),
+        ]),
     });
     round_trips(Stream::default());
     let pool = Pool {
@@ -2051,8 +2262,12 @@ fn the_terminal_seams_answers() {
         place: Some("tab w1:t2".into()),
         agent: Some("pane w1:p3".into()),
         base: Some("workspace w1".into()),
+        bases: vec!["workspace w1".into(), "workspace w4".into()],
     });
     round_trips(ShownAt::default());
+    let before: ShownAt =
+        serde_json::from_str(r#"{"place":null,"agent":null,"base":"workspace w1"}"#).unwrap();
+    assert!(before.bases.is_empty(), "no workspaces where none written");
     round_trips(Shown::Shown);
     round_trips(Shown::ShowsNone);
     round_trips(Shown::Failed {

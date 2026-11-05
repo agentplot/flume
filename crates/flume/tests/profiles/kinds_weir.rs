@@ -1,6 +1,7 @@
 //! The kinds profile over weir's kind format (C.2; design 7): the kinds
 //! seam's scenarios against it on scratch repositories, S13, S33, a
 //! stage's repeat (140; weir 53, 57), an agents table's mode (162, 169),
+//! an agents table's session read as no setting (32, 158),
 //! an elaboration section, the binding
 //! from the default branch, a place profile flume does not hold, flume's
 //! own kinds, one declaration per version with change@1 and change@2
@@ -332,6 +333,7 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
         starts_unready: false,
         lands: false,
         agents: KindSettings::default(),
+        label: None,
         stages: stages
             .iter()
             .map(|name| Stage {
@@ -600,6 +602,68 @@ agents = [{ mode = { claude = "auto" } }]
             "claude".to_string(),
             "auto".to_string()
         )])))
+    );
+}
+
+#[test]
+fn a_session_in_an_agents_table_gives_no_setting() {
+    // 32, 158, C.2: a kind names nothing a host owns, a session among
+    // it: `session` in an agents table, for every stage and for one, in
+    // a repository's table for a kind it does not declare, in a kind's
+    // own and in a stage's agents, reads as no setting, and the settings
+    // beside it are read.
+    let repository = Repository::new("declared-session");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.change.agents]
+session = "x"
+model = "opus"
+
+[kinds.change.agents.stages.verify]
+session = "y"
+instructions = "Read every task."
+
+[kinds.bump.agents]
+session = "x"
+model = "sonnet"
+
+[kinds.bump.agents.stages.code]
+session = "y"
+model = "haiku"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ session = "z", instructions = "keep it short" }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("a session for every stage and for one");
+    let revision = Revision::new(repository.head());
+    let KindsRead::Read { kinds, settings } = Weir.read_kinds(&repository.name(), &revision) else {
+        panic!("the declaration did not read");
+    };
+    let change = &settings["change"];
+    assert_eq!(change.every_stage.session, None, "change's every stage");
+    assert_eq!(change.for_stage("verify").session, None, "change's verify");
+    assert_eq!(change.every_stage.model.as_deref(), Some("opus"));
+    assert_eq!(
+        change.for_stage("verify").instructions.as_deref(),
+        Some("Read every task.")
+    );
+    let bump = &kinds[0];
+    assert_eq!(bump.agents.every_stage.session, None, "bump's every stage");
+    assert_eq!(bump.agents.for_stage("code").session, None, "bump's code");
+    assert_eq!(bump.stages[0].agents[0].session, None, "code's own agent");
+    assert_eq!(bump.agents.every_stage.model.as_deref(), Some("sonnet"));
+    assert_eq!(
+        bump.agents.for_stage("code").model.as_deref(),
+        Some("haiku")
+    );
+    assert_eq!(
+        bump.stages[0].agents[0].instructions.as_deref(),
+        Some("keep it short")
     );
 }
 

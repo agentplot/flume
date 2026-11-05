@@ -185,6 +185,10 @@ pub struct PlaceStatus {
     /// The stream the place runs in, fixed at its launch, and where it
     /// came from (56, 143).
     pub stream: StreamHeld,
+    /// The place's label as it would resolve at a start now, with where
+    /// it came from, none where nothing gives one (56, 180).
+    #[serde(default)]
+    pub label: Option<LabelHeld>,
     /// The intent the place serves, and where it came from (56, 147).
     pub intent: IntentKey,
     /// Each move of a stage of the place, or of its intent at a start of
@@ -326,6 +330,12 @@ pub struct HostStatus {
     /// its places show gives and where the terminal shows it (139).
     #[serde(default)]
     pub bases: Vec<BaseClues>,
+    /// The host's configuration as it stands: whether its local layer was
+    /// taken, every value with its layer, an account's variables by name
+    /// and `<set>`, and each local key passed over with its pin (56, C.7;
+    /// core.30, core.45).
+    #[serde(default)]
+    pub configuration: HostConfiguration,
 }
 
 fn no_watch() -> Watch {
@@ -345,6 +355,7 @@ impl Default for HostStatus {
             addresses: vec![],
             watch: Watch::None,
             bases: vec![],
+            configuration: HostConfiguration::default(),
         }
     }
 }
@@ -404,14 +415,20 @@ pub struct Queued {
     pub place: PlaceId,
     pub stage: String,
     pub stream: String,
+    /// The label its place resolves to now, none where nothing gives one
+    /// (180).
+    #[serde(default)]
+    pub label: Option<String>,
     pub priority: i64,
     pub since: Option<Seconds>,
     pub wants: RoomWanted,
 }
 
-/// The room a stage waiting for room is short of (70, 143, 145): the
+/// The room a stage waiting for room is short of (70, 143, 145, 181): the
 /// host's, its own full or taken by stages that rank ahead; its stream's,
-/// whose bound its agents running have reached; or its pool's, every
+/// whose bound its agents running have reached; its stream's room past
+/// what the stream's other labels keep free and do not use, naming those
+/// labels; or its pool's, every
 /// account that runs its program spent or at its own bound, with the
 /// soonest time one stops being spent, none where none is spent. A stage
 /// whose pool holds no account of its program waits on no room: it is
@@ -424,10 +441,23 @@ pub enum RoomWanted {
         stream: String,
         bound: u32,
     },
+    KeptFree {
+        stream: String,
+        labels: Vec<String>,
+    },
     Pool {
         pool: String,
         until: Option<Seconds>,
     },
+}
+
+/// `items` as a person reads a list: `a`, `a and b`, `a, b and c`.
+pub(crate) fn and_list(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
 }
 
 impl RoomWanted {
@@ -438,6 +468,10 @@ impl RoomWanted {
             RoomWanted::Stream { stream, bound } => {
                 format!("the stream {stream}'s room, at its bound of {bound}")
             }
+            RoomWanted::KeptFree { stream, labels } => format!(
+                "the stream {stream}'s room, the rest kept free for {}",
+                and_list(labels)
+            ),
             RoomWanted::Pool {
                 pool,
                 until: Some(until),
@@ -449,18 +483,52 @@ impl RoomWanted {
     }
 }
 
-/// A stream of the host (143): its priority among streams, its agents
-/// running, the bound it states, none where the host's alone holds it,
-/// its room, none where it states no bound, and its stages waiting for
-/// room in the order they would start (56, 70).
+/// A stream of the host (143): the session its agents open in where
+/// their launch names none, with where it came from, its priority among
+/// streams, its agents running, the bound it states, none where the
+/// host's alone holds it, its room, none where it states no bound, its
+/// stages waiting for room in the order they would start, its labels'
+/// shares, whether their reserves are held, and why its labels refuse
+/// its starts, none where they do not (56, 70, 107, 181, 182).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
+    pub session: SessionHeld,
     pub priority: i64,
     pub running: u32,
     pub bound: Option<u32>,
     pub room: Option<u32>,
     pub queue: Vec<Queued>,
+    #[serde(default)]
+    pub labels: Vec<LabelStatus>,
+    #[serde(default)]
+    pub reserves: Reserves,
+    #[serde(default)]
+    pub refused: Option<String>,
+}
+
+/// A label of a stream (181): its reserve, the slots of the stream it
+/// keeps free while it runs fewer, its agents running, each counted by
+/// the label it started under, and its stages waiting for room.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelStatus {
+    pub name: String,
+    pub reserve: u32,
+    pub keep_free: u32,
+    pub running: u32,
+    pub waiting: u32,
+}
+
+/// Whether a stream's labels' reserves are held: held where it states a
+/// bound, passed over where it states none, and none where it gives no
+/// label a share (70, 181).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reserves {
+    Held,
+    PassedOver,
+    #[default]
+    None,
 }
 
 /// A pool of the host (144, 145): its strategy and its accounts in
@@ -589,6 +657,11 @@ pub struct AgentStatus {
     /// a path; none for any other (56, 146, 179; core.30).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
+    /// The session the agent opened in, with where it came from; none for
+    /// an agent opened beside a pane and for a start written before (56,
+    /// 107, 143).
+    #[serde(default)]
+    pub session: Option<SessionHeld>,
 }
 
 /// An agent's mode at its start: `passed`, the value its profile passed,
