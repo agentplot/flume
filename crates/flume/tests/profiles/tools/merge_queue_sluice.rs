@@ -31,6 +31,17 @@ use std::time::{Duration, Instant};
 const POLICY: &str =
     "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\n\n[branches.main]\n";
 
+/// The variable a test's sluice is told by where the directory standing
+/// for the host user's own scratch is, since the gate's sandbox lets a
+/// test write its own folders and not `/tmp/sluice-<uid>` (sluice 35).
+const SCRATCH: &str = "SLUICE_USER_SCRATCH";
+
+/// The folder standing for the host user's scratch of the sluice a test
+/// runs in the scratch home `home`, which sluice makes its own.
+fn scratch(home: &Path) -> PathBuf {
+    home.join("sluice-scratch")
+}
+
 /// A scratch repository gated by sluice, and the place it holds.
 struct Harness {
     repository: Repository,
@@ -63,6 +74,7 @@ impl Harness {
                 seam = seam.with_env(&name, None);
             }
         }
+        let seam = seam.with_env(SCRATCH, Some(&scratch(&home).to_string_lossy()));
         let place = Harness::worktree(&repository, "fix/one", "fix--one", "work.rs");
         Harness {
             repository,
@@ -127,6 +139,7 @@ impl Harness {
             .env("HOME", &self.home)
             .env("XDG_STATE_HOME", self.home.join("state"))
             .env("XDG_CONFIG_HOME", self.home.join("config"))
+            .env(SCRATCH, scratch(&self.home))
             .output()
             .expect("sluice runs");
         serde_json::from_slice(&output.stdout).unwrap_or_else(|_| {
@@ -288,7 +301,7 @@ impl MergeQueueHarness for Harness {
 
     /// `bolt/x`, its policy naming it, given a submission from `unit/x`,
     /// then a policy at its tip that declares `[[checkout.cache]]`, which
-    /// sluice 0.57.1 refuses: no round of `bolt/x` has read its revision,
+    /// sluice 0.67.0 refuses: no round of `bolt/x` has read its revision,
     /// so `sluice status bolt/x` reads the policy at its tip and refuses
     /// the branch, as it refused one on deneb on 2026-11-04.
     fn refuse_another(&self, _place: &PlaceRef) -> String {
@@ -450,6 +463,7 @@ fn a_step_beside_a_live_driver_does_nothing_and_answers() {
         .env("HOME", &harness.home)
         .env("XDG_STATE_HOME", harness.home.join("state"))
         .env("XDG_CONFIG_HOME", harness.home.join("config"))
+        .env(SCRATCH, scratch(&harness.home))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -674,6 +688,7 @@ fn a_pull_request_with_no_entry_is_held_and_the_entry_taken_in_from_it_is_read_t
         .env("HOME", &harness.home)
         .env("XDG_STATE_HOME", harness.home.join("state"))
         .env("XDG_CONFIG_HOME", harness.home.join("config"))
+        .env(SCRATCH, scratch(&harness.home))
         .stdin(Stdio::null())
         .output()
         .expect("the stand-in takes the request in");

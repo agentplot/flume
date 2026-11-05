@@ -12,9 +12,8 @@ Groups 2 to 4 are built once three things hold:
 - flume's and sluice's statements are amended on agentplot/blueprints
   main as design 7 words them;
 - agentplot/sluice has released `sluice equip` as design 4 has it;
-- this repository's `devenv.nix` pins that release, moved there by a
-  chore of its own that checks C.6's commands and fields against it
-  (core.22).
+- this repository's `devenv.nix` pins that release, every command and
+  field C.6 names checked against it (core.22; 2.7).
 
 Tests reach no real account, no repository of the user's and no network.
 Every git call in a test runs under the scratch environment that
@@ -148,6 +147,21 @@ layer, where sluice is the one the tree pins.
 - [ ] 2.6 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools`
   passes.
+- [ ] 2.7 Pin sluice 0.67.0, the release that has `sluice equip`
+  (sluice #379), in `devenv.nix` with its three release assets' hashes,
+  main merged in first, as the answer to this stage's stop asked. Check
+  equip's command and answer at that tag: `sluice equip <branch> [--at
+  <revision>] [--json]` in the worktree it equips, answering `{branch,
+  revision, steps: [{step, passed, words}]}`, exiting 0 where every step
+  passed or none ran and 1 where one failed, a refusal `{error: {kind,
+  message, next}}` exiting 2, and `[tests] toolchain` read only as a list
+  of words. Every sluice a tools test starts keeps its scratch under
+  `SLUICE_USER_SCRATCH`, a folder of the test's own, since the gate's
+  sandbox refuses it `/tmp/sluice-<uid>` (sluice 35). The walkthroughs'
+  host user's login shell is the walk's own, giving the walk's `PATH`, so
+  a place's steps, equip and release, run the pinned sluice and not the
+  one the host's login `PATH` names (11, 79, C.6; core.22). True when
+  `sluice exec main -- moon run flume:tools` passes.
 
 ## 3. The site
 
