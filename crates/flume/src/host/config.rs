@@ -365,6 +365,7 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 agents: bound_of(table, "agents", &at)?,
                 priority,
                 pool: text_of(table, "pool", &at)?,
+                title: None,
             },
         );
     }
@@ -825,6 +826,7 @@ stream = "work"
                         agents: Some(3),
                         priority: 0,
                         pool: None,
+                        ..Stream::default()
                     }
                 ),
                 (
@@ -833,6 +835,7 @@ stream = "work"
                         agents: Some(5),
                         priority: 10,
                         pool: Some("work".into()),
+                        ..Stream::default()
                     }
                 ),
             ]),
@@ -862,6 +865,7 @@ stream = "work"
                     agents: Some(2),
                     priority: -1,
                     pool: None,
+                    ..Stream::default()
                 }
             )])
         );

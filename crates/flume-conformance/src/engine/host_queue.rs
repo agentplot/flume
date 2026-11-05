@@ -405,6 +405,7 @@ fn declare(world: &World, name: &str, agents: Option<u32>, priority: i64) {
             agents,
             priority,
             pool: None,
+            ..Stream::default()
         }),
     );
 }

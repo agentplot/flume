@@ -1,7 +1,7 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Host, Identity, Opened, PlaceRef, Seconds, Sent,
-    Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Attached, Closed, Clues, Host, Identity, Opened, PlaceRef, Seconds,
+    Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, ViewCommand, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -16,7 +16,10 @@ use std::sync::{Arc, Mutex};
 /// What show was given is kept, and a show may be made to fail. It
 /// holds recipients' sessions by name, each with a state a test sets,
 /// and keeps every text sent to each in order; an agent opened under a
-/// session name is that session while it is live (43, 95, 132).
+/// session name is that session while it is live (43, 95, 132). Attach
+/// answers a command of its own, `fake-terminal attach <session>` or
+/// `attach own`, with no environment, or as scripted, and logs each
+/// asking with its title (187).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -47,6 +50,8 @@ struct TerminalState {
     agent_sessions: BTreeMap<String, String>,
     /// Every text sent to a session by its name, in order.
     notices: Vec<(String, String)>,
+    /// What every attach answers, the fake's own command where none.
+    attaches_as: Option<Attached>,
 }
 
 /// What the next opens answer.
@@ -119,6 +124,7 @@ impl FakeTerminal {
                 sessions: BTreeMap::new(),
                 agent_sessions: BTreeMap::new(),
                 notices: vec![],
+                attaches_as: None,
             }),
             log: Log::default(),
         }
@@ -245,6 +251,12 @@ impl FakeTerminal {
     /// order.
     pub fn every_notice(&self) -> Vec<(String, String)> {
         lock(&self.state).notices.clone()
+    }
+
+    /// Every attach from now answers `answer`, shown or refused among
+    /// them, or the fake's own command where none (187).
+    pub fn attaches_as(&self, answer: Option<Attached>) {
+        lock(&self.state).attaches_as = answer;
     }
 
     pub fn refuse_opens(&self, reason: &str) {
@@ -610,5 +622,20 @@ impl Terminal for FakeTerminal {
     fn session(&self) -> Option<String> {
         self.log.push("session");
         lock(&self.state).session.clone()
+    }
+
+    fn attach(&self, session: Option<&str>, title: &str) -> Attached {
+        let part = session.unwrap_or("own");
+        self.log.push(format!("attach {part} titled {title}"));
+        lock(&self.state)
+            .attaches_as
+            .clone()
+            .unwrap_or_else(|| Attached::Command {
+                command: ViewCommand {
+                    program: "fake-terminal".into(),
+                    arguments: vec!["attach".into(), part.into()],
+                    environment: Default::default(),
+                },
+            })
     }
 }

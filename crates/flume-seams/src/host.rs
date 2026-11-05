@@ -13,9 +13,10 @@ pub const DEFAULT_STREAM: &str = "default";
 
 /// A stream the host's configuration declares: its bound on agents
 /// running, none where it states none and the host's bound alone holds
-/// it; its priority among streams, zero where it gives none; and the pool
-/// its agents' accounts come from, none where the host's own pool stands
-/// (143, 144, C.7).
+/// it; its priority among streams, zero where it gives none; the pool
+/// its agents' accounts come from, none where the host's own pool stands;
+/// and the title a window on its part of the terminal carries, none where
+/// it gives none and its name stands (143, 144, 186, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -24,6 +25,8 @@ pub struct Stream {
     pub priority: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 /// How a pool chooses among its usable accounts: the first in order, or

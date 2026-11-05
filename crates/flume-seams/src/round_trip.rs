@@ -1169,6 +1169,7 @@ fn streams_and_pools_as_the_configuration_names_them() {
         agents: Some(5),
         priority: 10,
         pool: Some("work".into()),
+        ..Stream::default()
     });
     round_trips(Stream::default());
     let pool = Pool {
@@ -2077,6 +2078,45 @@ fn the_terminal_seams_answers() {
     round_trips(Watch::None);
     round_trips(Some("pane-3".to_string()));
     round_trips(Some("Do you trust the files in this folder?".to_string()));
+}
+
+#[test]
+fn a_view_a_window_and_a_stream() {
+    let command = ViewCommand {
+        program: "/bin/terminal".into(),
+        arguments: vec!["session".into(), "attach".into(), "work".into()],
+        environment: BTreeMap::from([("XDG_CONFIG_HOME".into(), "/scratch/sessions".into())]),
+    };
+    round_trips(command.clone());
+    round_trips(ViewCommand {
+        environment: BTreeMap::new(),
+        ..command.clone()
+    });
+    let bare: ViewCommand =
+        serde_json::from_str(r#"{"program":"/bin/terminal","arguments":["attach"]}"#).unwrap();
+    assert!(bare.environment.is_empty());
+    assert!(!serde_json::to_string(&bare)
+        .unwrap()
+        .contains("environment"));
+    round_trips(Attached::Command { command });
+    round_trips(Attached::Shown);
+    round_trips(Attached::Refused {
+        reason: "the terminal holds no session a person can be shown".into(),
+    });
+    round_trips(WindowShown::Opened);
+    round_trips(WindowShown::Printed {
+        line: "XDG_CONFIG_HOME=<set> /bin/terminal session attach work".into(),
+    });
+    round_trips(WindowShown::Refused {
+        reason: "Unable to find application named 'Window.app'".into(),
+    });
+    round_trips(Stream {
+        title: Some("Work Agents".into()),
+        ..Stream::default()
+    });
+    let before: Stream = serde_json::from_str(r#"{"agents":4,"priority":10}"#).unwrap();
+    assert_eq!(before.title, None);
+    assert!(!serde_json::to_string(&before).unwrap().contains("title"));
 }
 
 #[test]

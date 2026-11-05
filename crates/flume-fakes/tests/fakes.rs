@@ -1145,6 +1145,7 @@ fn a_streams_pool_and_the_hosts() {
             agents: Some(5),
             priority: 10,
             pool: Some("work".into()),
+            ..Stream::default()
         }),
     );
     host.set_stream("personal", Some(Stream::default()));
