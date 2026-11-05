@@ -47,8 +47,8 @@ scratch environment `crates/flume/tests/common` gives.
 
 ## 6. The site
 
-- [ ] 6.1 Write the pages design 10 names: a stream's session and labels in `guides/agent-settings.md`, the two layers and pins there and in `reference/configuration.md` with `session`, labels' tables and `label`, a session per stream in `guides/places-and-herdr.mdx`, the status fields in `reference/state.md`, `--agent [<stage>.]session=<name>` in `reference/commands.md`, and the three rows built and the two items decided and not built in `roadmap.md`. Write it all to any host's operator, naming no host, team or word of ours (design 10; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 6.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 6.1 Write the pages design 10 names: a stream's session and labels in `guides/agent-settings.md`, the two layers and pins there and in `reference/configuration.md` with `session`, labels' tables and `label`, a session per stream in `guides/places-and-herdr.mdx`, the status fields in `reference/state.md`, `--agent [<stage>.]session=<name>` in `reference/commands.md`, and the three rows built and the two items decided and not built in `roadmap.md`. Write it all to any host's operator, naming no host, team or word of ours (design 10; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
+- [x] 6.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 7. Coverage and the gate
 

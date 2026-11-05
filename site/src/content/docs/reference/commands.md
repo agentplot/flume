@@ -81,7 +81,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
-| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside` or `mode`: `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. Repeatable. |
+| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside`, `session` or `mode`. `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. Repeatable. |
 | `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
 | `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
 
@@ -133,15 +133,18 @@ place gives:
 - its submission;
 - what it waits on, since when and in whose words, and whether it is
   stalled;
-- its stream and intent, its current agent's account, each move
-  between accounts, and each start that began without its settings;
+- its stream, its label and its intent, its current agent's account
+  and the session it opened in, each move between accounts, and each
+  start that began without its settings;
 - its holds, priority, recipients and ends, and what flume could not
   read.
 
 The host part gives the agents running, the bound, the room, the
-queue, each stream's and each pool's part, the watch, each base's
-count, the role addresses with ends pending, and what a tidy kept in
-the terminal. Where the terminal keeps no watch, it says so: places
+queue, each stream's part with its session and its labels, each
+pool's part, the watch, each base's count, the role addresses with
+ends pending, what a tidy kept in the terminal, and the host's
+configuration, whether its local layer was taken, each value it set
+and each key passed over with its pin. Where the terminal keeps no watch, it says so: places
 then move on only at flume's commands and when their agents go quiet.
 
 flume reads each fact where it lives when asked, and keeps none

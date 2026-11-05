@@ -24,6 +24,9 @@ the same answers you do.
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
 | Agent settings in six layers | ✓ | ✓ |
 | Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
+| Each stream's agents in a herdr session of its own, or the one a launch names | ✓ | ✓ |
+| The host's configuration in a managed layer and a local one over it, the managed one pinning keys | ✓ | ✓ |
+| Labels sharing a stream's agents, each with a reserve and slots kept free for it | ✓ | ✓ |
 | Pools of accounts, a spent account paused and its agent's conversation carried to another where the host shares it, else its stage started afresh | ✓ | ✓ |
 | An intent's agents kept to one account while it is usable | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
@@ -91,3 +94,12 @@ the rest of this site says.
   queued and in flight for the host and each stream, what each stream
   started in its span and when the next charge leaves it, and each
   stream's tokens.
+
+- **A kind's own label.** A kind's declaration may give its places a
+  label, which the host's configuration can override. It waits on the
+  kind format naming the field. Until then only the host's
+  configuration gives a place a label.
+
+- **An MCP server's labels.** A server the host gives its agents may
+  name the labels whose places may have it. It waits on how a host's
+  servers reach an agent, which is not yet decided.
