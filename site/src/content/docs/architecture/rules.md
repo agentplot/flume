@@ -22,7 +22,7 @@ yet built.
 
 ### The core and its seams
 
-- **[core.1]** Code outside a profile names no worktree tool, change tool, agent program, terminal or merge queue.
+- **[core.1]** Code outside a profile names no worktree tool, change tool, agent program, terminal, window program or merge queue.
 - **[core.2]** Every seam of Part B is reached through exactly one interface, and a profile implements that interface and nothing of the core.
 - **[core.3]** A repository's profiles are read from its `[profiles]` table and from nothing else; a seam the table leaves unbound is the no-tool profile, or unbound, and never guessed from another tool's files.
 - **[core.4]** flume defines no field of the kind format: the format is weir's, and flume reads the part clause 23 names and ignores every section it does not know.
@@ -53,6 +53,7 @@ yet built.
 
 - **[core.13]** flume starts no process that outlives a command of its own, and no command of flume's waits on the merge queue: every settle runs inside a command, started by an agent going quiet, by the terminal's watch or by a caller.
 - **[core.14]** Every surface answers from one core through one form a program reads, which only ever gains fields, and no surface computes a stage's end, a status, a submission or a tidy of its own.
+- **[core.48]** A window is opened only at a caller's asking for a stream, never at a launch, a settle or a start, through the window seam alone, running nothing but the terminal's attach for the stream's own session as a start resolves it, under the title the host's configuration declares for the stream or else its name; flume keeps, reads, finds again and closes nothing of a window, and neither the window nor the view in it is a process of flume's.
 - **[core.15]** Status reads every fact of a deliverable, a change or a submission where it lives when asked, and flume keeps no record of one between asks.
 - **[core.16]** A place's live state is one document on the host, written by compare-and-set on its version, gone when the place is tidied, and nothing of flume's is written into a repository's content.
 - **[core.17]** Every act is safe to repeat, and no act leaves a worktree or a branch of flume's that its held state does not name.
