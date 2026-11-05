@@ -53,6 +53,38 @@ impl HistoryHarness for Harness {
     fn made_default(&self) -> String {
         "main".into()
     }
+
+    /// A bare clone beside the repository as its `origin`, and two commits
+    /// pushed to it from a clone elsewhere, which the repository never
+    /// fetches.
+    fn origin_ahead(&self, _repository: &str, branch: &str) -> Revision {
+        let remote = self.repository.bare_remote();
+        self.repository
+            .git(&["remote", "add", "origin", &remote.to_string_lossy()]);
+        let elsewhere = self.repository.scratch.path("elsewhere");
+        git(
+            &self.repository.scratch.root,
+            &[
+                "clone",
+                "--quiet",
+                &remote.to_string_lossy(),
+                &elsewhere.to_string_lossy(),
+            ],
+        );
+        for file in ["one.rs", "two.rs"] {
+            std::fs::write(elsewhere.join(file), "on origin\n").expect("origin's work");
+            git(&elsewhere, &["add", file]);
+            git(&elsewhere, &["commit", "--quiet", "-m", file]);
+        }
+        git(&elsewhere, &["push", "--quiet", "origin", branch]);
+        Revision::new(git(&elsewhere, &["rev-parse", "HEAD"]))
+    }
+
+    fn origin_gone(&self, _repository: &str) {
+        let gone = self.repository.scratch.path("gone.git");
+        self.repository
+            .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
+    }
 }
 
 #[test]

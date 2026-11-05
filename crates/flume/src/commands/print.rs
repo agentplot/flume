@@ -8,9 +8,9 @@ use flume_core::{
     StageStatus, StreamStatus, Tidied, Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration, IntentKey,
-    LabelHeld, LocalLayer, Made, Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead,
-    UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
+    AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration,
+    IntentKey, LabelHeld, LocalLayer, Made, Readiness, SessionFrom, SessionHeld, StreamHeld,
+    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
 };
 use serde_json::{json, Value};
 
@@ -142,7 +142,11 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         word(json!(place.declared)),
         word(json!(place.phase))
     )];
-    let mut facts = vec![format!("branch {} from {}", place.branch, place.base)];
+    let mut facts = vec![format!(
+        "branch {} from {}",
+        place.branch,
+        base_words(&place.base, place.base_from)
+    )];
     if let Some(mark) = &place.mark {
         facts.push(format!("mark {mark}"));
     }
@@ -396,6 +400,19 @@ fn plain(words: &str) -> String {
 
 /// A place's stream, its label where it has one, each with where it came
 /// from, and its intent (56, 143, 147, 180).
+/// The base a place was cut from, with where the launch read its revision
+/// (56, C.1).
+fn base_words(base: &str, from: Option<BaseFrom>) -> String {
+    let from = match from {
+        None => return base.to_string(),
+        Some(BaseFrom::MergeQueue) => "where its merge queue lands it",
+        Some(BaseFrom::Origin) => "at origin",
+        Some(BaseFrom::NoOrigin) => "the host's own, the repository having no origin",
+        Some(BaseFrom::OriginLacks) => "the host's own, origin holding none",
+    };
+    format!("{base} ({from})")
+}
+
 fn stream_line(stream: &StreamHeld, label: Option<&LabelHeld>, intent: &IntentKey) -> String {
     let label = label
         .map(|label| format!(", label {} (from {})", label.name, word(json!(label.from))))
@@ -1340,6 +1357,30 @@ mod tests {
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
                 "    its agents open in the terminal's own session".to_string(),
                 "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_places_base_with_where_it_was_read() {
+        let lines: Vec<String> = [
+            None,
+            Some(BaseFrom::MergeQueue),
+            Some(BaseFrom::Origin),
+            Some(BaseFrom::NoOrigin),
+            Some(BaseFrom::OriginLacks),
+        ]
+        .into_iter()
+        .map(|from| base_words("main", from))
+        .collect();
+        assert_eq!(
+            lines,
+            vec![
+                "main",
+                "main (where its merge queue lands it)",
+                "main (at origin)",
+                "main (the host's own, the repository having no origin)",
+                "main (the host's own, origin holding none)",
             ]
         );
     }

@@ -141,6 +141,10 @@ pub struct PlaceStatus {
     pub name: String,
     pub branch: String,
     pub base: String,
+    /// Where the launch read the base's revision, none for a place
+    /// launched before flume said (9, 56, C.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_from: Option<BaseFrom>,
     pub mark: Option<String>,
     pub lands: bool,
     pub phase: Phase,

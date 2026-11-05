@@ -106,6 +106,7 @@ fn place_status() -> PlaceStatus {
         name: "one".into(),
         branch: "fix/one".into(),
         base: "main".into(),
+        base_from: Some(BaseFrom::Origin),
         mark: Some("team-a".into()),
         lands: true,
         phase: Phase::Over {

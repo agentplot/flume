@@ -12,11 +12,30 @@ pub struct Touch {
     pub since: bool,
 }
 
+/// A branch as the repository's remote `origin` holds it, read after
+/// flume's own fetch of it (9, 126, C.1).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OriginBranch {
+    /// `origin/<branch>` as the fetch left it.
+    At { revision: Revision },
+    /// The repository has no remote `origin`.
+    NoOrigin,
+    /// `origin` holds no such branch.
+    Lacks,
+    /// The fetch failed for another cause, in git's words.
+    Refused { reason: String },
+}
+
 /// What the core reads of git's history (design 3). Every answer is about
 /// the repository as it stands when asked.
 pub trait History: Send + Sync {
     /// The branch's head, if the branch exists.
     fn head(&self, repository: &str, branch: &str) -> Option<Revision>;
+
+    /// The branch at the repository's `origin`, fetched first, so a copy
+    /// of it the host holds is never read in its place (9, C.1).
+    fn origin_branch(&self, repository: &str, branch: &str) -> OriginBranch;
 
     /// Whether `head` holds a commit `start` does not: `head` reaches it
     /// and `start` does not (25).

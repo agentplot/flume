@@ -215,6 +215,7 @@ mod tests {
             branch: "fix/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: None,
             location: "/r/places/fix--one".into(),
             binding,
             brief: None,
