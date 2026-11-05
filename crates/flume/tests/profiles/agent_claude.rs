@@ -1,7 +1,8 @@
 //! The agent profile for Claude Code (C.4; design 14; record 0016): the
 //! agent seam's scenarios against it over fixture transcripts and hook
 //! records of Claude Code 2.1.296, the release `devenv.nix` pins; the
-//! command for a code stage and for a stage in a mode; the map of
+//! command for a code stage, its instructions in a file of the start's
+//! own, and for a stage in a mode; the map of
 //! flume's modes and the release's own, and the mode read back; the
 //! plugin an agent loads, written once per version; a prompt queued while
 //! the agent worked; a slash command's
@@ -16,8 +17,8 @@
 use crate::common::*;
 use flume::profiles::agent::claude::record::{self, Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
-    as_received, digest, written, Claude, NAME, PLUGIN, TRUST_CONFIRM, TRUST_FOCUS, TRUST_NEXT,
-    TRUST_QUESTION, VERSION,
+    as_received, digest, written, Claude, NAME, PLUGIN, STANDING_PROMPT_FLAG, TRUST_CONFIRM,
+    TRUST_FOCUS, TRUST_NEXT, TRUST_QUESTION, VERSION,
 };
 use flume::profiles::agent::claude::{carry, mode, transcript};
 use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
@@ -378,13 +379,16 @@ fn identity(stage: &str) -> Identity {
 #[test]
 fn the_command_for_a_code_stage() {
     // The command for a code stage: `claude` with the plugin, the model
-    // and the instructions, the four FLUME_* words over its account's
+    // and the instructions, in a file of the start's own beside its record
+    // holding them as given, newlines and all, which no argument may hold
+    // under herdr (148, C.5), the four FLUME_* words over its account's
     // environment, no `--permission-mode` where the settings give no mode,
     // and nothing of the caller's session (29, 32, 88, 144, 162, C.4).
     let harness = Harness::new();
+    let instructions = "Keep each commit small.\n\n- **Before you finish.** List each decision.\n";
     let settings = Settings {
         model: Some("opus".into()),
-        instructions: Some("Keep each commit small.".into()),
+        instructions: Some(instructions.into()),
         ..Settings::default()
     };
     // A `PATH` holding no `claude`, so no wrapper of the host's is read
@@ -395,6 +399,7 @@ fn the_command_for_a_code_stage() {
     ]);
     let who = identity("code");
     let command = harness.seam.command(
+        &harness.folder(),
         &settings,
         None,
         None,
@@ -406,6 +411,7 @@ fn the_command_for_a_code_stage() {
     );
     assert_eq!(command.program, NAME);
     let plugin = harness.seam.plugin_dir().to_string_lossy().into_owned();
+    let file = harness.record(&who).standing_prompt();
     assert_eq!(
         command.args,
         vec![
@@ -413,9 +419,22 @@ fn the_command_for_a_code_stage() {
             plugin,
             "--model".into(),
             "opus".into(),
-            "--append-system-prompt".into(),
-            "Keep each commit small.".into(),
+            STANDING_PROMPT_FLAG.into(),
+            file.to_string_lossy().into_owned(),
         ]
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).expect("the standing prompt's file"),
+        instructions,
+        "the instructions as the file holds them"
+    );
+    assert!(
+        command
+            .args
+            .iter()
+            .all(|arg| !arg.chars().any(char::is_control)),
+        "an argument holds a control character: {:?}",
+        command.args
     );
     assert_eq!(
         command.env,
@@ -444,6 +463,7 @@ fn the_command_for_a_code_stage() {
         ..Settings::default()
     };
     let command = harness.seam.command(
+        &harness.folder(),
         &by_path,
         None,
         None,
@@ -468,6 +488,7 @@ fn the_command_passes_the_mode_it_is_given() {
     };
     let command = |mode: Option<&str>| {
         harness.seam.command(
+            &harness.folder(),
             &settings,
             mode,
             None,
@@ -509,6 +530,7 @@ fn the_command_for_a_stage_in_edits() {
     let value = harness.seam.mode(&entry).expect("edits mapped");
     // A `PATH` holding no `claude`, so the program runs by its name.
     let command = harness.seam.command(
+        &harness.folder(),
         &settings,
         Some(&value),
         None,
@@ -594,6 +616,7 @@ fn the_plugin_an_agent_loads() {
     let place = harness.place();
     let who = identity("code");
     let first = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
         None,
@@ -610,6 +633,7 @@ fn the_plugin_an_agent_loads() {
         .expect("the plugin written");
     std::thread::sleep(std::time::Duration::from_millis(20));
     let second = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
         None,
@@ -841,6 +865,7 @@ fn the_trust_screen() {
     // trusting choice before it confirms (34; record 0018).
     let harness = Harness::new();
     let command = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
         None,
@@ -892,6 +917,7 @@ fn the_command_of_a_carried_start() {
     let harness = Harness::new();
     let command = |resume: Option<&str>| {
         harness.seam.command(
+            &harness.folder(),
             &Settings {
                 model: Some("opus".into()),
                 ..Settings::default()
@@ -968,6 +994,7 @@ fn a_conversation_carried_to_a_home_whose_projects_links_the_firsts() {
         yes
     );
     let command = harness.seam.command(
+        &harness.folder(),
         &Settings::default(),
         None,
         Some(SESSION),

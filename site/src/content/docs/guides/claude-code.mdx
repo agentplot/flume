@@ -20,11 +20,14 @@ under `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>`, and
 starts each agent with it:
 
 ```sh
-claude --plugin-dir <plugin> [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt <instructions>] '<prompt>'
+claude --plugin-dir <plugin> [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
 ```
 
 `--resume` is there only for a start that carries a spent agent's
 conversation ([a conversation carried](#a-conversation-carried)).
+`--append-system-prompt-file` names a file beside the start's record
+holding the agent's instructions as given, since herdr starts no
+program whose arguments hold a newline.
 
 in the place, with the agent's environment and four variables of
 flume's:

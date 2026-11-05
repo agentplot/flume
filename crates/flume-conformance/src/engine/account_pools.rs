@@ -168,6 +168,7 @@ pub fn stream_on(world: &World, name: &str, pool: Option<&str>, priority: i64) {
             agents: None,
             priority,
             pool: pool.map(str::to_string),
+            ..Stream::default()
         }),
     );
 }

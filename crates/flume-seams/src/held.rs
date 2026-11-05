@@ -4,9 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, PassedOver, PlaceId, PlaceRef,
-    Prompt, Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld, Unsettled,
-    Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, LabelHeld, PassedOver, PlaceId,
+    PlaceRef, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld, Settings, StopKind,
+    StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -755,6 +755,16 @@ pub struct StartHeld {
     /// none for any other start (56, 146, 179).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
+    /// The session its agent opened in, with where it came from; none
+    /// for an agent opened beside a pane, and in a start written before
+    /// (56, 107, 143).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<SessionHeld>,
+    /// The label its place started under, with where it came from, which
+    /// its agent counts toward until it ends; none where it had none, and
+    /// in a start written before (56, 180, 181).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<LabelHeld>,
 }
 
 /// Whether a start carries the conversation of its stage's start before

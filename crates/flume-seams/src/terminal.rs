@@ -46,6 +46,42 @@ pub enum Opened {
     },
 }
 
+/// Where the terminal opens an agent: a split beside the pane the
+/// settings name; in the terminal's part of the name given, a session
+/// under a terminal that keeps sessions; or in the terminal's own (107,
+/// 143). It names no terminal (core.1).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "in", rename_all = "snake_case")]
+pub enum OpenIn {
+    /// A split beside the pane the settings name (107).
+    Beside { pane: String },
+    /// The terminal's part of this name (107, 143).
+    Session { name: String },
+    /// The terminal's own (107).
+    Own,
+}
+
+/// Where the session an agent opens in came from: the launch's
+/// settings, its stream's `session`, its stream's name, or, for the
+/// host's default stream naming none, the terminal's own (32, 107, 143).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionFrom {
+    Launch,
+    Stream,
+    StreamName,
+    Own,
+}
+
+/// The session an agent opens in, by its name, none for the terminal's
+/// own, and where it came from (56, 107, 143).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionHeld {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub from: SessionFrom,
+}
+
 /// send: the text delivered as input, or a refusal; never left typed
 /// (95).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -137,8 +173,11 @@ pub enum Shown {
 /// Where the terminal shows a place's clues, each named in the
 /// terminal's own words: what holds the place's agents, the pane of its
 /// live agent, and what holds the places of its repository on its base;
-/// none where it holds none. Status gives them so a plugin of the
-/// terminal's refreshes the clues show gives, copying status (139, C.5).
+/// none where it holds none; and each thing that holds the places of its
+/// repository on its base, one for each of the terminal's sessions that
+/// has one, none where it holds none and in an answer written before.
+/// Status gives them so a plugin of the terminal's refreshes the clues
+/// show gives, copying status (107, 139, C.5).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShownAt {
     #[serde(default)]
@@ -147,25 +186,27 @@ pub struct ShownAt {
     pub agent: Option<String>,
     #[serde(default)]
     pub base: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bases: Vec<String>,
 }
 
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
 /// never reports an end that did not happen (98).
 pub trait Terminal: Send + Sync {
-    /// An agent running `command` in the place under `identity`, beside
-    /// the pane the settings name, if any, and carrying the session name
-    /// `session`, a role run's address, where one is given, so a send or
-    /// a state read by that name reaches it; refused where a live agent
-    /// carries that name already. What the terminal keeps of the start it
-    /// keeps in the place's own `folder` (94, 98, 107, 128, 132).
+    /// An agent running `command` in the place under `identity`, where
+    /// `at` says, and carrying the session name `session`, a role run's
+    /// address, where one is given, so a send or a state read by that name
+    /// reaches it; refused where a live agent carries that name already.
+    /// What the terminal keeps of the start it keeps in the place's own
+    /// `folder` (94, 98, 107, 128, 132).
     fn open(
         &self,
         place: &crate::PlaceRef,
         folder: &str,
         command: &crate::AgentCommand,
         identity: &crate::Identity,
-        beside: Option<&str>,
+        at: &OpenIn,
         session: Option<&str>,
     ) -> Opened;
 

@@ -8,18 +8,23 @@
 //! order they came to wait, as many as there is room for, passing over a
 //! stage whose stream has no room, or whose pool has no usable account,
 //! without holding the host's room for it,
-//! and ending no agent for one (31, 46; core.26). A place's priority is
+//! and ending no agent for one (31, 46; core.26). Within a stream, a
+//! stage of a label running fewer agents than its reserve starts first,
+//! and a stage starts only while its stream's room passes what the
+//! stream's other labels keep free and do not use; a stream whose labels
+//! are at fault starts no stage (180 to 182; core.46). A place's priority is
 //! its caller's, given at the launch and changed after (7), and a
 //! stream's the host's; a host that states no bound, in a stream that
 //! states none, has no queue.
 
 use crate::accounts::{AccountRoom, PoolRoom, Usable};
+use crate::answer::and_list;
 use crate::{
-    AccountStatus, Act, Answer, Engine, HostStatus, PoolStatus, Queued, RoomWanted, Step,
-    StreamStatus,
+    AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
+    RoomWanted, Step, StreamStatus,
 };
 use flume_seams::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// How a claim admits a start, with the queue as the room lock found it.
 #[derive(Clone, Copy)]
@@ -56,22 +61,223 @@ pub(crate) struct Queue {
     pub waiting: Vec<Waiting>,
 }
 
-/// A stream's agents running, its bound and its priority among streams
-/// (143); a stream a live place runs in that the host's configuration no
-/// longer declares states no bound and ranks at zero.
-#[derive(Clone, Copy, Default)]
+/// A stream's agents running, its bound, its priority among streams, the
+/// session it names, its labels' shares, whether their reserves are held,
+/// and why its labels refuse its starts (107, 143, 181, 182); a stream a
+/// live place runs in that the host's configuration no longer declares
+/// states no bound, ranks at zero, names no session and has no labels.
+#[derive(Clone, Default)]
 pub(crate) struct StreamRoom {
     pub running: u32,
     pub bound: Option<u32>,
     pub priority: i64,
+    pub session: Option<String>,
+    pub labels: BTreeMap<String, LabelRoom>,
+    /// Its labels' reserves and the slots they keep free are held: it
+    /// states a bound and its labels are at no fault (70, 181).
+    pub held: bool,
+    /// Why its labels refuse every start of the stream, none where they
+    /// do not (4, 181, 182).
+    pub fault: Option<String>,
+}
+
+/// A label's share of its stream as the queue reads it: its reserve, the
+/// slots of the stream it keeps free while it runs fewer, and its agents
+/// running, each counted toward the label it started under until it ends
+/// (180, 181).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct LabelRoom {
+    pub reserve: u32,
+    pub keep_free: u32,
+    pub running: u32,
+}
+
+impl LabelRoom {
+    /// The stream's slots it keeps free and does not use.
+    pub fn kept(&self) -> u32 {
+        self.keep_free.saturating_sub(self.running)
+    }
 }
 
 impl StreamRoom {
+    /// The stream `name` as the host's configuration declares it, its
+    /// labels running none yet (143, 181, 182).
+    fn of(name: &str, stream: Stream) -> StreamRoom {
+        let fault = fault_of(name, &stream);
+        StreamRoom {
+            running: 0,
+            held: stream.agents.is_some() && fault.is_none(),
+            bound: stream.agents,
+            priority: stream.priority,
+            session: stream.session,
+            labels: stream
+                .labels
+                .into_iter()
+                .map(|(label, share)| {
+                    (
+                        label,
+                        LabelRoom {
+                            reserve: share.reserve,
+                            keep_free: share.keep_free,
+                            running: 0,
+                        },
+                    )
+                })
+                .collect(),
+            fault,
+        }
+    }
+
     /// The stream's agents that may yet start; none where it states no
     /// bound.
     pub fn room(&self) -> Option<u32> {
         self.bound.map(|bound| bound.saturating_sub(self.running))
     }
+
+    /// Whether a stage of `label` starts before the stream's others: its
+    /// reserves are held and the label runs fewer than its reserve (181).
+    pub fn below_reserve(&self, label: Option<&str>) -> bool {
+        self.held
+            && label
+                .and_then(|label| self.labels.get(label))
+                .is_some_and(|room| room.running < room.reserve)
+    }
+
+    /// The stream's slots its labels other than `label` keep free and do
+    /// not use, and those labels, where its reserves are held; a stage of
+    /// no label counts every label's (181).
+    pub fn kept_for(&self, label: Option<&str>) -> (u32, Vec<String>) {
+        if !self.held {
+            return (0, vec![]);
+        }
+        let keeping: Vec<(&String, u32)> = self
+            .labels
+            .iter()
+            .filter(|(name, _)| Some(name.as_str()) != label)
+            .map(|(name, room)| (name, room.kept()))
+            .filter(|(_, kept)| *kept > 0)
+            .collect();
+        (
+            keeping.iter().map(|(_, kept)| kept).sum(),
+            keeping.into_iter().map(|(name, _)| name.clone()).collect(),
+        )
+    }
+
+    /// One more agent of the stream running, under `label`.
+    fn take(&mut self, label: Option<&str>) {
+        self.running = self.running.saturating_add(1);
+        if let Some(room) = label.and_then(|label| self.labels.get_mut(label)) {
+            room.running = room.running.saturating_add(1);
+        }
+    }
+
+    /// The session the agents of the stream `name` open in where their
+    /// launch names none: the one it names, else the one named by its
+    /// name, and, for the host's default stream naming none, the
+    /// terminal's own (107, 143).
+    pub fn session(&self, name: &str) -> SessionHeld {
+        match (&self.session, name) {
+            (Some(session), _) => SessionHeld {
+                name: Some(session.clone()),
+                from: SessionFrom::Stream,
+            },
+            (None, DEFAULT_STREAM) => SessionHeld {
+                name: None,
+                from: SessionFrom::Own,
+            },
+            (None, _) => SessionHeld {
+                name: Some(name.to_string()),
+                from: SessionFrom::StreamName,
+            },
+        }
+    }
+}
+
+/// Why the labels of the stream `name` refuse its starts: a label's table
+/// holding another key, then a label keeping more free than its reserve,
+/// then reserves past the stream's bound; none where none of them holds
+/// (4, 181, 182).
+fn fault_of(name: &str, stream: &Stream) -> Option<String> {
+    let other = stream.labels.iter().find_map(|(label, share)| {
+        share.unknown.first().map(|key| {
+            format!(
+                "streams.{name}.labels.{label}.{key}: a label's table holds its reserve and \
+                 what it keeps free alone; its stream's pool, points and pace are its budget"
+            )
+        })
+    });
+    let more_free = || {
+        stream.labels.iter().find_map(|(label, share)| {
+            (share.keep_free > share.reserve).then(|| {
+                format!(
+                    "the label {label} of the stream {name} keeps {} free of a reserve of {}, \
+                     and a reserve is at least what it keeps free",
+                    share.keep_free, share.reserve
+                )
+            })
+        })
+    };
+    let past_bound = || {
+        let bound = stream.agents?;
+        let total = stream
+            .labels
+            .values()
+            .fold(0u32, |total, share| total.saturating_add(share.reserve));
+        (total > bound).then(|| {
+            let each: Vec<String> = stream
+                .labels
+                .iter()
+                .filter(|(_, share)| share.reserve > 0)
+                .map(|(label, share)| format!("{label} {}", share.reserve))
+                .collect();
+            format!(
+                "the stream {name}'s reserves, {}, {total} in all, pass its bound of {bound}",
+                and_list(&each)
+            )
+        })
+    };
+    other.or_else(more_free).or_else(past_bound)
+}
+
+/// What places a stage among those waiting: its stream, its stream's
+/// priority then its place's, the order it came to wait, since when, and
+/// whether its label runs fewer than its reserve (70, 143, 181).
+struct Standing<'a> {
+    stream: &'a str,
+    rank: (i64, i64),
+    order: u64,
+    since: Option<Seconds>,
+    below: bool,
+}
+
+/// The positions of `standings` in the order their stages start: by
+/// their streams' priority, then their places', then the order they came
+/// to wait; then, within each stream, its stages in the positions its
+/// stages hold, a stage whose label runs fewer than its reserve first,
+/// each part in that order (70, 143, 181).
+fn start_order(standings: &[Standing<'_>]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..standings.len()).collect();
+    order.sort_by(|&a, &b| {
+        let (a, b) = (&standings[a], &standings[b]);
+        b.rank
+            .cmp(&a.rank)
+            .then(a.order.cmp(&b.order))
+            .then(a.since.cmp(&b.since))
+    });
+    let streams: BTreeSet<&str> = standings.iter().map(|standing| standing.stream).collect();
+    for stream in streams {
+        let positions: Vec<usize> = (0..order.len())
+            .filter(|&at| standings[order[at]].stream == stream)
+            .collect();
+        let (below, rest): (Vec<usize>, Vec<usize>) = positions
+            .iter()
+            .map(|&at| order[at])
+            .partition(|&index| standings[index].below);
+        for (at, index) in positions.into_iter().zip(below.into_iter().chain(rest)) {
+            order[at] = index;
+        }
+    }
+    order
 }
 
 /// A stage waiting for room.
@@ -81,6 +287,8 @@ pub(crate) struct Waiting {
     pub stage: String,
     pub stream: String,
     pub stream_priority: i64,
+    /// The label its place resolves to as the queue reads it (180).
+    pub label: Option<String>,
     /// The program its agent resolves to, by which its pool's accounts
     /// are usable (144).
     pub program: Option<String>,
@@ -95,6 +303,19 @@ impl Waiting {
     fn rank(&self) -> (i64, i64) {
         (self.stream_priority, self.priority)
     }
+
+    /// Whether the room its claim would refuse it for has no bearing: its
+    /// pool holds an account of its program and its stream's labels are
+    /// at no fault (4, 145, 182).
+    fn runs(&self, queue: &Queue) -> bool {
+        queue.runs(&self.stream, self.program.as_deref())
+            && queue.stream(&self.stream).fault.is_none()
+    }
+
+    /// The room it is short of now, none where it could start (70).
+    fn wants(&self, queue: &Queue) -> Option<RoomWanted> {
+        queue.wants(&self.stream, self.label.as_deref(), self.program.as_deref())
+    }
 }
 
 impl Queue {
@@ -106,7 +327,24 @@ impl Queue {
 
     /// The stream `name` as the queue reads it.
     pub fn stream(&self, name: &str) -> StreamRoom {
-        self.streams.get(name).copied().unwrap_or_default()
+        self.streams.get(name).cloned().unwrap_or_default()
+    }
+
+    /// Where a stage of `stream` with `settings` opens: none beside the
+    /// pane its settings name, else the session its launch names, else
+    /// its stream's as the host's configuration stands now (32, 107,
+    /// 143).
+    pub fn session_of(&self, stream: &str, settings: &Settings) -> Option<SessionHeld> {
+        if settings.beside.is_some() {
+            return None;
+        }
+        Some(match &settings.session {
+            Some(name) => SessionHeld {
+                name: Some(name.clone()),
+                from: SessionFrom::Launch,
+            },
+            None => self.stream(stream).session(stream),
+        })
     }
 
     /// The pool a stage of `stream` takes its account from, none where
@@ -145,19 +383,33 @@ impl Queue {
         }
     }
 
-    /// The room a stage of `stream` whose agent runs `program` is short
-    /// of now, none where the host and the stream have room and an
-    /// account of its pool is usable: its stream's bound first, then its
-    /// pool's accounts, then the host's (70, 143, 145). A pool that holds
-    /// no account of `program` gives no want: no room could start the
-    /// stage, and its claim refuses it (4, 32).
-    pub fn wants(&self, stream: &str, program: Option<&str>) -> Option<RoomWanted> {
+    /// The room a stage of `stream` and `label` whose agent runs
+    /// `program` is short of now, none where the host and the stream have
+    /// room and an account of its pool is usable: its stream's bound
+    /// first, then its stream's room past what its other labels keep free,
+    /// then its pool's accounts, then the host's (70, 143, 145, 181). A
+    /// pool that holds no account of `program` gives no want: no room
+    /// could start the stage, and its claim refuses it (4, 32).
+    pub fn wants(
+        &self,
+        stream: &str,
+        label: Option<&str>,
+        program: Option<&str>,
+    ) -> Option<RoomWanted> {
         let of = self.stream(stream);
         if let (Some(0), Some(bound)) = (of.room(), of.bound) {
             return Some(RoomWanted::Stream {
                 stream: stream.to_string(),
                 bound,
             });
+        }
+        if let (Some(room), (kept, labels)) = (of.room(), of.kept_for(label)) {
+            if kept > 0 && room <= kept {
+                return Some(RoomWanted::KeptFree {
+                    stream: stream.to_string(),
+                    labels,
+                });
+            }
         }
         if let (Some(pool), Some(program)) = (self.pool_of(stream), program) {
             if let Some(Usable::None(until)) = self.pools.get(pool).map(|room| room.usable(program))
@@ -171,31 +423,83 @@ impl Queue {
         (self.room() == Some(0)).then_some(RoomWanted::Host)
     }
 
-    /// Whether a stage of `place` in `stream` whose agent runs `program`
-    /// at `priority` due to start waits: the host or its stream is full,
-    /// its pool has no usable account, or a stage of another place waits
-    /// that ranks as high, its stream's priority then its place's, and
-    /// could start now, its pool holding an account of its program (70,
-    /// 143, 145; core.26).
+    /// Whether a stage of `place` in `stream` and `label` whose agent runs
+    /// `program` at `priority` due to start waits: the host or its stream
+    /// is full, the room its stream's other labels keep free is all it has
+    /// left, its pool has no usable account, or a stage of another place
+    /// waits that stands before it in the order stages start and could
+    /// start now, its pool holding an account of its program (70, 143,
+    /// 145, 181; core.26).
     pub fn must_wait(
         &self,
         place: &PlaceId,
         stream: &str,
+        label: Option<&str>,
         program: Option<&str>,
         priority: i64,
     ) -> bool {
-        if self.wants(stream, program).is_some() {
+        if self.wants(stream, label, program).is_some() {
             return true;
         }
-        let rank = (self.stream(stream).priority, priority);
-        self.waiting.iter().any(|waiting| {
-            &waiting.place != place
-                && waiting.rank() >= rank
-                && self.runs(&waiting.stream, waiting.program.as_deref())
-                && self
-                    .wants(&waiting.stream, waiting.program.as_deref())
-                    .is_none()
-        })
+        let others: Vec<&Waiting> = self
+            .waiting
+            .iter()
+            .filter(|waiting| &waiting.place != place)
+            .collect();
+        let mut standings: Vec<Standing<'_>> = others
+            .iter()
+            .map(|waiting| self.standing(waiting))
+            .collect();
+        standings.push(Standing {
+            stream,
+            rank: (self.stream(stream).priority, priority),
+            order: self.next_order(),
+            since: None,
+            below: self.stream(stream).below_reserve(label),
+        });
+        start_order(&standings)
+            .into_iter()
+            .take_while(|&index| index < others.len())
+            .any(|index| others[index].runs(self) && others[index].wants(self).is_none())
+    }
+
+    /// Where `waiting` stands among the stages waiting (70, 181).
+    fn standing<'a>(&self, waiting: &'a Waiting) -> Standing<'a> {
+        Standing {
+            stream: &waiting.stream,
+            rank: waiting.rank(),
+            order: waiting.order,
+            since: waiting.since,
+            below: self
+                .stream(&waiting.stream)
+                .below_reserve(waiting.label.as_deref()),
+        }
+    }
+
+    /// `waiting` in the order its stages start, as the queue's agents
+    /// running stand now (70, 143, 181).
+    pub fn ordered(&self, waiting: Vec<Waiting>) -> Vec<Waiting> {
+        let order = start_order(
+            &waiting
+                .iter()
+                .map(|waiting| self.standing(waiting))
+                .collect::<Vec<_>>(),
+        );
+        let mut slots: Vec<Option<Waiting>> = waiting.into_iter().map(Some).collect();
+        order
+            .into_iter()
+            .filter_map(|index| slots[index].take())
+            .collect()
+    }
+
+    /// One more agent running on the host and in `stream`, under `label`,
+    /// as a start the queue admits takes it (70, 180).
+    pub fn take(&mut self, stream: &str, label: Option<&str>) {
+        self.running = self.running.saturating_add(1);
+        self.streams
+            .entry(stream.to_string())
+            .or_default()
+            .take(label);
     }
 
     /// The order a stage that comes to wait now takes.
@@ -209,6 +513,21 @@ impl Queue {
 }
 
 impl Engine {
+    /// A place's label as it resolves now: the one the host's
+    /// configuration gives its repository's kind, else its kind, else
+    /// the label its kind declares, as the launch read the kind, else
+    /// none (21, 32, 180).
+    pub(crate) fn label_of(&self, place: &PlaceRecord) -> Option<LabelHeld> {
+        self.host
+            .label_for(&place.repository, &place.kind.name)
+            .or_else(|| {
+                place.kind.label.as_ref().map(|name| LabelHeld {
+                    name: name.clone(),
+                    from: LabelFrom::Kind,
+                })
+            })
+    }
+
     /// The host's queue as the store holds it now.
     pub(crate) fn queue(&self) -> Queue {
         let every = self.store.read_every();
@@ -217,14 +536,8 @@ impl Engine {
             .streams()
             .into_iter()
             .map(|(name, stream)| {
-                (
-                    name,
-                    StreamRoom {
-                        running: 0,
-                        bound: stream.agents,
-                        priority: stream.priority,
-                    },
-                )
+                let room = StreamRoom::of(&name, stream);
+                (name, room)
             })
             .collect();
         let mut running = 0u32;
@@ -239,6 +552,11 @@ impl Engine {
             running = running.saturating_add(count);
             let stream = streams.entry(held.place.stream.name.clone()).or_default();
             stream.running = stream.running.saturating_add(count);
+            for label in live.iter().filter_map(|start| start.label.as_ref()) {
+                if let Some(room) = stream.labels.get_mut(&label.name) {
+                    room.running = room.running.saturating_add(1);
+                }
+            }
             for account in live.iter().filter_map(|start| start.account.as_ref()) {
                 let on = on_accounts
                     .entry((account.pool.clone(), account.name.clone()))
@@ -295,7 +613,7 @@ impl Engine {
                 },
             );
         }
-        let mut waiting: Vec<Waiting> = every
+        let waiting: Vec<Waiting> = every
             .iter()
             .map(|read| &read.state)
             .filter(|held| matches!(held.phase, Phase::Live | Phase::Making { .. }))
@@ -318,6 +636,7 @@ impl Engine {
                             stage: stage.name.clone(),
                             stream: stream.clone(),
                             stream_priority,
+                            label: self.label_of(&held.place).map(|label| label.name),
                             program,
                             priority: held.priority,
                             order: room.order,
@@ -327,30 +646,30 @@ impl Engine {
                     })
             })
             .collect();
-        waiting.sort_by(|a, b| {
-            b.rank()
-                .cmp(&a.rank())
-                .then(a.order.cmp(&b.order))
-                .then(a.since.cmp(&b.since))
-        });
-        Queue {
+        let mut queue = Queue {
             running,
             bound: self.host.bound(),
             streams,
             stream_pools,
             pools,
-            waiting,
-        }
+            waiting: vec![],
+        };
+        queue.waiting = queue.ordered(waiting);
+        queue
     }
 
     /// Starts the stages waiting for room on the host, in the queue's
     /// order, as many as there is room for, passing over a stage whose
     /// stream has no room or whose pool has no usable account and holding
-    /// none of the host's for it, each
-    /// written live under the room lock and opened after it is released;
-    /// ends no agent (31, 46, 70, 143; core.26). Ahead of the host's room,
-    /// each stage waiting whose pool holds no account of its program is
-    /// claimed, which refuses it, whatever room the host has (4, 32, 145).
+    /// none of the host's for it, each written live under the room lock
+    /// and opened after it is released; ends no agent (31, 46, 70, 143;
+    /// core.26). After each start it counts that agent toward the host,
+    /// its stream, its label and its account and orders what is left
+    /// again, so a label that reaches its reserve goes back among its
+    /// stream's others (181). Ahead of the host's room, each stage waiting
+    /// whose pool holds no account of its program, or whose stream's
+    /// labels are at fault, is claimed, which refuses it, whatever room
+    /// the host has (4, 32, 145, 182).
     pub(crate) fn start_waiting(&self) {
         let any = self.store.read_every().iter().any(|read| {
             read.state
@@ -364,36 +683,37 @@ impl Engine {
         let claims: Vec<_> = {
             let _room = self.host.room();
             let mut queue = self.queue();
-            let (runs, refused): (Vec<_>, Vec<_>) = std::mem::take(&mut queue.waiting)
+            let (mut runs, refused): (Vec<_>, Vec<_>) = std::mem::take(&mut queue.waiting)
                 .into_iter()
-                .partition(|waiting| queue.runs(&waiting.stream, waiting.program.as_deref()));
+                .partition(|waiting| waiting.runs(&queue));
             let mut claims = vec![];
-            for waiting in refused.into_iter().chain(runs) {
-                if queue.runs(&waiting.stream, waiting.program.as_deref()) {
-                    if queue.room() == Some(0) {
-                        break;
-                    }
-                    if queue
-                        .wants(&waiting.stream, waiting.program.as_deref())
-                        .is_some()
-                    {
-                        continue;
-                    }
-                }
+            let mut claim = |queue: &mut Queue, waiting: Waiting| {
                 if let Ok(claim) = self.claim(
                     &waiting.place,
                     waiting.index,
                     waiting.words,
-                    Admit::Waiting(&queue),
+                    Admit::Waiting(queue),
                 ) {
-                    queue.running = queue.running.saturating_add(1);
-                    let stream = queue.streams.entry(waiting.stream).or_default();
-                    stream.running = stream.running.saturating_add(1);
+                    queue.take(&waiting.stream, waiting.label.as_deref());
                     if let Some(account) = claim.account() {
                         queue.take_account(&account.pool, &account.name);
                     }
                     claims.push((waiting.place, claim));
                 }
+            };
+            for waiting in refused {
+                claim(&mut queue, waiting);
+            }
+            while queue.room() != Some(0) {
+                runs = queue.ordered(runs);
+                let Some(at) = runs
+                    .iter()
+                    .position(|waiting| waiting.wants(&queue).is_none())
+                else {
+                    break;
+                };
+                let waiting = runs.remove(at);
+                claim(&mut queue, waiting);
             }
             claims
         };
@@ -415,11 +735,10 @@ impl Engine {
                 place: waiting.place.clone(),
                 stage: waiting.stage.clone(),
                 stream: waiting.stream.clone(),
+                label: waiting.label.clone(),
                 priority: waiting.priority,
                 since: waiting.since,
-                wants: queue
-                    .wants(&waiting.stream, waiting.program.as_deref())
-                    .unwrap_or(RoomWanted::Host),
+                wants: waiting.wants(&queue).unwrap_or(RoomWanted::Host),
             })
             .collect();
         let mut streams: Vec<StreamStatus> = queue
@@ -427,6 +746,7 @@ impl Engine {
             .iter()
             .map(|(name, stream)| StreamStatus {
                 name: name.clone(),
+                session: stream.session(name),
                 priority: stream.priority,
                 running: stream.running,
                 bound: stream.bound,
@@ -436,6 +756,30 @@ impl Engine {
                     .filter(|queued| &queued.stream == name)
                     .cloned()
                     .collect(),
+                labels: stream
+                    .labels
+                    .iter()
+                    .map(|(label, room)| LabelStatus {
+                        name: label.clone(),
+                        reserve: room.reserve,
+                        keep_free: room.keep_free,
+                        running: room.running,
+                        waiting: queued
+                            .iter()
+                            .filter(|queued| {
+                                &queued.stream == name && queued.label.as_ref() == Some(label)
+                            })
+                            .count()
+                            .try_into()
+                            .unwrap_or(u32::MAX),
+                    })
+                    .collect(),
+                reserves: match (stream.labels.is_empty(), stream.bound) {
+                    (true, _) => Reserves::None,
+                    (false, None) => Reserves::PassedOver,
+                    (false, Some(_)) => Reserves::Held,
+                },
+                refused: stream.fault.clone(),
             })
             .collect();
         streams.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.name.cmp(&b.name)));
@@ -470,6 +814,7 @@ impl Engine {
             watch: self.terminal.watch(),
             bases: self.bases(),
             terminal_setup: self.terminal.setup(),
+            configuration: self.host.configuration(),
         }
     }
 

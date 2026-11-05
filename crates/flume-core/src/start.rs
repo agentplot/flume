@@ -28,6 +28,9 @@ pub(crate) struct Claim {
     agent: Arc<dyn Agent>,
     /// The session name the agent carries: a role's run's address (132).
     session: Option<String>,
+    /// The terminal's session the agent opens in, none where it opens
+    /// beside the pane its settings name (107, 143).
+    opens_in: Option<SessionHeld>,
     /// The account the start runs under (144, 145).
     account: Option<AccountHeld>,
     /// The value its agent profile passes for its mode, none where no
@@ -303,8 +306,13 @@ impl Engine {
             return Err(Start::NoPlace);
         };
         let place = &read.state.place;
-        let resolution = self.resolution(place, &place.kind.stages[index]);
         let queue = admit.queue();
+        // A stream whose labels are at fault starts no stage: its words
+        // refuse the start before its settings are resolved (4, 181, 182).
+        let resolution = match queue.stream(&place.stream.name).fault {
+            Some(fault) => Err(fault),
+            None => self.resolution(place, &place.kind.stages[index]),
+        };
         let now = self.host.now();
         let affinity = queue
             .pool_of(&place.stream.name)
@@ -361,6 +369,7 @@ impl Engine {
             _ => None,
         };
         let made_from = self.store.made(id).len();
+        let label = self.label_of(place);
         let claimed = self.update(id, |held| {
             if let Admit::Waiting(_) = admit {
                 if held.phase != Phase::Live
@@ -429,7 +438,13 @@ impl Engine {
             if let Admit::Queue(queue) = admit {
                 let program = resolution.resolved.settings.program.as_deref();
                 if matches!(chosen, Choice::Wait)
-                    || queue.must_wait(id, &held.place.stream.name, program, held.priority)
+                    || queue.must_wait(
+                        id,
+                        &held.place.stream.name,
+                        label.as_ref().map(|label| label.name.as_str()),
+                        program,
+                        held.priority,
+                    )
                 {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::WaitingForRoom;
@@ -469,6 +484,7 @@ impl Engine {
                     );
                 }
             }
+            let opens_in = queue.session_of(&held.place.stream.name, &resolution.resolved.settings);
             let secret = self.host.secret();
             let program = resolution
                 .resolved
@@ -531,6 +547,8 @@ impl Engine {
                 opening: Some(self.host.command()),
                 dialog: None,
                 conversation: conversation.clone(),
+                session: opens_in.clone(),
+                label: label.clone(),
             });
             held.current = Some(index);
             Step::Write(Ok(Claim {
@@ -542,6 +560,7 @@ impl Engine {
                 env: env.clone(),
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
+                opens_in,
                 account,
                 mode: resolution.mode.clone(),
                 resume: resume.clone(),
@@ -575,11 +594,14 @@ impl Engine {
             env,
             agent,
             session,
+            opens_in,
             account: _,
             mode,
             resume,
         } = claim;
+        let folder = self.store.folder(id);
         let command = agent.command(
+            &folder,
             &settings,
             mode.as_deref(),
             resume.as_deref(),
@@ -589,13 +611,22 @@ impl Engine {
             &secret,
             &text,
         );
-        let folder = self.store.folder(id);
+        let at = match (&settings.beside, opens_in) {
+            (Some(pane), _) => OpenIn::Beside { pane: pane.clone() },
+            (
+                None,
+                Some(SessionHeld {
+                    name: Some(name), ..
+                }),
+            ) => OpenIn::Session { name },
+            (None, _) => OpenIn::Own,
+        };
         let opened = self.terminal.open(
             &place,
             &folder,
             &command,
             &identity,
-            settings.beside.as_deref(),
+            &at,
             session.as_deref(),
         );
         self.with_start(id, &identity, |start, _| {

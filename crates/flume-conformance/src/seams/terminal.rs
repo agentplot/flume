@@ -101,7 +101,7 @@ fn opened<H: TerminalHarness>(harness: &H, start: u32) -> Result<Identity, Strin
         &harness.folder(),
         &harness.command(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     ) {
         Opened::Opened { .. } => Ok(who),
@@ -254,7 +254,7 @@ fn an_agent_under_a_session_name<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &harness.command(),
         &first,
-        None,
+        &OpenIn::Own,
         Some(name),
     );
     ensure!(
@@ -281,7 +281,7 @@ fn an_agent_under_a_session_name<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &harness.command(),
         &identity(2),
-        None,
+        &OpenIn::Own,
         Some(name),
     );
     ensure!(
@@ -301,7 +301,7 @@ fn open_answers_held<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &command,
         &who,
-        None,
+        &OpenIn::Own,
         None,
     ) {
         Opened::Held { screen } => {
@@ -324,7 +324,7 @@ fn open_answers_not_come_up<H: TerminalHarness>(harness: &H) -> Outcome {
         &harness.folder(),
         &command,
         &who,
-        None,
+        &OpenIn::Own,
         None,
     ) {
         Opened::NotComeUp { .. } => Ok(()),
@@ -489,7 +489,7 @@ fn no_second_agent<H: TerminalHarness>(harness: &H) -> Outcome {
                 &harness.folder(),
                 &harness.command(),
                 &who,
-                None,
+                &OpenIn::Own,
                 None
             ),
             Opened::Refused { .. }
