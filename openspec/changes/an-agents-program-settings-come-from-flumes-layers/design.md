@@ -691,10 +691,15 @@ byte in the pinned release (C.4; core.22):
   `return["userSettings","projectSettings","localSettings","flagSettings","policySettings"]`;
 - the merge that joins a source's lists with those beneath it,
   `return D([...e,...n])`, and takes the later source's value
-  otherwise;
+  otherwise, by the settings merge's branch for two lists,
+  `if(Array.isArray(e)&&Array.isArray(n)){if(s==="fallbackModel")return n;return D([...e,...n])}`,
+  since 2.1.296 holds `return D([...e,...n])` once more outside it;
 - each reserved key as the settings schema names it, `apiKeyHelper:`,
   `disableAllHooks:`, `skipDangerousModePermissionPrompt:` and the
-  rest;
+  rest, each by its declaration through the opening of its
+  description,
+  `apiKeyHelper:()=>o().optional().describe("Path to a script that outputs authentication values")`,
+  since `model:` stands elsewhere in the release too;
 - the attribution the docs give as the worked example (design 16), by
   its schema's two texts, `Attribution text for git commits, including
   any trailers. Empty string hides attribution.` and `Attribution text
