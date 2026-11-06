@@ -567,12 +567,12 @@ every session (task 6.2).
   terminal read once: runs (201) answers several parts in one call, the
   terminal's sessions listed together, never one call per session, which
   would read 200's 'once' otherwise than it says". So:
-  - **runs (201)** is amended on a blueprints branch,
-    `design/flume-runs-reads-several-parts-at-once`, unpushed until the
-    user's card approves it: given one or more parts of the terminal,
-    whether each runs now, the parts read together in one reading of
-    the terminal. herdr's reads one `herdr session list --json` for every
-    part asked, and the printed command holds no part for any (C.5).
+  - **runs (201)** is amended on agentplot/blueprints main at 12866a8,
+    on the user's card of 2026-11-06: given one or more parts of the
+    terminal, whether each runs now, the parts read together in one
+    reading of the terminal. herdr's reads one
+    `herdr session list --json` for every part asked, and the printed
+    command holds no part for any (C.5).
   - **The seam.** `Terminal::runs(&[Option<&str>]) -> Vec<SessionRuns>`,
     one answer for each part asked, in the order asked; `SessionRuns`
     is unchanged. A listing herdr does not give within its bound is
@@ -631,10 +631,9 @@ and scenarios S106 and S107 are new, beside 186 to 192, 195 to 198,
 200, 201, S90 to S92, S95 to S97, S100 to S103 and S108 on main, and the
 designs in flight hold 193, 194, S93 to S99, S104 and S105. Each item
 gives the words a clause holds at fa40c94, but 201 and C.5's runs row,
-which give the words of the blueprints branch
-`design/flume-runs-reads-several-parts-at-once` at 9e08d54, cut from
-main at fa40c94 on the answer to the code stage's stop-short of
-2026-11-06 and unpushed until the user's card approves it (decision 11).
+which give the words on main at 12866a8, cut from fa40c94 on the
+answer to the code stage's stop-short of 2026-11-06 and accepted on the
+user's card that day (decision 11).
 
 - **32**: "Where in the terminal an agent runs (107) is read from the
   launch's settings and the stage's declaration, else from its place's

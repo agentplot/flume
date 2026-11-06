@@ -127,12 +127,12 @@ None.
   herdr row and C.7 amended, and 199, S106 and S107 added, on main at
   f676e8f, and amended again for a kind's stage and a session's open by
   the follow-up on main at fa40c94 (design 13); and 201 and C.5's runs
-  amended on the branch `design/flume-runs-reads-several-parts-at-once`
-  at 9e08d54, unpushed until the user's card approves it (design 11).
+  amended on main at 12866a8, on the user's card of 2026-11-06
+  (design 11).
 - `docs/adr`: record 0048, accepted; rules
   core.44 and core.48 amended with it, the site's rules page mirroring
-  them; record 0049's amendment, proposed, for runs over several parts,
-  with core.52's details.
+  them; record 0049's amendment, accepted on the user's card, for runs
+  over several parts, with core.52's details.
 - `crates/flume-seams`: `Stream::kinds`, `KindSessions` and
   `StageSession`, `SessionFrom::StreamKind` and `StreamStage`, and the
   stream status's sessions, each only added.
