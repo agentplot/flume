@@ -1,13 +1,14 @@
 ---
 title: Configuration
-description: The host's configuration, the repository's .config/flume.toml, the kind format, and the variables flume reads.
+description: The host's configuration and its sources of kinds, the repository's .config/flume.toml, the locks of kinds, the kind format, and the variables flume reads.
 sidebar:
   order: 2
 ---
 
-flume reads the host's configuration, the repository's
-`.config/flume.toml`, and a launch's own declaration of kinds when it
-names one. Every part of each is optional.
+flume reads the host's configuration with its sources of kinds, the
+repository's `.config/flume.toml`, a launch's own declaration of kinds
+when it names one, and the locks of kinds. Every part of each is
+optional.
 
 ## The host's configuration
 
@@ -19,11 +20,12 @@ start ([two layers](/flume/guides/agent-settings/#two-layers)):
   host. A file that is not there is an empty one. A file flume cannot
   read makes every command refuse, naming its fault.
 - `config.local.toml`, the local layer, read over the managed one key
-  by key. It sets only a stream's `agents`, `priority` and `session`,
-  a label's `reserve` and `keep_free`, the `stream` and `label` of a
-  repository's kind, a repository or a kind, and every agents table.
-  Each of a program's own settings and each program's `file` is a key
-  of its own there. A local file that sets any other key, or that
+  by key. It sets only a stream's `agents`, `priority`, `session` and
+  `multiplexer`, a label's `reserve` and `keep_free`, the `stream` and
+  `label` of a repository's kind, a repository or a kind, and every
+  agents table. Each of a program's own settings and each program's
+  `file` is a key of its own there. A local file that sets any other
+  key, or that
   flume cannot read, is not taken at all, and status names each key or
   the fault.
 
@@ -32,12 +34,18 @@ flume writes neither file.
 ```toml
 [host]
 agents = 8
-terminal = "herdr"
+multiplexer = "herdr"
+terminal_app = "ghostty"
 pool = "work"
+
+[streams.work]
+title = "Work Agents"
 
 [streams.personal]
 agents = 3
 pool = "personal"
+terminal_app = "terminal"
+title = "Personal Agents"
 
 [pools.work]
 strategy = "fill-first"
@@ -82,7 +90,10 @@ priority = 5
 | Key | Values | Meaning |
 |---|---|---|
 | `agents` | a whole number from 0 | The bound on agents running at once on the host, every caller's and every stream's counted together. A stage starts only while the host is under it and otherwise waits for room. With none, and no stream's bound, every stage starts at once and the host has no queue. |
-| `terminal` | `"herdr"`, `"printed"` | Where agents run: in herdr panes, or as a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminals there are. |
+| `multiplexer` | `"herdr"`, `"printed"` | The multiplexer a stream's agents run in where the stream names none: herdr panes, or a command flume prints for you to run. `"printed"` where none is given. Any other name makes every command refuse, naming the terminal profiles there are. |
+| `terminal` | as `multiplexer` | The word written before `multiplexer`, read as it. A `[host]` giving both is refused. |
+| `view` | `"terminal"`, `"app"` | How `flume open` shows a stream's agents where the stream names none: in a window of a terminal app, or in the multiplexer's own app. `"terminal"` where none is given. |
+| `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | The program that opens a stream's window where the stream names none: Ghostty, Terminal.app on macOS, or none, `flume open` printing the line to run. `"printed"` where none is given. Any other name refuses each stream's `flume open` that takes it, naming the window profiles there are; every other command runs. |
 | `pool` | a pool's name | The pool of a place whose stream names none. With none, such a place's agents run under no account. |
 | `pin` | a list of dotted keys, such as `"streams.work.agents"` | The keys the local layer may not set over the managed one. Each names a key the local layer could set, or a table of such keys, as `"streams.work"` does. A local key a pin holds is passed over, status naming it with its pin, and the rest of the local file is taken. |
 
@@ -99,6 +110,18 @@ for; a `[streams.default]` table gives it keys of its own.
 | `priority` | a whole number, negative allowed | the stream's priority: waiting stages start by it first, then by their place's | `0` |
 | `pool` | a pool's name | the pool its places' agents take accounts from | `[host] pool` |
 | `session` | a string herdr takes as a session's name | the herdr session its agents open in ([a stream's session](/flume/guides/agent-settings/#a-streams-session)) | the stream's own name, and flume's own session for `default` |
+| `multiplexer` | `"herdr"`, `"printed"` | the multiplexer its agents run in, read at each start; an agent stays in the one it opened in ([a stream's multiplexer](/flume/guides/agent-settings/#a-streams-multiplexer-and-view)) | `[host] multiplexer` |
+| `view` | `"terminal"`, `"app"` | how `flume open` shows its agents | `[host] view` |
+| `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | the program that opens its window | `[host] terminal_app` |
+| `title` | a string | its window's title, which a window manager can file the window by | the stream's name |
+
+The local layer may set a stream's `agents`, `priority`, `session` and
+`multiplexer`, so you can try a multiplexer on one stream of your host.
+Its `pool`, `view`, `terminal_app` and `title` are the managed layer's.
+A stream whose `multiplexer` names no terminal profile flume carries
+refuses each launch and each start on it, naming the stream, the name
+and the profiles there are, and every other stream runs. One whose
+`terminal_app` names no window profile refuses its `flume open` alone.
 
 ### `[streams.<stream>.labels.<label>]`
 
@@ -275,7 +298,10 @@ flume refuses the file, naming the key, for:
 - a key a stream, a pool or an account does not know;
 - a `label` that is not one word of letters, digits, `-` and `_`;
 - a `pin` that names no key the local layer could set and no table of
-  such keys.
+  such keys;
+- a `[host]` giving both `terminal` and `multiplexer`;
+- a `view` other than `terminal` and `app`;
+- a `multiplexer`, `terminal_app` or `title` that is not a string.
 
 A managed file that refuses leaves every launch and every start
 refused, naming its fault, until it is mended. A local file that would
@@ -304,7 +330,7 @@ The run the host launches for a role's address
 | Key | Meaning | Left out |
 |---|---|---|
 | `repository` | the repository of the run's place; a leading `~` is your home | refused |
-| `kind` | the kind the run launches | refused |
+| `kind` | the kind the run launches, named as `flume launch --kind` names one: `planner`, or by its source, as `beta/planner@1` | refused |
 | `priority` | a whole number, the run's priority in the host's queue | `0` |
 | `base` | the base the run's place is cut from | the repository's default branch |
 | `brief` | the run's brief | none |
@@ -313,6 +339,52 @@ The run the host launches for a role's address
 A key that is no `<group>/<role>` address, or a key the table does not
 know, makes the file unreadable.
 
+## The host's sources
+
+`$XDG_CONFIG_HOME/flume/sources/`, beside `config.toml`, holds one file
+per source of kinds the host declares
+([kinds from a source on the host](/flume/guides/kinds/#kinds-from-a-source-on-the-host)):
+
+```toml
+# ~/.config/flume/sources/acme.toml
+kinds_dir = "~/.local/share/flume/kinds/acme"
+```
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `kinds_dir` | an absolute path, or one whose leading `~` is your home | the directory holding the source's packages, each at `<name>@<version>/` with its `kind.toml` at its root | refused |
+
+The file's name, less `.toml`, is the source's name. flume reads every
+file in the directory whose name ends in `.toml` and begins with no
+`.`, a link as the file it leads to, and ignores every other entry. It
+reads the directory as it stands at each launch, each wake of a role,
+each `flume kinds lock` and each status, and writes nothing in it or in
+a `kinds_dir`.
+
+The sources belong to the host's configuration as its accounts do: a
+person, or a program that manages the host, writes each file whole,
+renames a new one over it, and deletes it. `config.local.toml` declares
+no source. No sources directory is a host with no sources. A `sources`
+that cannot be listed, a file of that name among them, makes every
+command refuse, as a `config.toml` that cannot be read does.
+
+### A source's faults
+
+Each of these is its source's own: it refuses every launch that names
+the source, naming the file and the fault, and no other launch. The
+host's part of `flume status` names it.
+
+- a file that is not TOML;
+- no `kinds_dir`, a `kinds_dir` that is neither absolute nor under `~`,
+  or a key other than `kinds_dir`;
+- a name that is not a legal source's name;
+- the name `flume`, `repo` or `launch`, the sources of flume's own
+  kinds, the repository's and a launch's, which no host declares.
+
+A `kinds_dir` that does not exist is no fault of the file's, since a
+program may write the file before the packages. A launch naming that
+source is refused, naming the directory as missing.
+
 ## The repository's `.config/flume.toml`
 
 flume reads it from git at a revision, never from the working copy. It
@@ -320,6 +392,10 @@ reads the `[profiles]` table at the repository's default branch, after
 one fetch of `origin` where the repository has it, and the kinds at the
 base's current revision for each launch. A place keeps what its launch read.
 flume never writes it.
+
+It reads the repository's lock of kinds, `.config/flume.lock`, at the
+base's current revision too, where a launch's kind needs a lock
+([the locks of kinds](#the-locks-of-kinds)).
 
 The repository's default branch is its remote's: the branch
 `origin/HEAD` names. Where the repository has `origin` and no
@@ -395,9 +471,42 @@ the field.
 ## A launch's declaration
 
 `flume launch --kinds <file>` names a file in the same format, read
-from disk at the launch with its prompts beside it. Its kinds stand
-over the repository's and flume's own for that launch alone. Its
-`[profiles]` and `[agents]` tables, if any, are not read.
+from disk at the launch with its prompts beside it, the source `launch`.
+Its kinds stand over the repository's and flume's own for a bare name,
+for that launch alone, and need no lock. Its `[profiles]` and
+`[agents]` tables, if any, are not read.
+
+## The locks of kinds
+
+A kind from a source on the host runs only where a lock records its
+identity at its content's hash. A lock records flume's own kinds too,
+to pick the version a launch that names none takes
+([locks](/flume/guides/kinds/#locks)). flume reads two:
+
+| Lock | Read |
+|---|---|
+| `.config/flume.lock` in the repository | from git at the base's current revision, as its kinds are |
+| `$XDG_CONFIG_HOME/flume/flume.lock`, the host's | as it stands at each launch |
+
+Each is TOML, one `[[kinds]]` table per entry, `kind` its identity and
+`hash` its content's:
+
+```toml
+[[kinds]]
+kind = "acme/review@1"
+hash = "sha256:ab12…"
+
+[[kinds]]
+kind = "acme/review@2"
+hash = "sha256:cd34…"
+```
+
+A lock that is not there records nothing. A lock that cannot be read
+refuses each launch that needs it, naming the file and its fault, and
+no other. flume writes a lock only at
+[`flume kinds lock`](/flume/reference/commands/#flume-kinds-lock), and
+never commits one: the repository's lock reaches its places once you
+commit it on their base.
 
 ## The kind format
 
@@ -440,7 +549,7 @@ lists what a prompt may ask for.
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `XDG_CONFIG_HOME` | every command | where the host's configuration lies, `~/.config` where unset |
+| `XDG_CONFIG_HOME` | every command | where the host's configuration lies, with its sources and its lock of kinds, `~/.config` where unset |
 | `XDG_STATE_HOME` | every command | where flume keeps its state, `~/.local/state` where unset |
 | `XDG_DATA_HOME` | every command that starts an agent | where flume writes its Claude Code plugin, `~/.local/share` where unset |
 | `FLUME_RECIPIENT` | `launch`, `wait`, `inbox` | the recipient where a command names none |

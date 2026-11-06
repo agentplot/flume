@@ -1,7 +1,7 @@
 //! Launching (1 to 12, 19 to 23, 154): one place made, made ready at the
 //! revision its launch read, and its first stage started, held or
-//! waiting, its kind named with its version or with none; or the launch
-//! refused whole, naming why.
+//! waiting, its kind named with its version or with none, or by its
+//! identity; or the launch refused whole, naming why.
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -131,7 +131,68 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["4", "19", "154"],
             run: a_version_the_repository_does_not_hold,
         },
+        Scenario {
+            name: "launch: a change named with no version, in a repository that locks nothing, is named flume/change@2 by status, and one named change@1 flume/change@1",
+            cites: &["22", "154", "19"],
+            run: the_identity_status_names,
+        },
+        Scenario {
+            name: "launch: a kind of a host's source named whole, locked by the host, runs that source's kind, status naming its identity",
+            cites: &["154", "155", "191"],
+            run: a_kind_of_a_hosts_source_named_whole,
+        },
+        Scenario {
+            name: "launch: a stream whose multiplexer names a terminal profile flume does not carry is refused, naming the stream, the name and the terminal profiles carried, nothing made",
+            cites: &["4", "190"],
+            run: a_streams_multiplexer_flume_does_not_carry,
+        },
     ]
+}
+
+fn the_identity_status_names(_: &()) -> Outcome {
+    let world = World::new();
+    let two = launched_as(&world, "change", "two")?;
+    ensure_eq!(
+        two.identity.as_deref(),
+        Some("flume/change@2"),
+        "the identity of a change named with no version"
+    );
+    let one = launched_as(&world, "change@1", "one")?;
+    ensure_eq!(
+        one.identity.as_deref(),
+        Some("flume/change@1"),
+        "the identity of change@1"
+    );
+    let held = world.held(&World::id("change", "one")).ok_or("no place")?;
+    ensure!(
+        !held.place.kind.stages[1].repeats,
+        "change@1's code repeats"
+    );
+    Ok(())
+}
+
+fn a_kind_of_a_hosts_source_named_whole(_: &()) -> Outcome {
+    use crate::seams::kinds::{entry, hash_of};
+    let world = World::new();
+    super::kind_sources::holds(&world, "acme", "/kinds/acme", &[("review", 2, '2')]);
+    super::kind_sources::host_locks(&world, vec![entry("acme", "review", 2, &hash_of('2'))]);
+    let place = launched(
+        &world
+            .engine
+            .launch(&launch("acme/review@2", "one", Some("x"))),
+    )?;
+    ensure_eq!(
+        (place.declared, place.identity.as_deref()),
+        (Declared::Host, Some("acme/review@2")),
+        "the kind run"
+    );
+    let held = world.held(&World::id("review", "one")).ok_or("no place")?;
+    ensure_eq!(
+        held.place.kind,
+        super::kind_sources::packaged("review", 2),
+        "the place's kind"
+    );
+    Ok(())
 }
 
 /// The change place `name` launched as `kind`, and its status.
@@ -839,4 +900,20 @@ fn a_change_name_taken(_: &()) -> Outcome {
         "the refusal names not the live place: {reason}"
     );
     Ok(())
+}
+
+fn a_streams_multiplexer_flume_does_not_carry(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_display("trial", Some("rex"), None, None);
+    let reason = refused(&world.engine.launch(&Launch {
+        stream: Some("trial".into()),
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    ensure!(
+        reason.contains("trial")
+            && reason.contains("rex")
+            && reason.contains("the terminal profiles there are: fake"),
+        "the refusal: {reason}"
+    );
+    nothing_made(&world)
 }

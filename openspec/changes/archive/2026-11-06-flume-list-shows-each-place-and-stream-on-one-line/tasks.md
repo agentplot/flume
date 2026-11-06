@@ -1,0 +1,52 @@
+# Tasks
+
+Each group is one session's work for an agent that reads this change
+(proposal, design, specs) and its group, and builds on main and on the
+groups before it. The user accepted record 0049 on 2026-11-05, and the
+statement's amendment stands on agentplot/blueprints main at 7bd1891.
+A group's last task runs the checks it touched through sluice. Every
+conformance scenario a group adds cites its clauses as data (106). The
+engine's scenarios name no tool (core.1). Tests reach no herdr session
+of the host's and no configuration directory of the user's: every host
+configuration, session home and state directory a test names is a
+scratch one of the test's own, and a herdr session a test starts is
+named by one letter of the test's own, `w` for a stream's.
+
+## 1. The decision recorded
+
+- [x] 1.1 Add record 0049, proposed, "flume's list gives a line for each place and each stream, read from what flume keeps", quoting the user's words of 2026-11-05, with its deciders, sources (the statement on agentplot/blueprints main at 7bd1891; records 0005, 0006, 0031 and 0037), context, nine considered options, outcome, why not the others and consequences (57, 62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, S108; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
+- [x] 1.2 Draw core.52 in `docs/architecture/core.md` under "Settling, surfaces and state", after core.15, with its details citing record 0049, and have `site/src/content/docs/architecture/rules.md` mirror it as written (core.19, core.35). True when `sluice exec main -- moon run root:format site:prose site:build` passes.
+- [x] 1.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run root:format root:adrs root:changes site:prose site:build` passes.
+
+## 2. The seams and their fakes
+
+- [x] 2.1 Give `flume-seams` design 5's `SessionRuns` and `Terminal::runs`, with no default, re-exported. Have every `Terminal` implement it: the fake as design 10 has it, the printed command answering `NoPart` as design 6 has it, herdr answering `Unread` with `not yet built` until 4.1, and every stand-in terminal a test or a harness holds answering `NotRunning` for the part named. Add to `round_trip.rs` the seam-contracts spec's scenario of each answer (201; core.2). True when `sluice exec main -- moon run seams:test fakes:test conformance:test core:test flume:test` passes, every existing test passing unchanged.
+- [x] 2.2 Give the fake terminal `runs_as(part, SessionRuns)` and its `runs <part>` log line, its own part named `own`, and add to `crates/flume-fakes/tests/fakes.rs` the seam-fakes spec's scenario (106, 201). True when `sluice exec main -- moon run fakes:test` passes.
+- [x] 2.3 Add to `flume-conformance`'s `seams/terminal.rs` runs' scenario over the fake, as the seam-contracts spec has it, citing 201. True when `sluice exec main -- moon run conformance:test` passes.
+- [x] 2.4 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test conformance:format conformance:lint conformance:test core:format core:lint core:test flume:format flume:lint flume:test` passes.
+
+## 3. The core's list
+
+- [x] 3.1 Add `crates/flume-core/src/list.rs` with `Engine::list` as designs 1 to 4 have it, and `Answer::List` with `Listed`, `WaitsOn` and `StreamListed`. Make `line.rs`'s `stage_at` and `state_words` `pub(crate)` and give the list's state from them. Read each document's held state and each live start's asking mark alone, and each declared stream's terminal once by runs. No lock is taken, no document written, nothing settled, and neither `bound`, `facts`, `read_agent`, `place_clues` nor `host_status` called (56, 57, 62, 64 to 66, 68, 70, 90, 107, 111, 130, 139, 186, 190, 200, 201; core.14, core.16, core.17, core.52). True when `sluice exec main -- moon run core:test conformance:test` passes, `list.rs`'s unit tests holding the kept words' order and the places' order, and `engine/list.rs` holding the-list spec's scenarios over the fakes, the one S108 cites named `s108_the_list_of_fifty_places`.
+- [x] 3.2 Where `where-an-agent-opens-is-given-by-kind-and-by-stage` has landed on main when this group is built, give each session a stream names for a kind or a stage a line of its own under the stream's, `<stream> · session <name> for <kind>[.<stage>] · <runs>`, by one runs each, as design 9 has it, with a scenario in `engine/list.rs` citing 199 and 200. Where it has not landed, leave its sessions to its build and name that in the group's summary (186, 199, 200). True when `sluice exec main -- moon run core:test conformance:test` passes.
+- [x] 3.3 Add `list`'s fields to `engine/answers.rs`'s field list, and the-list spec's JSON scenario, a list written and read back (60, 61, 200). True when `sluice exec main -- moon run conformance:test` passes, the field list failing naming the answer and the field where one is dropped.
+- [x] 3.4 Run the checks of the projects this group touched. True when `sluice exec main -- moon run core:format core:lint core:test conformance:format conformance:lint conformance:test` passes.
+
+## 4. The profiles and the command
+
+- [x] 4.1 Give the herdr profile runs as design 6 has it: one `herdr session list --json` through `run`, bounded at one second, found by `name`, its own `flume`, or by `socket_path` for an own server held by its socket alone, starting no server, and name the call in the module's header beside attach (201, C.5; core.13, core.29). True when `sluice exec main -- moon run flume:tools` passes, `tests/profiles/tools/terminal_herdr.rs` holding the terminal-profiles spec's four herdr scenarios, the bound's over a stand-in herdr of the test's own.
+- [x] 4.2 Hold the printed command's runs in `tests/profiles/terminal_printed.rs` as the terminal-profiles spec has it (187, 201). True when `sluice exec main -- moon run flume:test` passes.
+- [x] 4.3 Add `flume list` to `commands/mod.rs`, needing no repository and settling nothing, with its help as the command-line spec has it, and `print.rs`'s person's form as design 7 has it, from the answer's own lines (57, 60, 61, 200; core.14, core.35). True when `sluice exec main -- moon run flume:test` passes, `print.rs`'s tests holding the form with places in two repositories, a host with no places and a stream of each runs answer, and `tests/commands.rs` holding the command-line spec's five new scenarios, the fifty places' within a second among them.
+- [x] 4.4 Run the checks of the projects this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test flume:tools` passes.
+
+## 5. The site and the clause list
+
+- [x] 5.1 Give `site/src/content/docs/reference/commands.md` `flume list` in its table, among the commands that only read under "Settling first", and a section of its own with design 7's example; and `reference/state.md` the list's fields, to any host's operator (61, 200; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
+- [x] 5.2 Have `crates/flume-conformance/src/clauses.rs` read blueprints main at 7bd1891, which lands record 0049's amendment, or the later revision of main the build reads, 200 in Part A, 201 in Part B and S108 among the scenarios, as the clause-coverage spec has it (106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes, 200, 201 and S108 each cited by this change's scenarios.
+- [x] 5.3 Run the checks of the projects this change touched. True when `sluice exec main -- moon run root:format root:adrs root:specs root:changes seams:test fakes:test core:test conformance:test conformance:coverage flume:test flume:tools site:prose site:build` passes.
+
+## 6. Main merged, and the new capability's Purpose
+
+- [x] 6.1 Merge main at 24551f1 (#112 to #117) into this branch, resolving the three files it contests (verify at 10a49e4 names them): the clause list reading 7bd1891 with its `SKIPPED`, 191, 192 and S95 to S97 built by #114 and `SOURCES` gone, the entries for records 0041, 0043 and 0044 kept, and the coverage check's words naming the skipped scenarios where main's named `SCENARIO_GAP`; `docs/architecture/core.md` holding main's amended core.15 and this change's core.52; and the commands reference's "Settling first" naming both `flume list` and `flume kinds lock` (191, 192, 200, 201, S95 to S97, S108; core.15, core.19, core.52). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes over the merged tree, the coverage check citing every clause of S1 to S108 but the skipped at 7bd1891.
+- [x] 6.2 Give `specs/the-list/spec.md` a `## Purpose` of 50 characters or more at its head, citing 200 and 201, so the archive gives `openspec/specs/the-list/spec.md` that Purpose and not openspec's placeholder (core.19). True when `openspec validate flume-list-shows-each-place-and-stream-on-one-line --strict` passes and, on a copy of the merged tree, `openspec archive flume-list-shows-each-place-and-stream-on-one-line --yes` leaves `openspec validate --specs --strict` passing: on 2026-11-06, 16 requirements added and 3 modified, 43 of 43 specs passed.
+- [x] 6.3 Run the gate over the merged tree. True when `sluice exec main` passes: at 7082461 against main at 24551f1 on 2026-11-06, with no file contested, it passed the 23 tasks the head affects, conformance:coverage, flume:test and flume:tools (99 of 99) among them.

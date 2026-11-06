@@ -1,5 +1,7 @@
 //! The terminal seam's scenarios (B.5, 94 to 98, 122, 136 to 139, 7),
-//! and a recipient's session reached by its name (43, 132).
+//! a recipient's session reached by its name (43, 132), a part shown to
+//! a person in each view the terminal offers (187), and whether a part
+//! runs (201).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -76,12 +78,40 @@ pub trait TerminalHarness {
     /// A session name the terminal holds no session by.
     fn no_session(&self) -> String;
 
+    /// The views the terminal offers a person, each answered by attach;
+    /// every other is refused (187).
+    fn views(&self) -> Vec<View>;
+
+    /// The parts attach is asked to show, a session by its name, started
+    /// first where it does not run, or the terminal's own where none,
+    /// each one the terminal can show in the views it offers (187).
+    fn parts(&self) -> Vec<Option<String>>;
+
+    /// attach refuses `view` from now, where the harness can make it;
+    /// whether it did (187).
+    fn refuse_attach(&self, view: View) -> bool;
+
     /// What the harness has the terminal's own configuration lack for
     /// flume's plugin, each in the profile's words, and so what setup is
     /// to give; none for a terminal with no plugin of flume's, as the
     /// printed command, by default (122).
     fn setup(&self) -> Vec<String> {
         vec![]
+    }
+
+    /// Each part runs is asked of, a session by its name or the
+    /// terminal's own where none, with what runs is to answer of it, the
+    /// harness scripting or starting each first; none where the profile's
+    /// own tests hold its runs (201).
+    fn runs_parts(&self) -> Vec<(Option<String>, SessionRuns)> {
+        vec![]
+    }
+
+    /// Every call the terminal logged, in order, where it logs them as
+    /// the fakes do, each runs as `runs <part>`, its own part `own`; none
+    /// where it logs nothing (201).
+    fn logged(&self) -> Option<Vec<String>> {
+        None
     }
 }
 
@@ -199,11 +229,109 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             run: an_agent_under_a_session_name::<H>,
         },
         Scenario {
+            name: "terminal: attach gives a window's command for each part, shows the app, or refuses a view it does not offer",
+            cites: &["187"],
+            run: attach_by_view::<H>,
+        },
+        Scenario {
             name: "terminal: setup gives what its configuration lacks for flume's plugin, each in words, and none for a terminal with no plugin of flume's",
             cites: &["122", "72"],
             run: setup_gives_what_is_lacking::<H>,
         },
+        Scenario {
+            name: "terminal: runs reads whether each part runs, by the name the terminal knows it by, or that it holds no part or could not read it, and starts nothing",
+            cites: &["201"],
+            run: runs_reads_each_part::<H>,
+        },
     ]
+}
+
+/// The seam-contracts spec's runs over the fake: each part answered as
+/// the harness has it, in words where it holds no part or could not
+/// read it; nothing logged but each asking, so nothing opened; and each
+/// asked again answered the same, so nothing started (201).
+fn runs_reads_each_part<H: TerminalHarness>(harness: &H) -> Outcome {
+    let parts = harness.runs_parts();
+    for (part, due) in &parts {
+        let of = format!("runs of {}", part.as_deref().unwrap_or("its own part"));
+        let answer = harness.seam().runs(part.as_deref());
+        ensure_eq!(answer, *due, of);
+        let words = match &answer {
+            SessionRuns::Runs { name } | SessionRuns::NotRunning { name } => name,
+            SessionRuns::NoPart { reason } | SessionRuns::Unread { reason } => reason,
+        };
+        ensure!(
+            !words.trim().is_empty(),
+            "{of} gave {answer:?}, with no words"
+        );
+    }
+    if let Some(logged) = harness.logged() {
+        let asked: Vec<String> = parts
+            .iter()
+            .map(|(part, _)| format!("runs {}", part.as_deref().unwrap_or("own")))
+            .collect();
+        ensure_eq!(logged, asked, "what the terminal logged");
+    }
+    for (part, due) in &parts {
+        ensure_eq!(
+            harness.seam().runs(part.as_deref()),
+            *due,
+            format!(
+                "runs of {} asked again",
+                part.as_deref().unwrap_or("its own part")
+            )
+        );
+    }
+    Ok(())
+}
+
+fn attach_by_view<H: TerminalHarness>(harness: &H) -> Outcome {
+    let offered = harness.views();
+    let parts = harness.parts();
+    ensure!(!parts.is_empty(), "no part to attach");
+    let mut commands = vec![];
+    for part in &parts {
+        for view in [View::Terminal, View::App] {
+            let answer = harness.seam().attach(part.as_deref(), view);
+            let of = format!("attach {part:?} for {}", view.name());
+            match (offered.contains(&view), view, answer) {
+                (true, View::Terminal, Attached::Command { command }) => {
+                    ensure!(
+                        !command.program.trim().is_empty(),
+                        "{of} gave a command with no program"
+                    );
+                    commands.push(command);
+                }
+                (true, View::App, Attached::Shown) => {}
+                (false, _, Attached::Refused { reason }) => {
+                    ensure!(!reason.trim().is_empty(), "{of} refused with no words");
+                }
+                (offers, _, answer) => {
+                    return Err(format!(
+                        "{of}, a view the terminal {}, gave {answer:?}",
+                        if offers { "offers" } else { "does not offer" }
+                    ));
+                }
+            }
+        }
+    }
+    for (at, command) in commands.iter().enumerate() {
+        ensure!(
+            !commands[..at].contains(command),
+            "two parts were given the one command {command:?}"
+        );
+    }
+    let first = parts[0].as_deref();
+    for view in [View::Terminal, View::App] {
+        if harness.refuse_attach(view) {
+            ensure!(
+                matches!(harness.seam().attach(first, view), Attached::Refused { .. }),
+                "attach for {} answered where it was to refuse",
+                view.name()
+            );
+        }
+    }
+    Ok(())
 }
 
 fn a_session_by_its_name<H: TerminalHarness>(harness: &H) -> Outcome {

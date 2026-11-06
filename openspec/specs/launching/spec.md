@@ -111,12 +111,13 @@ is bound, or when a stage asks for a brief the launch lacks (4, 9, C.2).
 
 ### Requirement: A launch whose binding or settings flume cannot run is refused whole
 
-A launch SHALL be refused, naming the program, field or stage and its
-layer, and SHALL leave nothing made, when the binding names a place
-profile flume does not hold, when a stage's agent resolves to a program
-no agent profile binds or the host's terminal cannot run, when a
-declaration gives an agent an `env`, or when settings name a stage the
-kind does not hold (4, 32, 158, C.1, C.2).
+A launch SHALL be refused, naming the program, field, stage or stream
+and its layer, and SHALL leave nothing made, when the binding names a
+place profile flume does not hold, when a stage's agent resolves to a
+program no agent profile binds or its stream's terminal cannot run,
+when its stream's multiplexer names a terminal profile flume does not
+carry, when a declaration gives an agent an `env`, or when settings
+name a stage the kind does not hold (4, 32, 158, 190, C.1, C.2).
 
 #### Scenario: A program no agent profile binds
 
@@ -132,6 +133,11 @@ kind does not hold (4, 32, 158, C.1, C.2).
 
 - **WHEN** a repository's binding names a place profile the resolver does not hold
 - **THEN** the launch is refused naming the place profiles the resolver holds, and nothing is made (C.1, core.3)
+
+#### Scenario: A stream's multiplexer flume does not carry
+
+- **WHEN** the host's `[streams.trial]` gives `multiplexer = "rex"` and a fix is launched on `trial`
+- **THEN** the launch is refused naming `trial`, `rex` and the terminal profiles the resolver carries, and nothing is made (4, 190; core.8)
 
 ### Requirement: A place keeps what its launch resolved
 
@@ -202,23 +208,23 @@ account, starting no agent, until a retry (8, 27, 32).
 
 ### Requirement: A launch may name its kind's version
 
-A launch's kind SHALL be a name, or a name and a version written
-`<name>@<version>`; the name SHALL resolve as before, the launch's
-declaration over the repository's over flume's own, and the version
-SHALL be the one named, else, among flume's own, the newest flume
-holds; a launch naming a version its resolved declaration does not hold
-SHALL be refused naming the version and the versions held, and leave
-nothing made (4, 19, 22, 154).
+A launch's kind SHALL be a name, a name and a version, or an identity,
+`<source>/<name>` with or without `@<version>`, resolved as the
+kind-sources capability says: a name over the launch's declaration, the
+repository's and flume's own, and a version the one named, else the
+newest the locks record, else the newest its source holds; a version its
+source does not hold SHALL refuse the launch naming it and the versions
+held, and leave nothing made (4, 19, 22, 154).
 
 #### Scenario: No version named
 
-- **WHEN** a repository that declares no `change` launches `change`
-- **THEN** the place runs change@2 and status names change@2 (22, 154)
+- **WHEN** a repository that declares no `change` and locks nothing launches `change`
+- **THEN** the place runs change@2 and status names `flume/change@2` (22, 154)
 
 #### Scenario: change@1 named
 
 - **WHEN** the same repository launches `change@1`
-- **THEN** the place runs change@1, its code stage one agent for the whole change, and status names change@1 (22, 154)
+- **THEN** the place runs change@1, its code stage one agent for the whole change, and status names `flume/change@1` (22, 154)
 
 #### Scenario: A version flume does not hold
 
@@ -229,6 +235,11 @@ nothing made (4, 19, 22, 154).
 
 - **WHEN** a repository declares `change` at version 1 and a launch names `change@2`
 - **THEN** the launch is refused naming the version, since the repository's declaration resolves the name, and nothing is made (4, 19, 154)
+
+#### Scenario: A kind of a host's source named whole
+
+- **WHEN** the host's source acme holds `review@2`, locked by the host, and a launch names `acme/review@2`
+- **THEN** the place runs acme's review@2, and status names `acme/review@2` (154, 155)
 
 ### Requirement: The environment is the account's, its values read against the login environment
 

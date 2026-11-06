@@ -1,8 +1,9 @@
-//! The terminal seam's answers (94 to 98, 122, 136 to 139, 7), what its
-//! configuration lacks for flume's plugin (122), and an agent's state.
+//! The terminal seam's answers (94 to 98, 122, 136 to 139, 187, 201, 7), what
+//! its configuration lacks for flume's plugin (122), and an agent's state.
 
 use crate::Seconds;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// What an agent is doing (vocabulary: agent state).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -190,6 +191,42 @@ pub struct ShownAt {
     pub bases: Vec<String>,
 }
 
+/// The command a person runs to see a part of the terminal: its program
+/// by its full path, its arguments, and the variables it needs of its
+/// environment with their values, which the window passes on and no
+/// answer gives (187; core.30).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewCommand {
+    pub program: String,
+    pub arguments: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub environment: BTreeMap<String, String>,
+}
+
+/// attach: for a window, the command that shows the part, the part
+/// started first where it did not run; for the terminal's own app, the
+/// app told to show it; or a refusal where the terminal holds no part a
+/// person can be shown or offers no such view (187).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Attached {
+    Command { command: ViewCommand },
+    Shown,
+    Refused { reason: String },
+}
+
+/// runs: whether a part of the terminal runs now, with the name the
+/// terminal knows it by; or that the terminal holds no part, or could
+/// not read it, in its words (201).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRuns {
+    Runs { name: String },
+    NotRunning { name: String },
+    NoPart { reason: String },
+    Unread { reason: String },
+}
+
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
 /// never reports an end that did not happen (98).
@@ -281,4 +318,14 @@ pub trait Terminal: Send + Sync {
     /// The session the calling command runs in, as the terminal names
     /// it, a launch's default recipient; none where it names none (7).
     fn session(&self) -> Option<String>;
+
+    /// The part named `session`, the terminal's own where none, shown to
+    /// a person in `view`: a terminal view answers a command or a
+    /// refusal, and the app's view shown or a refusal (187).
+    fn attach(&self, session: Option<&str>, view: crate::View) -> Attached;
+
+    /// Whether the part named `session`, the terminal's own where none,
+    /// runs now, starting nothing, within a bound the profile states (98,
+    /// 201).
+    fn runs(&self, session: Option<&str>) -> SessionRuns;
 }

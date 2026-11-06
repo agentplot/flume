@@ -9,13 +9,13 @@ tidy, and the commands the plugin's hooks and an agent call.
 
 ### Requirement: Every command answers from the one core
 
-The binary SHALL offer `launch`, `status`, `prompt`, `tell`, `stop`,
-`retry`, `finish`, `drop`, `done`, `tidy`, `settle`, `needs` and
-`priority`, each building the core over the host's profiles and
-answering the core's answer, printed for a person or as its JSON with
-`--json`, exiting non-zero on a refusal; no command SHALL compute a
+The binary SHALL offer `launch`, `status`, `list`, `prompt`, `tell`,
+`stop`, `retry`, `finish`, `drop`, `done`, `tidy`, `settle`, `needs`,
+`priority` and `open`, each building the core over the host's profiles
+and answering the core's answer, printed for a person or as its JSON
+with `--json`, exiting non-zero on a refusal; no command SHALL compute a
 stage's end, a status, a submission or a tidy of its own (56 to 61,
-section 9, core.14).
+186, 200, section 9, core.14).
 
 #### Scenario: The same answer through the command line and the core
 
@@ -26,6 +26,11 @@ section 9, core.14).
 
 - **WHEN** `flume done` names a fix place
 - **THEN** the JSON is a refusal naming the place and the exit is non-zero (S26, 61)
+
+#### Scenario: The list through the command line and the core
+
+- **WHEN** `flume list --json` runs over a scratch host and the core is asked the list in a test over the same state
+- **THEN** the two answers are equal (60, 200)
 
 ### Requirement: needs takes the agent's identity and secret from its environment
 
@@ -146,3 +151,75 @@ its place's agents open in, for every stage or for one, at the
 
 - **WHEN** `flume status fix--one --line` runs over a scratch repository whose place's code stage was started under the printed command, the terminal keeping no watch
 - **THEN** it prints `fix--one · fix@1 · code · run 1 · starting` alone, `--json` gives the same line in `lines`, the place's held state is at the version it was before, and no agent was started (57)
+
+### Requirement: open names a stream or none
+
+`flume open [<stream>]` SHALL show the stream's view, `default`'s where
+it names none, needing no repository, its multiplexer and terminal app
+bound through the resolver for that stream alone, and printing the
+printed window's line on a line of its own (61, 105, 186, 190, C.8).
+
+#### Scenario: open under the printed command
+
+- **WHEN** `flume open work --json` runs on a host declaring `work` whose multiplexer is the printed command
+- **THEN** the JSON is a refusal saying the printed command holds no session, and the exit is non-zero (187)
+
+#### Scenario: open of an undeclared stream
+
+- **WHEN** `flume open nightly` runs outside any repository on a host that declares no `nightly`
+- **THEN** it is refused naming `nightly`, and the exit is non-zero (4, 186)
+
+#### Scenario: A stream's view through the binary
+
+- **WHEN** `flume open w` runs on a host whose multiplexer is herdr under a scratch session home, its terminal app `ghostty` over a stand-in, `[streams.w]` titled `Work Herdr`; then a fix is launched on `w` and `flume open w` runs again; then `flume open o` runs for `[streams.o]` naming the terminal app `terminal` and the title `Office Herdr`
+- **THEN** the stand-in records two windows titled `Work Herdr`, each running the pinned herdr's `session attach w`, the fix's agent opens in the session `w`, and on macOS the stand-in `osascript` records `exec <herdr> session attach o` under `Office Herdr`, and elsewhere `o`'s open is refused saying Terminal.app runs only on macOS (186 to 189, S90)
+
+#### Scenario: The printed window through the binary
+
+- **WHEN** `flume open w` runs on the same host naming no terminal app
+- **THEN** it prints the line `<herdr> session attach w` preceded by `XDG_CONFIG_HOME=<set>`, the exit is zero, and nothing is run (188, S90)
+
+#### Scenario: Two streams under two multiplexers through the binary
+
+- **WHEN** the host's multiplexer is herdr, `[streams.t]` names the printed command, and a fix is launched on `w` and one on `t`, and then `flume status --json` runs
+- **THEN** the `w` fix's agent opens in herdr's session `w`, the `t` fix's command is printed, and status gives each agent's terminal and each stream's multiplexer with where it came from (190, S91)
+
+### Requirement: list needs no repository and runs no tool
+
+`flume list` SHALL take no argument, need no repository and ask the
+core's list, settling nothing first, running no tool but each stream's
+terminal's runs, writing nothing and exiting 0 (57, 200; core.52).
+
+#### Scenario: A fix under the printed command, outside any repository
+
+- **WHEN** a fix named one is launched over a scratch repository under the printed command, its code agent not yet said started, and `flume list` then runs outside any repository with `PATH` set to an empty scratch folder
+- **THEN** it exits 0 having printed the fix's line, and leaves every file under the host's state as it was (57, 200, 201)
+
+#### Scenario: Fifty places within a second
+
+- **WHEN** a scratch host's state holds fifty places' documents in three repositories, written from a launched place's under fifty names, and `flume list --json` runs
+- **THEN** it answers fifty places' lines within a second of its start and exits 0 (200, S108)
+
+### Requirement: list prints each repository's places, then the streams
+
+`flume list` SHALL print each repository's path on a line of its own
+with its places' lines under it, then `streams` with each stream's line
+under it, each line indented by two spaces, and `no places` before
+`streams` where the host holds none; or the answer as JSON with
+`--json` (61, 200).
+
+#### Scenario: The person's form under the printed command
+
+- **WHEN** `flume list` runs over the scratch host holding the fix named one, and over a scratch host holding no place
+- **THEN** the first prints the repository's path, then `  fix--one · code · starting`, then `streams` and `  default · no session`; the second prints `no places`, then `streams` and `  default · no session` (200, 201)
+
+### Requirement: list's help names status for a place's every fact
+
+`flume list --help` SHALL say the list gives a line for each place and
+each stream, reading only what flume keeps, and that `flume status
+<place>` gives a place's every fact (200; core.35).
+
+#### Scenario: The list's help
+
+- **WHEN** `flume list --help` runs
+- **THEN** it says the list gives a line for each place and each stream, reading only what flume keeps, and names `flume status <place>` for a place's every fact (200)

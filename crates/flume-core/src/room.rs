@@ -21,7 +21,7 @@ use crate::accounts::{AccountRoom, PoolRoom, Usable, THRESHOLD};
 use crate::answer::and_list;
 use crate::{
     AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
-    RoomWanted, Step, StreamStatus,
+    RoomWanted, Step, StreamStatus, TitleFrom, TitleHeld,
 };
 use flume_seams::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -79,6 +79,10 @@ pub(crate) struct StreamRoom {
     /// Why its labels refuse every start of the stream, none where they
     /// do not (4, 181, 182).
     pub fault: Option<String>,
+    /// Why its multiplexer runs no agent, a terminal profile the resolver
+    /// does not carry, which refuses every start of the stream; none
+    /// where it runs them (4, 190).
+    pub uncarried: Option<String>,
 }
 
 /// A label's share of its stream as the queue reads it: its reserve, the
@@ -125,6 +129,7 @@ impl StreamRoom {
                 })
                 .collect(),
             fault,
+            uncarried: None,
         }
     }
 
@@ -305,11 +310,14 @@ impl Waiting {
     }
 
     /// Whether the room its claim would refuse it for has no bearing: its
-    /// pool holds an account of its program and its stream's labels are
-    /// at no fault (4, 145, 182).
+    /// pool holds an account of its program, its stream's labels are at
+    /// no fault and its stream's multiplexer runs agents (4, 145, 182,
+    /// 190).
     fn runs(&self, queue: &Queue) -> bool {
+        let stream = queue.stream(&self.stream);
         queue.runs(&self.stream, self.program.as_deref())
-            && queue.stream(&self.stream).fault.is_none()
+            && stream.fault.is_none()
+            && stream.uncarried.is_none()
     }
 
     /// The room it is short of now, none where it could start (70).
@@ -537,7 +545,10 @@ impl Engine {
             .streams()
             .into_iter()
             .map(|(name, stream)| {
-                let room = StreamRoom::of(&name, stream);
+                let room = StreamRoom {
+                    uncarried: self.stream_terminal(&name).err(),
+                    ..StreamRoom::of(&name, stream)
+                };
                 (name, room)
             })
             .collect();
@@ -590,12 +601,14 @@ impl Engine {
                         pool: name.clone(),
                         account: account.name.clone(),
                     };
-                    let spent_until = match self.store.read_host(&key) {
+                    let (spent_until, spent_unread) = match self.store.read_host(&key) {
                         Some(HostVersioned {
                             document: HostDocument::Account(spent),
                             ..
-                        }) if spent.until > now => Some(spent.until),
-                        _ => None,
+                        }) if spent.until > now => {
+                            (Some(spent.until), spent.words.filter(|_| spent.unread))
+                        }
+                        _ => (None, None),
                     };
                     let running = on_accounts
                         .get(&(name.clone(), account.name.clone()))
@@ -606,6 +619,7 @@ impl Engine {
                         account,
                         running,
                         spent_until,
+                        spent_unread,
                         threshold,
                         now,
                     }
@@ -674,9 +688,10 @@ impl Engine {
     /// its stream, its label and its account and orders what is left
     /// again, so a label that reaches its reserve goes back among its
     /// stream's others (181). Ahead of the host's room, each stage waiting
-    /// whose pool holds no account of its program, or whose stream's
-    /// labels are at fault, is claimed, which refuses it, whatever room
-    /// the host has (4, 32, 145, 182).
+    /// whose pool holds no account of its program, whose stream's labels
+    /// are at fault, or whose stream's multiplexer names a terminal
+    /// profile the resolver does not carry, is claimed, which refuses it,
+    /// whatever room the host has (4, 32, 145, 182, 190).
     pub(crate) fn start_waiting(&self) {
         let any = self.store.read_every().iter().any(|read| {
             read.state
@@ -732,9 +747,11 @@ impl Engine {
     /// The host's part of status: the agents running, the bound, the room
     /// and the queue in the order it would start, each stage waiting with
     /// the room it is short of, and the same for each stream (56, 70,
-    /// 130, 143).
-    pub(crate) fn host_status(&self) -> HostStatus {
+    /// 130, 143); each base's count taking the state of each agent in
+    /// `agents` as status read it for its place (139).
+    pub(crate) fn host_status(&self, agents: &BTreeMap<PlaceId, AgentState>) -> HostStatus {
         let queue = self.queue();
+        let declared = self.host.streams();
         let queued: Vec<Queued> = queue
             .waiting
             .iter()
@@ -751,9 +768,29 @@ impl Engine {
         let mut streams: Vec<StreamStatus> = queue
             .streams
             .iter()
-            .map(|(name, stream)| StreamStatus {
+            .map(|(name, stream)| {
+                let display = self.host.display_for(name);
+                let title = match declared.get(name).and_then(|stream| stream.title.clone()) {
+                    Some(title) => TitleHeld {
+                        title,
+                        from: TitleFrom::Stream,
+                    },
+                    None => TitleHeld {
+                        title: name.clone(),
+                        from: TitleFrom::StreamName,
+                    },
+                };
+                (name, stream, display, title)
+            })
+            .map(|(name, stream, display, title)| StreamStatus {
                 name: name.clone(),
                 session: stream.session(name),
+                refused: self.stream_refused(name, stream.fault.as_ref(), &display),
+                view_refused: self.view_refused(name, &display),
+                multiplexer: display.multiplexer,
+                view: display.view,
+                terminal_app: display.terminal_app,
+                title,
                 priority: stream.priority,
                 running: stream.running,
                 bound: stream.bound,
@@ -786,7 +823,6 @@ impl Engine {
                     (false, None) => Reserves::PassedOver,
                     (false, Some(_)) => Reserves::Held,
                 },
-                refused: stream.fault.clone(),
             })
             .collect();
         streams.sort_by(|a, b| b.priority.cmp(&a.priority).then(a.name.cmp(&b.name)));
@@ -806,6 +842,7 @@ impl Engine {
                         running: room.running,
                         bound: room.account.agents,
                         spent_until: room.spent_until,
+                        spent_unread: room.spent_unread.clone(),
                         reading: room.reading_status(),
                         past: room.past(),
                     })
@@ -822,9 +859,11 @@ impl Engine {
             terminal_kept: self.terminal.kept(),
             addresses: self.addresses(),
             watch: self.terminal.watch(),
-            bases: self.bases(),
+            terminals: self.terminals_status(),
+            bases: self.bases(agents),
             terminal_setup: self.terminal.setup(),
             configuration: self.host.configuration(),
+            sources: self.host_sources(),
         }
     }
 

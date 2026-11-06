@@ -5,16 +5,18 @@ use crate::seams::{
     agent::{AgentHarness, CarryAccounts, Modes, OwnWay},
     change::ChangeHarness,
     history::HistoryHarness,
-    kinds::KindsHarness,
+    kinds::{KindsHarness, SourceDir},
     merge_queue::MergeQueueHarness,
     place::{Pinned, PlaceHarness},
     store::StoreHarness,
     terminal::TerminalHarness,
+    window::WindowHarness,
 };
 use flume_fakes::*;
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 const REPOSITORY: &str = "/repository";
 
@@ -236,6 +238,80 @@ impl KindsHarness for FakeKindsHarness {
     fn binding(&self, binding: &Binding) -> String {
         self.kinds.set_binding(REPOSITORY, binding.clone());
         REPOSITORY.into()
+    }
+
+    fn source(&self, kinds: &[Kind]) -> Option<SourceDir> {
+        let dir = acme();
+        for kind in kinds {
+            let hash = packaged(&dir.source, kind.clone(), None).hash;
+            self.kinds.set_package(&dir.kinds_dir, kind.clone(), &hash);
+        }
+        Some(dir)
+    }
+
+    fn unreadable_source(&self) -> Option<SourceDir> {
+        let dir = SourceDir {
+            source: "broken".into(),
+            kinds_dir: "/kinds/broken".into(),
+        };
+        self.kinds
+            .unreadable_source(&dir.kinds_dir, "the directory cannot be listed");
+        Some(dir)
+    }
+
+    fn refused_package(&self) -> Option<(SourceDir, String, u32)> {
+        let dir = acme();
+        self.kinds.refuse_package(
+            &dir.kinds_dir,
+            "review",
+            3,
+            "kinds.review.version: makes the package acme/review@2, but it is held at acme/review@3",
+        );
+        Some((dir, "review".into(), 3))
+    }
+
+    fn lock_at(&self, entries: &[LockEntry]) -> Option<(String, Revision)> {
+        let revision = self.git.init("/locked", "main");
+        self.kinds
+            .set_lock_at("/locked", &revision, entries.to_vec());
+        Some(("/locked".into(), revision))
+    }
+
+    fn no_lock_at(&self) -> Option<(String, Revision)> {
+        Some(("/unlocked".into(), self.git.init("/unlocked", "main")))
+    }
+
+    fn lock_file(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = "/config/flume/flume.lock";
+        self.kinds.set_lock_file(path, entries.to_vec());
+        Some(path.into())
+    }
+
+    fn no_lock_file(&self) -> Option<String> {
+        Some("/work/.config/flume.lock".into())
+    }
+
+    fn unreadable_lock_file(&self) -> Option<String> {
+        let path = "/broken/flume.lock";
+        self.kinds
+            .unreadable_lock_file(path, "kinds[0].hash: is no content hash");
+        Some(path.into())
+    }
+
+    fn unwritable_lock(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = "/read-only/flume.lock";
+        self.kinds.set_lock_file(path, entries.to_vec());
+        self.kinds
+            .unwritable_lock(path, "/read-only is not writable");
+        Some(path.into())
+    }
+}
+
+/// The source `acme`, its packages in `/kinds/acme`.
+fn acme() -> SourceDir {
+    SourceDir {
+        source: "acme".into(),
+        kinds_dir: "/kinds/acme".into(),
     }
 }
 
@@ -636,9 +712,106 @@ impl TerminalHarness for FakeTerminalHarness {
         "nobody".into()
     }
 
+    fn views(&self) -> Vec<View> {
+        vec![View::Terminal, View::App]
+    }
+
+    fn parts(&self) -> Vec<Option<String>> {
+        vec![Some("work".into()), None]
+    }
+
+    fn refuse_attach(&self, view: View) -> bool {
+        self.terminal.attaches_as(
+            view,
+            Some(Attached::Refused {
+                reason: format!("no {}", view.name()),
+            }),
+        );
+        true
+    }
+
     fn setup(&self) -> Vec<String> {
         self.terminal.set_setup(&[SETUP]);
         vec![SETUP.to_string()]
+    }
+
+    /// `work` scripted running and `desk` unread with `no listing`;
+    /// `office`, never scripted, and its own part not running, the own as
+    /// `own` (201).
+    fn runs_parts(&self) -> Vec<(Option<String>, SessionRuns)> {
+        let work = SessionRuns::Runs {
+            name: "work".into(),
+        };
+        let desk = SessionRuns::Unread {
+            reason: "no listing".into(),
+        };
+        self.terminal.runs_as("work", work.clone());
+        self.terminal.runs_as("desk", desk.clone());
+        vec![
+            (Some("work".into()), work),
+            (Some("desk".into()), desk),
+            (
+                Some("office".into()),
+                SessionRuns::NotRunning {
+                    name: "office".into(),
+                },
+            ),
+            (None, SessionRuns::NotRunning { name: "own".into() }),
+        ]
+    }
+
+    fn logged(&self) -> Option<Vec<String>> {
+        Some(self.terminal.log.calls())
+    }
+}
+
+/// The fake window, its shows answered as each scenario scripts them.
+#[derive(Default)]
+pub struct FakeWindowHarness {
+    pub window: FakeWindow,
+}
+
+impl WindowHarness for FakeWindowHarness {
+    type Seam = FakeWindow;
+
+    fn seam(&self) -> &FakeWindow {
+        &self.window
+    }
+
+    fn command(&self) -> ViewCommand {
+        ViewCommand {
+            program: "/bin/fake-terminal".into(),
+            arguments: vec!["attach".into(), "work".into()],
+            environment: BTreeMap::from([("XDG_CONFIG_HOME".into(), "/scratch/home".into())]),
+        }
+    }
+
+    fn opens(&self) -> bool {
+        true
+    }
+
+    fn opened(&self) -> Vec<(ViewCommand, String)> {
+        self.window.windows()
+    }
+
+    fn will_print(&self) -> bool {
+        self.window.answers(Some(WindowShown::Printed {
+            line: "XDG_CONFIG_HOME=<set> /bin/fake-terminal attach work".into(),
+        }));
+        true
+    }
+
+    fn will_refuse(&self) -> Option<String> {
+        let words = "no display";
+        self.window.answers(Some(WindowShown::Refused {
+            reason: words.into(),
+        }));
+        Some(words.into())
+    }
+
+    /// The fake answers at once, and has no program to hold.
+    fn will_hang(&self) -> Option<Duration> {
+        None
     }
 }
 

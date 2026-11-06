@@ -2,7 +2,7 @@
 
 Each group is one session's work for an agent that reads this change
 (proposal, design, specs) and its group, and builds on main as merged
-into the branch, at 7e7eb88, and the groups before it. A group's last task runs the checks
+into the branch, at b5dcf96, and the groups before it. A group's last task runs the checks
 it touched through sluice; every conformance scenario a group adds
 cites its clauses as data (106). Tests reach no real account and no
 configuration directory of the user's: every git call in a test runs

@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "033d887";
+pub const REVISION: &str = "7bd1891";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -20,7 +20,7 @@ pub fn part_a() -> Vec<u32> {
         .chain(165..=173)
         .chain(175..=177)
         .chain(180..=186)
-        .chain([190, 191, 195])
+        .chain([190, 191, 195, 197, 200])
         .collect()
 }
 
@@ -36,7 +36,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(151..=153)
         .chain([160, 164, 174, 178, 179])
         .chain(187..=189)
-        .chain([192, 196])
+        .chain([192, 196, 201])
         .collect()
 }
 
@@ -58,18 +58,15 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11.
-pub const SCENARIOS: u32 = 102;
+pub const SCENARIOS: u32 = 108;
 
 /// The numbers section 11 skips at the revision, which designs the
 /// statement does not hold yet keep for their own scenarios.
-pub const SKIPPED: [u32; 4] = [93, 94, 98, 99];
+pub const SKIPPED: [u32; 8] = [93, 94, 98, 99, 104, 105, 106, 107];
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
 pub const STANDING: &str = "record 0021's change, the standing prompt, once its plan is approved";
-
-/// The change that builds record 0022's locks and packages from outside.
-pub const PACKAGES: &str = "record 0022's change, locks and packages, once its plan is approved";
 
 /// The change that builds record 0024's plan stage, after its mode.
 pub const PLAN: &str = "record 0024's plan stage's change, built after the mode";
@@ -79,10 +76,7 @@ pub const PLAN: &str = "record 0024's plan stage's change, built after the mode"
 pub const POINTS: &str = "record 0025's change, points, built after the mode";
 
 /// The change that builds record 0026's common profile and the degraded
-/// parts of the agent seam. With 173 it carries the own-settings spec's
-/// scenario "A pool of two programs": an account of a pool usable for a
-/// stage whose layers name no program only where its program's profile
-/// takes the stage's own settings for it (record 0043).
+/// parts of the agent seam.
 pub const PROFILES: &str = "record 0026's change, every program the terminal starts, once accepted";
 
 /// The change that builds records 0028 and 0029: statechart kinds, run
@@ -96,36 +90,25 @@ pub const STATECHART: &str =
 pub const MCP_SERVERS: &str =
     "the answer to section 10's question on how a host's MCP servers reach an agent";
 
-/// The change that builds record 0037: each stream's multiplexer, view
-/// and terminal app, and the window a person opens its agents in.
-pub const MULTIPLEXER: &str =
-    "record 0037's change, each stream's multiplexer, view and terminal app";
-
-/// The change that builds record 0040: the sources of a host's kinds.
-pub const SOURCES: &str = "a-host-declares-where-its-kinds-come-from, record 0040";
-
 /// The change that built record 0041, a place cut from origin's copy of
 /// its base, which landed before the list held S92: no scenario cites it
 /// as data yet.
 pub const ORIGIN: &str =
     "a-place-is-cut-from-origins-copy-of-its-base, record 0041, landed before the list held S92";
 
+/// The change that builds record 0044: an agent's effort, a setting of
+/// flume's layers.
+pub const EFFORT: &str = "an-agents-effort-is-a-setting-of-flumes-layers, record 0044";
+
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
-/// asks none to be cited. 154 and 157 are built as far as flume's own
-/// kinds go, one package per version and a launch naming a version, and
-/// their scenarios cite them.
+/// asks none to be cited.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
     let standing = [148, 149, 152]
         .map(|clause| clause.to_string())
         .into_iter()
         .chain((57..=58).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STANDING));
-    let packages = [155, 156, 158, 159, 160]
-        .map(|clause| clause.to_string())
-        .into_iter()
-        .chain((59..=63).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, PACKAGES));
     let plan = [163, 164]
         .map(|clause| clause.to_string())
         .into_iter()
@@ -144,26 +127,18 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain((76..=77).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
-    let multiplexer = (186..=190)
-        .map(|clause| clause.to_string())
-        .chain((90..=91).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, MULTIPLEXER));
-    let sources = [191, 192]
-        .map(|clause| clause.to_string())
-        .into_iter()
-        .chain((95..=97).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, SOURCES));
     let origin = std::iter::once(("S92".to_string(), ORIGIN));
+    let effort = ["197".to_string(), "S103".to_string()]
+        .into_iter()
+        .map(|clause| (clause, EFFORT));
     standing
-        .chain(packages)
         .chain(plan)
         .chain(points)
         .chain(profiles)
         .chain(statechart)
         .chain(mcp_servers)
-        .chain(multiplexer)
-        .chain(sources)
         .chain(origin)
+        .chain(effort)
         .collect()
 }
 
@@ -175,9 +150,9 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 3);
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 2);
-        for gap in [100, 150, 193, 194] {
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 5);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 3);
+        for gap in [100, 150, 193, 194, 198, 199] {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
         }
         assert!(a.iter().all(|clause| !b.contains(clause)));
@@ -185,63 +160,54 @@ mod tests {
         every.sort();
         assert_eq!(
             every,
-            (1..=196)
-                .filter(|clause| ![100, 150, 193, 194].contains(clause))
+            (1..=201)
+                .filter(|clause| ![100, 150, 193, 194, 198, 199].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 192 + 8 + 98);
+        assert_eq!(all().len(), 195 + 8 + 100);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        for skipped in ["S93", "S94", "S98", "S99"] {
-            assert!(!all().contains(&skipped.to_string()), "{skipped} is listed");
+        for gap in SKIPPED.map(|scenario| format!("S{scenario}")) {
+            assert!(!all().contains(&gap), "{gap} is listed");
         }
-        assert!(all().contains(&"S102".to_string()), "S102 is not listed");
-        assert_eq!(REVISION, "033d887");
+        for scenario in ["S91", "S92", "S95", "S96", "S97", "S100", "S103", "S108"] {
+            assert!(
+                all().contains(&scenario.to_string()),
+                "{scenario} is not listed"
+            );
+        }
+        assert_eq!(REVISION, "7bd1891");
         for clause in [
-            129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
-            173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191, 195,
+            129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 155, 156, 157, 158, 159, 161, 162,
+            163, 165, 168, 169, 173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191,
+            195, 197, 200,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [
             126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179, 187,
-            188, 189, 192, 196,
+            188, 189, 192, 196, 201,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0037_0040_and_0041s_and_183(
-    ) {
+    fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(
-            unbuilt.len(),
-            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 7 + 5 + 1
-        );
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 2);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
-            "S84", "S85", "184", "185", "S86", "S87", "S88", "S89", "195", "196", "S100", "S101",
-            "S102",
+            "S84", "S85", "184", "185", "186", "187", "188", "189", "190", "S86", "S87", "S88",
+            "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
+            "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "195", "196", "S100",
+            "S101", "S102",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
                 "{built} is named unbuilt"
-            );
-        }
-        for (clause, change) in [
-            ("186", MULTIPLEXER),
-            ("190", MULTIPLEXER),
-            ("S91", MULTIPLEXER),
-            ("191", SOURCES),
-            ("S97", SOURCES),
-            ("S92", ORIGIN),
-        ] {
-            assert!(
-                unbuilt.contains(&(clause.to_string(), change)),
-                "{clause} is not named unbuilt by {change}"
             );
         }
     }

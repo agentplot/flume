@@ -159,8 +159,9 @@ variables alone (56, 143, 145 to 147, 161).
 
 Status SHALL give, for the host, each pool with its strategy and its
 threshold, and each account with its agents running, its bound, the
-time it stops being spent, its reading, and, while it is past its
-threshold, the window that holds it and until when; and never an
+time it stops being spent, the words in which no reset was read while
+it is spent for the hour 146 gives, its reading, and, while it is past
+its threshold, the window that holds it and until when; and never an
 account's environment's value or a reading's path (56, 144 to 146,
 185).
 
@@ -168,6 +169,11 @@ account's environment's value or a reading's path (56, 144 to 146,
 
 - **WHEN** status is asked while work-1 runs two agents under a bound of four and work-2 is spent until 15:00
 - **THEN** the pool `work` gives fill-first, work-1 with two running and a bound of four, and work-2 spent until 15:00 (56, 146)
+
+#### Scenario: An account spent for an hour
+
+- **WHEN** status is asked while work-3 is spent for an hour because no reset was read in "You've hit your weekly limit · resets Nov 8, 12am (UTC)"
+- **THEN** work-3 gives its spent time and `spent_unread` with those words, and the person's form gives them under its line (56, 146)
 
 #### Scenario: A pool with readings
 
@@ -284,3 +290,39 @@ that window resets; a move recorded before SHALL read with neither (56,
 
 - **WHEN** a held state holds a move with `why` `spent` and no `window` or `until`, as an earlier release wrote it
 - **THEN** status gives it as written, with no window and no end (56; core.14)
+
+### Requirement: Status gives where a place's kind came from
+
+Status SHALL give a place's kind's `identity` and `kind_from`: its
+source, and for a host's source the source's file and the kind's
+directory, for the repository's the declaration's file and the base's
+revision, for a launch's the declaration's file, and for a package its
+hash and the lock that recorded it; `declared` SHALL take `host` for a
+host's source, each as the launch read it (19, 21, 56).
+
+#### Scenario: A kind of a host's source
+
+- **WHEN** status is asked of a place of acme/review@1, locked in the host's lock
+- **THEN** it gives the identity `acme/review@1`, `declared` `host`, and `kind_from` with the source `acme`, the source's file, the kind's directory, its hash and the host's lock's file, and the person's form gives them on the kind's line (19, 56)
+
+#### Scenario: The repository's, a launch's and flume's own
+
+- **WHEN** status is asked of places of the repository's bump@2, a launch's `--kinds` kind and flume's own change@2
+- **THEN** the first gives `repo/bump@2` with `.config/flume.toml` and the base's revision, the second `launch/<name>@<version>` with the file's path, and the third `flume/change@2` with its hash and no lock (19, 56)
+
+#### Scenario: A place launched before this change
+
+- **WHEN** status is asked of a place whose held state was written with no `kind_from`
+- **THEN** it gives the source from `declared`, and no identity or hash, and the place settles as before (21, core.14)
+
+### Requirement: Status gives the host's sources
+
+The host's part of status SHALL give each source the host declares, its
+file, its `kinds_dir`, the identity of every package that directory
+holds, and why the file or the directory cannot be read where either
+cannot, each read when asked (56, 159, 191; core.15).
+
+#### Scenario: A source and a fault
+
+- **WHEN** the host's sources directory holds `acme.toml`, whose `kinds_dir` holds `review@1/` and `review@2/`, and `bad.toml` with no `kinds_dir`
+- **THEN** status's host part gives `acme` with its file, its `kinds_dir`, acme/review@1 and acme/review@2, and `bad` with the fault naming `kinds_dir` (S96, 56, 159, 191)

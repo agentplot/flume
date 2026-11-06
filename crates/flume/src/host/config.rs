@@ -2,9 +2,12 @@
 //! state under `$XDG_STATE_HOME/flume`, and its configuration in
 //! `$XDG_CONFIG_HOME/flume/config.toml`, each beneath `$HOME` as the XDG
 //! directories default where the variable is unset. The configuration's
-//! `[host] agents` is the bound on agents running (70) and `[host]
-//! terminal` the terminal profile bound for the host (105); a file or a
-//! word left out is no bound and the printed command. Its
+//! `[host] agents` is the bound on agents running (70), `[host]
+//! multiplexer` the terminal profile bound for the host, `[host]
+//! terminal` the word written before it and read as it (105, 190), and
+//! `[host] view` and `terminal_app` how a person is shown a stream's
+//! agents (186, 188); a file or a word left out is no bound, the printed
+//! command, a terminal view and the printed window. Its
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
@@ -28,8 +31,9 @@
 //! each role's address, with `repository`, `kind`, `priority`, `base`,
 //! `brief` and `stream`, an address it names nothing for woken by nothing
 //! (132, C.7). Its `[streams.<stream>]` tables declare the host's streams,
-//! each with `agents`, `priority`, `pool`, `session` and its labels'
-//! shares in `[streams.<stream>.labels.<label>]`, and `default` stands
+//! each with `agents`, `priority`, `pool`, `session`, `multiplexer`,
+//! `view`, `terminal_app`, `title` and its labels' shares in
+//! `[streams.<stream>.labels.<label>]`, and `default` stands
 //! whether or not a table declares it; its `[pools.<pool>]` tables its
 //! pools, each with `strategy` and `accounts`, each account a `name`, a
 //! `program`, an `env` kept as written and an optional `agents`; `[host]
@@ -46,33 +50,56 @@
 //! holds is passed over. The reading keeps each value with its layer, an
 //! `env` table's and an own setting's shaped as a credential as `<set>`
 //! (core.30, core.50). No command writes either file (core.16, core.45).
+//!
+//! The host's sources of kinds are files of the configuration's managed
+//! layer, one each in `sources/` beside `config.toml` (159, 191, C.7;
+//! design 1); the local layer declares none. Each regular file there, or
+//! a link to one, whose name ends in `.toml` and begins with no `.`
+//! declares the source its name less `.toml` names; every other entry is
+//! ignored, so a source written beside as `.acme.toml.tmp` and renamed
+//! over `acme.toml` is never read half written. Its one key, `kinds_dir`,
+//! is the directory holding the source's packages, absolute or under `~`,
+//! read as the home. A file that is not TOML, gives no `kinds_dir`, one
+//! neither absolute nor under `~` or any other key, or takes a name the
+//! kinds profile refuses for a source, is that source's fault alone, kept
+//! with it and failing nothing else of the configuration; no `sources/`
+//! is no source, and one that cannot be listed fails the configuration as
+//! a `config.toml` that cannot be read does. flume writes nothing there.
 
+use crate::profiles::kinds::weir::source_fault;
 use flume_seams::{
-    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LabelFrom,
-    LabelHeld, LocalLayer, PinnedKey, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Share,
-    Strategy, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM, SET,
+    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
+    KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool, PoolFrom, PoolNamed,
+    ProfileHeld, RoleRun, Settings, Share, Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld,
+    View, ViewHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use toml::{Table, Value};
 
+/// The profile a stream and the host naming none get, for its
+/// multiplexer the printed command and for its terminal app the printed
+/// window (105, 188, 190).
+const PRINTED: &str = "printed";
+
 /// The keys the local layer may set, each a path of segments, `*` any one
-/// name: a stream's `agents`, `priority`, `points`, `pace` and `session`,
-/// a label's `reserve` and `keep_free`, the `stream` a repository, a
-/// repository's kind or a kind is given, the `label` a repository's kind
-/// or a kind is given, and every agents table, a kind's every stage's and
-/// one stage's, a repository's for every kind, a stream's and every
-/// agent's, each of its settings and in its `programs` each program's
-/// `file` and each of its own settings a key of its own (32, 107, 143,
-/// 166, 167, 180, 181, 195, C.7; record 0043). Each is one unit, its
-/// value taken whole. A change that gives the local layer another key
-/// adds it here.
+/// name: a stream's `agents`, `priority`, `points`, `pace`, `session` and
+/// `multiplexer`, a label's `reserve` and `keep_free`, the `stream` a
+/// repository, a repository's kind or a kind is given, the `label` a
+/// repository's kind or a kind is given, and every agents table, a kind's
+/// every stage's and one stage's, a repository's for every kind, a
+/// stream's and every agent's, each of its settings and in its `programs`
+/// each program's `file` and each of its own settings a key of its own
+/// (32, 107, 143, 166, 167, 180, 181, 190, 195, C.7; record 0043). Each
+/// is one unit, its value taken whole. A change that gives the local
+/// layer another key adds it here.
 pub const LOCAL_KEYS: &[&[&str]] = &[
     &["streams", "*", "agents"],
     &["streams", "*", "priority"],
     &["streams", "*", "points"],
     &["streams", "*", "pace"],
     &["streams", "*", "session"],
+    &["streams", "*", "multiplexer"],
     &["streams", "*", "labels", "*", "reserve"],
     &["streams", "*", "labels", "*", "keep_free"],
     &["repos", "*", "stream"],
@@ -121,9 +148,16 @@ pub struct HostConfig {
     /// The bound on agents running, every caller's counted together;
     /// none where the file states none (70).
     pub agents: Option<u32>,
-    /// The terminal profile the host binds, none for the printed command
-    /// (105).
+    /// The terminal profile the host binds, `[host] multiplexer` or the
+    /// word written before it, `[host] terminal`; none for the printed
+    /// command (105, 190).
     pub terminal: Option<String>,
+    /// How the host's streams are shown to a person, `[host] view`; none
+    /// for a terminal view (186).
+    pub view: Option<View>,
+    /// The window profile the host binds, `[host] terminal_app`; none for
+    /// the printed window (188).
+    pub terminal_app: Option<String>,
     /// The settings given each kind's agents in every repository, by the
     /// kind's name (32).
     pub kinds: BTreeMap<String, KindSettings>,
@@ -155,6 +189,13 @@ pub struct HostConfig {
     /// each local key passed over with its pin; none of it where only one
     /// table was read (C.7).
     pub configuration: HostConfiguration,
+    /// The sources of kinds declared in `sources/` beside the file, by
+    /// name, each with its fault where it has one (159, 191, C.7).
+    pub sources: BTreeMap<String, HostSource>,
+    /// The directory the file was read in, which holds `sources/` and the
+    /// host's lock of kinds; none for a configuration read from text
+    /// (155, 191, C.7).
+    pub dir: Option<PathBuf>,
 }
 
 /// The streams the configuration names for places: `stream` in
@@ -186,6 +227,8 @@ impl Default for HostConfig {
         HostConfig {
             agents: None,
             terminal: None,
+            view: None,
+            terminal_app: None,
             kinds: BTreeMap::new(),
             repos: BTreeMap::new(),
             repos_agents: BTreeMap::new(),
@@ -198,24 +241,29 @@ impl Default for HostConfig {
             pool: None,
             pools: BTreeMap::new(),
             configuration: HostConfiguration::default(),
+            sources: BTreeMap::new(),
+            dir: None,
         }
     }
 }
 
 impl HostConfig {
-    /// The configuration in `path`, the managed layer with no local one:
-    /// none of it where there is no file, and the file's fault named where
-    /// it is not one.
+    /// The configuration in `path`, the managed layer with no local one,
+    /// and the sources in `sources/` beside it: none of the file where
+    /// there is none, and the file's fault named where it is not one
+    /// (159, 191, C.7).
     pub fn read(path: &Path) -> Result<HostConfig, String> {
         let managed = text_in(path).map_err(|error| format!("{}: {error}", path.display()))?;
         HostConfig::layers_in(&managed.unwrap_or_default(), None, &directory_of(path))
-            .map_err(|fault| format!("{}: {fault}", path.display()))
+            .map_err(|fault| format!("{}: {fault}", path.display()))?
+            .with_sources(path)
     }
 
     /// The configuration of the managed layer in `managed` and the local
-    /// layer in `local` beside it: a managed file's fault refuses it,
-    /// naming the file, and a local file that cannot be read is not taken
-    /// (C.7; design 4).
+    /// layer in `local` beside it, and the sources in `sources/` beside
+    /// the managed one: a managed file's fault refuses it, naming the
+    /// file, and a local file that cannot be read is not taken (159, 191,
+    /// C.7; design 4).
     pub fn read_layers(managed: &Path, local: &Path) -> Result<HostConfig, String> {
         let text = text_in(managed).map_err(|error| format!("{}: {error}", managed.display()))?;
         let managed_text = text.unwrap_or_default();
@@ -225,7 +273,19 @@ impl HostConfig {
             Err(fault) => HostConfig::layers_in(&managed_text, None, &directory)
                 .map(|config| config.local_not_taken(vec![], Some(fault))),
         };
-        config.map_err(|fault| format!("{}: {fault}", managed.display()))
+        config
+            .map_err(|fault| format!("{}: {fault}", managed.display()))?
+            .with_sources(managed)
+    }
+
+    /// This configuration with the sources in `sources/` beside the
+    /// managed layer's `path`, and the directory `path` lies in, which
+    /// holds the host's lock of kinds: the sources are the managed
+    /// layer's, the local layer declaring none (155, 159, 191, C.7).
+    fn with_sources(mut self, path: &Path) -> Result<HostConfig, String> {
+        self.sources = read_sources(&path.with_file_name(SOURCES))?;
+        self.dir = path.parent().map(Path::to_path_buf);
+        Ok(self)
     }
 
     /// The configuration the managed layer's `managed` and the local
@@ -419,8 +479,10 @@ impl HostConfig {
                     })?)
                 }
             };
-            config.terminal = text_of(host, "terminal", "host")
-                .map_err(|_| "[host] terminal is not a name".to_string())?;
+            config.terminal = host_multiplexer(host)?;
+            config.view = view_of(host, "host")?;
+            config.terminal_app = text_of(host, "terminal_app", "host")
+                .map_err(|_| "[host] terminal_app is not a name".to_string())?;
             config.pool = text_of(host, "pool", "host")?;
         }
         let declared = |pool: &str| config.pools.contains_key(pool);
@@ -485,6 +547,51 @@ impl HostConfig {
                     .get(kind)
                     .map(|name| held(name, LabelFrom::HostKind))
             })
+    }
+
+    /// The multiplexer, view and terminal app of a place in `stream`:
+    /// each the stream's own, else the host's, else the printed command,
+    /// a terminal view and the printed window (186, 188, 190, C.7).
+    pub fn display_for(&self, stream: &str) -> StreamDisplay {
+        let stream = self.streams.get(stream);
+        let named = |own: Option<&String>, host: Option<&String>| match (own, host) {
+            (Some(name), _) => ProfileHeld {
+                profile: name.clone(),
+                from: NamedBy::Stream,
+            },
+            (None, Some(name)) => ProfileHeld {
+                profile: name.clone(),
+                from: NamedBy::Host,
+            },
+            (None, None) => ProfileHeld {
+                profile: PRINTED.into(),
+                from: NamedBy::Neither,
+            },
+        };
+        StreamDisplay {
+            multiplexer: named(
+                stream.and_then(|stream| stream.multiplexer.as_ref()),
+                self.terminal.as_ref(),
+            ),
+            view: match (stream.and_then(|stream| stream.view), self.view) {
+                (Some(view), _) => ViewHeld {
+                    view,
+                    from: NamedBy::Stream,
+                },
+                (None, Some(view)) => ViewHeld {
+                    view,
+                    from: NamedBy::Host,
+                },
+                (None, None) => ViewHeld {
+                    view: View::Terminal,
+                    from: NamedBy::Neither,
+                },
+            },
+            terminal_app: named(
+                stream.and_then(|stream| stream.terminal_app.as_ref()),
+                self.terminal_app.as_ref(),
+            ),
+        }
     }
 
     /// The pool of a place in `stream`: the stream's own, else the
@@ -814,6 +921,101 @@ fn own_credential(path: &[String], value: &Value) -> bool {
     own && shaped(path.last().map_or("", String::as_str), value)
 }
 
+/// The directory beside `config.toml` holding a file for each source of
+/// kinds the host declares (191, C.7).
+pub const SOURCES: &str = "sources";
+
+/// The host's lock of kinds, beside `config.toml` (155, C.7).
+pub const KINDS_LOCK: &str = "flume.lock";
+
+/// What ends the name of a source's file.
+const SOURCE_FILE: &str = ".toml";
+
+/// Every source the sources directory `dir` declares, by name: none where
+/// there is no directory, and why it cannot be listed where it cannot.
+/// Each file's fault is its own source's (191, C.7; design 1).
+pub fn read_sources(dir: &Path) -> Result<BTreeMap<String, HostSource>, String> {
+    let listed = |error: std::io::Error| format!("{}: {error}", dir.display());
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
+        Err(error) => return Err(listed(error)),
+    };
+    let mut sources = BTreeMap::new();
+    for entry in entries {
+        let entry = entry.map_err(listed)?;
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        let path = entry.path();
+        let Some(name) = file_name.strip_suffix(SOURCE_FILE) else {
+            continue;
+        };
+        if file_name.starts_with('.') || !path.is_file() {
+            continue;
+        }
+        let read = match source_of(name, &path) {
+            Ok(kinds_dir) => HostSourceRead::Read { kinds_dir },
+            Err(reason) => HostSourceRead::CouldNotRead { reason },
+        };
+        sources.insert(
+            name.to_string(),
+            HostSource {
+                file: path.to_string_lossy().into_owned(),
+                read,
+            },
+        );
+    }
+    Ok(sources)
+}
+
+/// The directory a source's file at `path` declares the source `name`'s
+/// packages in, or every fault of the file (154, 191, C.7).
+fn source_of(name: &str, path: &Path) -> Result<String, String> {
+    let mut faults: Vec<String> = source_fault(name).into_iter().collect();
+    let read = std::fs::read_to_string(path)
+        .map_err(|error| format!("could not be read: {error}"))
+        .and_then(|text| {
+            text.parse::<Table>()
+                .map_err(|error| format!("is not TOML: {}", error.message().trim()))
+        });
+    let table = match read {
+        Ok(table) => table,
+        Err(fault) => {
+            faults.push(fault);
+            return Err(faults.join("; "));
+        }
+    };
+    for key in table.keys().filter(|key| *key != "kinds_dir") {
+        faults.push(format!(
+            "`{key}` is no key of a source's file, which gives `kinds_dir` alone"
+        ));
+    }
+    let kinds_dir = match table.get("kinds_dir") {
+        None => {
+            faults.push("gives no `kinds_dir`, the directory holding the source's packages".into());
+            None
+        }
+        Some(Value::String(given)) => {
+            let read = home(given);
+            if Path::new(&read).is_absolute() {
+                Some(read)
+            } else {
+                faults.push(format!(
+                    "`kinds_dir` is `{given}`, which is neither absolute nor under `~`"
+                ));
+                None
+            }
+        }
+        Some(_) => {
+            faults.push("`kinds_dir` is not a path".into());
+            None
+        }
+    };
+    match kinds_dir {
+        Some(kinds_dir) if faults.is_empty() => Ok(kinds_dir),
+        _ => Err(faults.join("; ")),
+    }
+}
+
 /// A key as TOML writes it in a table's name.
 fn quoted(key: &str) -> String {
     if !key.is_empty()
@@ -887,6 +1089,36 @@ fn text_of(table: &Table, name: &str, at: &str) -> Result<Option<String>, String
         None => Ok(None),
         Some(Value::String(value)) => Ok(Some(value.clone())),
         Some(_) => Err(format!("[{at}] {name} is not a string")),
+    }
+}
+
+/// The host's multiplexer: `[host] multiplexer`, or `[host] terminal`,
+/// the word written before it and read as it; a `[host]` giving both
+/// refused naming both, and a value that is no name refused naming its
+/// key (105, 190, C.7).
+fn host_multiplexer(host: &Table) -> Result<Option<String>, String> {
+    let named =
+        |key: &str| text_of(host, key, "host").map_err(|_| format!("[host] {key} is not a name"));
+    match (named("multiplexer")?, named("terminal")?) {
+        (Some(_), Some(_)) => Err(
+            "[host] gives both terminal and multiplexer; terminal is the \
+             word written before multiplexer, so give one"
+                .to_string(),
+        ),
+        (multiplexer, terminal) => Ok(multiplexer.or(terminal)),
+    }
+}
+
+/// The `view` of `table`, `terminal` or `app`, none where it is left out,
+/// any other value refused naming its key and the two values (186, C.7).
+fn view_of(table: &Table, at: &str) -> Result<Option<View>, String> {
+    match table.get("view") {
+        None => Ok(None),
+        Some(Value::String(word)) if word == View::Terminal.name() => Ok(Some(View::Terminal)),
+        Some(Value::String(word)) if word == View::App.name() => Ok(Some(View::App)),
+        Some(value) => Err(format!(
+            "[{at}] view is {value}, where a view is terminal or app"
+        )),
     }
 }
 
@@ -1002,8 +1234,9 @@ fn shares_of(table: &Table, at: &str) -> Result<BTreeMap<String, Share>, String>
 }
 
 /// The `streams` table: each stream with its bound, its priority, zero
-/// where it gives none, its pool, its session and its labels' shares; a
-/// key a stream does not know refused naming it (107, 143, 181, C.7).
+/// where it gives none, its pool, its session, its multiplexer, its view,
+/// its terminal app, its title and its labels' shares; a key a stream
+/// does not know refused naming it (107, 143, 181, 186, 190, C.7).
 fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String> {
     let streams = streams
         .as_table()
@@ -1014,7 +1247,17 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
         let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
         only(
             table,
-            &["agents", "priority", "pool", "session", "labels"],
+            &[
+                "agents",
+                "priority",
+                "pool",
+                "session",
+                "multiplexer",
+                "view",
+                "terminal_app",
+                "title",
+                "labels",
+            ],
             &at,
             "a stream",
         )?;
@@ -1032,6 +1275,10 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 pool: text_of(table, "pool", &at)?,
                 session: text_of(table, "session", &at)?,
                 labels: shares_of(table, &at)?,
+                multiplexer: text_of(table, "multiplexer", &at)?,
+                view: view_of(table, &at)?,
+                terminal_app: text_of(table, "terminal_app", &at)?,
+                title: text_of(table, "title", &at)?,
             },
         );
     }
@@ -2413,6 +2660,211 @@ label = "inception"
             }
         );
         assert_eq!(config.streams["work"].pool.as_deref(), Some("work"));
+    }
+
+    #[test]
+    fn the_keys_and_none() {
+        // 143, 186, 190: a stream's multiplexer, view and terminal app its
+        // own, else the host's, else the default; its title its own, the
+        // core naming it by its name where none, which status gives
+        // through the binary in commands.rs's the_keys_and_none_in_status.
+        let config = HostConfig::parse(
+            "[host]\nmultiplexer = \"mux\"\nterminal_app = \"app-window\"\n\
+             [streams.office]\nterminal_app = \"terminal\"\ntitle = \"Office Agents\"\n\
+             [streams.personal]\n",
+        )
+        .unwrap();
+        let held = |profile: &str, from| ProfileHeld {
+            profile: profile.into(),
+            from,
+        };
+        let neither = ViewHeld {
+            view: View::Terminal,
+            from: NamedBy::Neither,
+        };
+        assert_eq!(
+            config.display_for("office"),
+            StreamDisplay {
+                multiplexer: held("mux", NamedBy::Host),
+                view: neither.clone(),
+                terminal_app: held("terminal", NamedBy::Stream),
+            }
+        );
+        assert_eq!(
+            config.streams["office"].title.as_deref(),
+            Some("Office Agents")
+        );
+        assert_eq!(
+            config.display_for("personal"),
+            StreamDisplay {
+                multiplexer: held("mux", NamedBy::Host),
+                view: neither,
+                terminal_app: held("app-window", NamedBy::Host),
+            }
+        );
+        assert_eq!(config.streams["personal"].title, None);
+        let config = HostConfig::parse(
+            "[host]\nview = \"app\"\n[streams.work]\nmultiplexer = \"mux\"\nview = \"terminal\"\n",
+        )
+        .unwrap();
+        let work = config.display_for("work");
+        assert_eq!(work.multiplexer, held("mux", NamedBy::Stream));
+        assert_eq!(
+            work.view,
+            ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Stream,
+            }
+        );
+        assert_eq!(
+            config.display_for("default"),
+            StreamDisplay {
+                multiplexer: held(PRINTED, NamedBy::Neither),
+                view: ViewHeld {
+                    view: View::App,
+                    from: NamedBy::Host,
+                },
+                terminal_app: held(PRINTED, NamedBy::Neither),
+            }
+        );
+    }
+
+    #[test]
+    fn the_word_written_before() {
+        // C.7: `[host] terminal` read as `[host] multiplexer`, and both
+        // refused naming both.
+        let config = HostConfig::parse("[host]\nterminal = \"mux\"\n").unwrap();
+        assert_eq!(config.display_for("default").multiplexer.profile, "mux");
+        assert_eq!(
+            config.display_for("default").multiplexer.from,
+            NamedBy::Host
+        );
+        let config = HostConfig::parse("[host]\nmultiplexer = \"mux\"\n").unwrap();
+        assert_eq!(config.terminal.as_deref(), Some("mux"));
+        let refused = HostConfig::parse("[host]\nterminal = \"mux\"\nmultiplexer = \"printed\"\n")
+            .unwrap_err();
+        assert!(
+            refused.contains("terminal") && refused.contains("multiplexer"),
+            "{refused}"
+        );
+        let refused = HostConfig::parse("[host]\nmultiplexer = 3\n").unwrap_err();
+        assert!(refused.contains("[host] multiplexer"), "{refused}");
+    }
+
+    #[test]
+    fn a_view_no_word_names() {
+        // C.7: a view is terminal or app, the key and both values named.
+        let refused = HostConfig::parse("[streams.work]\nview = \"tab\"\n").unwrap_err();
+        assert!(
+            refused.contains("[streams.work] view")
+                && refused.contains("\"tab\"")
+                && refused.contains("terminal or app"),
+            "{refused}"
+        );
+        let refused = HostConfig::parse("[host]\nview = 1\n").unwrap_err();
+        assert!(refused.contains("[host] view"), "{refused}");
+    }
+
+    #[test]
+    fn a_title_that_is_no_text() {
+        // C.7: a stream's title is a text, and its terminal app and
+        // multiplexer names.
+        for text in [
+            "[streams.work]\ntitle = 3\n",
+            "[streams.work]\nterminal_app = 3\n",
+            "[streams.work]\nmultiplexer = true\n",
+            "[host]\nterminal_app = []\n",
+        ] {
+            let key = text.lines().nth(1).unwrap().split(' ').next().unwrap();
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(refused.contains(key), "{text}: {refused}");
+        }
+        let refused = HostConfig::parse("[streams.work]\ntitle = 3\n").unwrap_err();
+        assert!(refused.contains("[streams.work] title"), "{refused}");
+    }
+
+    #[test]
+    fn a_streams_multiplexer_set_locally() {
+        // 190, C.7, S91: a stream's multiplexer a key the local layer may
+        // set, kept with its layer.
+        let config = HostConfig::layers(
+            "[host]\nmultiplexer = \"mux\"\n[streams.trial]\nmultiplexer = \"printed\"\n",
+            Some("[streams.trial]\nmultiplexer = \"mux\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        assert_eq!(
+            config.display_for("trial").multiplexer,
+            ProfileHeld {
+                profile: "mux".into(),
+                from: NamedBy::Stream,
+            }
+        );
+        assert_eq!(
+            value_at(&config, "streams.trial.multiplexer"),
+            Some(("\"mux\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "host.multiplexer"),
+            Some(("\"mux\"".into(), ConfigLayer::Managed))
+        );
+    }
+
+    #[test]
+    fn a_streams_view_set_locally() {
+        // 186, C.7: a stream's view the managed layer's alone.
+        let config = HostConfig::layers(WORK, Some("[streams.work]\nview = \"app\"\n")).unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["streams.work.view".into()],
+                fault: None,
+            }
+        );
+        assert_eq!(config.display_for("work").view.view, View::Terminal);
+    }
+
+    #[test]
+    fn a_terminal_app_set_by_the_local_layer() {
+        // C.7; record 0032: a stream's terminal app and title, and every
+        // key of `[host]`, the managed layer's alone; open uses the
+        // managed layer's terminal app.
+        let managed = format!("{WORK}[host]\nterminal_app = \"app-window\"\n");
+        let config = HostConfig::layers(
+            &managed,
+            Some("[streams.work]\nterminal_app = \"terminal\"\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["streams.work.terminal_app".into()],
+                fault: None,
+            }
+        );
+        assert_eq!(
+            config.display_for("work").terminal_app,
+            ProfileHeld {
+                profile: "app-window".into(),
+                from: NamedBy::Host,
+            }
+        );
+        for (local, key) in [
+            ("[streams.work]\ntitle = \"Mine\"\n", "streams.work.title"),
+            ("[host]\nmultiplexer = \"mux\"\n", "host.multiplexer"),
+            ("[host]\nview = \"app\"\n", "host.view"),
+            ("[host]\nterminal_app = \"terminal\"\n", "host.terminal_app"),
+        ] {
+            let config = HostConfig::layers(&managed, Some(local)).unwrap();
+            assert_eq!(
+                config.configuration.local,
+                LocalLayer::NotTaken {
+                    keys: vec![key.into()],
+                    fault: None,
+                },
+                "{local}"
+            );
+        }
     }
 
     #[test]

@@ -41,7 +41,7 @@ impl Engine {
         }
         let agent = self.agent(&start.program);
         let folder = self.store.folder(&held.place.id);
-        if self.state_of(agent.as_deref(), &folder, &start.identity) == AgentState::Stopped {
+        if self.state_of(agent.as_deref(), &folder, &start) == AgentState::Stopped {
             return Answer::refused(format!("the agent {identity} is not live"));
         }
         let id = held.place.id.clone();

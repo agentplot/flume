@@ -1,16 +1,43 @@
 //! Status of one place or every place (56 to 62): every fact of a
 //! deliverable, a change or a submission read where it lives when asked,
 //! at one head per place; nothing written, sent or started (57, 58).
+//! The places are read side by side, each repository's merge queue once
+//! for all its places asked, and each live agent once for its place and
+//! its base's count (58, 139, C.6). A place's kind is named by its
+//! identity and where it came from as its launch read them, none for a
+//! place whose held state keeps neither, its `declared` then saying its
+//! source (19, 21).
 
 use crate::reading::{find_group, reads_change};
 use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
-    Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, GroupStatus, ModeStatus,
-    MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, StageStatus, SubmissionStatus, WaitingOn,
-    Waits,
+    side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EndStatus, Engine, GroupStatus,
+    ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SourceStatus, StageStatus,
+    SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+/// Whether status reads a place's facts where they live: not for a place
+/// being made, gone or tidied (56, 62).
+fn reads_facts(held: &HeldState) -> bool {
+    !matches!(
+        held.phase,
+        Phase::Gone { .. } | Phase::Making { .. } | Phase::Tidied { .. }
+    )
+}
+
+/// One repository's ask of the merge queue its places' binding names:
+/// the places whose submissions it reads, each by its index with its
+/// branch.
+struct Ask {
+    repository: String,
+    profile: String,
+    queue: Arc<dyn MergeQueue>,
+    places: Vec<(usize, String)>,
+}
 
 impl Engine {
     /// Status of the place, or of every place on the host; a place tidied
@@ -39,22 +66,92 @@ impl Engine {
                 .map(|read| read.state)
                 .collect(),
         };
+        let mut submissions = self.submissions(&held);
+        let read: Vec<(&HeldState, Option<ReadAcross>)> = held
+            .iter()
+            .enumerate()
+            .map(|(at, held)| (held, submissions.remove(&at)))
+            .collect();
+        let places = side_by_side(&read, |(held, submission)| {
+            self.place_status_read(held, submission.clone())
+        });
+        let agents: BTreeMap<PlaceId, AgentState> = places
+            .iter()
+            .filter_map(|status| Some((status.place.clone(), status.agent.as_ref()?.state)))
+            .collect();
         Answer::Status {
-            places: held.iter().map(|held| self.place_status(held)).collect(),
-            host: self.host_status(),
+            places,
+            host: self.host_status(&agents),
         }
+    }
+
+    /// The submission of each of `held` that status reads, by its index:
+    /// one that lands, whose facts are read and whose binding names a
+    /// merge queue; each repository's merge queue asked once for all its
+    /// places, the repositories side by side (58, 99, C.6).
+    fn submissions(&self, held: &[HeldState]) -> BTreeMap<usize, ReadAcross> {
+        let mut asks: Vec<Ask> = vec![];
+        for (at, held) in held.iter().enumerate() {
+            let place = &held.place;
+            let Some(profile) = place.binding.merge_queue.as_ref() else {
+                continue;
+            };
+            if !place.kind.lands || !reads_facts(held) {
+                continue;
+            }
+            let Ok(Bound {
+                merge_queue: Some(queue),
+                ..
+            }) = self.bound(place)
+            else {
+                continue;
+            };
+            let branch = (at, place.branch.clone());
+            match asks
+                .iter_mut()
+                .find(|ask| ask.repository == place.repository && &ask.profile == profile)
+            {
+                Some(ask) => ask.places.push(branch),
+                None => asks.push(Ask {
+                    repository: place.repository.clone(),
+                    profile: profile.clone(),
+                    queue,
+                    places: vec![branch],
+                }),
+            }
+        }
+        side_by_side(&asks, |ask| {
+            let branches: Vec<&str> = ask
+                .places
+                .iter()
+                .map(|(_, branch)| branch.as_str())
+                .collect();
+            ask.places
+                .iter()
+                .map(|(at, _)| *at)
+                .zip(ask.queue.read_submissions(&ask.repository, &branches))
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     /// Every fact of one place, as it stands when asked.
     pub(crate) fn place_status(&self, held: &HeldState) -> PlaceStatus {
+        let submission = self.submissions(std::slice::from_ref(held)).remove(&0);
+        self.place_status_read(held, submission)
+    }
+
+    /// Every fact of one place, as it stands when asked, its submission
+    /// as `submission` read it where its repository's merge queue was
+    /// read for it.
+    fn place_status_read(&self, held: &HeldState, submission: Option<ReadAcross>) -> PlaceStatus {
         let place = &held.place;
         let mut cannot_read = vec![];
         let mut refused_acts = vec![];
         let current = held.current;
-        let read_facts = !matches!(
-            held.phase,
-            Phase::Gone { .. } | Phase::Making { .. } | Phase::Tidied { .. }
-        );
+        let read_facts = reads_facts(held);
         let bound = match self.bound(place) {
             Ok(bound) => Some(bound),
             Err(reason) => {
@@ -152,9 +249,7 @@ impl Engine {
                 asking: reading.asking,
                 own_work: reading.own_work,
                 past_limit: start.past_limit,
-                screen: starting
-                    .then(|| self.terminal.screen(&start.identity))
-                    .flatten(),
+                screen: starting.then(|| self.agent_on(start).screen()).flatten(),
                 dialog: start.dialog.as_ref().map(|dialog| dialog.words.clone()),
                 printed: start.printed.clone(),
                 last_words,
@@ -162,6 +257,7 @@ impl Engine {
                 mode,
                 conversation: start.conversation.clone(),
                 session: start.session.clone(),
+                terminal: start.terminal.clone(),
                 own,
             }
         });
@@ -172,7 +268,8 @@ impl Engine {
         let line = Engine::place_line(held, change, asking, None);
         let submission = match (&bound, place.kind.lands) {
             (Some(bound), true) if read_facts => bound.merge_queue.as_ref().map(|queue| {
-                let across = queue.read_submission(&place.repository, &place.branch);
+                let across = submission
+                    .unwrap_or_else(|| queue.read_submission(&place.repository, &place.branch));
                 if let SubmissionRead::CouldNotRead { reason } = &across.read {
                     cannot_read.push(format!("the merge queue: {reason}"));
                 }
@@ -227,6 +324,11 @@ impl Engine {
             kind: place.kind.name.clone(),
             version: place.kind.version,
             declared: place.declared,
+            identity: place
+                .kind_from
+                .as_ref()
+                .map(|from| from.identity.spelled.clone()),
+            kind_from: place.kind_from.clone(),
             name: place.name.clone(),
             branch: place.branch.clone(),
             base: place.base.clone(),
@@ -273,6 +375,42 @@ impl Engine {
 }
 
 impl Engine {
+    /// Each source the host declares as it stands when asked, by name: its
+    /// file, its packages' directory and every identity that directory
+    /// holds, or why its file or its directory cannot be read (56, 159,
+    /// 191; core.15).
+    pub(crate) fn host_sources(&self) -> Vec<SourceStatus> {
+        let kinds = self.resolver.kinds();
+        self.host
+            .sources()
+            .into_iter()
+            .map(|(name, source)| match source.read {
+                HostSourceRead::Read { kinds_dir } => {
+                    let (kinds, cannot_read) = match kinds.read_source(&name, &kinds_dir) {
+                        SourceRead::Read { kinds } => {
+                            (kinds.into_iter().map(|kind| kind.spelled).collect(), None)
+                        }
+                        SourceRead::CouldNotRead { reason } => (vec![], Some(reason)),
+                    };
+                    SourceStatus {
+                        name,
+                        source_file: source.file,
+                        kinds_dir: Some(kinds_dir),
+                        kinds,
+                        cannot_read,
+                    }
+                }
+                HostSourceRead::CouldNotRead { reason } => SourceStatus {
+                    name,
+                    source_file: source.file,
+                    kinds_dir: None,
+                    kinds: vec![],
+                    cannot_read: Some(reason),
+                },
+            })
+            .collect()
+    }
+
     /// The task group of the place's current stage where it repeats, as
     /// status gives it, read from the change at the branch's head (58,
     /// 139, 142).

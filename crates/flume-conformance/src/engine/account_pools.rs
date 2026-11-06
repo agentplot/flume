@@ -119,8 +119,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_reset_at_fifteen,
         },
         Scenario {
-            name: "account pools: a usage limit naming no reset pauses its account for an hour from the reading, and a later time already recorded is kept",
-            cites: &["146", "151", "153"],
+            name: "account pools: a usage limit naming no reset its profile reads pauses its account for an hour from the reading, status giving the words while it stands and none for a reset read, and a later time already recorded is kept",
+            cites: &["146", "151", "153", "56"],
             run: no_reset_named,
         },
         Scenario {
@@ -293,6 +293,7 @@ pub fn spent(world: &World, pool: &str, account: &str, until: Seconds) {
             until,
             words: Some("You've hit your session limit".into()),
             recorded_at: world.host.now(),
+            unread: false,
         }),
     );
 }
@@ -1325,6 +1326,19 @@ pub fn stops_at_limit(world: &World, name: &str, start: u32, until: Option<Secon
     who
 }
 
+/// The words status gives for the account `account` of the pool `work`,
+/// where flume read no reset in them (56, 146).
+fn spent_unread(world: &World, account: &str) -> Result<Option<String>, String> {
+    host(world)?
+        .pools
+        .into_iter()
+        .filter(|pool| pool.name == "work")
+        .flat_map(|pool| pool.accounts)
+        .find(|status| status.name == account)
+        .map(|status| status.spent_unread)
+        .ok_or_else(|| format!("status gives no account {account} of work"))
+}
+
 /// The account `account` of `pool`'s spent time as the host's document
 /// records it.
 fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent> {
@@ -1403,9 +1417,14 @@ fn a_reset_at_fifteen(_: &()) -> Outcome {
         "the fake's log shows no spent reading"
     );
     ensure_eq!(
-        spent_until(&world, "work", "work-1").map(|spent| spent.until),
-        Some(fifteen),
-        "work-1's spent time"
+        spent_until(&world, "work", "work-1").map(|spent| (spent.until, spent.unread)),
+        Some((fifteen, false)),
+        "work-1's spent time, its reset read"
+    );
+    ensure_eq!(
+        spent_unread(&world, "work-1")?,
+        None,
+        "status's words for a reset read"
     );
     // Another flume process, an engine of its own over the same store,
     // starts a stage of another place on the same pool before 15:00.
@@ -1439,9 +1458,18 @@ fn no_reset_named(_: &()) -> Outcome {
     let read_at = world.host.now();
     world.settle(&first);
     ensure_eq!(
-        spent_until(&world, "work", "work-1").map(|spent| (spent.until, spent.recorded_at)),
-        Some((read_at + 3600, read_at)),
-        "work-1's spent time and when it was recorded"
+        spent_until(&world, "work", "work-1").map(|spent| (
+            spent.until,
+            spent.recorded_at,
+            spent.unread
+        )),
+        Some((read_at + 3600, read_at, true)),
+        "work-1's spent time, when it was recorded, and that no reset was read"
+    );
+    ensure_eq!(
+        spent_unread(&world, "work-1")?,
+        Some("a usage limit this test writes".to_string()),
+        "the words status gives for work-1's hour"
     );
     let later = world.host.now() + 5 * 3600;
     let second = World::id("fix", "one");
@@ -1747,12 +1775,12 @@ fn reading(read_at: Seconds, used: u32) -> Usage {
     Usage {
         read_at,
         windows: vec![
-            Window {
+            UsageWindow {
                 name: "5-hour".into(),
                 used,
                 resets_at: Some(read_at + 5 * 3600),
             },
-            Window {
+            UsageWindow {
                 name: "7-day".into(),
                 used: 3_000,
                 resets_at: None,
@@ -1825,8 +1853,8 @@ pub fn reading_at(account: Account) -> Account {
 }
 
 /// A window `name`, `used` hundredths used, resetting at `resets_at`.
-pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
-    Window {
+pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> UsageWindow {
+    UsageWindow {
         name: name.into(),
         used,
         resets_at,
@@ -1834,7 +1862,7 @@ pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
 }
 
 /// The host writes `account`'s reading, read at `read_at`, of `windows`.
-pub fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<Window>) {
+pub fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<UsageWindow>) {
     world
         .host
         .set_usage(&usage_path(account), Ok(Usage { read_at, windows }));
@@ -2427,7 +2455,7 @@ fn a_reading_at_its_limit(_: &()) -> Outcome {
 
 /// The window of a reading leaving `left` hundredths, resetting an hour
 /// after `now`.
-fn leaving(now: Seconds, left: u32) -> Vec<Window> {
+fn leaving(now: Seconds, left: u32) -> Vec<UsageWindow> {
     vec![window("5-hour", 10_000 - left, Some(now + 3600))]
 }
 

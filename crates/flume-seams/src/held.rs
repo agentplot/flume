@@ -4,9 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindSettings, LabelHeld, PassedOver, PlaceId,
-    PlaceRef, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld, Settings, StopKind,
-    StreamHeld, Unsettled, Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, LabelHeld, PassedOver,
+    PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld,
+    Settings, StopKind, StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -75,6 +75,12 @@ pub struct HeldState {
     /// afresh after it (56, 146, S79).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub uncarried: Vec<UncarriedStart>,
+    /// Each terminal a start of the place's opened its agent in, each
+    /// once, as it was first opened in, so the place is tidied in each
+    /// whatever later starts of its stages record; none in a place
+    /// written before, whose stages' starts say theirs (137, 190).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub terminals: Vec<ProfileHeld>,
 }
 
 /// A start whose agent began without the settings its start recorded:
@@ -393,6 +399,10 @@ pub struct PlaceRecord {
     /// The kind as it resolved at the launch, its stages with it (21).
     pub kind: Kind,
     pub declared: Declared,
+    /// Where the kind came from, as the launch read it; none in a held
+    /// state written before a launch kept it (19, 21).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind_from: Option<KindFrom>,
     pub name: String,
     pub branch: String,
     pub base: String,
@@ -789,6 +799,10 @@ pub struct StartHeld {
     /// in a start written before (56, 180, 181).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<LabelHeld>,
+    /// The terminal its agent opened in, with where it came from; none in
+    /// a start written before, which is the host's (56, 190).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<ProfileHeld>,
     /// Its program's own settings beyond the keys its settings hold: each
     /// file a layer named for its program, and how its command passed the
     /// keys; none where no layer gave its program an entry, and in a start

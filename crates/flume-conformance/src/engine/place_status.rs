@@ -35,6 +35,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: every_fact_of_every_place,
         },
         Scenario {
+            name: "status: three places of one repository each give their own submission from one read of the merge queue naming all three branches, and each live agent's state is read once for its place and its base's count",
+            cites: &["58", "99", "139"],
+            run: one_read_for_every_place,
+        },
+        Scenario {
             name: "status: a fake terminal scripted to lack one entry for flume's plugin gives it as the host's terminal setup, and status opens, sends to and closes nothing",
             cites: &["122", "57", "72"],
             run: the_terminals_setup,
@@ -174,6 +179,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["195", "56", "32"],
             run: own_settings_of_another_program,
         },
+        Scenario {
+            name: "status: a place of a host's source's kind gives its identity, declared host, and where it came from: the source, its file, the kind's directory, its hash and the host's lock",
+            cites: &["19", "56", "191"],
+            run: a_kind_of_a_hosts_source,
+        },
+        Scenario {
+            name: "status: places of the repository's, a launch's and flume's own kinds give each identity and where it came from, the repository's file and revision, the launch's file, and flume's own hash with no lock",
+            cites: &["19", "56"],
+            run: the_repositorys_a_launchs_and_flumes_own,
+        },
+        Scenario {
+            name: "status: a place whose held state keeps no kind_from gives no identity or hash, its declared the source, and settles as before",
+            cites: &["21", "56"],
+            run: a_place_launched_before,
+        },
+        Scenario {
+            name: "status: the host's part gives each source with its file, its kinds_dir and every identity it holds, and a faulty one with its fault, read when asked",
+            cites: &["S96", "56", "159", "191"],
+            run: a_source_and_a_fault,
+        },
     ]
 }
 
@@ -310,6 +335,189 @@ fn own_settings_of_another_program(_: &()) -> Outcome {
     ensure!(
         !text.contains("programs.other") && json["settings"]["programs"].get("other").is_none(),
         "another program's entry in status: {text}"
+    );
+    Ok(())
+}
+
+fn a_kind_of_a_hosts_source(_: &()) -> Outcome {
+    use super::kind_sources::{holds, host_locks};
+    use crate::seams::kinds::{entry, hash_of};
+    let world = World::new();
+    holds(&world, "acme", "/kinds/acme", &[("review", 1, '1')]);
+    host_locks(&world, vec![entry("acme", "review", 1, &hash_of('1'))]);
+    launched(
+        &world
+            .engine
+            .launch(&launch("acme/review@1", "one", Some("x"))),
+    )?;
+    let status = world.status(&World::id("review", "one"))?;
+    ensure_eq!(
+        (status.identity.as_deref(), status.declared),
+        (Some("acme/review@1"), Declared::Host),
+        "the identity and declared"
+    );
+    let from = status.kind_from.ok_or("no kind_from")?;
+    ensure_eq!(
+        (
+            from.source.as_str(),
+            from.source_file,
+            from.kind_dir,
+            from.hash,
+            from.lock_file.as_deref()
+        ),
+        (
+            "acme",
+            Some(flume_fakes::source_file("acme")),
+            Some(flume_fakes::package_dir("/kinds/acme", "review", 1)),
+            Some(hash_of('1')),
+            Some(flume_fakes::HOST_LOCK)
+        ),
+        "where the kind came from"
+    );
+    ensure!(
+        from.declaration_file.is_none() && from.revision.is_none(),
+        "a host's source's kind names a declaration: {:?}",
+        (from.declaration_file, from.revision)
+    );
+    Ok(())
+}
+
+fn the_repositorys_a_launchs_and_flumes_own(_: &()) -> Outcome {
+    let world = World::new();
+    let mut bump = kind(
+        "bump",
+        false,
+        vec![stage("code", Some(Deliverable::Commits), "{{brief}}")],
+    );
+    bump.version = 2;
+    world.kinds.set_kinds(REPOSITORY, vec![bump]);
+    let declaration = "/caller/kinds.toml";
+    world.kinds.set_declaration(
+        declaration,
+        vec![kind(
+            "spike",
+            false,
+            vec![stage("try", Some(Deliverable::Commits), "{{brief}}")],
+        )],
+    );
+    let base = world.git.branch_head(REPOSITORY, "main").ok_or("main")?;
+    launched(&world.engine.launch(&launch("bump", "one", Some("x"))))?;
+    let mut carried = launch("spike", "one", Some("x"));
+    carried.declaration = Some(declaration.into());
+    launched(&world.engine.launch(&carried))?;
+    launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    let of = |kind: &str, name: &str| -> Result<(Option<String>, KindFrom), String> {
+        let status = world.status(&World::id(kind, name))?;
+        Ok((status.identity, status.kind_from.ok_or("no kind_from")?))
+    };
+    let (identity, from) = of("bump", "one")?;
+    ensure_eq!(identity.as_deref(), Some("repo/bump@2"), "the repository's");
+    ensure_eq!(
+        (
+            from.source.as_str(),
+            from.declaration_file.as_deref(),
+            from.revision
+        ),
+        ("repo", Some(".config/flume.toml"), Some(base)),
+        "where the repository's came from"
+    );
+    let (identity, from) = of("spike", "one")?;
+    ensure_eq!(identity.as_deref(), Some("launch/spike@1"), "the launch's");
+    ensure_eq!(
+        (from.source.as_str(), from.declaration_file.as_deref()),
+        ("launch", Some(declaration)),
+        "where the launch's came from"
+    );
+    ensure!(
+        from.hash.is_none() && from.lock_file.is_none(),
+        "a declaration's kind names a hash or a lock: {from:?}"
+    );
+    let (identity, from) = of("change", "plan")?;
+    ensure_eq!(identity.as_deref(), Some("flume/change@2"), "flume's own");
+    let own = world
+        .kinds
+        .flumes_own()
+        .into_iter()
+        .find(|own| own.identity.spelled == "flume/change@2")
+        .ok_or("flume holds no change@2")?;
+    ensure_eq!(
+        (from.source.as_str(), from.hash, from.lock_file),
+        ("flume", Some(own.hash), None),
+        "where flume's own came from"
+    );
+    Ok(())
+}
+
+fn a_place_launched_before(_: &()) -> Outcome {
+    let world = World::new();
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let id = World::id("fix", "one");
+    let mut held = world.held(&id).ok_or("no place")?;
+    held.place.kind_from = None;
+    world.store.put(&id, held);
+    let status = world.status(&id)?;
+    ensure_eq!(
+        (status.identity, status.kind_from, status.declared),
+        (None, None, Declared::Flume),
+        "the kind's identity, where it came from, and declared"
+    );
+    world.settle(&id);
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    Ok(())
+}
+
+fn a_source_and_a_fault(_: &()) -> Outcome {
+    use super::kind_sources::holds;
+    let world = World::new();
+    holds(
+        &world,
+        "acme",
+        "/kinds/acme",
+        &[("review", 1, '1'), ("review", 2, '2')],
+    );
+    world.host.faulty_source(
+        "bad",
+        "it gives no kinds_dir, the directory of its packages",
+    );
+    let sources = match world.engine.status(None) {
+        Answer::Status { host, .. } => host.sources,
+        other => return Err(format!("status answered {other:?}")),
+    };
+    ensure_eq!(
+        sources,
+        vec![
+            flume_core::SourceStatus {
+                name: "acme".into(),
+                source_file: flume_fakes::source_file("acme"),
+                kinds_dir: Some("/kinds/acme".into()),
+                kinds: vec!["acme/review@1".into(), "acme/review@2".into()],
+                cannot_read: None,
+            },
+            flume_core::SourceStatus {
+                name: "bad".into(),
+                source_file: flume_fakes::source_file("bad"),
+                kinds_dir: None,
+                kinds: vec![],
+                cannot_read: Some("it gives no kinds_dir, the directory of its packages".into()),
+            },
+        ],
+        "the host's sources"
+    );
+    world.kinds.set_package(
+        "/kinds/acme",
+        super::kind_sources::packaged("lint", 1),
+        "sha256:0",
+    );
+    let again = match world.engine.status(None) {
+        Answer::Status { host, .. } => host.sources,
+        other => return Err(format!("status answered {other:?}")),
+    };
+    ensure_eq!(
+        again[0].kinds.len(),
+        3,
+        "the source's identities, read again when asked"
     );
     Ok(())
 }
@@ -719,6 +927,49 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
     Ok(())
 }
 
+fn one_read_for_every_place(_: &()) -> Outcome {
+    let world = World::new();
+    for name in ["one", "two", "three"] {
+        launched(&world.engine.launch(&launch("fix", name, Some("x"))))?;
+    }
+    world.engine().settle(None);
+    let handed =
+        world
+            .queue
+            .hand_submission(REPOSITORY, "fix/two", "main", SubmissionState::Waiting);
+    world.queue.log.clear();
+    world.terminal.log.clear();
+    let all = places(world.engine.status(None))?;
+    ensure_eq!(
+        world.queue.log.of("read_submission"),
+        vec![format!(
+            "read_submission {REPOSITORY} fix/one fix/three fix/two"
+        )],
+        "the merge queue's reads"
+    );
+    for place in &all {
+        let submission = place.submission.as_ref().ok_or("no submission")?;
+        let expected = match place.name.as_str() {
+            "two" => SubmissionRead::Found {
+                submission: handed.clone(),
+            },
+            _ => SubmissionRead::None,
+        };
+        ensure_eq!(
+            submission.read,
+            expected,
+            format!("{}'s submission", place.name)
+        );
+        ensure!(place.agent.is_some(), "{} has no agent", place.name);
+    }
+    ensure_eq!(
+        world.terminal.log.count("state"),
+        3,
+        "the agents' states read"
+    );
+    Ok(())
+}
+
 fn a_line_in_status(_: &()) -> Outcome {
     let world = World::new();
     let id = super::account_pools::begun_fix(&world, "parser")?;
@@ -1074,6 +1325,7 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 2,
                     bound: Some(4),
                     spent_until: None,
+                    spent_unread: None,
                     reading: None,
                     past: None,
                 },
@@ -1083,6 +1335,7 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 0,
                     bound: None,
                     spent_until: Some(until),
+                    spent_unread: None,
                     reading: None,
                     past: None,
                 },

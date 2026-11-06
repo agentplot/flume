@@ -46,6 +46,22 @@ impl Resolver for WithKinds {
     fn agent(&self, program: &str) -> Option<Arc<dyn Agent>> {
         self.fakes.agent(program)
     }
+
+    fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>> {
+        self.fakes.terminal(profile)
+    }
+
+    fn terminal_profiles(&self) -> Vec<String> {
+        self.fakes.terminal_profiles()
+    }
+
+    fn window(&self, profile: &str) -> Option<Arc<dyn Window>> {
+        self.fakes.window(profile)
+    }
+
+    fn window_profiles(&self) -> Vec<String> {
+        self.fakes.window_profiles()
+    }
 }
 
 /// An engine over `world`'s fakes and the kinds profile `kinds`, as the

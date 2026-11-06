@@ -4,10 +4,13 @@
 //! process and that process's start, the bound and the agents' settings
 //! the host's configuration states, the role runs, streams, pools and
 //! labels it names, its values with their layers, an account's reading
-//! from the file its `usage` names, the recipient the calling command's
-//! environment names, the host user's login environment, and the room
-//! lock at `$XDG_STATE_HOME/flume/room.lock` (41, 70, 75, 184; design 6,
-//! 10). No tool is named here (core.1).
+//! from the file its `usage` names, the sources of kinds it declares and
+//! its lock of kinds beside them, the recipient the calling command's
+//! environment names, the host user's login environment, the room lock
+//! at `$XDG_STATE_HOME/flume/room.lock`, and the lock `flume kinds lock`
+//! holds while it writes a lock of kinds, at
+//! `$XDG_STATE_HOME/flume/kinds-lock.lock` (41, 70, 75, 155, 184, 191;
+//! design 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
@@ -16,8 +19,8 @@ pub mod usage;
 
 use config::HostConfig;
 use flume_seams::{
-    Host, HostConfiguration, HostSettings, LabelHeld, Pool, PoolNamed, RoleRun, RoomGuard, Seconds,
-    Secret, Stream, StreamHeld, Usage,
+    Host, HostConfiguration, HostSettings, HostSource, LabelHeld, Pool, PoolNamed, RoleRun,
+    RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, Usage,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -26,6 +29,25 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// The system a profile is built for: macOS, or any other, so a profile
+/// whose program differs between them holds both paths on any host (C.8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum System {
+    MacOs,
+    Other,
+}
+
+impl System {
+    /// The system this host runs.
+    pub fn of_host() -> System {
+        if cfg!(target_os = "macos") {
+            System::MacOs
+        } else {
+            System::Other
+        }
+    }
+}
 
 /// The host this command runs on.
 #[derive(Clone, Debug)]
@@ -91,6 +113,30 @@ impl RealHost {
     pub fn room_lock(&self) -> PathBuf {
         self.state.join("room.lock")
     }
+}
+
+/// The file of the advisory lock `flume kinds lock` holds, under flume's
+/// state directory (155; design 6).
+pub const WRITING_KINDS_LOCK: &str = "kinds-lock.lock";
+
+/// The advisory lock `flume kinds lock` holds while it reads and writes a
+/// lock of kinds, the host's or a working copy's, so two writers on the
+/// host never lose each other's entry; it lies under flume's state
+/// directory, so nothing but the lock is written in a working copy, and
+/// is held while the file lives (74, 155; design 6; core.16, core.17).
+pub fn writing_kinds_lock() -> Result<File, String> {
+    let path = config::flume_state()?.join(WRITING_KINDS_LOCK);
+    path.parent()
+        .map_or(Ok(()), fs::create_dir_all)
+        .and_then(|()| {
+            OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(&path)
+        })
+        .and_then(|file| file.lock().map(|()| file))
+        .map_err(|error| format!("the lock {} cannot be taken: {error}", path.display()))
 }
 
 /// The host user's login environment: what their login shell sets,
@@ -291,6 +337,10 @@ impl Host for RealHost {
         self.config.pool_for(stream)
     }
 
+    fn display_for(&self, stream: &str) -> StreamDisplay {
+        self.config.display_for(stream)
+    }
+
     fn pool(&self, name: &str) -> Option<Pool> {
         self.config.pools.get(name).cloned()
     }
@@ -303,6 +353,24 @@ impl Host for RealHost {
 
     fn login(&self, name: &str) -> Option<String> {
         self.login_environment().get(name).cloned()
+    }
+
+    /// The sources as this command read the configuration: each command
+    /// reads them as they stand (159, 191, C.7).
+    fn sources(&self) -> BTreeMap<String, HostSource> {
+        self.config.sources.clone()
+    }
+
+    /// `sources/` beside `config.toml` (191, C.7).
+    fn sources_dir(&self) -> Option<String> {
+        let dir = self.config.dir.as_ref()?;
+        Some(dir.join(config::SOURCES).to_string_lossy().into_owned())
+    }
+
+    /// `flume.lock` beside `config.toml` (155, C.7).
+    fn kinds_lock(&self) -> Option<String> {
+        let dir = self.config.dir.as_ref()?;
+        Some(dir.join(config::KINDS_LOCK).to_string_lossy().into_owned())
     }
 
     /// A line appended to `$XDG_STATE_HOME/flume/flume.log` with the

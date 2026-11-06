@@ -54,7 +54,17 @@
 //! the token `flume` (139), and says where it shows them, the place's
 //! tab and its base's workspace on its live agent's server, its agent's
 //! pane, and each of the base's workspaces, each as `herdr:<id>@<socket>`
-//! from its records, for flume's herdr plugin to refresh them (C.5). The watch is flume's herdr plugin's: while a
+//! from its records, for flume's herdr plugin to refresh them (C.5).
+//! attach gives a window `<herdr> session attach <name>`, the session's
+//! server found or started headless first, `<herdr>` the full path of the
+//! herdr the profile's calls run, and `XDG_CONFIG_HOME` where they run
+//! under one; it refuses the app's view, herdr 0.9.5 having no app of its
+//! own, and its own part on a server held by its socket alone, since
+//! herdr attaches a client by a session's name (107, 187). runs reads one
+//! `herdr session list --json`, bounded at a second, and finds the part
+//! by its name, the own session `flume`, or an own server held by its
+//! socket alone by the session listed at that socket, and starts no
+//! server, where attach starts one (201). The watch is flume's herdr plugin's: while a
 //! watch of it has renewed its lease within the lease's term, a minute,
 //! the profile answers its bound, thirty seconds, and no watch
 //! otherwise, reading the lease and starting nothing (119, 122; design
@@ -83,8 +93,9 @@
 
 use crate::host::process::{executable, program_path};
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, FolderTrust, Identity, OpenIn, Opened, PlaceRef, Sent,
-    Shown, ShownAt, Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
+    PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    ViewCommand, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -103,6 +114,10 @@ pub const NAME: &str = "herdr";
 
 /// The bound on a herdr call that states none (98).
 pub const BOUND: Duration = Duration::from_secs(10);
+
+/// The bound on runs' one session listing, which herdr answers in
+/// milliseconds (201, C.5).
+pub const RUNS_BOUND: Duration = Duration::from_secs(1);
 
 /// The bound flume's herdr plugin settles every place on while its watch
 /// runs (122).
@@ -413,6 +428,13 @@ impl Herdr {
     /// The bound on each call, in place of ten seconds.
     pub fn with_bound(mut self, bound: Duration) -> Herdr {
         self.bound = bound;
+        self
+    }
+
+    /// herdr run as `program`, in place of the `herdr` on the `PATH`; for
+    /// tests, which stand a herdr of their own in for it.
+    pub fn with_program(mut self, program: impl Into<PathBuf>) -> Herdr {
+        self.program = program.into();
         self
     }
 
@@ -867,6 +889,33 @@ impl Herdr {
         } else {
             AgentState::Unknown
         }
+    }
+
+    /// The herdr the profile's calls run, by its full path: its program
+    /// where that is absolute, else the first executable of its name on
+    /// the `PATH` this command runs under, as a call finds it; none where
+    /// there is none (187).
+    fn program_found(&self) -> Option<PathBuf> {
+        if self.program.is_absolute() {
+            return Some(self.program.clone());
+        }
+        let path = std::env::var("PATH").unwrap_or_default();
+        path.split(':')
+            .filter(|dir| !dir.is_empty())
+            .map(|dir| Path::new(dir).join(&self.program))
+            .find(|candidate| {
+                fs::metadata(candidate)
+                    .is_ok_and(|found| found.is_file() && found.permissions().mode() & 0o111 != 0)
+            })
+            .map(|found| {
+                if found.is_absolute() {
+                    found
+                } else {
+                    std::env::current_dir()
+                        .map(|dir| dir.join(&found))
+                        .unwrap_or(found)
+                }
+            })
     }
 
     /// The socket of `server`: a session's, as `herdr session list`
@@ -2210,6 +2259,121 @@ impl Terminal for Herdr {
 
     fn session(&self) -> Option<String> {
         self.caller.as_ref().map(Pane::session)
+    }
+
+    /// For a window, `<herdr> session attach <name>`, the session's
+    /// server found or started first as open does, `<herdr>` the full path
+    /// of the herdr the profile's calls run and `XDG_CONFIG_HOME` the
+    /// sessions' home they run under where they run under one; the
+    /// profile's own session where none is named, refused where its own
+    /// server is held by its socket alone. herdr 0.9.5 has no app of its
+    /// own, so the app's view is refused before anything is run (107,
+    /// 187, C.5; core.29).
+    fn attach(&self, session: Option<&str>, view: View) -> Attached {
+        let refused = |reason: String| Attached::Refused { reason };
+        if view == View::App {
+            return refused(
+                "herdr 0.9.5 has no app of its own; the Herdr app runs on herdr-core, a backend \
+                 apart with sessions of its own"
+                    .into(),
+            );
+        }
+        let name = match (session, &self.server) {
+            (Some(name), _) => name.to_string(),
+            (None, Server::Session(own)) => own.clone(),
+            (None, Server::Socket(socket)) => {
+                return refused(format!(
+                    "herdr attaches a client by a session's name, and this profile's own \
+                     server is held by its socket alone, {}",
+                    socket.display()
+                ))
+            }
+        };
+        let Some(program) = self.program_found() else {
+            return refused(format!(
+                "no {} is on the PATH this command runs under",
+                self.program.display()
+            ));
+        };
+        if let Err(reason) = self.socket_of(&Server::Session(name.clone())) {
+            return refused(reason);
+        }
+        let home = self
+            .session_home
+            .clone()
+            .or_else(|| std::env::var_os(SESSION_HOME).map(PathBuf::from));
+        Attached::Command {
+            command: ViewCommand {
+                program: program.to_string_lossy().into_owned(),
+                arguments: vec!["session".into(), "attach".into(), name],
+                environment: home
+                    .map(|home| {
+                        BTreeMap::from([(
+                            SESSION_HOME.to_string(),
+                            home.to_string_lossy().into_owned(),
+                        )])
+                    })
+                    .unwrap_or_default(),
+            },
+        }
+    }
+
+    /// From one `herdr session list --json`, bounded at a second: the
+    /// session by its name, the profile's own where none is named, running
+    /// where herdr lists it running and not running where it lists it
+    /// otherwise or not at all; an own server held by its socket alone by
+    /// the session listed at that socket, unread where none is. A listing
+    /// not read within the bound, refused or not parsed is unread in
+    /// herdr's words. Nothing is started (201, C.5; core.13, core.29).
+    fn runs(&self, session: Option<&str>) -> SessionRuns {
+        let unread = |reason: String| SessionRuns::Unread { reason };
+        let listing = match self.run(None, &["session", "list", "--json"], RUNS_BOUND) {
+            Ok((true, listing, _)) => listing,
+            Ok((false, _, errors)) => {
+                return unread(format!("herdr session list --json: {}", errors.trim()))
+            }
+            Err(words) => return unread(words),
+        };
+        let listed: Value = match serde_json::from_str(listing.trim()) {
+            Ok(listed) => listed,
+            Err(error) => return unread(format!("herdr session list --json: {error}")),
+        };
+        let sessions = listed
+            .get("sessions")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let by_name = |name: &str| {
+            let found = sessions
+                .iter()
+                .find(|listed| listed.get("name").and_then(Value::as_str) == Some(name));
+            (name.to_string(), found)
+        };
+        let found = match (session, &self.server) {
+            (Some(name), _) => by_name(name),
+            (None, Server::Session(own)) => by_name(own),
+            (None, Server::Socket(socket)) => {
+                let found = sessions.iter().find(|listed| {
+                    listed
+                        .get("socket_path")
+                        .and_then(Value::as_str)
+                        .is_some_and(|listed| Path::new(listed) == socket)
+                });
+                let Some(name) = found.and_then(|found| found.get("name")?.as_str()) else {
+                    return unread(format!(
+                        "herdr session list --json lists no session at {}",
+                        socket.display()
+                    ));
+                };
+                (name.to_string(), found)
+            }
+        };
+        match found {
+            (name, Some(listed)) if listed.get("running") == Some(&Value::Bool(true)) => {
+                SessionRuns::Runs { name }
+            }
+            (name, _) => SessionRuns::NotRunning { name },
+        }
     }
 }
 

@@ -41,7 +41,7 @@
 //! mode than its start asked at both its starts is never begun, naming
 //! both modes (S67; 161, 162); an agent run only after its start was
 //! read never begun acks its start and its prompt, its stage is read
-//! begun, and a retry leaves it be (35, 38, 50); and a fix's code agent's
+//! begun, and a retry leaves it be (35, 38, 50); a fix's code agent's
 //! line, asked by `flume hook status-line` in its environment as the
 //! plugin's module asks it, is status's line asked alone and in full, and
 //! the fix lands, while a change@2 code agent's names its group, its run
@@ -54,12 +54,18 @@
 //! 196); seven launches whose own settings give a reserved key, hold a
 //! credential or name a file that cannot be read are refused naming the
 //! key, the layer and the file, never the value, making nothing (S101; 4,
-//! 157, 195); and a fork's attribution is the host's for every stage of a
+//! 157, 195); a fork's attribution is the host's for every stage of a
 //! fix and a chore, a repository's its own `[agents]`' and a third's its
-//! account's, each landing (S102; 32, 195, C.2, C.7).
+//! account's, each landing (S102; 32, 195, C.2, C.7); and a host's
+//! source's kind, locked by `flume kinds lock --host --hash`, runs and
+//! lands, a second version added and its source's file renamed over, the
+//! next launch running it and the place launched before landing on its own
+//! version (design 13; 21, 154, 155, 159, 191).
 
 use super::walk::*;
 use flume::profiles::agent::claude::carry::UNREACHED;
+use flume::profiles::kinds::weir::Weir;
+use flume_seams::{Kinds, PackageRead};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -2477,4 +2483,203 @@ fn a_forks_attribution_is_the_hosts_a_repositorys_its_own_and_another_its_accoun
     );
     until_landed(&plain, &place);
     assert_eq!(plain.on_remote("plain.rs").as_deref(), Some("fixed\n"));
+}
+
+/// Writes acme's `review@<version>` in `kinds_dir`: one code stage whose
+/// agent commits, in a kind that lands, its prompt naming its version;
+/// gives its hash as the kinds profile reads it (156, 157, 159).
+fn review_package(kinds_dir: &Path, version: u32) -> String {
+    let dir = kinds_dir.join(format!("review@{version}"));
+    std::fs::create_dir_all(dir.join("prompts")).expect("the package's folder");
+    std::fs::write(
+        dir.join("kind.toml"),
+        format!(
+            "[kinds.review]\nversion = {version}\nbranch = \"review\"\nstarts_unready = true\nlands = true\n\n\
+             [[kinds.review.stages]]\nname = \"code\"\nprompt = \"prompts/code.md\"\n\
+             deliverables = [\"commits\"]\nagents = [{{}}]\n"
+        ),
+    )
+    .expect("the package's declaration");
+    std::fs::write(
+        dir.join("prompts/code.md"),
+        format!(
+            "You are acme's review@{version}, the {{{{kind}}}} {{{{name}}}} in {{{{place}}}} on {{{{branch}}}}.\n\n{{{{brief}}}}\n\nCommit the work on {{{{branch}}}}.\n"
+        ),
+    )
+    .expect("the package's prompt");
+    match Weir.read_package("acme", &kinds_dir.to_string_lossy(), "review", version) {
+        PackageRead::Read { package } => package.hash,
+        PackageRead::CouldNotRead { reason } => panic!("review@{version} not read: {reason}"),
+    }
+}
+
+/// Declares the host's source acme at `kinds_dir`, as a program that
+/// manages the host does: its file written beside under a name flume
+/// does not read, then renamed over `acme.toml` (191, C.7; design 12).
+fn declare_acme(walk: &Walk, kinds_dir: &Path) -> PathBuf {
+    let sources = walk.home().join("config/flume/sources");
+    std::fs::create_dir_all(&sources).expect("the sources directory");
+    let written = sources.join(".acme.toml.tmp");
+    std::fs::write(
+        &written,
+        format!("kinds_dir = \"{}\"\n", kinds_dir.display()),
+    )
+    .expect("the source's file");
+    let file = sources.join("acme.toml");
+    std::fs::rename(&written, &file).expect("the source's file renamed over");
+    file
+}
+
+/// Launches `kind` as the place `review--<name>` and gives its location,
+/// as the launch answers it.
+fn launch_review(walk: &Walk, kind: &str, name: &str) -> String {
+    let launched = walk.flume(&[
+        "launch",
+        "--kind",
+        kind,
+        "--name",
+        name,
+        "--brief",
+        &format!("Review the parser for {name}."),
+    ]);
+    launched["launched"]["place"]["place"]
+        .as_str()
+        .unwrap_or_else(|| panic!("a place launched: {launched}"))
+        .to_string()
+}
+
+#[test]
+fn a_hosts_source_runs_its_locked_kind_and_a_place_keeps_its_version() {
+    // Design 13; 21, 154, 155, 159, 191: the host's source acme holds
+    // review@1, locked by `flume kinds lock --host --hash`; a launch of
+    // `acme/review` runs it, status naming acme/review@1 from the
+    // source's file and the kind's directory with its hash, locked in the
+    // host's lock. review@2 is then added and locked, and `acme.toml`
+    // renamed over by one naming a directory holding review@2 alone: the
+    // next launch of `acme/review` runs review@2, one of `acme/review@1`
+    // is refused, and the place of review@1 launched before runs on with
+    // its own prompt to its landing, as does the place of review@2.
+    let walk = Walk::new("walk-source");
+    let first = walk.repository.scratch.path("packages/acme-1");
+    let one_hash = review_package(&first, 1);
+    let acme = declare_acme(&walk, &first);
+    let lock = walk.home().join("config/flume/flume.lock");
+    let locked = walk.flume(&[
+        "kinds",
+        "lock",
+        "--host",
+        "--hash",
+        &one_hash,
+        "acme/review@1",
+    ]);
+    assert_eq!(
+        locked["locked"]["lock_file"],
+        lock.to_string_lossy().as_ref(),
+        "{locked}"
+    );
+
+    let one = launch_review(&walk, "acme/review", "one");
+    let status = walk.status(&one);
+    assert_eq!(status["identity"], "acme/review@1", "{status}");
+    assert_eq!(status["declared"], "host", "{status}");
+    assert_eq!(
+        status["kind_from"],
+        json!({
+            "identity": {"source": "acme", "name": "review", "version": 1, "spelled": "acme/review@1"},
+            "source": "acme",
+            "source_file": acme.to_string_lossy(),
+            "kind_dir": first.join("review@1").to_string_lossy(),
+            "hash": one_hash,
+            "lock_file": lock.to_string_lossy(),
+        }),
+        "{status}"
+    );
+    let person = walk.person(&["status", &one]);
+    assert!(
+        person.contains(&format!(
+            "  kind acme/review@1 from the source acme ({}) at {}, its hash {one_hash}, locked in {}",
+            acme.display(),
+            first.join("review@1").display(),
+            lock.display()
+        )),
+        "{person}"
+    );
+    assert!(
+        walk.prompt(&one).contains("You are acme's review@1"),
+        "{}",
+        walk.prompt(&one)
+    );
+
+    let second = walk.repository.scratch.path("packages/acme-2");
+    let two_hash = review_package(&second, 2);
+    assert_eq!(declare_acme(&walk, &second), acme);
+    walk.flume(&[
+        "kinds",
+        "lock",
+        "--host",
+        "--hash",
+        &two_hash,
+        "acme/review@2",
+    ]);
+    let sources = &walk.host()["sources"];
+    assert_eq!(
+        sources,
+        &json!([{
+            "name": "acme",
+            "source_file": acme.to_string_lossy(),
+            "kinds_dir": second.to_string_lossy(),
+            "kinds": ["acme/review@2"],
+        }]),
+        "{sources}"
+    );
+    let two = launch_review(&walk, "acme/review", "two");
+    let status = walk.status(&two);
+    assert_eq!(status["identity"], "acme/review@2", "{status}");
+    assert_eq!(status["kind_from"]["hash"], two_hash.as_str(), "{status}");
+    assert_eq!(
+        status["kind_from"]["kind_dir"],
+        second.join("review@2").to_string_lossy().as_ref(),
+        "{status}"
+    );
+    assert!(
+        walk.prompt(&two).contains("You are acme's review@2"),
+        "{}",
+        walk.prompt(&two)
+    );
+    let (refused, was) = walk.flume_ran(&[
+        "launch",
+        "--kind",
+        "acme/review@1",
+        "--name",
+        "three",
+        "--brief",
+        "Review it again.",
+    ]);
+    assert!(was, "{refused}");
+    assert!(
+        refused["refused"]["refusal"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("the source acme holds no acme/review@1")),
+        "{refused}"
+    );
+
+    let status = walk.status(&one);
+    assert_eq!(status["identity"], "acme/review@1", "{status}");
+    assert_eq!(
+        status["kind_from"]["source_file"],
+        acme.to_string_lossy().as_ref()
+    );
+    assert_eq!(
+        status["kind_from"]["kind_dir"],
+        first.join("review@1").to_string_lossy().as_ref(),
+        "the directory as the launch read it"
+    );
+    assert!(walk.prompt(&one).contains("You are acme's review@1"));
+    walk.agent(&one, commits("one.rs", "fn one() {}\n"));
+    until_landed(&walk, &one);
+    assert_eq!(walk.on_remote("one.rs").as_deref(), Some("fn one() {}\n"));
+    walk.agent(&two, commits("two.rs", "fn two() {}\n"));
+    until_landed(&walk, &two);
+    assert_eq!(walk.on_remote("two.rs").as_deref(), Some("fn two() {}\n"));
+    assert!(!Path::new(&one).exists() && !Path::new(&two).exists());
 }
