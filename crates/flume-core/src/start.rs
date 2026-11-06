@@ -343,15 +343,27 @@ impl Engine {
         // A stream whose labels are at fault, or whose multiplexer names a
         // terminal profile the resolver does not carry, starts no stage:
         // its words refuse the start before its settings are resolved (4,
-        // 181, 182, 190).
+        // 181, 182, 190). Where the settings name no pane and no session,
+        // the stream's word for the stage's kind or the stage, read once
+        // they are resolved, refuses it where that word is at fault (4,
+        // 107, 199).
         let resolution = match (
             queue.stream(&place.stream.name).fault,
             self.stream_terminal(&place.stream.name),
         ) {
             (Some(fault), _) | (None, Err(fault)) => Err(fault),
-            (None, Ok(terminal)) => self
-                .resolution(place, &place.kind.stages[index])
-                .map(|resolution| (resolution, terminal)),
+            (None, Ok(terminal)) => {
+                let stage = &place.kind.stages[index];
+                self.resolution(place, stage).and_then(|resolution| {
+                    let opens_in = queue.session_of(
+                        &place.stream.name,
+                        &place.kind.name,
+                        &stage.name,
+                        &resolution.resolved.settings,
+                    )?;
+                    Ok((resolution, terminal, opens_in))
+                })
+            }
         };
         let now = self.host.now();
         let affinity = queue
@@ -361,7 +373,7 @@ impl Engine {
         let program = resolution
             .as_ref()
             .ok()
-            .and_then(|(resolution, _)| resolution.resolved.settings.program.clone());
+            .and_then(|(resolution, _, _)| resolution.resolved.settings.program.clone());
         let stage_name = &place.kind.stages[index].name;
         // A stage waiting after its agent stopped at its account's usage
         // limit, or after its caller's retry of a conversation reported
@@ -413,12 +425,12 @@ impl Engine {
         // the login environment's, an empty one; a spent agent always ran
         // under an account (146, 179).
         let carry = match (&after, &chosen, &resolution) {
-            (Some(after), Choice::Chose { .. }, Ok((resolution, _))) if after.carry => Some(
+            (Some(after), Choice::Chose { .. }, Ok((resolution, _, _))) if after.carry => Some(
                 resolution
                     .agent
                     .carry(&self.store.folder(id), &after.start, &env),
             ),
-            (Some(after), Choice::NoPool, Ok((resolution, _))) if after.carry && lost => Some(
+            (Some(after), Choice::NoPool, Ok((resolution, _, _))) if after.carry && lost => Some(
                 resolution
                     .agent
                     .carry(&self.store.folder(id), &after.start, &BTreeMap::new()),
@@ -513,8 +525,8 @@ impl Engine {
             {
                 return Step::Write(Err(Start::AgentLive));
             }
-            let (resolution, (terminal, named)) = match &resolution {
-                Ok((resolution, terminal)) => (resolution, terminal),
+            let (resolution, (terminal, named), opens_in) = match &resolution {
+                Ok((resolution, terminal, opens_in)) => (resolution, terminal, opens_in),
                 Err(reason) => {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::Refused;
@@ -622,7 +634,6 @@ impl Engine {
                     );
                 }
             }
-            let opens_in = queue.session_of(&held.place.stream.name, &resolution.resolved.settings);
             let secret = self.host.secret();
             let program = resolution
                 .resolved
@@ -707,7 +718,7 @@ impl Engine {
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
                 terminal: terminal.clone(),
-                opens_in,
+                opens_in: opens_in.clone(),
                 account,
                 mode: resolution.mode.clone(),
                 resume: resume.clone(),

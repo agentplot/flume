@@ -108,11 +108,6 @@ pub const EFFORT: &str = "an-agents-effort-is-a-setting-of-flumes-layers, record
 /// an answer kept open for it, `keep_open` one of flume's layers.
 pub const KEEP_OPEN: &str = "an-answer-reaches-the-open-session-within-an-hour, record 0046";
 
-/// The change that built record 0048, a session of its own for a kind or
-/// a stage of a stream, which landed on main after this branch was cut.
-pub const KIND_SESSIONS: &str =
-    "where-an-agent-opens-is-given-by-kind-and-by-stage, record 0048, landed on main after this branch was cut";
-
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
 /// asks none to be cited.
@@ -152,9 +147,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
     let keep_open = std::iter::once("198".to_string())
         .chain((104..=105).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, KEEP_OPEN));
-    let kind_sessions = std::iter::once("199".to_string())
-        .chain((106..=107).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, KIND_SESSIONS));
     standing
         .chain(plan)
         .chain(points)
@@ -165,7 +157,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(settings)
         .chain(effort)
         .chain(keep_open)
-        .chain(kind_sessions)
         .collect()
 }
 
@@ -225,10 +216,7 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(
-            unbuilt.len(),
-            3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 5 + 2 + 3 + 3
-        );
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 5 + 2 + 3);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
@@ -236,8 +224,8 @@ mod tests {
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
             "S84", "S85", "184", "185", "186", "187", "188", "189", "190", "S86", "S87", "S88",
             "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
-            "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "207", "S113", "S114",
-            "S115", "S116", "S117",
+            "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "199", "S106", "S107",
+            "207", "S113", "S114", "S115", "S116", "S117",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

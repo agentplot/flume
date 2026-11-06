@@ -108,8 +108,8 @@ pub trait TerminalHarness {
     }
 
     /// Every call the terminal logged, in order, where it logs them as
-    /// the fakes do, each runs as `runs <part>`, its own part `own`; none
-    /// where it logs nothing (201).
+    /// the fakes do, each runs as `runs <part> <part>…`, its own part
+    /// `own`; none where it logs nothing (201).
     fn logged(&self) -> Option<Vec<String>> {
         None
     }
@@ -239,7 +239,7 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             run: setup_gives_what_is_lacking::<H>,
         },
         Scenario {
-            name: "terminal: runs reads whether each part runs, by the name the terminal knows it by, or that it holds no part or could not read it, and starts nothing",
+            name: "terminal: runs reads whether each part runs, alone or several in one reading, by the name the terminal knows it by, or that it holds no part or could not read it, and starts nothing",
             cites: &["201"],
             run: runs_reads_each_part::<H>,
         },
@@ -248,38 +248,48 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
 
 /// The seam-contracts spec's runs over the fake: each part answered as
 /// the harness has it, in words where it holds no part or could not
-/// read it; nothing logged but each asking, so nothing opened; and each
-/// asked again answered the same, so nothing started (201).
+/// read it; the parts asked together in one call answered each as alone,
+/// in the order asked; nothing logged but each asking, one for each call,
+/// so nothing opened; and each asked again answered the same, so nothing
+/// started (201).
 fn runs_reads_each_part<H: TerminalHarness>(harness: &H) -> Outcome {
     let parts = harness.runs_parts();
+    if parts.is_empty() {
+        return Ok(());
+    }
+    let of =
+        |part: &Option<String>| format!("runs of {}", part.as_deref().unwrap_or("its own part"));
     for (part, due) in &parts {
-        let of = format!("runs of {}", part.as_deref().unwrap_or("its own part"));
-        let answer = harness.seam().runs(part.as_deref());
-        ensure_eq!(answer, *due, of);
-        let words = match &answer {
+        let answer = harness.seam().runs(&[part.as_deref()]);
+        ensure_eq!(answer, vec![due.clone()], of(part));
+        let words = match &answer[0] {
             SessionRuns::Runs { name } | SessionRuns::NotRunning { name } => name,
             SessionRuns::NoPart { reason } | SessionRuns::Unread { reason } => reason,
         };
         ensure!(
             !words.trim().is_empty(),
-            "{of} gave {answer:?}, with no words"
+            "{} gave {answer:?}, with no words",
+            of(part)
         );
     }
+    let asked: Vec<Option<&str>> = parts.iter().map(|(part, _)| part.as_deref()).collect();
+    let due: Vec<SessionRuns> = parts.iter().map(|(_, due)| due.clone()).collect();
+    ensure_eq!(
+        harness.seam().runs(&asked),
+        due,
+        "runs of every part in one call"
+    );
     if let Some(logged) = harness.logged() {
-        let asked: Vec<String> = parts
-            .iter()
-            .map(|(part, _)| format!("runs {}", part.as_deref().unwrap_or("own")))
-            .collect();
-        ensure_eq!(logged, asked, "what the terminal logged");
+        let named: Vec<&str> = asked.iter().map(|part| part.unwrap_or("own")).collect();
+        let mut calls: Vec<String> = named.iter().map(|part| format!("runs {part}")).collect();
+        calls.push(format!("runs {}", named.join(" ")));
+        ensure_eq!(logged, calls, "what the terminal logged");
     }
     for (part, due) in &parts {
         ensure_eq!(
-            harness.seam().runs(part.as_deref()),
-            *due,
-            format!(
-                "runs of {} asked again",
-                part.as_deref().unwrap_or("its own part")
-            )
+            harness.seam().runs(&[part.as_deref()]),
+            vec![due.clone()],
+            format!("{} asked again", of(part))
         );
     }
     Ok(())

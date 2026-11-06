@@ -2318,15 +2318,23 @@ impl Terminal for Herdr {
         }
     }
 
-    /// From one `herdr session list --json`, bounded at a second: the
-    /// session by its name, the profile's own where none is named, running
-    /// where herdr lists it running and not running where it lists it
-    /// otherwise or not at all; an own server held by its socket alone by
-    /// the session listed at that socket, unread where none is. A listing
-    /// not read within the bound, refused or not parsed is unread in
-    /// herdr's words. Nothing is started (201, C.5; core.13, core.29).
-    fn runs(&self, session: Option<&str>) -> SessionRuns {
-        let unread = |reason: String| SessionRuns::Unread { reason };
+    /// From one `herdr session list --json` for every part asked, bounded
+    /// at a second: each session by its name, the profile's own where none
+    /// is named, running where herdr lists it running and not running
+    /// where it lists it otherwise or not at all; an own server held by its
+    /// socket alone by the session listed at that socket, unread where none
+    /// is. A listing not read within the bound, refused or not parsed is
+    /// unread in herdr's words for every part. Nothing is started (200,
+    /// 201, C.5; core.13, core.29).
+    fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns> {
+        let unread = |reason: String| {
+            sessions
+                .iter()
+                .map(|_| SessionRuns::Unread {
+                    reason: reason.clone(),
+                })
+                .collect()
+        };
         let listing = match self.run(None, &["session", "list", "--json"], RUNS_BOUND) {
             Ok((true, listing, _)) => listing,
             Ok((false, _, errors)) => {
@@ -2338,11 +2346,22 @@ impl Terminal for Herdr {
             Ok(listed) => listed,
             Err(error) => return unread(format!("herdr session list --json: {error}")),
         };
-        let sessions = listed
+        let listed = listed
             .get("sessions")
             .and_then(Value::as_array)
             .map(Vec::as_slice)
             .unwrap_or_default();
+        sessions
+            .iter()
+            .map(|session| self.listed_runs(listed, *session))
+            .collect()
+    }
+}
+
+impl Herdr {
+    /// Whether the part `session`, the profile's own where none, runs, as
+    /// the listing `sessions` gives it (201, C.5).
+    fn listed_runs(&self, sessions: &[Value], session: Option<&str>) -> SessionRuns {
         let by_name = |name: &str| {
             let found = sessions
                 .iter()
@@ -2360,10 +2379,12 @@ impl Terminal for Herdr {
                         .is_some_and(|listed| Path::new(listed) == socket)
                 });
                 let Some(name) = found.and_then(|found| found.get("name")?.as_str()) else {
-                    return unread(format!(
-                        "herdr session list --json lists no session at {}",
-                        socket.display()
-                    ));
+                    return SessionRuns::Unread {
+                        reason: format!(
+                            "herdr session list --json lists no session at {}",
+                            socket.display()
+                        ),
+                    };
                 };
                 (name.to_string(), found)
             }

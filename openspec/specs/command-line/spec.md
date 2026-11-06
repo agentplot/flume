@@ -154,10 +154,13 @@ its place's agents open in, for every stage or for one, at the
 
 ### Requirement: open names a stream or none
 
-`flume open [<stream>]` SHALL show the stream's view, `default`'s where
-it names none, needing no repository, its multiplexer and terminal app
-bound through the resolver for that stream alone, and printing the
-printed window's line on a line of its own (61, 105, 186, 190, C.8).
+`flume open [<session>]` SHALL show the session of that name in its
+stream's view, the default stream's own where it names none, needing no
+repository, its stream's multiplexer and terminal app bound through the
+resolver for that stream alone, and printing the printed window's line
+on a line of its own; its help SHALL say the name is a session's, a
+stream's own or one a stream names for a kind or a stage (61, 105, 186,
+190, 199, C.8).
 
 #### Scenario: open under the printed command
 
@@ -184,11 +187,23 @@ printed window's line on a line of its own (61, 105, 186, 190, C.8).
 - **WHEN** the host's multiplexer is herdr, `[streams.t]` names the printed command, and a fix is launched on `w` and one on `t`, and then `flume status --json` runs
 - **THEN** the `w` fix's agent opens in herdr's session `w`, the `t` fix's command is printed, and status gives each agent's terminal and each stream's multiplexer with where it came from (190, S91)
 
+#### Scenario: A design session through the binary
+
+- **WHEN** the same host's `[streams.w.kinds.research]` gives `session = "w-design"`, a research place and a fix are launched on `w`, `flume open w-design --json` runs, then `flume open w`, each place's agent is read by `flume status --json` and the places are tidied
+- **THEN** the pinned herdr lists the sessions `w-design` and `w` running, the research agent's pane on `w-design`'s server in its place's tab and the fix's on `w`'s; the open's JSON gives the stream `w`, the session `w-design` from `stream-kind` named for research and the title `w-design`, and the stand-in records a window titled `w-design` running `session attach w-design` and one titled `Work Herdr` running `session attach w`; status gives each agent's session with its origin; and after the tidies no server holds a tab or a workspace of flume's (107, 137, 138, 186, 190, 199, S106, S107)
+
+#### Scenario: A name no stream's word gives
+
+- **WHEN** `flume open nightly` runs over a scratch host whose `work` names `work-design` for research
+- **THEN** it exits refused naming `nightly`, `work` and `work-design`, and starts no session (186, 199)
+
 ### Requirement: list needs no repository and runs no tool
 
-`flume list` SHALL take no argument, need no repository and ask the
-core's list, settling nothing first, running no tool but each stream's
-terminal's runs, writing nothing and exiting 0 (57, 200; core.52).
+`flume list` SHALL take no argument but `--all`, need no repository and
+ask the core's list, of every place where `--all` is given and
+otherwise leaving out a place that landed or was dropped, settling
+nothing first, running no tool but each stream's terminal's runs,
+writing nothing and exiting 0 (57, 63, 200; core.52).
 
 #### Scenario: A fix under the printed command, outside any repository
 
@@ -199,6 +214,11 @@ terminal's runs, writing nothing and exiting 0 (57, 200; core.52).
 
 - **WHEN** a scratch host's state holds fifty places' documents in three repositories, written from a launched place's under fifty names, and `flume list --json` runs
 - **THEN** it answers fifty places' lines within a second of its start and exits 0 (200, S108)
+
+#### Scenario: A dropped place listed only with --all
+
+- **WHEN** a scratch host's state holds the fix named one, launched under the printed command, and a document written from its as the fix named gone whose phase says it was dropped, and `flume list --json` and then `flume list --all --json` run outside any repository
+- **THEN** the first gives `fix--one · code · starting` alone, the second `fix--gone · dropped` and then `fix--one · code · starting`, and each exits 0 (63, 200)
 
 ### Requirement: list prints each repository's places, then the streams
 
@@ -216,10 +236,12 @@ under it, each line indented by two spaces, and `no places` before
 ### Requirement: list's help names status for a place's every fact
 
 `flume list --help` SHALL say the list gives a line for each place and
-each stream, reading only what flume keeps, and that `flume status
-<place>` gives a place's every fact (200; core.35).
+each stream, reading only what flume keeps, that a place that landed or
+was dropped is left out unless `--all` is given, that `--all` gives
+every place, and that `flume status <place>` gives a place's every fact
+(63, 200; core.35).
 
 #### Scenario: The list's help
 
 - **WHEN** `flume list --help` runs
-- **THEN** it says the list gives a line for each place and each stream, reading only what flume keeps, and names `flume status <place>` for a place's every fact (200)
+- **THEN** it says the list gives a line for each place and each stream, reading only what flume keeps, a place that landed or was dropped left out unless `--all` is given, names `--all` for every place, those that landed or were dropped among them, and names `flume status <place>` for a place's every fact (63, 200)
