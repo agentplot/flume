@@ -24,6 +24,19 @@ repetitions share (28, 41, 132, 193; core.31).
 - **WHEN** a place's recipient is a pane and no source declares a role with `answers`
 - **THEN** the way to stop short names no role
 
+### Requirement: The way to stop short is the agent's one way to ask
+
+The way to stop short in every stage's prompt SHALL say that a
+stop-short is the agent's one way to ask for what its stage needs, and
+that the agent writes no card and no message to a person, since
+whoever answers the question decides whether it is a person's (28, 41,
+69, 72).
+
+#### Scenario: A change's construct
+
+- **WHEN** a construct's prompt is rendered, with roles listed or none
+- **THEN** its way to stop short says the agent asks by it alone, and writes no card and no message to a person
+
 ### Requirement: A stop-short may name the role it is for
 
 A stop-short SHALL take an optional role or address, `flume needs

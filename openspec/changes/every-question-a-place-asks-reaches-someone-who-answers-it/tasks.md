@@ -6,14 +6,17 @@ groups before it. A group's last task runs the checks it touched
 through sluice. Every conformance scenario a group adds cites its
 clauses as data (106).
 
-Group 1 is built once the user has read the design and answered its
-open question. The groups after it are built once flume's statement is
-amended on agentplot/blueprints main as design 12.1 words it, and once
-the change `a-host-declares-where-its-kinds-come-from` has landed on
-this repository's main, since a source's declaration and its packages
-are read by it. An answer of the user's that changes the design is
-written into the design, the specs and these tasks before group 2
-starts.
+Group 1 is built once the user has read the design. The groups after
+it are built once flume's statement is amended on agentplot/blueprints
+main as design 12.1 words it, and once the change
+`a-host-declares-where-its-kinds-come-from` has landed on this
+repository's main, since a source's declaration and its packages are
+read by it. Group 7 is built once record 0046's change
+`an-answer-reaches-the-open-session-within-an-hour` has landed too,
+since an answer handed to an agent kept open is recorded in the end's
+answer this group's key reads. An answer of the user's that changes the
+design is written into the design, the specs and these tasks before
+group 2 starts.
 
 Tests reach no real account, no repository of the user's, no person's
 queue and no network. Every git call in a test runs under the scratch
@@ -26,12 +29,12 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Record in record 0039 the user's answer to the design's open
-  question, quoting their words with the date, and lift the proposed
-  mark from the parts they read. Its consequences give the
-  agentplot/blueprints revision that holds the statement's amendment
-  (section 3's address, 4, 7, 8, 28, 41, 42, 43, 49, 56, 130, 132, 143,
-  191, 192, 193, C.4, C.7, S93, S94, S98, S99; core.19). True when
+- [ ] 1.1 Record in record 0039 the user's read of the design, quoting
+  their words with the date, and lift the proposed mark from the parts
+  they read. Its consequences give the agentplot/blueprints revision
+  that holds the statement's amendment (section 3's address, 4, 7, 8,
+  28, 41, 42, 43, 49, 53, 56, 130, 132, 143, 191, 192, 193, C.4, C.7,
+  S93, S94, S98, S99; core.19). True when
   `sluice exec main -- moon run root:adrs root:format` passes.
 - [ ] 1.2 Add to records 0009, 0013, 0014 and 0040 an amendment line
   each, naming record 0039 and what it changes of that record. 0009: a
@@ -80,8 +83,10 @@ name no program, no terminal, no queue and no caller's tool (core.1).
       delivered; a stop-short's end sent to the place's recipients when
       it named a role; a question kept to its place's stream; flume
       choosing the role a question goes to,
-      reading its words; a second answer to one key taken; and flume
-      making a card, or deciding which question is a person's (69, 72).
+      reading its words; a second answer to one key taken, by a retry or
+      a tell; a way to stop short that leaves a stage's agent to ask a
+      person itself; and flume making a card, or deciding which question
+      is a person's (69, 72).
     - They do not rule out: a retry with no key, taken as before; a
       launch naming a recipient it collects as itself; a stop-short that
       names no role.
@@ -210,7 +215,9 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   where it is a role's run, the place's own stream's first by the role
   alone and every other stream's after by its whole address, read from
   the sources at each start and placed after every part a stage's
-  repetitions share (design 4; 28, 41, 193; core.31). True when `sluice
+  repetitions share, and have it say that a stop-short is the agent's
+  one way to ask and that it writes no card and no message to a person
+  (design 4; 28, 41, 193; core.31). True when `sluice
   exec main -- moon run core:test conformance:test` passes, with the
   stage-runs spec's three scenarios of the list, and every scenario that
   reads a rendered prompt brought to it.
@@ -271,21 +278,26 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 ## 7. An answer taken once, by its key
 
 - [ ] 7.1 Give each end its key as callers see it,
-  `stage/<stage>/<start>/<state>`, `submission/<n>/<outcome>` and
-  `stall/<since>`, made from `EndOf::key`'s parts and parsed back,
-  refused in any other form, naming the forms (design 8; 42, 43). True
+  `stage/<stage>/<start>/<state>`, with `/<answered>` after it where
+  `EndOf::Stage`'s `answered` is not zero, `submission/<n>/<outcome>`
+  and `stall/<since>`, made from `EndOf::key`'s parts and parsed back,
+  refused in any other form, naming the forms (design 8; 42, 43, 198).
+  True
   when `sluice exec main -- moon run seams:test` passes, with a round
   trip of every end's key in `round_trip.rs`.
-- [ ] 7.2 Have `Engine::retry` take an optional key. It is taken only
-  while the place waits on the stop-short the key names, and records on
-  that end the answer's words, who gave them, as the retrying command's
-  recipient names it, and when. It is refused otherwise, naming the
-  answer taken, who gave it and when, or the move the place waits on
-  now. A retry with no key records the answer with none named. A retry
-  refused for its key ends no agent (design 8; 42, 49, 50). True when
-  `sluice exec main -- moon run core:test conformance:test` passes.
-  `engine/caller_acts.rs` holds the caller-acts spec's four scenarios,
-  with S93's engine part, `s93_a_question_for_ops_answered_once`.
+- [ ] 7.2 Have `Engine::retry`, and `Engine::tell` where it answers an
+  agent kept open (198), take an optional key. It is taken only while
+  the place waits on the stop-short the key names, and records in that
+  end's answer, `EndHeld::answer` as record 0046's change writes it for
+  an answer handed to a session, the answer's words, who gave them, as
+  the answering command's recipient names it, the key and when. It is
+  refused otherwise, naming the answer taken, who gave it and when, or
+  the move the place waits on now. An answer with no key records it with
+  none named. An answer refused for its key ends, starts and types
+  nothing (design 8; 42, 49, 50, 53, 54). True when `sluice exec main --
+  moon run core:test conformance:test` passes. `engine/caller_acts.rs`
+  holds the caller-acts spec's seven scenarios, with S93's engine part,
+  `s93_a_question_for_ops_answered_once`.
 - [ ] 7.3 Have status give each end's key, and a stop-short's answer
   with who gave it and when (56; core.14). True when `sluice exec main
   -- moon run core:test conformance:test flume:test` passes, with the
@@ -332,8 +344,9 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 ## 9. The command line and the walkthroughs
 
 - [ ] 9.1 Add `flume needs --to <role or address>`, `flume hold …
-  --waiting [--for <time>]` and `flume retry … --answers <key>` to the
-  command line, with their help naming the clauses, `needs --to`'s
+  --waiting [--for <time>]`, `flume retry … --answers <key>` and `flume
+  tell … --answers <key>` to the command line, with their help naming
+  the clauses, `needs --to`'s
   saying that a role alone is the place's own stream's, and `flume
   launch --recipient`'s help naming a role's address of any stream and
   the answerer behind a stream (design 1, 4, 7, 8; 7, 41, 42, 49, 61,
@@ -349,8 +362,9 @@ name no program, no terminal, no queue and no caller's tool (core.1).
     in `east`, its recipient `east/operator`. Its construct stops short
     naming `ops`. The run of `east/ops` is woken in `east` and collects
     the question with its key, holds the waiting move, and retries
-    naming the key, starting construct afresh with the question and the
-    answer. A second retry naming the key is refused. No run of
+    naming the key, which reaches construct's stand-in, kept open for
+    its answer, in its session. A second retry naming the key is
+    refused. No run of
     `east/operator` is launched. The run of `east/ops` delivers and is
     tidied with no caller's word.
   - **S94.** A change launched in `east` from a scratch pane, whose
@@ -358,7 +372,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
     SessionStart gives it the place, and five minutes of the
     walkthrough's clock later the stall reaches `east/operator`.
 
-  (41, 43, 130, 132, 191, 193, S93, S94). True when `sluice exec main --
+  (41, 42, 43, 130, 132, 191, 193, 198, S93, S94). True when `sluice exec main --
   moon run flume:tools` passes with them, and every existing walkthrough
   passes.
 - [ ] 9.3 Run the checks of the projects this group touched. True when
@@ -369,10 +383,11 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 - [ ] 10.1 Write the design into the site, to any host's operator,
   naming no host, team or word of ours (core.35):
-  - `guides/callers-and-holds.md`: who answers a place, addressing a
-    role with `flume needs --to`, its own stream's by name and another's
-    by its address, the hold on the waiting move, the answer's key, and
-    holding before asking a person.
+  - `guides/callers-and-holds.md`: who answers a place, a stage's agent
+    asking by `flume needs` alone, addressing a role with `flume needs
+    --to`, its own stream's by name and another's by its address, the
+    hold on the waiting move, the answer's key on a retry or a tell, and
+    holding before putting a question to a person.
   - `guides/roles-and-wake.md`: a role's address `<stream>/<role>`, the
     role of a stream the host declares, where the page says
     `<group>/<role>`; roles declared by a source, once for every stream,
@@ -380,14 +395,16 @@ name no program, no terminal, no queue and no caller's tool (core.1).
     address's stream, with its settings and intent, its end at its
     delivery;
     the answerer behind a stream; a carried address; and an answering
-    run's way with a question: hold, answer, pass, or ask a person once,
-    keyed by the place and the end.
+    run's way with a question: hold, answer, pass, or say it is a
+    person's, which its source's own code then puts to them once, keyed
+    by the place and the end, and whose answer that code carries back as
+    the place's retry naming the key.
   - `guides/claude-code.mdx`: what SessionStart gives a session of the
     operator's own.
   - `reference/configuration.md`: a source's `roles`, its file's form
     and faults, and that the host's configuration names no role.
-  - `reference/commands.md`: `needs --to`, `hold --waiting` and `retry
-    --answers`.
+  - `reference/commands.md`: `needs --to`, `hold --waiting`, `retry
+    --answers` and `tell --answers`.
   - `reference/state.md`: an end's key and answer, a stop-short's
     addressee, and a hold on the waiting move.
 
@@ -400,7 +417,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 - [ ] 11.1 Have the suite's clause list read the statement at the
   revision of agentplot/blueprints main that holds record 0039's
-  amendment, Part A with 193 and the scenarios to S103. Have 193, S93,
+  amendment, Part A with 193 and the scenarios to S108. Have 193, S93,
   S94, S98 and S99 cited by this change's scenarios, and nothing of this
   change's named unbuilt (clause-coverage spec; core.19). True when
   `sluice exec main -- moon run conformance:test conformance:coverage`

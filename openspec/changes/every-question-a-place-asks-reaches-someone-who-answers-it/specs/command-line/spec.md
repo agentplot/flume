@@ -1,17 +1,18 @@
 ## ADDED Requirements
 
-### Requirement: needs --to, hold --waiting and retry --answers
+### Requirement: needs --to, hold --waiting, retry --answers and tell --answers
 
 The command line SHALL take `flume needs [--found] --to <role or
 address> "<words>"`, `flume hold <place> <words> --waiting [--for
-<time>]` with the time in the forms `--stall-after` takes, and `flume
-retry <place> --answers <key>`, each answering from the one core in the
-JSON form and the person's, and each key as the inbox and status give
-it (41, 42, 49, 61, 130).
+<time>]` with the time in the forms `--stall-after` takes, `flume retry
+<place> --answers <key>` and `flume tell <place> --answers <key>
+"<words>"`, each answering from the one core in the JSON form and the
+person's, and each key as the inbox and status give it (41, 42, 49, 53,
+61, 130).
 
 #### Scenario: The forms
 
-- **WHEN** `flume hold change--x "asked the user, msg_1" --waiting --for 1h --json` and `flume retry change--x --stage construct --answers stage/construct/1/ended-short --words "yes" --json` run in turn against the fakes
+- **WHEN** `flume hold change--x "on the user's card" --waiting --for 1h --json` and `flume retry change--x --stage construct --answers stage/construct/1/ended-short --words "yes" --json` run in turn against the fakes
 - **THEN** each answers in the JSON form, the hold with its words and bound, and the retry with the place's status
 
 #### Scenario: A stop-short addressed by its role
@@ -28,6 +29,11 @@ it (41, 42, 49, 61, 130).
 
 - **WHEN** `flume hold change--x "words" --waiting --for soon` runs
 - **THEN** it is refused naming the forms a time takes, and nothing is held
+
+#### Scenario: A tell's key
+
+- **WHEN** `flume tell change--x --answers stage/construct/1/ended-short "yes" --json` runs against the fakes, the place's construct agent kept open for that stop-short
+- **THEN** it answers in the JSON form, the tell delivered as the answer to that stop-short
 
 #### Scenario: A key in a wrong form
 

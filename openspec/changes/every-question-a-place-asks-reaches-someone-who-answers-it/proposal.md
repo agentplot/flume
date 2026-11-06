@@ -49,7 +49,10 @@ run never ends of itself, so crew had the runner launch and end role
 runs instead of flume. Every place crew launches names the planner,
 though a question may be the design agent's or ops's. Nothing bounds
 how long a question waits on a role that does not answer, and nothing
-stops two answerers from retrying one question.
+stops two answerers from retrying one question. A question that is the
+user's is put to them by whoever reads it, in words of its own, and a
+construction agent may ask the user in the Inbox itself, where no
+answerer of the place sees it.
 
 ## What Changes
 
@@ -59,12 +62,16 @@ events to it by `flume wake`; the answerer is crew's roles, each a Flume
 kind at its own address; crew's roles are crew's to declare, never
 repeated in each host's configuration; planning is a label of each
 partition's stream; an address is a role of a stream; a role's run
-reads flume's list for its address; the operator may ask the user, in
-the Plannotator Inbox; crew's own cards stay on Pending You until crew
-moves them to the Inbox; the roles move in the user's order, the planner
-and the design agent once flume gives an agent's effort; and the word
-label keeps flume's meaning alone. It builds nothing until the user has
-read it. Its tasks are the build that follows.
+reads flume's list for its address; the operator may put a question to
+the user; the roles move in the user's order, the planner and the design
+agent once flume gives an agent's effort; and the word label keeps
+flume's meaning alone. Then on the user's answers of 2026-11-06: cards
+are written by code, never by an agent, and no construction agent
+writes a card or an Inbox message; Pending You and the Inbox together,
+the user's question a Pending You card that links to a thread in the
+partition's Inbox when it needs elaboration; and an answer reaches
+whoever asked, never a session the user picks. It builds nothing until
+the user has read it. Its tasks are the build that follows.
 
 - **The decision.** Record 0039, written to the rulings. An address is
   a role of a stream. Every main-level role answers as a Flume kind at
@@ -72,17 +79,20 @@ read it. Its tasks are the build that follows.
   it is for, in any stream. The stream's door, its operator, stands
   behind every stall. An answer names the stop-short it answers and is
   taken once. A restarted recipient sees every place that waits on it.
-  A place's question that is the user's is asked once in the user's
-  Plannotator Inbox, by the role whose question it is, in the Inbox of
-  its stream's partition as swancloud's design
-  `the-plannotator-inbox-runs-on-deneb-for-the-users-devices` gives a
-  stream's agents theirs, and deneb's one Inbox until it does, in its
-  address's thread under an Inbox identity of the address's that
-  outlives each run; crew's follower, reading each role's identity in
-  that role's partition's Inbox, and the runner's `flume wake` carry the
-  answer to the role's next run. crew's own cards stay on Pending You.
-  Plannotator offers no watch and no identity for an address, and the
-  design says how it works around both.
+  A place's question that is the user's is one Pending You card that
+  crew's code raises on the word of the role whose question it is,
+  built from flume's facts as crew's code builds a batch's card, keyed
+  by the place and the end so it is raised once. The user answers on
+  the card, and crew's code, run by Pending You's notice, carries their
+  words to the place as its retry, naming the key. Where the question
+  needs talk, the card links to a thread in the Inbox of the stream's
+  partition, held by the role as its address, whose replies reach the
+  role by crew's follower whichever session holds it, or by an
+  elaboration's named agent, there while the user talks. Where each
+  partition's Inbox runs is swancloud's design
+  `the-plannotator-inbox-runs-on-deneb-for-the-users-devices`. No
+  construction agent writes a card or an Inbox message, and crew's own
+  cards stay as they are.
 - **An address is a role of a stream.** `<stream>/<role>`: the role a
   source declares for a stream the host declares (143). `madswan/ops`
   is ops of the stream `madswan`. A role's run runs in its address's
@@ -133,8 +143,12 @@ read it. Its tasks are the build that follows.
   stall. Past its bound the hold lapses and the place stalls again.
 - **An answer is taken once.** Every end has a key, which every notice
   and every collected end gives. `flume retry <place> --stage <stage>
-  --answers <key> --words "<answer>"` is refused, naming who answered
-  and when, once the place no longer waits on that stop-short (42, 49).
+  --answers <key> --words "<answer>"`, and a tell that answers an agent
+  kept open, `flume tell <place> --answers <key> "<answer>"`, are
+  refused, naming who answered and when, once the place no longer waits
+  on that stop-short (42, 49, 53). Record 0046, its statement on
+  blueprints main at c188bf3 (clause 198, S104, S105), keeps the asking
+  agent open for its answer, and the key holds whichever way it goes.
 - **What a restarted recipient sees.** `flume inbox` also gives every
   place that waits on the recipient, delivered or not, with the move,
   since when, the question's words, key and addressee, and a hold's
@@ -150,36 +164,38 @@ read it. Its tasks are the build that follows.
 - **Changes named in other repositories**, to be made there once the
   user has read the design, and not written here:
   - agentplot/blueprints: flume's statement, as design 12.1 words it
-    against main at 2287669, section 3's address, its new clause 193 and
+    against main at c188bf3, section 3's address, its new clause 193 and
     scenarios S93, S94, S98 and S99. sluice's is not amended.
   - afterthought/crew: its kinds as packages declaring the label
     `planning`; its roles file, written from its partitions at their
     streams' addresses; the teams file naming each partition's one
     stream; its turn reading flume's list for its address and holding,
-    answering, passing or putting each question to the user; each
-    brief's part of the routing; the operator behind every stall of its
-    stream; `crew answer` carrying the key and taking any place; a
-    place's question put to the user in its partition's Plannotator
-    Inbox as its address's identity, keyed by the place and the end,
-    and its other questions and crew's commands' cards left on Pending
-    You; the follower reading each role's threads in that role's
-    partition's Inbox at its minute and writing each answer as an ask,
-    its Pending You notice kept beside it; each partition's Inbox's data
-    folder in the teams file; roles.7 holding as written, and the change
-    `roles-run-as-flume-kinds` Decisions 1, 3 and 6 giving way to
-    flume's launch and crew's roles file.
+    answering, passing or saying a question is the user's; `crew
+    question`, whose code raises the place's question's card from
+    flume's facts, once under its key, with a thread where it needs
+    talk; `crew _answered` carrying the card's answer to the place as
+    its retry with the key; the follower reading each role's threads as
+    its address and closing each card whose place no longer waits;
+    each brief's part of the routing, a role writing no card and, in the
+    Inbox, only as its address; the operator behind every stall of its
+    stream; `crew answer` carrying the key and taking any place; roles.7
+    holding as written, and the change `roles-run-as-flume-kinds`
+    Decisions 1, 3 and 6 giving way to flume's launch and crew's roles
+    file.
   - agentplot/boomdrive: the runner wakes a role by `flume wake`, and
     launches and ends no role's run; it passes an answer's key with its
     retry.
   - The host, on deneb: crew declared as a source and its kinds locked,
-    and the streams `agentplot`, `madswan` and `swancloud` with
-    `planning`'s reserve, with flume's release and the operators' move;
+    the streams `agentplot`, `madswan` and `swancloud` with
+    `planning`'s reserve, and no construction kind's agents given the
+    Inbox's or Pending You's tools, with flume's release and the
+    operators' move;
     each later role moved by crew alone, in the order design 13 gives,
     the planner and the design agent once flume's change
     `an-agents-effort-is-a-setting-of-flumes-layers` is released.
   - Plannotator, outside the family: a watch on replies to a session no
-    host wakes, and an identity for an address, asked of it (design
-    12.5).
+    host wakes, and an identity for an address never read as ended,
+    asked of it for a role's thread (design 12.5).
 - **The site** says what an address is, who answers a place's question,
   a source's roles, addressing a role of any stream, the answerer behind
   a stream, a role's run's name and its end, the hold on the waiting
@@ -200,11 +216,12 @@ None.
 - `caller-waits`: a stall delivered to the role a question named and to
   the answerer behind the place's stream, and a hold on the waiting move
   with its bound.
-- `caller-acts`: a retry that names the key of the stop-short it
-  answers.
+- `caller-acts`: a retry, or a tell that answers an agent kept open,
+  that names the key of the stop-short it answers.
 - `stage-runs`: the way to stop short listing the roles an agent may
-  address, its own stream's by name and every other's whole, and a
-  stop-short addressed to one of them.
+  address, its own stream's by name and every other's whole, and saying
+  it is the agent's one way to ask; and a stop-short addressed to one
+  of them.
 - `role-waking`: an address a role of a stream; the roles read from the
   sources and never from the host's configuration; a fault kept to its
   file, entry or address; a run named per address in its address's
@@ -216,18 +233,21 @@ None.
   gives that session what waits on it.
 - `place-status`: who answers a place, the sources' roles, and the
   answers it took.
-- `command-line`: `needs --to`, `hold --waiting`, `retry --answers`, and
-  `wake`'s address as `<stream>/<role>`.
+- `command-line`: `needs --to`, `hold --waiting`, `retry --answers`,
+  `tell --answers`, and `wake`'s address as `<stream>/<role>`.
 - `clause-coverage`: the suite reads the statement at the revision that
   holds the amendment, and cites 193, S93, S94, S98 and S99.
 
 ## Impact
 
-- **Before the build.** The user's read of the design and their answer
-  to its open question. agentplot/blueprints: flume's statement
-  amended on main as design 12.1 words it (core.19). This repository:
-  the change `a-host-declares-where-its-kinds-come-from` landed, since
-  a source's declaration is read by it.
+- **Before the build.** The user's read of the design.
+  agentplot/blueprints: flume's statement amended on main as design 12.1
+  words it (core.19). This repository: the change
+  `a-host-declares-where-its-kinds-come-from` landed, since a source's
+  declaration is read by it, and, before the answer's key, record
+  0046's change `an-answer-reaches-the-open-session-within-an-hour`,
+  since an answer handed to an agent kept open is recorded where the key
+  takes it once.
 - `docs/adr/0039-…`: accepted by the user on 2026-11-05, written to
   their rulings. `docs/architecture/core.md`: core.24, core.25 and
   core.28 amended, and a rule drawn for the answerer, the addressed
@@ -246,12 +266,13 @@ None.
   `wake.rs` (the address's stream, the run's name, stream and settings,
   its done at delivery, the refusal's words), `wait.rs` (`inbox`'s
   waiting places), `acts.rs` (`needs --to` with a bare role read in the
-  place's stream, `retry`'s key, `hold`'s waiting move), the prompt's
-  stop-short part, `status.rs`.
+  place's stream, `retry`'s and a tell's key, `hold`'s waiting move),
+  the prompt's stop-short part, `status.rs`.
 - `crates/flume`: the host's configuration reader (a source's `roles`
   and its file, an entry's address checked against the host's streams,
   `[roles]` refused), the command line (`needs --to`, `hold --waiting`,
-  `retry --answers`, `wake`'s help), and the Claude Code profile's
+  `retry --answers`, `tell --answers`, `wake`'s help), and the Claude
+  Code profile's
   SessionStart hook.
 - `crates/flume-fakes`: the fake host's sources' roles.
 - `crates/flume-conformance`: the clause list and the engine's scenarios

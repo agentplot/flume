@@ -22,7 +22,8 @@ flume did not start (C.4, section 9; record 0016).
 In a session flume did not start, SessionStart SHALL run `flume inbox`
 as the session the terminal names, never as a role's address, and SHALL
 give the agent, as added context, each end and each waiting place it
-answers with the key and how to answer, hold or leave it; or nothing
+answers with the key, whether its agent is kept open and until when,
+and how to answer, hold or leave it; or nothing
 where it answers nothing, no session is named, or flume does not answer
 (43, C.4).
 
