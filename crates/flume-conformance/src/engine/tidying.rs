@@ -4,6 +4,7 @@
 //! made for a place closed with it, and for its base once nothing live
 //! is in it, never what a person put there.
 
+use super::carried_conversations::{by_hand, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Answer, Retry, Tidied};
@@ -50,6 +51,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "tidy: a place whose agent works is kept until the agent stops",
             cites: &["64", "16", "31"],
             run: an_agent_still_working,
+        },
+        Scenario {
+            name: "tidy: a place whose lost talk's session a person runs is kept at its drop, naming the process, and removed by the first tidy after the session ends",
+            cites: &["S117", "64", "207"],
+            run: a_dropped_place_whose_session_a_person_runs,
         },
     ]
 }
@@ -350,5 +356,53 @@ fn s48_a_persons_pane(_: &()) -> Outcome {
         other => return Err(format!("status answered {other:?}")),
     }
     ensure_eq!(world.terminal.log.count("close"), 1, "agents ended");
+    Ok(())
+}
+
+fn a_dropped_place_whose_session_a_person_runs(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.terminal.kill(&talk(1));
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "talk"),
+        Some(StageState::Lost),
+        "talk once its agent was killed"
+    );
+    world.agent.live_runs("s-1", &[by_hand()]);
+    let Answer::Acted {
+        tidy: Some(tidy), ..
+    } = world.engine.drop_place(&id, false)
+    else {
+        return Err("the drop answered no tidy".into());
+    };
+    ensure_eq!(
+        tidy.kept
+            .iter()
+            .map(|kept| kept.why.clone())
+            .collect::<Vec<_>>(),
+        vec![Kept::SessionRuns {
+            processes: vec![by_hand()],
+            unread: None,
+        }],
+        "why the drop's tidy kept the place"
+    );
+    ensure_eq!(
+        (
+            world.place.log.count("remove"),
+            world.terminal.log.count("close")
+        ),
+        (0, 0),
+        "removes and closes while the session runs"
+    );
+    world.agent.live_ended("s-1");
+    let Answer::Tidied { tidy } = world.engine().tidy(Some(&id)) else {
+        return Err("the tidy answered otherwise".into());
+    };
+    ensure_eq!(
+        (tidy.removed, world.place.log.count("remove")),
+        (vec![id.clone()], 1),
+        "the place removed once its session ended"
+    );
     Ok(())
 }

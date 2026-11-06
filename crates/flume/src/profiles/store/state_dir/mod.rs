@@ -12,7 +12,9 @@
 //! `accounts/<pool>/<account>.json`, an intent's affinity at
 //! `intents/<digest>.json` and the host's watch at `watch.json`, each
 //! written whole the same way under its own lock, readable by the host's
-//! user alone (153, 208, C.7). Nothing is written
+//! user alone (153, 208, C.7). A file an agent's command lists is written
+//! into the place's folder whole, beside and renamed over, readable by the
+//! host's user alone, and goes with the folder (196). Nothing is written
 //! into a repository (104, core.16).
 
 use flume_seams::{
@@ -314,6 +316,39 @@ impl Store for StateDir {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    fn write_file(&self, place: &PlaceId, path: &str, text: &str) -> Result<(), String> {
+        let folder = self.folder_path(place);
+        let file = Path::new(path);
+        let under = file.starts_with(&folder)
+            && file != folder
+            && !file
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir));
+        let (Some(directory), Some(name), true) = (file.parent(), file.file_name(), under) else {
+            return Err(format!("{path} lies outside the place's folder"));
+        };
+        let written = fs::create_dir_all(directory).and_then(|()| {
+            let temporary = directory.join(format!(
+                ".{}.{}-{}.tmp",
+                name.to_string_lossy(),
+                std::process::id(),
+                TEMPORARY.fetch_add(1, Ordering::Relaxed)
+            ));
+            let mut open = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&temporary)?;
+            open.write_all(text.as_bytes())
+                .and_then(|()| open.sync_all())
+                .and_then(|()| fs::rename(&temporary, file))
+                .inspect_err(|_| {
+                    let _ = fs::remove_file(&temporary);
+                })
+        });
+        written.map_err(|error| format!("{path} could not be written: {error}"))
     }
 
     fn read_host(&self, key: &HostKey) -> Option<HostVersioned> {

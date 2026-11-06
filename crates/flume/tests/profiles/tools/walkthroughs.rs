@@ -45,14 +45,30 @@
 //! line, asked by `flume hook status-line` in its environment as the
 //! plugin's module asks it, is status's line asked alone and in full, and
 //! the fix lands, while a change@2 code agent's names its group, its run
-//! and the change's tasks (56, 60, 142; S14); and a host's source's kind,
-//! locked by `flume kinds lock --host --hash`, runs and lands, a second
-//! version added and its source's file renamed over, the next launch
-//! running it and the place launched before landing on its own version
-//! (design 13; 21, 154, 155, 159, 191).
+//! and the change's tasks (56, 60, 142; S14); a host's people's file, the
+//! host's own status line over it, a stream's and a repository's file reach
+//! a fix's agent in `work` and in `default` by a `--settings` file of its
+//! start's own, which the stand-in reads over its account's settings, the
+//! keys another setting owns left out and named in status, and a fix no
+//! layer gives own settings passes none, each landing (S100; 32, 143, 195,
+//! 196); seven launches whose own settings give a reserved key, hold a
+//! credential or name a file that cannot be read are refused naming the
+//! key, the layer and the file, never the value, making nothing (S101; 4,
+//! 157, 195); a fork's attribution is the host's for every stage of a
+//! fix and a chore, a repository's its own `[agents]`' and a third's its
+//! account's, each landing (S102; 32, 195, C.2, C.7); a host's source's
+//! kind, locked by `flume kinds lock --host --hash`, runs and lands, a
+//! second version added and its source's file renamed over, the next
+//! launch running it and the place launched before landing on its own
+//! version (design 13; 21, 154, 155, 159, 191); and a talk read lost,
+//! whose session a person resumed by hand under another home, waits at its
+//! retry while that session runs, flume ending nothing, and goes on in
+//! the same session and transcript once it ends, and a lost talk whose
+//! transcript is gone starts afresh with flume's words (S113, S115, S117;
+//! 49, 77, 179, 207).
 
 use super::walk::*;
-use flume::profiles::agent::claude::carry::UNREACHED;
+use flume::profiles::agent::claude::carry::{UNREACHED, UNREADABLE};
 use flume::profiles::kinds::weir::Weir;
 use flume_seams::{Kinds, PackageRead};
 use serde_json::{json, Value};
@@ -1147,8 +1163,9 @@ fn sessions(out: &str) -> Vec<String> {
 
 /// `home` holds what it held, `held`, as it held it, and besides only the
 /// transcripts the stand-in wrote of `sessions`, under `projects`, with
-/// their folders: flume copied, linked and wrote nothing there (179, C.4;
-/// core.32).
+/// their folders, and the folder it names its running sessions in, empty
+/// once they ended: flume copied, linked and wrote nothing there (179,
+/// C.4, 207; core.32).
 fn holds_only(home: &Path, held: &BTreeMap<PathBuf, Holding>, sessions: &[String]) {
     let now = holdings(home);
     for (path, holding) in held {
@@ -1172,6 +1189,9 @@ fn holds_only(home: &Path, held: &BTreeMap<PathBuf, Holding>, sessions: &[String
                     && matches!(holding, Holding::File(_))
             }
             [projects] | [projects, _] if projects == "projects" => holding == &Holding::Folder,
+            // The folder 2.1.296 names its running sessions in, each
+            // record gone with its session.
+            [sessions] if sessions == "sessions" => holding == &Holding::Folder,
             _ => false,
         };
         assert!(
@@ -1986,6 +2006,494 @@ fn an_agent_run_after_its_start_was_read_never_begun_is_begun_and_a_retry_leaves
     assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
 }
 
+/// The printed command run to its end, the stand-in committing `file`:
+/// the settings the stand-in read, as it merged them, its account's, the
+/// place's and those `--settings` passed (195; design 14).
+fn read_settings(walk: &Walk, place: &str, file: &str) -> Value {
+    let read = walk.signal(&format!("read-{file}.json"));
+    walk.agent_with(
+        place,
+        commits(file, "fixed\n"),
+        &[("STAND_IN_SETTINGS", &read.to_string_lossy())],
+    );
+    let text = std::fs::read_to_string(&read).expect("the settings the stand-in read");
+    serde_json::from_str(&text).expect("the settings as JSON")
+}
+
+/// The own settings' file the place's printed command names, as JSON.
+fn passed(walk: &Walk, place: &str) -> Value {
+    let file = walk
+        .own_settings(place)
+        .unwrap_or_else(|| panic!("no --settings in {}", walk.printed(place)));
+    let text = std::fs::read_to_string(&file).expect("the own settings' file");
+    serde_json::from_str(&text).expect("the own settings as JSON")
+}
+
+/// Every file named `own-settings.json` under `dir`.
+fn own_files(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(own_files(&path));
+        } else if path
+            .file_name()
+            .is_some_and(|name| name == "own-settings.json")
+        {
+            found.push(path);
+        }
+    }
+    found
+}
+
+/// The keys of a JSON object, in order.
+fn keys(value: &Value) -> Vec<&str> {
+    value
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(key, _)| key.as_str())
+        .collect()
+}
+
+/// The settings file a host's launcher gives its people's sessions: what
+/// they see, and the keys flume's other settings, the account and a person
+/// own.
+const PEOPLE: &str = r#"{
+  "tui": "fullscreen",
+  "statusLine": { "type": "command", "command": "people-line" },
+  "env": { "PEOPLE": "1" },
+  "permissions": { "allow": ["Bash(git log:*)"], "defaultMode": "bypassPermissions" },
+  "skipDangerousModePermissionPrompt": true
+}
+"#;
+
+#[test]
+fn a_hosts_people_file_its_lines_and_a_repositorys_file_reach_each_streams_agents() {
+    // S100, 32, 143, 195, 196: the host names its people's file for every
+    // agent with a status line of its own over it, and another for
+    // `work`; the repository names a file of its own for fix. A fix in
+    // `work` is started with `--settings` naming a file of its start's own
+    // under the place's folder, never the people's file, and the stand-in
+    // read work's line, the file's `tui` and `permissions` without
+    // `defaultMode` joined with its account's own, the repository's
+    // `alwaysThinkingEnabled` and its account's `cleanupPeriodDays`, with
+    // no `env` and no acceptance; status names each key with its layer and
+    // file and the three keys left out with their owners. A fix in
+    // `default` read the host's line.
+    // A host and a repository that give no entry start a fix with nothing
+    // passed and no file written. Each lands.
+    let walk = Walk::new("walk-own");
+    let people = walk.repository.scratch.path("people-settings.json");
+    std::fs::write(&people, PEOPLE).expect("the people's file");
+    std::fs::write(
+        walk.account().join("settings.json"),
+        "{ \"cleanupPeriodDays\": 30, \"permissions\": { \"allow\": [\"Bash(git log:*)\", \"Read\"] } }\n",
+    )
+    .expect("the account's settings");
+    walk.configure(&format!(
+        "[streams.work]\npool = \"stand-in\"\n\n[agents.programs.claude]\nfile = {:?}\nsettings = {{ statusLine = {{ type = \"command\", command = \"host-line\" }} }}\n\n[agents.streams.work.programs.claude.settings]\nstatusLine = {{ type = \"command\", command = \"work-line\" }}\n",
+        people.display().to_string()
+    ));
+    walk.repository.write(
+        ".config/claude-fix.json",
+        "{ \"alwaysThinkingEnabled\": false }\n",
+    );
+    the_repository_gives(
+        &walk,
+        "[kinds.fix.agents.programs.claude]\nfile = \"claude-fix.json\"\n",
+    );
+
+    let place = walk.launch(
+        "fix",
+        "work",
+        &["--brief", "fix the parser", "--stream", "work"],
+    );
+    let printed = walk.printed(&place);
+    assert!(!printed.contains("people-settings"), "{printed}");
+    let file = walk.own_settings(&place).expect("--settings");
+    assert!(
+        file.starts_with(walk.home().join("state")) && file.ends_with("own-settings.json"),
+        "the file is not the start's own: {printed}"
+    );
+    let given = passed(&walk, &place);
+    assert_eq!(
+        keys(&given),
+        vec!["alwaysThinkingEnabled", "permissions", "statusLine", "tui"],
+        "{given}"
+    );
+    let status = walk.status(&place);
+    let from = &status["agent"]["settings"]["from"];
+    let people = people.to_string_lossy().into_owned();
+    assert_eq!(
+        (
+            &from["programs.claude.settings.statusLine"],
+            &from["programs.claude.settings.tui"],
+            &from["programs.claude.settings.permissions"],
+            &from["programs.claude.settings.alwaysThinkingEnabled"],
+        ),
+        (
+            &json!({ "layer": "host-stream", "value": "{\"command\":\"work-line\",\"type\":\"command\"}" }),
+            &json!({ "layer": "host", "value": "\"fullscreen\"", "file": people }),
+            &json!({ "layer": "host", "value": "{\"allow\":[\"Bash(git log:*)\"]}", "file": people }),
+            &json!({ "layer": "repository", "value": "false", "file": ".config/claude-fix.json" }),
+        ),
+        "{status}"
+    );
+    let own = &status["agent"]["own"];
+    assert_eq!(
+        own["passed"],
+        format!("--settings {}", file.display()),
+        "{status}"
+    );
+    assert_eq!(own["read_back"], false, "{status}");
+    let host_file = own["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|file| file["layer"] == "host")
+        .unwrap_or_else(|| panic!("no host file in {status}"));
+    assert_eq!(
+        host_file["left_out"],
+        json!([
+            { "key": "env", "owner": "the account's `env`" },
+            { "key": "permissions.defaultMode", "owner": "flume's `mode`" },
+            { "key": "skipDangerousModePermissionPrompt", "owner": "a person, who alone accepts the warning it records" },
+        ]),
+        "{status}"
+    );
+
+    let read = read_settings(&walk, &place, "in-work.rs");
+    assert_eq!(read["statusLine"]["command"], "work-line", "{read}");
+    assert_eq!(read["tui"], "fullscreen", "{read}");
+    // The account's list joined with the file's, the rule both give kept
+    // once, as the release joins two sources' lists.
+    assert_eq!(
+        read["permissions"],
+        json!({ "allow": ["Bash(git log:*)", "Read"] }),
+        "{read}"
+    );
+    assert_eq!(read["alwaysThinkingEnabled"], false, "{read}");
+    assert_eq!(read["cleanupPeriodDays"], 30, "{read}");
+    assert!(
+        read.get("env").is_none() && read.get("skipDangerousModePermissionPrompt").is_none(),
+        "{read}"
+    );
+    until_landed(&walk, &place);
+    assert_eq!(walk.on_remote("in-work.rs").as_deref(), Some("fixed\n"));
+
+    // A launch names `default`, since the intent's stream is `work` now.
+    let place = walk.launch(
+        "fix",
+        "default",
+        &["--brief", "fix the reader", "--stream", "default"],
+    );
+    assert_eq!(
+        walk.status(&place)["agent"]["settings"]["from"]["programs.claude.settings.statusLine"]
+            ["layer"],
+        "host"
+    );
+    let read = read_settings(&walk, &place, "default.rs");
+    assert_eq!(read["statusLine"]["command"], "host-line", "{read}");
+    assert_eq!(read["tui"], "fullscreen", "{read}");
+    until_landed(&walk, &place);
+    assert_eq!(walk.on_remote("default.rs").as_deref(), Some("fixed\n"));
+
+    let walk = Walk::new("walk-own-none");
+    std::fs::write(
+        walk.account().join("settings.json"),
+        "{ \"cleanupPeriodDays\": 30 }\n",
+    )
+    .expect("the account's settings");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let printed = walk.printed(&place);
+    assert!(!printed.contains("--settings"), "{printed}");
+    let status = walk.status(&place);
+    assert!(status["agent"]["own"].is_null(), "{status}");
+    assert_eq!(own_files(walk.home()), Vec::<PathBuf>::new());
+    let read = read_settings(&walk, &place, "parser.rs");
+    assert_eq!(read, json!({ "cleanupPeriodDays": 30 }));
+    until_landed(&walk, &place);
+    assert_eq!(walk.on_remote("parser.rs").as_deref(), Some("fixed\n"));
+}
+
+/// A launch of a fix `name` with `words` beside, which flume refuses
+/// having made nothing: its words.
+fn refused_whole(walk: &Walk, name: &str, words: &[&str]) -> String {
+    let mut launch = vec![
+        "launch",
+        "--kind",
+        "fix",
+        "--name",
+        name,
+        "--brief",
+        "fix the parser",
+    ];
+    launch.extend(words);
+    let (answer, refused) = walk.flume_ran(&launch);
+    assert!(refused, "the launch was taken: {answer}");
+    assert!(
+        !walk.has_branch(&format!("fix/{name}")),
+        "the fix's branch was made"
+    );
+    assert_eq!(
+        walk.repository.git(&["worktree", "list"]).lines().count(),
+        1,
+        "a worktree was made"
+    );
+    answer.to_string()
+}
+
+/// The repository's binding with `more` beside it in place of whatever it
+/// gave before, committed and pushed to the remote.
+fn the_repository_gives_only(walk: &Walk, binding: &str, more: &str) {
+    walk.repository
+        .write(".config/flume.toml", &format!("{binding}\n{more}"));
+    walk.repository.commit("the repository's settings");
+    walk.repository.git(&["push", "--quiet", "origin", "main"]);
+}
+
+/// A value shaped as a token an issuer gives, which no layer may hold
+/// (design 7).
+const TOKEN: &str = "ghp_StandInWordShapedAsAToken0123456789";
+
+#[test]
+fn own_settings_that_are_reserved_or_hold_a_credential_or_cannot_be_read_refuse_the_launch() {
+    // S101, 4, 157, 195: seven launches, each refused naming its key, its
+    // layer and its file where it came from one, never a value, and each
+    // making nothing.
+    let walk = Walk::new("walk-own-refused");
+    let binding = std::fs::read_to_string(walk.repository.dir.join(".config/flume.toml"))
+        .expect("the binding");
+    let scratch = |name: &str| walk.repository.scratch.path(name);
+    let says = |words: &str, parts: &[&str], value: &str| {
+        for part in parts {
+            assert!(
+                words.contains(part),
+                "the refusal names not {part}: {words}"
+            );
+        }
+        assert!(
+            !words.contains(value),
+            "the refusal gives the value: {words}"
+        );
+        let status = walk.everything().to_string();
+        assert!(!status.contains(value), "status gives the value: {status}");
+        assert_eq!(walk.everything()["places"], json!([]), "a place was made");
+    };
+
+    // The launch gives Claude Code an `env`, which is the account's.
+    let words = refused_whole(
+        &walk,
+        "env",
+        &[
+            "--agent",
+            "programs.claude.settings.env={\"STAND_IN_WORD\":\"never-given\"}",
+        ],
+    );
+    says(
+        &words,
+        &[
+            "programs.claude.settings.env",
+            "launch",
+            "the account's `env`",
+        ],
+        "never-given",
+    );
+
+    // A token in a status line the launch gives.
+    let line = format!(
+        "programs.claude.settings.statusLine={{\"type\":\"command\",\"command\":\"line {TOKEN}\"}}"
+    );
+    let words = refused_whole(&walk, "launch-token", &["--agent", &line]);
+    says(
+        &words,
+        &["programs.claude.settings.statusLine.command", "launch"],
+        TOKEN,
+    );
+
+    // The host's own settings give `apiKeyHelper`, the account's sign-in.
+    // The refusal gives no value; status's configuration values give the
+    // host's own words as written, a script's name being no credential
+    // (core.45; design 12), so only the refusal is read for it.
+    walk.configure("[agents.programs.claude.settings]\napiKeyHelper = \"key-helper-script\"\n");
+    let words = refused_whole(&walk, "helper", &[]);
+    assert!(
+        [
+            "programs.claude.settings.apiKeyHelper",
+            "host",
+            "the account's sign-in"
+        ]
+        .iter()
+        .all(|part| words.contains(part))
+            && !words.contains("key-helper-script"),
+        "{words}"
+    );
+
+    // A token in the status line of the host's named file.
+    let tokened = scratch("tokened.json");
+    std::fs::write(
+        &tokened,
+        format!(
+            "{{ \"statusLine\": {{ \"type\": \"command\", \"command\": \"line {TOKEN}\" }} }}\n"
+        ),
+    )
+    .expect("the host's file");
+    walk.configure(&format!(
+        "[agents.programs.claude]\nfile = {:?}\n",
+        tokened.display().to_string()
+    ));
+    let words = refused_whole(&walk, "host-token", &[]);
+    says(
+        &words,
+        &[
+            "programs.claude.settings.statusLine.command",
+            "host",
+            &tokened.to_string_lossy(),
+        ],
+        TOKEN,
+    );
+
+    // The host names a file that does not exist.
+    let missing = scratch("missing.json");
+    walk.configure(&format!(
+        "[agents.programs.claude]\nfile = {:?}\n",
+        missing.display().to_string()
+    ));
+    let words = refused_whole(&walk, "missing", &[]);
+    assert!(
+        [
+            "config.toml",
+            "agents.programs.claude.file",
+            "could not be read"
+        ]
+        .iter()
+        .all(|part| words.contains(part))
+            && words.contains(&*missing.to_string_lossy()),
+        "{words}"
+    );
+    walk.configure("");
+
+    // The repository's kind table gives `permissions.defaultMode`, flume's
+    // mode's.
+    the_repository_gives_only(
+        &walk,
+        &binding,
+        "[kinds.fix.agents.programs.claude.settings]\npermissions = { defaultMode = \"bypassPermissions\" }\n",
+    );
+    let words = refused_whole(&walk, "mode", &[]);
+    says(
+        &words,
+        &[
+            "programs.claude.settings.permissions.defaultMode",
+            "repository",
+            "flume's `mode`",
+        ],
+        "bypassPermissions",
+    );
+
+    // The repository names a file past its root, which stands.
+    std::fs::write(
+        walk.repository.scratch.path("claude.json"),
+        "{ \"tui\": \"fullscreen\" }\n",
+    )
+    .expect("a file outside the repository");
+    the_repository_gives_only(
+        &walk,
+        &binding,
+        "[kinds.fix.agents.programs.claude]\nfile = \"../../claude.json\"\n",
+    );
+    let words = refused_whole(&walk, "outside", &[]);
+    says(
+        &words,
+        &[
+            "kinds.fix.agents.programs.claude.file",
+            "../../claude.json",
+            "lies outside the repository",
+        ],
+        "fullscreen",
+    );
+}
+
+/// Claude Code's attribution with no text and no session link, as a host
+/// writes it for a fork whose upstream refuses a tagline (design 16).
+const NO_TAGLINE: &str = "attribution = { commit = \"\", pr = \"\", sessionUrl = false }\n";
+
+#[test]
+fn a_forks_attribution_is_the_hosts_a_repositorys_its_own_and_another_its_accounts() {
+    // S102, 32, 143, 195, C.2, C.7: three repositories on one host. The
+    // host's `[repos."<fork>".agents]` gives Claude Code's attribution with
+    // no text and no session link; `ours` commits its own words in its
+    // `.config/flume.toml`'s `[agents]`; `plain` gives none, and the
+    // account's own settings give one. Every stage of a fix and a chore in
+    // the fork is started with the attribution as the host wrote it, from
+    // `host-repository`, and the stand-in read it over its account's; a fix
+    // in `ours` with its own words, from `repository`; a fix in `plain`
+    // with nothing passed, the stand-in reading its account's. Each lands.
+    let fork = Walk::new("walk-fork");
+    let ours = Walk::new("walk-ours").with_home(fork.home().to_path_buf());
+    let plain = Walk::new("walk-plain").with_home(fork.home().to_path_buf());
+    std::fs::write(
+        fork.account().join("settings.json"),
+        "{ \"attribution\": { \"commit\": \"Co-Authored-By: the account\" } }\n",
+    )
+    .expect("the account's settings");
+    fork.configure(&format!(
+        "[repos.{:?}.agents.programs.claude.settings]\n{NO_TAGLINE}",
+        fork.repository.name()
+    ));
+    the_repository_gives(
+        &ours,
+        "[agents.programs.claude.settings]\nattribution = { commit = \"Assisted-by: Claude Code\", pr = \"\" }\n",
+    );
+
+    let none = json!({ "commit": "", "pr": "", "sessionUrl": false });
+    for kind in ["fix", "chore"] {
+        let place = fork.launch(kind, "fork", &["--brief", "mend the parser"]);
+        let given = passed(&fork, &place);
+        assert_eq!(given, json!({ "attribution": none }), "{kind}");
+        let status = fork.status(&place);
+        assert_eq!(
+            status["agent"]["settings"]["from"]["programs.claude.settings.attribution"],
+            json!({ "layer": "host-repository", "value": "{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}" }),
+            "{status}"
+        );
+        let read = read_settings(&fork, &place, &format!("{kind}.rs"));
+        assert_eq!(read["attribution"], none, "{kind}: {read}");
+        until_landed(&fork, &place);
+        assert_eq!(
+            fork.on_remote(&format!("{kind}.rs")).as_deref(),
+            Some("fixed\n")
+        );
+    }
+
+    let place = ours.launch("fix", "ours", &["--brief", "mend the parser"]);
+    let words = json!({ "commit": "Assisted-by: Claude Code", "pr": "" });
+    assert_eq!(passed(&ours, &place), json!({ "attribution": words }));
+    let status = ours.status(&place);
+    assert_eq!(
+        status["agent"]["settings"]["from"]["programs.claude.settings.attribution"]["layer"],
+        "repository",
+        "{status}"
+    );
+    let read = read_settings(&ours, &place, "ours.rs");
+    assert_eq!(read["attribution"], words, "{read}");
+    until_landed(&ours, &place);
+    assert_eq!(ours.on_remote("ours.rs").as_deref(), Some("fixed\n"));
+
+    let place = plain.launch("fix", "plain", &["--brief", "mend the parser"]);
+    let printed = plain.printed(&place);
+    assert!(!printed.contains("--settings"), "{printed}");
+    let read = read_settings(&plain, &place, "plain.rs");
+    assert_eq!(
+        read["attribution"],
+        json!({ "commit": "Co-Authored-By: the account" }),
+        "{read}"
+    );
+    until_landed(&plain, &place);
+    assert_eq!(plain.on_remote("plain.rs").as_deref(), Some("fixed\n"));
+}
+
 /// Writes acme's `review@<version>` in `kinds_dir`: one code stage whose
 /// agent commits, in a kind that lands, its prompt naming its version;
 /// gives its hash as the kinds profile reads it (156, 157, 159).
@@ -2183,4 +2691,309 @@ fn a_hosts_source_runs_its_locked_kind_and_a_place_keeps_its_version() {
     until_landed(&walk, &two);
     assert_eq!(walk.on_remote("two.rs").as_deref(), Some("fn two() {}\n"));
     assert!(!Path::new(&one).exists() && !Path::new(&two).exists());
+}
+
+/// A kind of the walkthrough's own whose one stage is a conversation, and
+/// which does not land.
+const TALK_KIND: &str = r#"[kinds.talk]
+version = 1
+branch = "talk"
+starts_unready = true
+lands = false
+
+[[kinds.talk.stages]]
+name = "talk"
+prompt = "prompts/talk.md"
+conversation = true
+agents = [{}]
+"#;
+
+/// The words of a lost conversation's carried start (49, 179).
+const RESUMED: &str = "Your session was lost and goes on here, with its conversation as it stood. Anything you had running then has stopped: read the place again before you carry on.";
+
+/// The words before a lost conversation's fresh start's own (49).
+const LOST: &str = "The stage's earlier agent was lost, and its conversation could not be carried, so this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.";
+
+/// Launches `talk--<name>` from the walkthrough's own kinds and gives the
+/// place's location.
+fn launch_talk(walk: &Walk, name: &str) -> String {
+    let kinds = walk.repository.scratch.path("talk-kinds");
+    std::fs::create_dir_all(kinds.join("prompts")).expect("the kinds' folder");
+    std::fs::write(kinds.join("kinds.toml"), TALK_KIND).expect("the kinds");
+    std::fs::write(
+        kinds.join("prompts/talk.md"),
+        "Talk with the person about {{brief}}.\n\n{{#words}}{{words}}\n\n{{/words}}To stop short: {{needs}}\n",
+    )
+    .expect("the prompt");
+    walk.launch(
+        "talk",
+        name,
+        &[
+            "--brief",
+            "the parser",
+            "--kinds",
+            &kinds.join("kinds.toml").to_string_lossy(),
+        ],
+    )
+}
+
+/// The talk's first agent run to its end, as a person leaves the printed
+/// command's session, and the stage read lost: the session it ran and the
+/// transcript it wrote.
+fn talk_lost(walk: &Walk, place: &str) -> (String, PathBuf) {
+    let out = walk.agent(place, json!([]));
+    let ran = sessions(&out);
+    assert_eq!(ran.len(), 1, "{out}");
+    walk.until(place, "talk lost", |status| {
+        stage(status, "talk")["state"] == "lost"
+    });
+    let transcripts = transcripts(walk.account());
+    assert_eq!(transcripts.len(), 1, "{transcripts:?}");
+    (ran[0].clone(), transcripts[0].clone())
+}
+
+/// Every transcript under `home`'s `projects`, links followed.
+fn transcripts(home: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(home.join("projects"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .flat_map(|folder| {
+            std::fs::read_dir(folder.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+        })
+        .map(|file| file.path())
+        .collect()
+}
+
+/// The transcript each start of the place acked, by its started ack in
+/// the place's own folder, in the order of the starts.
+fn acked_transcripts(walk: &Walk) -> Vec<(String, PathBuf)> {
+    let mut acked = vec![];
+    let mut folders = vec![walk.home().join("state/flume")];
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(&folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                folders.push(path);
+            } else if path.file_name().is_some_and(|name| name == "started.json") {
+                let ack: Value =
+                    serde_json::from_str(&std::fs::read_to_string(&path).expect("the started ack"))
+                        .expect("the started ack as JSON");
+                acked.push((
+                    path.to_string_lossy().into_owned(),
+                    PathBuf::from(ack["transcript_path"].as_str().unwrap_or_default()),
+                ));
+            }
+        }
+    }
+    acked.sort();
+    acked
+}
+
+/// The device and inode of the file at `path`, links followed.
+fn file_id(path: &Path) -> (u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    let meta =
+        std::fs::metadata(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    (meta.dev(), meta.ino())
+}
+
+#[test]
+fn a_talk_resumed_by_hand_waits_at_its_retry_and_goes_on_in_its_session_once_it_ends() {
+    // S113, S117, 49, 77, 179, 207: a talk's agent ends and the stage is
+    // read lost. A person resumes its session by hand, `claude --resume
+    // <session>`, under a second configuration home whose `projects` is a
+    // link to the account's, with no flume of its own, and says something
+    // in it. The caller's retry is taken and the stage waits on its
+    // session, status naming the process and the line saying so, while
+    // flume starts, ends and sends nothing to that process. Once the
+    // person ends it, the next settle starts the stage on the account its
+    // lost start ran under, its command resuming the lost session, its
+    // prompt flume's words for a lost session and the way to stop short;
+    // it goes on in the same transcript, by device and inode, which holds
+    // what the person said, and the place is done and tidied (core.10,
+    // core.18).
+    let walk = Walk::new("walk-lost-talk");
+    let place = launch_talk(&walk, "one");
+    let (session, transcript) = talk_lost(&walk, &place);
+
+    let by_hand_home = walk.account_folder("by-hand");
+    std::os::unix::fs::symlink(
+        walk.account().join("projects"),
+        by_hand_home.join("projects"),
+    )
+    .expect("the by-hand home's projects, a link to the account's");
+    let ended = walk.signal("by-hand-ends");
+    let script = walk.repository.scratch.path("by-hand.json");
+    std::fs::write(
+        &script,
+        json!([{ "wait_for": ended.to_string_lossy() }]).to_string(),
+    )
+    .expect("the by-hand script");
+    let mut by_hand = walk
+        .command("claude", Path::new(&place))
+        .args(["--resume", &session, "a person's word in the talk"])
+        .env("CLAUDE_CONFIG_DIR", &by_hand_home)
+        .env("STAND_IN_SCRIPT", &script)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the stand-in resumed by hand");
+    let record = by_hand_home.join(format!("sessions/{}.json", by_hand.id()));
+    let began = std::time::Instant::now();
+    while !record.is_file() {
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(30),
+            "the by-hand session never named itself"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    walk.flume(&["retry", &place, "--stage", "talk"]);
+    for _ in 0..3 {
+        walk.settle(&place);
+    }
+    let status = walk.status(&place);
+    let wait = &status["waits_on_session"];
+    assert_eq!(wait["stage"], "talk", "{status}");
+    assert_eq!(wait["processes"][0]["pid"], json!(by_hand.id()), "{status}");
+    assert!(
+        status["line"]["full"]
+            .as_str()
+            .is_some_and(|line| line.contains("waiting on its session")),
+        "{status}"
+    );
+    assert_eq!(stage(&status, "talk")["starts"], 1, "{status}");
+    assert!(!status["stalled"].as_bool().unwrap_or(false), "{status}");
+    let person = walk.person(&["status", &place]);
+    assert!(
+        person.contains("talk waits for its conversation to end since")
+            && person.contains(&format!("process {}", by_hand.id())),
+        "{person}"
+    );
+    assert!(
+        by_hand.try_wait().expect("the by-hand process").is_none(),
+        "flume ended the session run by hand"
+    );
+    assert!(record.is_file(), "the by-hand session's record");
+
+    std::fs::write(&ended, "").expect("the person ends the session");
+    let ran = finish(by_hand);
+    assert_eq!(ran.code, 0, "the by-hand session: {}", ran.out);
+    assert!(ran.out.contains(", resumed"), "{}", ran.out);
+    assert!(!record.exists(), "the by-hand session's record left behind");
+
+    let status = walk.until(&place, "talk started again", |status| {
+        stage(status, "talk")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert!(status["waits_on_session"].is_null(), "{status}");
+    assert_eq!(
+        status["agent"]["conversation"],
+        json!({ "from": 1, "cause": "lost", "carried": true }),
+        "{status}"
+    );
+    assert_eq!(
+        status["agent"]["account"],
+        json!({ "pool": "stand-in", "name": "stand-in-1", "from": "conversation" }),
+        "{status}"
+    );
+    assert_eq!(walk.resumes(&place).as_deref(), Some(session.as_str()));
+    let prompt = walk.prompt(&place);
+    assert_eq!(prompt, format!("{RESUMED}\n\n{STOP_SHORT}"));
+    let person = walk.person(&["status", &place]);
+    assert!(
+        person.contains("carries the conversation of start 1, lost")
+            && person.contains("(its conversation's)"),
+        "{person}"
+    );
+
+    let out = walk.agent(&place, json!([]));
+    assert!(out.contains(", resumed"), "{out}");
+    assert_eq!(sessions(&out), std::slice::from_ref(&session), "{out}");
+    let acked = acked_transcripts(&walk);
+    assert_eq!(acked.len(), 2, "{acked:?}");
+    for (ack, path) in &acked {
+        assert_eq!(
+            file_id(path),
+            file_id(&transcript),
+            "{ack} names another file"
+        );
+    }
+    assert_eq!(
+        transcripts(walk.account()),
+        std::slice::from_ref(&transcript)
+    );
+    let text = std::fs::read_to_string(&transcript).expect("the transcript");
+    let turns: Vec<Value> = text
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("a JSON record"))
+        .filter(|record| record["type"] == "user" && record["message"]["content"].is_string())
+        .map(|record| record["message"]["content"].clone())
+        .collect();
+    assert_eq!(
+        turns.len(),
+        3,
+        "the stage's prompt, the person's, then flume's: {text}"
+    );
+    assert_eq!(turns[1], json!("a person's word in the talk"), "{text}");
+    assert_eq!(turns[2], json!(prompt), "{text}");
+
+    walk.until(&place, "talk lost again", |status| {
+        stage(status, "talk")["state"] == "lost"
+    });
+    walk.flume(&["done", &place]);
+    walk.until(&place, "done and tidied", Value::is_null);
+}
+
+#[test]
+fn a_lost_talk_whose_transcript_is_gone_starts_afresh_with_flumes_words() {
+    // S115, 49, 179: a talk's agent ends and the stage is read lost; its
+    // transcript is then removed. The caller's retry starts the stage at
+    // once, no process running its session, afresh: its command resumes
+    // nothing, its prompt holds flume's words for a lost stage, and status
+    // says why the conversation could not be carried, naming
+    // `CLAUDE_CONFIG_DIR` and no path (core.30).
+    let walk = Walk::new("walk-lost-talk-gone");
+    let place = launch_talk(&walk, "two");
+    let (_, transcript) = talk_lost(&walk, &place);
+    std::fs::remove_file(&transcript).expect("the transcript removed");
+
+    walk.flume(&["retry", &place, "--stage", "talk"]);
+    let status = walk.until(&place, "talk started again", |status| {
+        stage(status, "talk")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert!(status["waits_on_session"].is_null(), "{status}");
+    assert_eq!(
+        status["agent"]["conversation"],
+        json!({ "from": 1, "cause": "lost", "carried": false, "why": UNREADABLE }),
+        "{status}"
+    );
+    assert!(
+        !status
+            .to_string()
+            .contains(&*walk.account().to_string_lossy()),
+        "status holds a configuration home's path: {status}"
+    );
+    assert_eq!(walk.resumes(&place), None, "{}", walk.printed(&place));
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.starts_with("Talk with the person about the parser.") && prompt.contains(LOST),
+        "{prompt}"
+    );
+    let person = walk.person(&["status", &place]);
+    assert!(
+        person.contains(&format!("starts afresh after start 1, lost: {UNREADABLE}")),
+        "{person}"
+    );
+
+    let out = walk.agent(&place, json!([]));
+    assert!(!out.contains(", resumed"), "{out}");
+    walk.until(&place, "talk lost again", |status| {
+        stage(status, "talk")["state"] == "lost"
+    });
+    walk.flume(&["done", &place]);
+    walk.until(&place, "done and tidied", Value::is_null);
 }

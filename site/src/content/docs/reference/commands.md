@@ -87,7 +87,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
-| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside`, `session` or `mode`. `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. Repeatable. |
+| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside`, `session`, `mode` or `programs`. `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. `programs.<program>.settings.<key>=<value>` gives one top-level key of a program's own settings, several building one entry. Its value is read as JSON where it parses and as the text written otherwise. A nested key, or one key given twice for one stage, refuses the launch. `programs.<program>.file=<path>` names a program's settings file, relative to the working directory, read once at the launch ([a program's own settings](/flume/guides/agent-settings/#a-programs-own-settings)). Repeatable. |
 | `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
 | `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
 
@@ -112,6 +112,9 @@ nothing it made, when:
   causes;
 - a declaration sets `env` in an agents table, or a setting names a
   stage the kind lacks, or a program no agent profile runs;
+- a program's own setting is a key its agent profile reserves for
+  another setting, holds a value shaped as a credential, or is given
+  for a program whose profile takes none;
 - the stream is one the host's configuration does not declare;
 - the stream's multiplexer names no terminal profile flume carries.
   A launch on another stream runs.
@@ -148,6 +151,9 @@ place gives:
 - its current agent's identity, program, settings with their layers
   and state, and whether it started, is asking or has its own work
   running;
+- its current agent's own settings, each with its layer and its file,
+  the keys left out of each file with their owners, and how they were
+  passed;
 - whether the deliverable exists, and a change's tasks;
 - its submission;
 - what it waits on, since when and in whose words, and whether it is
@@ -221,11 +227,14 @@ stage. Then come the parts that hold:
 
 - whom it waits on: `waits on its caller`, where its next move is its
   caller's, stalled or not; `waits on the host`, where a stage waits for
-  room; or `waits on the merge queue`, where it is submitted;
+  room; `waits on its session`, where a stage waits while a process
+  runs the conversation its start would carry; or `waits on the merge
+  queue`, where it is submitted;
 - what keeps a place whose work is over, in a word: `kept by <step>`,
   the teardown's step that failed, such as `sluice release`; `kept
   holding work`, `kept holding a lock` or `kept holding work and a
-  lock`; `kept while its agent runs`; or `kept unread`. A place removed
+  lock`; `kept while its agent runs`; `kept while its session runs`,
+  while a process runs its conversation; or `kept unread`. A place removed
   whose branch and document are still to go reads `being tidied`, and a
   tidied place's document kept for an end pending reads `tidied`. A
   place that landed or was dropped shows these only under `--all`; a

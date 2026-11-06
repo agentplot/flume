@@ -19,6 +19,7 @@
 
 use crate::accounts::{AccountRoom, PoolRoom, Usable, THRESHOLD};
 use crate::answer::and_list;
+use crate::live::waits_on_session;
 use crate::{
     AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
     RoomWanted, Step, StreamStatus, TitleFrom, TitleHeld,
@@ -567,6 +568,10 @@ pub(crate) struct Waiting {
     pub order: u64,
     pub since: Option<Seconds>,
     pub words: Option<String>,
+    /// It waits while a process runs the conversation its start would
+    /// carry, or flume could not read whether one does, as the last settle
+    /// read it: it starts only once a claim reads none (49, 207).
+    pub session: bool,
     /// Whether its stream's word for where its kind or its stage opens
     /// refuses it (4, 199).
     pub session_refused: bool,
@@ -718,8 +723,9 @@ impl Queue {
     /// is full, the room its stream's other labels keep free is all it has
     /// left, its pool has no usable account, or a stage of another place
     /// waits that stands before it in the order stages start and could
-    /// start now, its pool holding an account of its program (70, 143,
-    /// 145, 181; core.26).
+    /// start now, its pool holding an account of its program and no
+    /// process last read running the conversation it would carry (70, 143,
+    /// 145, 181, 207; core.26).
     pub fn must_wait(
         &self,
         place: &PlaceId,
@@ -750,7 +756,10 @@ impl Queue {
         start_order(&standings)
             .into_iter()
             .take_while(|&index| index < others.len())
-            .any(|index| others[index].runs(self) && others[index].wants(self).is_none())
+            .any(|index| {
+                let other = others[index];
+                other.runs(self) && !other.session && other.wants(self).is_none()
+            })
     }
 
     /// Where `waiting` stands among the stages waiting (70, 181).
@@ -940,7 +949,8 @@ impl Engine {
                         let room = stage.room.clone().unwrap_or_default();
                         let settings = self
                             .resolve(&held.place, &held.place.kind.stages[index])
-                            .settings;
+                            .map(|resolved| resolved.settings)
+                            .unwrap_or_default();
                         let session_refused = as_read
                             .session_of(&stream, &held.place.kind.name, &stage.name, &settings)
                             .is_err();
@@ -955,6 +965,7 @@ impl Engine {
                             priority: held.priority,
                             order: room.order,
                             since: stage.since,
+                            session: waits_on_session(&room),
                             words: room.words,
                             session_refused,
                         }
@@ -978,7 +989,10 @@ impl Engine {
     /// are at fault, whose stream's word for where its kind or its stage
     /// opens is at fault, or whose stream's multiplexer names a terminal
     /// profile the resolver does not carry, is claimed, which refuses it,
-    /// whatever room the host has (4, 32, 145, 182, 190, 199).
+    /// whatever room the host has (4, 32, 145, 182, 190, 199); and each
+    /// stage waiting while a process runs the conversation its start would
+    /// carry has the agent profile's live asked again, passed over while it
+    /// runs and claimed, room allowing, once it reads none (49, 207).
     pub(crate) fn start_waiting(&self) {
         let any = self.store.read_every().iter().any(|read| {
             read.state
@@ -1013,11 +1027,17 @@ impl Engine {
             for waiting in refused {
                 claim(&mut queue, waiting);
             }
+            // A stage waiting on a process that runs the conversation its
+            // start would carry is read again at each settle, whatever
+            // room the host has, and passed over while it runs (49, 207).
+            for waiting in runs.iter_mut().filter(|waiting| waiting.session) {
+                waiting.session = self.session_again(waiting, &queue);
+            }
             while queue.room() != Some(0) {
                 runs = queue.ordered(runs);
                 let Some(at) = runs
                     .iter()
-                    .position(|waiting| waiting.wants(&queue).is_none())
+                    .position(|waiting| !waiting.session && waiting.wants(&queue).is_none())
                 else {
                     break;
                 };

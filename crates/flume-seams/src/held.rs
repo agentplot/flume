@@ -430,6 +430,11 @@ pub struct PlaceRecord {
     /// 32).
     #[serde(default)]
     pub repository_settings: KindSettings,
+    /// The repository's settings for every kind, its `[agents]`, as the
+    /// launch read them at the base's revision; none in a held state
+    /// written before (21, 32, 195).
+    #[serde(default)]
+    pub repository_agents: Settings,
     pub hold: Vec<String>,
     pub hold_submission: bool,
     /// The words of each hold the launch put, by stage name (7, 130).
@@ -532,10 +537,29 @@ pub enum Over {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kept {
-    Holds { holds: Holds },
-    Teardown { step: String, words: String },
-    AgentLive { identity: String },
-    Unreadable { reason: String },
+    Holds {
+        holds: Holds,
+    },
+    Teardown {
+        step: String,
+        words: String,
+    },
+    AgentLive {
+        identity: String,
+    },
+    Unreadable {
+        reason: String,
+    },
+    /// A process of the host runs the conversation of its last
+    /// conversation start, each as the agent profile's live read it, or
+    /// what could not be read where it could not read whether one does
+    /// (64, 207; core.18).
+    SessionRuns {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        processes: Vec<LiveProcess>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        unread: Option<String>,
+    },
 }
 
 /// Where a stage stands (vocabulary: stage state).
@@ -623,25 +647,76 @@ pub struct RoomWait {
     /// The words it starts with: a fix round's or a retry's (49, 112).
     pub words: Option<String>,
     /// For a stage waiting after its agent stopped at its account's usage
-    /// limit, that start and whether the next may carry its conversation;
-    /// none for any other wait, so no other start carries one (30, 146,
-    /// 179).
+    /// limit, or after a caller's retry of a conversation reported lost,
+    /// that start, why it ended and whether the next may carry its
+    /// conversation; none for any other wait, so no other start carries
+    /// one (30, 49, 146, 179).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub carry: Option<AfterSpent>,
+    pub carry: Option<CarryFrom>,
+    /// For a stage whose start would carry a conversation, or start a
+    /// lost conversation afresh, each process of the host the agent
+    /// profile's live last read running that conversation; none where it
+    /// read none, and in a wait written before (49, 207).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub live: Vec<LiveProcess>,
+    /// What the agent profile's live last could not read, so the stage
+    /// waits as if a process ran its conversation, naming a variable and
+    /// never a path; none where it read, and in a wait written before
+    /// (207; core.30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_unread: Option<String>,
 }
 
-/// A stage's wait after its agent stopped at its account's usage limit:
-/// the start that stopped, whether the next start may carry its
-/// conversation, and why not where it may not (146, 179, S79).
+/// A stage's wait to carry the conversation of a start whose agent
+/// stopped at its account's usage limit or was reported lost: that start,
+/// why it ended, whether the next start may carry its conversation, and
+/// why not where it may not (49, 146, 179, S79).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AfterSpent {
-    /// The start whose agent stopped at its account's usage limit.
+pub struct CarryFrom {
+    /// The start whose agent stopped at its account's usage limit, or
+    /// whose conversation was reported lost.
     pub start: Identity,
+    /// Why that start ended, spent in a wait written before.
+    #[serde(default, skip_serializing_if = "CarryCause::is_spent")]
+    pub cause: CarryCause,
     /// Whether the next start may carry its conversation.
     pub carry: bool,
     /// Why it does not, where it may not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
+}
+
+/// Why the start whose conversation a start carries ended: its agent
+/// stopped at its account's usage limit, or its conversation was reported
+/// lost and its caller retried it (49, 146, 179). Spent is written by no
+/// field, so a wait or a conversation written before reads as spent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CarryCause {
+    #[default]
+    Spent,
+    Lost,
+}
+
+impl CarryCause {
+    pub fn name(self) -> &'static str {
+        match self {
+            CarryCause::Spent => "spent",
+            CarryCause::Lost => "lost",
+        }
+    }
+
+    pub fn is_spent(&self) -> bool {
+        *self == CarryCause::Spent
+    }
+}
+
+/// A process of the host running a conversation, as an agent profile's
+/// live reads it: its id, and when it started by the host's clock (207).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveProcess {
+    pub pid: u32,
+    pub started: Seconds,
 }
 
 /// A stage's end as reported when it ended (43).
@@ -679,6 +754,11 @@ pub struct StageEnd {
     /// variables' names alone (35, 161); boxed, so an end stays small.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unsettled: Option<Box<Unsettled>>,
+    /// For a conversation's stage read lost while an agent the terminal
+    /// brought back stands in its last start's pane, that flume left that
+    /// agent there, sent nothing (43, 77; core.10).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub left_in_pane: bool,
 }
 
 /// One line a stage's run wrote of what it made (129): a JSON object
@@ -780,8 +860,9 @@ pub struct StartHeld {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dialog: Option<Dialog>,
     /// For a start after its stage's agent stopped at its account's usage
-    /// limit, whether it carries that agent's conversation, or why not;
-    /// none for any other start (56, 146, 179).
+    /// limit, or after a caller's retry of a conversation reported lost,
+    /// whether it carries that agent's conversation, or why not; none for
+    /// any other start (49, 56, 146, 179).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
     /// The session its agent opened in, with where it came from; none
@@ -798,15 +879,37 @@ pub struct StartHeld {
     /// a start written before, which is the host's (56, 190).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal: Option<ProfileHeld>,
+    /// Its program's own settings beyond the keys its settings hold: each
+    /// file a layer named for its program, and how its command passed the
+    /// keys; none where no layer gave its program an entry, and in a start
+    /// written before (56, 195, 196).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own: Option<OwnHeld>,
+}
+
+/// A start's own settings beyond its keys: each file a layer named for
+/// its program, most specific first, and how its command passed the keys,
+/// its arguments naming the files it lists, none where it passed none or
+/// until it is opened (56, 195, 196).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnHeld {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<crate::OwnFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passed: Option<String>,
 }
 
 /// Whether a start carries the conversation of its stage's start before
-/// it, whose agent stopped at its account's usage limit: that start's
-/// number, and why not where it does not (56, 146, 179).
+/// it, whose agent stopped at its account's usage limit or was reported
+/// lost: that start's number, why it ended, and why not where it does not
+/// (49, 56, 146, 179).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Conversation {
-    /// The number of the start whose agent stopped.
+    /// The number of the start whose agent stopped or was lost.
     pub from: u32,
+    /// Why that start ended, spent in a conversation written before.
+    #[serde(default, skip_serializing_if = "CarryCause::is_spent")]
+    pub cause: CarryCause,
     pub carried: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
@@ -847,7 +950,8 @@ pub struct StartRecord {
 }
 
 /// The account a start runs under: its pool, its name, and whether the
-/// intent's affinity or the pool's strategy chose it (144, 145, 147).
+/// intent's affinity, the pool's strategy or the conversation it carries
+/// chose it (144, 145, 147).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountHeld {
     pub pool: String,
@@ -855,12 +959,15 @@ pub struct AccountHeld {
     pub from: AccountFrom,
 }
 
-/// What chose a start's account (145, 147).
+/// What chose a start's account (145, 147): the intent's affinity, the
+/// pool's strategy, or, for a lost conversation's start, the account its
+/// lost start ran under, which holds its conversation (145, 179).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountFrom {
     Affinity,
     Strategy,
+    Conversation,
 }
 
 /// A move from one account to another: of a stage, whose start went to

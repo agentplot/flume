@@ -30,8 +30,11 @@ use std::sync::{Arc, Mutex};
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
+    before_open: Mutex<Vec<BeforeOpen>>,
     pub log: Log,
 }
+
+type BeforeOpen = Box<dyn FnOnce() + Send>;
 
 struct TerminalState {
     agents: BTreeMap<String, Running>,
@@ -202,8 +205,15 @@ impl FakeTerminal {
                 runs: BTreeMap::new(),
                 setup: vec![],
             }),
+            before_open: Mutex::default(),
             log: Log::default(),
         }
+    }
+
+    /// `act` runs once, at the start of the next open, as the program the
+    /// terminal starts would first see its place.
+    pub fn before_next_open(&self, act: impl FnOnce() + Send + 'static) {
+        lock(&self.before_open).push(Box::new(act));
     }
 
     /// The state an agent reads in once opened, until set otherwise.
@@ -498,6 +508,10 @@ impl Terminal for FakeTerminal {
         at: &OpenIn,
         session: Option<&str>,
     ) -> Opened {
+        let acts: Vec<BeforeOpen> = std::mem::take(&mut *lock(&self.before_open));
+        for act in acts {
+            act();
+        }
         self.log.push(format!("open {identity} {}", place.location));
         self.log.push(format!("at {identity} {}", where_words(at)));
         let key = identity.to_string();

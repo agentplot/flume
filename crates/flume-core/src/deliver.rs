@@ -48,6 +48,7 @@ impl Engine {
     /// receipt only where `read_back`.
     fn deliver_reading(&self, id: &PlaceId, read_back: bool) -> bool {
         let mut sent = false;
+        let mut read_again = false;
         loop {
             let Some(read) = self.store.read(id) else {
                 return sent;
@@ -115,6 +116,17 @@ impl Engine {
                     .unwrap_or(QUIET_LIMIT);
                 let waited = self.host.now().saturating_sub(start.started_at);
                 if stopped || (!dialog && waited >= limit) {
+                    // A start read begun without its settings is read so
+                    // once more before it is read never begun, from the
+                    // held state as it stands now: its agent, read not
+                    // quiet there, may have stopped since, so it is ended
+                    // as that reading says, and the held state read
+                    // before it may not hold how it began, which its end
+                    // names (161).
+                    if unsettled.is_some() && !read_again {
+                        read_again = true;
+                        continue;
+                    }
                     if carries(&start) {
                         let words = if stopped {
                             ENDED_FIRST

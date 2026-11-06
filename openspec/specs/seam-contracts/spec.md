@@ -306,11 +306,13 @@ word that is not one of the four SHALL be refused naming it (161, 162,
 
 ### Requirement: The agent seam carries a conversation or says why not
 
-The agent seam SHALL answer, given the start whose agent stopped at its
-account's usage limit and the chosen account's environment, whether its
-program can carry that agent's conversation there, with the session to
-resume, or why not, or that it offers no carry, the default; and its
-command SHALL take the session a start resumes (88, 179).
+The agent seam SHALL answer, given the start whose conversation a start
+carries, one whose agent stopped at its account's usage limit or a
+conversation's start reported lost, and the environment of the account
+the next start takes, an empty one under no pool, whether its program
+can carry that agent's conversation there, with the session to resume,
+or why not, or that it offers no carry, the default; and its command
+SHALL take the session a start resumes (49, 88, 179).
 
 #### Scenario: A profile that offers no carry
 
@@ -324,11 +326,14 @@ command SHALL take the session a start resumes (88, 179).
 
 ### Requirement: The types of a carried start
 
-The seams SHALL pass one type each for a stage's wait after a spent
-agent, a start's conversation, a start carried that did not begin, the
-session in a start's record and an unsettled start's other session;
-each SHALL serialize to JSON and back unchanged, and held state written
-before them SHALL read with none (146, 161, 179).
+The seams SHALL pass one type each for a stage's wait to carry a
+conversation, naming the start it carries and its cause, spent or
+lost; a start's conversation with that cause; a start carried that did
+not begin; the session in a start's record; and an unsettled start's
+other session. Each SHALL serialize to JSON and back unchanged, and
+held state written before them SHALL read with none, and a wait or a
+conversation written before with no cause SHALL read as spent (49, 146,
+161, 179).
 
 #### Scenario: A held state with a carried start
 
@@ -339,6 +344,11 @@ before them SHALL read with none (146, 161, 179).
 
 - **WHEN** a held state written before this change is read
 - **THEN** it reads with no wait after a spent agent, no conversation, no session and no start carried that did not begin (146)
+
+#### Scenario: A lost conversation's wait and conversation
+
+- **WHEN** a held state whose talk waits to carry a lost start's conversation, and whose talk start 2 carries it, is written and read, and one whose wait and conversation name no cause is read
+- **THEN** the first reads back unchanged with the cause lost, and the second reads with the cause spent (49, 179)
 
 ### Requirement: An affinity written before reads with its one account
 
@@ -562,3 +572,114 @@ its four answers serializing to JSON and back unchanged (61, 201).
 
 - **WHEN** `runs`, `not_running`, `no_part` and `unread`, each with its name or its reason, are written to JSON and read back
 - **THEN** each equals the value written (201)
+
+### Requirement: The agent seam takes a program's own settings
+
+The agent seam SHALL name the keys of its program's settings another
+setting or the account owns, each with its owner, none by default; and
+SHALL say whether its profile takes its program's keys as resolved,
+refusing every non-empty entry by default. Its command SHALL be given
+the agent's resolved keys alone and the start's folder, and SHALL pass
+the keys, listing each file it is to be started with under that folder,
+and none where they are empty (88, 195, 196).
+
+#### Scenario: A profile that keeps the seam's defaults
+
+- **WHEN** an agent profile that keeps the seam's defaults is asked its reserved keys, and to take `{ line = "a" }` and then an empty entry
+- **THEN** it names no reserved key, refuses the first, saying its profile passes no settings of its program's own, and takes the second (170, 195)
+
+#### Scenario: The fake's way over the seam's scenarios
+
+- **WHEN** the agent seam's scenarios run against the fake agent scripted to take own settings by a file and to reserve `env`
+- **THEN** it names `env` with its owner, takes `{ line = "a" }`, and its command lists one file under the start's folder holding the entry (196)
+
+### Requirement: The core writes a command's files before the terminal opens it
+
+The core SHALL write each file an agent's command lists, written beside
+and renamed over, readable by the host user alone, before the terminal
+opens the agent, and SHALL read a start whose command lists a file
+outside the start's folder as not opened, naming the file (16, 17,
+196).
+
+#### Scenario: A file written before the open
+
+- **WHEN** a stage starts whose command lists one file under its start's folder
+- **THEN** the file holds the command's text when the fake terminal opens the agent, and only the host's user may read it (196)
+
+#### Scenario: A file outside the folder
+
+- **WHEN** a command lists a file outside its start's folder
+- **THEN** the start is not opened, naming the file, and nothing is written (196)
+
+### Requirement: The types of own settings
+
+The seams SHALL pass `programs`, a table of programs each giving a
+named file, with its path as written and as read, its keys and the keys
+left out of it, and `settings`, a table of JSON values, in an agent's
+settings; the layers `host-stream` and `host` beside the others; a
+profile's reserved keys; and a command's files.
+Each SHALL serialize to JSON and back unchanged, and a held state
+written before them SHALL read with none (32, 195, 196).
+
+#### Scenario: A held state with own settings
+
+- **WHEN** a held state whose launch gives `programs` for two programs, one with a named file whose `env` was left out, and whose start took a key from `host-stream`, is written and read
+- **THEN** it reads back unchanged, holding `env` by name alone, and the same state written with no `programs` reads with none (195)
+
+### Requirement: The seams carry a repository's settings for every kind
+
+The kinds read SHALL carry a repository's settings for every kind
+apart from its settings for each kind, and a place's held state SHALL
+keep them as the launch read them; each SHALL serialize to JSON and
+back unchanged, and one written before them SHALL read with none (21,
+32, 195, C.2).
+
+#### Scenario: A held state with a repository's settings for every kind
+
+- **WHEN** a kinds read and a held state whose repository gave `attribution` for every kind are written and read
+- **THEN** each reads back unchanged, and the same written with none reads with none (195)
+
+### Requirement: The types of an account taken for its conversation and an agent left
+
+The seams SHALL pass an account's choice from the conversation beside
+the affinity and the strategy, and a lost end's and a status agent's
+`left_in_pane`; each SHALL serialize to JSON and back unchanged, and an
+end or a status written before SHALL read with no agent left (43, 56,
+77, 145).
+
+#### Scenario: An account from the conversation and an agent left
+
+- **WHEN** a held state whose talk start runs under work-2 chosen from its conversation, and whose earlier talk end gives `left_in_pane`, is written and read
+- **THEN** it reads back unchanged (43, 145)
+
+### Requirement: The agent seam reads whether a conversation runs
+
+The agent seam SHALL answer, given the start whose conversation a start
+would carry and the environments of the host's accounts for its
+program, whether a process runs that conversation, naming each by its
+id and when it started, or that none does, or unknown with what could
+not be read; the default SHALL answer unknown, saying its profile reads
+no running session (171, 207).
+
+#### Scenario: A profile that reads no running session
+
+- **WHEN** the seam's scenarios run against a profile that implements no live
+- **THEN** live answers unknown, saying the profile reads no running session (207)
+
+#### Scenario: The fake's live over the seam's scenarios
+
+- **WHEN** the seam's scenarios run against the fake agent scripted live for one session and unknown for another
+- **THEN** live answers runs with the scripted processes for the first, unknown with the scripted words for the second, and none for a third (207)
+
+### Requirement: The types of a live session
+
+The seams SHALL pass one type for live's answer and one for a process it
+names; a stage's wait SHALL hold the processes or what could not be read
+as last read, and a place kept SHALL hold the processes that keep it.
+Each SHALL serialize to JSON and back unchanged, and held state written
+before SHALL read with none (49, 64, 207).
+
+#### Scenario: A wait on a live session
+
+- **WHEN** a held state whose talk waits on process 4242, and a place kept while its session runs, are written and read
+- **THEN** each reads back unchanged (49, 64, 207)

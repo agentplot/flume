@@ -287,16 +287,27 @@ impl Host for RealHost {
     /// The configuration's settings as this command read it: the engine
     /// is built for each command, so each start reads the host's
     /// configuration as it stands (32, C.7; record 0017).
-    fn settings(&self, repository: &str, kind: &str) -> HostSettings {
+    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings {
+        let config = &self.config;
         HostSettings {
-            repository: self
-                .config
+            repository: config
                 .repos
                 .get(repository)
                 .and_then(|kinds| kinds.get(kind))
                 .cloned()
                 .unwrap_or_default(),
-            kind: self.config.kinds.get(kind).cloned().unwrap_or_default(),
+            every_kind: config
+                .repos_agents
+                .get(repository)
+                .cloned()
+                .unwrap_or_default(),
+            kind: config.kinds.get(kind).cloned().unwrap_or_default(),
+            stream: config
+                .streams_agents
+                .get(stream)
+                .cloned()
+                .unwrap_or_default(),
+            every_agent: config.every_agent.clone(),
         }
     }
 

@@ -1,5 +1,5 @@
-//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161, 179), an agent's
-//! identity and its start's secret (33, 41). Every reading of an agent's
+//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161, 179, 196, 207), an
+//! agent's identity and its start's secret (33, 41). Every reading of an agent's
 //! own record is handed the place's own folder with the identity, where
 //! the agent profile keeps its marks (128).
 
@@ -69,7 +69,27 @@ pub struct AgentCommand {
     /// program names it; none where the profile names none (C.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// Each file the agent is started with, by its absolute path under
+    /// the place's own folder the command was given, with its text, which
+    /// the core writes before the terminal opens the agent; none where the
+    /// command needs none, and in a command written before (196).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub files: BTreeMap<String, String>,
 }
+
+/// A key of its program's settings that another of flume's settings or
+/// the account owns, by its path, a nested key's as
+/// `permissions.defaultMode`, with its owner's words: refused where a
+/// table of a layer gives it, and left out of a named file (195, 196).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reserved {
+    pub key: String,
+    pub owner: String,
+}
+
+/// What a profile that keeps the agent seam's default says of its
+/// program's own settings given it, which it refuses (195, 196).
+pub const NO_OWN: &str = "its agent profile passes no settings of its program's own";
 
 /// A yes or no the agent's own record may not give (93).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,10 +126,11 @@ pub enum Spent {
 }
 
 /// carry: whether the agent program can carry the conversation of the
-/// start whose agent stopped at its account's usage limit to the account
-/// chosen for the next start, with the session that start resumes; why
-/// not, naming a variable and never its value; or that the program gives
-/// no way to (179; core.30).
+/// start whose agent stopped at its account's usage limit, or of a
+/// conversation's start reported lost, to the account chosen for the next
+/// start, with the session that start resumes; why not, naming a variable
+/// and never its value; or that the program gives no way to (49, 179;
+/// core.30).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Carry {
@@ -117,6 +138,23 @@ pub enum Carry {
     No { why: String },
     NotOffered,
 }
+
+/// live: whether a process of the host runs the conversation of a start,
+/// each by its id and when it started; none where none does, or where the
+/// start names no conversation; or unknown, with what could not be read,
+/// naming a variable or the host's processes and never a path (207;
+/// core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Live {
+    Runs(Vec<crate::LiveProcess>),
+    None,
+    Unknown { what: String },
+}
+
+/// What [`Agent::live`] answers by default, for a profile that reads no
+/// running session (171, 207).
+pub const READS_NO_SESSION: &str = "its agent profile reads no running session";
 
 /// started_without: how the agent began otherwise than its start
 /// recorded, as its own word that it started shows it, or, for its mode,
@@ -227,19 +265,25 @@ pub trait Agent: Send + Sync {
     /// How to start the agent with its settings and `env`, its account's
     /// variables read against the login environment, in the place under
     /// its identity and secret, the prompt in `prompt_args` (88, 29, 144);
-    /// `mode` is the value [`Agent::mode`] mapped, passed as its program's
-    /// setting, and nothing is passed where it is none (162, 169);
-    /// `resume` is the session the start resumes, which [`Agent::carry`]
-    /// answered yes with, so a profile that answers no yes is never given
-    /// one (88, 179); what the start carries by a file, such as a standing
-    /// prompt no terminal can type as an argument, is written beside its
-    /// record in the place's own `folder` (148, C.4, C.5).
+    /// `folder` is the place's own folder, under which each file the
+    /// command lists lies (128, 196); `mode` is the value [`Agent::mode`]
+    /// mapped, passed as its program's setting, and nothing is passed
+    /// where it is none (162, 169); `own` is its program's own settings as
+    /// the layers resolved them, its program's alone and taken by
+    /// [`Agent::own`], passed its program's way, and nothing is passed
+    /// where they are empty (195, 196); `resume` is the session the start
+    /// resumes, which [`Agent::carry`] answered yes with, so a profile
+    /// that answers no yes is never given one (88, 179); what the start
+    /// carries by a file, such as a standing prompt no terminal can type
+    /// as an argument, is written beside its record in `folder` (148, C.4,
+    /// C.5).
     #[allow(clippy::too_many_arguments)]
     fn command(
         &self,
         folder: &str,
         settings: &crate::Settings,
         mode: Option<&str>,
+        own: &BTreeMap<String, serde_json::Value>,
         resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &crate::PlaceRef,
@@ -281,15 +325,36 @@ pub trait Agent: Send + Sync {
     }
 
     /// Whether its program can carry the conversation of `earlier`, the
-    /// start whose agent stopped at its account's usage limit, read in the
-    /// place's own `folder`, to the account whose environment is `env`,
+    /// start whose agent stopped at its account's usage limit or a
+    /// conversation's start reported lost, read in the place's own
+    /// `folder`, to the account whose environment is `env`, an empty one
+    /// where the stage's stream has no pool, so the login environment's,
     /// each value read against the login environment, with the session the
     /// next start resumes, or why not, naming a variable and never its
-    /// value (128, 146, 179; core.30); not offered by default, for a
+    /// value (49, 128, 146, 179; core.30); not offered by default, for a
     /// program that carries none. It reads only, so it is safe to ask at
     /// every claim (core.17).
     fn carry(&self, _folder: &str, _earlier: &Identity, _env: &BTreeMap<String, String>) -> Carry {
         Carry::NotOffered
+    }
+
+    /// Whether a process of the host runs the conversation of `start`, the
+    /// start whose conversation a start would carry or a lost
+    /// conversation's start, read in the place's own `folder`, under each
+    /// of `envs`, the environments of the accounts the host's configuration
+    /// declares for its program, the login environment's among them as an
+    /// empty one, and under whatever environment a process runs it: each
+    /// process by its id and when it started, none, or unknown with what
+    /// could not be read, naming a variable and never its value or a path
+    /// (49, 128, 207; core.30). Unknown by default, saying its profile
+    /// reads no running session, so a program whose profile cannot read
+    /// one never carries a conversation beside a process that runs it
+    /// (171). It reads only, so it is safe to ask at every settle
+    /// (core.17).
+    fn live(&self, _folder: &str, _start: &Identity, _envs: &[BTreeMap<String, String>]) -> Live {
+        Live::Unknown {
+            what: READS_NO_SESSION.to_string(),
+        }
     }
 
     /// How the agent under `agent` began otherwise than its start
@@ -319,6 +384,27 @@ pub trait Agent: Send + Sync {
     /// default.
     fn mode_read_back(&self) -> Offered {
         Offered::NotOffered
+    }
+
+    /// Each key of its program's settings that another of flume's
+    /// settings or the account owns, with its owner, which the core
+    /// refuses where a table gives it and leaves out of a named file (195,
+    /// 196); none by default.
+    fn reserved(&self) -> Vec<Reserved> {
+        vec![]
+    }
+
+    /// Whether the profile passes `given`, its program's own settings as
+    /// the layers resolved them, or words saying its program gives no way
+    /// (195, 196); an empty entry is always taken, and every other refused
+    /// by default, in [`NO_OWN`]'s words, as a profile that maps no mode
+    /// refuses one (170).
+    fn own(&self, given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
+        if given.is_empty() {
+            Ok(())
+        } else {
+            Err(NO_OWN.into())
+        }
     }
 
     /// The variables the agent program keeps from every process it

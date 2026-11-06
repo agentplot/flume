@@ -19,6 +19,61 @@ fn settings() -> Settings {
         beside: Some("operator".into()),
         mode: None,
         session: Some("office".into()),
+        programs: BTreeMap::new(),
+    }
+}
+
+/// Own settings for two programs: one's keys given inline over a named
+/// file whose `env` and nested `permissions.default` its profile
+/// reserved and left out, the other's given inline alone (195).
+fn own_programs() -> BTreeMap<String, ProgramSettings> {
+    BTreeMap::from([
+        (
+            "agent".into(),
+            ProgramSettings {
+                file: Some(NamedFile {
+                    written: "~/.config/agent/settings.json".into(),
+                    read: "/home/operator/.config/agent/settings.json".into(),
+                    keys: BTreeMap::from([
+                        ("tips".into(), serde_json::json!(false)),
+                        (
+                            "permissions".into(),
+                            serde_json::json!({"allow": ["Read", "Bash(git log:*)"]}),
+                        ),
+                    ]),
+                    left_out: vec!["env".into(), "permissions.default".into()],
+                }),
+                settings: BTreeMap::from([(
+                    "line".into(),
+                    serde_json::json!({"type": "command", "command": "line", "padding": 1}),
+                )]),
+            },
+        ),
+        (
+            "other".into(),
+            ProgramSettings {
+                file: None,
+                settings: BTreeMap::from([("theme".into(), serde_json::json!("dark"))]),
+            },
+        ),
+    ])
+}
+
+/// A repository's settings for every kind run in it: what its agents'
+/// commits and pull requests say of who made them (195).
+fn every_kind() -> Settings {
+    Settings {
+        programs: BTreeMap::from([(
+            "agent".into(),
+            ProgramSettings {
+                file: None,
+                settings: BTreeMap::from([(
+                    "attribution".into(),
+                    serde_json::json!({"commit": "", "pr": "", "sessionUrl": false}),
+                )]),
+            },
+        )]),
+        ..Settings::default()
     }
 }
 
@@ -181,11 +236,13 @@ fn held() -> HeldState {
                 "code".into(),
                 Settings {
                     mode: Some(programs()),
+                    programs: own_programs(),
                     ..settings()
                 },
             )]),
             every_stage: settings(),
             repository_settings: kind_settings(),
+            repository_agents: every_kind(),
             hold: vec!["review".into()],
             hold_submission: true,
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
@@ -213,6 +270,7 @@ fn held() -> HeldState {
             refused_part: Some("words".into()),
             refused_setting: Some("the program nothing-here, from host-kind".into()),
             end: Some(StageEnd {
+                left_in_pane: false,
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
@@ -230,13 +288,16 @@ fn held() -> HeldState {
                 unsettled: Some(Box::new(unsettled())),
             }),
             room: Some(RoomWait {
+                live_unread: None,
+                live: vec![],
                 order: 3,
                 words: Some("the merge queue's words".into()),
-                carry: Some(AfterSpent {
+                carry: Some(CarryFrom {
                     start: Identity {
                         start: 1,
                         ..identity()
                     },
+                    cause: CarryCause::Spent,
                     carry: true,
                     why: None,
                 }),
@@ -261,6 +322,7 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Repository,
                             value: "opus".into(),
+                            file: None,
                         },
                     ),
                     (
@@ -268,6 +330,7 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Launch,
                             value: programs().written(),
+                            file: None,
                         },
                     ),
                     (
@@ -275,6 +338,23 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Account,
                             value: "~/.agent-work".into(),
+                            file: None,
+                        },
+                    ),
+                    (
+                        "programs.agent.settings.line".into(),
+                        Given {
+                            layer: Layer::HostStream,
+                            value: r#"{"type":"command","command":"work-line"}"#.into(),
+                            file: None,
+                        },
+                    ),
+                    (
+                        "programs.agent.settings.tips".into(),
+                        Given {
+                            layer: Layer::Host,
+                            value: "false".into(),
+                            file: Some("/home/operator/.config/agent/settings.json".into()),
                         },
                     ),
                 ]),
@@ -306,6 +386,7 @@ fn held() -> HeldState {
                 }),
                 conversation: Some(Conversation {
                     from: 1,
+                    cause: CarryCause::Spent,
                     carried: true,
                     why: None,
                 }),
@@ -320,6 +401,15 @@ fn held() -> HeldState {
                 terminal: Some(ProfileHeld {
                     profile: "fake".into(),
                     from: NamedBy::Stream,
+                }),
+                own: Some(OwnHeld {
+                    files: vec![OwnFile {
+                        layer: Layer::Host,
+                        written: "~/.config/agent/settings.json".into(),
+                        read: "/home/operator/.config/agent/settings.json".into(),
+                        left_out: vec!["env".into()],
+                    }],
+                    passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
             }),
             since: Some(120),
@@ -984,13 +1074,15 @@ fn a_held_state_with_a_carried_start() {
             "words": "the start that carried its conversation ended before it said it started",
         })
     );
-    round_trips(AfterSpent {
+    round_trips(CarryFrom {
         start: identity(),
+        cause: CarryCause::Spent,
         carry: false,
         why: Some("the start that carried its conversation ended before it said it started".into()),
     });
     round_trips(Conversation {
         from: 1,
+        cause: CarryCause::Spent,
         carried: false,
         why: Some("its agent profile carries no conversation".into()),
     });
@@ -1036,6 +1128,198 @@ fn a_held_state_written_before_carried_starts() {
         before,
         "nothing of a carried start written where none is held"
     );
+}
+
+/// A held state whose talk was reported lost and its caller retried it:
+/// its wait carries the conversation of the lost start 1, as live last
+/// read it run by process 4242, and its start 2 carries that conversation
+/// under work-2, the account start 1 ran under, chosen from its
+/// conversation; its end before says flume left the agent the terminal
+/// brought back in its pane (43, 49, 145, 179, 207).
+fn talk() -> HeldState {
+    let mut state = held();
+    let talk = Identity {
+        stage: "talk".into(),
+        ..identity()
+    };
+    let stage = &mut state.stages[0];
+    stage.name = "talk".into();
+    stage.state = StageState::WaitingForRoom;
+    stage.end = Some(StageEnd {
+        left_in_pane: true,
+        ..StageEnd::default()
+    });
+    stage.room = Some(RoomWait {
+        order: 4,
+        words: Some("we were on the second option".into()),
+        carry: Some(CarryFrom {
+            start: Identity {
+                start: 1,
+                ..talk.clone()
+            },
+            cause: CarryCause::Lost,
+            carry: true,
+            why: None,
+        }),
+        live: vec![LiveProcess {
+            pid: 4242,
+            started: 100,
+        }],
+        live_unread: None,
+    });
+    let start = stage.start.as_mut().expect("a start");
+    start.identity = talk;
+    start.account = Some(AccountHeld {
+        pool: "work".into(),
+        name: "work-2".into(),
+        from: AccountFrom::Conversation,
+    });
+    start.conversation = Some(Conversation {
+        from: 1,
+        cause: CarryCause::Lost,
+        carried: true,
+        why: None,
+    });
+    state
+}
+
+/// The seam-contracts spec's scenario "A lost conversation's wait and
+/// conversation" (49, 179).
+#[test]
+fn a_lost_conversations_wait_and_conversation() {
+    let state = talk();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let stage = &json["stages"][0];
+    assert_eq!(stage["room"]["carry"]["start"]["start"], 1);
+    assert_eq!(stage["room"]["carry"]["cause"], "lost");
+    assert_eq!(
+        stage["start"]["conversation"],
+        serde_json::json!({"from": 1, "cause": "lost", "carried": true})
+    );
+    // A spent start's wait and conversation write no cause, so what a
+    // reader of either wrote before stands (core.14).
+    let spent = serde_json::to_value(held()).expect("held state as JSON");
+    assert!(spent["stages"][0]["room"]["carry"].get("cause").is_none());
+    assert!(spent["stages"][0]["start"]["conversation"]
+        .get("cause")
+        .is_none());
+    // One whose wait and conversation name no cause reads as spent.
+    let mut before = json;
+    let stage = &mut before["stages"][0];
+    stage["room"]["carry"]
+        .as_object_mut()
+        .unwrap()
+        .remove("cause");
+    stage["start"]["conversation"]
+        .as_object_mut()
+        .unwrap()
+        .remove("cause");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    let stage = &read.stages[0];
+    let carry = stage.room.as_ref().and_then(|room| room.carry.as_ref());
+    assert_eq!(carry.map(|carry| carry.cause), Some(CarryCause::Spent));
+    let start = stage.start.as_ref().expect("a start");
+    assert_eq!(
+        start
+            .conversation
+            .as_ref()
+            .map(|conversation| conversation.cause),
+        Some(CarryCause::Spent)
+    );
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no cause written where a spent one is held"
+    );
+    assert_eq!(
+        (CarryCause::Spent.name(), CarryCause::Lost.name()),
+        ("spent", "lost")
+    );
+}
+
+/// The seam-contracts spec's scenario "An account from the conversation
+/// and an agent left" (43, 145).
+#[test]
+fn an_account_from_the_conversation_and_an_agent_left() {
+    let state = talk();
+    round_trips(state.clone());
+    round_trips(AccountFrom::Conversation);
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let stage = &json["stages"][0];
+    assert_eq!(
+        stage["start"]["account"],
+        serde_json::json!({"pool": "work", "name": "work-2", "from": "conversation"})
+    );
+    assert_eq!(stage["end"]["left_in_pane"], true);
+    // An end written before reads with no agent left, and writes none.
+    let held = serde_json::to_value(held()).expect("held state as JSON");
+    assert!(held["stages"][0]["end"].get("left_in_pane").is_none());
+    for end in held["ends"].as_array().unwrap() {
+        assert!(end["end"].get("left_in_pane").is_none(), "{end}");
+    }
+    let read: HeldState = serde_json::from_value(held).expect("read from before");
+    assert!(!read.stages[0].end.as_ref().expect("an end").left_in_pane);
+}
+
+/// The seam-contracts spec's scenario "A wait on a live session" (49, 64,
+/// 207).
+#[test]
+fn a_wait_on_a_live_session() {
+    let state = talk();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["stages"][0]["room"]["live"],
+        serde_json::json!([{"pid": 4242, "started": 100}])
+    );
+    assert!(json["stages"][0]["room"].get("live_unread").is_none());
+    // A wait on a session live could not read, naming a variable and no
+    // path (core.30).
+    let unread = RoomWait {
+        order: 5,
+        words: None,
+        carry: None,
+        live: vec![],
+        live_unread: Some("the sessions under CLAUDE_CONFIG_DIR cannot be read".into()),
+    };
+    round_trips(unread.clone());
+    assert!(serde_json::to_value(&unread)
+        .expect("a wait as JSON")
+        .get("live")
+        .is_none());
+    // A place kept while its session runs, by the process that runs it,
+    // or by what could not be read.
+    let kept = Phase::Over {
+        over: Over::Dropped,
+        kept: Some(Kept::SessionRuns {
+            processes: vec![LiveProcess {
+                pid: 4242,
+                started: 100,
+            }],
+            unread: None,
+        }),
+    };
+    round_trips(kept.clone());
+    assert_eq!(
+        serde_json::to_value(&kept).expect("a phase as JSON")["over"]["kept"],
+        serde_json::json!({"session_runs": {"processes": [{"pid": 4242, "started": 100}]}})
+    );
+    round_trips(Phase::Over {
+        over: Over::Done,
+        kept: Some(Kept::SessionRuns {
+            processes: vec![],
+            unread: Some("the host's processes cannot be listed".into()),
+        }),
+    });
+    // A wait written before reads with no process and nothing unread, and
+    // writes none.
+    let before = serde_json::to_value(held()).expect("held state as JSON");
+    let room = &before["stages"][0]["room"];
+    assert!(room.get("live").is_none() && room.get("live_unread").is_none());
+    let read: HeldState = serde_json::from_value(before).expect("read from before");
+    let room = read.stages[0].room.as_ref().expect("a room");
+    assert_eq!((&room.live, &room.live_unread), (&vec![], &None));
 }
 
 #[test]
@@ -1087,6 +1371,120 @@ fn a_held_state_with_a_session_and_a_label() {
         before,
         "no session and no label written where none is held"
     );
+}
+
+/// `value` with every `programs` of a settings' table, a start's `own`
+/// and a setting's `file` taken out, at any depth, as a held state
+/// written before own settings holds none.
+fn without_programs(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.remove("programs");
+            map.remove("own");
+            map.remove("file");
+            map.values_mut().for_each(without_programs);
+        }
+        serde_json::Value::Array(values) => values.iter_mut().for_each(without_programs),
+        _ => {}
+    }
+}
+
+#[test]
+fn a_held_state_with_own_settings() {
+    // A held state whose launch gives own settings for two programs, one
+    // by a named file whose `env` its profile left out, and whose start
+    // took a key from the host's table for its stream, reads back
+    // unchanged, holding `env` by name alone; one written before reads
+    // with none, and writes none back (195).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let agent = &json["place"]["settings"]["code"]["programs"]["agent"];
+    assert_eq!(
+        agent["file"]["left_out"],
+        serde_json::json!(["env", "permissions.default"])
+    );
+    assert_eq!(
+        agent["file"]["keys"].get("env"),
+        None,
+        "env held by name alone"
+    );
+    assert_eq!(
+        agent["file"]["keys"]["permissions"],
+        serde_json::json!({"allow": ["Read", "Bash(git log:*)"]})
+    );
+    assert_eq!(agent["settings"]["line"]["padding"], 1);
+    assert_eq!(
+        json["place"]["settings"]["code"]["programs"]["other"],
+        serde_json::json!({"settings": {"theme": "dark"}}),
+        "a program with no file writes none"
+    );
+    assert_eq!(
+        json["stages"][0]["start"]["from"]["programs.agent.settings.line"]["layer"],
+        "host-stream"
+    );
+    assert_eq!(
+        json["stages"][0]["start"]["from"]["programs.agent.settings.line"].get("file"),
+        None,
+        "a key given inline names no file"
+    );
+    assert_eq!(
+        json["stages"][0]["start"]["own"]["files"][0]["left_out"],
+        serde_json::json!(["env"])
+    );
+    let mut before = json;
+    without_programs(&mut before);
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert!(read.place.settings["code"].programs.is_empty());
+    assert!(read.place.repository_agents.programs.is_empty());
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!(start.own, None);
+    assert_eq!(start.from["programs.agent.settings.tips"].file, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no programs written where none are held"
+    );
+}
+
+#[test]
+fn a_held_state_with_a_repositorys_settings_for_every_kind() {
+    // A kinds read and a held state whose repository gave its agents'
+    // attribution for every kind read back unchanged; each written before
+    // reads with none (21, 32, 195, C.2).
+    let read = KindsRead::Read {
+        kinds: vec![kind()],
+        settings: BTreeMap::from([("change".into(), kind_settings())]),
+        agents: every_kind(),
+    };
+    round_trips(read.clone());
+    let state = held();
+    round_trips(state.clone());
+    let attribution = serde_json::json!({"commit": "", "pr": "", "sessionUrl": false});
+    assert_eq!(
+        serde_json::to_value(&read).unwrap()["read"]["agents"]["programs"]["agent"]["settings"]
+            ["attribution"],
+        attribution
+    );
+    let mut before = serde_json::to_value(&state).unwrap();
+    assert_eq!(
+        before["place"]["repository_agents"]["programs"]["agent"]["settings"]["attribution"],
+        attribution
+    );
+    before["place"]
+        .as_object_mut()
+        .unwrap()
+        .remove("repository_agents");
+    let state: HeldState = serde_json::from_value(before).expect("held state from before");
+    assert_eq!(state.place.repository_agents, Settings::default());
+    let mut before = serde_json::to_value(&read).unwrap();
+    before["read"].as_object_mut().unwrap().remove("agents");
+    let KindsRead::Read { agents, .. } =
+        serde_json::from_value(before).expect("kinds read from before")
+    else {
+        panic!("a kinds read read back as another");
+    };
+    assert_eq!(agents, Settings::default());
 }
 
 #[test]
@@ -1343,6 +1741,7 @@ impl Agent for Bare {
         _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
@@ -1411,6 +1810,23 @@ fn a_profile_that_maps_no_mode() {
 }
 
 #[test]
+fn a_profile_that_passes_no_own_settings() {
+    // A profile that keeps the seam's defaults reserves no key, refuses
+    // its program's keys, saying it passes none, and takes an empty entry
+    // (170, 195, 196).
+    assert_eq!(Bare.reserved(), vec![]);
+    let given = BTreeMap::from([("line".to_string(), serde_json::json!("a"))]);
+    let words = Bare
+        .own(&given)
+        .expect_err("a profile that passes no own settings took one");
+    assert!(
+        words.contains("passes no settings of its program's own"),
+        "{words}"
+    );
+    assert_eq!(Bare.own(&BTreeMap::new()), Ok(()));
+}
+
+#[test]
 fn a_profile_that_carries_no_conversation() {
     // A profile that keeps the seam's default offers no carry, for any
     // start and account (179).
@@ -1420,6 +1836,37 @@ fn a_profile_that_carries_no_conversation() {
         Bare.carry("/folder", &identity(), &BTreeMap::new()),
         Carry::NotOffered
     );
+}
+
+/// The seam-contracts spec's scenario "A profile that reads no running
+/// session" (207).
+#[test]
+fn a_profile_that_reads_no_running_session() {
+    let env = BTreeMap::from([("AGENT_HOME".to_string(), "/scratch/work-2".to_string())]);
+    for envs in [vec![], vec![BTreeMap::new(), env]] {
+        assert_eq!(
+            Bare.live("/folder", &identity(), &envs),
+            Live::Unknown {
+                what: READS_NO_SESSION.to_string()
+            }
+        );
+    }
+    assert_eq!(
+        READS_NO_SESSION,
+        "its agent profile reads no running session"
+    );
+    for live in [
+        Live::Runs(vec![LiveProcess {
+            pid: 4242,
+            started: 100,
+        }]),
+        Live::None,
+        Live::Unknown {
+            what: "the sessions under CLAUDE_CONFIG_DIR cannot be read".into(),
+        },
+    ] {
+        round_trips(live);
+    }
 }
 
 #[test]
@@ -1440,6 +1887,21 @@ fn settings_under_others_take_the_mode_whole() {
     assert_eq!(under.under(&over).mode, over.mode);
     assert_eq!(under.under(&Settings::default()).mode, Some(programs()));
     assert_eq!(Settings::default().under(&under).mode, Some(programs()));
+}
+
+#[test]
+fn settings_under_others_take_own_settings_whole() {
+    // Own settings over own settings are taken whole, the more specific
+    // table's where it gives any; their fold key by key is the core's
+    // (195).
+    let under = Settings {
+        programs: own_programs(),
+        ..Settings::default()
+    };
+    let over = every_kind();
+    assert_eq!(under.under(&over).programs, over.programs);
+    assert_eq!(under.under(&Settings::default()).programs, own_programs());
+    assert_eq!(Settings::default().under(&under).programs, own_programs());
 }
 
 #[test]
@@ -1926,15 +2388,37 @@ fn a_kind_with_its_stages() {
     round_trips(KindsRead::Read {
         kinds: vec![kind()],
         settings: BTreeMap::from([("change".into(), kind_settings())]),
+        agents: every_kind(),
     });
     round_trips(HostSettings {
         repository: kind_settings(),
         kind: KindSettings::default(),
+        ..HostSettings::default()
     });
+    round_trips(HostSettings {
+        every_kind: every_kind(),
+        stream: Settings {
+            model: Some("opus".into()),
+            ..every_kind()
+        },
+        every_agent: Settings {
+            model: Some("sonnet".into()),
+            ..Settings::default()
+        },
+        ..HostSettings::default()
+    });
+    let written_before: HostSettings = serde_json::from_value(serde_json::json!({
+        "repository": KindSettings::default(),
+        "kind": KindSettings::default(),
+    }))
+    .unwrap();
+    assert_eq!(written_before, HostSettings::default());
     for layer in [
         Layer::Launch,
         Layer::HostRepository,
         Layer::HostKind,
+        Layer::HostStream,
+        Layer::Host,
         Layer::Repository,
         Layer::Kind,
         Layer::Default,
@@ -2726,6 +3210,10 @@ fn the_agent_seams_answers() {
             confirm: "enter".into(),
         }),
         kind: Some("agent".into()),
+        files: BTreeMap::from([(
+            "/state/fix--one/agent/own.json".into(),
+            r#"{"line":"a"}"#.into(),
+        )]),
     });
     let before: AgentCommand =
         serde_json::from_str(r#"{"program":"agent","args":[],"env":{},"prompt_args":[]}"#).unwrap();
@@ -2733,6 +3221,14 @@ fn the_agent_seams_answers() {
         before.kind, None,
         "a command written before it named a kind"
     );
+    assert!(
+        before.files.is_empty(),
+        "a command written before it listed files"
+    );
+    round_trips(Reserved {
+        key: "permissions.default".into(),
+        owner: "flume's mode".into(),
+    });
     for reading in [Reading::Yes, Reading::No, Reading::Unknown] {
         round_trips(reading);
     }

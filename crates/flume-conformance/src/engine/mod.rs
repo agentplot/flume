@@ -18,6 +18,7 @@ pub mod launching;
 pub mod list;
 pub mod made_things;
 pub mod open;
+pub mod own_settings;
 pub mod place_line;
 pub mod place_status;
 pub mod places;
@@ -72,5 +73,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(stream_terminals::scenarios());
     every.extend(open::scenarios());
     every.extend(list::scenarios());
+    every.extend(own_settings::scenarios());
     every
 }
