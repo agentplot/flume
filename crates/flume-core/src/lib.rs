@@ -16,8 +16,13 @@ mod deliver;
 mod end;
 mod ends;
 mod held;
+mod kinds_lock;
 mod launch;
 mod line;
+mod list;
+mod live;
+mod open;
+mod own;
 mod prompt;
 mod reading;
 mod room;
@@ -28,6 +33,7 @@ mod start;
 mod start_record;
 mod status;
 mod submit;
+mod terminals;
 mod tidy;
 mod uncarried;
 mod unsettled;
@@ -39,7 +45,9 @@ pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
+pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
+pub use own::shaped_as_credential;
 pub use prompt::group_name;
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
@@ -109,6 +117,50 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// How many reads status runs at once, each on a thread of its own.
+const SIDE_BY_SIDE: usize = 8;
+
+/// `read` of each of `items`, in their order, read side by side on up to
+/// [`SIDE_BY_SIDE`] threads, as status reads places (58); a panic in one
+/// read is the caller's, as it would be read in turn.
+pub(crate) fn side_by_side<T: Sync, R: Send>(items: &[T], read: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let threads = SIDE_BY_SIDE.min(items.len());
+    if threads < 2 {
+        return items.iter().map(read).collect();
+    }
+    let next = AtomicUsize::new(0);
+    let mut read_each: Vec<Option<R>> = items.iter().map(|_| None).collect();
+    std::thread::scope(|scope| {
+        let reading: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = vec![];
+                    loop {
+                        let at = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = items.get(at) else {
+                            return done;
+                        };
+                        done.push((at, read(item)));
+                    }
+                })
+            })
+            .collect();
+        for thread in reading {
+            let done = thread
+                .join()
+                .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+            for (at, value) in done {
+                read_each[at] = Some(value);
+            }
+        }
+    });
+    read_each
+        .into_iter()
+        .map(|value| value.expect("every item is read by one thread"))
+        .collect()
 }
 
 /// The seams a place's binding resolved to (105).
@@ -214,10 +266,12 @@ mod tests {
                 label: None,
             },
             declared: Declared::Flume,
+            kind_from: None,
             name: "one".into(),
             branch: "fix/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: None,
             location: "/r/places/fix--one".into(),
             binding,
             brief: None,
@@ -225,6 +279,7 @@ mod tests {
             settings: BTreeMap::new(),
             every_stage: Settings::default(),
             repository_settings: KindSettings::default(),
+            repository_agents: Settings::default(),
             hold: vec![],
             hold_submission: false,
             hold_words: BTreeMap::new(),

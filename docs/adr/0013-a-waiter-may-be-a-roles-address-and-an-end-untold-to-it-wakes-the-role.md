@@ -13,6 +13,8 @@ Status: accepted by the user on 2026-10-28, in their design session ("i agree wi
 
 Amended 2026-10-28 by record 0014, accepted by the user: a waiter is a recipient, and an end untold to an address is pending for it, collected by the run's start.
 
+Amended 2026-11-06 by madswan-design, below: an address may be held by a standing agent the host's configuration names, whose ends go into it and wake no run.
+
 Deciders: the user, accepting recommendation R1 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
 
@@ -44,3 +46,42 @@ Option 1.
 - Rule core.25's details name a role run's start as the caller's ask, in place of "crew's session-start hook".
 - Units: the address as a waiter; the wake at a settle; `flume wake`; `[roles]` read from the host's configuration; status naming ends untold to an address with no kind.
 - crew's side, the role kinds and the waiter named by address, is crew record 0049.
+
+## Amendment, 2026-11-06: an address a standing agent holds
+
+Status: decided on 2026-11-06 by madswan-design, the design agent, on swancloud-design's ask relayed by madswan-operator. Nothing in it is the user's alone: it holds to clauses 3, 43 and 132 and rule core.28 as they stand, and each choice in it is cheap to change.
+
+Deciders: madswan-design.
+Sources: `agentplot/blueprints:design/flume/requirements.md` on main at e6ab2a0, clauses 3, 43, 132, 143 and C.7 and the vocabulary's recipient; `crates/flume/src/profiles/terminal/herdr/mod.rs` `reach` on main at 78ea62ea, read 2026-11-06; `herdr --session madswan agent list` on deneb, read 2026-11-06, which names madswan's standing agents `madswan-planner`, `madswan-ops` and the rest in that session; `afterthought/swancloud:docs/adr/` record 0042 as amended at f424dd86; crew's runner, which names every place's recipient by a role's address (`afterthought/crew:plugin/lib/runner.py` on `teamless/deneb`, as swancloud's record reads it); `afterthought/crew:docs/adr/0047` move 6.
+
+### Context and problem statement
+
+This record has a role run only as a place flume opens, as crew's record 0047 move 6 had no role stand. Every main-level role now stands. Each partition's crew teams file has `flume` false throughout, so each role is a herdr agent crew keeps under a name of its own, `madswan-planner` among them. crew still names every place's recipient by the role's address, `madswan/planner`. flume reaches an address only in the pane of a run it opened (`reach` finds a `herdr:<pane>@<socket>` or a name its own open recorded, and nothing else). An entry under `[roles]` would wake a second agent of the role beside the standing one, two agents acting on one plan. So every end for a standing role pends: 22 for `madswan/planner` on deneb on 2026-11-06, read by nobody until the agent runs `flume inbox` by hand.
+
+### Considered options
+
+1. **The host's configuration names a standing agent for an address,** by the name its terminal knows it by and the terminal session it lives in. flume delivers the address's ends into it as notices at the settles that read them, opens nothing and wakes no run, and status says where the address lives.
+2. **crew names each launch's recipient by the standing agent's pane,** `herdr:<pane>@<socket>`, in place of the address.
+3. **flume takes the address as the agent's terminal name,** finding `madswan/planner` among the terminal's agents with no entry.
+4. **Each standing agent collects with `flume inbox --recipient <address>` at each wake,** and flume changes nothing.
+
+### Decision outcome
+
+Option 1.
+
+**The address stays the recipient.** A caller names the address as before, so crew's launches, the places already launched and `flume inbox` change nothing. Which agent holds an address is the host's configuration's alone, written by whoever administers the host: `[roles."<partition>/<role>"]` with `agent`, the terminal's name for the agent, and an optional `session`, else the session the host names for the entry's `stream`, else its default stream's (143). When the roles crew keeps become kinds, the entry trades `agent` for `kind`, and no launch changes.
+
+**One holder for an address.** An entry giving `agent` beside `kind` is refused, naming the address, since a standing agent and a woken run are two agents of one role (3).
+
+**Delivered as any end is, and nothing more.** An end for a standing address goes into the agent's pane as a notice at a settle that reads it, only while the agent asks no question (43), and counts delivered on the terminal's answer. flume opens nothing for the address, starts no run and keeps no watch over it (core.13). The terminal finds the agent by its name in its session at each delivery, so a revive that keeps the name keeps the address. Where it finds none, or more than one, the end stays pending, and status says where the address lives and why nothing went (core.15).
+
+**Why not the others.** Option 2 puts the terminal's pane ids into crew's launches. A pane's id changes when crew revives the agent, and the places already launched name the address. A pane that is gone takes the end, and nobody reads it. Option 3 couples flume to crew's naming: the address `madswan/planner` is not the agent's herdr name, `madswan-planner`. A standing agent of a caller that names none would take ends meant for a role. Option 4 is today's stopgap: an end waits until something else wakes the agent, and every caller of a standing role must remember to collect.
+
+### Consequences
+
+- Good: an end reaches a standing role's agent as it reaches a role's run, with no second agent and no process of flume's.
+- Good: the crossing from standing roles to roles that run as kinds changes one entry per address and no launch.
+- Bad: a burst of ends while the agent is away is a burst of notices when it returns, one for each end, as for any recipient (43).
+- Bad: flume trusts the configuration's name. An agent that takes a standing agent's name in that session takes its ends, which no identity of flume's guards, since flume did not start it.
+- The statement's vocabulary, 43, 132 and C.7 say so (blueprints e6ab2a0). Rule core.28 takes it. The roadmap lists it as decided, not built. The herdr profile's reading of an agent by its name is the change's construct to read and state in C.5's herdr row.
+- Unit: a role's address held by a standing agent, its `[roles]` entry read with `agent` and `session`, its ends delivered at a settle, and status naming where each address lives. swancloud's `lib/flume-config.nix` writes the entries from `lib/crew-teams.nix` once a release reads them (swancloud record 0042 as amended).

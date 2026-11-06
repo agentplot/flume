@@ -12,7 +12,9 @@
 //! nothing and says so, and a launch refused because another settle's run
 //! of the address now stands is that run, answered as waiting (75). An
 //! address the configuration names nothing for is woken by nothing, and
-//! status names its pending ends and why its run was not woken. flume
+//! status names its pending ends and why its run was not woken. A role's
+//! `kind` is resolved and locked as a launch's is, a name or an identity,
+//! its run carrying no declaration of its own (154, 155). flume
 //! decides nothing of what the run does (69, 70, 72).
 
 use crate::start::Starts;
@@ -84,10 +86,16 @@ impl Engine {
 
     /// The run of the address that stands: the place serving it, or a
     /// place of the repository, kind and name its run would be made as,
+    /// the kind's name as the kinds seam reads the role's `kind` (154),
     /// wherever it was made, a tidied document of an earlier run aside
     /// (3, 132).
     fn run_of(&self, address: &str, run: &RoleRun) -> Option<HeldState> {
-        let short = format!("{}--{}", run.kind, role_of(address));
+        let kind = self
+            .resolver
+            .kinds()
+            .read_named(&run.kind)
+            .map_or_else(|_| run.kind.clone(), |named| named.name);
+        let short = format!("{kind}--{}", role_of(address));
         self.store
             .read_every()
             .into_iter()

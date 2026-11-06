@@ -192,13 +192,15 @@ impl From<SubmissionRead> for ReadAcross {
     }
 }
 
-/// Where the base's current revision lives, or why it cannot be read (9,
-/// 126, core.7).
+/// Where the base's current revision lives, or why it cannot be read, or
+/// that the merge queue lands no such base, which the core then reads at
+/// origin (9, 126, C.1, core.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BaseRevision {
     At { revision: Revision },
     Refused { reason: String },
+    Unlanded,
 }
 
 /// The merge queue seam (B.6), bound once for each repository. The
@@ -214,16 +216,31 @@ pub trait MergeQueue: Send + Sync {
     /// given once (133).
     fn inbox(&self, place: &crate::PlaceRef) -> Inbox;
 
-    /// The newest submission of `branch`, whoever made it, on the
-    /// branches the merge queue could read, passing over each it could
-    /// not (99).
-    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross;
+    /// The newest submission of each of `branches`, whoever made it, on
+    /// the branches the merge queue could read, passing over each it
+    /// could not, one answer for each branch in their order: the
+    /// repository's records read once for them all, so a status of every
+    /// place asks each repository once (58, 99, C.6).
+    fn read_submissions(&self, repository: &str, branches: &[&str]) -> Vec<ReadAcross>;
+
+    /// The newest submission of `branch` alone, as
+    /// [`MergeQueue::read_submissions`] reads it (99).
+    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross {
+        self.read_submissions(repository, &[branch])
+            .pop()
+            .unwrap_or_else(|| {
+                SubmissionRead::CouldNotRead {
+                    reason: format!("the merge queue gave no answer for {branch}"),
+                }
+                .into()
+            })
+    }
 
     /// One round of `base`'s queue, so it moves where nothing else
     /// drives it (125).
     fn step(&self, repository: &str, base: &str) -> Stepped;
 
-    /// Where `base`'s current revision lives, where work lands on it (9,
-    /// 126, core.7).
+    /// Where `base`'s current revision lives, where work lands on it, or
+    /// that the merge queue lands no such base (9, 126, core.7).
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision;
 }

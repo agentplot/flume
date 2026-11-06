@@ -5,10 +5,15 @@
 //! the pinned Claude Code writes one, a push it tries is refused by the
 //! guard, and its stop starts the settle that moves the place on to the
 //! next stage once its session ended, with no settle of the test's (35,
-//! 89, 108, 116, 121, S29). A session it is told to resume and finds no
-//! transcript of ends it as the pinned Claude Code ends (design 8; C.4).
+//! 89, 108, 116, 121, S29); while its session runs it names it in its
+//! home's `sessions/<pid>.json`, as the pinned Claude Code does, and
+//! removes the record at its exit (207). A session it is told to resume
+//! and finds no transcript of ends it as the pinned Claude Code ends
+//! (design 8; C.4).
 
 use super::walk::*;
+use flume::host::process::listed;
+use flume::profiles::agent::claude::live::{started_at, SESSIONS};
 use serde_json::{json, Value};
 
 /// A kind of two stages that does not land.
@@ -90,9 +95,43 @@ fn the_stand_in_drives_one_stage() {
         status["refused_acts"].to_string().contains("git push"),
         "{status}"
     );
+    // Its session is named in its home's `sessions/<pid>.json`: the
+    // process that runs it, started at the record's `procStart`, and the
+    // session its transcript is named for.
+    let records: Vec<std::path::PathBuf> = std::fs::read_dir(walk.account().join(SESSIONS))
+        .expect("the running sessions' folder")
+        .flatten()
+        .map(|entry| entry.path())
+        .collect();
+    assert_eq!(records.len(), 1, "{records:?}");
+    let record: Value =
+        serde_json::from_str(&std::fs::read_to_string(&records[0]).expect("the record"))
+            .expect("the record as JSON");
+    let pid = record["pid"].as_u64().expect("a pid");
+    assert_eq!(
+        records[0].file_name().and_then(|name| name.to_str()),
+        Some(format!("{pid}.json").as_str())
+    );
+    let process = listed()
+        .expect("the host's processes")
+        .into_iter()
+        .find(|process| u64::from(process.pid) == pid)
+        .expect("the record's process runs");
+    assert_eq!(
+        record["procStart"].as_str().and_then(started_at),
+        Some(process.started),
+        "{record}"
+    );
+    let session = record["sessionId"].as_str().expect("a session").to_string();
     std::fs::write(&midway, "").expect("the signal");
     let ran = finish(agent);
     assert_eq!(ran.code, 0, "{}", ran.out);
+    assert!(
+        ran.out.contains(&format!("session {session} in ")),
+        "{}",
+        ran.out
+    );
+    assert!(!records[0].exists(), "the record left at the exit");
     assert!(ran.out.contains("Bash refused"), "{}", ran.out);
     assert!(ran.out.contains("session ended"), "{}", ran.out);
 

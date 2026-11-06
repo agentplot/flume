@@ -1,6 +1,6 @@
 ---
 title: Kinds
-description: flume's built-in fix, chore and change, how a kind runs through on its own, and how a repository writes kinds of its own with stages, prompts, deliverables and what a stage makes.
+description: flume's built-in fix, chore and change, how a kind runs through on its own, how a repository writes kinds of its own with stages, prompts, deliverables and what a stage makes, and how a host takes kinds from a source, locked by their content's hash.
 sidebar:
   order: 1
 ---
@@ -73,19 +73,48 @@ next stage: the place waits until a retry carries the answer.
 
 ## Where kinds come from
 
-A launch's kind resolves from the first of three declarations that
-holds its name:
+A kind has an identity, `<source>/<name>@<version>`, such as
+`flume/fix@1` or `acme/review@2`. Its source says where it lies:
 
-1. the file the launch names with `--kinds <file>`;
-2. the repository's `.config/flume.toml`, read at the base's current
-   revision;
-3. flume's own.
+| Source | Its kinds |
+|---|---|
+| `flume` | flume's own, carried in its binary |
+| `repo` | the repository's `.config/flume.toml`, read at the base's current revision |
+| `launch` | the file the launch names with `--kinds <file>` |
+| any other name | the packages of a source the host declares ([kinds from a source on the host](#kinds-from-a-source-on-the-host)) |
 
-So a repository that declares `fix` stands its own over flume's. A
-place keeps the kind its launch read for its whole life: a change to
-the declaration reaches the next launch, never a place already running.
-`flume status` gives each place's kind with its version and where it
-came from, as in `fix@1 (flume)` or `spike@1 (repository)`.
+A launch names its kind with or without its source and version:
+
+| `--kind` | flume looks in | and takes the version |
+|---|---|---|
+| `review` | the launch's file, else the repository's, else flume's own | the one that declaration holds, or, for flume's own, as [the locks pick it](#the-version-a-launch-takes) |
+| `review@2` | the same | 2, refused where the declaration holding the name holds another |
+| `acme/review` | the source `acme` alone | as the locks pick it |
+| `acme/review@2` | the source `acme` alone | 2 |
+
+`flume/change`, `repo/bump` and `launch/spike` name flume's own, the
+repository's and the launch's file alone, with or without a version, in
+the same way. So a repository that declares `fix` stands its own over
+flume's for a bare `fix`, and `flume/fix` still names flume's. A name
+that resolves to nothing refuses the launch, naming what each source
+holds, and makes nothing.
+
+flume's own kinds are `flume/fix@1`, `flume/chore@1`, `flume/change@1`
+and `flume/change@2`. A bare `change` takes the newest, `change@2`,
+unless a lock records another.
+
+A place keeps the kind its launch read for its whole life
+([a place keeps its kind](#a-place-keeps-its-kind)). `flume status`
+gives each place's kind with its version and where it came from, as in
+`fix@1 (flume)` or `spike@1 (repository)`. The line after it gives the
+kind's identity and where it came from, and for a package its hash and
+the lock that recorded it:
+
+```
+  kind flume/fix@1, flume's own, its hash sha256:59dee7a3…
+  kind repo/spike@1 from the repository at 9ba6b13
+  kind acme/review@1 from the source acme (~/.config/flume/sources/acme.toml) at ~/.local/share/flume/kinds/acme/review@1, its hash sha256:ab12…, locked in ~/.config/flume/flume.lock
+```
 
 ## Writing a kind
 
@@ -199,12 +228,40 @@ none of the lines once the place is tidied.
 
 A kind's `agents` table, and a stage's one agent table, give the
 agent's `program`, `model` and `instructions`, `beside` for where its
-pane opens, and `mode`. The mode says how far the agent may act without
-asking a person: one of `plan`, `ask`, `edits` and `full`, or a table of
-programs such as `{ claude = "auto" }`
+pane opens, `mode` and `programs`. The mode says how far the agent may
+act without asking a person: one of `plan`, `ask`, `edits` and `full`,
+or a table of programs such as `{ claude = "auto" }`
 ([the mode](/flume/guides/agent-settings/#the-mode)).
-A `mode` that is neither refuses the launch, naming the field. A
-repository may also give settings to a kind it does not declare,
+A `mode` that is neither refuses the launch, naming the field.
+
+`programs` gives each program's own settings, in that program's own
+words: a settings file the table names, `file`, and keys it gives
+inline, `settings`
+([a program's own settings](/flume/guides/agent-settings/#a-programs-own-settings)).
+A kind's file lies beside its prompts, by a path relative to the
+declaration's own folder. flume reads it where it reads them: at the
+launch's revision for a repository's kind, and from disk for a
+launch's:
+
+```toml
+[kinds.spike.agents.programs.claude.settings]
+tui = "fullscreen"
+
+[[kinds.spike.stages]]
+name = "explore"
+prompt = "prompts/spike.md"
+deliverables = ["committed:notes/spike.md"]
+agents = [{ programs = { claude = { file = "claude-explore.json" } } }]
+```
+
+Here every stage's agent gets `tui`, and `explore`'s gets the keys of
+`.config/claude-explore.json` as well, its file coming before the
+kind's inline keys since a stage's table comes first. A file outside
+the repository, by `..`, an absolute path or a link, refuses the
+launch. So does a file the revision does not hold or that does not
+parse, and an entry with any key but `file` and `settings`.
+
+A repository may also give settings to a kind it does not declare,
 flume's own among them, with a table that holds only `agents`:
 
 ```toml
@@ -212,6 +269,28 @@ flume's own among them, with a table that holds only `agents`:
 model = "opus"
 mode = "edits"
 ```
+
+A repository gives settings to every kind it runs, its own and
+flume's, in `[agents]`, flume's own table beside `[profiles]`, which no
+kind holds. This repository's agents write its own words into every
+commit and pull request ([what a commit says about who made
+it](/flume/guides/agent-settings/#what-a-commit-says-about-who-made-it)):
+
+```toml
+# .config/flume.toml
+[profiles]
+merge_queue = "sluice"
+
+[agents.programs.claude.settings]
+attribution = { commit = "Assisted-by: Claude Code", pr = "" }
+```
+
+`[agents]` gives what a kind's table gives, and names no stage, no
+stream, no environment and no pane beside: a `stages`, a `streams`, an
+`env` or a `beside` there refuses the launch, naming the field. A
+repository's table for one kind comes before its `[agents]`, and
+`[agents]` before a kind the repository declares. A launch's
+declaration is not read for `[agents]`, as it is not for `[profiles]`.
 
 A declaration gives no environment: an `env` in any agents table
 refuses the launch, naming the field, since an agent's environment is
@@ -228,3 +307,204 @@ naming the part, and starts no agent. The way to stop short is always
 in the prompt: where the template does not place `{{needs}}`, flume
 adds it at the end. [Prompt parts](/flume/reference/prompt-parts/)
 lists every part.
+
+## Kinds from a source on the host
+
+A kind that another project ships reaches the host's places through a
+source: a directory of packages the host's configuration declares. A
+launch names such a kind by its source, `acme/review` or
+`acme/review@2`, and it runs only once a lock records its content.
+
+### A source's file
+
+The host declares each source in a file of its own, in the sources
+directory beside its configuration:
+
+```toml
+# ~/.config/flume/sources/acme.toml
+kinds_dir = "~/.local/share/flume/kinds/acme"
+```
+
+The file's name, less `.toml`, is the source's name. Its one key,
+`kinds_dir`, names the directory that holds the source's packages: an
+absolute path, or one whose leading `~` is your home. flume reads the
+sources directory as it stands at each launch, each wake of a role, each
+`flume kinds lock` and each status. It writes nothing in it, or in a
+source's `kinds_dir`.
+
+Each source is one file. A person or a program adds a source by
+writing its file, replaces it by renaming a new file over it, and
+removes it by deleting it. None of these touches another file of the
+configuration. flume reads no file whose name begins with `.`, so
+`.acme.toml.tmp` can be written whole and renamed to `acme.toml`, and
+no launch reads half a file.
+
+A source's file that cannot be read refuses only the launches that name
+its source, naming the file and its fault. Every other launch goes on,
+and the host's part of `flume status` names the fault.
+[Configuration](/flume/reference/configuration/#the-hosts-sources) gives
+each fault.
+
+### Packages side by side
+
+A source's packages lie in its `kinds_dir`, one directory per version
+of each kind:
+
+```
+~/.local/share/flume/kinds/acme/
+  review@1/
+    kind.toml
+    prompts/code.md
+  review@2/
+    kind.toml
+    prompts/code.md
+```
+
+A package's `kind.toml` declares exactly one kind, in the format of
+[writing a kind](#writing-a-kind), with the name and version of the
+directory it lies in. Every prompt it names lies inside the package.
+Any number of versions of one kind stand side by side. A launch of a
+package is refused, naming the package and the field, when:
+
+- the kind's name or version is not its directory's;
+- it declares no kind, or more than one;
+- it names a file outside the package, by `..`, an absolute path or a
+  link;
+- an agents table gives an `env`, or a `program` by a path.
+
+A package's content has a hash, `sha256:` and its hex, over each file's
+path within the package, its length and its bytes. The same package
+hashes the same wherever it lies. A change to a package's content is a
+new version: write `review@3/` beside `review@2/`, and leave `review@2/`
+as it stands.
+
+### Locks
+
+A kind from a source on the host runs only where a lock records its
+identity at its content's hash. Two locks can record it:
+
+- the repository's, `.config/flume.lock`, read at the base's current
+  revision as its kinds are;
+- the host's, `~/.config/flume/flume.lock`, read as it stands at the
+  launch.
+
+A lock is TOML, one entry per kind:
+
+```toml
+[[kinds]]
+kind = "acme/review@1"
+hash = "sha256:ab12…"
+```
+
+At each launch of a kind a lock records, flume reads the package as the
+host holds it, hashes it, and checks the hash against every lock that
+records the identity. It refuses the launch, making nothing, where:
+
+- no lock records the kind, naming both ways to record it;
+- the content's hash is not the lock's, naming the lock and both
+  hashes;
+- the two locks give the kind two hashes, naming both;
+- a lock it reads cannot be read, naming the file and its fault.
+
+A launch of the repository's kind or of the launch's file reads no
+lock, since neither needs one. So a lock that cannot be read refuses
+only the launches of flume's own and of a source's kinds.
+
+Locks record flume's own kinds only to pick a version. A version of
+flume's own that no lock records runs, since flume carries it, and one
+that a lock records is checked against the hash flume carries. A
+version of flume's own keeps its content in every later release: a
+change to it is a new version.
+
+### The version a launch takes
+
+A launch that names no version, as `acme/review` or a bare `change`,
+takes:
+
+1. the newest version of the kind that the repository's lock records;
+   else
+2. the newest that the host's lock records; else
+3. the newest its source holds.
+
+So a repository that records `flume/change@1` keeps launching
+`change@1` with a bare `change`. For a source on the host, the third
+step picks a version no lock records, and the launch is refused as
+unlocked. A version installed and not yet locked never runs, and until
+it is locked a launch takes the newest a lock records.
+
+### `flume kinds lock`
+
+```sh
+flume kinds lock acme/review@1
+flume kinds lock --host acme/review@1
+flume kinds lock --host --hash sha256:ab12… acme/review@2
+flume kinds lock --host --remove acme/review@1
+```
+
+`flume kinds lock` records each kind it names, whole, at its content's
+hash, beside any other version of the same kind the lock holds. Without
+`--host` it writes `.config/flume.lock` in the working copy it runs in,
+and the repository's places read it once you commit it on their base.
+With `--host` it writes the host's lock. `--hash` records the one kind
+named only where its content hashes to that value, and otherwise
+refuses, naming both hashes, and leaves the lock as it was. `--remove`
+takes each named entry out, reading no package. It fetches nothing and
+commits nothing, and run twice it leaves the same lock
+([commands](/flume/reference/commands/#flume-kinds-lock)).
+
+### A bare name keeps its meaning
+
+A kind named with no source resolves among the launch's file, the
+repository's and flume's own alone. It never reaches a source on the
+host, locked or not. So adding a source never changes what a bare `fix`
+runs: a source's own `fix` is launched as `acme/fix`. Where none of the
+three holds a bare name, the refusal ends naming each identity the
+host's sources hold under it: `the host's sources hold acme/review@1,
+which a launch names by its source`.
+
+### A place keeps its kind
+
+A place keeps the whole kind its launch read, its prompts among it,
+with its identity, where it came from and its hash. None of these
+reaches a place already launched, only the next launch:
+
+- a source's file renamed over, or naming another `kinds_dir`;
+- a package edited, or its directory removed;
+- a lock moved, or its entry removed;
+- a change to the repository's `.config/flume.toml` or to a launch's
+  file.
+
+### A program that manages the host
+
+A program that installs kinds on the host, with no person at it, does
+each step as a whole file written, a rename, a delete or a `flume`
+command, and touches no running place.
+
+**Install `acme/review@2`:**
+
+1. Write the package to a directory of the program's own, such as
+   `~/.local/share/flume/kinds/acme/review@2/`.
+2. Write `.acme.toml.tmp` in the sources directory and rename it to
+   `acme.toml`.
+3. Run `flume kinds lock --host --hash sha256:… acme/review@2`, with the
+   hash the package's publisher gave, so the lock records exactly the
+   content published and not whatever lies on disk.
+
+**Update to `review@3`.** Write `review@3/` beside `review@2/` and lock
+it. A launch of `acme/review` then takes `review@3`, the host lock's
+newest, unless the repository's lock records another. Places on
+`review@2` run on.
+
+**Retire `review@2`.** Run `flume kinds lock --host --remove
+acme/review@2`, then remove its directory. Places on `review@2` run on.
+
+**Remove the source.** Remove its kinds' entries from the lock, then its
+file.
+
+**Read back.** `flume status --json` gives `status.host.sources`: each
+source, the identities it holds, and each fault.
+
+Between any two steps flume refuses only the launches that name what is
+half installed. It refuses a version not yet locked as unlocked, and a
+locked one whose directory is gone as one the source does not hold. It
+never runs content no lock recorded.

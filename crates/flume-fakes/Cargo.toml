@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 flume-seams = { path = "../flume-seams" }
+serde_json.workspace = true
 
 [lib]
 doctest = false

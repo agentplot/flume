@@ -8,8 +8,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-/// The remote a repository's default branch is read from where it has
-/// one (20).
+/// The remote a repository's default branch, and a base no merge queue
+/// lands, are read from where it has one (9, 20, C.1).
 pub const REMOTE: &str = "origin";
 
 /// A repository git is run in.
@@ -193,6 +193,43 @@ impl Git {
             .collect())
     }
 
+    /// `branch` fetched from `remote` to its tracking ref, `git fetch
+    /// <remote> +refs/heads/<branch>:refs/remotes/<remote>/<branch>`, the
+    /// one fetch of a branch every reader of a remote makes (9, 20, C.1,
+    /// C.2, C.6): the tracking ref, or why the fetch failed.
+    pub fn fetch_branch(&self, remote: &str, branch: &str) -> Result<String, String> {
+        let tracking = format!("refs/remotes/{remote}/{branch}");
+        self.bytes(&[
+            "fetch",
+            "--quiet",
+            remote,
+            &format!("+refs/heads/{branch}:{tracking}"),
+        ])
+        .map_err(|words| format!("the fetch of {branch} from {remote} failed: {words}"))?;
+        Ok(tracking)
+    }
+
+    /// Whether `remote` holds the branch `branch`, by `ls-remote
+    /// --exit-code`, which exits 2 where it holds no such ref; git's words
+    /// where it could not say.
+    pub fn remote_holds(&self, remote: &str, branch: &str) -> Result<bool, String> {
+        let args = [
+            "ls-remote",
+            "--exit-code",
+            remote,
+            &format!("refs/heads/{branch}"),
+        ];
+        let output = self.output(&args)?;
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(2) => Ok(false),
+            _ => {
+                let words = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                Err(format!("git {}: {words}", args.join(" ")))
+            }
+        }
+    }
+
     /// The repository's remotes, by name.
     pub fn remotes(&self) -> Result<Vec<String>, String> {
         Ok(self
@@ -233,14 +270,7 @@ impl Git {
                     .strip_suffix("\tHEAD")
             })
             .ok_or_else(|| format!("{REMOTE}'s HEAD names no branch"))?;
-        let tracking = format!("refs/remotes/{REMOTE}/{branch}");
-        self.bytes(&[
-            "fetch",
-            "--quiet",
-            REMOTE,
-            &format!("+refs/heads/{branch}:{tracking}"),
-        ])
-        .map_err(|words| format!("the fetch of {branch} from {REMOTE} failed: {words}"))?;
+        self.fetch_branch(REMOTE, branch)?;
         self.bytes(&["remote", "set-head", REMOTE, branch])
             .map_err(|words| format!("{REMOTE}'s HEAD could not be set to {branch}: {words}"))?;
         self.remote_head()

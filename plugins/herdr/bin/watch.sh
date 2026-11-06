@@ -95,11 +95,30 @@ ticks=-1
 socket=$(socket_id)
 who=$(identity $$)
 
+# The watch's end: its renewer ended, and its lease removed where it is
+# still this watch's, under the lock, which it may hold already.
+stop() {
+  if [ -n "${renewer:-}" ]; then
+    kill "$renewer" 2>/dev/null
+    wait "$renewer" 2>/dev/null
+  fi
+  if holds_lock || take_lock; then
+    rm -f "$lease.tmp.$$"
+    [ "$(holder)" = $$ ] && rm -f "$lease"
+    drop_lock
+  fi
+}
+
 take_lock || exit 0
 if ours; then
   drop_lock
   exit 0
 fi
+# Set before the lease is written, so a watch ended at any moment once
+# its lease can be read takes the lease with it: a lease left by a watch
+# that is gone is read as a live one until it is stale (122).
+trap 'stop; exit 0' INT TERM
+trap stop EXIT
 write_lease
 drop_lock
 say "watching (pid $$)"
@@ -107,6 +126,8 @@ setup said
 
 # The lease is renewed on its own clock, however long a settle takes.
 (
+  # The watch's traps are its own: a subshell's end removes no lease.
+  trap - TERM EXIT
   # shellcheck disable=SC2034 # read by take_lock and drop_lock
   lock_owner=$(exec sh -c 'echo $PPID')
   while sleep "$every" && kill -0 $$ 2>/dev/null; do
@@ -121,17 +142,6 @@ setup said
   done
 ) &
 renewer=$!
-
-stop() {
-  kill "$renewer" 2>/dev/null
-  wait "$renewer" 2>/dev/null
-  if take_lock; then
-    [ "$(holder)" = $$ ] && rm -f "$lease"
-    drop_lock
-  fi
-}
-trap 'stop; exit 0' INT TERM
-trap stop EXIT
 
 # Each flume pane on this server status names, with the agent state
 # herdr's listing $1 reads in it, or gone where it lists none: one line

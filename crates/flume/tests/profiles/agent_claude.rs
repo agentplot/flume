@@ -2,31 +2,42 @@
 //! agent seam's scenarios against it over fixture transcripts and hook
 //! records of Claude Code 2.1.296, the release `devenv.nix` pins; the
 //! command for a code stage, its instructions in a file of the start's
-//! own, and for a stage in a mode; the map of
+//! own, and for a stage in a mode; the command for a stage with own
+//! settings and with none, the keys the profile reserves, a people's
+//! settings file named by the host through the core, the keys it takes
+//! as written and a repository's tagline among them; the map of
 //! flume's modes and the release's own, and the mode read back; the
 //! plugin an agent loads, written once per version; a prompt queued while
 //! the agent worked; a slash command's
 //! prompt; the folder-trust dialog the command names, against that
 //! release's screen; the carry of a stopped start's conversation over
 //! scratch configuration homes, one whose `projects` is a link to
-//! another's and one of its own, and the command that resumes it; and
-//! each reading of a carried start past the length its started ack
-//! recorded. The hooks themselves are driven through the built binary in
+//! another's and one of its own, and the command that resumes it, and of
+//! a lost start's to its own home; each reading of a carried start past
+//! the length its started ack recorded; and live, over scratch homes'
+//! session records and processes the tests start. The hooks themselves are driven through the built binary in
 //! `hooks_claude.rs`.
 
 use crate::common::*;
+use flume::host::config::HostConfig;
 use flume::profiles::agent::claude::record::{self, Asking, Failure, Record, Started};
 use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, STANDING_PROMPT_FLAG, TRUST_CONFIRM,
     TRUST_FOCUS, TRUST_NEXT, TRUST_QUESTION, VERSION,
 };
-use flume::profiles::agent::claude::{carry, mode, transcript};
-use flume::profiles::{BuiltIn, DEFAULT_PROGRAM};
+use flume::profiles::agent::claude::{carry, live, mode, settings, transcript};
+use flume::profiles::{core_over, BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::agent::{self, AgentHarness, Modes};
+use flume_conformance::seams::agent::{self, AgentHarness, Modes, OwnWay};
+use flume_core::Answer;
 use flume_seams::*;
+use serde_json::{json, Value};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// The fixtures, as Claude Code 2.1.296 writes them.
 pub fn fixture(name: &str) -> String {
@@ -64,6 +75,50 @@ fn append(path: &Path, lines: &str) {
 struct Harness {
     scratch: Scratch,
     seam: Claude,
+    processes: Processes,
+}
+
+/// The processes a harness started, ended when it is dropped.
+#[derive(Default)]
+struct Processes(RefCell<Vec<Child>>);
+
+impl Drop for Processes {
+    fn drop(&mut self) {
+        for mut child in self.0.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// A session no process of the host but the harness's runs: the test
+/// process's id and a count.
+fn new_session() -> String {
+    static SESSIONS: AtomicUsize = AtomicUsize::new(0);
+    format!(
+        "live-{}-{}",
+        std::process::id(),
+        SESSIONS.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+/// The process `pid` as the host's process table lists it.
+fn live_process(pid: u32) -> LiveProcess {
+    let listed = flume::host::process::listed()
+        .expect("the host's processes")
+        .into_iter()
+        .find(|process| process.pid == pid)
+        .expect("the process listed");
+    LiveProcess {
+        pid,
+        started: listed.started,
+    }
+}
+
+/// When the process `pid` started, as 2.1.296 records it in `procStart`,
+/// `ps -o lstart=`'s words under `LC_ALL=C` and `TZ=UTC`.
+fn proc_start(pid: u32) -> String {
+    live::proc_start(live_process(pid).started).expect("the start in words")
 }
 
 impl Harness {
@@ -71,7 +126,99 @@ impl Harness {
         let scratch = Scratch::new("claude");
         std::fs::create_dir_all(scratch.path("state/places/fix--one")).expect("the folder");
         let seam = Claude::new(&scratch.path("data"), Path::new("/opt/flume/bin/flume"));
-        Harness { scratch, seam }
+        Harness {
+            scratch,
+            seam,
+            processes: Processes::default(),
+        }
+    }
+
+    /// A process the harness runs until it is dropped, `sleep`.
+    fn run_process(&self) -> u32 {
+        self.keep(
+            Command::new("sleep")
+                .arg("600")
+                .stdin(Stdio::null())
+                .spawn()
+                .expect("sleep"),
+        )
+    }
+
+    /// A process the harness runs until it is dropped whose arguments are
+    /// those of `claude --resume <session>`, as the host lists them: a
+    /// shell named `claude` waiting on its input.
+    fn run_resume(&self, session: &str) -> u32 {
+        self.keep(
+            Command::new("/bin/sh")
+                .arg0("claude")
+                .args(["-c", "read line", "claude", "--resume", session])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .spawn()
+                .expect("sh"),
+        )
+    }
+
+    fn keep(&self, child: Child) -> u32 {
+        let pid = child.id();
+        self.processes.0.borrow_mut().push(child);
+        pid
+    }
+
+    /// Ends the harness's process `pid` and waits for it.
+    fn end_process(&self, pid: u32) {
+        let mut processes = self.processes.0.borrow_mut();
+        let at = processes
+            .iter()
+            .position(|child| child.id() == pid)
+            .expect("a process of the harness");
+        let mut child = processes.remove(at);
+        child.kill().expect("the process ended");
+        child.wait().expect("the process waited on");
+    }
+
+    /// `<home>/sessions/<pid>.json` as 2.1.296 writes it for the process
+    /// `pid` running `session`, its `procStart` as given, none left out.
+    fn session_record(
+        &self,
+        home: &Path,
+        pid: u32,
+        session: &str,
+        started: Option<&str>,
+    ) -> PathBuf {
+        let mut record = serde_json::json!({
+            "pid": pid,
+            "sessionId": session,
+            "cwd": self.place().location,
+            "startedAt": 1_793_279_400_000u64,
+            "kind": "interactive",
+            "entrypoint": "cli",
+        });
+        if let Some(started) = started {
+            record["procStart"] = started.into();
+        }
+        let path = home.join(format!("sessions/{pid}.json"));
+        std::fs::create_dir_all(path.parent().expect("a folder")).expect("sessions");
+        std::fs::write(&path, record.to_string()).expect("the record");
+        path
+    }
+
+    /// The start's started ack, written again naming `session`.
+    fn name_session(&self, identity: &Identity, session: &str) {
+        let record = self.record(identity);
+        let mut started = record.started().expect("a started ack");
+        started.session_id = session.into();
+        record.ack_started(&started).expect("the started ack");
+    }
+
+    /// A configuration home whose `sessions` stands and cannot be listed:
+    /// a file in its place, which no user, the superuser among them, can
+    /// list.
+    fn unlistable(&self, name: &str) -> PathBuf {
+        let home = self.home(name);
+        std::fs::create_dir_all(&home).expect("the home");
+        std::fs::write(home.join(live::SESSIONS), "").expect("the file");
+        home
     }
 
     fn record(&self, identity: &Identity) -> Record {
@@ -350,6 +497,37 @@ impl AgentHarness for Harness {
             .expect("the word");
     }
 
+    /// `runs`' session named by a record in work-1's home, for a process
+    /// the harness runs started at its `procStart`, and resumed by a
+    /// `claude` under no home given; `unknown`'s read under a home whose
+    /// `sessions` cannot be listed (207, C.4).
+    fn live_sessions(&self, runs: &Identity, unknown: &Identity) -> Option<agent::LiveSessions> {
+        let session = new_session();
+        self.name_session(runs, &session);
+        self.name_session(unknown, &new_session());
+        let recorded = self.run_process();
+        self.session_record(
+            &self.home("work-1"),
+            recorded,
+            &session,
+            Some(&proc_start(recorded)),
+        );
+        let resumed = self.run_resume(&session);
+        let mut processes = vec![live_process(recorded), live_process(resumed)];
+        processes.sort_by_key(|process| process.pid);
+        Some(agent::LiveSessions {
+            envs: vec![
+                at_home(&self.home("work-1")),
+                at_home(&self.sharing("work-2")),
+            ],
+            processes,
+            unreadable: vec![
+                at_home(&self.home("work-1")),
+                at_home(&self.unlistable("work-9")),
+            ],
+        })
+    }
+
     /// `work-2`, whose `projects` is a link to `work-1`'s, where `earlier`
     /// ran, and `work-3`, whose `projects` is a folder of its own holding a
     /// copy of its transcript (179, C.4).
@@ -359,6 +537,33 @@ impl AgentHarness for Harness {
             session: SESSION.into(),
             reaches_none: at_home(&self.apart("work-3", earlier)),
         })
+    }
+
+    /// Taken by `--settings <file>`, with design 6's reserved keys (195,
+    /// 196).
+    fn own_way(&self) -> OwnWay {
+        OwnWay {
+            takes: true,
+            reserved: settings::reserved(),
+        }
+    }
+
+    /// The JSON object of the file the command names by `--settings`, as
+    /// the release reads one, from the files the command lists; none where
+    /// it names none (195, C.4).
+    fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>> {
+        let file = command
+            .args
+            .iter()
+            .skip_while(|arg| *arg != "--settings")
+            .nth(1)?;
+        Some(
+            command
+                .files
+                .get(file)
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default(),
+        )
     }
 }
 
@@ -402,6 +607,7 @@ fn the_command_for_a_code_stage() {
         &harness.folder(),
         &settings,
         None,
+        &BTreeMap::new(),
         None,
         &env,
         &harness.place(),
@@ -466,6 +672,7 @@ fn the_command_for_a_code_stage() {
         &harness.folder(),
         &by_path,
         None,
+        &BTreeMap::new(),
         None,
         &env,
         &harness.place(),
@@ -491,6 +698,7 @@ fn the_command_passes_the_mode_it_is_given() {
             &harness.folder(),
             &settings,
             mode,
+            &BTreeMap::new(),
             None,
             &BTreeMap::new(),
             &harness.place(),
@@ -533,6 +741,7 @@ fn the_command_for_a_stage_in_edits() {
         &harness.folder(),
         &settings,
         Some(&value),
+        &BTreeMap::new(),
         None,
         &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
         &harness.place(),
@@ -542,6 +751,298 @@ fn the_command_for_a_stage_in_edits() {
     );
     assert_eq!(command.program, NAME);
     assert_eq!(command.args[2..], ["--permission-mode", "acceptEdits"]);
+}
+
+/// The command for a code stage given `own`, its program's resolved own
+/// settings.
+fn with_own(harness: &Harness, own: &BTreeMap<String, Value>) -> AgentCommand {
+    harness.seam.command(
+        &harness.folder(),
+        &Settings {
+            model: Some("opus".into()),
+            ..Settings::default()
+        },
+        None,
+        own,
+        None,
+        &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
+        &harness.place(),
+        &identity("code"),
+        &Secret("s".into()),
+        "x",
+    )
+}
+
+/// The keys `command`'s `--settings` file holds, as the release reads it.
+fn passed(command: &AgentCommand) -> BTreeMap<String, Value> {
+    Harness::new()
+        .own_passed(command)
+        .expect("own settings passed")
+}
+
+#[test]
+fn the_command_for_a_stage_with_own_settings() {
+    // Keys resolved from a named file and a table's `settings` are
+    // written as one JSON object to the file beside the start's record,
+    // which `--settings` names right after `--plugin-dir`; the named
+    // file's path is never on the line (S100, 195, 196).
+    let harness = Harness::new();
+    let named = "/host/agent-launcher/claude-settings.json";
+    let line = json!({ "type": "command", "command": "~/bin/line" });
+    let own = BTreeMap::from([
+        ("tui".to_string(), json!("fullscreen")),
+        ("statusLine".to_string(), line.clone()),
+    ]);
+    let command = with_own(&harness, &own);
+    let file = format!(
+        "{}/claude/{}/own-settings.json",
+        harness.folder(),
+        identity("code").to_string().replace('/', "%")
+    );
+    let plugin = harness.seam.plugin_dir().to_string_lossy().into_owned();
+    assert_eq!(
+        command.args,
+        [
+            "--plugin-dir",
+            &plugin,
+            "--settings",
+            &file,
+            "--model",
+            "opus"
+        ]
+    );
+    assert_eq!(command.files.keys().collect::<Vec<_>>(), [&file]);
+    assert_eq!(
+        serde_json::from_str::<Value>(&command.files[&file]).expect("JSON"),
+        json!({ "statusLine": line, "tui": "fullscreen" })
+    );
+    assert!(
+        !command
+            .args
+            .iter()
+            .chain(command.prompt_args.iter())
+            .any(|arg| arg.contains(named)),
+        "the named file on the line: {:?}",
+        command.args
+    );
+}
+
+#[test]
+fn the_command_for_a_stage_with_none() {
+    // No key for `claude`: no `--settings`, and no file (195).
+    let harness = Harness::new();
+    let command = with_own(&harness, &BTreeMap::new());
+    assert!(
+        !command.args.iter().any(|arg| arg == "--settings"),
+        "{:?}",
+        command.args
+    );
+    assert!(command.files.is_empty(), "{:?}", command.files);
+}
+
+#[test]
+fn each_reserved_key() {
+    // Each key 2.1.296's settings hold that another setting, the account
+    // or a person owns, `permissions.defaultMode` by its path, with its
+    // owner (34, 144, 162, 172, 195).
+    let reserved: Vec<(String, String)> = Harness::new()
+        .seam
+        .reserved()
+        .into_iter()
+        .map(|Reserved { key, owner }| (key, owner))
+        .collect();
+    let account = "the account's `env`";
+    let sign_in = "the account's sign-in";
+    let person = "a person, who alone accepts the warning it records";
+    assert_eq!(
+        reserved,
+        [
+            ("env", account),
+            ("model", "flume's `model`"),
+            ("permissions.defaultMode", "flume's `mode`"),
+            ("apiKeyHelper", sign_in),
+            ("awsAuthRefresh", sign_in),
+            ("awsCredentialExport", sign_in),
+            ("gcpAuthRefresh", sign_in),
+            ("otelHeadersHelper", sign_in),
+            ("forceLoginMethod", sign_in),
+            ("forceLoginOrgUUID", sign_in),
+            ("disableAllHooks", "flume's plugin"),
+            ("skipDangerousModePermissionPrompt", person),
+            ("skipAutoPermissionPrompt", person),
+        ]
+        .map(|(key, owner)| (key.to_string(), owner.to_string()))
+    );
+}
+
+#[test]
+fn a_peoples_settings_file() {
+    // A host names the file its people's sessions get: through the core,
+    // the command's file holds its status line, renderer, hooks and
+    // permissions' rules, and none of its `env`, its
+    // `permissions.defaultMode` or its acceptance of the bypass warning,
+    // which status names left out with their owners (S100, 195).
+    let repository = Repository::new("peoples-file");
+    let scratch = &repository.scratch;
+    let line = json!({ "type": "command", "command": "~/bin/line" });
+    let hooks = json!({ "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] });
+    std::fs::write(
+        scratch.path("people.json"),
+        json!({
+            "tui": "fullscreen",
+            "statusLine": line,
+            "hooks": hooks,
+            "env": { "EDITOR": "vi" },
+            "permissions": {
+                "allow": ["Bash(git log:*)"],
+                "defaultMode": "bypassPermissions"
+            },
+            "skipDangerousModePermissionPrompt": true
+        })
+        .to_string(),
+    )
+    .expect("the people's file");
+    let config = scratch.path("config.toml");
+    std::fs::write(
+        &config,
+        "[agents.programs.claude]\nfile = \"people.json\"\n",
+    )
+    .expect("the host's configuration");
+    let config = HostConfig::read(&config).expect("the configuration read");
+    let home = scratch.path("home");
+    std::fs::create_dir_all(&home).expect("a scratch home");
+    let path = std::env::var("PATH").unwrap_or_default();
+    let core = core_over(
+        &scratch.path("state"),
+        config,
+        None,
+        BuiltIn::with_login(&[
+            ("HOME", &home.to_string_lossy()),
+            ("PATH", &path),
+            ("LANG", "C"),
+        ]),
+    )
+    .expect("the core");
+    std::fs::create_dir_all(scratch.path("kinds/prompts")).expect("prompts");
+    std::fs::write(scratch.path("kinds/prompts/code.md"), "{{brief}}").expect("the prompt");
+    std::fs::write(
+        scratch.path("kinds/kinds.toml"),
+        r#"[kinds.survey]
+version = 1
+branch = "survey"
+
+[[kinds.survey.stages]]
+name = "code"
+prompt = "prompts/code.md"
+deliverables = ["commits"]
+agents = [{}]
+"#,
+    )
+    .expect("the declaration");
+    let answer = core.launch(&Launch {
+        repository: repository.name(),
+        kind: "survey".into(),
+        name: "first".into(),
+        base: "main".into(),
+        brief: Some("look around".into()),
+        declaration: Some(scratch.path("kinds/kinds.toml").to_string_lossy().into()),
+        ..Launch::default()
+    });
+    let Answer::Launched { place } = answer else {
+        panic!("the launch answered otherwise: {answer:?}");
+    };
+    let agent = place.agent.expect("the stage's agent");
+    let own = agent.own.expect("own settings in status");
+    let passed = own.passed.expect("own settings passed");
+    let file = passed
+        .strip_prefix("--settings ")
+        .unwrap_or_else(|| panic!("passed otherwise: {passed}"));
+    assert!(
+        file.ends_with("/own-settings.json"),
+        "{file} is not the start's own file"
+    );
+    let printed = agent.printed.expect("the command printed");
+    assert!(printed.contains(file), "{printed}");
+    let text = std::fs::read_to_string(file).expect("the start's own file");
+    assert_eq!(
+        serde_json::from_str::<Value>(&text).expect("JSON"),
+        json!({
+            "hooks": hooks,
+            "permissions": { "allow": ["Bash(git log:*)"] },
+            "statusLine": line,
+            "tui": "fullscreen"
+        })
+    );
+    let read = scratch.path("people.json").to_string_lossy().into_owned();
+    assert!(!printed.contains(&read), "the named file passed: {printed}");
+    assert_eq!(
+        own.files
+            .iter()
+            .map(|file| (file.layer, file.read.clone(), file.left_out.clone()))
+            .collect::<Vec<_>>(),
+        [(
+            Layer::Host,
+            read,
+            [
+                "env",
+                "permissions.defaultMode",
+                "skipDangerousModePermissionPrompt"
+            ]
+            .iter()
+            .map(|key| {
+                settings::reserved()
+                    .into_iter()
+                    .find(|reserved| reserved.key == *key)
+                    .expect("reserved")
+            })
+            .collect::<Vec<_>>()
+        )]
+    );
+}
+
+#[test]
+fn keys_taken_as_written() {
+    // Keys no setting of flume's owns are taken, and the command's file
+    // holds each as written (195).
+    let harness = Harness::new();
+    let given = BTreeMap::from([
+        (
+            "statusLine".to_string(),
+            json!({ "type": "command", "command": "printf '%s' \"$(git branch --show-current)\"" }),
+        ),
+        ("tui".to_string(), json!("fullscreen")),
+        (
+            "hooks".to_string(),
+            json!({ "SessionStart": [{ "hooks": [{ "type": "command", "command": "touch started" }] }] }),
+        ),
+        (
+            "permissions".to_string(),
+            json!({ "allow": ["Bash(git log:*)"] }),
+        ),
+        ("enableAllProjectMcpServers".to_string(), json!(true)),
+    ]);
+    assert_eq!(harness.seam.own(&given), Ok(()));
+    assert_eq!(passed(&with_own(&harness, &given)), given);
+}
+
+#[test]
+fn a_repositorys_tagline_written_as_given() {
+    // `attribution = { commit = "", pr = "", sessionUrl = false }` among
+    // the resolved keys reaches the file exactly as the layer wrote it,
+    // nothing of flume's added to it (S102, 195, C.4).
+    let harness = Harness::new();
+    let attribution = json!({ "commit": "", "pr": "", "sessionUrl": false });
+    let own = BTreeMap::from([
+        ("attribution".to_string(), attribution.clone()),
+        ("tui".to_string(), json!("fullscreen")),
+    ]);
+    let command = with_own(&harness, &own);
+    let text = command.files.values().next().expect("the file");
+    assert_eq!(
+        text,
+        "{\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false},\"tui\":\"fullscreen\"}\n"
+    );
+    assert_eq!(passed(&command)["attribution"], attribution);
 }
 
 #[test]
@@ -619,6 +1120,7 @@ fn the_plugin_an_agent_loads() {
         &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &place,
@@ -636,6 +1138,7 @@ fn the_plugin_an_agent_loads() {
         &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &place,
@@ -868,6 +1371,7 @@ fn the_trust_screen() {
         &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         None,
         &BTreeMap::new(),
         &harness.place(),
@@ -923,6 +1427,7 @@ fn the_command_of_a_carried_start() {
                 ..Settings::default()
             },
             None,
+            &BTreeMap::new(),
             resume,
             &BTreeMap::new(),
             &harness.place(),
@@ -997,6 +1502,7 @@ fn a_conversation_carried_to_a_home_whose_projects_links_the_firsts() {
         &harness.folder(),
         &Settings::default(),
         None,
+        &BTreeMap::new(),
         Some(SESSION),
         &at_home(&second),
         &harness.place(),
@@ -1246,4 +1752,190 @@ fn a_transcript_read_from_its_length() {
         transcript::Read::NotWritten
     ));
     assert_eq!(transcript::length(&harness.scratch.path("none.jsonl")), 0);
+}
+
+#[test]
+fn a_lost_starts_conversation_carried_to_its_own_home() {
+    // The lost start's transcript is in work-1's home, whose `projects` it
+    // shares with no other: carry to that home answers yes with the ack's
+    // session, as it does under no pool to the login environment's
+    // `~/.claude` where that is the home; once the transcript is removed,
+    // no, saying it cannot be read, naming `CLAUDE_CONFIG_DIR` and no path
+    // (49, 179, C.4, S115; core.30).
+    let harness = Harness::new();
+    let who = identity("talk");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    let own = at_home(&harness.home("work-1"));
+    let yes = Carry::Yes {
+        session: SESSION.into(),
+    };
+    assert_eq!(harness.seam.carry(&folder, &who, &own), yes);
+    let login = harness.scratch.path("login");
+    std::fs::create_dir_all(&login).expect("the login home");
+    std::os::unix::fs::symlink(harness.home("work-1"), login.join(".claude")).expect("the link");
+    let record = Record::at(&folder, &who);
+    assert_eq!(carry::carry(&record, &BTreeMap::new(), Some(&login)), yes);
+
+    std::fs::remove_file(harness.transcript(&who)).expect("the transcript removed");
+    let why = no_words(&harness, harness.seam.carry(&folder, &who, &own));
+    assert_eq!(why, carry::UNREADABLE);
+    let why = no_words(
+        &harness,
+        carry::carry(&record, &BTreeMap::new(), Some(&login)),
+    );
+    assert_eq!(why, carry::UNREADABLE);
+}
+
+/// The processes live reads, by a listing of the host's.
+fn listed() -> Option<Vec<flume::host::process::Listed>> {
+    live::processes()
+}
+
+#[test]
+fn a_session_record_and_its_process() {
+    // work-1's `sessions/<pid>.json` names the start's session with the
+    // `pid` and `procStart` of a process the test runs: live answers runs
+    // with that process, under work-1's home and under the login
+    // environment's `~/.claude` where that is work-1's; once the process
+    // ends, none, the record still on disk (207, C.4).
+    let harness = Harness::new();
+    let who = identity("talk");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    let session = new_session();
+    harness.name_session(&who, &session);
+    let home = harness.home("work-1");
+    let pid = harness.run_process();
+    let record = harness.session_record(&home, pid, &session, Some(&proc_start(pid)));
+    let runs = Live::Runs(vec![live_process(pid)]);
+    assert_eq!(harness.seam.live(&folder, &who, &[at_home(&home)]), runs);
+    let login = harness.scratch.path("login");
+    std::fs::create_dir_all(&login).expect("the login home");
+    std::os::unix::fs::symlink(&home, login.join(".claude")).expect("the link");
+    assert_eq!(
+        live::live(
+            &Record::at(&folder, &who),
+            &[BTreeMap::new()],
+            Some(&login),
+            listed
+        ),
+        runs
+    );
+    // A home that keeps no `sessions` folder, or another session's record,
+    // names nothing.
+    assert_eq!(
+        harness
+            .seam
+            .live(&folder, &who, &[at_home(&harness.home("work-2"))]),
+        Live::None
+    );
+    let other = identity("code");
+    harness.start(&AgentCommand::default(), &other, &folder);
+    harness.name_session(&other, &new_session());
+    assert_eq!(
+        harness.seam.live(&folder, &other, &[at_home(&home)]),
+        Live::None
+    );
+    // A start that never said it started names no session.
+    assert_eq!(
+        harness
+            .seam
+            .live(&folder, &identity("verify"), &[at_home(&home)]),
+        Live::None
+    );
+
+    harness.end_process(pid);
+    assert_eq!(
+        harness.seam.live(&folder, &who, &[at_home(&home)]),
+        Live::None
+    );
+    assert!(record.is_file(), "the record was removed");
+}
+
+#[test]
+fn a_reused_process_id() {
+    // The record names a `pid` the host runs, started at another time
+    // than its `procStart`: live answers none. A record with no
+    // `procStart` counts where its process runs, as 2.1.296 reads its own
+    // (207).
+    let harness = Harness::new();
+    let who = identity("talk");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    let session = new_session();
+    harness.name_session(&who, &session);
+    let home = harness.home("work-1");
+    let pid = harness.run_process();
+    harness.session_record(&home, pid, &session, Some("Thu Jan  1 00:00:00 1970"));
+    assert_eq!(
+        harness.seam.live(&folder, &who, &[at_home(&home)]),
+        Live::None
+    );
+    harness.session_record(&home, pid, &session, None);
+    assert_eq!(
+        harness.seam.live(&folder, &who, &[at_home(&home)]),
+        Live::Runs(vec![live_process(pid)])
+    );
+}
+
+#[test]
+fn a_resume_under_a_home_not_given() {
+    // A process `claude --resume <session>` runs under a home the profile
+    // is not given: live answers runs with that process, given any homes
+    // or none; one resuming another session counts nothing (207, S117).
+    let harness = Harness::new();
+    let who = identity("talk");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    let session = new_session();
+    harness.name_session(&who, &session);
+    harness.run_resume(&new_session());
+    assert_eq!(harness.seam.live(&folder, &who, &[]), Live::None);
+    let pid = harness.run_resume(&session);
+    let runs = Live::Runs(vec![live_process(pid)]);
+    assert_eq!(harness.seam.live(&folder, &who, &[]), runs);
+    assert_eq!(
+        harness
+            .seam
+            .live(&folder, &who, &[at_home(&harness.home("work-1"))]),
+        runs
+    );
+    harness.end_process(pid);
+    assert_eq!(harness.seam.live(&folder, &who, &[]), Live::None);
+}
+
+#[test]
+fn a_sessions_folder_that_cannot_be_read() {
+    // A home's `sessions` stands and cannot be listed: live answers
+    // unknown, naming `CLAUDE_CONFIG_DIR` and no path, whatever another
+    // home holds; and where the host's processes cannot be listed,
+    // unknown naming them (207; core.30).
+    let harness = Harness::new();
+    let who = identity("talk");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    let blocked = harness.unlistable("work-9");
+    let answer = harness.seam.live(
+        &folder,
+        &who,
+        &[at_home(&harness.home("work-1")), at_home(&blocked)],
+    );
+    let Live::Unknown { what } = answer else {
+        panic!("live answered {answer:?}");
+    };
+    assert_eq!(what, live::UNREADABLE);
+    assert!(what.contains("`CLAUDE_CONFIG_DIR`"), "{what}");
+    assert!(!what.contains('/'), "a path in {what}");
+    assert_eq!(
+        live::live(
+            &Record::at(&folder, &who),
+            &[at_home(&harness.home("work-1"))],
+            None,
+            || None
+        ),
+        Live::Unknown {
+            what: live::UNLISTED.into()
+        }
+    );
 }

@@ -1,8 +1,9 @@
 use crate::{lock, Log};
 use flume_seams::{
-    ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, KindSettings, LabelFrom,
-    LabelHeld, Pool, PoolFrom, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Share, Stream,
-    StreamFrom, StreamHeld, Usage, DEFAULT_STREAM,
+    ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, HostSource, HostSourceRead,
+    KindSessions, KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed,
+    ProfileHeld, RoleRun, RoomGuard, Seconds, Secret, Settings, Share, Stream, StreamDisplay,
+    StreamFrom, StreamHeld, Usage, View, ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -10,18 +11,28 @@ use std::sync::{Arc, Condvar, Mutex};
 /// The host: a clock that moves only when a test advances it or a command
 /// sleeps on it, numbered secrets, files' write times, the commands of
 /// flume's that live, the bound on agents and the agents' settings its
-/// configuration states, its streams with their sessions and labels'
-/// shares, its pools of accounts, each account's reading by its path, the
-/// labels it gives kinds, its configuration's values with their layers,
-/// the recipient the calling command's environment names, the host user's
-/// login environment, and an exclusive room lock. It reads no
-/// configuration file and no reading's file (106, 184).
+/// configuration states, its streams with their sessions, their kinds'
+/// and stages' sessions, labels' shares, titles and displays, the host's own display, its pools of
+/// accounts, each account's reading by its path, the labels it gives
+/// kinds, its configuration's values with their layers, the sources of
+/// its kinds with where their files and its lock lie, the recipient the
+/// calling command's environment names, the host user's login
+/// environment, and an exclusive room lock. It reads no configuration
+/// file and no reading's file (106, 184).
 pub struct FakeHost {
     state: Mutex<HostState>,
     room: Arc<Room>,
     pub log: Log,
     /// The lines written to the host's log (139).
     pub logged: Log,
+}
+
+/// A multiplexer, a view and a terminal app, each named or not.
+#[derive(Clone, Default)]
+struct Display {
+    multiplexer: Option<String>,
+    view: Option<View>,
+    terminal_app: Option<String>,
 }
 
 /// The room lock: taken while held, waited on by every other taker.
@@ -53,6 +64,13 @@ struct HostState {
     kinds: BTreeMap<String, KindSettings>,
     /// The agents' settings by repository and kind.
     repos: BTreeMap<(String, String), KindSettings>,
+    /// The agents' settings for every kind, by repository (32, 195).
+    repos_agents: BTreeMap<String, Settings>,
+    /// The agents' settings for every agent in a stream, by the stream
+    /// (32, 143).
+    streams_agents: BTreeMap<String, Settings>,
+    /// The settings for every agent on the host (32).
+    every_agent: Settings,
     login: BTreeMap<String, String>,
     /// The role runs the configuration names, by address (132, C.7).
     roles: BTreeMap<String, RoleRun>,
@@ -63,6 +81,8 @@ struct HostState {
     streams_named: BTreeMap<(Option<String>, Option<String>), String>,
     /// The host's own pool (144).
     pool: Option<String>,
+    /// The host's own multiplexer, view and terminal app (186, 190).
+    display: Display,
     /// The pools the configuration declares, by name (144).
     pools: BTreeMap<String, Pool>,
     /// The reading, or why there is none, by the path it is read at
@@ -74,6 +94,19 @@ struct HostState {
     /// The configuration's values with their layers, whether its local
     /// layer was taken, and the keys passed over (C.7).
     configuration: HostConfiguration,
+    /// The sources the configuration declares, by name (191).
+    sources: BTreeMap<String, HostSource>,
+}
+
+/// Where the fake host's configuration keeps its sources' files (C.7).
+pub const SOURCES: &str = "/home/user/.config/flume/sources";
+
+/// The fake host's lock of kinds (155, C.7).
+pub const HOST_LOCK: &str = "/home/user/.config/flume/flume.lock";
+
+/// The file that declares the source `name` on the fake host (191, C.7).
+pub fn source_file(name: &str) -> String {
+    format!("{SOURCES}/{name}.toml")
 }
 
 impl Default for FakeHost {
@@ -89,12 +122,17 @@ impl Default for FakeHost {
                 recipient: None,
                 kinds: BTreeMap::new(),
                 repos: BTreeMap::new(),
+                repos_agents: BTreeMap::new(),
+                streams_agents: BTreeMap::new(),
+                every_agent: Settings::default(),
                 login: BTreeMap::from([("HOME".to_string(), "/home/user".to_string())]),
                 roles: BTreeMap::new(),
                 streams: BTreeMap::new(),
                 streams_named: BTreeMap::new(),
                 pool: None,
+                display: Display::default(),
                 pools: BTreeMap::new(),
+                sources: BTreeMap::new(),
                 usage: BTreeMap::new(),
                 labels_named: BTreeMap::new(),
                 configuration: HostConfiguration::default(),
@@ -179,6 +217,35 @@ impl FakeHost {
         }
     }
 
+    /// The settings the configuration gives every kind's agents in
+    /// `repository`, its `[repos."<repository>".agents]`; empty settings
+    /// remove them (32, 195).
+    pub fn set_every_kind(&self, repository: &str, settings: Settings) {
+        let mut state = lock(&self.state);
+        if settings == Settings::default() {
+            state.repos_agents.remove(repository);
+        } else {
+            state.repos_agents.insert(repository.to_string(), settings);
+        }
+    }
+
+    /// The settings the configuration gives every agent in `stream`, its
+    /// `[agents.streams.<stream>]`; empty settings remove them (32, 143).
+    pub fn set_stream_settings(&self, stream: &str, settings: Settings) {
+        let mut state = lock(&self.state);
+        if settings == Settings::default() {
+            state.streams_agents.remove(stream);
+        } else {
+            state.streams_agents.insert(stream.to_string(), settings);
+        }
+    }
+
+    /// The settings the configuration gives every agent on the host, its
+    /// `[agents]` (32).
+    pub fn set_every_agent(&self, settings: Settings) {
+        lock(&self.state).every_agent = settings;
+    }
+
     /// A variable of the host user's login environment, or none; `HOME`
     /// is `/home/user` until set.
     pub fn set_login(&self, name: &str, value: Option<&str>) {
@@ -207,6 +274,49 @@ impl FakeHost {
         };
     }
 
+    /// The title the configuration declares for the stream `name`, or
+    /// none, the stream declared with nothing else where it was not (143,
+    /// 186).
+    pub fn set_title(&self, name: &str, title: Option<&str>) {
+        lock(&self.state)
+            .streams
+            .entry(name.to_string())
+            .or_default()
+            .title = title.map(str::to_string);
+    }
+
+    /// The multiplexer, view and terminal app the configuration names for
+    /// the stream `name`, each none where it names none, the stream
+    /// declared where it was not (186, 190).
+    pub fn set_display(
+        &self,
+        name: &str,
+        multiplexer: Option<&str>,
+        view: Option<View>,
+        terminal_app: Option<&str>,
+    ) {
+        let mut state = lock(&self.state);
+        let stream = state.streams.entry(name.to_string()).or_default();
+        stream.multiplexer = multiplexer.map(str::to_string);
+        stream.view = view;
+        stream.terminal_app = terminal_app.map(str::to_string);
+    }
+
+    /// The host's own multiplexer, view and terminal app, each none where
+    /// the configuration names none (186, 190).
+    pub fn set_host_display(
+        &self,
+        multiplexer: Option<&str>,
+        view: Option<View>,
+        terminal_app: Option<&str>,
+    ) {
+        lock(&self.state).display = Display {
+            multiplexer: multiplexer.map(str::to_string),
+            view,
+            terminal_app: terminal_app.map(str::to_string),
+        };
+    }
+
     /// The stream the configuration names for `kind` in `repository`,
     /// for every kind in `repository` where no kind is given, or for
     /// `kind` in every repository where no repository is; none removes
@@ -228,6 +338,18 @@ impl FakeHost {
             .entry(name.to_string())
             .or_default()
             .session = session.map(str::to_string);
+    }
+
+    /// The table the configuration gives `kind` in the stream `name`, its
+    /// session, its stages' tables and its other keys as the test writes
+    /// them, or none, the stream declared where it was not (199).
+    pub fn set_kind_sessions(&self, name: &str, kind: &str, sessions: Option<KindSessions>) {
+        let mut state = lock(&self.state);
+        let kinds = &mut state.streams.entry(name.to_string()).or_default().kinds;
+        match sessions {
+            Some(sessions) => kinds.insert(kind.to_string(), sessions),
+            None => kinds.remove(kind),
+        };
     }
 
     /// The share the configuration gives `label` of the stream `name`'s
@@ -283,6 +405,43 @@ impl FakeHost {
             Some(pool) => state.pools.insert(name.to_string(), pool),
             None => state.pools.remove(name),
         };
+    }
+
+    /// The configuration declares the source `name` by its file, its
+    /// packages in `kinds_dir`, in place of any it declared under that
+    /// name (191).
+    pub fn set_source(&self, name: &str, kinds_dir: &str) {
+        self.source(
+            name,
+            HostSourceRead::Read {
+                kinds_dir: kinds_dir.into(),
+            },
+        );
+    }
+
+    /// The file of the source `name` cannot be read, for `reason` (191).
+    pub fn faulty_source(&self, name: &str, reason: &str) {
+        self.source(
+            name,
+            HostSourceRead::CouldNotRead {
+                reason: reason.into(),
+            },
+        );
+    }
+
+    /// The configuration declares no source `name`: its file is gone.
+    pub fn remove_source(&self, name: &str) {
+        lock(&self.state).sources.remove(name);
+    }
+
+    fn source(&self, name: &str, read: HostSourceRead) {
+        lock(&self.state).sources.insert(
+            name.into(),
+            HostSource {
+                file: source_file(name),
+                read,
+            },
+        );
     }
 
     /// The reading at `path`, or why there is none, in place of any set
@@ -409,6 +568,42 @@ impl Host for FakeHost {
             .or_else(|| state.pool.as_ref().map(|name| named(name, PoolFrom::Host)))
     }
 
+    /// The stream's multiplexer, view and terminal app, each the
+    /// stream's key where it names one, else the host's, else `fake`, a
+    /// terminal view and `fake-window`, the fakes' own (186, 190).
+    fn display_for(&self, stream: &str) -> StreamDisplay {
+        self.log.push(format!("display_for {stream}"));
+        let state = lock(&self.state);
+        let stream = state.streams.get(stream);
+        let host = &state.display;
+        let from = |stream: bool, host: bool| match (stream, host) {
+            (true, _) => NamedBy::Stream,
+            (false, true) => NamedBy::Host,
+            (false, false) => NamedBy::Neither,
+        };
+        let named = |stream: Option<&String>, host: Option<&String>, default: &str| ProfileHeld {
+            profile: stream.or(host).map_or(default, String::as_str).to_string(),
+            from: from(stream.is_some(), host.is_some()),
+        };
+        let view = stream.and_then(|stream| stream.view);
+        StreamDisplay {
+            multiplexer: named(
+                stream.and_then(|stream| stream.multiplexer.as_ref()),
+                host.multiplexer.as_ref(),
+                "fake",
+            ),
+            view: ViewHeld {
+                view: view.or(host.view).unwrap_or(View::Terminal),
+                from: from(view.is_some(), host.view.is_some()),
+            },
+            terminal_app: named(
+                stream.and_then(|stream| stream.terminal_app.as_ref()),
+                host.terminal_app.as_ref(),
+                "fake-window",
+            ),
+        }
+    }
+
     fn pool(&self, name: &str) -> Option<Pool> {
         self.log.push(format!("pool {name}"));
         lock(&self.state).pools.get(name).cloned()
@@ -423,8 +618,9 @@ impl Host for FakeHost {
             .unwrap_or_else(|| Err("the file is missing".to_string()))
     }
 
-    fn settings(&self, repository: &str, kind: &str) -> HostSettings {
-        self.log.push(format!("settings {repository} {kind}"));
+    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings {
+        self.log
+            .push(format!("settings {repository} {kind} {stream}"));
         let state = lock(&self.state);
         HostSettings {
             repository: state
@@ -432,7 +628,18 @@ impl Host for FakeHost {
                 .get(&(repository.to_string(), kind.to_string()))
                 .cloned()
                 .unwrap_or_default(),
+            every_kind: state
+                .repos_agents
+                .get(repository)
+                .cloned()
+                .unwrap_or_default(),
             kind: state.kinds.get(kind).cloned().unwrap_or_default(),
+            stream: state
+                .streams_agents
+                .get(stream)
+                .cloned()
+                .unwrap_or_default(),
+            every_agent: state.every_agent.clone(),
         }
     }
 
@@ -442,6 +649,19 @@ impl Host for FakeHost {
 
     fn log(&self, line: &str) {
         self.logged.push(line);
+    }
+
+    fn sources(&self) -> BTreeMap<String, HostSource> {
+        self.log.push("sources");
+        lock(&self.state).sources.clone()
+    }
+
+    fn sources_dir(&self) -> Option<String> {
+        Some(SOURCES.into())
+    }
+
+    fn kinds_lock(&self) -> Option<String> {
+        Some(HOST_LOCK.into())
     }
 
     fn room(&self) -> RoomGuard {

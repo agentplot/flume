@@ -3,7 +3,8 @@
 //! repositories, secrets that never repeat, a command's life, a file's
 //! write time, an account's reading from its file, the bound the
 //! configuration states, its two layers read by a command of its own and
-//! written by none, and the room lock taken by two processes.
+//! written by none, the sources of kinds it declares in `sources/`, each
+//! fault its source's own, and the room lock taken by two processes.
 
 mod common;
 
@@ -14,7 +15,7 @@ use flume::host::{command_of, RealHost};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::history::{self, HistoryHarness};
 use flume_seams::*;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -52,6 +53,38 @@ impl HistoryHarness for Harness {
 
     fn made_default(&self) -> String {
         "main".into()
+    }
+
+    /// A bare clone beside the repository as its `origin`, and two commits
+    /// pushed to it from a clone elsewhere, which the repository never
+    /// fetches.
+    fn origin_ahead(&self, _repository: &str, branch: &str) -> Revision {
+        let remote = self.repository.bare_remote();
+        self.repository
+            .git(&["remote", "add", "origin", &remote.to_string_lossy()]);
+        let elsewhere = self.repository.scratch.path("elsewhere");
+        git(
+            &self.repository.scratch.root,
+            &[
+                "clone",
+                "--quiet",
+                &remote.to_string_lossy(),
+                &elsewhere.to_string_lossy(),
+            ],
+        );
+        for file in ["one.rs", "two.rs"] {
+            std::fs::write(elsewhere.join(file), "on origin\n").expect("origin's work");
+            git(&elsewhere, &["add", file]);
+            git(&elsewhere, &["commit", "--quiet", "-m", file]);
+        }
+        git(&elsewhere, &["push", "--quiet", "origin", branch]);
+        Revision::new(git(&elsewhere, &["rev-parse", "HEAD"]))
+    }
+
+    fn origin_gone(&self, _repository: &str) {
+        let gone = self.repository.scratch.path("gone.git");
+        self.repository
+            .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
     }
 }
 
@@ -243,12 +276,12 @@ fn an_accounts_reading_from_its_file() {
         Ok(Usage {
             read_at: 1_793_887_331,
             windows: vec![
-                Window {
+                UsageWindow {
                     name: "5-hour".into(),
                     used: 4_200,
                     resets_at: Some(1_793_898_000),
                 },
-                Window {
+                UsageWindow {
                     name: "7-day".into(),
                     used: 7_150,
                     resets_at: None,
@@ -311,6 +344,221 @@ fn the_bound_the_configuration_states() {
         HostConfig::read(&file).is_err(),
         "a file that is no configuration"
     );
+}
+
+/// A scratch `XDG_CONFIG_HOME`'s configuration file, and the sources
+/// directory beside it, made.
+fn configuration(scratch: &Scratch) -> (std::path::PathBuf, std::path::PathBuf) {
+    let file = scratch.path("config/flume/config.toml");
+    let sources = scratch.path("config/flume/sources");
+    std::fs::create_dir_all(&sources).unwrap();
+    (file, sources)
+}
+
+/// The host's sources as its configuration in `file` reads them.
+fn sources(scratch: &Scratch, file: &Path) -> BTreeMap<String, HostSource> {
+    host(
+        scratch,
+        HostConfig::read(file).expect("the configuration read"),
+    )
+    .sources()
+}
+
+/// The host user's home, as `~` is read.
+fn home() -> String {
+    std::env::var("HOME").expect("a home")
+}
+
+#[test]
+fn a_source_written_beside_and_renamed() {
+    // 159, 191, C.7: `.acme.toml.tmp` is no source; renamed to
+    // `acme.toml` it declares acme, its `~` the home.
+    let scratch = Scratch::new("source-renamed");
+    let (file, dir) = configuration(&scratch);
+    let beside = dir.join(".acme.toml.tmp");
+    std::fs::write(&beside, "kinds_dir = \"~/kinds/acme\"\n").unwrap();
+    assert_eq!(sources(&scratch, &file), BTreeMap::new());
+    let acme = dir.join("acme.toml");
+    std::fs::rename(&beside, &acme).unwrap();
+    assert_eq!(
+        sources(&scratch, &file),
+        BTreeMap::from([(
+            "acme".to_string(),
+            HostSource {
+                file: acme.to_string_lossy().into_owned(),
+                read: HostSourceRead::Read {
+                    kinds_dir: format!("{}/kinds/acme", home()),
+                },
+            }
+        )])
+    );
+}
+
+#[test]
+fn entries_that_are_no_source() {
+    // 191, C.7: `README`, `acme.toml~` and a directory `beta.toml/` beside
+    // `acme.toml`, which alone declares a source; a link to a file reads as
+    // the file.
+    let scratch = Scratch::new("no-source");
+    let (file, dir) = configuration(&scratch);
+    std::fs::write(dir.join("acme.toml"), "kinds_dir = \"/srv/kinds/acme\"\n").unwrap();
+    std::fs::write(dir.join("README"), "kinds_dir = \"/srv/kinds/readme\"\n").unwrap();
+    std::fs::write(dir.join("acme.toml~"), "kinds_dir = \"/srv/kinds/old\"\n").unwrap();
+    std::fs::create_dir_all(dir.join("beta.toml")).unwrap();
+    let declared: Vec<String> = sources(&scratch, &file).into_keys().collect();
+    assert_eq!(declared, ["acme"]);
+    let managed = scratch.path("managed/crew.toml");
+    std::fs::create_dir_all(managed.parent().unwrap()).unwrap();
+    std::fs::write(&managed, "kinds_dir = \"/srv/kinds/crew\"\n").unwrap();
+    std::os::unix::fs::symlink(&managed, dir.join("crew.toml")).unwrap();
+    let read = sources(&scratch, &file);
+    assert_eq!(
+        read["crew"].read,
+        HostSourceRead::Read {
+            kinds_dir: "/srv/kinds/crew".into()
+        }
+    );
+    assert_eq!(read.len(), 2, "{read:?}");
+}
+
+#[test]
+fn no_sources_directory() {
+    // 154, 191: a configuration directory holding no `sources/` declares
+    // no source, and its `config.toml` reads as before.
+    let scratch = Scratch::new("no-sources");
+    let file = scratch.path("config/flume/config.toml");
+    assert_eq!(sources(&scratch, &file), BTreeMap::new());
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "[host]\nagents = 2\n").unwrap();
+    let config = HostConfig::read(&file).unwrap();
+    assert_eq!(config.agents, Some(2));
+    assert_eq!(host(&scratch, config).sources(), BTreeMap::new());
+}
+
+#[test]
+fn each_fault_is_its_sources_own() {
+    // 4, 154, 159, 191: a file that is not TOML, that gives no
+    // `kinds_dir`, one neither absolute nor under `~`, or a key flume
+    // does not know, or that takes the name of flume's own source, the
+    // repository's, a launch's or a name no identity allows, is its own
+    // source's fault, named, and fails neither the configuration nor
+    // another source; a `kinds_dir` that does not exist is no fault of
+    // the file's.
+    let scratch = Scratch::new("source-faults");
+    let (file, dir) = configuration(&scratch);
+    std::fs::write(&file, "[host]\nagents = 3\n").unwrap();
+    let given = "kinds_dir = \"/srv/kinds/x\"\n";
+    for (name, text) in [
+        ("acme", "kinds_dir = \"/srv/kinds/acme\"\n"),
+        ("gone", "kinds_dir = \"/no/such/directory\"\n"),
+        ("broken", "kinds_dir = [\n"),
+        ("bad", "# no kinds_dir\n"),
+        ("relative", "kinds_dir = \"kinds/relative\"\n"),
+        ("other", "kinds_dir = \"~other/kinds\"\n"),
+        (
+            "extra",
+            "kinds_dir = \"/srv/kinds/extra\"\nfetch = \"https://kinds.invalid\"\n",
+        ),
+        ("number", "kinds_dir = 7\n"),
+        ("flume", given),
+        ("repo", given),
+        ("launch", given),
+        ("ac.me", given),
+    ] {
+        std::fs::write(dir.join(format!("{name}.toml")), text).unwrap();
+    }
+    let config = HostConfig::read(&file).expect("the configuration read whatever its sources");
+    assert_eq!(config.agents, Some(3), "the file's own settings");
+    let read = host(&scratch, config).sources();
+    let fault = |name: &str| match &read[name] {
+        HostSource {
+            file,
+            read: HostSourceRead::CouldNotRead { reason },
+        } => {
+            assert_eq!(
+                file,
+                &dir.join(format!("{name}.toml")).to_string_lossy(),
+                "{name}'s file"
+            );
+            reason.clone()
+        }
+        source => panic!("{name} read as {source:?}"),
+    };
+    for (name, named) in [
+        ("broken", "is not TOML"),
+        ("bad", "gives no `kinds_dir`"),
+        (
+            "relative",
+            "`kinds/relative`, which is neither absolute nor under `~`",
+        ),
+        (
+            "other",
+            "`~other/kinds`, which is neither absolute nor under `~`",
+        ),
+        ("extra", "`fetch` is no key"),
+        ("number", "`kinds_dir` is not a path"),
+        ("flume", "the source of flume's own kinds"),
+        ("repo", "the source of the repository's kinds"),
+        ("launch", "the source of a launch's kinds"),
+        ("ac.me", "`ac.me`"),
+    ] {
+        let reason = fault(name);
+        assert!(reason.contains(named), "{name}: {reason}");
+    }
+    for (name, kinds_dir) in [("acme", "/srv/kinds/acme"), ("gone", "/no/such/directory")] {
+        assert_eq!(
+            read[name].read,
+            HostSourceRead::Read {
+                kinds_dir: kinds_dir.into()
+            },
+            "{name}"
+        );
+    }
+    assert_eq!(read.len(), 12, "{read:?}");
+}
+
+#[test]
+fn a_sources_directory_that_cannot_be_listed_fails_the_configuration() {
+    // C.7: `sources` that is no directory is the configuration's fault,
+    // as a `config.toml` that cannot be read is.
+    let scratch = Scratch::new("sources-unlisted");
+    let file = scratch.path("config/flume/config.toml");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(scratch.path("config/flume/sources"), "a file").unwrap();
+    let Err(reason) = HostConfig::read(&file) else {
+        panic!("a sources directory that cannot be listed read");
+    };
+    assert!(reason.contains("config/flume/sources"), "{reason}");
+}
+
+#[test]
+fn the_local_layer_declares_no_source() {
+    // 159, 191, C.7; core.45: the sources are the managed layer's, read
+    // from `sources/` beside `config.toml` whether the local layer is
+    // taken or not, and a local file naming a source is not taken.
+    let scratch = Scratch::new("local-sources");
+    let (managed, dir) = configuration(&scratch);
+    let local = scratch.path("config/flume/config.local.toml");
+    std::fs::write(&managed, "[host]\nagents = 8\n").unwrap();
+    std::fs::write(dir.join("acme.toml"), "kinds_dir = \"/srv/kinds/acme\"\n").unwrap();
+    let declared = |config: &HostConfig| config.sources.keys().cloned().collect::<Vec<_>>();
+
+    std::fs::write(&local, "[streams.work]\nagents = 3\n").unwrap();
+    let taken = HostConfig::read_layers(&managed, &local).expect("the configuration read");
+    assert_eq!(taken.configuration.local, LocalLayer::Taken);
+    assert_eq!(declared(&taken), ["acme"]);
+
+    std::fs::write(&local, "[sources.beta]\nkinds_dir = \"/srv/kinds/beta\"\n").unwrap();
+    let refused = HostConfig::read_layers(&managed, &local).expect("the configuration read");
+    assert!(
+        matches!(
+            &refused.configuration.local,
+            LocalLayer::NotTaken { keys, .. } if keys.iter().any(|key| key.starts_with("sources"))
+        ),
+        "{:?}",
+        refused.configuration.local
+    );
+    assert_eq!(declared(&refused), ["acme"]);
 }
 
 const CHILD_ANSWER: &str = "FLUME_TEST_LAYERS_ANSWER";

@@ -7,13 +7,18 @@ use std::sync::Mutex;
 
 type Interleaved = Box<dyn FnOnce() + Send>;
 
+/// A test of the held state a read hands out.
+type Holds = Box<dyn Fn(&HeldState) -> bool + Send>;
+
 /// The store seam: each place's held state with its version, written by
-/// compare-and-set, the host's own documents in memory beside them, and a
-/// hook that runs another act just before the next
-/// write, as two commands acting at once do.
+/// compare-and-set, the files written into its folder, the host's own
+/// documents in memory beside them, and hooks that run another act just
+/// before the next write, or just after a read hands out a held state a
+/// test holds of, as two commands acting at once do.
 pub struct FakeStore {
     state: Mutex<StoreState>,
     before_write: Mutex<Vec<Interleaved>>,
+    after_read: Mutex<Vec<(Holds, Interleaved)>>,
     root: String,
     pub log: Log,
 }
@@ -23,6 +28,9 @@ struct StoreState {
     documents: BTreeMap<PlaceId, Versioned>,
     /// The lines of each place's `made.jsonl`, which go with its folder.
     made: BTreeMap<PlaceId, Vec<String>>,
+    /// The files written into each place's folder, by path, each with its
+    /// text and its mode, which go with the folder (196).
+    files: BTreeMap<PlaceId, BTreeMap<String, (String, u32)>>,
     /// The host's own documents, by key (153).
     host: BTreeMap<HostKey, HostVersioned>,
     next: u64,
@@ -40,6 +48,7 @@ impl FakeStore {
         FakeStore {
             state: Mutex::default(),
             before_write: Mutex::default(),
+            after_read: Mutex::default(),
             root: root.into(),
             log: Log::default(),
         }
@@ -48,6 +57,31 @@ impl FakeStore {
     /// `act` runs once, just before the next write is decided.
     pub fn before_next_write(&self, act: impl FnOnce() + Send + 'static) {
         lock(&self.before_write).push(Box::new(act));
+    }
+
+    /// `act` runs once, just after the first read of a place that hands
+    /// out a held state `when` holds of, so the reader goes on with what
+    /// it read while `act` has moved the place on.
+    pub fn after_read_of(
+        &self,
+        when: impl Fn(&HeldState) -> bool + Send + 'static,
+        act: impl FnOnce() + Send + 'static,
+    ) {
+        lock(&self.after_read).push((Box::new(when), Box::new(act)));
+    }
+
+    /// Takes out and runs the first hook whose test holds of `held`.
+    fn read_out(&self, held: &HeldState) {
+        let act = {
+            let mut hooks = lock(&self.after_read);
+            hooks
+                .iter()
+                .position(|(when, _)| when(held))
+                .map(|at| hooks.remove(at).1)
+        };
+        if let Some(act) = act {
+            act();
+        }
     }
 
     pub fn held(&self, place: &PlaceId) -> Option<HeldState> {
@@ -69,6 +103,15 @@ impl FakeStore {
             .entry(place.clone())
             .or_default()
             .push(line.to_string());
+    }
+
+    /// The text of the file at `path` in a place's folder and its mode,
+    /// as the last write left it; none where none was written (196).
+    pub fn file(&self, path: &str) -> Option<(String, u32)> {
+        lock(&self.state)
+            .files
+            .values()
+            .find_map(|files| files.get(path).cloned())
     }
 
     /// Whether the place's folder holds a line of what was made.
@@ -116,7 +159,11 @@ impl FakeStore {
 impl Store for FakeStore {
     fn read(&self, place: &PlaceId) -> Option<Versioned> {
         self.log.push(format!("read {place}"));
-        lock(&self.state).documents.get(place).cloned()
+        let read = lock(&self.state).documents.get(place).cloned();
+        if let Some(read) = &read {
+            self.read_out(&read.state);
+        }
+        read
     }
 
     fn read_every(&self) -> Vec<Versioned> {
@@ -156,6 +203,7 @@ impl Store for FakeStore {
             None => {
                 state.documents.remove(place);
                 state.made.remove(place);
+                state.files.remove(place);
             }
         }
         Written::Written { version }
@@ -176,6 +224,22 @@ impl Store for FakeStore {
             .get(place)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Refuses a path outside the place's folder, and otherwise keeps the
+    /// text whole, readable by the host's user alone (196).
+    fn write_file(&self, place: &PlaceId, path: &str, text: &str) -> Result<(), String> {
+        self.log.push(format!("write_file {place} {path}"));
+        let under = format!("{}/", self.folder(place));
+        if !path.starts_with(&under) || path.split('/').any(|part| part == "..") {
+            return Err(format!("{path} lies outside the place's folder"));
+        }
+        lock(&self.state)
+            .files
+            .entry(place.clone())
+            .or_default()
+            .insert(path.to_string(), (text.to_string(), 0o600));
+        Ok(())
     }
 
     fn read_host(&self, key: &HostKey) -> Option<HostVersioned> {

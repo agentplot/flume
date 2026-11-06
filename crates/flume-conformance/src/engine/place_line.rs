@@ -3,8 +3,9 @@
 //! agent's asking mark alone, never the terminal or the merge queue, and
 //! the same line in status (60; S14).
 
-use super::account_pools::begun_fix;
+use super::account_pools::{begun_fix, fix_in};
 use super::caller_waits::construct_asks;
+use super::carried_conversations::{by_hand, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Answer, PlaceLine, Retry, NOT_ITS_AGENT};
@@ -73,15 +74,20 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["S14", "60", "56"],
             run: asked_two_ways,
         },
+        Scenario {
+            name: "place line: a lost talk retried while its session runs reads `waiting on its session`, and `waiting for room` once the session ends while the host has no room",
+            cites: &["49", "70", "139", "207"],
+            run: a_lost_talk_retried_while_its_session_runs,
+        },
     ]
 }
 
 /// The task groups of a change of two groups and three tasks.
-const TWO_GROUPS: &[(&str, &str, usize)] = &[("1", "One", 2), ("2", "Two", 1)];
+pub const TWO_GROUPS: &[(&str, &str, usize)] = &[("1", "One", 2), ("2", "Two", 1)];
 
 /// The change place `name` of flume's own change@2, its change written
 /// as `groups` none ticked, and code's first repetition begun.
-fn code_of_change(
+pub fn code_of_change(
     world: &World,
     name: &str,
     groups: &[(&str, &str, usize)],
@@ -114,7 +120,7 @@ fn line(world: &World, id: &PlaceId) -> Result<PlaceLine, String> {
 /// A fix named `name` whose ends are pending for a role's address that
 /// no run collects, so its document stays once it is tidied, its code
 /// stage begun.
-fn fix_for_a_role(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn fix_for_a_role(world: &World, name: &str) -> Result<PlaceId, String> {
     launched(&world.engine.launch(&Launch {
         recipients: vec!["madswan/planner".into()],
         ..launch("fix", name, Some("x"))
@@ -440,6 +446,33 @@ fn asked_two_ways(_: &()) -> Outcome {
             .map(|place| place.line)
             .collect::<Vec<_>>(),
         "every place's line"
+    );
+    Ok(())
+}
+
+fn a_lost_talk_retried_while_its_session_runs(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.terminal.kill(&talk(1));
+    world.settle(&id);
+    world.host.set_bound(Some(1));
+    fix_in(&world, None, "other")?;
+    world.agent.live_runs("s-1", &[by_hand()]);
+    retry_talk(&world, &id, None, false)?;
+    ensure_eq!(
+        line(&world, &id)?.state,
+        "waiting on its session",
+        "the line's state while talk's session runs"
+    );
+    world.agent.live_ended("s-1");
+    world.engine().settle(None);
+    ensure_eq!(
+        (line(&world, &id)?.state, world.stage_state(&id, "talk")),
+        (
+            "waiting for room".to_string(),
+            Some(StageState::WaitingForRoom)
+        ),
+        "the line's state and talk once its session ended, the host having no room"
     );
     Ok(())
 }

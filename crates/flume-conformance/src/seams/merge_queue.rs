@@ -41,6 +41,10 @@ pub trait MergeQueueHarness {
     /// Reading where the base lives fails, as a fetch does.
     fn fetch_fails(&self, repository: &str, base: &str);
 
+    /// A branch of the repository the merge queue lands nothing on, as
+    /// one its policy names no table for: its name (126, C.6).
+    fn base_unlanded(&self, repository: &str) -> String;
+
     /// The merge queue cannot be read.
     fn unreadable(&self);
 
@@ -125,6 +129,38 @@ fn the_one_outcome<H: MergeQueueHarness>(
     Ok(first.remove(0))
 }
 
+fn two_branches_at_once<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, head) = harness.place();
+    harness.will_hold();
+    let submission = submitted(harness, &place, &head)?;
+    let none = format!("{}-none", place.branch);
+    let both = harness
+        .seam()
+        .read_submissions(&place.repository, &[none.as_str(), place.branch.as_str()]);
+    ensure_eq!(both.len(), 2, "the answers for two branches");
+    ensure_eq!(
+        both[0].read,
+        SubmissionRead::None,
+        "the branch with nothing"
+    );
+    ensure_eq!(
+        found(both[1].clone())?.id,
+        submission.id,
+        "the place's branch"
+    );
+    ensure_eq!(
+        found(
+            harness
+                .seam()
+                .read_submission(&place.repository, &place.branch)
+        )?
+        .id,
+        submission.id,
+        "the place's branch alone"
+    );
+    Ok(())
+}
+
 // ---- the merge queue seam: a profile unit appends its own scenarios at the list's end ----
 
 pub fn scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
@@ -165,6 +201,11 @@ pub fn scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
             run: read_gives_the_newest::<H>,
         },
         Scenario {
+            name: "merge queue: read-submission asked of two branches at once gives each its own newest, in the order asked, and one of them alone the same",
+            cites: &["99"],
+            run: two_branches_at_once::<H>,
+        },
+        Scenario {
             name: "merge queue: landed is said only of that branch's own submission",
             cites: &["101", "63", "S8"],
             run: landed_only_of_that_branch::<H>,
@@ -173,6 +214,11 @@ pub fn scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
             name: "merge queue: the base's revision where work lands, or why not",
             cites: &["9", "126", "15"],
             run: the_base_where_it_lands::<H>,
+        },
+        Scenario {
+            name: "merge queue: a base the merge queue lands not is said so, for the core to read at origin",
+            cites: &["126", "9"],
+            run: a_base_it_lands_not::<H>,
         },
         Scenario {
             name: "merge queue: a branch the merge queue cannot read is passed over with its words, and the place's submission on its base is found, followed and landed past it",
@@ -378,6 +424,24 @@ fn the_base_where_it_lands<H: MergeQueueHarness>(harness: &H) -> Outcome {
             BaseRevision::Refused { .. }
         ),
         "a failed fetch gave a revision"
+    );
+    Ok(())
+}
+
+fn a_base_it_lands_not<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, _) = harness.place();
+    let base = harness.base_unlanded(&place.repository);
+    ensure_eq!(
+        harness.seam().base_revision(&place.repository, &base),
+        BaseRevision::Unlanded,
+        "a base the merge queue lands not"
+    );
+    ensure!(
+        matches!(
+            harness.seam().base_revision(&place.repository, &place.base),
+            BaseRevision::At { .. }
+        ),
+        "the place's base, which the merge queue lands, is not read"
     );
     Ok(())
 }

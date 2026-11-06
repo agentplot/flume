@@ -29,7 +29,8 @@ pub(crate) struct PoolRoom {
 
 /// An account of a pool: as the configuration declares it, flume's
 /// agents running on it, the time it is spent until, none where it is
-/// not spent at the host's clock, and its reading, with the host's clock
+/// not spent at the host's clock, the words in which flume read no reset
+/// where that time is the hour, and its reading, with the host's clock
 /// and its pool's threshold, 90 where the pool states none, the queue
 /// read it at (144, 146, 184, 185).
 #[derive(Clone, Debug)]
@@ -37,6 +38,7 @@ pub(crate) struct AccountRoom {
     pub account: Account,
     pub running: u32,
     pub spent_until: Option<Seconds>,
+    pub spent_unread: Option<String>,
     pub reading: Reading,
     pub threshold: u32,
     pub now: Seconds,
@@ -56,7 +58,7 @@ pub(crate) enum Reading {
 
 /// The window's use now in hundredths of a percent: none where its reset
 /// has passed at `now`, its `used` otherwise (184).
-pub(crate) fn used_now(window: &Window, now: Seconds) -> u32 {
+pub(crate) fn used_now(window: &UsageWindow, now: Seconds) -> u32 {
     match window.resets_at {
         Some(resets_at) if resets_at <= now => 0,
         _ => window.used,
@@ -82,7 +84,7 @@ pub(crate) fn fresh(usage: &Usage, now: Seconds) -> bool {
 /// otherwise (185).
 pub(crate) fn holds_until(
     usage: &Usage,
-    window: &Window,
+    window: &UsageWindow,
     threshold: u32,
     now: Seconds,
 ) -> Option<Seconds> {
@@ -356,13 +358,19 @@ impl Engine {
     /// and its end, unless it is an account the affinity for `program`
     /// once left. A program the affinity keeps no account for moves nothing, and
     /// a pool that holds no account of `program` refuses the stage (4, 32,
-    /// 144, 145, 147; core.32).
+    /// 144, 145, 147; core.32). A start that carries a conversation lost
+    /// with its terminal or its host takes `conversation`, the account its
+    /// lost start ran under, first, where the pool declares it under the
+    /// same pool, of `program` and usable, moving no intent's affinity by
+    /// it (49, 145, 147, 179).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn choose_account(
         &self,
         place: &PlaceRecord,
         stage: &str,
         program: Option<&str>,
         affinity: Option<&Affinity>,
+        conversation: Option<&AccountHeld>,
         queue: &Queue,
         now: Seconds,
     ) -> (Choice, Option<AccountMove>) {
@@ -396,6 +404,13 @@ impl Engine {
             },
             account: chosen.account.clone(),
         };
+        let holds = conversation
+            .filter(|held| held.pool == pool)
+            .and_then(|held| room.account(&held.name))
+            .filter(|holds| holds.usable(program));
+        if let Some(holds) = holds {
+            return (chose(holds, AccountFrom::Conversation), None);
+        }
         if let Some(kept) = kept.filter(|kept| kept.usable(program)) {
             return (chose(kept, AccountFrom::Affinity), None);
         }
@@ -680,15 +695,15 @@ mod tests {
 
     const NOW: Seconds = 1_000_000;
 
-    fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
-        Window {
+    fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> UsageWindow {
+        UsageWindow {
             name: name.into(),
             used,
             resets_at,
         }
     }
 
-    fn usage(read_at: Seconds, windows: Vec<Window>) -> Usage {
+    fn usage(read_at: Seconds, windows: Vec<UsageWindow>) -> Usage {
         Usage { read_at, windows }
     }
 
@@ -802,6 +817,7 @@ mod tests {
             },
             running: 1,
             spent_until,
+            spent_unread: None,
             reading,
             threshold: THRESHOLD,
             now: NOW,

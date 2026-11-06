@@ -9,13 +9,13 @@ no tool but through them (core.1, core.2).
 
 ### Requirement: One interface per seam
 
-There SHALL be exactly one interface for each of the seven seams of Part
-B: the place (78 to 83), the kinds (84, 85), the change (86, 87, 127),
-the agent (88 to 93, 115, 116, 121, 134, 135), the terminal (94 to 98,
-122, 136 to 139), the merge queue (99, 101, 117, 125, 126, 133) and the
-store (102 to 104, 128). Each SHALL offer the operations its section
-names and no operation of the core's, and no interface SHALL name a tool
-(core.1, core.2).
+There SHALL be exactly one interface for each of the eight seams of
+Part B: the place (78 to 83), the kinds (84, 85), the change (86, 87,
+127), the agent (88 to 93, 115, 116, 121, 134, 135), the terminal (94
+to 98, 122, 136 to 139, 187), the merge queue (99, 101, 117, 125, 126,
+133), the store (102 to 104, 128) and the window (188, 189). Each SHALL
+offer the operations its section names and no operation of the core's,
+and no interface SHALL name a tool (core.1, core.2).
 
 #### Scenario: Each seam's operations
 
@@ -24,7 +24,7 @@ names and no operation of the core's, and no interface SHALL name a tool
 
 #### Scenario: No tool named outside a profile
 
-- **WHEN** the seams', core's, fakes', suite's and commands' sources are searched for `wt`, `worktrunk`, `openspec`, `claude`, `herdr` and `sluice` as words
+- **WHEN** the seams', core's, fakes', suite's and commands' sources are searched for `wt`, `worktrunk`, `openspec`, `claude`, `herdr`, `sluice`, `ghostty` and `osascript` as words
 - **THEN** none is found outside a `profiles` directory
 
 ### Requirement: The merge queue's submit holds no wait
@@ -75,10 +75,11 @@ terminal operation SHALL answer within a bound the profile states (98).
 
 The merge queue seam SHALL answer the revision the base stands at where
 its profile says the base lives, after that profile's fetch, or a
-refusal naming why (126; 9, core.7); the change seam where a change
-lies in a place, for a prompt's change part (127); and the store the
-place's own folder beside its held state, for a report kept there (128,
-123).
+refusal naming why, or that the merge queue lands no such base, which
+the core then reads at origin (126; 9, C.1, core.7); the change seam
+where a change lies in a place, for a prompt's change part (127); and
+the store the place's own folder beside its held state, for a report
+kept there (128, 123).
 
 #### Scenario: The base where the merge queue says it lives
 
@@ -89,6 +90,11 @@ place's own folder beside its held state, for a report kept there (128,
 
 - **WHEN** the fake merge queue refuses to give the base's revision, naming a failed fetch
 - **THEN** the launch is refused naming the fetch, and nothing is made
+
+#### Scenario: A base the merge queue lands not
+
+- **WHEN** the fake merge queue is asked for a base it lands nothing on
+- **THEN** it answers that it lands no such base, and the place's own base at a revision (126)
 
 ### Requirement: The place seam says where a place is made
 
@@ -300,11 +306,13 @@ word that is not one of the four SHALL be refused naming it (161, 162,
 
 ### Requirement: The agent seam carries a conversation or says why not
 
-The agent seam SHALL answer, given the start whose agent stopped at its
-account's usage limit and the chosen account's environment, whether its
-program can carry that agent's conversation there, with the session to
-resume, or why not, or that it offers no carry, the default; and its
-command SHALL take the session a start resumes (88, 179).
+The agent seam SHALL answer, given the start whose conversation a start
+carries, one whose agent stopped at its account's usage limit or a
+conversation's start reported lost, and the environment of the account
+the next start takes, an empty one under no pool, whether its program
+can carry that agent's conversation there, with the session to resume,
+or why not, or that it offers no carry, the default; and its command
+SHALL take the session a start resumes (49, 88, 179).
 
 #### Scenario: A profile that offers no carry
 
@@ -318,11 +326,14 @@ command SHALL take the session a start resumes (88, 179).
 
 ### Requirement: The types of a carried start
 
-The seams SHALL pass one type each for a stage's wait after a spent
-agent, a start's conversation, a start carried that did not begin, the
-session in a start's record and an unsettled start's other session;
-each SHALL serialize to JSON and back unchanged, and held state written
-before them SHALL read with none (146, 161, 179).
+The seams SHALL pass one type each for a stage's wait to carry a
+conversation, naming the start it carries and its cause, spent or
+lost; a start's conversation with that cause; a start carried that did
+not begin; the session in a start's record; and an unsettled start's
+other session. Each SHALL serialize to JSON and back unchanged, and
+held state written before them SHALL read with none, and a wait or a
+conversation written before with no cause SHALL read as spent (49, 146,
+161, 179).
 
 #### Scenario: A held state with a carried start
 
@@ -333,6 +344,11 @@ before them SHALL read with none (146, 161, 179).
 
 - **WHEN** a held state written before this change is read
 - **THEN** it reads with no wait after a spent agent, no conversation, no session and no start carried that did not begin (146)
+
+#### Scenario: A lost conversation's wait and conversation
+
+- **WHEN** a held state whose talk waits to carry a lost start's conversation, and whose talk start 2 carries it, is written and read, and one whose wait and conversation name no cause is read
+- **THEN** the first reads back unchanged with the cause lost, and the second reads with the cause spent (49, 179)
 
 ### Requirement: An affinity written before reads with its one account
 
@@ -348,31 +364,42 @@ and its intent's moves with no program, and SHALL never be written so
 ### Requirement: The host's facts give sessions, labels and the layers
 
 The host's facts SHALL give, as its configuration stands when asked,
-each stream's `session` and its labels' shares, each with its
-`reserve`, `keep_free` and any other key its table holds; the label
-the configuration gives a repository's kind or a kind, with where from;
-and every value of the configuration with its layer, whether its local
-layer was taken, and each key passed over with its pin (143, 180, 181,
-C.7).
+each stream's `session`, the sessions it names for its kinds and their
+stages, and its labels' shares with their `reserve` and `keep_free`,
+each table with any other key it holds; the label the configuration
+gives a repository's kind or a kind, with where from; and every value
+of the configuration with its layer, whether its local layer was taken,
+and each key passed over with its pin (143, 180, 181, 199, C.7).
 
 #### Scenario: The fake host's sessions, labels and layers
 
 - **WHEN** a test scripts the fake host's `work` with the session `office` and `operation`'s reserve of two keeping one free, `[kinds.research] label = "inception"`, and `streams.work.agents` from the local layer
 - **THEN** the core reads `office` for `work`, `operation`'s share, `inception` from `host-kind` for research in any repository, and `streams.work.agents` from `local` (143, 180, 181, C.7)
 
+#### Scenario: The fake host's sessions for its kinds and stages
+
+- **WHEN** a test scripts the fake host's `work` naming `work-design` for research and for release's review, and `work-plan` for plan with the other key `label`
+- **THEN** the core reads `work-design` for research, `work-design` for release's review, and `work-plan` for plan with `label` named as its table's other key (199, C.7)
+
 ### Requirement: The types of a session, a label and the layers
 
 The seams SHALL pass one type each for where an agent opens, a session
-and where it came from, a label and where it came from, a label's
-share of its stream, and the configuration's values with their layers;
-each SHALL serialize to JSON and back unchanged, and a held state, a
-kind or settings written before them SHALL read with none (107, 143,
-180, 181, C.7).
+and where it came from, `launch`, `stream-stage`, `stream-kind`,
+`stream`, `stream-name` or `own`, a stream's sessions for its kinds and
+stages, a label, where it came from and its share of its stream, and
+the configuration's values with their layers; each SHALL serialize to
+JSON and back unchanged, and a held state, a kind, a stream or settings
+written before them SHALL read with none (107, 143, 180, 181, 199, C.7).
 
 #### Scenario: A held state with a session and a label
 
 - **WHEN** a held state whose kind declares a label, whose launch's settings name a session, and whose live start holds its session and label, is written and read
 - **THEN** it reads back unchanged, and one written before reads with no label and no session (107, 180)
+
+#### Scenario: A start's session from its stream's word for its stage
+
+- **WHEN** a held state whose live start holds the session `work-review` from `stream-stage`, and a stream naming `work-design` for research and `work-review` for release's review, are written and read
+- **THEN** each reads back unchanged, and a stream written before reads with no session for any kind or stage (199)
 
 ### Requirement: The terminal seam gives what its configuration lacks for flume's plugin
 
@@ -417,3 +444,242 @@ read with no window and no end (147, 184, 185; core.14).
 
 - **WHEN** an intent's move with `why` `threshold`, `window` `5-hour` and `until` 17:00 is written and read, and a move written before with neither
 - **THEN** the first reads back unchanged and the second with no window and no end (147, 185)
+
+### Requirement: The terminal seam's attach by view
+
+The terminal seam SHALL offer attach: given a session by its name or
+the terminal's own, and a view, for a window the command that shows it,
+its program by its full path, its arguments and the variables it needs
+with their values, the session started first where it does not run; for
+the terminal's own app, the app told to show it; or a refusal where the
+terminal holds no such part or offers no such view (187).
+
+#### Scenario: Attach over the fake
+
+- **WHEN** the fake terminal is asked to attach `work` for a window, then its own session for a window, then `work` for its app, then is scripted to refuse its app
+- **THEN** it answers a command for `work`, one for its own session, shown, then the refusal, and logs each asking with its view (187)
+
+### Requirement: The window seam's show
+
+The window seam SHALL offer show: given a command and a title, a window
+running the command under that title, opened; the line a person runs,
+printed, where no window program is named; or a refusal in the window
+program's words; within a bound the profile states, opening at most one
+window at each asking (188, 189).
+
+#### Scenario: Show over the fake
+
+- **WHEN** the fake window is asked to show a command under `Work Agents` twice, then is scripted to answer printed and then refused
+- **THEN** it answers opened twice, logging two shows with the command and the title, then the printed line, then the refusal (188, 189)
+
+### Requirement: The resolver gives a terminal and a window by name
+
+The resolver SHALL give a terminal profile and a window profile by
+name, none for a name it carries none for, and list the names it
+carries, the one the host's multiplexer names being the terminal the
+core is built with (105, 190).
+
+#### Scenario: Named terminals and windows
+
+- **WHEN** the fake resolver is given a terminal `other` and a window `other-window`, and asked for `fake`, `other`, `rex`, `fake-window` and `kitty`
+- **THEN** it gives the core's own terminal, `other`, none, the fake window and none, and lists `fake` and `other`, and `fake-window` and `other-window` (105, 190)
+
+### Requirement: The types of a view, a window and a stream's terminal
+
+The seams SHALL pass one type each for a view's command, attach's
+answer, show's answer, a view, where a stream's multiplexer, view and
+terminal app came from, and a start's terminal; each SHALL serialize to
+JSON and back unchanged, a stream written before reading with no
+multiplexer, view, terminal app or title, and a start written before
+with no terminal (143, 187, 188, 190).
+
+#### Scenario: A view, a window and a stream round-trip
+
+- **WHEN** a command needing `XDG_CONFIG_HOME`, each of attach's and show's answers, each view, a stream's display from each of `stream`, `host` and `neither`, a stream with all four keys, and a start with its terminal are written to JSON and read back, and a stream and a start written with none of those keys are read
+- **THEN** each equals the value written, the stream written before reads with none of its four keys, and the start with no terminal (143, 187, 188, 190)
+
+### Requirement: The kinds seam reads sources, packages and locks
+
+The kinds seam SHALL offer read-named, a kind's parts as a launch writes
+it; read-source, the identities a source's directory holds; read-package,
+a package's kind, identity and hash; the repository's lock at a revision;
+a lock on disk; and a lock written whole; flume's own SHALL be packages
+with their hashes; the same input SHALL give the same answer, and no read
+SHALL change anything (85, 154 to 157, 160, 192).
+
+#### Scenario: Each operation over the fake
+
+- **WHEN** the kinds seam's scenarios run against the fake kinds
+- **THEN** each new operation is exercised twice with one input, each answering the same both times and leaving the fake's scripted packages and locks as they were, and each scenario cites its clause (85, 160)
+
+#### Scenario: A kind's text read by the seam
+
+- **WHEN** launches name `review`, `acme/review` and `acme/review@2` over the fakes
+- **THEN** the fake kinds' log shows `read_named` given each text whole, and each place's identity is the spelling the fake gave, the core parsing and spelling none (core.4)
+
+### Requirement: The types of a source, a package and a lock
+
+The seams SHALL pass one type for each of: a kind's identity with its
+parts and weir's spelling; a kind as named, its source and version each
+optional; a package read or why not; a source the host declares or its
+fault; a lock's entry and a lock read, none, or why not; and where a
+place's kind came from, beside the place's `declared`, which gains
+`host`. Each SHALL serialize to JSON and back unchanged (19, 154, 155).
+
+#### Scenario: A held state with where its kind came from
+
+- **WHEN** a held state whose `kind_from` names a host's source, its file, its kind's directory, its hash and the host's lock is written to JSON and read back, and one with no `kind_from` is read
+- **THEN** the first equals the value written, and the second reads with none (21, core.14)
+
+### Requirement: The host gives its sources
+
+The host's facts SHALL give the core the sources the host declares, each
+by its name with its file and its `kinds_dir`, or with why its file
+cannot be read, as they stand when asked; the core SHALL read a source's
+packages only through the kinds seam (159, C.7; core.2).
+
+#### Scenario: Sources scripted on the fake host
+
+- **WHEN** a test scripts the fake host with the source `acme` and the faulty source `bad`
+- **THEN** the core's resolution of `acme/review@1` reads acme's `kinds_dir` through the fake kinds, and one of `bad/x@1` is refused naming bad's fault with no call to the fake kinds (4, 159)
+
+### Requirement: The terminal seam's runs
+
+The terminal seam SHALL offer runs: given one or more parts, each by
+its name or the terminal's own, read together in one reading of the
+terminal, for each in the order asked, that it runs or does not, with
+the name the terminal knows it by; or that the terminal holds no part a
+person can be shown, or that it could not read the part, in the
+terminal's words; starting nothing, within a bound the profile states.
+No terminal SHALL take a default answer for it (98, 200, 201; core.2).
+
+#### Scenario: Runs over the fake
+
+- **WHEN** the fake terminal is scripted to read `work` running and `desk` unread with `no listing`, and is asked runs of `work`, `desk`, `office` and its own part, one at a time
+- **THEN** it answers `work` running, `desk` unread with `no listing`, `office` not running and its own part not running as `own`, logs `runs work`, `runs desk`, `runs office` and `runs own`, and opens nothing (201)
+
+#### Scenario: Runs of several parts over the fake
+
+- **WHEN** the same fake terminal is asked runs of `work`, `desk`, `office` and its own part in one call
+- **THEN** it answers each as it answered alone, in that order, and logs the one `runs work desk office own` (201)
+
+### Requirement: The type of a session's running
+
+The seams SHALL pass one type for runs' answer, `SessionRuns`, each of
+its four answers serializing to JSON and back unchanged (61, 201).
+
+#### Scenario: Each answer round-trips
+
+- **WHEN** `runs`, `not_running`, `no_part` and `unread`, each with its name or its reason, are written to JSON and read back
+- **THEN** each equals the value written (201)
+
+### Requirement: The agent seam takes a program's own settings
+
+The agent seam SHALL name the keys of its program's settings another
+setting or the account owns, each with its owner, none by default; and
+SHALL say whether its profile takes its program's keys as resolved,
+refusing every non-empty entry by default. Its command SHALL be given
+the agent's resolved keys alone and the start's folder, and SHALL pass
+the keys, listing each file it is to be started with under that folder,
+and none where they are empty (88, 195, 196).
+
+#### Scenario: A profile that keeps the seam's defaults
+
+- **WHEN** an agent profile that keeps the seam's defaults is asked its reserved keys, and to take `{ line = "a" }` and then an empty entry
+- **THEN** it names no reserved key, refuses the first, saying its profile passes no settings of its program's own, and takes the second (170, 195)
+
+#### Scenario: The fake's way over the seam's scenarios
+
+- **WHEN** the agent seam's scenarios run against the fake agent scripted to take own settings by a file and to reserve `env`
+- **THEN** it names `env` with its owner, takes `{ line = "a" }`, and its command lists one file under the start's folder holding the entry (196)
+
+### Requirement: The core writes a command's files before the terminal opens it
+
+The core SHALL write each file an agent's command lists, written beside
+and renamed over, readable by the host user alone, before the terminal
+opens the agent, and SHALL read a start whose command lists a file
+outside the start's folder as not opened, naming the file (16, 17,
+196).
+
+#### Scenario: A file written before the open
+
+- **WHEN** a stage starts whose command lists one file under its start's folder
+- **THEN** the file holds the command's text when the fake terminal opens the agent, and only the host's user may read it (196)
+
+#### Scenario: A file outside the folder
+
+- **WHEN** a command lists a file outside its start's folder
+- **THEN** the start is not opened, naming the file, and nothing is written (196)
+
+### Requirement: The types of own settings
+
+The seams SHALL pass `programs`, a table of programs each giving a
+named file, with its path as written and as read, its keys and the keys
+left out of it, and `settings`, a table of JSON values, in an agent's
+settings; the layers `host-stream` and `host` beside the others; a
+profile's reserved keys; and a command's files.
+Each SHALL serialize to JSON and back unchanged, and a held state
+written before them SHALL read with none (32, 195, 196).
+
+#### Scenario: A held state with own settings
+
+- **WHEN** a held state whose launch gives `programs` for two programs, one with a named file whose `env` was left out, and whose start took a key from `host-stream`, is written and read
+- **THEN** it reads back unchanged, holding `env` by name alone, and the same state written with no `programs` reads with none (195)
+
+### Requirement: The seams carry a repository's settings for every kind
+
+The kinds read SHALL carry a repository's settings for every kind
+apart from its settings for each kind, and a place's held state SHALL
+keep them as the launch read them; each SHALL serialize to JSON and
+back unchanged, and one written before them SHALL read with none (21,
+32, 195, C.2).
+
+#### Scenario: A held state with a repository's settings for every kind
+
+- **WHEN** a kinds read and a held state whose repository gave `attribution` for every kind are written and read
+- **THEN** each reads back unchanged, and the same written with none reads with none (195)
+
+### Requirement: The types of an account taken for its conversation and an agent left
+
+The seams SHALL pass an account's choice from the conversation beside
+the affinity and the strategy, and a lost end's and a status agent's
+`left_in_pane`; each SHALL serialize to JSON and back unchanged, and an
+end or a status written before SHALL read with no agent left (43, 56,
+77, 145).
+
+#### Scenario: An account from the conversation and an agent left
+
+- **WHEN** a held state whose talk start runs under work-2 chosen from its conversation, and whose earlier talk end gives `left_in_pane`, is written and read
+- **THEN** it reads back unchanged (43, 145)
+
+### Requirement: The agent seam reads whether a conversation runs
+
+The agent seam SHALL answer, given the start whose conversation a start
+would carry and the environments of the host's accounts for its
+program, whether a process runs that conversation, naming each by its
+id and when it started, or that none does, or unknown with what could
+not be read; the default SHALL answer unknown, saying its profile reads
+no running session (171, 207).
+
+#### Scenario: A profile that reads no running session
+
+- **WHEN** the seam's scenarios run against a profile that implements no live
+- **THEN** live answers unknown, saying the profile reads no running session (207)
+
+#### Scenario: The fake's live over the seam's scenarios
+
+- **WHEN** the seam's scenarios run against the fake agent scripted live for one session and unknown for another
+- **THEN** live answers runs with the scripted processes for the first, unknown with the scripted words for the second, and none for a third (207)
+
+### Requirement: The types of a live session
+
+The seams SHALL pass one type for live's answer and one for a process it
+names; a stage's wait SHALL hold the processes or what could not be read
+as last read, and a place kept SHALL hold the processes that keep it.
+Each SHALL serialize to JSON and back unchanged, and held state written
+before SHALL read with none (49, 64, 207).
+
+#### Scenario: A wait on a live session
+
+- **WHEN** a held state whose talk waits on process 4242, and a place kept while its session runs, are written and read
+- **THEN** each reads back unchanged (49, 64, 207)
