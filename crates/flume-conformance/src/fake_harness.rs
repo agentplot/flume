@@ -663,6 +663,35 @@ impl TerminalHarness for FakeTerminalHarness {
         self.terminal.set_setup(&[SETUP]);
         vec![SETUP.to_string()]
     }
+
+    /// `work` scripted running and `desk` unread with `no listing`;
+    /// `office`, never scripted, and its own part not running, the own as
+    /// `own` (201).
+    fn runs_parts(&self) -> Vec<(Option<String>, SessionRuns)> {
+        let work = SessionRuns::Runs {
+            name: "work".into(),
+        };
+        let desk = SessionRuns::Unread {
+            reason: "no listing".into(),
+        };
+        self.terminal.runs_as("work", work.clone());
+        self.terminal.runs_as("desk", desk.clone());
+        vec![
+            (Some("work".into()), work),
+            (Some("desk".into()), desk),
+            (
+                Some("office".into()),
+                SessionRuns::NotRunning {
+                    name: "office".into(),
+                },
+            ),
+            (None, SessionRuns::NotRunning { name: "own".into() }),
+        ]
+    }
+
+    fn logged(&self) -> Option<Vec<String>> {
+        Some(self.terminal.log.calls())
+    }
 }
 
 /// The fake window, its shows answered as each scenario scripts them.

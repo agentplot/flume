@@ -15,6 +15,7 @@ pub mod host_queue;
 pub mod kind_sources;
 pub mod labels;
 pub mod launching;
+pub mod list;
 pub mod made_things;
 pub mod open;
 pub mod place_line;
@@ -70,5 +71,6 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(kind_sources::scenarios());
     every.extend(stream_terminals::scenarios());
     every.extend(open::scenarios());
+    every.extend(list::scenarios());
     every
 }

@@ -194,3 +194,14 @@ reaching a real configuration directory (106).
 
 - **WHEN** a test scripts acme's review@1 at one hash, the host's lock records it, a place is launched, and the test then scripts review@1 at another hash
 - **THEN** the next launch of `acme/review@1` is refused naming both hashes, the first place's held kind is unchanged, and the fake's log shows one `read_package` call for each launch (21, 156)
+
+### Requirement: The fake terminal scripts runs
+
+The fake terminal SHALL answer runs as scripted for each part, and
+otherwise that the part does not run, its own part named `own`, logging
+each asking as `runs <part>` and starting nothing (106, 201).
+
+#### Scenario: A scripted runs
+
+- **WHEN** a test scripts the fake terminal to read `work` running, and asks it runs of `work` and then of `office`
+- **THEN** it answers `work` running and `office` not running, its log naming `runs work` and `runs office` and no open (201)

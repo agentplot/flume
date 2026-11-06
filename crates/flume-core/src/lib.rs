@@ -19,6 +19,7 @@ mod held;
 mod kinds_lock;
 mod launch;
 mod line;
+mod list;
 mod open;
 mod prompt;
 mod reading;

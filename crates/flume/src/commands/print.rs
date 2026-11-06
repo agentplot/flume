@@ -138,6 +138,21 @@ pub fn person(answer: &Answer) -> String {
             lines.extend(places.iter().map(|line| line.full.clone()));
         }
         Answer::Opened(opened) => lines.extend(opened_lines(opened)),
+        Answer::List { places, streams } => {
+            if places.is_empty() {
+                lines.push("no places".to_string());
+            }
+            let mut repository = None;
+            for place in places {
+                if repository != Some(&place.repository) {
+                    repository = Some(&place.repository);
+                    lines.push(place.repository.clone());
+                }
+                lines.push(format!("  {}", place.line));
+            }
+            lines.push("streams".to_string());
+            lines.extend(streams.iter().map(|stream| format!("  {}", stream.line)));
+        }
     }
     lines.join("\n")
 }
@@ -1083,13 +1098,13 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 mod tests {
     use super::*;
     use flume_core::{
-        AccountStatus, AgentSettings, ModeStatus, MoveStatus, Past, PlaceLine, RoomWanted,
-        StreamStatus, TitleFrom, TitleHeld, WindowStatus,
+        AccountStatus, AgentSettings, Listed, ModeStatus, MoveStatus, Past, PlaceLine, RoomWanted,
+        StreamListed, StreamStatus, TitleFrom, TitleHeld, WindowStatus,
     };
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, Declared, Given, Layer, ModeBegan,
-        MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, Strategy,
-        StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
+        MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, SessionRuns,
+        Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -2615,6 +2630,135 @@ mod tests {
             waiting_line(&dialog, false),
             "  waits on a person to answer the dialog its agent shows in talk (dialog) since 54000:\n    New MCP server found in .mcp.json: docs\n    \u{276f} 1. Use this and all future MCP servers"
         );
+    }
+
+    fn listed(repository: &str, name: &str, stage: Option<&str>, rest: &[&str]) -> Listed {
+        let line = std::iter::once(name)
+            .chain(stage)
+            .chain(rest.iter().copied())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        Listed {
+            place: PlaceId::new(format!("{repository}/places/{name}")),
+            repository: repository.into(),
+            name: name.into(),
+            kind: "fix@1".into(),
+            stage: stage.map(str::to_string),
+            state: rest[0].into(),
+            waits_on: None,
+            kept: None,
+            line,
+        }
+    }
+
+    fn stream_listed(stream: &str, runs: Option<SessionRuns>, line: &str) -> StreamListed {
+        StreamListed {
+            stream: stream.into(),
+            session: SessionHeld {
+                name: Some(stream.into()),
+                from: SessionFrom::StreamName,
+            },
+            multiplexer: ProfileHeld {
+                profile: "mux".into(),
+                from: NamedBy::Neither,
+            },
+            uncarried: runs
+                .is_none()
+                .then(|| format!("the stream {stream} names no terminal profile flume carries")),
+            runs,
+            line: line.into(),
+        }
+    }
+
+    /// A stream of each answer runs gives, and one whose multiplexer
+    /// names no profile, as the core words their lines (200, 201).
+    fn every_stream() -> Vec<StreamListed> {
+        let named = |name: &str| name.to_string();
+        vec![
+            stream_listed(
+                "madswan",
+                Some(SessionRuns::Runs {
+                    name: named("madswan"),
+                }),
+                "madswan · session madswan · runs",
+            ),
+            stream_listed(
+                "swancloud",
+                Some(SessionRuns::NotRunning {
+                    name: named("swancloud"),
+                }),
+                "swancloud · session swancloud · not running",
+            ),
+            stream_listed(
+                "work",
+                Some(SessionRuns::NoPart {
+                    reason: named("the terminal holds no session"),
+                }),
+                "work · no session",
+            ),
+            stream_listed(
+                "office",
+                Some(SessionRuns::Unread {
+                    reason: named("the terminal did not answer"),
+                }),
+                "office · session office · not read",
+            ),
+            stream_listed("trial", None, "trial · session trial · no profile for rex"),
+        ]
+    }
+
+    #[test]
+    fn the_list_by_repository_then_the_streams() {
+        // 200, design 7: each repository's path on a line of its own, its
+        // places' lines under it, then the streams', each indented by two
+        // spaces, every line the answer's own.
+        let list = Answer::List {
+            places: vec![
+                listed(
+                    "/code/flume",
+                    "change--list",
+                    Some("construct"),
+                    &["working"],
+                ),
+                listed(
+                    "/code/flume",
+                    "chore--rename",
+                    None,
+                    &["landed", "kept by release"],
+                ),
+                listed(
+                    "/code/boomdrive",
+                    "change--records",
+                    Some("construct"),
+                    &["held", "waits on its caller"],
+                ),
+            ],
+            streams: every_stream(),
+        };
+        assert_eq!(
+            person(&list),
+            "/code/flume\n  change--list · construct · working\n  chore--rename · landed · kept by \
+             release\n/code/boomdrive\n  change--records · construct · held · waits on its \
+             caller\nstreams\n  madswan · session madswan · runs\n  swancloud · session swancloud \
+             · not running\n  work · no session\n  office · session office · not read\n  trial · \
+             session trial · no profile for rex"
+        );
+    }
+
+    #[test]
+    fn a_host_with_no_places_lists_none_then_its_streams() {
+        // 200, design 7.
+        let list = Answer::List {
+            places: vec![],
+            streams: vec![stream_listed(
+                "default",
+                Some(SessionRuns::NoPart {
+                    reason: "the terminal holds no session".into(),
+                }),
+                "default · no session",
+            )],
+        };
+        assert_eq!(person(&list), "no places\nstreams\n  default · no session");
     }
 
     #[test]

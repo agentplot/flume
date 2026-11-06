@@ -1,6 +1,6 @@
 ---
 title: State
-description: What flume keeps on the host and where, the host's own documents of accounts and intents among it, what it keeps in a place's own folder, made.jsonl among it, and the fields of flume status --json.
+description: What flume keeps on the host and where, the host's own documents of accounts and intents among it, what it keeps in a place's own folder, made.jsonl among it, and the fields of flume status --json and flume list --json.
 sidebar:
   order: 3
 ---
@@ -211,6 +211,40 @@ The host:
 | `terminal_setup` | what the host's own multiplexer's configuration lacks for flume's plugin there, each in words a person acts on, naming the file read: under herdr, the popup's `[[keys.command]]` entry or the sidebar rows' `$flume`, as the plugin's watch last read herdr's configuration; empty where nothing is missing, there is no watch or the terminal reads none |
 | `configuration` | the host's configuration: `local`, its local layer's `state`, `no-file`, `taken` or `not-taken` with each of its `keys` the local layer may not set or its `fault`; `values`, every value by its dotted `key`, as TOML writes it, with its `layer`, `managed` or `local`, an account's variables `<set>`; and `passed_over`, each local `key` a `pin` holds |
 | `sources` | each source of kinds the host declares, read when asked: `name`, `source_file`, `kinds_dir`, `kinds`, the identity of every package its directory holds, and `cannot_read`, the fault where the file or the directory cannot be read |
+
+## The answer of flume list --json
+
+```json
+{"list":{"places":[{…}],"streams":[{…}]}}
+```
+
+Read from each place's held state, a live agent's asking mark, and each
+stream's multiplexer once, as [`flume
+list`](/flume/reference/commands/#flume-list) says. A field the place or
+the stream has none of is left out. Each place, by repository, then by
+`<kind>--<name>`:
+
+| Field | |
+|---|---|
+| `place`, `repository` | the place's location, which a tidied place's document gives with when it was tidied, and its repository |
+| `name` | `<kind>--<name>` |
+| `kind` | `<kind>@<version>` |
+| `stage` | the stage the place's line names, without a repeating stage's group; left out for a place that is not live |
+| `state` | the place's state in its line's words |
+| `waits_on` | whom the place waits on: `caller`, `host` or `merge_queue` |
+| `kept` | what keeps a place whose work is over, in its line's words: `kept by <step>`, `kept holding work`, `kept holding a lock`, `kept holding work and a lock`, `kept while its agent runs`, `kept unread`, `being tidied` or `tidied` |
+| `line` | the parts joined by ` · `, as `flume list` prints it |
+
+Each stream, in status's order:
+
+| Field | |
+|---|---|
+| `stream` | the stream's name |
+| `session` | `name`, `null` for the multiplexer's own, and `from`: `stream`, `stream-name` or `own` |
+| `multiplexer` | `profile` and `from`: `stream`, `host` or `neither` |
+| `runs` | what the multiplexer read of the session: `{"runs":{"name":…}}`, `{"not_running":{"name":…}}`, each with the name the multiplexer knows it by; `{"no_part":{"reason":…}}`, where it holds no session; or `{"unread":{"reason":…}}`, where it could not read it, in its words |
+| `uncarried` | in place of `runs`, why no multiplexer was asked: the stream's names no profile flume carries |
+| `line` | `<stream> · session <name> · <runs>`, as `flume list` prints it |
 
 The JSON only ever gains fields, so a tool reading it keeps working
 across releases.

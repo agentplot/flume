@@ -9,6 +9,7 @@ sidebar:
 |---|---|
 | `flume launch` | Make one place and start, hold or queue its first stage. |
 | `flume status [<place>]` | Every fact of a place, or of every place, and of the host; with `--line`, each place's one line. |
+| `flume list` | A line for each place on the host, under its repository, and each stream, reading only what flume keeps. |
 | `flume prompt <place> <stage>` | The exact prompt a stage would be sent at its next start, starting nothing. |
 | `flume tell <place> <words>` | Hand the place's agent words as a prompt, once it waits. |
 | `flume hold <place> <words>` | Hold the place's next stage, `--stage`, or its submission, `--submission`, with words saying what for. |
@@ -61,10 +62,10 @@ error. `flume wait` has exits of its own.
 `hold`, `retry`, `stop`, `finish`, `drop`, `done`, `priority`, `tidy`,
 `wait`, `inbox` and `wake`, settles every place on the host first,
 unless every multiplexer the host binds keeps a watch, as herdr's plugin
-does. `flume status`, `flume prompt` and `flume mcp` only read,
-`flume status --line` and `flume hook status-line` among them.
-`flume open` settles nothing, and `flume kinds lock` writes its lock and
-settles nothing.
+does. `flume status`, `flume list`, `flume prompt` and `flume mcp`
+only read, `flume status --line` and `flume hook status-line` among
+them. `flume open` settles nothing, and `flume kinds lock` writes its
+lock and settles nothing.
 
 ## `flume launch`
 
@@ -195,6 +196,72 @@ lists the states). With `--json` the answer is
 flume reads each fact where it lives when asked, and keeps none
 between asks. The [state reference](/flume/reference/state/) lists the
 JSON fields.
+
+## `flume list`
+
+```sh
+flume list
+```
+
+A line for each place on the host and each stream its configuration
+declares, for a person to see at a glance what flume holds and what
+`flume open` can show. It needs no repository, takes no argument, and
+always exits `0`. `flume status <place>` gives a place's every fact.
+
+Each repository's path stands on a line of its own, its places' lines
+under it. A place's line is `<kind>--<name> · <stage> · <state>`, the
+stage its line names, without a repeating stage's group, and the state
+in the words its line gives it. A place that is not live names no
+stage. Then come the parts that hold:
+
+- whom it waits on: `waits on its caller`, where its next move is its
+  caller's, stalled or not; `waits on the host`, where a stage waits for
+  room; or `waits on the merge queue`, where it is submitted;
+- what keeps a place whose work is over, in a word: `kept by <step>`,
+  the teardown's step that failed, such as `sluice release`; `kept
+  holding work`, `kept holding a lock` or `kept holding work and a
+  lock`; `kept while its agent runs`; or `kept unread`. A place removed
+  whose branch and document are still to go reads `being tidied`, and a
+  tidied place's document kept for an end pending reads `tidied`.
+
+After the places, under `streams`, comes a line for each stream, in
+status's order, `default` among them: `<stream> · session <name> ·
+<runs>`. The session is the one `flume open` shows: the stream's
+`session`, else its name, and, for `default` naming none, the
+multiplexer's own, named as the multiplexer names it. The last part is
+`runs`, `not running`, `not read` where the multiplexer could not be
+read, or `no profile for <multiplexer>` where the stream's multiplexer
+names no profile flume carries. Under the printed command, which holds
+no session, a stream's line reads `<stream> · no session`. A host with
+no places prints `no places` before `streams`.
+
+```console
+$ flume list
+/home/you/src/parser
+  change--tabs-are-read-as-spaces · design · working
+  chore--the-docs-are-moved · landed · kept by sluice release
+  fix--a-long-line-wraps · code · waiting for room · waits on the host
+/home/you/src/site
+  change--the-search-is-rebuilt · construct · held · waits on its caller
+streams
+  work · session work · runs
+  personal · session personal · not running
+  default · session flume · runs
+```
+
+The list reads each place's held state, and a live agent's asking mark
+from its own record, and asks each stream's multiplexer once whether
+its session runs. It reads no worktree, head, deliverable, change or
+submission, asks no merge queue, and starts no session. None of a
+place's long words, a stop-short's, a hold's, a failure's or a
+teardown's, is in its lines or its JSON. It says what the last settle
+left: where a multiplexer keeps no watch, places move on only at
+flume's commands. It settles, starts, sends and writes nothing.
+
+With `--json` the answer is `{"list":{"places":[…],"streams":[…]}}`,
+the same lines and their parts. The [state
+reference](/flume/reference/state/#the-answer-of-flume-list-json)
+lists the fields.
 
 ## `flume prompt`
 

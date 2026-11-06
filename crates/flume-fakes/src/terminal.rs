@@ -1,7 +1,8 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
     AgentCommand, AgentState, Attached, Closed, Clues, Host, Identity, OpenIn, Opened, PlaceRef,
-    Seconds, Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, ViewCommand, Watch,
+    Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    ViewCommand, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -23,7 +24,9 @@ use std::sync::{Arc, Mutex};
 /// answers a terminal view with a command of its own, `fake-terminal
 /// attach <session>` or `attach own`, with no environment, and the app's
 /// view shown, or either as scripted, and logs each asking with its view
-/// (187).
+/// (187). Runs answers each part as scripted, and otherwise that it does
+/// not run, its own named `own` as attach names it, logging each asking
+/// as `runs <part>` and starting nothing (201).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -58,6 +61,9 @@ struct TerminalState {
     /// the fake's own answer where none.
     attaches_terminal: Option<Attached>,
     attaches_app: Option<Attached>,
+    /// What runs answers for each part, its own named `own`, as
+    /// scripted.
+    runs: BTreeMap<String, SessionRuns>,
     /// What the terminal's configuration lacks for flume's plugin, as
     /// scripted.
     setup: Vec<String>,
@@ -193,6 +199,7 @@ impl FakeTerminal {
                 notices: vec![],
                 attaches_terminal: None,
                 attaches_app: None,
+                runs: BTreeMap::new(),
                 setup: vec![],
             }),
             log: Log::default(),
@@ -353,6 +360,12 @@ impl FakeTerminal {
             View::Terminal => state.attaches_terminal = answer,
             View::App => state.attaches_app = answer,
         }
+    }
+
+    /// Every runs of `part`, its own named `own`, from now answers
+    /// `answer` (201).
+    pub fn runs_as(&self, part: &str, answer: SessionRuns) {
+        lock(&self.state).runs.insert(part.into(), answer);
     }
 
     pub fn refuse_opens(&self, reason: &str) {
@@ -793,5 +806,17 @@ impl Terminal for FakeTerminal {
             },
             View::App => Attached::Shown,
         })
+    }
+
+    /// The part as scripted, else not running, its own named `own` as
+    /// attach names it; logged, and nothing started (201).
+    fn runs(&self, session: Option<&str>) -> SessionRuns {
+        let part = session.unwrap_or("own");
+        self.log.push(format!("runs {part}"));
+        lock(&self.state)
+            .runs
+            .get(part)
+            .cloned()
+            .unwrap_or_else(|| SessionRuns::NotRunning { name: part.into() })
     }
 }

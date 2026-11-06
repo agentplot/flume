@@ -19,7 +19,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the statement's revision the build read, which states the host's sources as the user ruled on this change's design; Part A and Part B hold every clause that revision holds, 191 and 192 among them; the scenarios are every one that revision holds, and no other; and it names as unbuilt no clause or scenario of record 0022's, 154 to 160 and S59 to S63 among them, nor 191, 192 or S95 to S97, each named otherwise as the revision's list holds it
+- **THEN** it names the revision of agentplot/blueprints main that holds record 0049's amendment, 200, 201 and S108 among it, or the later one of main the build read; Parts A and B hold every clause that revision states, 200 in Part A and 201 in Part B; the scenarios run as that revision holds them, S108 among them; and it names as unbuilt what it named before this change and each clause of that revision another change has not yet built, by that change, and nothing of 200, 201 or S108
 
 ### Requirement: Every scenario cites its clauses
 
@@ -48,7 +48,7 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario but those named as unbuilt is cited, 155, 156, 158 to 160, S59 to S63, 191, 192 and S95 to S97 by this change's scenarios
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 200, 201 and S108 by this change's scenarios
 
 ### Requirement: Seam scenarios run against any profile
 
