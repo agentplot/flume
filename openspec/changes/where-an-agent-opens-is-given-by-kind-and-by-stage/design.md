@@ -42,7 +42,9 @@ and then in their reply msg_01M6Q6MPHXPYEXK3FNW3RE2GRT:
   without thinking about it, we're going to end up with lots of bugs".
 
 The user approved the design on 2026-11-06 and named each partition's
-research-and-design session `<partition>-design`.
+research-and-design session `<partition>-design`, and answered "Yes,
+push it" to the statement's follow-up carrying these answers (reply
+msg_01M6Q9HQKY95T1XW1B1TWHAVSF).
 
 This design carries those rulings: what the host writes, what a person
 opens and how, what the terminal profile does, what status says, and the
@@ -149,12 +151,11 @@ of it (core.4).
 
 ### What rules what
 
-Record 0048 decides it, carrying the user's rulings: accepted on the
-user's word of 2026-11-06, its amendment, that a person opens a session
-by its name, proposed until their yes. The statement's amendment is on
-blueprints main at f676e8f, and its follow-up on blueprints' branch
-`design/flume-a-stage-session-and-open-by-session` at 28d95e8, for the
-user's word (decision 13). The rules this design relies on:
+Record 0048, accepted on the user's word of 2026-11-06, decides it,
+carrying their rulings. The statement's amendment is on blueprints main
+at f676e8f, and its follow-up, which the user said yes to pushing, at
+28d95e8 on blueprints' branch `design/flume-a-stage-session-and-open-by-session`
+(decision 13). The rules this design relies on:
 
 - core.1 and core.2: the core names no terminal; it hands the terminal
   `OpenIn::Session { name }` and the terminal profile makes it a herdr
@@ -556,7 +557,7 @@ orchestrator is told.
 On agentplot/blueprints main at f676e8f, on the user's word of
 2026-11-06, and its follow-up on the branch
 `design/flume-a-stage-session-and-open-by-session` at 28d95e8, cut from
-main at c188bf3, not pushed, for the user's word (core.19). Clause 199
+main at c188bf3, which the user said yes to pushing (core.19). Clause 199
 and scenarios S106 and S107 are new, beside 186 to 192, 195 to 198,
 200, 201, S90 to S92, S95 to S97, S100 to S103 and S108 on main, and the
 designs in flight hold 193, 194, S93 to S99, S104 and S105. Each item

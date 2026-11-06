@@ -13,7 +13,7 @@ scratch file of the test's own.
 
 ## 1. Before the code
 
-- [ ] 1.1 Start once agentplot/blueprints main holds design 13's follow-up, 28d95e8 on `design/flume-a-stage-session-and-open-by-session`, beside f676e8f, and the user has said yes to record 0048's amendment, that what a person opens is a session by its name. Merge main into the branch. Check that record 0048 is still free on every branch and in every place on the host, renumbering here where another took it, and fit every delta that names `Stream`, `StreamStatus`, `open_stream`, `flume open`, `flume list` or the local layer's keys to the specs and code as main then holds them (design 11; core.19). True when `git log` on blueprints main shows the follow-up, the merge is committed, and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
+- [ ] 1.1 Start once agentplot/blueprints main holds design 13's follow-up, 28d95e8 on `design/flume-a-stage-session-and-open-by-session`, beside f676e8f, which the user said yes to pushing on 2026-11-06. Merge main into the branch. Check that record 0048 is still free on every branch and in every place on the host, renumbering here where another took it, and fit every delta that names `Stream`, `StreamStatus`, `open_stream`, `flume open`, `flume list` or the local layer's keys to the specs and code as main then holds them (design 11; core.19). True when `git log` on blueprints main shows the follow-up, the merge is committed, and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
 
 ## 2. The seams
 
