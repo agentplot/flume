@@ -1507,6 +1507,37 @@ fn a_profile_that_carries_no_conversation() {
     );
 }
 
+/// The seam-contracts spec's scenario "A profile that reads no running
+/// session" (207).
+#[test]
+fn a_profile_that_reads_no_running_session() {
+    let env = BTreeMap::from([("AGENT_HOME".to_string(), "/scratch/work-2".to_string())]);
+    for envs in [vec![], vec![BTreeMap::new(), env]] {
+        assert_eq!(
+            Bare.live("/folder", &identity(), &envs),
+            Live::Unknown {
+                what: READS_NO_SESSION.to_string()
+            }
+        );
+    }
+    assert_eq!(
+        READS_NO_SESSION,
+        "its agent profile reads no running session"
+    );
+    for live in [
+        Live::Runs(vec![LiveProcess {
+            pid: 4242,
+            started: 100,
+        }]),
+        Live::None,
+        Live::Unknown {
+            what: "the sessions under CLAUDE_CONFIG_DIR cannot be read".into(),
+        },
+    ] {
+        round_trips(live);
+    }
+}
+
 #[test]
 fn settings_under_others_take_the_mode_whole() {
     // A table over a table is taken whole, never merged; a mode under

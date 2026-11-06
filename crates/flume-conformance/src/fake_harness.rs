@@ -2,7 +2,7 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::{AgentHarness, CarryAccounts, Modes},
+    agent::{AgentHarness, CarryAccounts, LiveSessions, Modes},
     change::ChangeHarness,
     history::HistoryHarness,
     kinds::{KindsHarness, SourceDir},
@@ -494,6 +494,11 @@ impl AgentHarness for FakeAgentHarness {
     /// is `asked`.
     fn begin_in(&self, identity: &Identity, _asked: &str, began: &str) {
         self.agent.set_began_in(identity, began);
+    }
+
+    /// The fake reads no running session until its live is scripted (207).
+    fn live_sessions(&self, _runs: &Identity, _unknown: &Identity) -> Option<LiveSessions> {
+        None
     }
 
     /// The fake scripted to carry to one account's home with the session

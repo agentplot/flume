@@ -350,6 +350,11 @@ impl AgentHarness for Harness {
             .expect("the word");
     }
 
+    /// Claude Code's profile reads no running session yet (207).
+    fn live_sessions(&self, _runs: &Identity, _unknown: &Identity) -> Option<agent::LiveSessions> {
+        None
+    }
+
     /// `work-2`, whose `projects` is a link to `work-1`'s, where `earlier`
     /// ran, and `work-3`, whose `projects` is a folder of its own holding a
     /// copy of its transcript (179, C.4).

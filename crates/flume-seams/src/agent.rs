@@ -1,4 +1,4 @@
-//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161, 179), an agent's
+//! The agent seam's answers (88 to 93, 115, 116, 121, 134, 135, 151, 161, 179, 207), an agent's
 //! identity and its start's secret (33, 41). Every reading of an agent's
 //! own record is handed the place's own folder with the identity, where
 //! the agent profile keeps its marks (128).
@@ -106,10 +106,11 @@ pub enum Spent {
 }
 
 /// carry: whether the agent program can carry the conversation of the
-/// start whose agent stopped at its account's usage limit to the account
-/// chosen for the next start, with the session that start resumes; why
-/// not, naming a variable and never its value; or that the program gives
-/// no way to (179; core.30).
+/// start whose agent stopped at its account's usage limit, or of a
+/// conversation's start reported lost, to the account chosen for the next
+/// start, with the session that start resumes; why not, naming a variable
+/// and never its value; or that the program gives no way to (49, 179;
+/// core.30).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Carry {
@@ -117,6 +118,23 @@ pub enum Carry {
     No { why: String },
     NotOffered,
 }
+
+/// live: whether a process of the host runs the conversation of a start,
+/// each by its id and when it started; none where none does, or where the
+/// start names no conversation; or unknown, with what could not be read,
+/// naming a variable or the host's processes and never a path (207;
+/// core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Live {
+    Runs(Vec<crate::LiveProcess>),
+    None,
+    Unknown { what: String },
+}
+
+/// What [`Agent::live`] answers by default, for a profile that reads no
+/// running session (171, 207).
+pub const READS_NO_SESSION: &str = "its agent profile reads no running session";
 
 /// started_without: how the agent began otherwise than its start
 /// recorded, as its own word that it started shows it, or, for its mode,
@@ -281,15 +299,36 @@ pub trait Agent: Send + Sync {
     }
 
     /// Whether its program can carry the conversation of `earlier`, the
-    /// start whose agent stopped at its account's usage limit, read in the
-    /// place's own `folder`, to the account whose environment is `env`,
+    /// start whose agent stopped at its account's usage limit or a
+    /// conversation's start reported lost, read in the place's own
+    /// `folder`, to the account whose environment is `env`, an empty one
+    /// where the stage's stream has no pool, so the login environment's,
     /// each value read against the login environment, with the session the
     /// next start resumes, or why not, naming a variable and never its
-    /// value (128, 146, 179; core.30); not offered by default, for a
+    /// value (49, 128, 146, 179; core.30); not offered by default, for a
     /// program that carries none. It reads only, so it is safe to ask at
     /// every claim (core.17).
     fn carry(&self, _folder: &str, _earlier: &Identity, _env: &BTreeMap<String, String>) -> Carry {
         Carry::NotOffered
+    }
+
+    /// Whether a process of the host runs the conversation of `start`, the
+    /// start whose conversation a start would carry or a lost
+    /// conversation's start, read in the place's own `folder`, under each
+    /// of `envs`, the environments of the accounts the host's configuration
+    /// declares for its program, the login environment's among them as an
+    /// empty one, and under whatever environment a process runs it: each
+    /// process by its id and when it started, none, or unknown with what
+    /// could not be read, naming a variable and never its value or a path
+    /// (49, 128, 207; core.30). Unknown by default, saying its profile
+    /// reads no running session, so a program whose profile cannot read
+    /// one never carries a conversation beside a process that runs it
+    /// (171). It reads only, so it is safe to ask at every settle
+    /// (core.17).
+    fn live(&self, _folder: &str, _start: &Identity, _envs: &[BTreeMap<String, String>]) -> Live {
+        Live::Unknown {
+            what: READS_NO_SESSION.to_string(),
+        }
     }
 
     /// How the agent under `agent` began otherwise than its start
