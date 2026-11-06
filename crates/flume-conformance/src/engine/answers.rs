@@ -680,7 +680,74 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                 lines: vec![line()],
             },
         ),
+        ("list", list()),
     ]
+}
+
+/// A list of a place waiting on the host and a place kept by its
+/// teardown, and of a stream that runs and one whose multiplexer names
+/// no profile flume carries (200).
+pub fn list() -> Answer {
+    Answer::List {
+        places: vec![
+            Listed {
+                place: PlaceId::new("/r/places/fix--one"),
+                repository: "/r".into(),
+                name: "fix--one".into(),
+                kind: "fix@1".into(),
+                stage: Some("code".into()),
+                state: "waiting for room".into(),
+                waits_on: Some(WaitsOn::Host),
+                kept: None,
+                line: "fix--one · code · waiting for room · waits on the host".into(),
+            },
+            Listed {
+                place: PlaceId::new("/r/places/chore--one"),
+                repository: "/r".into(),
+                name: "chore--one".into(),
+                kind: "chore@1".into(),
+                stage: None,
+                state: "landed".into(),
+                waits_on: None,
+                kept: Some("kept by release".into()),
+                line: "chore--one · landed · kept by release".into(),
+            },
+        ],
+        streams: vec![
+            StreamListed {
+                stream: "work".into(),
+                session: SessionHeld {
+                    name: Some("work".into()),
+                    from: SessionFrom::StreamName,
+                },
+                multiplexer: ProfileHeld {
+                    profile: "fake".into(),
+                    from: NamedBy::Neither,
+                },
+                runs: Some(SessionRuns::Runs {
+                    name: "work".into(),
+                }),
+                uncarried: None,
+                line: "work · session work · runs".into(),
+            },
+            StreamListed {
+                stream: "trial".into(),
+                session: SessionHeld {
+                    name: Some("trial".into()),
+                    from: SessionFrom::StreamName,
+                },
+                multiplexer: ProfileHeld {
+                    profile: "rex".into(),
+                    from: NamedBy::Stream,
+                },
+                runs: None,
+                uncarried: Some(
+                    "the stream trial names the multiplexer rex, and no terminal profile is named rex; the terminal profiles there are: fake".into(),
+                ),
+                line: "trial · session trial · no profile for rex".into(),
+            },
+        ],
+    }
 }
 
 fn every_field_listed(_: &()) -> Outcome {
@@ -1857,6 +1924,35 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "lines.lines[].stage",
             "lines.lines[].state",
             "lines.lines[].tasks",
+        ],
+    ),
+    (
+        "list",
+        &[
+            "list",
+            "list.places",
+            "list.places[].kept",
+            "list.places[].kind",
+            "list.places[].line",
+            "list.places[].name",
+            "list.places[].place",
+            "list.places[].repository",
+            "list.places[].stage",
+            "list.places[].state",
+            "list.places[].waits_on",
+            "list.streams",
+            "list.streams[].line",
+            "list.streams[].multiplexer",
+            "list.streams[].multiplexer.from",
+            "list.streams[].multiplexer.profile",
+            "list.streams[].runs",
+            "list.streams[].runs.runs",
+            "list.streams[].runs.runs.name",
+            "list.streams[].session",
+            "list.streams[].session.from",
+            "list.streams[].session.name",
+            "list.streams[].stream",
+            "list.streams[].uncarried",
         ],
     ),
 ];

@@ -9,6 +9,7 @@
 //! 64 to 66, 68, 70, 90, 107, 111, 130, 139, 186, 190, 201).
 
 use super::account_pools::begun_fix;
+use super::answers::missing;
 use super::caller_waits::construct_asks;
 use super::place_line::{code_of_change, fix_for_a_role, TWO_GROUPS};
 use super::world::*;
@@ -69,6 +70,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "list: no stop-short's, hold's, readiness step's, failed submission's or agent's last words are in the list's JSON, and status gives each",
             cites: &["12", "42", "47", "112", "200"],
             run: every_long_word_left_to_status,
+        },
+        Scenario {
+            name: "list: a list of a place waiting on the host, a place kept by its teardown, a stream that runs and one uncarried reads back unchanged, waits_on reading host, and the field list holds every field, failing naming the answer and the field where one is dropped",
+            cites: &["60", "61", "200"],
+            run: the_list_round_trips_and_holds_its_fields,
         },
     ]
 }
@@ -688,5 +694,39 @@ fn every_long_word_left_to_status(_: &()) -> Outcome {
             "status of {place} gives not {word:?}"
         );
     }
+    Ok(())
+}
+
+fn the_list_round_trips_and_holds_its_fields(_: &()) -> Outcome {
+    let written = super::answers::list();
+    let json = written.to_json();
+    let back: Answer = serde_json::from_str(&json).map_err(|error| error.to_string())?;
+    ensure_eq!(back, written, "the list read back");
+    let mut value: serde_json::Value =
+        serde_json::from_str(&json).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        value["list"]["places"][0]["waits_on"].as_str(),
+        Some("host"),
+        "whom the first place waits on"
+    );
+    let missed = missing("list", &value);
+    ensure!(missed.is_empty(), "{}", missed.join("; "));
+    value["list"]["streams"][1]
+        .as_object_mut()
+        .ok_or("no second stream")?
+        .remove("uncarried")
+        .ok_or("no uncarried")?;
+    ensure_eq!(
+        missing("list", &value),
+        vec!["the answer list lacks its field list.streams[].uncarried".to_string()],
+        "the fields missed"
+    );
+    let world = World::new();
+    begun_fix(&world, "one")?;
+    world.host.set_display("trial", Some("rex"), None, None);
+    let listed = world.engine().list();
+    let back: Answer =
+        serde_json::from_str(&listed.to_json()).map_err(|error| error.to_string())?;
+    ensure_eq!(back, listed, "the engine's list read back");
     Ok(())
 }
