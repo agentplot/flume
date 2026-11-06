@@ -1,12 +1,13 @@
 //! flume's list (200; core.52): a line for each place on the host under
-//! its repository, a tidied place whose document stays among them, in
-//! the words its own line gives it, with whom a waiting place waits on
+//! its repository, a place that landed or was dropped only where every
+//! place is asked, a tidied place whose document stays among them then,
+//! in the words its own line gives it, with whom a waiting place waits on
 //! and what keeps a place whose work is over; and a line for each stream
 //! the host declares with whether its session runs. It reads each
 //! place's held state, each live agent's asking mark and each stream's
 //! terminal once by runs, and nothing else; it settles, starts, sends and
 //! writes nothing, and gives none of a place's long words (56, 57, 62,
-//! 64 to 66, 68, 70, 90, 107, 111, 130, 139, 186, 190, 201).
+//! 63, 64 to 66, 68, 70, 90, 107, 111, 130, 139, 186, 190, 201).
 
 use super::account_pools::begun_fix;
 use super::answers::missing;
@@ -42,13 +43,18 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_caller_the_host_and_the_merge_queue,
         },
         Scenario {
-            name: "list: a landed chore whose teardown failed at release with forty lines of words reads `kept by release`, and neither its line nor the JSON holds a word of the teardown's",
-            cites: &["66", "200"],
+            name: "list: places that landed or were dropped, kept, being tidied or tidied, are left out and a done place and a live one listed; asked for every place, the list gives each",
+            cites: &["62", "63", "200"],
+            run: landed_and_dropped_places_left_out_unless_every_place_is_asked,
+        },
+        Scenario {
+            name: "list: a landed chore whose teardown failed at release with forty lines of words is left out, and asked for every place reads `kept by release`, neither its line nor the JSON holding a word of the teardown's",
+            cites: &["63", "66", "200"],
             run: a_teardown_that_failed,
         },
         Scenario {
-            name: "list: a dropped place holding a file, a done place whose agent runs and a landed place's tidied document say in a word what keeps them",
-            cites: &["62", "64", "65", "200"],
+            name: "list: a dropped place holding a file, a done place whose agent runs and a landed place's tidied document say in a word what keeps them, the done one alone listed unless every place is asked",
+            cites: &["62", "63", "64", "65", "200"],
             run: holds_a_live_agent_and_a_tidied_document,
         },
         Scenario {
@@ -62,8 +68,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_multiplexer_flume_carries_no_profile_for,
         },
         Scenario {
-            name: "list: S108, fifty places in three repositories and three streams, read from what flume keeps alone, nothing settled, started or written",
-            cites: &["S108", "57", "62", "66", "70", "130", "200", "201"],
+            name: "list: S108, fifty places in three repositories and three streams, the two landed left out unless every place is asked, read from what flume keeps alone, nothing settled, started or written",
+            cites: &["S108", "57", "62", "63", "66", "70", "130", "200", "201"],
             run: s108_the_list_of_fifty_places,
         },
         Scenario {
@@ -79,9 +85,19 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     ]
 }
 
-/// The list as a fresh engine gives it, as the next command asks it.
+/// The list as a fresh engine gives it, as the next command asks it, a
+/// place that landed or was dropped left out.
 fn list(world: &World) -> Result<(Vec<Listed>, Vec<StreamListed>), String> {
-    match world.engine().list() {
+    listed(world, false)
+}
+
+/// The list of every place, as `flume list --all` asks it.
+fn every(world: &World) -> Result<(Vec<Listed>, Vec<StreamListed>), String> {
+    listed(world, true)
+}
+
+fn listed(world: &World, every: bool) -> Result<(Vec<Listed>, Vec<StreamListed>), String> {
+    match world.engine().list(every) {
         Answer::List { places, streams } => Ok((places, streams)),
         other => Err(format!("the list answered {other:?}")),
     }
@@ -333,7 +349,9 @@ fn the_caller_the_host_and_the_merge_queue(_: &()) -> Outcome {
 fn a_teardown_that_failed(_: &()) -> Outcome {
     let world = World::new();
     let (_, words) = chore_kept_by_its_teardown(&world, "one")?;
-    let answer = world.engine().list();
+    let (places, _) = list(&world)?;
+    ensure_eq!(lines(&places), Vec::<String>::new(), "the places listed");
+    let answer = world.engine().list(true);
     let Answer::List { places, .. } = &answer else {
         return Err(format!("the list answered {answer:?}"));
     };
@@ -390,12 +408,95 @@ fn holds_a_live_agent_and_a_tidied_document(_: &()) -> Outcome {
     let (places, _) = list(&world)?;
     ensure_eq!(
         lines(&places),
+        vec!["notes--done · done · kept while its agent runs".to_string()],
+        "the places' lines"
+    );
+    let (places, _) = every(&world)?;
+    ensure_eq!(
+        lines(&places),
         vec![
             "fix--drop · dropped · kept holding work".to_string(),
             "fix--landed · landed · tidied".to_string(),
             "notes--done · done · kept while its agent runs".to_string(),
         ],
+        "every place's line"
+    );
+    Ok(())
+}
+
+fn landed_and_dropped_places_left_out_unless_every_place_is_asked(_: &()) -> Outcome {
+    let world = World::new();
+    let live = begun_fix(&world, "live")?;
+    let landed = || Over::Landed {
+        commit: Revision::new("c1"),
+    };
+    for (name, phase) in [
+        (
+            "landed",
+            Phase::Over {
+                over: landed(),
+                kept: None,
+            },
+        ),
+        (
+            "dropped",
+            Phase::Over {
+                over: Over::Dropped,
+                kept: Some(Kept::Holds {
+                    holds: Holds {
+                        untracked: vec!["scratch.txt".into()],
+                        ..Holds::default()
+                    },
+                }),
+            },
+        ),
+        (
+            "going",
+            Phase::Gone {
+                over: landed(),
+                at: None,
+            },
+        ),
+        (
+            "tidied",
+            Phase::Tidied {
+                over: Over::Dropped,
+                at: 1,
+                pending_for: vec!["operator".into()],
+            },
+        ),
+        (
+            "done",
+            Phase::Over {
+                over: Over::Done,
+                kept: None,
+            },
+        ),
+    ] {
+        let id = copied(&world, &live, REPOSITORY, name)?;
+        phased(&world, &id, phase)?;
+    }
+    let (places, _) = list(&world)?;
+    ensure_eq!(
+        lines(&places),
+        vec![
+            "fix--done · done".to_string(),
+            "fix--live · code · working".to_string(),
+        ],
         "the places' lines"
+    );
+    let (places, _) = every(&world)?;
+    ensure_eq!(
+        lines(&places),
+        vec![
+            "fix--done · done".to_string(),
+            "fix--dropped · dropped · kept holding work".to_string(),
+            "fix--going · landed · being tidied".to_string(),
+            "fix--landed · landed".to_string(),
+            "fix--live · code · working".to_string(),
+            "fix--tidied · dropped · tidied".to_string(),
+        ],
+        "every place's line"
     );
     Ok(())
 }
@@ -479,7 +580,7 @@ fn a_multiplexer_flume_carries_no_profile_for(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_stream("work", Some(Stream::default()));
     world.host.set_display("trial", Some("rex"), None, None);
-    let answer = world.engine().list();
+    let answer = world.engine().list(false);
     ensure!(
         answer.refusal().is_none(),
         "the list was refused: {answer:?}"
@@ -565,7 +666,14 @@ fn s108_the_list_of_fifty_places(_: &()) -> Outcome {
         log.clear();
     }
     let (places, streams) = list(&world)?;
-    ensure_eq!(places.len(), 50, "the places listed");
+    ensure_eq!(places.len(), 48, "the places listed");
+    for name in ["chore--kept", "fix--tidied"] {
+        ensure!(
+            !places.iter().any(|place| place.name == name),
+            "the landed {name} listed: {:?}",
+            lines(&places)
+        );
+    }
     let mut at: Vec<&str> = places
         .iter()
         .map(|place| place.repository.as_str())
@@ -576,8 +684,6 @@ fn s108_the_list_of_fifty_places(_: &()) -> Outcome {
     at.dedup();
     ensure_eq!(at.len(), 3, "the repositories");
     for (name, line) in [
-        ("chore--kept", "chore--kept · landed · kept by release"),
-        ("fix--tidied", "fix--tidied · landed · tidied"),
         (
             "fix--queued",
             "fix--queued · code · submitted · waits on the merge queue",
@@ -644,6 +750,21 @@ fn s108_the_list_of_fifty_places(_: &()) -> Outcome {
         "the store's calls: one read and no write"
     );
     ensure_eq!(versions(&world), before, "every document's version");
+    world.store.log.clear();
+    let (places, _) = every(&world)?;
+    ensure_eq!(places.len(), 50, "every place listed");
+    for (name, line) in [
+        ("chore--kept", "chore--kept · landed · kept by release"),
+        ("fix--tidied", "fix--tidied · landed · tidied"),
+    ] {
+        ensure_eq!(line_of(&places, REPOSITORY, name)?, line, "{name}'s line");
+    }
+    ensure_eq!(
+        world.store.log.calls(),
+        vec!["read_every".to_string()],
+        "the store's calls for every place: one read and no write"
+    );
+    ensure_eq!(versions(&world), before, "every document's version");
     Ok(())
 }
 
@@ -675,7 +796,7 @@ fn every_long_word_left_to_status(_: &()) -> Outcome {
     world
         .agent
         .set_last_words(&World::identity("fix", "worded", "code", 1), "done for now");
-    let json = world.engine().list().to_json();
+    let json = world.engine().list(false).to_json();
     let words = [
         (&asked, "Which design does the brief mean?"),
         (&held, "after review"),
@@ -724,7 +845,7 @@ fn the_list_round_trips_and_holds_its_fields(_: &()) -> Outcome {
     let world = World::new();
     begun_fix(&world, "one")?;
     world.host.set_display("trial", Some("rex"), None, None);
-    let listed = world.engine().list();
+    let listed = world.engine().list(false);
     let back: Answer =
         serde_json::from_str(&listed.to_json()).map_err(|error| error.to_string())?;
     ensure_eq!(back, listed, "the engine's list read back");
