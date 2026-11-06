@@ -126,13 +126,20 @@ enum Command {
     },
     /// Remove what is over (63 to 68).
     Tidy { place: Option<String> },
-    /// Move a place, or every place, on (46, 119 to 121).
+    /// Move a place, or every place, on (46, 119 to 121); with `--every`,
+    /// every place as a caller's watch over the host (208).
     Settle {
         place: Option<String>,
         /// Read the place's agent until it is quiet, for up to 60 seconds,
         /// first.
         #[arg(long)]
         on_quiet: bool,
+        /// Settle every place as a watch over the host whose settles come
+        /// within this bound, as `<n>`, `<n>s`, `<n>m` or `<n>h`: flume
+        /// runs unattended while the newest such settle began less than
+        /// twice it ago.
+        #[arg(long)]
+        every: Option<String>,
     },
     /// From an agent flume started: its stage cannot deliver without an
     /// answer, or found work (41, C.4).
@@ -538,7 +545,29 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let place = maybe(place)?;
             build()?.tidy(place.as_ref())
         }
-        Command::Settle { place, on_quiet } => {
+        Command::Settle {
+            place: Some(given_place),
+            every: Some(_),
+            ..
+        } => {
+            return Err(format!(
+                "--every settles every place as a caller's watch over the host, and takes no place: {given_place} was named"
+            ));
+        }
+        Command::Settle {
+            every: Some(every), ..
+        } => {
+            let bound = seconds(every)?;
+            if bound == 0 {
+                return Err(format!(
+                    "--every {every} is no bound: a watch's bound is a positive duration"
+                ));
+            }
+            build()?.settle_every(bound)
+        }
+        Command::Settle {
+            place, on_quiet, ..
+        } => {
             let place = maybe(place)?;
             let core = build()?;
             if *on_quiet {
@@ -768,6 +797,22 @@ mod tests {
         let outcome = run(["flume", "launch"], &|| Err("not built".into()));
         assert!(outcome.usage);
         assert_eq!(outcome.code, 2);
+    }
+
+    #[test]
+    fn a_watch_beside_a_place_or_with_no_bound_builds_nothing() {
+        // 208: refused before the core is built, so nothing is settled
+        // and no watch is recorded.
+        for words in [
+            ["flume", "settle", "fix--one", "--every", "2m"].as_slice(),
+            ["flume", "settle", "--every", "0"].as_slice(),
+            ["flume", "settle", "--every", "soon"].as_slice(),
+        ] {
+            let outcome = run(words.iter().copied(), &|| panic!("the core is built"));
+            assert_eq!(outcome.code, 1, "{words:?}: {}", outcome.text);
+            assert!(!outcome.usage, "{words:?}");
+            assert!(outcome.text.starts_with("refused: "), "{}", outcome.text);
+        }
     }
 
     #[test]
