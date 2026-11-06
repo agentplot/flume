@@ -68,6 +68,23 @@ let
     '';
   };
 
+  # The convco hook's check of a message (.versionrc), which takes one
+  # `git revert` wrote, its first line starting `Revert "`, as CI's
+  # `convco check --ignore-reverts` takes the commit: `--from-stdin`, how a
+  # hook reads a message before its commit exists, skips no revert. git
+  # runs the hook on a revert committed after a conflict or `--no-commit`.
+  conventional = pkgs.writeShellApplication {
+    name = "conventional";
+    runtimeInputs = [ config.git-hooks.hooks.convco.package ];
+    text = ''
+      IFS= read -r first <"$1" || true
+      case "$first" in
+        'Revert "'*) exit 0 ;;
+      esac
+      exec convco check --from-stdin --config .versionrc <"$1"
+    '';
+  };
+
   # target/ grows unseen across worktrees until the disk is full.
   disk = pkgs.writeShellApplication {
     name = "disk";
@@ -225,6 +242,17 @@ let
     '';
   };
 
+  # TypeScript, which plugin-claude:typecheck types the Claude Code
+  # plugin's module and its tests with, against the engine types the pinned
+  # Claude Code writes, which ask for 5.4 or later: nixpkgs' as devenv.lock
+  # gives it, its version named here so a lock that moves it fails to
+  # evaluate rather than typing the module with another (core.22).
+  typescriptVersion = "7.0.2";
+  typescript =
+    assert lib.assertMsg (pkgs.typescript.version == typescriptVersion)
+      "devenv.lock's nixpkgs gives TypeScript ${pkgs.typescript.version}, devenv.nix pins ${typescriptVersion}";
+    pkgs.typescript;
+
   # OpenSpec, which root:specs and root:changes validate with and the
   # change profile reads other schemas through: sluice's release, built as
   # nixpkgs builds its older one. Bump the version, then each hash from
@@ -288,11 +316,11 @@ let
   # loader and libgcc_s, on macOS libiconv, are store paths of the machine
   # that built them, set here to this tree's. Bump the version and the three
   # checksums from the release's assets.
-  sluiceVersion = "0.57.1";
+  sluiceVersion = "0.67.0";
   sluiceHashes = {
-    aarch64-darwin = "afedf1910ecafbeefb49f38da54795b9f92835dcde6ef37de454c1b9dd03df9f";
-    aarch64-linux = "c6efd409aa591f90b5f638c6bb6924a37a0e2ecdf911e813480cd0de13a6c637";
-    x86_64-linux = "986a0d020b2c07a17d37af8352878a1b2db39eab09e10bbbc9ff77c662293633";
+    aarch64-darwin = "ea02ae38cd9d3b3023a39cb13ec28818fd0a665c1ca840aff257ba9ad2053942";
+    aarch64-linux = "00f40536c3ac91aba9e41196a8bbeb10306a63e08e469da84427ce791fe71718";
+    x86_64-linux = "13be60e2fdf9a4d3245e0a50dbb2534902311707bba58f90f770eedf5277504e";
   };
   sluiceSystem = pkgs.stdenv.hostPlatform.system;
   sluice = pkgs.stdenv.mkDerivation {
@@ -340,6 +368,7 @@ in
     proto
     vale
     claude
+    typescript
     openspec
     herdr
     sluice
@@ -460,12 +489,13 @@ in
   };
   # The floor under every commit, installed into the common hooks directory
   # on `devenv shell`. convco refuses a message that is not a conventional
-  # commit (.versionrc); treefmt formats what is staged; clippy fails a
-  # warning when a Rust file or the cargo manifests change.
+  # commit (.versionrc), but one `git revert` wrote (conventional above);
+  # treefmt formats what is staged; clippy fails a warning when a Rust file
+  # or the cargo manifests change.
   git-hooks.hooks = {
     convco = {
       enable = true;
-      settings.configPath = ".versionrc";
+      entry = lib.mkForce (lib.getExe conventional);
     };
     treefmt.enable = true;
     clippy-gate = {

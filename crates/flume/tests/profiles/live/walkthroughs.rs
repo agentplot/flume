@@ -1,11 +1,15 @@
 //! The fix and change walkthroughs of the check-tools layer with the
 //! pinned Claude Code under herdr in place of the stand-in, a code stage
 //! waiting on its suite with its pane quiet (39, S3), a fix begun in
-//! the mode its host gives (162, S66), and a fix whose code agent stops
-//! at its account's usage limit going on in its own conversation under
-//! the pool's other account (S78). Each brief asks for what the
-//! stand-in's script acted; the kinds' own prompts say the rest.
+//! the mode its host gives (162, S66), a fix whose code agent stops at
+//! its account's usage limit going on in its own conversation under the
+//! pool's other account (S78), a fix whose code agent's pane holds the
+//! place's line under its prompt (56, 60, C.4), and a fix whose host's own
+//! settings for the program reach its code agent's session (195, S100,
+//! S102). Each brief asks for what the stand-in's script acted; the kinds'
+//! own prompts say the rest.
 
+use super::common::git;
 use super::walk::{now, session_limit_after, stage};
 use super::Live;
 use flume::profiles::agent::claude::record::Record;
@@ -13,6 +17,11 @@ use flume::profiles::terminal::herdr::herdr_name;
 use serde_json::{json, Value};
 use std::path::Path;
 use std::time::{Duration, Instant};
+
+/// A fix's brief whose agent, in its first turn, waits a minute in one
+/// foreground call on the repository's `step.sh`, since the pinned release
+/// refuses a bare `sleep` there, before it commits.
+const STEP_FIRST: &str = "Do this in two steps, in order. First run `sh step.sh` with the Bash tool in the foreground, never in the background: it takes about a minute, so wait for it to end. Only then create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.";
 
 /// The label of the workspace of the walkthrough's repository and main.
 fn workspace(live: &Live) -> String {
@@ -294,14 +303,7 @@ fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
     // what the brief asked, which its prompt does not hold, and the place
     // lands.
     let live = Live::sharing_projects("live-carry");
-    let place = live.walk.launch(
-        "fix",
-        "one",
-        &[
-            "--brief",
-            "Do this in two steps, in order. First run `sh step.sh` with the Bash tool in the foreground, never in the background: it takes about a minute, so wait for it to end. Only then create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
-        ],
-    );
+    let place = live.walk.launch("fix", "one", &["--brief", STEP_FIRST]);
     // Settled until code has begun, its prompt received: the launch sends
     // the prompt only where the agent said it started by the time herdr
     // read it ready, and a settle that read no started ack leaves it to
@@ -429,4 +431,211 @@ fn s78_a_spent_agents_conversation_goes_on_under_the_pools_other_account() {
             .any(|turn| turn.contains("Your last turn stopped at your account's usage limit")),
         "the carried prompt is not in the first's transcript: {turns:?}"
     );
+}
+
+/// The rows of a pane's screen beneath the last that holds the prompt's
+/// input, `❯`: what the agent program pins under its prompt.
+fn under_the_prompt(screen: &str) -> Vec<&str> {
+    let rows: Vec<&str> = screen.lines().collect();
+    rows.iter()
+        .rposition(|row| row.trim_start().starts_with('❯'))
+        .map(|at| rows[at + 1..].to_vec())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_fix_agents_pane_holds_its_place_line_under_the_prompt() {
+    // Design 4, 5; 56, 60, C.4: the fix's code agent, in its first turn,
+    // waits a minute in one foreground call on the repository's
+    // `step.sh`. While it works, its pane, read by herdr as the screen
+    // shows it, holds the place's line beneath the prompt's input, pinned
+    // there by flume's plugin's module from `flume hook status-line`,
+    // which the module runs at the session's start, after each tool call
+    // and every ten seconds. Then the agent commits and the place lands.
+    let live = Live::new("live-line");
+    let place = live.walk.launch("fix", "one", &["--brief", STEP_FIRST]);
+    live.until(&place, "its code stage begun", 5, |status| {
+        status["agent"]["started"] == "yes" && stage(status, "code")["state"] == "begun"
+    });
+    let start = live.live_start(&place);
+    let agent = live.herdr(&["agent", "get", &herdr_name(&start.identity)]);
+    let pane = agent["agent"]["pane_id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("herdr lists no pane for the code agent: {agent}"))
+        .to_string();
+
+    let line = "fix--one · fix@1 · code · run 1 ·";
+    let began = Instant::now();
+    loop {
+        let screen = live.screen(&pane);
+        if under_the_prompt(&screen)
+            .iter()
+            .any(|row| row.contains(line))
+        {
+            break;
+        }
+        assert!(
+            began.elapsed() < Duration::from_secs(60),
+            "the code agent's pane holds no `{line}` under its prompt:\n{screen}"
+        );
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    // Read while code works on: its agent live, nothing delivered.
+    let status = live.walk.status(&place);
+    assert_eq!(status["current"], "code", "{status}");
+    assert_eq!(stage(&status, "code")["state"], "begun", "{status}");
+    assert!(!status["agent"].is_null(), "{status}");
+    live.until_landed(&place, 20);
+
+    let submissions = live.walk.submissions();
+    assert_eq!(submissions.len(), 1, "{submissions:?}");
+    assert_eq!(submissions[0]["state"], "landed", "{}", submissions[0]);
+    let parser = live.walk.on_remote("parser.rs").unwrap_or_default();
+    assert!(parser.contains("fn parse()"), "parser.rs: {parser:?}");
+}
+
+#[test]
+fn a_hosts_own_settings_reach_its_fix_agents_session_and_commit() {
+    // Design 15, 16; S100, S102, 195, C.4: the host names, for every
+    // agent, a settings file of the kind a host's launcher gives its
+    // people, whose `tui` is `fullscreen` and whose SessionStart hook
+    // writes what the session gives it into a scratch file, and gives
+    // Claude Code's attribution with no text and no session link for the
+    // walkthrough's repository, as for a fork whose upstream refuses a
+    // tagline. The launch names each key with its layer, the file's with
+    // the file, and the start passes flume's own file, never the host's.
+    // The fix's code agent, in its first turn, waits a minute on the
+    // repository's `step.sh`, so its start is read while it works: its
+    // started ack, written by flume's plugin's SessionStart hook, was
+    // taken, and the host's hook ran in the same session, which only the
+    // file's keys reaching the release by `--settings` could make it do.
+    // The commit the agent made carries no `Co-Authored-By` trailer, which
+    // the release's own words ask for where no attribution says otherwise,
+    // and the place lands.
+    let live = Live::with_host("live-own", |walk| {
+        let ran = walk.repository.scratch.path("session-start.json");
+        let file = walk.repository.scratch.path("people-settings.json");
+        let settings = json!({
+            "tui": "fullscreen",
+            "hooks": {
+                "SessionStart": [{
+                    "hooks": [{ "type": "command", "command": format!("cat >> '{}'", ran.display()) }]
+                }]
+            }
+        });
+        std::fs::write(&file, format!("{settings:#}\n")).expect("the people's file");
+        format!(
+            "\n[agents.programs.claude]\nfile = {:?}\n\n[repos.{:?}.agents.programs.claude.settings]\nattribution = {{ commit = \"\", pr = \"\", sessionUrl = false }}\n",
+            file.display().to_string(),
+            walk.repository.name()
+        )
+    });
+    let ran = live.walk.repository.scratch.path("session-start.json");
+    let file = live
+        .walk
+        .repository
+        .scratch
+        .path("people-settings.json")
+        .to_string_lossy()
+        .into_owned();
+    let launched = live.walk.flume(&[
+        "launch", "--kind", "fix", "--name", "one", "--brief", STEP_FIRST,
+    ]);
+    let place = launched["launched"]["place"]["place"]
+        .as_str()
+        .expect("the place's location")
+        .to_string();
+    // Read from the launch's own answer, which no landing can outrun.
+    let agent = &launched["launched"]["place"]["agent"];
+    let from = &agent["settings"]["from"];
+    assert_eq!(
+        (
+            &from["programs.claude.settings.tui"],
+            &from["programs.claude.settings.attribution"],
+        ),
+        (
+            &json!({ "layer": "host", "value": "\"fullscreen\"", "file": file }),
+            &json!({ "layer": "host-repository", "value": "{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}" }),
+        ),
+        "{launched}"
+    );
+    let hooks = &from["programs.claude.settings.hooks"];
+    assert_eq!(
+        (&hooks["layer"], &hooks["file"]),
+        (&json!("host"), &json!(file)),
+        "{launched}"
+    );
+    let given: Value = serde_json::from_str(hooks["value"].as_str().unwrap_or_default())
+        .unwrap_or_else(|_| panic!("the hooks' value as JSON: {launched}"));
+    assert_eq!(
+        given["SessionStart"][0]["hooks"][0]["command"],
+        format!("cat >> '{}'", ran.display()),
+        "{launched}"
+    );
+    let passed = agent["own"]["passed"].as_str().unwrap_or_default();
+    assert!(
+        passed.starts_with("--settings ") && !passed.contains(&file),
+        "the start passes not its own file: {launched}"
+    );
+
+    live.until(&place, "its code stage begun", 5, |status| {
+        status["agent"]["started"] == "yes" && stage(status, "code")["state"] == "begun"
+    });
+    let start = live.live_start(&place);
+    let started = Record::at(&live.folder(&place), &start.identity)
+        .started()
+        .expect("the code agent's started ack");
+    let began = Instant::now();
+    loop {
+        // Each run of the hook appends its input as it was given, which
+        // need not end its line.
+        let text = std::fs::read_to_string(&ran).unwrap_or_default();
+        let sessions: Vec<Value> = serde_json::Deserializer::from_str(&text)
+            .into_iter::<Value>()
+            .map_while(Result::ok)
+            .collect();
+        if sessions.iter().any(|session| {
+            session["hook_event_name"] == "SessionStart"
+                && session["session_id"] == started.session_id
+        }) {
+            break;
+        }
+        assert!(
+            began.elapsed() < Duration::from_secs(30),
+            "the host's SessionStart hook never ran in the code agent's session {}: {sessions:?}",
+            started.session_id
+        );
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    live.until_landed(&place, 20);
+
+    let submissions = live.walk.submissions();
+    assert_eq!(submissions.len(), 1, "{submissions:?}");
+    assert_eq!(submissions[0]["state"], "landed", "{}", submissions[0]);
+    let parser = live.walk.on_remote("parser.rs").unwrap_or_default();
+    assert!(parser.contains("fn parse()"), "parser.rs: {parser:?}");
+    // The agent's own commits: sluice's merge, if any, is not one.
+    let messages = git(
+        &live.walk.remote,
+        &[
+            "log",
+            "--no-merges",
+            "--format=%B%x00",
+            "main",
+            "--",
+            "parser.rs",
+        ],
+    );
+    let messages: Vec<&str> = messages
+        .split('\0')
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+        .collect();
+    assert!(!messages.is_empty(), "no commit of the agent's on main");
+    for message in messages {
+        assert!(
+            !message.to_lowercase().contains("co-authored-by"),
+            "the code agent's commit carries a trailer: {message:?}"
+        );
+    }
 }

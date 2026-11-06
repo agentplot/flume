@@ -112,3 +112,140 @@ answers (106, 179).
 
 - **WHEN** a test scripts the fake agent's carried start to end before it says it started
 - **THEN** the core starts the stage afresh carrying nothing, and the fake's log shows the second start's command with no session (146, S79)
+
+### Requirement: The fakes script sessions, labels and the layers
+
+The fake host SHALL script each stream's session and labels' shares,
+the labels its configuration gives kinds, and its configuration's
+values with their layers; the fake kinds SHALL script a kind's label;
+and the fake terminal SHALL log where each agent was asked to open;
+none SHALL read a configuration file of the host's (106).
+
+#### Scenario: A scripted session
+
+- **WHEN** a test scripts the fake host's `work` with the session `office` and a fix is launched on `work`
+- **THEN** the fake terminal's log names the fix's agent opened in `office` (107)
+
+#### Scenario: A scripted label
+
+- **WHEN** a test scripts the fake kinds' `deploy` with the label `operation`
+- **THEN** a deploy place's label is `operation` from `kind` where the fake host gives none (180)
+
+### Requirement: The fake host scripts each account's reading
+
+The fake host SHALL hold a reading or a refusal for each path a test
+sets, answer that the file is missing for any other, and pass the
+host's reading scenario; no fake SHALL read a real file (106, 184).
+
+#### Scenario: A scripted reading
+
+- **WHEN** a test sets the fake host's reading for `work-1`, then sets it again with a later `read_at`
+- **THEN** the core reads the later reading at the next choice, and the fake's log shows each reading asked (184)
+
+### Requirement: The fake terminal scripts attach by view
+
+The fake terminal SHALL answer attach with a command of its own for the
+session it is asked for a window, and shown for its app, or as scripted
+for either view, logging each asking with its view (106, 187).
+
+#### Scenario: A scripted attach
+
+- **WHEN** a test scripts the fake terminal to refuse attach for its app with `no app`, and asks it to attach `work` for a window and then for its app
+- **THEN** it answers `fake-terminal attach work` and then the refusal, its log naming `attach work for terminal` and `attach work for app` (187)
+
+### Requirement: The fake window scripts a show
+
+A fake window SHALL log each show with its command and title and
+answer opened, printed or refused as scripted, keeping the windows it
+opened, and reading no display (106, 188).
+
+#### Scenario: A scripted window
+
+- **WHEN** a test scripts the fake window to answer printed with the line `attach work` and asks the core to open `work`
+- **THEN** the core's answer gives that line, and the fake window's log names one show under the stream's title (188)
+
+### Requirement: The fake host and resolver script a stream's display and named terminals
+
+The fake host SHALL script a stream's title, multiplexer, view and
+terminal app and the host's own, and the fake resolver SHALL hold
+terminals and windows by name, each with a log of its own (106, 143,
+190).
+
+#### Scenario: A scripted title
+
+- **WHEN** a test scripts the fake host's `work` with the title `Work Agents`
+- **THEN** status gives `work`'s title `Work Agents` from `stream` (143)
+
+#### Scenario: A scripted display
+
+- **WHEN** a test scripts the fake host's own view as `app` and its `trial` with the multiplexer `other`, and asks the fake host for each stream's display
+- **THEN** `trial` gives `other` from `stream`, every stream the view `app` from `host`, and every other stream the multiplexer `fake` and the terminal app `fake-window` from `neither` (143, 190)
+
+### Requirement: The fake kinds scripts sources, packages and locks
+
+The fake kinds SHALL script flume's own kinds as packages with hashes; a
+source's packages by identity, each with its hash, or a package's or a
+listing's refusal; the repository's lock at each revision; a lock on
+disk; and a lock written, which it records; the fake host SHALL script
+the sources declared; each passing its seam's scenarios, and none
+reaching a real configuration directory (106).
+
+#### Scenario: A scripted package edited after a launch
+
+- **WHEN** a test scripts acme's review@1 at one hash, the host's lock records it, a place is launched, and the test then scripts review@1 at another hash
+- **THEN** the next launch of `acme/review@1` is refused naming both hashes, the first place's held kind is unchanged, and the fake's log shows one `read_package` call for each launch (21, 156)
+
+### Requirement: The fake terminal scripts runs
+
+The fake terminal SHALL answer runs as scripted for each part asked,
+and otherwise that the part does not run, its own part named `own`,
+logging each asking as one `runs <part> <part>…`, the parts in the
+order asked, and starting nothing (106, 201).
+
+#### Scenario: A scripted runs
+
+- **WHEN** a test scripts the fake terminal to read `work` running, and asks it runs of `work` and then of `office`
+- **THEN** it answers `work` running and `office` not running, its log naming `runs work` and `runs office` and no open (201)
+
+#### Scenario: Several parts in one runs
+
+- **WHEN** a test scripts the fake terminal to read `work` running, and asks it runs of `work`, `office` and its own part in one call
+- **THEN** it answers `work` running, `office` not running and `own` not running, in that order, its log naming the one `runs work office own` (201)
+
+### Requirement: The fake agent scripts its own settings
+
+The fake agent SHALL script whether it takes own settings, the keys it
+reserves with their owners, nested keys by their path among them, and
+its way, a file under the start's folder its command names by `--own
+<file>`, each passing the agent seam's scenarios; its log SHALL name
+the keys it was given, so a test reads what the core passed (106, 195,
+196).
+
+#### Scenario: A scripted way and a reserved key
+
+- **WHEN** a test scripts the fake agent to take own settings by a file and to reserve `env`, and a fix's layers give `line` and `tips` inline and `env` by a named file
+- **THEN** the core writes the file the fake's command lists before the open, the fake's log names `line` and `tips` and not `env`, and a launch giving `env` inline is refused naming the fake's owner (195, 196)
+
+### Requirement: The fakes bring an agent back bare
+
+The fake terminal and the fake agent SHALL together bring a start's
+agent back bare, as a terminal's restore does: its pane holding an
+agent again, waiting, whose started ack reads no, at a test's word, by
+one helper that logs `bring back bare <identity>`; and the fake terminal
+SHALL read it working, waiting or stopped as the test scripts (77, 106).
+
+#### Scenario: A bare agent brought back
+
+- **WHEN** a test brings a talk start's agent back bare and settles the place
+- **THEN** the core reads the start's agent waiting with its started ack no, talk reads lost, and the fakes' log shows `bring back bare` for that identity (77)
+
+### Requirement: The fake agent scripts a live session
+
+The fake agent SHALL script, per session, the processes live answers
+that run it, or that it cannot read it with words, answering none
+otherwise; its log SHALL name each `live` it answers (106, 207).
+
+#### Scenario: A scripted live session that ends
+
+- **WHEN** a test scripts the session `s-1` live as process 4242, asks live, then scripts it ended and asks again
+- **THEN** live answers runs with process 4242, then none, and the fake's log shows both readings (207)

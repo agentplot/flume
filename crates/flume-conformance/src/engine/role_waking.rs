@@ -70,6 +70,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["132", "143"],
             run: a_role_in_its_stream,
         },
+        Scenario {
+            name: "role waking: a role whose kind names a host's source with no version is woken by an end pending for it to the newest the locks record, status naming its identity and the source's file",
+            cites: &["132", "154", "155", "191"],
+            run: a_role_woken_to_a_hosts_source,
+        },
+        Scenario {
+            name: "role waking: a role whose kind no lock records is refused at its wake naming it, no place made",
+            cites: &["4", "132", "155"],
+            run: a_roles_kind_unlocked,
+        },
     ]
 }
 
@@ -568,5 +578,73 @@ fn a_role_in_its_stream(_: &()) -> Outcome {
         "a wake into an undeclared stream: {refused:?}"
     );
     ensure_eq!(runs(&world), vec![planner_id()], "the runs on the host");
+    Ok(())
+}
+
+/// The planner's run, its kind `kind` as the host's configuration names
+/// it, with acme holding turn@1 and turn@2 (132, 154, 191).
+fn turn_planner(world: &World, kind: &str) {
+    super::kind_sources::holds(
+        world,
+        "acme",
+        "/kinds/acme",
+        &[("turn", 1, '1'), ("turn", 2, '2')],
+    );
+    world.host.set_role(
+        PLANNER,
+        Some(RoleRun {
+            kind: kind.into(),
+            ..planner_run(None, Some("take your turn"))
+        }),
+    );
+}
+
+fn a_role_woken_to_a_hosts_source(_: &()) -> Outcome {
+    use crate::seams::kinds::{entry, hash_of};
+    let world = World::new();
+    turn_planner(&world, "acme/turn");
+    super::kind_sources::host_locks(
+        &world,
+        vec![
+            entry("acme", "turn", 1, &hash_of('1')),
+            entry("acme", "turn", 2, &hash_of('2')),
+        ],
+    );
+    let id = fix_for(&world, "one", &[PLANNER])?;
+    deliver_fix(&world, &id);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    world.settle(&id);
+    let run = World::id("turn", "planner");
+    ensure_eq!(runs(&world), vec![run.clone()], "the run woken");
+    let status = world.status(&run)?;
+    ensure_eq!(
+        status.identity.as_deref(),
+        Some("acme/turn@2"),
+        "the run's kind"
+    );
+    ensure_eq!(
+        status.kind_from.and_then(|from| from.source_file),
+        Some(flume_fakes::source_file("acme")),
+        "the source's file"
+    );
+    ensure!(
+        woken(&world.engine.wake(PLANNER))?.0 != Woke::Launched,
+        "a second wake of the run that stands launched another"
+    );
+    ensure_eq!(runs(&world), vec![run], "the runs after a second wake");
+    Ok(())
+}
+
+fn a_roles_kind_unlocked(_: &()) -> Outcome {
+    let world = World::new();
+    turn_planner(&world, "acme/turn@1");
+    let refused = world.engine.wake(PLANNER);
+    let reason = refused.refusal().ok_or("the wake was taken")?;
+    ensure!(
+        reason.contains("acme/turn@1") && reason.contains("recorded in no lock"),
+        "the refusal names not the kind as unlocked: {reason}"
+    );
+    ensure_eq!(world.store.places(), Vec::<PlaceId>::new(), "places made");
+    ensure_eq!(world.place.log.count("make"), 0, "makes");
     Ok(())
 }

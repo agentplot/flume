@@ -1,11 +1,14 @@
-//! A stage's start (27 to 33): its settings resolved from their six
+//! A stage's start (27 to 33): its settings resolved from their eight
 //! layers, or the stage refused naming the setting (32), a fresh identity
 //! and secret, its prompt filled or the stage refused naming the part,
-//! and one agent opened through the agent seam's command and the
+//! and one agent opened through the agent seam's command in its stream's
 //! terminal, never while another of the place's is live, and only under
-//! the host's bound (70).
+//! the host's bound (70, 190). Each file the command lists is written
+//! into the place's folder before the terminal opens the agent, and a
+//! start whose command lists one outside it is not opened (196).
 
 use crate::accounts::Choice;
+use crate::live::LiveRead;
 use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
 use crate::start_record::start_record;
@@ -28,14 +31,24 @@ pub(crate) struct Claim {
     agent: Arc<dyn Agent>,
     /// The session name the agent carries: a role's run's address (132).
     session: Option<String>,
+    /// The terminal it opens in, its stream's as the host's
+    /// configuration stands now (190).
+    terminal: Arc<dyn Terminal>,
+    /// The terminal's session the agent opens in, none where it opens
+    /// beside the pane its settings name (107, 143).
+    opens_in: Option<SessionHeld>,
     /// The account the start runs under (144, 145).
     account: Option<AccountHeld>,
     /// The value its agent profile passes for its mode, none where no
     /// layer gives one (162, 169).
     mode: Option<String>,
     /// The session it resumes, carrying the conversation of the stage's
-    /// start whose agent stopped at its account's usage limit (146, 179).
+    /// start whose agent stopped at its account's usage limit, or whose
+    /// conversation was reported lost (49, 146, 179).
     resume: Option<String>,
+    /// Its program's own settings as the layers resolved them, which its
+    /// profile takes, none where they give none (195, 196).
+    own: BTreeMap<String, serde_json::Value>,
 }
 
 impl Claim {
@@ -86,6 +99,15 @@ pub(crate) enum StartReason {
     /// this start resumes its conversation: its prompt is these words and
     /// the way to stop short alone (28, 146, 179).
     Carried,
+    /// The stage, a conversation, was reported lost and its caller
+    /// retried it, and this start resumes its conversation: its prompt is
+    /// these words, the retry's words and the way to stop short (28, 49,
+    /// 179).
+    Resumed,
+    /// The stage, a conversation, was reported lost and its caller
+    /// retried it, and its conversation could not be carried: these words
+    /// stand before the retry's in the stage's prompt (27, 49, 179).
+    Lost,
 }
 
 impl StartReason {
@@ -95,7 +117,18 @@ impl StartReason {
             StartReason::Spent => "The stage's earlier agent stopped at its account's usage limit, and this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.".into(),
             StartReason::Unsettled => "The stage's earlier agent began without the settings its start recorded and was ended, and this agent starts the stage afresh. Anything it committed is on the place's branch and anything it left is in the place: read them and carry the stage on from there.".into(),
             StartReason::Carried => "Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.".into(),
+            StartReason::Resumed => "Your session was lost and goes on here, with its conversation as it stood. Anything you had running then has stopped: read the place again before you carry on.".into(),
+            StartReason::Lost => "The stage's earlier agent was lost, and its conversation could not be carried, so this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.".into(),
         }
+    }
+}
+
+/// `first`, then `words` where there are any, joined by a blank line (27,
+/// 28, 49).
+fn then_words(first: String, words: Option<&str>) -> String {
+    match words {
+        Some(words) => format!("{first}\n\n{words}"),
+        None => first,
     }
 }
 
@@ -104,11 +137,12 @@ impl StartReason {
 pub(crate) const CARRIES_NONE: &str = "its agent profile carries no conversation";
 
 /// Whether the start after `after`, the stage's start whose agent stopped
-/// at its account's usage limit, carries that agent's conversation, as
-/// `carry`, its profile's answer for the account chosen, says; or why
-/// not: the profile's words, or the wait's where it may not carry, or
-/// that no account was chosen to carry it to (146, 179).
-fn conversation(after: &AfterSpent, carry: Option<&Carry>) -> Conversation {
+/// at its account's usage limit or whose conversation was reported lost,
+/// carries that agent's conversation, as `carry`, its profile's answer
+/// for the account chosen, says; or why not: the profile's words, or the
+/// wait's where it may not carry, or that no account was chosen to carry
+/// it to (49, 146, 179).
+fn conversation(after: &CarryFrom, carry: Option<&Carry>) -> Conversation {
     let why = match carry {
         Some(Carry::Yes { .. }) => None,
         Some(Carry::No { why }) => Some(why.clone()),
@@ -123,6 +157,7 @@ fn conversation(after: &AfterSpent, carry: Option<&Carry>) -> Conversation {
     };
     Conversation {
         from: after.start.start,
+        cause: after.cause,
         carried: why.is_none(),
         why,
     }
@@ -286,12 +321,18 @@ impl Engine {
 
     /// Claims the stage's start in held state: refused naming the part
     /// its prompt cannot fill, left waiting for room where `admit` says
-    /// so, its wait after a spent agent kept, or written as live; called
-    /// under the room lock. A start after its stage's agent stopped at its
-    /// account's usage limit resumes that agent's conversation where the
-    /// stage's profile answers that the account chosen reaches it, its
-    /// prompt flume's words alone and its record naming the session, and
-    /// starts afresh otherwise, saying why (28, 146, 179).
+    /// so, its wait to carry a conversation kept, or written as live;
+    /// called under the room lock. A start after its stage's agent stopped
+    /// at its account's usage limit, or after its caller's retry of a
+    /// conversation reported lost, resumes that agent's conversation where
+    /// the stage's profile answers that the account chosen reaches it, its
+    /// prompt flume's words, a lost one's retry's words, and the way to
+    /// stop short, and its record naming the session; and starts afresh
+    /// otherwise, saying why. Such a start, and a lost conversation's
+    /// fresh start, waits for room while the profile's live reads a
+    /// process running the conversation, or cannot read whether one does,
+    /// or while the agent the terminal brought back in the lost start's
+    /// pane stands (28, 30, 49, 146, 179, 207).
     pub(crate) fn claim(
         &self,
         id: &PlaceId,
@@ -303,8 +344,32 @@ impl Engine {
             return Err(Start::NoPlace);
         };
         let place = &read.state.place;
-        let resolution = self.resolution(place, &place.kind.stages[index]);
         let queue = admit.queue();
+        // A stream whose labels are at fault, or whose multiplexer names a
+        // terminal profile the resolver does not carry, starts no stage:
+        // its words refuse the start before its settings are resolved (4,
+        // 181, 182, 190). Where the settings name no pane and no session,
+        // the stream's word for the stage's kind or the stage, read once
+        // they are resolved, refuses it where that word is at fault (4,
+        // 107, 199).
+        let resolution = match (
+            queue.stream(&place.stream.name).fault,
+            self.stream_terminal(&place.stream.name),
+        ) {
+            (Some(fault), _) | (None, Err(fault)) => Err(fault),
+            (None, Ok(terminal)) => {
+                let stage = &place.kind.stages[index];
+                self.resolution(place, stage).and_then(|resolution| {
+                    let opens_in = queue.session_of(
+                        &place.stream.name,
+                        &place.kind.name,
+                        &stage.name,
+                        &resolution.resolved.settings,
+                    )?;
+                    Ok((resolution, terminal, opens_in))
+                })
+            }
+        };
         let now = self.host.now();
         let affinity = queue
             .pool_of(&place.stream.name)
@@ -313,14 +378,38 @@ impl Engine {
         let program = resolution
             .as_ref()
             .ok()
-            .and_then(|resolution| resolution.resolved.settings.program.clone());
+            .and_then(|(resolution, _, _)| resolution.resolved.settings.program.clone());
         let stage_name = &place.kind.stages[index].name;
+        // A stage waiting after its agent stopped at its account's usage
+        // limit, or after its caller's retry of a conversation reported
+        // lost: its profile is asked, under the room lock once an account
+        // is chosen, whether that account reaches the agent's conversation
+        // (49, 145, 146, 179).
+        let after = read.state.stages[index]
+            .room
+            .as_ref()
+            .and_then(|room| room.carry.clone());
+        let lost = after
+            .as_ref()
+            .is_some_and(|after| after.cause == CarryCause::Lost);
+        // The lost start, while it is the stage's last: the account it ran
+        // under holds its conversation (145, 179).
+        let lost_start = read.state.stages[index]
+            .start
+            .as_ref()
+            .filter(|start| {
+                lost && after
+                    .as_ref()
+                    .is_some_and(|after| after.start == start.identity)
+            })
+            .cloned();
         let (chosen, intent_moved) = match &resolution {
             Ok(_) => self.choose_account(
                 place,
                 stage_name,
                 program.as_deref(),
                 affinity.as_ref(),
+                lost_start.as_ref().and_then(|start| start.account.as_ref()),
                 queue,
                 now,
             ),
@@ -337,19 +426,19 @@ impl Engine {
             _ => resolution,
         };
         let env = env.unwrap_or_default();
-        // A stage waiting after its agent stopped at its account's usage
-        // limit: its profile is asked, under the room lock once an account
-        // is chosen, whether that account reaches the agent's conversation
-        // (145, 146, 179).
-        let after = read.state.stages[index]
-            .room
-            .as_ref()
-            .and_then(|room| room.carry.clone());
+        // A lost conversation's start under no pool asks the profile of
+        // the login environment's, an empty one; a spent agent always ran
+        // under an account (146, 179).
         let carry = match (&after, &chosen, &resolution) {
-            (Some(after), Choice::Chose { .. }, Ok(resolution)) if after.carry => Some(
+            (Some(after), Choice::Chose { .. }, Ok((resolution, _, _))) if after.carry => Some(
                 resolution
                     .agent
                     .carry(&self.store.folder(id), &after.start, &env),
+            ),
+            (Some(after), Choice::NoPool, Ok((resolution, _, _))) if after.carry && lost => Some(
+                resolution
+                    .agent
+                    .carry(&self.store.folder(id), &after.start, &BTreeMap::new()),
             ),
             _ => None,
         };
@@ -360,7 +449,35 @@ impl Engine {
             Some(Carry::Yes { session }) => Some(session),
             _ => None,
         };
+        // A start that carries a conversation, and a lost conversation's
+        // fresh start, opens only while no process runs that conversation:
+        // live is asked of every home the host declares for the program,
+        // and the stage waits while one runs it or live cannot read whether
+        // one does, flume adopting, ending and sending nothing to it (30,
+        // 49, 207; core.10).
+        let ask = matches!(
+            (&after, &chosen, &resolution),
+            (Some(_), Choice::Chose { .. } | Choice::NoPool, Ok(_))
+        ) && (resume.is_some() || lost);
+        let (session, standing) = match &after {
+            Some(after) => self.session_holds(
+                id,
+                after,
+                lost_start.as_ref(),
+                program.as_deref().unwrap_or_default(),
+                queue,
+                ask,
+            ),
+            None => (None, None),
+        };
+        let lost_identity = lost_start.as_ref().map(|start| start.identity.clone());
+        let fresh = if lost {
+            Some(then_words(StartReason::Lost.words(), words.as_deref()))
+        } else {
+            words.clone()
+        };
         let made_from = self.store.made(id).len();
+        let label = self.label_of(place);
         let claimed = self.update(id, |held| {
             if let Admit::Waiting(_) = admit {
                 if held.phase != Phase::Live
@@ -369,15 +486,52 @@ impl Engine {
                     return Step::Keep(Err(Start::NoPlace));
                 }
             }
+            if let Some(lost) = lost_identity.as_ref().filter(|_| standing == Some(false)) {
+                if let Some(start) = held
+                    .index_of(lost)
+                    .and_then(|at| held.stages[at].start.as_mut())
+                {
+                    start.live = false;
+                }
+            }
+            match (&session, admit) {
+                (Some(session), Admit::Waiting(_)) => {
+                    let room = held.stages[index]
+                        .room
+                        .get_or_insert_with(RoomWait::default);
+                    session.hold(room);
+                    return Step::Write(Err(Start::WaitingForRoom));
+                }
+                (Some(session), Admit::Queue(queue)) => {
+                    let stage = &mut held.stages[index];
+                    stage.state = StageState::WaitingForRoom;
+                    let mut room = RoomWait {
+                        order: queue.next_order(),
+                        words: words.clone(),
+                        carry: after.clone(),
+                        ..RoomWait::default()
+                    };
+                    session.hold(&mut room);
+                    stage.room = Some(room);
+                    held.current = Some(index);
+                    return Step::Write(Err(Start::WaitingForRoom));
+                }
+                (None, _) => {
+                    // Read no longer running: the wait holds no process.
+                    if let Some(room) = held.stages[index].room.as_mut() {
+                        LiveRead::default().hold(room);
+                    }
+                }
+            }
             if held
                 .stages
                 .iter()
                 .any(|stage| stage.start.as_ref().is_some_and(|start| start.live))
             {
-                return Step::Keep(Err(Start::AgentLive));
+                return Step::Write(Err(Start::AgentLive));
             }
-            let resolution = match &resolution {
-                Ok(resolution) => resolution,
+            let (resolution, (terminal, named), opens_in) = match &resolution {
+                Ok((resolution, terminal, opens_in)) => (resolution, terminal, opens_in),
                 Err(reason) => {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::Refused;
@@ -395,10 +549,19 @@ impl Engine {
             let group = self.group_at(held, index, &head);
             let identity = self.next_identity(held, index);
             let agent = resolution.agent.as_ref();
-            // A start that carries its conversation is sent flume's words
-            // and the way to stop short alone, nothing of the stage's
-            // prompt filled (28, 146).
+            // A start that carries its conversation is sent flume's words,
+            // a lost conversation's retry's words after them, and the way
+            // to stop short, nothing of the stage's prompt filled; a lost
+            // conversation's fresh start is given flume's words before the
+            // retry's as its words (27, 28, 49, 146). A lost carried
+            // start keeps the retry's words, so a fresh start after it
+            // that did not begin is given them again (S79).
             let (text, started_with) = match &resume {
+                Some(_) if lost => {
+                    let resumed = then_words(StartReason::Resumed.words(), words.as_deref());
+                    let text = format!("{resumed}\n\n{}", agent.stop_short(&identity));
+                    (text, words.clone())
+                }
                 Some(_) => {
                     let words = StartReason::Carried.words();
                     let text = format!("{words}\n\n{}", agent.stop_short(&identity));
@@ -408,7 +571,7 @@ impl Engine {
                     held,
                     index,
                     &identity,
-                    words.as_deref(),
+                    fresh.as_deref(),
                     Some(agent),
                     group.as_ref().map(Option::as_ref),
                 ) {
@@ -420,16 +583,22 @@ impl Engine {
                         stage.room = None;
                         return Step::Write(Err(Start::Refused(part)));
                     }
-                    Ok(text) => (text, words.clone()),
+                    Ok(text) => (text, fresh.clone()),
                 },
             };
             if let (Admit::Waiting(_), Choice::Wait) = (admit, &chosen) {
-                return Step::Keep(Err(Start::WaitingForRoom));
+                return Step::Write(Err(Start::WaitingForRoom));
             }
             if let Admit::Queue(queue) = admit {
                 let program = resolution.resolved.settings.program.as_deref();
                 if matches!(chosen, Choice::Wait)
-                    || queue.must_wait(id, &held.place.stream.name, program, held.priority)
+                    || queue.must_wait(
+                        id,
+                        &held.place.stream.name,
+                        label.as_ref().map(|label| label.name.as_str()),
+                        program,
+                        held.priority,
+                    )
                 {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::WaitingForRoom;
@@ -437,6 +606,7 @@ impl Engine {
                         order: queue.next_order(),
                         words: words.clone(),
                         carry: after.clone(),
+                        ..RoomWait::default()
                     });
                     held.current = Some(index);
                     return Step::Write(Err(Start::WaitingForRoom));
@@ -465,6 +635,7 @@ impl Engine {
                         Given {
                             layer: Layer::Account,
                             value: value.clone(),
+                            file: None,
                         },
                     );
                 }
@@ -531,7 +702,21 @@ impl Engine {
                 opening: Some(self.host.command()),
                 dialog: None,
                 conversation: conversation.clone(),
+                session: opens_in.clone(),
+                label: label.clone(),
+                terminal: Some(named.clone()),
+                own: resolution.resolved.own.as_ref().map(|own| OwnHeld {
+                    files: own.files.clone(),
+                    passed: None,
+                }),
             });
+            if !held
+                .terminals
+                .iter()
+                .any(|opened| opened.profile == named.profile)
+            {
+                held.terminals.push(named.clone());
+            }
             held.current = Some(index);
             Step::Write(Ok(Claim {
                 identity,
@@ -542,9 +727,12 @@ impl Engine {
                 env: env.clone(),
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
+                terminal: terminal.clone(),
+                opens_in: opens_in.clone(),
                 account,
                 mode: resolution.mode.clone(),
                 resume: resume.clone(),
+                own: resolution.own_keys(),
             }))
         });
         let claimed = claimed.unwrap_or(Err(Start::NoPlace));
@@ -575,13 +763,19 @@ impl Engine {
             env,
             agent,
             session,
+            terminal,
+            opens_in,
             account: _,
             mode,
             resume,
+            own,
         } = claim;
+        let folder = self.store.folder(id);
         let command = agent.command(
+            &folder,
             &settings,
             mode.as_deref(),
+            &own,
             resume.as_deref(),
             &env,
             &place,
@@ -589,17 +783,39 @@ impl Engine {
             &secret,
             &text,
         );
-        let folder = self.store.folder(id);
-        let opened = self.terminal.open(
+        if let Err(failure) = self.write_files(id, &folder, &command) {
+            self.with_start(id, &identity, |start, _| start.opening = None);
+            self.not_opened(
+                id,
+                &identity,
+                format!("{identity} was not opened: {failure}"),
+            );
+            return Start::NotOpened(failure);
+        }
+        let passed = passed(&command);
+        let at = match (&settings.beside, opens_in) {
+            (Some(pane), _) => OpenIn::Beside { pane: pane.clone() },
+            (
+                None,
+                Some(SessionHeld {
+                    name: Some(name), ..
+                }),
+            ) => OpenIn::Session { name },
+            (None, _) => OpenIn::Own,
+        };
+        let opened = terminal.open(
             &place,
             &folder,
             &command,
             &identity,
-            settings.beside.as_deref(),
+            &at,
             session.as_deref(),
         );
         self.with_start(id, &identity, |start, _| {
             start.opening = None;
+            if let Some(own) = start.own.as_mut() {
+                own.passed.clone_from(&passed);
+            }
             if let Opened::Opened { carried, printed } = &opened {
                 start.prompt.carried = *carried;
                 start.printed.clone_from(printed);
@@ -626,20 +842,48 @@ impl Engine {
             }
             Opened::Refused { reason } => {
                 let failure = format!("the terminal did not open {identity}: {reason}");
-                self.update(id, |held| {
-                    if let Some(index) = held.index_of(&identity) {
-                        let stage = &mut held.stages[index];
-                        stage.state = StageState::NeverBegun;
-                        if let Some(start) = stage.start.as_mut() {
-                            start.live = false;
-                        }
-                        held.failures.push(failure.clone());
-                    }
-                    Step::Write(())
-                });
+                self.not_opened(id, &identity, failure);
                 Start::NotOpened(reason)
             }
         }
+    }
+
+    /// The start under `identity` ended never begun, its room freed, and
+    /// `failure` kept with the place (35, 70).
+    fn not_opened(&self, id: &PlaceId, identity: &Identity, failure: String) {
+        self.update(id, |held| {
+            if let Some(index) = held.index_of(identity) {
+                let stage = &mut held.stages[index];
+                stage.state = StageState::NeverBegun;
+                if let Some(start) = stage.start.as_mut() {
+                    start.live = false;
+                }
+                held.failures.push(failure.clone());
+            }
+            Step::Write(())
+        });
+    }
+
+    /// Writes each file `command` lists into the place's own `folder`
+    /// through the store, written beside and renamed over, readable by
+    /// the host's user alone; or, writing nothing, why not: a file
+    /// outside the folder, named, or the store's words (196; core.16,
+    /// core.17).
+    fn write_files(
+        &self,
+        id: &PlaceId,
+        folder: &str,
+        command: &AgentCommand,
+    ) -> Result<(), String> {
+        if let Some(outside) = command.files.keys().find(|path| !under(folder, path)) {
+            return Err(format!(
+                "its command lists the file {outside}, which lies outside the place's folder {folder}"
+            ));
+        }
+        for (path, text) in &command.files {
+            self.store.write_file(id, path, text)?;
+        }
+        Ok(())
     }
 
     /// Changes the start under `identity`, if it is still the stage's,
@@ -683,6 +927,36 @@ impl Engine {
             Step::Write(())
         });
     }
+}
+
+/// Whether `path` is a file under `folder`, by its components, none of
+/// them `..` (196).
+fn under(folder: &str, path: &str) -> bool {
+    let path = std::path::Path::new(path);
+    path.starts_with(folder)
+        && path != std::path::Path::new(folder)
+        && !path
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+}
+
+/// How `command` passed its program's own settings: each of its
+/// arguments naming a file it lists, with the argument before it; none
+/// where it names none (195, 196; design 12).
+fn passed(command: &AgentCommand) -> Option<String> {
+    let words: Vec<String> = command
+        .args
+        .iter()
+        .enumerate()
+        .filter(|(_, arg)| command.files.contains_key(*arg))
+        .map(
+            |(at, file)| match at.checked_sub(1).map(|before| &command.args[before]) {
+                Some(flag) => format!("{flag} {file}"),
+                None => file.clone(),
+            },
+        )
+        .collect();
+    (!words.is_empty()).then(|| words.join(" "))
 }
 
 /// Finding a start in held state by its identity.

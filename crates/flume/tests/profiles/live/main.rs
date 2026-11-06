@@ -9,10 +9,16 @@
 //! code stage whose agent ends its turn to wait on a suite it started, its
 //! pane quiet with no deliverable, is not ended until it delivers (39,
 //! S3); and a fix whose host gives the mode `ask` begins in it over the
-//! repository's own default, its started ack taken (162, S66); and a
-//! fix whose code agent stops at its account's usage limit goes on in its
-//! own conversation under the pool's other account, whose `projects` is a
-//! link to the first's, and lands (S78).
+//! repository's own default, its started ack taken (162, S66); a fix
+//! whose code agent stops at its account's usage limit goes on in its own
+//! conversation under the pool's other account, whose `projects` is a
+//! link to the first's, and lands (S78); and a fix whose code agent's pane
+//! holds the place's line, pinned under the prompt by flume's plugin's
+//! module, while it works, and lands (56, 60, C.4); and a fix on a host
+//! that names its people's settings file for every agent and a fork's
+//! attribution for the repository, whose code agent's session runs the
+//! file's hook beside flume's plugin's and commits with no trailer, and
+//! lands (195, S100, S102, C.4).
 //!
 //! Run by hand, outside the gate, required by no branch, in the devenv
 //! shell, so the pinned Claude Code and herdr lead `PATH`:
@@ -98,7 +104,14 @@ impl Live {
     /// A walkthrough as `new` makes it, the host's `[kinds.fix.agents]`
     /// holding `lines` beside the operator's model, if any (32).
     pub fn with_fix_agents(label: &str, lines: &str) -> Live {
-        Live::made(label, lines, 1)
+        Live::made(label, lines, 1, |_| String::new())
+    }
+
+    /// A walkthrough as `new` makes it, the host's configuration holding
+    /// the tables `more` gives beside, from the walk, whose repository's
+    /// location and scratch it may name (32, 143).
+    pub fn with_host(label: &str, more: impl FnOnce(&Walk) -> String) -> Live {
+        Live::made(label, "", 1, more)
     }
 
     /// A walkthrough as `new` makes it on a fill-first pool of two
@@ -106,11 +119,12 @@ impl Live {
     /// configuration home of its own, the second's `projects` a link to the
     /// first's, as a host shares one between its accounts (179).
     pub fn sharing_projects(label: &str) -> Live {
-        Live::made(label, "", 2)
+        Live::made(label, "", 2, |_| String::new())
     }
 
-    /// A walkthrough on a fill-first pool of `accounts` accounts.
-    fn made(label: &str, lines: &str, accounts: usize) -> Live {
+    /// A walkthrough on a fill-first pool of `accounts` accounts, the
+    /// host's configuration holding what `more` gives beside.
+    fn made(label: &str, lines: &str, accounts: usize, more: impl FnOnce(&Walk) -> String) -> Live {
         let token = std::env::var(TOKEN)
             .ok()
             .filter(|token| !token.trim().is_empty())
@@ -187,6 +201,7 @@ impl Live {
                 text.push_str(&format!("\n[kinds.{kind}.agents]\n{table}"));
             }
         }
+        text.push_str(&more(&walk));
         walk.configure(&text);
 
         let repository = &walk.repository;
@@ -203,31 +218,38 @@ impl Live {
         }
     }
 
-    /// herdr's answer on flume's own session's server, as JSON.
-    pub fn herdr(&self, args: &[&str]) -> Value {
-        let dir = &self.walk.repository.dir;
+    /// The socket of flume's own herdr session's server.
+    fn socket(&self) -> String {
         let listing = self
             .walk
-            .command("herdr", dir)
+            .command("herdr", &self.walk.repository.dir)
             .args(["session", "list", "--json"])
             .output()
             .expect("herdr runs");
         let sessions: Value = serde_json::from_slice(&listing.stdout).unwrap_or(Value::Null);
-        let socket = sessions["sessions"]
+        sessions["sessions"]
             .as_array()
             .into_iter()
             .flatten()
             .find(|session| session["name"] == "flume")
             .and_then(|session| session["socket_path"].as_str())
             .unwrap_or_else(|| panic!("no herdr session flume: {sessions}"))
-            .to_string();
-        let output = self
-            .walk
-            .command("herdr", dir)
+            .to_string()
+    }
+
+    /// herdr run with `args` on flume's own session's server.
+    fn on_server(&self, args: &[&str]) -> std::process::Output {
+        self.walk
+            .command("herdr", &self.walk.repository.dir)
             .args(args)
-            .env("HERDR_SOCKET_PATH", socket)
+            .env("HERDR_SOCKET_PATH", self.socket())
             .output()
-            .expect("herdr runs");
+            .expect("herdr runs")
+    }
+
+    /// herdr's answer on flume's own session's server, as JSON.
+    pub fn herdr(&self, args: &[&str]) -> Value {
+        let output = self.on_server(args);
         serde_json::from_slice::<Value>(&output.stdout)
             .map(|answer| answer["result"].clone())
             .unwrap_or_else(|_| {
@@ -238,6 +260,21 @@ impl Live {
                     String::from_utf8_lossy(&output.stderr)
                 )
             })
+    }
+
+    /// The text the pane shows, as `pane read <pane> --source visible
+    /// --format text` gives it on flume's own session's server.
+    pub fn screen(&self, pane: &str) -> String {
+        let output = self.on_server(&[
+            "pane", "read", pane, "--source", "visible", "--format", "text",
+        ]);
+        assert!(
+            output.status.success(),
+            "herdr pane read {pane}: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
     /// The labels of the workspaces flume's herdr session holds.

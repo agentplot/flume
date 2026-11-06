@@ -6,10 +6,15 @@
 //! it, the host user's login environment under it, and a shell of the
 //! start's own that reads no startup file, so nothing the host's shell
 //! files do reorders the pane's `PATH`: a split beside the pane the settings name, by its label or id on
-//! flume's server or as `herdr:<pane>@<socket>`; otherwise, in flume's
-//! own herdr session, the place's tab `<kind>--<name>` in the workspace
-//! of the place's repository and base, labelled `<repository> <base>`,
-//! each made when first needed and recorded by id and server. The pane's
+//! flume's server or as `herdr:<pane>@<socket>`; otherwise, in the herdr
+//! session the core names, or flume's own where it names the terminal's
+//! own, the session's server found by `herdr session list` and started
+//! headless where none runs, a name the pinned herdr refuses refusing the
+//! open in herdr's words, the place's tab `<kind>--<name>` in that
+//! session's workspace of the place's repository and base, labelled
+//! `<repository> <base>`, each made when first needed and recorded by id
+//! and server, a record written before records were kept by server read
+//! as the record of the server it names (107, 138; record 0031). The pane's
 //! `PATH` is led by a folder of the start's own linking the program's
 //! kind to the program the settings name, since herdr's agent start
 //! types the kind's name into the pane's shell; once the pane's screen
@@ -41,19 +46,33 @@
 //! `restore_error`, or herdr lists no agent in it and its foreground is
 //! the shell (96). screen is the pane's visible lines (136); close ends
 //! the pane and reads that it is gone (97). tidy closes a gone place's
-//! tab, and its base's workspace once no tab of a live place and no pane
-//! flume did not open is in it, keeping and naming either where a pane
-//! flume did not open stands (137, 138). show titles the agent's pane
-//! with its stage and state and gives the base's workspace its count as
+//! tab in every session it made one in, and its base's workspace in each
+//! once no tab of a live place and no pane flume did not open is in it,
+//! keeping and naming either where a pane flume did not open stands
+//! (137, 138). show titles the agent's pane with its stage and state and
+//! gives each of the base's workspaces, in every session, its count as
 //! the token `flume` (139), and says where it shows them, the place's
-//! tab, its agent's pane and its base's workspace each as
-//! `herdr:<id>@<socket>` from its records, for flume's herdr plugin to
-//! refresh them (C.5). The watch is flume's herdr plugin's: while a
+//! tab and its base's workspace on its live agent's server, its agent's
+//! pane, and each of the base's workspaces, each as `herdr:<id>@<socket>`
+//! from its records, for flume's herdr plugin to refresh them (C.5).
+//! attach gives a window `<herdr> session attach <name>`, the session's
+//! server found or started headless first, `<herdr>` the full path of the
+//! herdr the profile's calls run, and `XDG_CONFIG_HOME` where they run
+//! under one; it refuses the app's view, herdr 0.9.5 having no app of its
+//! own, and its own part on a server held by its socket alone, since
+//! herdr attaches a client by a session's name (107, 187). runs reads one
+//! `herdr session list --json`, bounded at a second, and finds the part
+//! by its name, the own session `flume`, or an own server held by its
+//! socket alone by the session listed at that socket, and starts no
+//! server, where attach starts one (201). The watch is flume's herdr plugin's: while a
 //! watch of it has renewed its lease within the lease's term, a minute,
 //! the profile answers its bound, thirty seconds, and no watch
 //! otherwise, reading the lease and starting nothing (119, 122; design
-//! 10). The session a command runs in is `herdr:<pane>@<socket>`, its
-//! pane on its server (7).
+//! 10). setup is what the watch wrote herdr's configuration lacks for the
+//! plugin, `setup.json` beside each fresh lease, its words in order and
+//! once each, read from the files alone (122; design 8). The session a
+//! command runs in is `herdr:<pane>@<socket>`, its pane on its server
+//! (7).
 //!
 //! A recipient's session is reached by its name (43, 132; records 0016,
 //! 0018): `herdr:<pane>@<socket>` by that pane on that server, its id
@@ -74,8 +93,9 @@
 
 use crate::host::process::{executable, program_path};
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, FolderTrust, Identity, Opened, PlaceRef, Sent, Shown,
-    ShownAt, Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
+    PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    ViewCommand, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -94,6 +114,10 @@ pub const NAME: &str = "herdr";
 
 /// The bound on a herdr call that states none (98).
 pub const BOUND: Duration = Duration::from_secs(10);
+
+/// The bound on runs' one session listing, which herdr answers in
+/// milliseconds (201, C.5).
+pub const RUNS_BOUND: Duration = Duration::from_secs(1);
 
 /// The bound flume's herdr plugin settles every place on while its watch
 /// runs (122).
@@ -180,8 +204,13 @@ pub const KINDS: [&str; 24] = [
 ];
 
 /// The herdr session flume opens its places' panes in, where the settings
-/// name no pane.
+/// name no pane and the core names no session of its own.
 pub const SESSION: &str = "flume";
+
+/// The variable the pinned herdr, 0.9.5, reads its named sessions' home
+/// from, `$XDG_CONFIG_HOME/herdr/sessions/<name>`, `~/.config` where it is
+/// unset; a test's profile sets it to a scratch home (core.29).
+pub const SESSION_HOME: &str = "XDG_CONFIG_HOME";
 
 /// How often a reading of herdr is taken again while a server starts.
 const POLL: Duration = Duration::from_millis(200);
@@ -242,6 +271,30 @@ pub struct Herdr {
     caller: Option<Pane>,
     login: Arc<OnceLock<BTreeMap<String, String>>>,
     plugin: Option<PathBuf>,
+    session_home: Option<PathBuf>,
+}
+
+/// A workspace or a tab open made, as its record names it: its id and
+/// its server's socket, the record whole, and the file it is kept in.
+#[derive(Clone, Debug)]
+struct Record {
+    id: String,
+    socket: PathBuf,
+    value: Value,
+    path: PathBuf,
+}
+
+impl Record {
+    /// The workspace or tab as flume names it to a plugin,
+    /// `herdr:<id>@<socket>` (C.5).
+    fn named(&self) -> String {
+        format!("herdr:{}@{}", self.id, self.socket.display())
+    }
+
+    /// Its label as recorded, else its id.
+    fn label(&self) -> &str {
+        self.value["label"].as_str().unwrap_or(&self.id)
+    }
 }
 
 /// A pane as open recorded it for an agent: its id, its server, the
@@ -297,7 +350,18 @@ impl Herdr {
             caller: None,
             login: Arc::default(),
             plugin: None,
+            session_home: None,
         }
+    }
+
+    /// herdr's named sessions placed under `home` rather than the host
+    /// user's: every herdr call, and every session's server the profile
+    /// starts, run with `home` as [`SESSION_HOME`], which the pinned herdr
+    /// reads its sessions from; for tests, which reach no session of the
+    /// host's (core.29).
+    pub fn with_session_home(mut self, home: impl Into<PathBuf>) -> Herdr {
+        self.session_home = Some(home.into());
+        self
     }
 
     /// The state directory of flume's herdr plugin, whose watch's lease
@@ -308,26 +372,41 @@ impl Herdr {
     }
 
     /// Whether a watch of flume's herdr plugin, on any herdr server, has
-    /// renewed its lease within the lease's term: the lease's first line
-    /// is the watch's pid and when it last renewed, in seconds since the
-    /// epoch (design 10).
+    /// renewed its lease within the lease's term (design 10).
     pub fn watch_kept(&self) -> bool {
+        !self.watched_servers().is_empty()
+    }
+
+    /// The state directory of each herdr server whose watch of flume's
+    /// herdr plugin renewed its lease within the lease's term, in the
+    /// order of their names: the lease's first line is the watch's pid
+    /// and when it last renewed, in seconds since the epoch (design 10).
+    fn watched_servers(&self) -> Vec<PathBuf> {
         let Some(plugin) = &self.plugin else {
-            return false;
+            return vec![];
         };
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_secs());
-        fs::read_dir(plugin.join("servers"))
+        let mut servers: Vec<PathBuf> = fs::read_dir(plugin.join("servers"))
             .into_iter()
             .flatten()
             .filter_map(Result::ok)
-            .filter_map(|server| fs::read_to_string(server.path().join("watch.lease")).ok())
-            .filter_map(|lease| {
-                let first = lease.lines().next()?.to_string();
-                first.split_whitespace().nth(1)?.parse::<u64>().ok()
+            .map(|server| server.path())
+            .filter(|server| {
+                fs::read_to_string(server.join("watch.lease"))
+                    .ok()
+                    .and_then(|lease| {
+                        let first = lease.lines().next()?.to_string();
+                        first.split_whitespace().nth(1)?.parse::<u64>().ok()
+                    })
+                    .is_some_and(|renewed| {
+                        renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs()
+                    })
             })
-            .any(|renewed| renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs())
+            .collect();
+        servers.sort();
+        servers
     }
 
     /// Exactly `variables` for the host user's login environment, in
@@ -352,6 +431,13 @@ impl Herdr {
         self
     }
 
+    /// herdr run as `program`, in place of the `herdr` on the `PATH`; for
+    /// tests, which stand a herdr of their own in for it.
+    pub fn with_program(mut self, program: impl Into<PathBuf>) -> Herdr {
+        self.program = program.into();
+        self
+    }
+
     /// How long a start waits for the pane's shell and the program, in
     /// place of 120 seconds; herdr's agent start takes 3001 milliseconds
     /// to 300 seconds.
@@ -371,23 +457,33 @@ impl Herdr {
         self.kept(identity).map(|kept| kept.pane)
     }
 
-    /// The workspace recorded for the place's repository and base, by id
-    /// and server.
+    /// The workspace last recorded for the place's repository and base,
+    /// on any server, by id and server.
     pub fn workspace(&self, place: &PlaceRef) -> Option<(String, PathBuf)> {
-        let record = read_json(&self.workspace_record(place))?;
-        Some((
-            record.get("workspace")?.as_str()?.into(),
-            record.get("socket")?.as_str()?.into(),
-        ))
+        self.workspaces(place).pop()
     }
 
-    /// The tab recorded for the place, by id and server.
+    /// Each workspace recorded for the place's repository and base, one
+    /// on each server, by id and server, the last made last.
+    pub fn workspaces(&self, place: &PlaceRef) -> Vec<(String, PathBuf)> {
+        self.base_records(place)
+            .into_iter()
+            .map(|record| (record.id, record.socket))
+            .collect()
+    }
+
+    /// The place's tab last recorded, on any server, by id and server.
     pub fn tab(&self, place: &PlaceRef) -> Option<(String, PathBuf)> {
-        let record = read_json(&self.tab_record(&place.location))?;
-        Some((
-            record.get("tab")?.as_str()?.into(),
-            record.get("socket")?.as_str()?.into(),
-        ))
+        self.tabs(place).pop()
+    }
+
+    /// Each of the place's tabs recorded, one on each server its agents
+    /// opened on, by id and server, the last made last.
+    pub fn tabs(&self, place: &PlaceRef) -> Vec<(String, PathBuf)> {
+        self.tab_records(place)
+            .into_iter()
+            .map(|record| (record.id, record.socket))
+            .collect()
     }
 
     /// herdr run with `args` on the server at `socket`, under `bound`:
@@ -440,6 +536,9 @@ impl Herdr {
             if name.to_string_lossy().starts_with("HERDR_") {
                 command.env_remove(name);
             }
+        }
+        if let Some(home) = &self.session_home {
+            command.env(SESSION_HOME, home);
         }
         if let Some(socket) = socket {
             command.env("HERDR_SOCKET_PATH", socket);
@@ -494,17 +593,110 @@ impl Herdr {
             .join(format!("{}.json", identity.to_string().replace('/', "%")))
     }
 
-    fn workspace_record(&self, place: &PlaceRef) -> PathBuf {
+    /// Where the workspace of the place's repository and base on the
+    /// server at `socket` is recorded.
+    fn workspace_record(&self, place: &PlaceRef, socket: &Path) -> PathBuf {
+        self.records.join("workspaces").join(format!(
+            "{}.json",
+            digest(&format!(
+                "{}\n{}\n{}",
+                socket.display(),
+                place.repository,
+                place.base
+            ))
+        ))
+    }
+
+    /// Where a workspace was recorded before records were kept by
+    /// server, which is read as the record of the server it names.
+    fn workspace_record_before(&self, place: &PlaceRef) -> PathBuf {
         self.records.join("workspaces").join(format!(
             "{}.json",
             digest(&format!("{}\n{}", place.repository, place.base))
         ))
     }
 
-    fn tab_record(&self, location: &str) -> PathBuf {
+    /// Where the place's tab on the server at `socket` is recorded.
+    fn tab_record(&self, location: &str, socket: &Path) -> PathBuf {
+        self.records.join("tabs").join(format!(
+            "{}.json",
+            digest(&format!("{location}\n{}", socket.display()))
+        ))
+    }
+
+    /// Where a tab was recorded before records were kept by server,
+    /// which is read as the record of the server it names.
+    fn tab_record_before(&self, location: &str) -> PathBuf {
         self.records
             .join("tabs")
             .join(format!("{}.json", digest(location)))
+    }
+
+    /// Every record under `kind`, `workspaces` or `tabs`, its id under
+    /// `key`, oldest first.
+    fn records_of(&self, kind: &str, key: &str) -> Vec<Record> {
+        let mut records: Vec<(std::time::SystemTime, Record)> =
+            fs::read_dir(self.records.join(kind))
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .filter_map(|entry| {
+                    let path = entry.path();
+                    let value = read_json(&path)?;
+                    let made = entry
+                        .metadata()
+                        .and_then(|meta| meta.modified())
+                        .unwrap_or(std::time::UNIX_EPOCH);
+                    Some((
+                        made,
+                        Record {
+                            id: value.get(key)?.as_str()?.into(),
+                            socket: value.get("socket")?.as_str()?.into(),
+                            value,
+                            path,
+                        },
+                    ))
+                })
+                .collect();
+        records.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.path.cmp(&b.1.path)));
+        records.into_iter().map(|(_, record)| record).collect()
+    }
+
+    /// Each workspace recorded for the place's repository and base, one
+    /// on each server, oldest first; one recorded before records were
+    /// kept by server read as its server's.
+    fn base_records(&self, place: &PlaceRef) -> Vec<Record> {
+        let before = self.workspace_record_before(place);
+        self.records_of("workspaces", "workspace")
+            .into_iter()
+            .filter(|record| {
+                record.path == before
+                    || (record.value["repository"].as_str() == Some(place.repository.as_str())
+                        && record.value["base"].as_str() == Some(place.base.as_str()))
+            })
+            .collect()
+    }
+
+    /// The workspace recorded for the place's repository and base on the
+    /// server at `socket`.
+    fn base_record_on(&self, place: &PlaceRef, socket: &Path) -> Option<Record> {
+        self.base_records(place)
+            .into_iter()
+            .find(|record| record.socket == socket)
+    }
+
+    /// Each of the place's tabs recorded, one on each server, oldest
+    /// first; one recorded before records were kept by server read as its
+    /// server's.
+    fn tab_records(&self, place: &PlaceRef) -> Vec<Record> {
+        let before = self.tab_record_before(&place.location);
+        self.records_of("tabs", "tab")
+            .into_iter()
+            .filter(|record| {
+                record.path == before
+                    || record.value["place"].as_str() == Some(place.location.as_str())
+            })
+            .collect()
     }
 
     fn kept(&self, identity: &Identity) -> Option<Kept> {
@@ -541,31 +733,30 @@ impl Herdr {
         )
     }
 
-    /// Every pane flume opened, as its records name them.
-    fn opened_panes(&self) -> BTreeSet<String> {
+    /// Every pane flume opened, as its records name them, by server and
+    /// id.
+    fn opened_panes(&self) -> BTreeSet<(PathBuf, String)> {
         fs::read_dir(&self.records)
             .into_iter()
             .flatten()
             .filter_map(Result::ok)
             .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "json"))
             .filter_map(|entry| read_json(&entry.path()))
-            .filter_map(|record| record.get("pane")?.as_str().map(str::to_string))
+            .filter_map(|record| {
+                Some((
+                    record.get("socket")?.as_str()?.into(),
+                    record.get("pane")?.as_str()?.to_string(),
+                ))
+            })
             .collect()
     }
 
-    /// Every tab flume made for a place still recorded, by id.
-    fn place_tabs(&self) -> BTreeMap<String, String> {
-        fs::read_dir(self.records.join("tabs"))
+    /// Every tab flume made for a place still recorded, by server and id.
+    fn place_tabs(&self) -> BTreeSet<(PathBuf, String)> {
+        self.records_of("tabs", "tab")
             .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .filter_map(|entry| read_json(&entry.path()))
-            .filter_map(|record| {
-                Some((
-                    record.get("tab")?.as_str()?.to_string(),
-                    record.get("place")?.as_str()?.to_string(),
-                ))
-            })
+            .filter(|record| record.value.get("place").is_some())
+            .map(|record| (record.socket, record.id))
             .collect()
     }
 
@@ -700,70 +891,116 @@ impl Herdr {
         }
     }
 
-    /// The socket of the server open makes a place's pane on, its session's
-    /// server started headless where none runs.
-    fn socket(&self) -> Result<PathBuf, String> {
-        let name = match &self.server {
-            Server::Socket(socket) => return Ok(socket.clone()),
-            Server::Session(name) => name,
-        };
+    /// The herdr the profile's calls run, by its full path: its program
+    /// where that is absolute, else the first executable of its name on
+    /// the `PATH` this command runs under, as a call finds it; none where
+    /// there is none (187).
+    fn program_found(&self) -> Option<PathBuf> {
+        if self.program.is_absolute() {
+            return Some(self.program.clone());
+        }
+        let path = std::env::var("PATH").unwrap_or_default();
+        path.split(':')
+            .filter(|dir| !dir.is_empty())
+            .map(|dir| Path::new(dir).join(&self.program))
+            .find(|candidate| {
+                fs::metadata(candidate)
+                    .is_ok_and(|found| found.is_file() && found.permissions().mode() & 0o111 != 0)
+            })
+            .map(|found| {
+                if found.is_absolute() {
+                    found
+                } else {
+                    std::env::current_dir()
+                        .map(|dir| dir.join(&found))
+                        .unwrap_or(found)
+                }
+            })
+    }
+
+    /// The socket of `server`: a session's, as `herdr session list`
+    /// lists it running, its server started headless where none runs
+    /// (107, C.5).
+    fn socket_of(&self, server: &Server) -> Result<PathBuf, String> {
+        match server {
+            Server::Socket(socket) => Ok(socket.clone()),
+            Server::Session(name) => match self.running(name)? {
+                Some(socket) => Ok(socket),
+                None => self.start_session(name),
+            },
+        }
+    }
+
+    /// The socket of the session `name` where `herdr session list` lists
+    /// it running; none where it lists it stopped or not at all.
+    fn running(&self, name: &str) -> Result<Option<PathBuf>, String> {
         let (_, listing, _) = self.run(None, &["session", "list", "--json"], self.bound)?;
         let sessions: Value = serde_json::from_str(listing.trim())
             .map_err(|error| format!("herdr session list --json: {error}"))?;
-        let session = sessions
+        Ok(sessions
             .get("sessions")
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-            .find(|session| session.get("name").and_then(Value::as_str) == Some(name));
-        let socket = match session.and_then(|session| session.get("socket_path")) {
-            Some(Value::String(socket)) => PathBuf::from(socket),
-            _ => return self.start_session(name),
-        };
-        if session.and_then(|session| session.get("running")) == Some(&Value::Bool(true)) {
-            return Ok(socket);
-        }
-        self.start_session(name)
+            .find(|session| {
+                session.get("name").and_then(Value::as_str) == Some(name)
+                    && session.get("running") == Some(&Value::Bool(true))
+            })
+            .and_then(|session| session.get("socket_path")?.as_str())
+            .map(PathBuf::from))
     }
 
     /// Starts the named session's server headless, apart from this
-    /// command, and gives its socket once it answers.
+    /// command, and gives its socket once it answers; a server that ends
+    /// before herdr lists it running refuses in herdr's words, as a name
+    /// the pinned herdr refuses does, its errors kept under the records'
+    /// `servers` (core.29).
     fn start_session(&self, name: &str) -> Result<PathBuf, String> {
+        let errors = self
+            .records
+            .join("servers")
+            .join(format!("{}.log", digest(name)));
+        let kept = errors
+            .parent()
+            .map_or(Ok(()), fs::create_dir_all)
+            .and_then(|()| fs::File::create(&errors))
+            .map_err(|error| format!("{}: {error}", errors.display()))?;
         let mut command = Command::new(&self.program);
         command
             .args(["--session", name, "server"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stderr(kept);
         for (variable, _) in std::env::vars_os() {
             if variable.to_string_lossy().starts_with("HERDR_") {
                 command.env_remove(variable);
             }
         }
+        if let Some(home) = &self.session_home {
+            command.env(SESSION_HOME, home);
+        }
         std::os::unix::process::CommandExt::process_group(&mut command, 0);
-        command
+        let mut child = command
             .spawn()
             .map_err(|error| format!("herdr's session {name} could not be started: {error}"))?;
         let deadline = Instant::now() + self.bound;
         loop {
-            let (_, listing, _) = self.run(None, &["session", "list", "--json"], self.bound)?;
-            let running = serde_json::from_str::<Value>(listing.trim())
-                .ok()
-                .and_then(|sessions| {
-                    sessions
-                        .get("sessions")?
-                        .as_array()?
-                        .iter()
-                        .find(|session| {
-                            session.get("name").and_then(Value::as_str) == Some(name)
-                                && session.get("running") == Some(&Value::Bool(true))
-                        })?
-                        .get("socket_path")?
-                        .as_str()
-                        .map(PathBuf::from)
-                });
-            if let Some(socket) = running {
+            if let Some(socket) = self.running(name)? {
                 return Ok(socket);
+            }
+            if let Ok(Some(_)) = child.try_wait() {
+                // Another command's server may have come up meanwhile.
+                if let Some(socket) = self.running(name)? {
+                    return Ok(socket);
+                }
+                let words = fs::read_to_string(&errors).unwrap_or_default();
+                let words = words
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(format!("herdr refused the session {name}: {words}"));
             }
             if Instant::now() >= deadline {
                 return Err(format!(
@@ -781,7 +1018,7 @@ impl Herdr {
         if let Some(pane) = Pane::named(beside) {
             return Ok(pane);
         }
-        let socket = self.socket()?;
+        let socket = self.socket_of(&self.server)?;
         let panes = self.answered(&socket, &["pane", "list"])?;
         panes
             .get("panes")
@@ -853,14 +1090,15 @@ impl Herdr {
     }
 
     /// A new pane for the agent in the place, made with `made`'s cwd and
-    /// environment: a split beside the pane named, or in the place's tab
-    /// of the workspace of its repository and base, each made and
-    /// recorded when first needed (94, 107; record 0018).
+    /// environment: a split beside the pane named, or, on the server of
+    /// the session `at` names or of flume's own, in the place's tab of the
+    /// workspace of its repository and base, each made and recorded with
+    /// its server when first needed (94, 107; records 0018, 0031).
     fn new_pane(
         &self,
         place: &PlaceRef,
         short: &str,
-        beside: Option<&str>,
+        at: &OpenIn,
         made: &[String],
     ) -> Result<Pane, String> {
         let split = |pane: &Pane| -> Result<Pane, String> {
@@ -873,10 +1111,11 @@ impl Herdr {
                 socket: pane.socket.clone(),
             })
         };
-        if let Some(beside) = beside {
-            return split(&self.named_pane(beside)?);
-        }
-        let socket = self.socket()?;
+        let socket = match at {
+            OpenIn::Beside { pane } => return split(&self.named_pane(pane)?),
+            OpenIn::Own => self.socket_of(&self.server)?,
+            OpenIn::Session { name } => self.socket_of(&Server::Session(name.clone()))?,
+        };
         let workspace = self.standing_workspace(place, &socket)?;
         let Some(workspace) = workspace else {
             let label = workspace_label(place);
@@ -888,7 +1127,7 @@ impl Herdr {
                 .as_str()
                 .ok_or_else(|| format!("herdr gave no workspace in {created}"))?;
             write_json(
-                &self.workspace_record(place),
+                &self.workspace_record(place, &socket),
                 &json!({
                     "workspace": workspace,
                     "socket": socket,
@@ -904,7 +1143,12 @@ impl Herdr {
             self.keep_tab(place, tab, workspace, &socket, short)?;
             return pane_id(&created, "root_pane").map(|id| Pane { id, socket });
         };
-        if let Some((tab, _)) = self.tab(place) {
+        if let Some(tab) = self
+            .tab_records(place)
+            .into_iter()
+            .find(|tab| tab.socket == socket)
+            .map(|tab| tab.id)
+        {
             let panes = self.answered(&socket, &["pane", "list", "--workspace", &workspace])?;
             let in_tab = panes["panes"]
                 .as_array()
@@ -939,7 +1183,7 @@ impl Herdr {
         short: &str,
     ) -> Result<(), String> {
         write_json(
-            &self.tab_record(&place.location),
+            &self.tab_record(&place.location, socket),
             &json!({
                 "tab": tab,
                 "workspace": workspace,
@@ -950,29 +1194,27 @@ impl Herdr {
         )
     }
 
-    /// The workspace recorded for the place's repository and base where
-    /// herdr still lists it on `socket`; its record dropped otherwise.
+    /// The workspace recorded for the place's repository and base on
+    /// `socket` where herdr still lists it there; its record dropped
+    /// otherwise.
     fn standing_workspace(
         &self,
         place: &PlaceRef,
         socket: &Path,
     ) -> Result<Option<String>, String> {
-        let Some((workspace, recorded)) = self.workspace(place) else {
+        let Some(record) = self.base_record_on(place, socket) else {
             return Ok(None);
         };
-        if recorded != socket {
-            return Ok(None);
-        }
         let listing = self.answered(socket, &["workspace", "list"])?;
         let listed = listing["workspaces"]
             .as_array()
             .into_iter()
             .flatten()
-            .any(|listed| listed["workspace_id"].as_str() == Some(workspace.as_str()));
+            .any(|listed| listed["workspace_id"].as_str() == Some(record.id.as_str()));
         if listed {
-            return Ok(Some(workspace));
+            return Ok(Some(record.id));
         }
-        let _ = fs::remove_file(self.workspace_record(place));
+        let _ = fs::remove_file(&record.path);
         Ok(None)
     }
 
@@ -1164,7 +1406,7 @@ impl Herdr {
         &self,
         socket: &Path,
         workspace: &str,
-        opened: &BTreeSet<String>,
+        opened: &BTreeSet<(PathBuf, String)>,
         within: impl Fn(&Value) -> bool,
     ) -> Result<Vec<String>, String> {
         let panes = match self.ask(socket, &["pane", "list", "--workspace", workspace]) {
@@ -1182,7 +1424,7 @@ impl Herdr {
             .flatten()
             .filter(|pane| within(pane))
             .filter_map(|pane| pane["pane_id"].as_str())
-            .filter(|id| !opened.contains(*id))
+            .filter(|id| !opened.contains(&(socket.to_path_buf(), (*id).to_string())))
             .map(str::to_string)
             .collect())
     }
@@ -1204,38 +1446,37 @@ impl Herdr {
         }
     }
 
-    /// The base's recorded workspace closed once it holds no tab of a
-    /// live place and no pane flume did not open: what was closed, none
+    /// The base's workspace `record` names closed once it holds no tab of
+    /// a live place and no pane flume did not open: what was closed, none
     /// where it stands for a live place or is gone, or what was kept and
     /// what holds it (137, 138).
     fn tidy_workspace(
         &self,
         place: &PlaceRef,
-        opened: &BTreeSet<String>,
+        record: &Record,
+        opened: &BTreeSet<(PathBuf, String)>,
     ) -> Result<Option<String>, String> {
-        let Some((workspace, socket)) = self.workspace(place) else {
-            return Ok(None);
-        };
-        if let Some(kept) = self.held_workspace(place, opened) {
+        let (workspace, socket) = (&record.id, &record.socket);
+        if let Some(kept) = self.held_workspace(record, opened) {
             return Err(kept);
         }
         let label = workspace_label(place);
-        match self.live_tabs(&workspace, &socket)? {
+        match self.live_tabs(workspace, socket)? {
             Some(true) => return Ok(None),
             Some(false) => {}
             None => {
                 // herdr closes a workspace with its last tab.
-                let _ = fs::remove_file(self.workspace_record(place));
+                let _ = fs::remove_file(&record.path);
                 return Ok(Some(format!("the workspace {label}")));
             }
         }
-        match self.ask(&socket, &["workspace", "close", &workspace]) {
+        match self.ask(socket, &["workspace", "close", workspace]) {
             Call::Answered(_) => {
-                let _ = fs::remove_file(self.workspace_record(place));
+                let _ = fs::remove_file(&record.path);
                 Ok(Some(format!("the workspace {label}")))
             }
             Call::Refused { code, .. } if code == "workspace_not_found" => {
-                let _ = fs::remove_file(self.workspace_record(place));
+                let _ = fs::remove_file(&record.path);
                 Ok(None)
             }
             Call::Refused { code, words } => Err(format!(
@@ -1263,25 +1504,29 @@ impl Herdr {
                 .into_iter()
                 .flatten()
                 .filter_map(|tab| tab["tab_id"].as_str())
-                .any(|tab| places.contains_key(tab)),
+                .any(|tab| places.contains(&(socket.to_path_buf(), tab.to_string()))),
         ))
     }
 
-    /// The base's recorded workspace named with what holds it, where it
-    /// holds no tab of a live place and a pane flume did not open stands
-    /// in it; none otherwise.
-    fn held_workspace(&self, place: &PlaceRef, opened: &BTreeSet<String>) -> Option<String> {
-        let (workspace, socket) = self.workspace(place)?;
-        if self.live_tabs(&workspace, &socket).ok()?? {
+    /// The base's workspace `record` names, named with what holds it,
+    /// where it holds no tab of a live place and a pane flume did not open
+    /// stands in it; none otherwise.
+    fn held_workspace(
+        &self,
+        record: &Record,
+        opened: &BTreeSet<(PathBuf, String)>,
+    ) -> Option<String> {
+        let (workspace, socket) = (&record.id, &record.socket);
+        if self.live_tabs(workspace, socket).ok()?? {
             return None;
         }
         let foreign = self
-            .foreign_panes(&socket, &workspace, opened, |_| true)
+            .foreign_panes(socket, workspace, opened, |_| true)
             .ok()?;
         (!foreign.is_empty()).then(|| {
             format!(
                 "the workspace {} ({workspace}), held by the pane {} flume did not open",
-                workspace_label(place),
+                record.label(),
                 foreign.join(", ")
             )
         })
@@ -1456,9 +1701,10 @@ impl Terminal for Herdr {
         folder: &str,
         command: &AgentCommand,
         identity: &Identity,
-        beside: Option<&str>,
+        at: &OpenIn,
         session: Option<&str>,
     ) -> Opened {
+        let beside = matches!(at, OpenIn::Beside { .. });
         if self.state(identity) != AgentState::Stopped {
             return Opened::Refused {
                 reason: format!("an agent is live under {identity}"),
@@ -1523,14 +1769,14 @@ impl Terminal for Herdr {
             Ok(made) => made,
             Err(reason) => return Opened::Refused { reason },
         };
-        let pane = match self.new_pane(place, &identity.place, beside, &made) {
+        let pane = match self.new_pane(place, &identity.place, at, &made) {
             Ok(pane) => pane,
             Err(reason) => return Opened::Refused { reason },
         };
         let kept = Kept {
             pane: pane.clone(),
             name: herdr_name(identity),
-            place: beside.is_none().then(|| place.location.clone()),
+            place: (!beside).then(|| place.location.clone()),
             trust: command
                 .folder_trust
                 .clone()
@@ -1840,14 +2086,23 @@ impl Terminal for Herdr {
         }
     }
 
+    /// The place's tab closed on every server a record names, then the
+    /// base's workspace on each of those servers, or on every server where
+    /// the place had no tab, each once it holds no tab of a live place and
+    /// no pane flume did not open (137, 138; record 0031).
     fn tidy(&self, place: &PlaceRef) -> TerminalTidy {
         let mut tidy = TerminalTidy::default();
         let opened = self.opened_panes();
-        if let Some((tab, socket)) = self.tab(place) {
-            let record = read_json(&self.tab_record(&place.location)).unwrap_or_default();
-            let label = record["label"].as_str().unwrap_or(&tab).to_string();
-            let workspace = record["workspace"].as_str().unwrap_or_default().to_string();
-            match self.foreign_panes(&socket, &workspace, &opened, |pane| {
+        let tabs = self.tab_records(place);
+        let servers: BTreeSet<PathBuf> = tabs.iter().map(|tab| tab.socket.clone()).collect();
+        for record in &tabs {
+            let (tab, socket) = (&record.id, &record.socket);
+            let label = record.label().to_string();
+            let workspace = record.value["workspace"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            match self.foreign_panes(socket, &workspace, &opened, |pane| {
                 pane["tab_id"].as_str() == Some(tab.as_str())
             }) {
                 Err(reason) => tidy.kept.push(format!(
@@ -1857,13 +2112,13 @@ impl Terminal for Herdr {
                     "the tab {label} ({tab}), held by the pane {} flume did not open",
                     foreign.join(", ")
                 )),
-                Ok(_) => match self.ask(&socket, &["tab", "close", &tab]) {
+                Ok(_) => match self.ask(socket, &["tab", "close", tab]) {
                     Call::Answered(_) => {
                         tidy.closed.push(format!("the tab {label}"));
-                        let _ = fs::remove_file(self.tab_record(&place.location));
+                        let _ = fs::remove_file(&record.path);
                     }
                     Call::Refused { code, .. } if code == "tab_not_found" => {
-                        let _ = fs::remove_file(self.tab_record(&place.location));
+                        let _ = fs::remove_file(&record.path);
                     }
                     Call::Refused { code, words } => tidy.kept.push(format!(
                         "the tab {label} ({tab}): herdr refused ({code}): {words}"
@@ -1875,30 +2130,25 @@ impl Terminal for Herdr {
             }
         }
         self.forget_place(place);
-        match self.tidy_workspace(place, &opened) {
-            Ok(Some(closed)) => tidy.closed.push(closed),
-            Ok(None) => {}
-            Err(kept) => tidy.kept.push(kept),
+        for record in self
+            .base_records(place)
+            .iter()
+            .filter(|record| servers.is_empty() || servers.contains(&record.socket))
+        {
+            match self.tidy_workspace(place, record, &opened) {
+                Ok(Some(closed)) => tidy.closed.push(closed),
+                Ok(None) => {}
+                Err(kept) => tidy.kept.push(kept),
+            }
         }
         tidy
     }
 
     fn kept(&self) -> Vec<String> {
         let opened = self.opened_panes();
-        fs::read_dir(self.records.join("workspaces"))
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .filter_map(|entry| read_json(&entry.path()))
-            .filter_map(|record| {
-                let place = PlaceRef {
-                    repository: record["repository"].as_str()?.into(),
-                    base: record["base"].as_str()?.into(),
-                    location: String::new(),
-                    branch: String::new(),
-                };
-                self.held_workspace(&place, &opened)
-            })
+        self.records_of("workspaces", "workspace")
+            .iter()
+            .filter_map(|record| self.held_workspace(record, &opened))
             .collect()
     }
 
@@ -1927,14 +2177,15 @@ impl Terminal for Herdr {
                 }
             }
         }
-        if let Some((workspace, socket)) = self.workspace(place) {
-            let token = format!("flume={}", clues.base);
+        let token = format!("flume={}", clues.base);
+        for record in self.base_records(place) {
+            let (workspace, socket) = (&record.id, &record.socket);
             match self.answered(
-                &socket,
+                socket,
                 &[
                     "workspace",
                     "report-metadata",
-                    &workspace,
+                    workspace,
                     "--source",
                     "flume",
                     "--token",
@@ -1956,16 +2207,28 @@ impl Terminal for Herdr {
         }
     }
 
+    /// The place's tab on the live agent's server, else its newest; the
+    /// agent's pane; the base's workspace on that tab's server, or its
+    /// newest where the place has no tab; and each of the base's
+    /// workspaces, on every server; each from the records alone (107,
+    /// 139, C.5).
     fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
-        let named = |id: &str, socket: &Path| format!("herdr:{id}@{}", socket.display());
+        let pane = agent.and_then(|agent| self.pane(agent));
+        let tabs = self.tab_records(place);
+        let tab = pane
+            .as_ref()
+            .and_then(|pane| tabs.iter().find(|tab| tab.socket == pane.socket))
+            .or(tabs.last());
+        let bases = self.base_records(place);
+        let base = match tab {
+            Some(tab) => bases.iter().find(|base| base.socket == tab.socket),
+            None => bases.last(),
+        };
         ShownAt {
-            place: self.tab(place).map(|(tab, socket)| named(&tab, &socket)),
-            agent: agent
-                .and_then(|agent| self.pane(agent))
-                .map(|pane| pane.session()),
-            base: self
-                .workspace(place)
-                .map(|(workspace, socket)| named(&workspace, &socket)),
+            place: tab.map(Record::named),
+            agent: pane.map(|pane| pane.session()),
+            base: base.map(Record::named),
+            bases: bases.iter().map(Record::named).collect(),
         }
     }
 
@@ -1979,8 +2242,159 @@ impl Terminal for Herdr {
         }
     }
 
+    fn setup(&self) -> Vec<String> {
+        let mut setup: Vec<String> = Vec::new();
+        for server in self.watched_servers() {
+            let Some(Value::Array(lacking)) = read_json(&server.join("setup.json")) else {
+                continue;
+            };
+            for words in lacking.iter().filter_map(Value::as_str) {
+                if !words.trim().is_empty() && !setup.iter().any(|said| said == words) {
+                    setup.push(words.to_string());
+                }
+            }
+        }
+        setup
+    }
+
     fn session(&self) -> Option<String> {
         self.caller.as_ref().map(Pane::session)
+    }
+
+    /// For a window, `<herdr> session attach <name>`, the session's
+    /// server found or started first as open does, `<herdr>` the full path
+    /// of the herdr the profile's calls run and `XDG_CONFIG_HOME` the
+    /// sessions' home they run under where they run under one; the
+    /// profile's own session where none is named, refused where its own
+    /// server is held by its socket alone. herdr 0.9.5 has no app of its
+    /// own, so the app's view is refused before anything is run (107,
+    /// 187, C.5; core.29).
+    fn attach(&self, session: Option<&str>, view: View) -> Attached {
+        let refused = |reason: String| Attached::Refused { reason };
+        if view == View::App {
+            return refused(
+                "herdr 0.9.5 has no app of its own; the Herdr app runs on herdr-core, a backend \
+                 apart with sessions of its own"
+                    .into(),
+            );
+        }
+        let name = match (session, &self.server) {
+            (Some(name), _) => name.to_string(),
+            (None, Server::Session(own)) => own.clone(),
+            (None, Server::Socket(socket)) => {
+                return refused(format!(
+                    "herdr attaches a client by a session's name, and this profile's own \
+                     server is held by its socket alone, {}",
+                    socket.display()
+                ))
+            }
+        };
+        let Some(program) = self.program_found() else {
+            return refused(format!(
+                "no {} is on the PATH this command runs under",
+                self.program.display()
+            ));
+        };
+        if let Err(reason) = self.socket_of(&Server::Session(name.clone())) {
+            return refused(reason);
+        }
+        let home = self
+            .session_home
+            .clone()
+            .or_else(|| std::env::var_os(SESSION_HOME).map(PathBuf::from));
+        Attached::Command {
+            command: ViewCommand {
+                program: program.to_string_lossy().into_owned(),
+                arguments: vec!["session".into(), "attach".into(), name],
+                environment: home
+                    .map(|home| {
+                        BTreeMap::from([(
+                            SESSION_HOME.to_string(),
+                            home.to_string_lossy().into_owned(),
+                        )])
+                    })
+                    .unwrap_or_default(),
+            },
+        }
+    }
+
+    /// From one `herdr session list --json` for every part asked, bounded
+    /// at a second: each session by its name, the profile's own where none
+    /// is named, running where herdr lists it running and not running
+    /// where it lists it otherwise or not at all; an own server held by its
+    /// socket alone by the session listed at that socket, unread where none
+    /// is. A listing not read within the bound, refused or not parsed is
+    /// unread in herdr's words for every part. Nothing is started (200,
+    /// 201, C.5; core.13, core.29).
+    fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns> {
+        let unread = |reason: String| {
+            sessions
+                .iter()
+                .map(|_| SessionRuns::Unread {
+                    reason: reason.clone(),
+                })
+                .collect()
+        };
+        let listing = match self.run(None, &["session", "list", "--json"], RUNS_BOUND) {
+            Ok((true, listing, _)) => listing,
+            Ok((false, _, errors)) => {
+                return unread(format!("herdr session list --json: {}", errors.trim()))
+            }
+            Err(words) => return unread(words),
+        };
+        let listed: Value = match serde_json::from_str(listing.trim()) {
+            Ok(listed) => listed,
+            Err(error) => return unread(format!("herdr session list --json: {error}")),
+        };
+        let listed = listed
+            .get("sessions")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        sessions
+            .iter()
+            .map(|session| self.listed_runs(listed, *session))
+            .collect()
+    }
+}
+
+impl Herdr {
+    /// Whether the part `session`, the profile's own where none, runs, as
+    /// the listing `sessions` gives it (201, C.5).
+    fn listed_runs(&self, sessions: &[Value], session: Option<&str>) -> SessionRuns {
+        let by_name = |name: &str| {
+            let found = sessions
+                .iter()
+                .find(|listed| listed.get("name").and_then(Value::as_str) == Some(name));
+            (name.to_string(), found)
+        };
+        let found = match (session, &self.server) {
+            (Some(name), _) => by_name(name),
+            (None, Server::Session(own)) => by_name(own),
+            (None, Server::Socket(socket)) => {
+                let found = sessions.iter().find(|listed| {
+                    listed
+                        .get("socket_path")
+                        .and_then(Value::as_str)
+                        .is_some_and(|listed| Path::new(listed) == socket)
+                });
+                let Some(name) = found.and_then(|found| found.get("name")?.as_str()) else {
+                    return SessionRuns::Unread {
+                        reason: format!(
+                            "herdr session list --json lists no session at {}",
+                            socket.display()
+                        ),
+                    };
+                };
+                (name.to_string(), found)
+            }
+        };
+        match found {
+            (name, Some(listed)) if listed.get("running") == Some(&Value::Bool(true)) => {
+                SessionRuns::Runs { name }
+            }
+            (name, _) => SessionRuns::NotRunning { name },
+        }
     }
 }
 
@@ -2042,37 +2456,123 @@ mod tests {
         // recorded, asking herdr nothing (the socket answers no server).
         let (herdr, records) = over_records("shown");
         let place = place();
+        let socket = Path::new("/run/h.sock");
         write_json(
-            &herdr.tab_record(&place.location),
-            &json!({"tab": "w1:t2", "socket": "/run/h.sock"}),
+            &herdr.tab_record(&place.location, socket),
+            &json!({"tab": "w1:t2", "socket": socket, "place": place.location}),
         )
         .unwrap();
         write_json(
-            &herdr.workspace_record(&place),
-            &json!({"workspace": "w1", "socket": "/run/h.sock"}),
+            &herdr.workspace_record(&place, socket),
+            &json!({"workspace": "w1", "socket": socket, "repository": "/r", "base": "main"}),
         )
         .unwrap();
-        herdr
-            .keep(
-                &identity(),
-                &Kept {
-                    pane: Pane {
-                        id: "w1:p3".into(),
-                        socket: "/run/h.sock".into(),
-                    },
-                    name: herdr_name(&identity()),
-                    place: Some(place.location.clone()),
-                    trust: None,
-                },
-            )
-            .unwrap();
+        keep_pane(&herdr, "w1:p3", "/run/h.sock");
         assert_eq!(
             herdr.shown_at(&place, Some(&identity())),
             ShownAt {
                 place: Some("herdr:w1:t2@/run/h.sock".into()),
                 agent: Some("herdr:w1:p3@/run/h.sock".into()),
                 base: Some("herdr:w1@/run/h.sock".into()),
+                bases: vec!["herdr:w1@/run/h.sock".into()],
             }
+        );
+        let _ = fs::remove_dir_all(records);
+    }
+
+    /// The agent `identity()` recorded in the pane `id` on `socket`.
+    fn keep_pane(herdr: &Herdr, id: &str, socket: &str) {
+        herdr
+            .keep(
+                &identity(),
+                &Kept {
+                    pane: Pane {
+                        id: id.into(),
+                        socket: socket.into(),
+                    },
+                    name: herdr_name(&identity()),
+                    place: Some(place().location),
+                    trust: None,
+                },
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn a_place_in_two_sessions_shows_on_its_live_agents_server_and_its_base_on_each() {
+        // 107, 139, design 2: the tab and the base's workspace on the live
+        // agent's server, and each of the base's workspaces in bases.
+        let (herdr, records) = over_records("two");
+        let place = place();
+        for (socket, workspace, tab) in [
+            ("/run/flume.sock", "w1", "w1:t2"),
+            ("/run/work.sock", "w4", "w4:t1"),
+        ] {
+            let socket = Path::new(socket);
+            write_json(
+                &herdr.tab_record(&place.location, socket),
+                &json!({"tab": tab, "socket": socket, "place": place.location}),
+            )
+            .unwrap();
+            write_json(
+                &herdr.workspace_record(&place, socket),
+                &json!({"workspace": workspace, "socket": socket, "repository": "/r", "base": "main"}),
+            )
+            .unwrap();
+        }
+        keep_pane(&herdr, "w1:p3", "/run/flume.sock");
+        let shown = herdr.shown_at(&place, Some(&identity()));
+        assert_eq!(
+            (shown.place.as_deref(), shown.base.as_deref()),
+            (
+                Some("herdr:w1:t2@/run/flume.sock"),
+                Some("herdr:w1@/run/flume.sock")
+            )
+        );
+        let mut bases = shown.bases;
+        bases.sort();
+        assert_eq!(
+            bases,
+            vec![
+                "herdr:w1@/run/flume.sock".to_string(),
+                "herdr:w4@/run/work.sock".to_string()
+            ]
+        );
+        assert_eq!(herdr.tabs(&place).len(), 2);
+        let _ = fs::remove_dir_all(records);
+    }
+
+    #[test]
+    fn records_written_before_are_read_as_their_servers() {
+        // 138, design 2: a workspace and a tab recorded at the keys used
+        // before records were kept by server are the records of the
+        // server they name.
+        let (herdr, records) = over_records("before");
+        let place = place();
+        write_json(
+            &herdr.tab_record_before(&place.location),
+            &json!({"tab": "w1:t2", "socket": "/run/h.sock", "place": place.location}),
+        )
+        .unwrap();
+        write_json(
+            &herdr.workspace_record_before(&place),
+            &json!({"workspace": "w1", "socket": "/run/h.sock"}),
+        )
+        .unwrap();
+        assert_eq!(
+            herdr.shown_at(&place, None),
+            ShownAt {
+                place: Some("herdr:w1:t2@/run/h.sock".into()),
+                agent: None,
+                base: Some("herdr:w1@/run/h.sock".into()),
+                bases: vec!["herdr:w1@/run/h.sock".into()],
+            }
+        );
+        assert_eq!(
+            herdr
+                .base_record_on(&place, Path::new("/run/h.sock"))
+                .map(|record| record.path),
+            Some(herdr.workspace_record_before(&place))
         );
         let _ = fs::remove_dir_all(records);
     }
@@ -2084,5 +2584,106 @@ mod tests {
             herdr.shown_at(&place(), Some(&identity())),
             ShownAt::default()
         );
+    }
+
+    /// The profile over a scratch state directory of flume's herdr
+    /// plugin, its herdr a script that marks it was run; and the plugin's
+    /// directory and that mark.
+    fn over_plugin(name: &str) -> (Herdr, PathBuf, PathBuf) {
+        let scratch =
+            std::env::temp_dir().join(format!("flume-herdr-plugin-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&scratch);
+        fs::create_dir_all(&scratch).unwrap();
+        let program = scratch.join("herdr");
+        let ran = scratch.join("ran");
+        fs::write(
+            &program,
+            format!("#!/bin/sh\necho \"$@\" >> '{}'\n", ran.display()),
+        )
+        .unwrap();
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        let plugin = scratch.join("plugin");
+        let herdr = Herdr {
+            program,
+            ..Herdr::new(
+                Server::Socket("/run/h.sock".into()),
+                scratch.join("records"),
+            )
+            .with_plugin(Some(plugin.clone()))
+        };
+        (herdr, plugin, ran)
+    }
+
+    /// A server of the plugin's whose watch last renewed its lease `ago`
+    /// seconds since, and wrote `lacking` into its setup.json.
+    fn server(plugin: &Path, name: &str, ago: u64, lacking: &[&str]) {
+        let server = plugin.join("servers").join(name);
+        fs::create_dir_all(&server).unwrap();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        fs::write(
+            server.join("watch.lease"),
+            format!("4242 {}\n/plugin\n0.0.0\n77\n", now - ago),
+        )
+        .unwrap();
+        write_json(&server.join("setup.json"), &json!(lacking)).unwrap();
+    }
+
+    const KEY: &str = "herdr's configuration, /h/config.toml, binds no key to flume's places";
+    const ROWS: &str =
+        "herdr's configuration, /h/config.toml, shows no row of flume's in the sidebar";
+
+    #[test]
+    fn setup_is_a_fresh_leases_words_alone() {
+        // 122, C.5, design 8: one server's watch keeps a fresh lease and
+        // says the popup's key is missing; another's lease is stale, its
+        // words of the rows no longer what a watch reads. The profile
+        // gives the first's words alone and runs no herdr command.
+        let (herdr, plugin, ran) = over_plugin("fresh-stale");
+        server(&plugin, "1111", 5, &[KEY]);
+        server(&plugin, "2222", 120, &[ROWS]);
+        assert_eq!(herdr.setup(), vec![KEY.to_string()]);
+        assert!(!ran.exists(), "a herdr command was run");
+    }
+
+    #[test]
+    fn setup_gives_each_servers_words_in_order_and_once() {
+        // 122, design 8: two watches read one configuration file, and a
+        // third another; each of their words is given once, in the order
+        // of their servers.
+        let (herdr, plugin, ran) = over_plugin("in-order");
+        server(&plugin, "1111", 5, &[KEY, ROWS]);
+        server(&plugin, "2222", 5, &[KEY, ROWS]);
+        server(
+            &plugin,
+            "3333",
+            5,
+            &["herdr's configuration, /other.toml, binds no key"],
+        );
+        assert_eq!(
+            herdr.setup(),
+            vec![
+                KEY.to_string(),
+                ROWS.to_string(),
+                "herdr's configuration, /other.toml, binds no key".to_string(),
+            ]
+        );
+        assert!(!ran.exists(), "a herdr command was run");
+    }
+
+    #[test]
+    fn setup_is_none_beside_no_lease_or_nothing_lacking() {
+        // 122, design 8: no plugin's state, a fresh lease beside an empty
+        // array, and one beside no setup.json, as a watch of an earlier
+        // plugin keeps, each give none.
+        let (herdr, plugin, ran) = over_plugin("none");
+        assert_eq!(herdr.setup(), Vec::<String>::new());
+        server(&plugin, "1111", 5, &[]);
+        server(&plugin, "2222", 5, &[KEY]);
+        fs::remove_file(plugin.join("servers/2222/setup.json")).unwrap();
+        assert_eq!(herdr.setup(), Vec::<String>::new());
+        assert!(!ran.exists(), "a herdr command was run");
     }
 }

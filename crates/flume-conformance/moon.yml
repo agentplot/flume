@@ -18,9 +18,10 @@ tasks:
     inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
+  # The no-tool test reads every crate's sources, so each is an input.
   test:
     command: 'cargo test -p flume-conformance'
-    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/crates/flume-core/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
+    inputs: ['/crates/flume-conformance/**/*', '/crates/flume-seams/**/*', '/crates/flume-fakes/**/*', '/crates/flume-core/**/*', '/crates/flume/**/*', '/Cargo.toml', '/Cargo.lock', '/devenv.nix', '/devenv.lock', '/.prototools', '/rust-toolchain.toml']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   coverage:

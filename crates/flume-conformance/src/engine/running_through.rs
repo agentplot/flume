@@ -13,6 +13,9 @@ use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Act, Retry, Waits};
 use flume_fakes::Plan;
 use flume_seams::*;
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
@@ -65,6 +68,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "fix round: a conflict two settles read at once, of a change whose held submission a retry released, starts code once with the merge queue's words and counts once toward the kind's bound, the change sent back never or once before; one sent back to its bound waits on its caller saying so",
             cites: &["47", "49", "111", "112", "131", "74", "75"],
             run: a_released_conflict_read_at_once,
+        },
+        Scenario {
+            name: "run through: a settle that read construct delivered while another started code and code was refused starts nothing past code, and the place waits on a retry of code",
+            cites: &["40", "46", "74", "75"],
+            run: a_refused_start_read_late,
         },
         Scenario {
             name: "fix round: construct finding work starts nothing, and waits on an answer, status saying it found work",
@@ -558,6 +566,73 @@ fn two_settles_at_once(world: &World, id: &PlaceId) -> Outcome {
             .iter()
             .any(|call| call.ends_with("moved")),
         "the two settles did not meet at one write"
+    );
+    Ok(())
+}
+
+/// Two settles at once, as the walkthrough's settle and its agent's
+/// going quiet settle together: one reads construct delivered and, before
+/// it starts the stage after it, the other runs whole, starting code,
+/// which its stream's table for code refuses. The first then reads code
+/// refused and current, and starts nothing.
+fn a_refused_start_read_late(_: &()) -> Outcome {
+    let world = World::new();
+    let id = construct_begun(&world, "plan")?;
+    let stream = world.held(&id).ok_or("no held state")?.place.stream.name;
+    world.host.set_kind_sessions(
+        &stream,
+        "change",
+        Some(KindSessions {
+            stages: BTreeMap::from([(
+                "code".to_string(),
+                StageSession {
+                    session: None,
+                    unknown: vec!["pool".into()],
+                },
+            )]),
+            ..KindSessions::default()
+        }),
+    );
+    write_change(&world, "plan");
+    let met = Arc::new(AtomicBool::new(false));
+    let (other, at, ran) = (world.engine(), id.clone(), met.clone());
+    world.store.after_read_of(
+        |held| held.current == Some(0) && held.stages[0].state == StageState::Delivered,
+        move || {
+            other.settle(Some(&at));
+            ran.store(true, Ordering::SeqCst);
+        },
+    );
+    world.settle(&id);
+    ensure!(
+        met.load(Ordering::SeqCst),
+        "the second settle did not run after construct was read delivered"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Refused),
+        "code"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "verify"),
+        Some(StageState::NotReached),
+        "verify"
+    );
+    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    let status = world.status(&id)?;
+    let words = status.stages[1]
+        .refused_setting
+        .clone()
+        .ok_or("no refusal given")?;
+    ensure!(
+        words.contains(&format!("streams.{stream}.kinds.change.stages.code.pool")),
+        "the refusal names not code's table and the key: {words}"
+    );
+    let waiting = status.waiting_on.ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage.as_deref(), waiting.why),
+        (Act::Retry, Some("code"), Waits::Refused),
+        "the move the place waits on"
     );
     Ok(())
 }

@@ -10,7 +10,7 @@ pub mod place;
 mod print;
 
 use clap::{Args, Parser, Subcommand};
-use flume_core::{Answer, Engine, Retry, WaitFor};
+use flume_core::{Answer, Engine, KindsLock, LockOf, Retry, WaitFor};
 use flume_seams::{AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -57,6 +57,20 @@ enum Command {
     Status {
         /// A location, or `<kind>--<name>` in the repository.
         place: Option<String>,
+        /// Each place's one line alone, reading only what a line holds
+        /// (57, 60).
+        #[arg(long)]
+        line: bool,
+    },
+    /// A line for each place on the host and each stream it declares,
+    /// reading only what flume keeps, a place that landed or was dropped
+    /// left out unless `--all` is given; `flume status <place>` gives a
+    /// place's every fact. Needs no repository and settles nothing (57,
+    /// 200).
+    List {
+        /// Every place, those that landed or were dropped among them.
+        #[arg(long)]
+        all: bool,
     },
     /// The exact prompt a stage would be sent at its next start (29).
     Prompt { place: String, stage: String },
@@ -136,7 +150,8 @@ enum Command {
     },
     /// From an agent program's hook: what the hook for `event` does with
     /// the input on standard input, in an agent flume started; nothing
-    /// elsewhere. It always exits 0 (C.4).
+    /// elsewhere. `status-line` reads no input and prints the place's
+    /// line. It always exits 0 (C.4).
     Hook {
         /// One of the plugin's hooks; any other does nothing.
         event: String,
@@ -190,9 +205,53 @@ enum Command {
         /// The role's address, `<partition>/<role>`.
         address: String,
     },
+    /// Show a session of a stream's terminal in the stream's view, by the
+    /// session's name, never a stream's: a window of the stream's
+    /// terminal app running its multiplexer's attach for the session,
+    /// titled as the stream declares, else the stream's name, for the
+    /// stream's own session, and by the session's name for one the stream
+    /// names for a kind or a stage; or the multiplexer's own app; or the
+    /// line to run where no terminal app opens a window. Needs no
+    /// repository; each asking opens a window of its own (186, 199).
+    Open {
+        /// A session's name: a stream's own, the one the stream's
+        /// `session` names, else the stream's name, or one a stream names
+        /// for a kind or a stage; the default stream's own where none is
+        /// named.
+        session: Option<String>,
+    },
     /// flume's status over MCP on standard input and output, one tool,
     /// `status`, settling nothing (57, 60).
     Mcp,
+    /// The kinds a lock records, by which a kind from outside flume and
+    /// the repository runs (155, C.2).
+    Kinds {
+        #[command(subcommand)]
+        kinds: KindsCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum KindsCommand {
+    /// Record each kind, named whole as `<source>/<name>@<version>`, at
+    /// its content's hash: in `.config/flume.lock` of the working copy the
+    /// command runs in, which its caller commits, or in the host's lock
+    /// with `--host`. It fetches nothing and commits nothing (155, C.2).
+    Lock {
+        /// Write the host's lock, beside its configuration.
+        #[arg(long)]
+        host: bool,
+        /// Take each kind's entry out, reading no package.
+        #[arg(long, conflicts_with = "hash")]
+        remove: bool,
+        /// Record the one kind named only where its content hashes so,
+        /// and otherwise refuse, the lock left as it was.
+        #[arg(long)]
+        hash: Option<String>,
+        /// Each kind, `<source>/<name>@<version>`.
+        #[arg(required = true, value_name = "IDENTITY")]
+        kinds: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -234,6 +293,10 @@ struct Forced {
 
 #[derive(Debug, Args)]
 struct LaunchArgs {
+    /// The kind, as the launch's declaration, the repository's or flume's
+    /// own names it, `<name>` or `<name>@<version>`, or by its source,
+    /// `<source>/<name>` or `<source>/<name>@<version>`; read whole by
+    /// the core (19, 154).
     #[arg(long)]
     kind: String,
     #[arg(long)]
@@ -268,9 +331,10 @@ struct LaunchArgs {
     #[arg(long, value_name = "TIME")]
     stall_after: Option<String>,
     /// One setting of every stage's agent, or of one stage's (32): the
-    /// field one of program, model, instructions, beside and mode, the
-    /// mode one of plan, ask, edits and full, or `mode.<program>` for one
-    /// program's entry of a mode (162, 169).
+    /// field one of program, model, instructions, beside, session and
+    /// mode, `session` the terminal's session its agents open in, the mode
+    /// one of plan, ask, edits and full, or `mode.<program>` for one
+    /// program's entry of a mode (107, 162, 169).
     #[arg(long, value_name = "[STAGE.]FIELD=VALUE")]
     agent: Vec<String>,
     /// The stream the place runs in, one the host's configuration
@@ -326,7 +390,9 @@ where
     match &cli.command {
         Command::Hook { event } => {
             let mut input = String::new();
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            if crate::profiles::hook_reads_input(event) {
+                let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            }
             return Outcome {
                 text: crate::profiles::hook(event, &input, build),
                 usage: false,
@@ -411,10 +477,16 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             let launch = launch_of(args, given)?;
             build()?.launch(&launch)
         }
-        Command::Status { place } => {
+        Command::Status { place, line } => {
             let place = maybe(place)?;
-            build()?.status(place.as_ref())
+            let core = build()?;
+            if *line {
+                core.lines(place.as_ref())
+            } else {
+                core.status(place.as_ref())
+            }
         }
+        Command::List { all } => build()?.list(*all),
         Command::Prompt { place, stage } => {
             let place = named(place)?;
             build()?.prompt(&place, stage)
@@ -503,6 +575,33 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             core.inbox(&recipient)
         }
         Command::Wake { address } => build()?.wake(address),
+        Command::Kinds {
+            kinds:
+                KindsCommand::Lock {
+                    host,
+                    remove,
+                    hash,
+                    kinds,
+                },
+        } => {
+            let of = if *host {
+                LockOf::Host
+            } else {
+                LockOf::WorkingCopy {
+                    dir: place::working_copy(given)?,
+                }
+            };
+            // Held until the lock is written, so two writers on the host
+            // never lose each other's entry (74, 155; design 6).
+            let _writing = crate::host::writing_kinds_lock()?;
+            build()?.lock_kinds(&KindsLock {
+                of,
+                kinds: kinds.clone(),
+                remove: *remove,
+                hash: hash.clone(),
+            })
+        }
+        Command::Open { session } => build()?.open_session(session.as_deref()),
         Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
             unreachable!("answered before the core's acts")
         }
@@ -573,8 +672,10 @@ fn launch_of(args: &LaunchArgs, given: Option<&Path>) -> Result<Launch, String> 
         .transpose()?;
     let mut every_stage = Default::default();
     let mut settings = BTreeMap::new();
+    let working = std::env::current_dir()
+        .map_err(|error| format!("the working directory could not be read: {error}"))?;
     for given in &args.agent {
-        launch::agent(given, &mut every_stage, &mut settings)?;
+        launch::agent(given, &working, &mut every_stage, &mut settings)?;
     }
     let mut hold = vec![];
     let mut hold_words = BTreeMap::new();

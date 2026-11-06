@@ -9,9 +9,12 @@
 # last settle, it runs `flume settle`,
 # writes `flume status --json` for the sidebar and the popup, and reports
 # the display clues and the sidebar rows status gives (46, 119, 120, 139;
-# core.13, core.14). It runs nothing else of flume's. What it holds
-# between ticks is in its state directory, so `--ticks N`, which stops it
-# after N ticks (the tests), goes on where the last left off.
+# core.13, core.14). At its start and after each settle it writes what
+# herdr's configuration lacks for the plugin, for flume's status to give,
+# and logs it once at its start, telling no person (72, 122). It runs
+# nothing else of flume's. What it holds between ticks is in its state
+# directory, so `--ticks N`, which stops it after N ticks (the tests),
+# goes on where the last left off.
 set -u
 . "$(dirname "$0")/../lib/common.sh"
 . "$root/lib/lease.sh"
@@ -66,6 +69,19 @@ write_lease() {
   if holds_lock; then mv -f "$lease.tmp.$$" "$lease"; else rm -f "$lease.tmp.$$"; fi
 }
 
+# What herdr's configuration lacks for the plugin, written as a JSON
+# array into setup.json, which flume's herdr profile gives in status
+# beside this watch's lease; and logged where $1 is `said`. Nothing is
+# sent to herdr for it (72, 122; design 8).
+setup() {
+  lacking "$(herdr_config)" >"$state/setup.lines"
+  jq -R -s -c 'split("\n") | map(select(. != ""))' <"$state/setup.lines" | put "$state/setup.json" ||
+    say "what herdr's configuration lacks was not written"
+  if [ "${1:-}" = said ]; then
+    while IFS= read -r words; do say "$words"; done <"$state/setup.lines"
+  fi
+}
+
 case ${1:-} in
 --ensure)
   ours && exit 0
@@ -79,17 +95,39 @@ ticks=-1
 socket=$(socket_id)
 who=$(identity $$)
 
+# The watch's end: its renewer ended, and its lease removed where it is
+# still this watch's, under the lock, which it may hold already.
+stop() {
+  if [ -n "${renewer:-}" ]; then
+    kill "$renewer" 2>/dev/null
+    wait "$renewer" 2>/dev/null
+  fi
+  if holds_lock || take_lock; then
+    rm -f "$lease.tmp.$$"
+    [ "$(holder)" = $$ ] && rm -f "$lease"
+    drop_lock
+  fi
+}
+
 take_lock || exit 0
 if ours; then
   drop_lock
   exit 0
 fi
+# Set before the lease is written, so a watch ended at any moment once
+# its lease can be read takes the lease with it: a lease left by a watch
+# that is gone is read as a live one until it is stale (122).
+trap 'stop; exit 0' INT TERM
+trap stop EXIT
 write_lease
 drop_lock
 say "watching (pid $$)"
+setup said
 
 # The lease is renewed on its own clock, however long a settle takes.
 (
+  # The watch's traps are its own: a subshell's end removes no lease.
+  trap - TERM EXIT
   # shellcheck disable=SC2034 # read by take_lock and drop_lock
   lock_owner=$(exec sh -c 'echo $PPID')
   while sleep "$every" && kill -0 $$ 2>/dev/null; do
@@ -104,17 +142,6 @@ say "watching (pid $$)"
   done
 ) &
 renewer=$!
-
-stop() {
-  kill "$renewer" 2>/dev/null
-  wait "$renewer" 2>/dev/null
-  if take_lock; then
-    [ "$(holder)" = $$ ] && rm -f "$lease"
-    drop_lock
-  fi
-}
-trap 'stop; exit 0' INT TERM
-trap stop EXIT
 
 # Each flume pane on this server status names, with the agent state
 # herdr's listing $1 reads in it, or gone where it lists none: one line
@@ -134,15 +161,15 @@ states() {
   printf '%s' "$1" | jq -r '"agents:" + ([.result.panes[]? | select(.agent != null) | " " + .pane_id] | sort | add // "")' 2>/dev/null
 }
 
-# Each clue and row status gives, reported where status says the terminal
-# shows it on this server: a pane's title, the agent's name and its row;
-# a base's workspace's count line. Copied from status and computed by
-# nothing here (139; core.14). A report that fails is logged and the tick
-# goes on.
+# Each clue and line status gives, reported where status says the
+# terminal shows it on this server: a pane's title, the agent's name and
+# its row, the short form of its place's line; a base's workspace's count
+# line. Copied from status and computed by nothing here (56, 60, 139;
+# core.14). A report that fails is logged and the tick goes on.
 report() {
-  jq -r "$rows_jq"'
+  jq -r '
     (.status.places[]? | select(.clues != null and .clues.shown_at.agent != null)
-      | ["pane", .clues.shown_at.agent, .clues.title, .clues.display_agent, row]),
+      | ["pane", .clues.shown_at.agent, .clues.title, .clues.display_agent, .line.short]),
     (.status.host.bases[]? | select(.shown_at != null) | ["workspace", .shown_at, .line])
     | @tsv' "$status" 2>/dev/null >"$state/reports"
   while IFS='	' read -r what at a b c; do
@@ -158,7 +185,8 @@ report() {
   done <"$state/reports"
 }
 
-# flume settle, then status written for the sidebar, then the clues.
+# flume settle, then status written for the sidebar, then the clues, then
+# what herdr's configuration lacks.
 settle() {
   flume settle >/dev/null 2>"$state/settle.err" ||
     say "flume settle failed: $(tail -1 "$state/settle.err")"
@@ -174,6 +202,7 @@ settle() {
   else
     say "flume status failed: $(tail -1 "$state/status.err")"
   fi
+  setup
 }
 
 gone=0

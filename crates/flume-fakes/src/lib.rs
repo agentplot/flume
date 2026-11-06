@@ -1,4 +1,4 @@
-//! One scriptable fake for each of flume's seven seams, and for git's
+//! One scriptable fake for each of flume's eight seams, and for git's
 //! history and the host: a test sets what each answers, its refusals and
 //! unknowns among them, and reads back every call made of it, in order.
 //! The fake clock moves only when a test advances it or a command sleeps
@@ -16,18 +16,20 @@ mod place;
 mod resolver;
 mod store;
 mod terminal;
+mod window;
 
 pub use agent::FakeAgent;
 pub use change::FakeChange;
 pub use git::{FakeGit, FakeHistory};
-pub use host::FakeHost;
-pub use kinds::FakeKinds;
+pub use host::{source_file, FakeHost, HOST_LOCK, SOURCES};
+pub use kinds::{kind_identity, package_dir, packaged, FakeKinds};
 pub use log::Log;
 pub use merge_queue::{FakeMergeQueue, Plan};
 pub use place::{place_location, FakePlace};
 pub use resolver::FakeResolver;
 pub use store::FakeStore;
 pub use terminal::FakeTerminal;
+pub use window::FakeWindow;
 
 use std::sync::{Mutex, MutexGuard};
 

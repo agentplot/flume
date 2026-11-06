@@ -48,6 +48,7 @@ impl Engine {
     /// receipt only where `read_back`.
     fn deliver_reading(&self, id: &PlaceId, read_back: bool) -> bool {
         let mut sent = false;
+        let mut read_again = false;
         loop {
             let Some(read) = self.store.read(id) else {
                 return sent;
@@ -100,9 +101,9 @@ impl Engine {
                 // after the open returned: the terminal answers it where
                 // it shows it now (34, 35).
                 let answered =
-                    stage.state == StageState::Starting && self.terminal.answer_trust(identity);
+                    stage.state == StageState::Starting && self.agent_on(&start).answer_trust();
                 let stopped =
-                    self.state_of(Some(agent.as_ref()), &folder, identity) == AgentState::Stopped;
+                    self.state_of(Some(agent.as_ref()), &folder, &start) == AgentState::Stopped;
                 // Any other question it shows a person holds the start,
                 // which waits on them however long (34, 35).
                 let dialog = match (answered, stopped) {
@@ -115,6 +116,17 @@ impl Engine {
                     .unwrap_or(QUIET_LIMIT);
                 let waited = self.host.now().saturating_sub(start.started_at);
                 if stopped || (!dialog && waited >= limit) {
+                    // A start read begun without its settings is read so
+                    // once more before it is read never begun, from the
+                    // held state as it stands now: its agent, read not
+                    // quiet there, may have stopped since, so it is ended
+                    // as that reading says, and the held state read
+                    // before it may not hold how it began, which its end
+                    // names (161).
+                    if unsettled.is_some() && !read_again {
+                        read_again = true;
+                        continue;
+                    }
                     if carries(&start) {
                         let words = if stopped {
                             ENDED_FIRST
@@ -139,7 +151,7 @@ impl Engine {
                 });
                 return true;
             }
-            let state = self.state_of(Some(agent.as_ref()), &folder, identity);
+            let state = self.state_of(Some(agent.as_ref()), &folder, &start);
             if state == AgentState::Stopped {
                 let end = self.read_out(&held, &start, false);
                 self.end_start(
@@ -191,7 +203,7 @@ impl Engine {
             if !self.claim_sending(id, identity, prompt.sendings.len(), now) {
                 continue;
             }
-            match self.terminal.send(identity, &prompt.text) {
+            match self.agent_on(&start).send(&prompt.text) {
                 Sent::Sent => sent = true,
                 Sent::Refused { reason } => {
                     let failure =
@@ -246,12 +258,11 @@ impl Engine {
     /// dialog is gone; where it cannot read it, the start keeps what it
     /// held. Whether a dialog holds the start (34, 35).
     fn read_dialog(&self, id: &PlaceId, start: &StartHeld) -> bool {
-        let identity = &start.identity;
-        let dialog = match self.terminal.state(identity) {
+        let on = self.agent_on(start);
+        let dialog = match on.state() {
             AgentState::Asking => Some(Dialog {
-                words: self
-                    .terminal
-                    .screen(identity)
+                words: on
+                    .screen()
                     .map(|screen| shown(&screen))
                     .filter(|words| !words.is_empty())
                     .or_else(|| start.dialog.as_ref().map(|dialog| dialog.words.clone()))
@@ -265,7 +276,9 @@ impl Engine {
             _ => None,
         };
         if dialog != start.dialog {
-            self.with_start(id, identity, |start, _| start.dialog.clone_from(&dialog));
+            self.with_start(id, &start.identity, |start, _| {
+                start.dialog.clone_from(&dialog);
+            });
         }
         dialog.is_some()
     }

@@ -10,21 +10,26 @@
 //! `devenv.nix` pins, 2.1.296: its hook events and their inputs, its
 //! transcript's records, its folder-trust dialog and the keys that answer
 //! it, the words of its usage limits, its permission modes ([`mode`]),
-//! and where it keeps a session and how it resumes one ([`carry`]).
+//! where it keeps a session and how it resumes one ([`carry`]), and how it
+//! takes its own settings and which of them another setting owns
+//! ([`settings`]).
 
 pub mod carry;
 pub mod guard;
 pub mod hook;
 pub mod limit;
+pub mod live;
 pub mod mode;
 pub mod record;
+pub mod settings;
+pub mod status_line;
 pub mod transcript;
 pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
-    Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, ModeEntry, Offered, PlaceRef,
-    Reading, Received, Secret, Settings, Spent, Unsettled,
+    Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Live, ModeEntry, Offered, PlaceRef,
+    Reading, Received, Reserved, Secret, Settings, Spent, Unsettled,
 };
 use record::Record;
 use sha2::{Digest, Sha256};
@@ -39,6 +44,11 @@ pub const NAME: &str = "claude";
 /// The program's kind, by which a terminal that starts a known agent
 /// program names it (C.4).
 pub const KIND: &str = "claude";
+
+/// The option that names the file of the standing prompt, which 2.1.296
+/// reads as it reads `--append-system-prompt`'s text, though its help
+/// does not list it (148, C.4).
+pub const STANDING_PROMPT_FLAG: &str = "--append-system-prompt-file";
 
 /// The version of flume, which the plugin it writes carries, so a hook
 /// run by a binary of another version is reported (135).
@@ -70,8 +80,9 @@ pub const PLACE: &str = "FLUME_PLACE";
 pub const STAGE: &str = "FLUME_STAGE";
 
 /// The plugin's files, as `plugins/claude` holds them, by their path in
-/// the plugin.
-pub const PLUGIN: [(&str, &str); 4] = [
+/// the plugin: its manifests, its hooks, the module that pins the place's
+/// line under the prompt (design 4) and the /launch command.
+pub const PLUGIN: [(&str, &str); 5] = [
     (
         ".claude-plugin/plugin.json",
         include_str!("../../../../../../plugins/claude/.claude-plugin/plugin.json"),
@@ -79,6 +90,10 @@ pub const PLUGIN: [(&str, &str); 4] = [
     (
         "hooks/hooks.json",
         include_str!("../../../../../../plugins/claude/hooks/hooks.json"),
+    ),
+    (
+        "hooks/line.ts",
+        include_str!("../../../../../../plugins/claude/hooks/line.ts"),
     ),
     (
         ".mcp.json",
@@ -91,13 +106,19 @@ pub const PLUGIN: [(&str, &str); 4] = [
 ];
 
 /// A file of the plugin as the binary writes it for the agents it
-/// starts: each command naming `flume` names the binary by its absolute
-/// path instead (C.4). The manifest carries the binary's version as
-/// `plugins/claude` holds it, the workspace's (135).
+/// starts: each command naming `flume`, a hook's or the module's, names
+/// the binary by its absolute path instead (C.4; design 4). The manifest
+/// carries the binary's version as `plugins/claude` holds it, the
+/// workspace's (135).
 pub fn written(text: &str, binary: &Path) -> String {
     let path = serde_json::to_string(&binary.to_string_lossy()).expect("a path as JSON");
     text.replace("\"command\": \"flume\"", &format!("\"command\": {path}"))
+        .replace(MODULE_FLUME, &format!("const FLUME = {path};"))
 }
+
+/// How the module names the binary in `plugins/claude`, as a JavaScript
+/// string, which a JSON string is too.
+const MODULE_FLUME: &str = "const FLUME = \"flume\";";
 
 /// The hex digest of `text`'s SHA-256.
 pub fn digest(text: &str) -> String {
@@ -241,22 +262,30 @@ impl Claude {
 }
 
 impl Agent for Claude {
-    /// `claude --plugin-dir <plugin> [--resume <session>] [--model <m>]
-    /// [--permission-mode <mode>] [--append-system-prompt <instructions>]`
-    /// in the place, the session resumed where the start carries one (179),
-    /// the mode passed where one is given and none where it is none (162),
-    /// the program the settings name by name or path, or the program it
-    /// runs where it is a nix wrapper, with the variables the wrapper
-    /// sets ([`wrapper`]), its account's
-    /// environment and the four `FLUME_*` words, the prompt as its argument where the terminal cannot send
-    /// it; nothing of the caller's session (29, 32, 33, 88, C.4). The
-    /// host user's login environment is the terminal's to give, set on
-    /// the pane under herdr and the person's shell's under the printed
-    /// command.
+    /// `claude --plugin-dir <plugin> [--settings <file>] [--resume
+    /// <session>] [--model <m>] [--permission-mode <mode>]
+    /// [--append-system-prompt-file <file>]` in the place, the agent's
+    /// resolved own settings written as one JSON object to the file it
+    /// lists beside the start's record and named by `--settings`, nothing
+    /// passed and no file listed where they are empty, and never a file a
+    /// layer named (195, 196; [`settings`]), the session resumed where the
+    /// start carries one (179), the mode passed where one is given and none
+    /// where it is none (162), the instructions in the start's own file
+    /// beside its record, since herdr 0.9.5 types no argument holding a
+    /// newline (148, C.5), the program the settings name by name or path,
+    /// or the program it runs where it is a nix wrapper, with the variables
+    /// the wrapper sets ([`wrapper`]), its account's environment and the
+    /// four `FLUME_*` words, the prompt as its argument where the terminal
+    /// cannot send it; nothing of the caller's session (29, 32, 33, 88,
+    /// C.4). The host user's login environment is the terminal's to give,
+    /// set on the pane under herdr and the person's shell's under the
+    /// printed command.
     fn command(
         &self,
+        folder: &str,
         settings: &Settings,
         mode: Option<&str>,
+        own: &BTreeMap<String, serde_json::Value>,
         resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
@@ -269,6 +298,14 @@ impl Agent for Claude {
             "--plugin-dir".to_string(),
             plugin.to_string_lossy().into_owned(),
         ];
+        let mut files = BTreeMap::new();
+        if !own.is_empty() {
+            let file = settings::file(folder, identity)
+                .to_string_lossy()
+                .into_owned();
+            args.extend([settings::FLAG.to_string(), file.clone()]);
+            files.insert(file, settings::text(own));
+        }
         if let Some(session) = resume {
             args.extend([carry::FLAG.to_string(), session.to_string()]);
         }
@@ -279,7 +316,15 @@ impl Agent for Claude {
             args.extend([mode::FLAG.to_string(), mode.to_string()]);
         }
         if let Some(instructions) = &settings.instructions {
-            args.extend(["--append-system-prompt".to_string(), instructions.clone()]);
+            // A file that cannot be written is named all the same, as the
+            // plugin is: Claude Code's words that it is missing are the
+            // screen of the start that never came up (35).
+            let record = Record::at(folder, identity);
+            let _ = record.set_standing_prompt(instructions);
+            args.extend([
+                STANDING_PROMPT_FLAG.to_string(),
+                record.standing_prompt().to_string_lossy().into_owned(),
+            ]);
         }
         let mut env: BTreeMap<String, String> = env.clone();
         let mut program = settings.program.clone().unwrap_or_else(|| NAME.into());
@@ -310,6 +355,7 @@ impl Agent for Claude {
                 confirm: TRUST_CONFIRM.into(),
             }),
             kind: Some(KIND.into()),
+            files,
         }
     }
 
@@ -481,6 +527,24 @@ impl Agent for Claude {
         carry::carry(&Record::at(folder, earlier), env, login.as_deref())
     }
 
+    /// Runs with each process whose record under a given account's
+    /// configuration home names the start's session and runs as recorded,
+    /// or whose arguments resume it under any home; none where none does;
+    /// unknown naming `CLAUDE_CONFIG_DIR` or the host's processes and no
+    /// path where they cannot be read; read only, the host user's home its
+    /// `HOME` ([`live`]; 207, C.4).
+    fn live(&self, folder: &str, start: &Identity, envs: &[BTreeMap<String, String>]) -> Live {
+        let login = std::env::var_os("HOME")
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from);
+        live::live(
+            &Record::at(folder, start),
+            envs,
+            login.as_deref(),
+            live::processes,
+        )
+    }
+
     /// The credentials 2.1.296 keeps from every process it starts, its
     /// hooks among them ([`withheld::WITHHELD`]; 161).
     fn withheld(&self) -> Vec<String> {
@@ -500,6 +564,19 @@ impl Agent for Claude {
     /// the session runs in (161).
     fn mode_read_back(&self) -> Offered {
         Offered::Offered
+    }
+
+    /// 2.1.296's keys that another of flume's settings, the account or a
+    /// person owns, each with its owner ([`settings::reserved`]; design 6).
+    fn reserved(&self) -> Vec<Reserved> {
+        settings::reserved()
+    }
+
+    /// Every entry, taken as written: `--settings` passes any keys of
+    /// 2.1.296's settings, and the release reads them as it reads its own
+    /// (195, 196, C.4).
+    fn own(&self, _given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
+        Ok(())
     }
 
     /// The hooks' word that the agent began otherwise than its start

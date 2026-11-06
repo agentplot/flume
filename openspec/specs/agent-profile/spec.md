@@ -23,7 +23,7 @@ and the prompt as its argument under the printed command (29, 32, 33,
 #### Scenario: The command for a code stage
 
 - **WHEN** the profile gives the command for a stage with a model and instructions under an account giving `CLAUDE_CONFIG_DIR`
-- **THEN** it runs `claude` with `--plugin-dir`, `--model` and `--append-system-prompt`, the account's `CLAUDE_CONFIG_DIR`, the four `FLUME_*` words, and nothing of the caller's session
+- **THEN** it runs `claude` with `--plugin-dir`, `--model` and `--append-system-prompt-file`, naming a file of the start's own beside its record that holds the instructions as given, newlines and all, so no argument holds a newline, the account's `CLAUDE_CONFIG_DIR`, the four `FLUME_*` words, and nothing of the caller's session
 
 ### Requirement: Readings from the agent's own record
 
@@ -126,11 +126,12 @@ record 0016).
 
 The Claude Code profile's `spent` SHALL read yes only where the
 StopFailure hook recorded `rate_limit` with words that open as the
-pinned release's usage-limit messages do, with the reset its words'
-` · resets <when> (<zone>)` part names, read in that zone from when
-the hook ran, a time of day being the first such time no more than a
-minute before the hook ran, or none; a `rate_limit` with other words SHALL read no
-(146, 151, C.4).
+pinned release's usage-limit messages do, with the reset their
+` · resets <when> (<zone>)` part names, or, for a budget, their
+` · your <limit> resets <when> (<zone>)` part, read in that zone from
+when the hook ran. Words that name no reset, or one in
+another form, SHALL read yes with none; a `rate_limit` with other words
+SHALL read no (146, 151, C.4).
 
 #### Scenario: A session limit with a time of day
 
@@ -139,18 +140,28 @@ minute before the hook ran, or none; a `rate_limit` with other words SHALL read 
 
 #### Scenario: A weekly limit with a date
 
-- **WHEN** the words are "You've hit your weekly limit · resets Nov 2, 3:30pm (UTC) · progress saved"
-- **THEN** `spent` reads yes until 2 November at 15:30 UTC of the hook's year (151, C.4)
+- **WHEN** the hook ran on 2026-11-05 at 20:40 UTC and recorded `rate_limit` with "You've hit your weekly limit · resets Nov 8 at 12am (America/New_York)"
+- **THEN** `spent` reads yes until 2026-11-08 at 05:00 UTC (151, C.4)
 
 #### Scenario: A reset past midnight
 
 - **WHEN** the hook ran at 23:40 in UTC and the words say "resets 1am (UTC)"
 - **THEN** `spent` reads yes until 01:00 UTC the next day (151)
 
+#### Scenario: A budget with its plan limit's reset
+
+- **WHEN** the words are "You've hit your team's shared budget · raise it at https://claude.ai/admin-settings/usage · your weekly limit resets Nov 8 at 12am (America/New_York)"
+- **THEN** `spent` reads yes until 2026-11-08 at 05:00 UTC (151, C.4)
+
 #### Scenario: No reset in the words
 
 - **WHEN** the words are "You've hit your limit"
 - **THEN** `spent` reads yes with no reset (146, 151)
+
+#### Scenario: A reset in a form the release does not write
+
+- **WHEN** the words are "You've hit your weekly limit · resets Nov 2, 3:30pm (UTC) · progress saved"
+- **THEN** `spent` reads yes with no reset (146, 151, C.4)
 
 #### Scenario: A model under high load
 
@@ -186,7 +197,10 @@ turn; a transcript that cannot be read SHALL read unknown (91, 93).
 A `check-tools` test SHALL read the pinned Claude Code and require the
 source of its usage-limit words to stand byte for byte as the profile
 reads them: its list of usage-limit openings, the `You've hit your`
-template, the ` · resets ` part and the zone's suffix (core.22, C.4).
+template, the ` · resets ` part, the budget's ` · your <limit> resets `
+part, the zone's suffix, and its reset formatter's choice of a date past
+a day off and its options for a date and for a time of day (core.22,
+C.4).
 
 #### Scenario: The pinned release read
 
@@ -308,3 +322,167 @@ finds no such session (core.22, C.4).
 
 - **WHEN** the test reads the program devenv.nix pins, the file its `claude` wrapper runs
 - **THEN** each fragment the carry rests on is found in it, and the test names any that is not (C.4)
+
+### Requirement: A reset read as the pinned release's formatter writes it
+
+The Claude Code profile SHALL read a reset's `<when>` as the pinned
+release's reset formatter writes it: a time of day being the first such
+time no more than a minute before the hook ran, and a date and a time
+joined by ` at ` being that date, in the year the hook ran in the zone
+where the date names none (151, C.4).
+
+#### Scenario: A reset in the minute the hook ran
+
+- **WHEN** the hook ran 20 seconds past 15:00 UTC and the words say "resets 3pm (UTC)"
+- **THEN** `spent` reads yes until 15:00 UTC that day, not the next (151)
+
+#### Scenario: A date with its minutes
+
+- **WHEN** the hook ran on 2026-11-05 in UTC and the words say "resets Nov 12 at 3:30pm (UTC)"
+- **THEN** `spent` reads yes until 2026-11-12 at 15:30 UTC (151, C.4)
+
+#### Scenario: A date in another year
+
+- **WHEN** the hook ran on 2026-12-30 in London and the words say "resets Jan 3, 2027 at 9am (Europe/London)"
+- **THEN** `spent` reads yes until 3 January 2027 at 09:00 in London (151, C.4)
+
+### Requirement: Claude Code's own settings passed by --settings
+
+Where the agent's resolved keys for `claude` are not empty, the agent
+profile SHALL write them as one JSON object to `own-settings.json` in
+the start's folder and start `claude` with `--settings` naming that
+file; where they are empty it SHALL pass no `--settings` and write no
+file. It SHALL never pass a file a layer named. The release lays them
+over the user's, the project's and the local settings (88, 195, 196,
+C.4).
+
+#### Scenario: The command for a stage with own settings
+
+- **WHEN** the profile gives the command for a stage whose resolved keys for `claude` give `tui = "fullscreen"` from a named file and `statusLine` from a table's `settings`
+- **THEN** it runs `claude` with `--settings <folder>/claude/<identity>/own-settings.json` after `--plugin-dir`, its files hold that path with both keys as JSON, and its line names no path of the named file (S100, 196)
+
+#### Scenario: The command for a stage with none
+
+- **WHEN** the profile gives the command for a stage whose settings give `claude` no key
+- **THEN** it runs `claude` with no `--settings`, and its files are empty (195)
+
+### Requirement: Claude Code's reserved keys named
+
+The agent profile SHALL name as reserved, each with what owns it,
+Claude Code's `env`, `model` and `permissions.defaultMode`, its
+credential helpers `apiKeyHelper`, `awsAuthRefresh`,
+`awsCredentialExport`, `gcpAuthRefresh` and `otelHeadersHelper`, its
+sign-in keys `forceLoginMethod` and `forceLoginOrgUUID`,
+`disableAllHooks`, and `skipDangerousModePermissionPrompt` and
+`skipAutoPermissionPrompt`; and take every other key as written (34,
+144, 162, 172, 195; core.12, core.30).
+
+#### Scenario: Each reserved key
+
+- **WHEN** the profile's reserved keys are read
+- **THEN** they hold each of those keys, `permissions.defaultMode` by its path, each with its owner, the account, the model, the mode, the account's sign-in, flume's plugin or a person (195)
+
+#### Scenario: A people's settings file
+
+- **WHEN** a host's named file gives `tui = "fullscreen"`, `statusLine`, `hooks`, `env`, `permissions = { allow = ["Bash(git log:*)"], defaultMode = "bypassPermissions" }` and `skipDangerousModePermissionPrompt = true`
+- **THEN** the command's file holds `tui`, `statusLine`, `hooks` and `permissions = { allow = ["Bash(git log:*)"] }`, and no `env`, `defaultMode` or `skipDangerousModePermissionPrompt` (S100, 195)
+
+#### Scenario: Keys taken as written
+
+- **WHEN** the profile is asked to take `statusLine`, `tui`, `hooks`, `permissions = { allow = ["Bash(git log:*)"] }` and `enableAllProjectMcpServers = true`
+- **THEN** it takes them, and its command's file holds each as written (195)
+
+### Requirement: A repository's tagline reaches Claude Code's settings file
+
+Claude Code's `attribution`, its commit and pull request text and its
+session link, SHALL be an own setting like any other: given by a
+repository's layers for every kind, taken whole, and written into the
+`--settings` file of each agent of that repository as the layer wrote
+it, with nothing of flume's added to it or read in it; a repository no
+layer gives it for SHALL get no `attribution` from flume (195, C.4).
+
+#### Scenario: A fork that carries no tagline
+
+- **WHEN** the host's `[repos."<fork>".agents.programs.claude.settings]` gives `attribution = { commit = "", pr = "", sessionUrl = false }`, and a fix and a chore run in the fork
+- **THEN** the `--settings` file of every stage of each holds `attribution` as `{"commit":"","pr":"","sessionUrl":false}`, the stand-in read it, and status names `programs.claude.settings.attribution` from `host-repository` (S102, 195)
+
+#### Scenario: A repository's own words from its file
+
+- **WHEN** the repository's `.config/flume.toml` gives `[agents.programs.claude.settings] attribution = { commit = "Assisted-by: Claude Code", pr = "" }` and no host table gives `attribution`
+- **THEN** a fix's `--settings` file holds that `attribution` as written, and status names it from `repository` (S102, 195, C.2)
+
+#### Scenario: A repository nothing names
+
+- **WHEN** no layer gives `attribution` and no other own setting for a fix's repository
+- **THEN** the fix's agent starts with no `--settings`, and the stand-in read no `attribution` but its account's (S102, 195)
+
+### Requirement: Own settings pinned to the release the tree holds
+
+A check-tools test SHALL find in the pinned Claude Code, byte for byte,
+the `--settings <file-or-json>` option and its words, its sources'
+order with `flagSettings` after the user's, the project's and the local
+settings, the merge that joins a source's lists with those beneath it,
+each reserved key as its settings schema names it, and the
+`attribution` schema's commit and pull request texts, each saying an
+empty string hides attribution, naming any it does not find (195, C.4;
+core.22).
+
+#### Scenario: The pinned release read
+
+- **WHEN** the test reads the program the `claude` wrapper from devenv.nix execs
+- **THEN** every fragment of the profile's settings stands in it (C.4)
+
+### Requirement: Claude Code reads a session live from its records
+
+The Claude Code profile SHALL answer live runs, naming each process,
+where a `sessions/<pid>.json` under a home it is given, each account's
+`CLAUDE_CONFIG_DIR` or the login environment's `~/.claude`, names the
+session its start's started ack names, and a process of the host runs
+with its `pid` started at its `procStart`. A record whose process is
+gone or started otherwise SHALL count nothing (207, C.4).
+
+#### Scenario: A session record and its process
+
+- **WHEN** a scratch home's `sessions/<pid>.json` names the session with the `pid` and `procStart` of a process the test runs
+- **THEN** live answers runs with that process; once the process ends, it answers none, the record still on disk (207, C.4)
+
+#### Scenario: A reused process id
+
+- **WHEN** the record names a `pid` the host runs, started at another time than its `procStart`
+- **THEN** live answers none (207)
+
+### Requirement: Claude Code reads a session live from the host's processes
+
+The Claude Code profile SHALL answer live runs, naming each process,
+where a process of the host whose program is `claude` holds the session
+after `--resume` or `-r` in its arguments, under whatever home (207,
+C.4).
+
+#### Scenario: A resume under a home not given
+
+- **WHEN** a process `claude --resume <session>` runs under a home the profile is not given
+- **THEN** live answers runs with that process (207, S117)
+
+### Requirement: Claude Code's live says what it cannot read
+
+The Claude Code profile SHALL answer live unknown where a home's
+`sessions` folder exists and cannot be read, naming `CLAUDE_CONFIG_DIR`
+and no path, or where the host's processes cannot be listed, naming
+them (207; core.30).
+
+#### Scenario: A sessions folder that cannot be read
+
+- **WHEN** a home's `sessions` folder exists and cannot be read
+- **THEN** live answers unknown, naming `CLAUDE_CONFIG_DIR` and no path (207; core.30)
+
+### Requirement: Claude Code's live pinned to the release the tree holds
+
+A `check-tools` test SHALL read the pinned Claude Code and require the
+source its live rests on to stand: the session record's fields
+`sessionId`, `pid` and `procStart`, its `sessions` folder under the
+configuration home, and `--resume`'s short form `-r` (core.22, C.4).
+
+#### Scenario: The pinned release's session record read
+
+- **WHEN** the test reads the program devenv.nix pins
+- **THEN** each fragment live rests on is found in it, and the test names any that is not (C.4)

@@ -1,14 +1,19 @@
 //! The core over the profiles built in (design 16): the engine built over
 //! a scratch state directory and host configuration, the resolver from a
 //! binding's names to the profiles, the place bound with the merge
-//! queue's data, and the terminal the host's configuration names.
+//! queue's data, and the terminal the host's configuration names; and
+//! the hash of each version of flume's own kinds, which no later release
+//! moves (156).
 
 use crate::common::*;
+use crate::place_git_worktree::{equip_answer, stand_in_sluice};
 use flume::host::config::HostConfig;
+use flume::profiles::kinds::weir::{Weir, OWN_SOURCE};
 use flume::profiles::{core_over, terminal, BuiltIn, DEFAULT_PROGRAM, SEND_BACKS};
 use flume_core::Answer;
 use flume_seams::*;
 use std::path::Path;
+use std::sync::Arc;
 
 /// The resolver, a place's steps run in a scratch home with the test's
 /// own `PATH`.
@@ -173,14 +178,57 @@ fn a_terminal_the_host_names_is_bound_or_refused() {
 }
 
 #[test]
-fn a_place_is_readied_as_the_merge_queues_policy_says() {
-    let repository = Repository::new("readied");
-    repository.write(
-        ".config/sluice.toml",
-        "[tests]\ntoolchain = \"printf 'ANSWER=42\\\\n'\"\n",
+fn terminals_and_windows_are_given_by_name() {
+    // 105, 188, 190; design 2: the host's own terminal the engine's very
+    // one, each window profile by its name, and none for a name no
+    // profile holds.
+    let scratch = Scratch::new("by-name");
+    let state = scratch.path("state");
+    let resolver = built_in(&scratch).over(&state);
+    let herdr = resolver.terminal("herdr").expect("herdr by its name");
+    let again = resolver.terminal("herdr").expect("herdr again");
+    assert!(Arc::ptr_eq(&herdr, &again), "one herdr for the command");
+    assert!(resolver.terminal("rex").is_none());
+    assert_eq!(resolver.terminal_profiles(), ["printed", "herdr"]);
+    assert_eq!(
+        resolver.window_profiles(),
+        ["ghostty", "terminal", "printed"]
     );
+    for name in ["ghostty", "terminal", "printed"] {
+        assert!(resolver.window(name).is_some(), "{name}");
+    }
+    assert!(resolver.window("kitty").is_none());
+    let printed = resolver.window("printed").expect("the printed window");
+    let command = ViewCommand {
+        program: "/bin/herdr".into(),
+        arguments: vec!["session".into(), "attach".into(), "w".into()],
+        ..ViewCommand::default()
+    };
+    assert_eq!(
+        printed.show(&command, "Work Herdr"),
+        WindowShown::Printed {
+            line: "/bin/herdr session attach w".into()
+        }
+    );
+}
+
+#[test]
+fn a_place_is_readied_as_the_merge_queue_equips_it() {
+    let repository = Repository::new("readied");
+    repository.write(".config/sluice.toml", "[branches.main]\n");
     repository.commit("a policy");
-    let resolver = built_in(&repository.scratch);
+    let (path, _) = stand_in_sluice(
+        &repository.scratch,
+        &equip_answer(&[("toolchain", true)]),
+        0,
+    );
+    let home = repository.scratch.path("home");
+    std::fs::create_dir_all(&home).expect("a scratch home");
+    let resolver = BuiltIn::with_login(&[
+        ("HOME", &home.to_string_lossy()),
+        ("PATH", &path),
+        ("LANG", "C"),
+    ]);
 
     let queued = resolver
         .place(&repository.name(), &binding(Some("sluice")))
@@ -335,4 +383,98 @@ fn the_herdr_terminal_keeps_no_watch_on_a_stale_lease() {
 fn the_herdr_terminal_keeps_no_watch_without_the_plugin() {
     // 119, 122, C.5: no lease, the plugin not installed or never started.
     assert_eq!(herdr_watch("watch-none", None), Watch::None);
+}
+
+/// The content hash of each version of flume's own kinds as this release
+/// records it, the first that reads locks. A version keeps its content in
+/// every later release, so a change to what one holds is a version of its
+/// own (156; design 7).
+const OWN_HASHES: [(&str, &str); 4] = [
+    (
+        "flume/change@1",
+        "sha256:2dbf6a11e877872619f56a51c192292b306dc7a8f1b7c2728cccdb8992e7d883",
+    ),
+    (
+        "flume/change@2",
+        "sha256:c47df4b93a579d76b62c1cf284af218bbc724ae81be67099c678a2cf5765e8ec",
+    ),
+    (
+        "flume/chore@1",
+        "sha256:49c9a204c18d27348d6ed0c1bb6dbb894bc8816a9ae05c1de3ce7d65e4b61fda",
+    ),
+    (
+        "flume/fix@1",
+        "sha256:59dee7a3e1c11f8f0f20abe807812e31cb2398cce047c2a2066636d0e8bfdcf8",
+    ),
+];
+
+#[test]
+fn the_hashes_recorded() {
+    // 156; design 7: each version of flume's own hashes to the value this
+    // release records, built in as its directory under `own/` reads as a
+    // package, and a version whose hash moves is named.
+    let own_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/profiles/kinds/weir/own");
+    let own = Weir.flumes_own();
+    let mut faults = vec![];
+    for package in &own {
+        let identity = &package.identity;
+        match Weir.read_package(
+            OWN_SOURCE,
+            &own_dir.to_string_lossy(),
+            &identity.name,
+            identity.version,
+        ) {
+            PackageRead::Read { package: read } if read.hash == package.hash => {}
+            PackageRead::Read { package: read } => faults.push(format!(
+                "{identity} is built in at {} and its directory hashes to {}: the binary holds \
+                 another content than own/ does",
+                package.hash, read.hash
+            )),
+            PackageRead::CouldNotRead { reason } => {
+                faults.push(format!("{identity}'s directory: {reason}"))
+            }
+        }
+        match OWN_HASHES
+            .iter()
+            .find(|(recorded, _)| *recorded == identity.spelled)
+        {
+            Some((_, hash)) if *hash == package.hash => {}
+            Some((_, hash)) => faults.push(format!(
+                "{identity} hashes to {} where this release records {hash}: a version's content \
+                 never changes, so what it holds now is a version of its own (156)",
+                package.hash
+            )),
+            None => faults.push(format!(
+                "{identity} hashes to {}, and no hash of it is recorded here",
+                package.hash
+            )),
+        }
+    }
+    for (recorded, _) in OWN_HASHES {
+        if !own
+            .iter()
+            .any(|package| package.identity.spelled == recorded)
+        {
+            faults.push(format!(
+                "{recorded} is recorded here and flume holds it no more"
+            ));
+        }
+    }
+    assert!(faults.is_empty(), "{}", faults.join("\n"));
+}
+
+#[test]
+fn flumes_own_kinds_declare_no_label() {
+    // 180: a label is the host's to give flume's own kinds, and none of
+    // them declares one.
+    use flume::profiles::kinds::weir::Weir;
+    let own = Weir.flumes_own();
+    assert!(!own.is_empty(), "flume holds no kind of its own");
+    for package in own {
+        assert_eq!(
+            package.kind.label, None,
+            "{} declares a label",
+            package.identity
+        );
+    }
 }

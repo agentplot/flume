@@ -66,6 +66,167 @@ pub enum Answer {
         woke: Woke,
         place: PlaceStatus,
     },
+    /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
+    /// at its content's hash, and each it removed (155).
+    Locked {
+        lock_file: String,
+        recorded: Vec<LockedKind>,
+        removed: Vec<String>,
+    },
+    /// Each place's line asked alone, of the place named or of every
+    /// place on the host, read from its held state, the change at its
+    /// head and its live agent's asking mark alone (56, 57, 58).
+    Lines { lines: Vec<PlaceLine> },
+    /// A stream's session shown in its view at a person's asking, and
+    /// nothing flume holds changed (186; core.48).
+    Opened(StreamOpened),
+    /// Every place on the host and every stream it declares, a line
+    /// each, read from what flume keeps and each stream's terminal once
+    /// (200; core.52).
+    List {
+        places: Vec<Listed>,
+        streams: Vec<StreamListed>,
+    },
+}
+
+/// A place's line in the list and its parts (200): `<kind>--<name>`, the
+/// stage its line names, its state in its line's words, whom it waits on
+/// and what keeps it, a part it has none of left out; `line` joins them
+/// by ` · `. None of a place's long words is among them (56, 139).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Listed {
+    pub place: PlaceId,
+    pub repository: String,
+    /// `<kind>--<name>`.
+    pub name: String,
+    /// `<kind>@<version>`.
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    pub state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on: Option<WaitsOn>,
+    /// What keeps a place whose work is over, in a word (64 to 66, 68).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kept: Option<String>,
+    pub line: String,
+}
+
+/// Whom a waiting place waits on: its caller for a move 130 names, the
+/// host for room (70), or the merge queue for its submission's outcome
+/// (111).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitsOn {
+    Caller,
+    Host,
+    /// A process runs the conversation its waiting stage's start would
+    /// carry, or flume could not read whether one does (49, 207).
+    Session,
+    MergeQueue,
+}
+
+impl WaitsOn {
+    /// Whom the place waits on as its line says it.
+    pub fn words(self) -> &'static str {
+        match self {
+            WaitsOn::Caller => "waits on its caller",
+            WaitsOn::Host => "waits on the host",
+            WaitsOn::Session => "waits on its session",
+            WaitsOn::MergeQueue => "waits on the merge queue",
+        }
+    }
+}
+
+/// A stream's line in the list and its parts (107, 186, 190, 199, 200):
+/// the stream, its session as an open resolves it, its multiplexer with
+/// where it came from, whether its session runs, or why no terminal was
+/// asked, and each other session it names for a kind or a stage with
+/// whether it runs; `line` joins them by ` · `.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamListed {
+    pub stream: String,
+    pub session: SessionHeld,
+    pub multiplexer: ProfileHeld,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs: Option<SessionRuns>,
+    /// Why no runs was asked: the stream's multiplexer names no profile
+    /// flume carries (190).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uncarried: Option<String>,
+    /// Each session the stream names for a kind or a stage but its own, by
+    /// name, read in the one runs its own is (199, 201).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sessions: Vec<SessionListed>,
+    pub line: String,
+}
+
+/// A session a stream names for a kind or a stage, on the stream's line
+/// in the list, with whether it runs, none where no terminal was asked
+/// (199, 200, 201).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionListed {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs: Option<SessionRuns>,
+}
+
+/// What an open showed (186): the stream whose session it is, its
+/// multiplexer, the session shown, its view, the title and the terminal
+/// app of a window, each with where it came from, the kinds and stages
+/// the stream names the session for (199), the command the window runs
+/// by its variables' names, and what the window did.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamOpened {
+    pub stream: String,
+    pub multiplexer: ProfileHeld,
+    pub session: SessionHeld,
+    /// The kinds and stages the stream names the session for, each with
+    /// its layer; none where it names it for none (199).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub named: Option<NamedSession>,
+    pub view: ViewHeld,
+    /// None for the app's view, whose app titles its own window.
+    #[serde(default)]
+    pub title: Option<TitleHeld>,
+    /// None for the app's view.
+    #[serde(default)]
+    pub terminal_app: Option<ProfileHeld>,
+    /// None for the app's view.
+    #[serde(default)]
+    pub command: Option<ViewCommandStatus>,
+    pub window: WindowOutcome,
+}
+
+/// The command a window runs to show a stream's session, by its program,
+/// its arguments and its variables' names, never their values (187;
+/// core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewCommandStatus {
+    pub program: String,
+    pub arguments: Vec<String>,
+    #[serde(default)]
+    pub environment: Vec<String>,
+}
+
+/// What showing a stream's session did (186, 188).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowOutcome {
+    /// The terminal app opened a window.
+    Opened,
+    /// No window: the line for a person to run.
+    Printed { line: String },
+    /// The multiplexer's own app showed the session.
+    App,
+}
+
+/// A kind `flume kinds lock` recorded: its identity and its content's
+/// hash (155).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedKind {
+    pub kind: String,
+    pub hash: String,
 }
 
 /// What a wake of a role's address came to (132): its run launched by
@@ -138,9 +299,20 @@ pub struct PlaceStatus {
     pub kind: String,
     pub version: u32,
     pub declared: Declared,
+    /// The kind's identity as its launch read it, `acme/review@2`; none
+    /// for a place whose held state keeps no `kind_from` (19, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<String>,
+    /// Where the kind came from, as its launch read it (19, 21, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind_from: Option<KindFrom>,
     pub name: String,
     pub branch: String,
     pub base: String,
+    /// Where the launch read the base's revision, none for a place
+    /// launched before flume said (9, 56, C.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_from: Option<BaseFrom>,
     pub mark: Option<String>,
     pub lands: bool,
     pub phase: Phase,
@@ -175,6 +347,13 @@ pub struct PlaceStatus {
     /// bound, read so by a settle (130).
     #[serde(default)]
     pub stalled: bool,
+    /// The stage that waits for room while a process runs the
+    /// conversation its start would carry, or flume could not read
+    /// whether one does, each process as the last settle's live read it,
+    /// and since when it waits; none where no stage waits so (49, 56,
+    /// 207; core.30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on_session: Option<SessionWait>,
     /// Each hold on a stage or the submission, with its words and since
     /// when (47, 130).
     #[serde(default)]
@@ -185,6 +364,10 @@ pub struct PlaceStatus {
     /// The stream the place runs in, fixed at its launch, and where it
     /// came from (56, 143).
     pub stream: StreamHeld,
+    /// The place's label as it would resolve at a start now, with where
+    /// it came from, none where nothing gives one (56, 180).
+    #[serde(default)]
+    pub label: Option<LabelHeld>,
     /// The intent the place serves, and where it came from (56, 147).
     pub intent: IntentKey,
     /// Each move of a stage of the place, or of its intent at a start of
@@ -212,6 +395,44 @@ pub struct PlaceStatus {
     /// terminal shows them (139).
     #[serde(default)]
     pub clues: Option<PlaceClues>,
+    /// The place's one line, made from the facts above, the same as the
+    /// line asked alone (56, 60; S14).
+    #[serde(default)]
+    pub line: PlaceLine,
+}
+
+/// A stage waiting for room while a process runs the conversation its
+/// start would carry: the stage, each process by its id and when it
+/// started as live last read it, or what live could not read, naming a
+/// variable and never a path, and since when the stage waits (49, 56,
+/// 207; core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionWait {
+    pub stage: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub processes: Vec<LiveProcess>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unread: Option<String>,
+    pub since: Option<Seconds>,
+}
+
+/// A place's one line and its parts (56, 142): `<kind>--<name>`,
+/// `<kind>@<version>`, its current stage with a repeating stage's group,
+/// how many times that stage started, its change's tasks ticked at the
+/// head, and its state in words; `full` joins them by ` · `, a part it
+/// has none of left out, and `short` is `full` less its name and kind.
+/// A full line asked for a session that is not the current stage's live
+/// agent ends saying so; a short one never does (35, 140).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceLine {
+    pub name: String,
+    pub kind: String,
+    pub stage: Option<String>,
+    pub run: Option<u32>,
+    pub tasks: Option<String>,
+    pub state: String,
+    pub full: String,
+    pub short: String,
 }
 
 /// A move between accounts as status gives it: what moved, from, to,
@@ -233,9 +454,10 @@ impl MoveStatus {
     }
 
     /// The move as a person reads it, an intent's for the program whose
-    /// account moved where it names one, with whether a stage's
-    /// conversation went with it where its agent stopped at its
-    /// account's usage limit (56, 147, 179).
+    /// account moved where it names one, off an account past its
+    /// threshold with the window that held it and its end, with whether a
+    /// stage's conversation went with it where its agent stopped at its
+    /// account's usage limit (56, 147, 179, 185).
     pub fn words(&self) -> String {
         let moved = &self.moved;
         let what = match &moved.on {
@@ -250,17 +472,17 @@ impl MoveStatus {
             Some(false) => ", its conversation stayed behind",
             None => "",
         };
+        let why = match (moved.why, &moved.window, moved.until) {
+            (MoveWhy::Spent, ..) => "spent".to_string(),
+            (MoveWhy::Threshold, Some(window), Some(until)) => {
+                format!("past its threshold in {window} until {until}")
+            }
+            (MoveWhy::Threshold, ..) => "past its threshold".to_string(),
+            (MoveWhy::Full, ..) => "at its bound".to_string(),
+        };
         format!(
-            "{what} from {} to {} at {}, {} {}{conversation}, its agents after starting without {}'s cache",
-            moved.from,
-            moved.to,
-            moved.at,
-            moved.from,
-            match moved.why {
-                MoveWhy::Spent => "spent",
-                MoveWhy::Full => "at its bound",
-            },
-            moved.from
+            "{what} from {} to {} at {}, {} {why}{conversation}, its agents after starting without {}'s cache",
+            moved.from, moved.to, moved.at, moved.from, moved.from
         )
     }
 }
@@ -322,10 +544,46 @@ pub struct HostStatus {
     /// The watch the terminal keeps, with its bound, or none (122).
     #[serde(default = "no_watch")]
     pub watch: Watch,
+    /// Each terminal the host binds, its own first, then each stream's
+    /// by the stream's name, each once: its profile, what it made and
+    /// keeps for what it did not make, and its watch (56, 119, 190).
+    #[serde(default)]
+    pub terminals: Vec<TerminalStatus>,
     /// Each repository's base a live place stands on, with the count of
     /// its places show gives and where the terminal shows it (139).
     #[serde(default)]
     pub bases: Vec<BaseClues>,
+    /// What the terminal's own configuration lacks for flume's plugin,
+    /// each in the terminal profile's words; none where it lacks nothing
+    /// (72, 122).
+    #[serde(default)]
+    pub terminal_setup: Vec<String>,
+    /// The host's configuration as it stands: whether its local layer was
+    /// taken, every value with its layer, an account's variables by name
+    /// and `<set>`, and each local key passed over with its pin (56, C.7;
+    /// core.30, core.45).
+    #[serde(default)]
+    pub configuration: HostConfiguration,
+    /// Each source the host declares, by name, read when asked (56, 159,
+    /// 191; core.15).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<SourceStatus>,
+}
+
+/// A source the host declares as status gives it (56, 191): its name, its
+/// file, the directory its packages lie in, the identity of every package
+/// that directory holds, and why the file or the directory cannot be read
+/// where either cannot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceStatus {
+    pub name: String,
+    pub source_file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kinds_dir: Option<String>,
+    #[serde(default)]
+    pub kinds: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cannot_read: Option<String>,
 }
 
 fn no_watch() -> Watch {
@@ -344,7 +602,11 @@ impl Default for HostStatus {
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
+            terminals: vec![],
             bases: vec![],
+            terminal_setup: vec![],
+            configuration: HostConfiguration::default(),
+            sources: vec![],
         }
     }
 }
@@ -404,16 +666,23 @@ pub struct Queued {
     pub place: PlaceId,
     pub stage: String,
     pub stream: String,
+    /// The label its place resolves to now, none where nothing gives one
+    /// (180).
+    #[serde(default)]
+    pub label: Option<String>,
     pub priority: i64,
     pub since: Option<Seconds>,
     pub wants: RoomWanted,
 }
 
-/// The room a stage waiting for room is short of (70, 143, 145): the
+/// The room a stage waiting for room is short of (70, 143, 145, 181): the
 /// host's, its own full or taken by stages that rank ahead; its stream's,
-/// whose bound its agents running have reached; or its pool's, every
-/// account that runs its program spent or at its own bound, with the
-/// soonest time one stops being spent, none where none is spent. A stage
+/// whose bound its agents running have reached; its stream's room past
+/// what the stream's other labels keep free and do not use, naming those
+/// labels; or its pool's, every
+/// account that runs its program spent, past its threshold or at its own
+/// bound, with the soonest time one is back, none where each is only at
+/// its bound (185). A stage
 /// whose pool holds no account of its program waits on no room: it is
 /// refused (4, 32, 145).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -424,10 +693,23 @@ pub enum RoomWanted {
         stream: String,
         bound: u32,
     },
+    KeptFree {
+        stream: String,
+        labels: Vec<String>,
+    },
     Pool {
         pool: String,
         until: Option<Seconds>,
     },
+}
+
+/// `items` as a person reads a list: `a`, `a and b`, `a, b and c`.
+pub(crate) fn and_list(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
 }
 
 impl RoomWanted {
@@ -438,10 +720,14 @@ impl RoomWanted {
             RoomWanted::Stream { stream, bound } => {
                 format!("the stream {stream}'s room, at its bound of {bound}")
             }
+            RoomWanted::KeptFree { stream, labels } => format!(
+                "the stream {stream}'s room, the rest kept free for {}",
+                and_list(labels)
+            ),
             RoomWanted::Pool {
                 pool,
                 until: Some(until),
-            } => format!("a usable account of the pool {pool}, the soonest spent until {until}"),
+            } => format!("a usable account of the pool {pool}, the soonest back at {until}"),
             RoomWanted::Pool { pool, until: None } => {
                 format!("a usable account of the pool {pool}, each at its own bound")
             }
@@ -449,33 +735,130 @@ impl RoomWanted {
     }
 }
 
-/// A stream of the host (143): its priority among streams, its agents
-/// running, the bound it states, none where the host's alone holds it,
-/// its room, none where it states no bound, and its stages waiting for
-/// room in the order they would start (56, 70).
+/// A stream of the host (143): its own session, the one its agents open
+/// in where neither their launch nor its word for their kind or stage
+/// names one, with where it came from; each session it names for its
+/// kinds and their stages, with the kinds and stages it names it for and
+/// each one's layer; each fault of those tables, with the refusal it
+/// causes the starts that read it; its multiplexer, view and terminal
+/// app, each with where it came from, and the title a window on it
+/// carries, its priority among streams, its agents running,
+/// the bound it states, none where the host's alone holds it, its room,
+/// none where it states no bound, its stages waiting for room in the
+/// order they would start, its labels' shares, whether their reserves
+/// are held, and why it refuses: its labels' fault, its multiplexer
+/// naming a terminal profile flume does not carry, or, for a terminal
+/// view, its terminal app naming a window profile flume does not carry,
+/// that last also given alone, since it refuses the stream's open and
+/// none of its stages; none where none holds (4, 56, 70, 107, 181, 182,
+/// 186, 188, 190, 199, C.7; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
+    pub session: SessionHeld,
+    #[serde(default)]
+    pub sessions: Vec<NamedSession>,
+    #[serde(default)]
+    pub faults: Vec<TableFault>,
+    pub multiplexer: ProfileHeld,
+    pub view: ViewHeld,
+    pub terminal_app: ProfileHeld,
+    pub title: TitleHeld,
     pub priority: i64,
     pub running: u32,
     pub bound: Option<u32>,
     pub room: Option<u32>,
     pub queue: Vec<Queued>,
+    #[serde(default)]
+    pub labels: Vec<LabelStatus>,
+    #[serde(default)]
+    pub reserves: Reserves,
+    #[serde(default)]
+    pub refused: Option<String>,
+    /// The terminal app's refusal alone, the last part of `refused` where
+    /// it holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_refused: Option<String>,
 }
 
-/// A pool of the host (144, 145): its strategy and its accounts in
-/// order.
+/// The title a window on a stream's part of its terminal carries, and
+/// where it came from: for the stream's own session, the stream's
+/// `title`, else its name, and for a session it names for a kind or a
+/// stage, that session's name (143, 186, 199).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TitleHeld {
+    pub title: String,
+    pub from: TitleFrom,
+}
+
+/// Where a window's title came from (143, 186, 199).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TitleFrom {
+    Stream,
+    StreamName,
+    /// The name of a session the stream names for a kind or a stage.
+    Session,
+}
+
+/// A terminal the host binds (119, 190): the profile a stream takes it
+/// by, none for the host's own where no profile flume carries is it,
+/// what it made and keeps for what it did not make, each named with what
+/// holds it, and the watch it keeps.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalStatus {
+    pub profile: Option<String>,
+    pub kept: Vec<String>,
+    pub watch: Watch,
+}
+
+/// A label of a stream (181): its reserve, the slots of the stream it
+/// keeps free while it runs fewer, its agents running, each counted by
+/// the label it started under, and its stages waiting for room.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelStatus {
+    pub name: String,
+    pub reserve: u32,
+    pub keep_free: u32,
+    pub running: u32,
+    pub waiting: u32,
+}
+
+/// Whether a stream's labels' reserves are held: held where it states a
+/// bound, passed over where it states none, and none where it gives no
+/// label a share (70, 181).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reserves {
+    Held,
+    PassedOver,
+    #[default]
+    None,
+}
+
+/// A pool of the host (144, 145, 185): its strategy, its threshold, 90
+/// where it states none, and its accounts in order.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolStatus {
     pub name: String,
     pub strategy: Strategy,
+    #[serde(default = "threshold")]
+    pub threshold: u32,
     pub accounts: Vec<AccountStatus>,
 }
 
-/// An account of a pool (144 to 146): the program it runs, flume's
-/// agents running on it, its own bound, none where it states none, and
-/// the time it is spent until, none where it is not spent; never a value
-/// of its environment.
+/// The threshold of a pool that states none (185).
+fn threshold() -> u32 {
+    crate::THRESHOLD
+}
+
+/// An account of a pool (144 to 146, 184, 185): the program it runs,
+/// flume's agents running on it, its own bound, none where it states
+/// none, the time it is spent until, none where it is not spent, and,
+/// where that time is the hour 146 gives because flume read no reset in
+/// its agent's words, those words, its reading, none where it names none,
+/// and what holds it past its threshold, none where nothing does; never a
+/// value of its environment or a reading's path.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountStatus {
     pub name: String,
@@ -483,6 +866,84 @@ pub struct AccountStatus {
     pub running: u32,
     pub bound: Option<u32>,
     pub spent_until: Option<Seconds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spent_unread: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reading: Option<ReadingStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub past: Option<Past>,
+}
+
+/// An account's reading as status gives it (184): when the host read it,
+/// whether it is fresh at the host's clock, and each of its windows; or,
+/// where the account names one that cannot be read, why, in words that
+/// name no path.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ReadingStatus {
+    Read {
+        read_at: Seconds,
+        fresh: bool,
+        windows: Vec<WindowStatus>,
+    },
+    Unread {
+        unread: String,
+    },
+}
+
+/// A window of an account's reading as status gives it (184, 185): its
+/// name, how much of it is used, in hundredths of a percent and a
+/// percentage in the JSON form, when it resets, none where the reading
+/// gives none, and whether it holds the account past its threshold.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowStatus {
+    pub name: String,
+    #[serde(with = "as_percentage")]
+    pub used: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_at: Option<Seconds>,
+    pub past: bool,
+}
+
+/// What holds an account past its threshold: the window, and when it
+/// stops holding it, its reset, or, where it names none, when the reading
+/// stops being fresh (185).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Past {
+    pub window: String,
+    pub until: Seconds,
+}
+
+/// Hundredths of a percent as a percentage, a whole number where it is
+/// one, as a reading's file writes it (184).
+pub fn percentage(hundredths: u32) -> String {
+    match hundredths % 100 {
+        0 => (hundredths / 100).to_string(),
+        _ => format!("{}", f64::from(hundredths) / 100.0),
+    }
+}
+
+/// Hundredths of a percent given as a percentage in the JSON form, a
+/// whole number where it is one (184).
+mod as_percentage {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(hundredths: &u32, serializer: S) -> Result<S::Ok, S::Error> {
+        match hundredths % 100 {
+            0 => serializer.serialize_u32(hundredths / 100),
+            _ => serializer.serialize_f64(f64::from(*hundredths) / 100.0),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+        let percent = f64::deserialize(deserializer)?;
+        if !(0.0..=100.0).contains(&percent) {
+            return Err(serde::de::Error::custom(format!(
+                "{percent} is not a percentage from 0 to 100"
+            )));
+        }
+        Ok((percent * 100.0).round() as u32)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -589,6 +1050,53 @@ pub struct AgentStatus {
     /// a path; none for any other (56, 146, 179; core.30).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
+    /// The session the agent opened in, with where it came from; none for
+    /// an agent opened beside a pane and for a start written before (56,
+    /// 107, 143).
+    #[serde(default)]
+    pub session: Option<SessionHeld>,
+    /// The terminal the agent opened in, with where it came from; none
+    /// for a start written before, whose agent is in the host's (56,
+    /// 190).
+    #[serde(default)]
+    pub terminal: Option<ProfileHeld>,
+    /// For the agent of a conversation's stage read lost, one the terminal
+    /// brought back in its last start's pane, that flume left it there,
+    /// sent nothing; written only where it did (56, 77; core.10).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub left_in_pane: bool,
+    /// Its program's own settings beyond the keys its settings give: how
+    /// its profile passed them, that they were not read back, and each
+    /// file a layer named for its program; none where no layer gave its
+    /// program an entry (56, 195).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own: Option<OwnStatus>,
+}
+
+/// An agent's own settings at its start beyond their keys: `passed`, its
+/// command's arguments naming the files it lists, none where it passed
+/// no key; `read_back`, whether its program read them back, which no
+/// release does; and `files`, each file a layer named for its program,
+/// most specific first (56, 195, 196).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnStatus {
+    pub passed: Option<String>,
+    pub read_back: bool,
+    #[serde(default)]
+    pub files: Vec<OwnFileStatus>,
+}
+
+/// A file a layer named for an agent's program: its layer, its path as
+/// written and as read, and each key its program's profile reserves left
+/// out of it, unread, with the setting or the account that owns it (56,
+/// 195).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnFileStatus {
+    pub layer: Layer,
+    pub written: String,
+    pub read: String,
+    #[serde(default)]
+    pub left_out: Vec<Reserved>,
 }
 
 /// An agent's mode at its start: `passed`, the value its profile passed,
@@ -652,8 +1160,8 @@ pub struct Tidied {
     pub branches_kept: Vec<BranchKept>,
     /// Places asked of whose work is not over.
     pub not_over: Vec<PlaceId>,
-    /// What the terminal closed and kept of what it made for each place
-    /// removed (137, 138).
+    /// What each terminal closed and kept of what it made for each place
+    /// removed, by the terminal (137, 138, 190).
     #[serde(default)]
     pub terminal: Vec<TerminalTidied>,
 }
@@ -668,11 +1176,15 @@ impl Tidied {
     }
 }
 
-/// What the terminal closed of what it made for a place removed, and what
-/// it kept, each named with what holds it (137, 138).
+/// What a terminal closed of what it made for a place removed, and what
+/// it kept, each named with what holds it, under the name of the
+/// terminal's profile: none for the host's own where no profile the
+/// resolver carries gives it (137, 138, 190).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalTidied {
     pub place: PlaceId,
+    #[serde(default)]
+    pub profile: Option<String>,
     pub closed: Vec<String>,
     pub kept: Vec<String>,
 }

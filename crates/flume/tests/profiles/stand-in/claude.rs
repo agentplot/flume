@@ -34,6 +34,22 @@
 //!   refuses the mode asked begins in another, so every hook input that
 //!   names the mode names it as its `permission_mode`.
 //!
+//! Where the command passes `--append-system-prompt-file <file>` naming no
+//! file, it prints `Error: Append system prompt file not found: <file>`
+//! and exits 1 before any hook, as that release does.
+//!
+//! Before its session starts it reads its settings as that release reads
+//! them: the `settings.json` of its configuration home, then the place's
+//! `.claude/settings.json` and `.claude/settings.local.json`, then the
+//! settings `--settings <file-or-json>` passes, a JSON object as written
+//! or the file it names, each source merged over those before it, objects
+//! key by key, two lists joined with a repeated value kept once, and
+//! anything else taken from the later source. It writes the settings so
+//! merged to the file `STAND_IN_SETTINGS` names, where one is named, so a
+//! walkthrough reads what the program read (195; design 14). Where the
+//! settings `--settings` passes cannot be read, or are not JSON, it says so
+//! and exits 1 before any hook.
+//!
 //! Where the command passes `--resume <session>`, it resumes the session
 //! as that release does: it looks for `<home>/projects/<folder>/<session>.jsonl`
 //! alone, `<home>` its configuration home, `CLAUDE_CONFIG_DIR` or else
@@ -53,6 +69,15 @@
 //! SessionStart, StopFailure and SessionEnd name none, as that release's
 //! do not.
 //!
+//! While its session runs it names it in `<home>/sessions/<pid>.json`, as
+//! that release does, the folder made readable by the host's user alone:
+//! its `pid`, its `sessionId`, its `cwd`, when it started, and its
+//! `procStart`, the words `ps -o lstart=` gives under `LC_ALL=C` and
+//! `TZ=UTC`, here read from the host's process table, which a sandbox
+//! lets it read where it refuses to run a setuid `ps`; it removes the
+//! record as it exits, as that release does at its process's exit, and a
+//! process killed leaves it.
+//!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
@@ -66,6 +91,8 @@
 //! output as one line; the exit status is 1 where an act failed that no
 //! hook refused. It never reaches a model, an account or the network.
 
+use flume::host::process::listed;
+use flume::profiles::agent::claude::live::{proc_start, SESSIONS};
 use flume::profiles::agent::claude::withheld::WITHHELD;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -86,13 +113,22 @@ fn main() {
     let mut prompt = None;
     let mut mode = None;
     let mut resume = None;
+    let mut flag = None;
     let mut words = args.iter();
     while let Some(word) = words.next() {
         match word.as_str() {
             "--plugin-dir" => plugin = words.next().map(PathBuf::from),
             "--permission-mode" => mode = words.next().cloned(),
             "--resume" => resume = words.next().cloned(),
-            "--model" | "--append-system-prompt" | "--settings" => {
+            "--settings" => flag = words.next().cloned(),
+            "--append-system-prompt-file" => {
+                let file = words.next().cloned().unwrap_or_default();
+                if !Path::new(&file).is_file() {
+                    eprintln!("Error: Append system prompt file not found: {file}");
+                    std::process::exit(1);
+                }
+            }
+            "--model" | "--append-system-prompt" => {
                 words.next();
             }
             flag if flag.starts_with("--") => {}
@@ -117,6 +153,17 @@ fn main() {
         }
     }
     let cwd = std::env::current_dir().expect("the place");
+    match settings(&cwd, flag.as_deref()) {
+        Ok(read) => {
+            if let Some(file) = std::env::var_os("STAND_IN_SETTINGS").filter(|f| !f.is_empty()) {
+                std::fs::write(&file, format!("{read}\n")).expect("the settings read");
+            }
+        }
+        Err(words) => {
+            eprintln!("{words}");
+            std::process::exit(1);
+        }
+    }
     let resumed = resume.map(|session| {
         let transcript = transcript_of(&cwd, &session);
         if !transcript.is_file() {
@@ -126,7 +173,11 @@ fn main() {
         (session, transcript)
     });
     let mut session = Session::new(cwd, plugin, mode, resumed);
+    let record = session.name_running();
     let failed = session.run(prompt.as_deref(), &script);
+    if let Some(record) = record {
+        let _ = std::fs::remove_file(record);
+    }
     std::process::exit(i32::from(failed));
 }
 
@@ -149,21 +200,90 @@ fn submitted(prompt: &str) -> String {
 /// the working directory with every character that is not a letter or a
 /// digit written `-`.
 fn transcript_of(cwd: &Path, session: &str) -> PathBuf {
-    let config = std::env::var_os("CLAUDE_CONFIG_DIR")
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
-        });
     let project: String = cwd
         .to_string_lossy()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
-    config
+    config_home()
         .join("projects")
         .join(project)
         .join(format!("{session}.jsonl"))
+}
+
+/// That release's configuration home: `CLAUDE_CONFIG_DIR`, or else
+/// `~/.claude`.
+fn config_home() -> PathBuf {
+    std::env::var_os("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
+        })
+}
+
+/// The settings that release reads in `cwd`, `flag` the value of its
+/// `--settings`: the user's `settings.json` in its configuration home, the
+/// project's `.claude/settings.json` and its `.claude/settings.local.json`,
+/// then the flag's, a JSON object as written or the file it names, each
+/// merged over those before it (195; design 14). A source that is not there
+/// gives nothing; the flag's that cannot be read or is not JSON gives the
+/// words the session ends with.
+fn settings(cwd: &Path, flag: Option<&str>) -> Result<Value, String> {
+    let mut read = json!({});
+    for file in [
+        config_home().join("settings.json"),
+        cwd.join(".claude/settings.json"),
+        cwd.join(".claude/settings.local.json"),
+    ] {
+        if let Some(source) = std::fs::read_to_string(&file)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        {
+            merge(&mut read, source);
+        }
+    }
+    if let Some(given) = flag {
+        let text = if given.trim_start().starts_with('{') {
+            given.to_string()
+        } else {
+            std::fs::read_to_string(given)
+                .map_err(|error| format!("Error: --settings {given} cannot be read: {error}"))?
+        };
+        let source: Value = serde_json::from_str(&text)
+            .map_err(|error| format!("Error: --settings {given} is not JSON: {error}"))?;
+        merge(&mut read, source);
+    }
+    Ok(read)
+}
+
+/// `over` merged into `under` as that release merges one source of its
+/// settings over those before it: two objects key by key, two lists joined,
+/// a string, a number or a boolean the two give kept once, as its `Set`
+/// keeps one; anything else taken from `over`.
+fn merge(under: &mut Value, over: Value) {
+    match (under, over) {
+        (Value::Object(under), Value::Object(over)) => {
+            for (key, value) in over {
+                match under.get_mut(&key) {
+                    Some(beneath) => merge(beneath, value),
+                    None => {
+                        under.insert(key, value);
+                    }
+                }
+            }
+        }
+        (Value::Array(under), Value::Array(over)) => {
+            let joined: Vec<Value> = under.drain(..).chain(over).collect();
+            for item in joined {
+                let kept_once = !matches!(item, Value::Object(_) | Value::Array(_));
+                if !(kept_once && under.contains(&item)) {
+                    under.push(item);
+                }
+            }
+        }
+        (under, over) => *under = over,
+    }
 }
 
 /// One session of the stand-in.
@@ -238,6 +358,43 @@ impl Session {
             mode,
             resumed: is_resumed,
         }
+    }
+
+    /// The session named in `<home>/sessions/<pid>.json` while it runs, as
+    /// that release names it, the folder made readable by the host's user
+    /// alone; the record's path, none where it could not be written.
+    fn name_running(&self) -> Option<PathBuf> {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        let folder = config_home().join(SESSIONS);
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&folder)
+            .ok()?;
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).ok()?;
+        let pid = std::process::id();
+        let started = listed()
+            .into_iter()
+            .flatten()
+            .find(|process| process.pid == pid)
+            .and_then(|process| proc_start(process.started));
+        let mut record = json!({
+            "pid": pid,
+            "sessionId": self.id,
+            "cwd": self.cwd,
+            "startedAt": SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |since| since.as_millis()),
+            "version": VERSION,
+            "kind": "interactive",
+            "entrypoint": "cli",
+        });
+        if let Some(started) = started {
+            record["procStart"] = json!(started);
+        }
+        let path = folder.join(format!("{pid}.json"));
+        std::fs::write(&path, record.to_string()).ok()?;
+        Some(path)
     }
 
     /// The session: its start, the prompt, the script's acts, the stop

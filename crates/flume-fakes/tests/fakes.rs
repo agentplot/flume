@@ -153,7 +153,7 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     agent.set_own_work(&who, Reading::Unknown);
@@ -229,7 +229,7 @@ fn the_agents_record_is_read_in_its_folder_alone() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     agent.keep_record_in(&who, "/state/fix--one");
@@ -288,8 +288,10 @@ fn the_agents_modes_are_scripted() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, mode: Option<&str>| {
         let command = agent.command(
+            folder,
             &Settings::default(),
             mode,
+            &BTreeMap::new(),
             None,
             &BTreeMap::new(),
             &place_ref(),
@@ -297,7 +299,7 @@ fn the_agents_modes_are_scripted() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
         command
     };
     let who = identity("code", 1);
@@ -385,8 +387,10 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity| {
         let command = agent.command(
+            folder,
             &Settings::default(),
             Some("all"),
+            &BTreeMap::new(),
             None,
             &BTreeMap::new(),
             &place_ref(),
@@ -394,7 +398,7 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let who = identity("code", 1);
     opened(&who);
@@ -518,8 +522,10 @@ fn the_agents_command_resumes_the_session_it_is_given() {
     let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
     let command = |who: &Identity, resume: Option<&str>| {
         agent.command(
+            "/state/fix--one",
             &Settings::default(),
             None,
+            &BTreeMap::new(),
             resume,
             &BTreeMap::new(),
             &place_ref(),
@@ -558,8 +564,10 @@ fn the_agents_word_names_the_session_it_resumes() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, resume: Option<&str>| {
         let command = agent.command(
+            folder,
             &Settings::default(),
             None,
+            &BTreeMap::new(),
             resume,
             &BTreeMap::new(),
             &place_ref(),
@@ -567,7 +575,7 @@ fn the_agents_word_names_the_session_it_resumes() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let carried = identity("code", 2);
     opened(&carried, Some("s-1"));
@@ -596,6 +604,126 @@ fn the_agents_word_names_the_session_it_resumes() {
     assert_eq!(agent.started(folder, &fresh), Reading::Yes);
 }
 
+/// The seam-fakes spec's scenario "A bare agent brought back", as the
+/// fakes give it: the terminal holds the start's agent again, waiting,
+/// its word that it started reads no, the log names the bringing back,
+/// and the terminal reads it as the test scripts (77, 106).
+#[test]
+fn a_bare_agent_brought_back() {
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host.clone()));
+    let agent = FakeAgent::new(terminal.clone());
+    let talk = identity("talk", 1);
+    let folder = "/state/fix--one";
+    terminal.open(
+        &place_ref(),
+        folder,
+        &AgentCommand::default(),
+        &talk,
+        &OpenIn::Own,
+        None,
+    );
+    agent.keep_record_in(&talk, folder);
+    assert_eq!(agent.started(folder, &talk), Reading::Yes);
+    host.restart();
+    terminal.forget_all();
+    assert_eq!(terminal.state(&talk), AgentState::Stopped);
+    agent.bring_back_bare(&talk);
+    assert_eq!(terminal.state(&talk), AgentState::Waiting);
+    assert_eq!(agent.started(folder, &talk), Reading::No);
+    assert_eq!(
+        agent.log.of("bring"),
+        vec![format!("bring back bare {talk}")]
+    );
+    for state in [
+        AgentState::Working,
+        AgentState::Waiting,
+        AgentState::Stopped,
+    ] {
+        terminal.set_state(&talk, state);
+        assert_eq!(terminal.state(&talk), state);
+    }
+}
+
+/// The seam-fakes spec's scenario "A scripted live session that ends":
+/// live answers the processes scripted for the session a start's word
+/// names, the words scripted where it cannot be read, and none where
+/// nothing is scripted or the session ended, each reading and each
+/// scripting logged (207).
+#[test]
+fn a_scripted_live_session_that_ends() {
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host.clone()));
+    let agent = FakeAgent::new(terminal.clone());
+    let folder = "/state/fix--one";
+    let talk = identity("talk", 1);
+    let other = identity("talk", 2);
+    let unset = identity("code", 1);
+    agent.keep_record_in(&talk, folder);
+    agent.set_session(&talk, "s-1");
+    agent.set_session(&other, "s-2");
+    let home = BTreeMap::from([(FakeAgent::HOME.to_string(), "/scratch/work-1".to_string())]);
+    let envs = [BTreeMap::new(), home];
+    assert_eq!(agent.live(folder, &talk, &envs), Live::None);
+    let process = LiveProcess {
+        pid: 4242,
+        started: host.now(),
+    };
+    agent.live_runs("s-1", std::slice::from_ref(&process));
+    agent.live_unknown("s-2", "the sessions under AGENT_HOME cannot be read");
+    assert_eq!(
+        agent.live(folder, &talk, &envs),
+        Live::Runs(vec![process.clone()])
+    );
+    assert_eq!(
+        agent.live(folder, &other, &envs),
+        Live::Unknown {
+            what: "the sessions under AGENT_HOME cannot be read".into()
+        }
+    );
+    assert_eq!(agent.live(folder, &unset, &envs), Live::None);
+    // A start whose record is kept in another place's folder is not read
+    // there, so it names no session.
+    assert_eq!(agent.live("/state/fix--two", &talk, &envs), Live::None);
+    agent.live_ended("s-1");
+    assert_eq!(agent.live(folder, &talk, &[]), Live::None);
+    let talk_lives: Vec<String> = agent
+        .log
+        .of("live")
+        .into_iter()
+        .filter(|line| line.starts_with(&format!("live {talk} in {folder} ")))
+        .collect();
+    assert_eq!(
+        talk_lives,
+        vec![
+            format!("live {talk} in {folder} under no home, /scratch/work-1: none"),
+            format!("live {talk} in {folder} under no home, /scratch/work-1: runs 4242"),
+            format!("live {talk} in {folder} under no account: none"),
+        ]
+    );
+    assert_eq!(
+        (
+            agent.log.of("live_runs"),
+            agent.log.count("live_unknown"),
+            agent.log.of("live_ended")
+        ),
+        (
+            vec!["live_runs s-1: 4242".to_string()],
+            1,
+            vec!["live_ended s-1".to_string()]
+        )
+    );
+    // Set to read none, it answers the seam's default whatever is scripted.
+    agent.live_runs("s-1", &[process]);
+    agent.live_not_read();
+    assert_eq!(
+        agent.live(folder, &talk, &envs),
+        Live::Unknown {
+            what: READS_NO_SESSION.into()
+        }
+    );
+}
+
 #[test]
 fn a_carried_start_scripted_to_end_before_its_word() {
     // Scripted so, a start that resumes a session ends before its word
@@ -609,8 +737,10 @@ fn a_carried_start_scripted_to_end_before_its_word() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, resume: Option<&str>| {
         let command = agent.command(
+            folder,
             &Settings::default(),
             None,
+            &BTreeMap::new(),
             resume,
             &BTreeMap::new(),
             &place_ref(),
@@ -618,7 +748,7 @@ fn a_carried_start_scripted_to_end_before_its_word() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let carried = identity("code", 2);
     opened(&carried, Some("s-1"));
@@ -632,6 +762,91 @@ fn a_carried_start_scripted_to_end_before_its_word() {
     assert_eq!(agent.started(folder, &fresh), Reading::Yes);
     assert_eq!(agent.ended(folder, &fresh), Reading::No);
     assert_ne!(terminal.state(&fresh), AgentState::Stopped);
+}
+
+#[test]
+fn the_agents_own_settings_are_scripted() {
+    // Unscripted, the fake reserves no key and refuses own settings in the
+    // seam's default words, taking an empty entry, and its command lists
+    // no file; scripted, it reserves each key with its owner, a nested one
+    // by its path, takes them, and its command lists them as one JSON
+    // object in a file under the place's own folder named by `--own
+    // <file>`; every command given own settings logs their keys, and one
+    // given none lists nothing (195, 196).
+    let host = Arc::new(FakeHost::default());
+    let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
+    let given = BTreeMap::from([
+        (
+            "line".to_string(),
+            serde_json::json!({"type": "command", "command": "line"}),
+        ),
+        ("tips".to_string(), serde_json::json!(false)),
+    ]);
+    assert_eq!(agent.reserved(), vec![]);
+    assert_eq!(agent.own(&given), Err(NO_OWN.to_string()));
+    assert_eq!(agent.own(&BTreeMap::new()), Ok(()));
+    let folder = "/state/fix--one";
+    let who = identity("code", 1);
+    let command = |own: &BTreeMap<String, serde_json::Value>| {
+        agent.command(
+            folder,
+            &Settings::default(),
+            None,
+            own,
+            None,
+            &BTreeMap::new(),
+            &place_ref(),
+            &who,
+            &Secret("s".into()),
+            "go",
+        )
+    };
+    let lists_none = |command: &AgentCommand| {
+        command.files.is_empty() && !command.args.iter().any(|arg| arg == "--own")
+    };
+    assert!(lists_none(&command(&given)), "a fake that takes none");
+
+    agent.take_own();
+    agent.reserve("env", "the account");
+    agent.reserve("permissions.default", "flume's mode");
+    assert_eq!(
+        agent.reserved(),
+        vec![
+            Reserved {
+                key: "env".into(),
+                owner: "the account".into(),
+            },
+            Reserved {
+                key: "permissions.default".into(),
+                owner: "flume's mode".into(),
+            },
+        ]
+    );
+    assert_eq!(agent.own(&given), Ok(()));
+    let taken = command(&given);
+    let file = FakeAgent::own_file(folder, &who);
+    assert!(file.starts_with("/state/fix--one/"), "{file}");
+    assert!(
+        taken
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--own", file.as_str()]),
+        "{:?}",
+        taken.args
+    );
+    assert_eq!(taken.files.keys().collect::<Vec<_>>(), vec![&file]);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&taken.files[&file]).expect("JSON"),
+        serde_json::json!({"line": {"type": "command", "command": "line"}, "tips": false})
+    );
+    assert!(
+        lists_none(&command(&BTreeMap::new())),
+        "a command given none"
+    );
+    assert_eq!(
+        agent.log.of("own"),
+        vec![format!("own {who}: line, tips"); 2]
+    );
 }
 
 #[test]
@@ -654,7 +869,7 @@ fn the_terminals_states_follow_the_fake_clock() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     terminal.schedule(&who, host.now() + 240, AgentState::Waiting);
@@ -1033,15 +1248,39 @@ fn the_settings_of_the_host_and_of_a_repository_are_set() {
     let host = FakeHost::default();
     host.set_settings(None, "change", given("opus"));
     host.set_settings(Some("/r"), "change", given("sonnet"));
-    let in_r = host.settings("/r", "change");
+    let model = |model: &str| Settings {
+        model: Some(model.into()),
+        ..Settings::default()
+    };
+    host.set_every_kind("/r", model("haiku"));
+    host.set_stream_settings("work", model("fast"));
+    host.set_every_agent(model("any"));
+    let in_r = host.settings("/r", "change", "work");
     assert_eq!(in_r.kind, given("opus"));
     assert_eq!(in_r.repository, given("sonnet"));
+    assert_eq!(in_r.every_kind, model("haiku"));
+    assert_eq!(in_r.stream, model("fast"));
+    assert_eq!(in_r.every_agent, model("any"));
     assert_eq!(
-        host.settings("/s", "change").repository,
-        KindSettings::default()
+        host.log.of("settings"),
+        vec!["settings /r change work".to_string()]
     );
+    let in_s = host.settings("/s", "change", "default");
+    assert_eq!(in_s.repository, KindSettings::default());
+    assert_eq!(in_s.every_kind, Settings::default());
+    assert_eq!(in_s.stream, Settings::default());
+    assert_eq!(in_s.every_agent, model("any"));
     host.set_settings(None, "change", KindSettings::default());
-    assert_eq!(host.settings("/r", "change").kind, KindSettings::default());
+    host.set_every_kind("/r", Settings::default());
+    host.set_stream_settings("work", Settings::default());
+    host.set_every_agent(Settings::default());
+    assert_eq!(
+        host.settings("/r", "change", "work"),
+        HostSettings {
+            repository: given("sonnet"),
+            ..HostSettings::default()
+        }
+    );
     assert_eq!(host.login("HOME").as_deref(), Some("/home/user"));
     host.set_login("ACCOUNT", Some("work"));
     assert_eq!(host.login("ACCOUNT").as_deref(), Some("work"));
@@ -1083,7 +1322,7 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(matches!(opened, Opened::Opened { .. }));
@@ -1098,7 +1337,7 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         "/state/fix--one",
         &AgentCommand::default(),
         &identity("code", 2),
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(matches!(second, Opened::Refused { .. }), "{second:?}");
@@ -1117,6 +1356,291 @@ fn the_terminal_holds_recipients_sessions_by_name() {
     assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
 }
 
+fn attach_command(part: &str) -> Attached {
+    Attached::Command {
+        command: ViewCommand {
+            program: "fake-terminal".into(),
+            arguments: vec!["attach".into(), part.into()],
+            environment: BTreeMap::new(),
+        },
+    }
+}
+
+/// The seam-fakes spec's scripted attach: the app's view scripted to
+/// refuse, a window's command for `work` and then the refusal, each
+/// asking logged with its view; and a command of the fake's own for its
+/// own session, shown for its app once the script is gone, and either
+/// view scripted apart from the other (187).
+#[test]
+fn a_scripted_attach() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let no_app = Attached::Refused {
+        reason: "no app".into(),
+    };
+    terminal.attaches_as(View::App, Some(no_app.clone()));
+    assert_eq!(
+        terminal.attach(Some("work"), View::Terminal),
+        attach_command("work")
+    );
+    assert_eq!(terminal.attach(Some("work"), View::App), no_app);
+    assert_eq!(
+        terminal.log.of("attach"),
+        vec!["attach work for terminal", "attach work for app"]
+    );
+
+    assert_eq!(terminal.attach(None, View::Terminal), attach_command("own"));
+    terminal.attaches_as(View::App, None);
+    assert_eq!(terminal.attach(Some("work"), View::App), Attached::Shown);
+    let no_session = Attached::Refused {
+        reason: "the terminal holds no session".into(),
+    };
+    terminal.attaches_as(View::Terminal, Some(no_session.clone()));
+    assert_eq!(terminal.attach(Some("work"), View::Terminal), no_session);
+    assert_eq!(terminal.attach(None, View::App), Attached::Shown);
+    assert_eq!(
+        terminal.log.of("attach")[2..],
+        [
+            "attach own for terminal",
+            "attach work for app",
+            "attach work for terminal",
+            "attach own for app",
+        ]
+    );
+}
+
+/// The seam-fakes spec's scripted runs: the fake terminal scripted to
+/// read `work` running answers it so, and `office`, never scripted, not
+/// running, each asking logged and nothing opened; its own part not
+/// running as `own` (106, 201).
+#[test]
+fn a_scripted_runs() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    terminal.runs_as(
+        "work",
+        SessionRuns::Runs {
+            name: "work".into(),
+        },
+    );
+    assert_eq!(
+        terminal.runs(&[Some("work")]),
+        vec![SessionRuns::Runs {
+            name: "work".into()
+        }]
+    );
+    assert_eq!(
+        terminal.runs(&[Some("office")]),
+        vec![SessionRuns::NotRunning {
+            name: "office".into()
+        }]
+    );
+    assert_eq!(terminal.log.of("runs"), vec!["runs work", "runs office"]);
+    assert_eq!(terminal.log.count("open"), 0);
+    assert_eq!(
+        terminal.runs(&[None]),
+        vec![SessionRuns::NotRunning { name: "own".into() }]
+    );
+    assert_eq!(
+        terminal.log.calls(),
+        vec!["runs work", "runs office", "runs own"]
+    );
+}
+
+/// The seam-fakes spec's several parts in one runs: `work`, `office` and
+/// its own part asked in one call answer as each does alone, in that
+/// order, and the call is logged once (106, 201).
+#[test]
+fn several_parts_in_one_runs() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    terminal.runs_as(
+        "work",
+        SessionRuns::Runs {
+            name: "work".into(),
+        },
+    );
+    assert_eq!(
+        terminal.runs(&[Some("work"), Some("office"), None]),
+        vec![
+            SessionRuns::Runs {
+                name: "work".into()
+            },
+            SessionRuns::NotRunning {
+                name: "office".into()
+            },
+            SessionRuns::NotRunning { name: "own".into() },
+        ]
+    );
+    assert_eq!(terminal.log.calls(), vec!["runs work office own"]);
+}
+
+/// The seam-fakes spec's scripted window, the fakes' part of it: the
+/// window scripted to print `attach work` answers that line for the
+/// terminal's command under the title the host declares for `work`, its
+/// log naming one show under that title and no window opened; then it
+/// opens one and refuses as scripted. The scenario through the core's
+/// open is conformance's `open: the fake window scripted to print attach
+/// work …` (188).
+#[test]
+fn a_scripted_window() {
+    let host = Arc::new(FakeHost::default());
+    host.set_title("work", Some("Work Agents"));
+    let title = host.streams()["work"].title.clone().expect("work's title");
+    let terminal = FakeTerminal::new(host);
+    let Attached::Command { command } = terminal.attach(Some("work"), View::Terminal) else {
+        panic!("the fake terminal answers a command");
+    };
+    let window = FakeWindow::default();
+    let printed = WindowShown::Printed {
+        line: "attach work".into(),
+    };
+    window.answers(Some(printed.clone()));
+    assert_eq!(window.show(&command, &title), printed);
+    assert_eq!(
+        window.log.calls(),
+        vec!["show fake-terminal attach work titled Work Agents"]
+    );
+    assert!(window.windows().is_empty());
+
+    window.answers(None);
+    assert_eq!(window.show(&command, &title), WindowShown::Opened);
+    assert_eq!(window.windows(), vec![(command.clone(), title.clone())]);
+    let refused = WindowShown::Refused {
+        reason: "no display".into(),
+    };
+    window.answers(Some(refused.clone()));
+    assert_eq!(window.show(&command, &title), refused);
+    assert_eq!(window.windows().len(), 1);
+    assert_eq!(window.log.count("show"), 3);
+}
+
+/// The seam-fakes spec's scripted title, the fakes' part of it: the fake
+/// host's `work` titled as scripted and every other stream with none.
+/// The scenario through status is conformance's `streams: the fake
+/// host's work scripted with the title Work Agents …` (143).
+#[test]
+fn a_scripted_title() {
+    let host = FakeHost::default();
+    host.set_stream(
+        "personal",
+        Some(Stream {
+            agents: Some(3),
+            ..Stream::default()
+        }),
+    );
+    host.set_title("work", Some("Work Agents"));
+    host.set_title("personal", Some("Personal"));
+    host.set_title("personal", None);
+    let streams = host.streams();
+    assert_eq!(streams["work"].title.as_deref(), Some("Work Agents"));
+    assert_eq!(streams["personal"].title, None);
+    assert_eq!(streams["personal"].agents, Some(3));
+    assert_eq!(streams[DEFAULT_STREAM].title, None);
+}
+
+/// The seam-fakes spec's scripted display: the host's own view `app` and
+/// `trial`'s multiplexer `other`, `trial` giving `other` from `stream`,
+/// every stream the view `app` from `host`, and every other key the
+/// fakes' own from `neither`, each asking logged; then a stream's key
+/// over the host's, and the host's over the fakes' own (143, 190).
+#[test]
+fn a_scripted_display() {
+    let host = FakeHost::default();
+    host.set_host_display(None, Some(View::App), None);
+    host.set_display("trial", Some("other"), None, None);
+    host.set_stream("work", Some(Stream::default()));
+    let held = |profile: &str, from| ProfileHeld {
+        profile: profile.into(),
+        from,
+    };
+    for name in host.streams().keys() {
+        let multiplexer = match name.as_str() {
+            "trial" => held("other", NamedBy::Stream),
+            _ => held("fake", NamedBy::Neither),
+        };
+        assert_eq!(
+            host.display_for(name),
+            StreamDisplay {
+                multiplexer,
+                view: ViewHeld {
+                    view: View::App,
+                    from: NamedBy::Host,
+                },
+                terminal_app: held("fake-window", NamedBy::Neither),
+            },
+            "{name}'s display"
+        );
+    }
+    assert_eq!(
+        host.log.of("display_for"),
+        vec![
+            "display_for default",
+            "display_for trial",
+            "display_for work"
+        ]
+    );
+
+    host.set_host_display(Some("host-terminal"), None, Some("host-window"));
+    host.set_display("trial", None, Some(View::Terminal), Some("trial-window"));
+    assert_eq!(
+        host.display_for("trial"),
+        StreamDisplay {
+            multiplexer: held("host-terminal", NamedBy::Host),
+            view: ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Stream,
+            },
+            terminal_app: held("trial-window", NamedBy::Stream),
+        }
+    );
+    assert_eq!(
+        host.display_for("work").view,
+        ViewHeld {
+            view: View::Terminal,
+            from: NamedBy::Neither,
+        }
+    );
+    assert_eq!(
+        host.display_for("work").terminal_app,
+        held("host-window", NamedBy::Host)
+    );
+}
+
+/// The fake resolver's terminals and windows by name: none until a test
+/// names one, each the very fake it was given, with a log of its own,
+/// and a name it holds none for none (105, 188, 190).
+#[test]
+fn the_resolver_holds_terminals_and_windows_by_name() {
+    let resolver = FakeResolver::new(Arc::new(FakeKinds::default()));
+    assert!(resolver.terminal("fake").is_none());
+    assert!(resolver.window("fake-window").is_none());
+    let host = Arc::new(FakeHost::default());
+    let own = Arc::new(FakeTerminal::new(host.clone()));
+    let other = Arc::new(FakeTerminal::new(host));
+    let window = Arc::new(FakeWindow::default());
+    resolver.with_terminal("fake", own.clone());
+    resolver.with_terminal("other", other.clone());
+    resolver.with_window("fake-window", window.clone());
+
+    let Attached::Command { command } = resolver
+        .terminal("other")
+        .expect("the terminal other")
+        .attach(Some("work"), View::Terminal)
+    else {
+        panic!("the fake terminal answers a command");
+    };
+    let shown = resolver
+        .window("fake-window")
+        .expect("the window fake-window")
+        .show(&command, "Work Agents");
+    assert_eq!(shown, WindowShown::Opened);
+    assert_eq!(other.log.of("attach"), vec!["attach work for terminal"]);
+    assert!(own.log.calls().is_empty());
+    assert_eq!(window.windows(), vec![(command, "Work Agents".to_string())]);
+    assert_eq!(resolver.terminal_profiles(), vec!["fake", "other"]);
+    assert_eq!(resolver.window_profiles(), vec!["fake-window"]);
+    assert!(resolver.terminal("rex").is_none());
+    assert!(resolver.window("kitty").is_none());
+}
+
 /// The history-and-host spec's host's streams and pools: a stream's pool
 /// and the host's, each with where it came from, and the streams
 /// declared, `default` among them, as the configuration stands when
@@ -1131,11 +1655,13 @@ fn a_streams_pool_and_the_hosts() {
     );
     let pool = Pool {
         strategy: Strategy::FillFirst,
+        threshold: None,
         accounts: vec![Account {
             name: "work-1".into(),
             program: "agent".into(),
             env: BTreeMap::from([("AGENT_HOME".into(), "/scratch/work-1".into())]),
             agents: Some(4),
+            usage: None,
         }],
     };
     host.set_pool("work", Some(pool.clone()));
@@ -1145,6 +1671,7 @@ fn a_streams_pool_and_the_hosts() {
             agents: Some(5),
             priority: 10,
             pool: Some("work".into()),
+            ..Stream::default()
         }),
     );
     host.set_stream("personal", Some(Stream::default()));
@@ -1205,4 +1732,670 @@ fn a_stream_named_for_a_place() {
         })
     );
     assert_eq!(named("/s", "fix"), None);
+}
+
+/// A one-stage kind `name` at `version`.
+fn kind_at(name: &str, version: u32) -> Kind {
+    Kind {
+        name: name.into(),
+        version,
+        branch_prefix: name.into(),
+        starts_unready: false,
+        lands: true,
+        agents: KindSettings::default(),
+        stages: vec![],
+        label: None,
+    }
+}
+
+fn hash_of(digit: char) -> String {
+    format!("sha256:{}", digit.to_string().repeat(64))
+}
+
+fn lock_entry(name: &str, version: u32, hash: &str) -> LockEntry {
+    LockEntry {
+        kind: kind_identity("acme", name, version),
+        hash: hash.into(),
+    }
+}
+
+#[test]
+fn a_kinds_name_is_read_as_written_or_refused_as_scripted() {
+    let kinds = FakeKinds::default();
+    assert_eq!(
+        kinds.read_named("acme/review@2"),
+        Ok(KindNamed {
+            source: Some("acme".into()),
+            name: "review".into(),
+            version: Some(2),
+            spelled: "acme/review@2".into(),
+        })
+    );
+    assert_eq!(
+        kinds.read_named("review"),
+        Ok(KindNamed {
+            source: None,
+            name: "review".into(),
+            version: None,
+            spelled: "review".into(),
+        })
+    );
+    for text in ["acme/", "review@0", "review@x", "a/b/c"] {
+        assert!(kinds.read_named(text).is_err(), "`{text}` read");
+    }
+    kinds.unreadable_named("review", "scripted");
+    assert_eq!(kinds.read_named("review"), Err("scripted".into()));
+    assert_eq!(
+        kinds.log.of("read_named"),
+        [
+            "read_named acme/review@2",
+            "read_named review",
+            "read_named acme/",
+            "read_named review@0",
+            "read_named review@x",
+            "read_named a/b/c",
+            "read_named review",
+        ]
+    );
+}
+
+#[test]
+fn flumes_own_are_packages_at_a_stand_in_hash_or_as_scripted() {
+    let kinds = FakeKinds::default();
+    kinds.set_own(vec![kind_at("fix", 1), kind_at("change", 2)]);
+    let own = kinds.flumes_own();
+    assert_eq!(
+        own.iter()
+            .map(|package| package.identity.spelled.as_str())
+            .collect::<Vec<_>>(),
+        ["flume/fix@1", "flume/change@2"]
+    );
+    assert!(own
+        .iter()
+        .all(|package| package.hash.starts_with("sha256:")
+            && package.hash.len() == "sha256:".len() + 64));
+    assert_ne!(own[0].hash, own[1].hash, "two kinds at one stand-in hash");
+    kinds.set_own(vec![kind_at("fix", 1)]);
+    assert_eq!(
+        kinds.flumes_own()[0].hash,
+        own[0].hash,
+        "one kind's hash moved"
+    );
+    kinds.set_own_packages(vec![packaged(
+        "flume",
+        kind_at("fix", 1),
+        Some(&hash_of('f')),
+    )]);
+    assert_eq!(kinds.flumes_own()[0].hash, hash_of('f'));
+    assert_eq!(kinds.log.count("flumes_own"), 3);
+}
+
+#[test]
+fn a_sources_packages_are_scripted_by_its_directory() {
+    let kinds = FakeKinds::default();
+    kinds.set_package("/kinds/acme", kind_at("review", 2), &hash_of('2'));
+    kinds.set_package("/kinds/acme", kind_at("review", 1), &hash_of('1'));
+    kinds.refuse_package(
+        "/kinds/acme",
+        "lint",
+        1,
+        "kinds.lint.env: no declaration gives one",
+    );
+    assert_eq!(
+        kinds.read_source("acme", "/kinds/acme"),
+        SourceRead::Read {
+            kinds: vec![
+                kind_identity("acme", "lint", 1),
+                kind_identity("acme", "review", 1),
+                kind_identity("acme", "review", 2),
+            ],
+        },
+        "every package by identity, the refused one among them"
+    );
+    assert_eq!(
+        kinds.read_package("acme", "/kinds/acme", "review", 2),
+        PackageRead::Read {
+            package: Box::new(Packaged {
+                dir: Some(package_dir("/kinds/acme", "review", 2)),
+                ..packaged("acme", kind_at("review", 2), Some(&hash_of('2')))
+            }),
+        },
+        "the package with its directory as read"
+    );
+    assert_eq!(
+        kinds.read_package("acme", "/kinds/acme", "lint", 1),
+        PackageRead::CouldNotRead {
+            reason: "kinds.lint.env: no declaration gives one".into(),
+        }
+    );
+    assert!(matches!(
+        kinds.read_package("acme", "/kinds/acme", "review", 3),
+        PackageRead::CouldNotRead { reason } if reason.contains("review@3")
+    ));
+    kinds.set_package("/kinds/acme", kind_at("review", 2), &hash_of('3'));
+    assert!(
+        matches!(
+            kinds.read_package("acme", "/kinds/acme", "review", 2),
+            PackageRead::Read { package } if package.hash == hash_of('3')
+        ),
+        "a package scripted again at another hash"
+    );
+    kinds.remove_package("/kinds/acme", "review", 1);
+    assert!(matches!(
+        kinds.read_source("acme", "/kinds/acme"),
+        SourceRead::Read { kinds } if kinds.len() == 2
+    ));
+    assert!(matches!(
+        kinds.read_source("beta", "/kinds/beta"),
+        SourceRead::CouldNotRead { reason } if reason.contains("/kinds/beta")
+    ));
+    kinds.unreadable_source("/kinds/acme", "permission denied");
+    assert_eq!(
+        kinds.read_source("acme", "/kinds/acme"),
+        SourceRead::CouldNotRead {
+            reason: "permission denied".into(),
+        }
+    );
+    assert_eq!(
+        kinds.read_package("acme", "/kinds/acme", "review", 2),
+        PackageRead::CouldNotRead {
+            reason: "permission denied".into(),
+        }
+    );
+    assert_eq!(
+        kinds.log.of("read_source")[0],
+        "read_source acme /kinds/acme"
+    );
+    assert_eq!(
+        kinds.log.of("read_package")[0],
+        "read_package acme /kinds/acme review@2"
+    );
+}
+
+#[test]
+fn the_repositorys_lock_is_scripted_at_a_revision_or_every_revision() {
+    let git = FakeGit::new();
+    let first = git.init("/r", "main");
+    let second = git.commit("/r", "main", &["x"]);
+    let third = git.commit("/r", "main", &["y"]);
+    let kinds = FakeKinds::default();
+    assert_eq!(kinds.read_lock_at("/r", &first), LockRead::None);
+    kinds.set_lock("/r", vec![lock_entry("review", 1, &hash_of('1'))]);
+    kinds.set_lock_at("/r", &second, vec![]);
+    kinds.unreadable_lock_at("/r", &third, "kinds: must be an array of tables");
+    assert_eq!(
+        kinds.read_lock_at("/r", &first),
+        LockRead::Read {
+            entries: vec![lock_entry("review", 1, &hash_of('1'))],
+        }
+    );
+    assert_eq!(
+        kinds.read_lock_at("/r", &second),
+        LockRead::Read { entries: vec![] }
+    );
+    assert_eq!(
+        kinds.read_lock_at("/r", &third),
+        LockRead::CouldNotRead {
+            reason: "kinds: must be an array of tables".into(),
+        }
+    );
+    assert_eq!(
+        kinds.log.of("read_lock_at")[0],
+        format!("read_lock_at /r {first}")
+    );
+}
+
+#[test]
+fn a_lock_on_disk_is_scripted_and_a_lock_written_replaces_it() {
+    let kinds = FakeKinds::default();
+    let host_lock = "/config/flume/flume.lock";
+    assert_eq!(kinds.read_lock_file(host_lock), LockRead::None);
+    kinds.set_lock_file(host_lock, vec![lock_entry("review", 1, &hash_of('1'))]);
+    assert_eq!(
+        kinds.read_lock_file(host_lock),
+        LockRead::Read {
+            entries: vec![lock_entry("review", 1, &hash_of('1'))],
+        }
+    );
+    let written = [
+        lock_entry("review", 2, &hash_of('2')),
+        lock_entry("lint", 1, &hash_of('3')),
+    ];
+    kinds.write_lock(host_lock, &written).expect("written");
+    assert_eq!(
+        kinds.read_lock_file(host_lock),
+        LockRead::Read {
+            entries: vec![written[1].clone(), written[0].clone()],
+        },
+        "written whole, in identity order"
+    );
+    assert_eq!(
+        kinds.log.of("write_lock"),
+        [format!(
+            "write_lock {host_lock} acme/review@2={},acme/lint@1={}",
+            hash_of('2'),
+            hash_of('3')
+        )]
+    );
+    kinds.unwritable_lock(host_lock, "read-only");
+    assert_eq!(kinds.write_lock(host_lock, &[]), Err("read-only".into()));
+    assert!(
+        matches!(
+            kinds.read_lock_file(host_lock),
+            LockRead::Read { entries } if entries.len() == 2
+        ),
+        "a write that failed left the lock as it was"
+    );
+    kinds.unreadable_lock_file("/bad.lock", "not TOML");
+    assert_eq!(
+        kinds.read_lock_file("/bad.lock"),
+        LockRead::CouldNotRead {
+            reason: "not TOML".into(),
+        }
+    );
+}
+
+#[test]
+fn the_hosts_sources_are_scripted() {
+    let host = FakeHost::default();
+    assert!(
+        host.sources().is_empty(),
+        "a host with no sources directory"
+    );
+    host.set_source("acme", "/kinds/acme");
+    host.faulty_source("bad", "it gives no kinds_dir");
+    let sources = host.sources();
+    assert_eq!(
+        sources.get("acme"),
+        Some(&HostSource {
+            file: source_file("acme"),
+            read: HostSourceRead::Read {
+                kinds_dir: "/kinds/acme".into(),
+            },
+        })
+    );
+    assert_eq!(
+        sources.get("bad"),
+        Some(&HostSource {
+            file: format!("{SOURCES}/bad.toml"),
+            read: HostSourceRead::CouldNotRead {
+                reason: "it gives no kinds_dir".into(),
+            },
+        })
+    );
+    host.set_source("acme", "/kinds/acme-2");
+    assert!(
+        matches!(
+            &host.sources()["acme"].read,
+            HostSourceRead::Read { kinds_dir } if kinds_dir == "/kinds/acme-2"
+        ),
+        "a file renamed over another"
+    );
+    host.remove_source("bad");
+    assert_eq!(host.sources().keys().collect::<Vec<_>>(), ["acme"]);
+    assert_eq!(host.log.count("sources"), 4);
+    assert_eq!(
+        (host.sources_dir(), host.kinds_lock()),
+        (Some(SOURCES.to_string()), Some(HOST_LOCK.to_string())),
+        "where the sources' files and the host's lock lie"
+    );
+}
+
+#[test]
+fn a_declarations_identity_and_the_repositorys_files() {
+    let kinds = FakeKinds::default();
+    assert_eq!(
+        kinds.identity_of("repo", "bump", 2),
+        Ok(kind_identity("repo", "bump", 2))
+    );
+    assert_eq!(
+        kinds.log.of("identity_of"),
+        vec!["identity_of repo bump@2".to_string()]
+    );
+    assert_eq!(
+        (kinds.declaration_path(), kinds.lock_path()),
+        (
+            Some(".config/flume.toml".to_string()),
+            Some(".config/flume.lock".to_string())
+        )
+    );
+}
+
+/// A one-stage kind of the name given, which declares no label.
+fn kind_named(name: &str) -> Kind {
+    Kind {
+        name: name.into(),
+        version: 1,
+        branch_prefix: name.into(),
+        starts_unready: false,
+        lands: true,
+        agents: KindSettings::default(),
+        stages: vec![],
+        label: None,
+    }
+}
+
+/// The seam-contracts spec's scenario of where an agent opens: the fake
+/// terminal asked to open one agent beside the pane `operator`, one in
+/// the session `work` and one in its own logs each where it was asked,
+/// and answers each the same (94, 107).
+#[test]
+fn the_terminal_logs_where_each_agent_opens() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let at = [
+        OpenIn::Beside {
+            pane: "operator".into(),
+        },
+        OpenIn::Session {
+            name: "work".into(),
+        },
+        OpenIn::Own,
+    ];
+    let mut answers = vec![];
+    for (n, at) in at.iter().enumerate() {
+        let who = identity("code", n as u32 + 1);
+        answers.push(terminal.open(
+            &place_ref(),
+            "/state/fix--one",
+            &AgentCommand::default(),
+            &who,
+            at,
+            None,
+        ));
+        assert_eq!(terminal.opened_at(&who).as_ref(), Some(at));
+    }
+    assert_eq!(
+        terminal.log.of("at"),
+        vec![
+            format!("at {} beside operator", identity("code", 1)),
+            format!("at {} in session work", identity("code", 2)),
+            format!("at {} in own", identity("code", 3)),
+        ],
+        "where each open was asked"
+    );
+    assert_eq!(
+        terminal.log.of("open"),
+        (1..=3)
+            .map(|n| format!("open {} /r/places/fix--one", identity("code", n)))
+            .collect::<Vec<_>>(),
+        "each open logged as before"
+    );
+    assert!(
+        answers.iter().all(|answer| *answer == answers[0]),
+        "{answers:?}"
+    );
+    assert_eq!(
+        terminal.beside(&identity("code", 1)).as_deref(),
+        Some("operator")
+    );
+    assert_eq!(terminal.beside(&identity("code", 2)), None);
+}
+
+/// A workspace per session and base: an agent opened in a session makes
+/// its place's tab in its base's workspace there; `shown_at` names the
+/// tab and workspace of the live agent's session and each of the base's
+/// workspaces in `bases`; a tidy closes the place's tab in each session,
+/// and each workspace it leaves empty, keeping one a person's pane holds
+/// (107, 137, 138, 139).
+#[test]
+fn a_workspace_per_session_and_base() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let open = |start, at: OpenIn| {
+        terminal.open(
+            &place_ref(),
+            "/state/fix--one",
+            &AgentCommand::default(),
+            &identity("code", start),
+            &at,
+            None,
+        )
+    };
+    open(1, OpenIn::Own);
+    terminal.kill(&identity("code", 1));
+    open(
+        2,
+        OpenIn::Session {
+            name: "work".into(),
+        },
+    );
+    assert_eq!(
+        terminal.made(),
+        (
+            vec!["/r/places/fix--one".to_string(); 2],
+            vec!["r main".to_string(), "r main in work".to_string()],
+        )
+    );
+    assert_eq!(
+        terminal.tabs_of(&place_ref()),
+        vec![None, Some("work".to_string())]
+    );
+    let live = identity("code", 2);
+    assert_eq!(
+        terminal.shown_at(&place_ref(), Some(&live)),
+        ShownAt {
+            place: Some("tab fix--one in work".into()),
+            agent: Some(format!("pane {live}")),
+            base: Some("workspace r main in work".into()),
+            bases: vec!["workspace r main".into(), "workspace r main in work".into()],
+        }
+    );
+    assert_eq!(
+        terminal.shown_at(&place_ref(), None).place.as_deref(),
+        Some("tab fix--one in work"),
+        "the newest tab where no agent is named"
+    );
+    terminal.person_pane_in(Some("work"), &place_ref(), "w4:p1");
+    let tidy = terminal.tidy(&place_ref());
+    assert_eq!(
+        tidy,
+        TerminalTidy {
+            closed: vec![
+                "the tab fix--one".into(),
+                "the tab fix--one in work".into(),
+                "the workspace r main".into(),
+            ],
+            kept: vec!["the workspace r main in work, held by the pane w4:p1".into()],
+        }
+    );
+    assert_eq!(
+        terminal.kept(),
+        vec!["the workspace r main in work, held by the pane w4:p1".to_string()]
+    );
+    assert_eq!(
+        terminal.made(),
+        (vec![], vec!["r main in work".to_string()])
+    );
+}
+
+/// The seam-fakes spec's scripted session: the fake host gives `work`
+/// the session `office`, and a fix's agent of `work` opened in the
+/// session its stream names is logged opened in `office` (107).
+#[test]
+fn a_scripted_session() {
+    let host = Arc::new(FakeHost::default());
+    host.set_stream_session("work", Some("office"));
+    let terminal = FakeTerminal::new(host.clone());
+    let session = host
+        .streams()
+        .get("work")
+        .and_then(|stream| stream.session.clone())
+        .expect("work's session");
+    let who = identity("code", 1);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        &OpenIn::Session { name: session },
+        None,
+    );
+    assert_eq!(
+        terminal.log.of("at"),
+        vec![format!("at {who} in session office")]
+    );
+    assert_eq!(terminal.tabs_of(&place_ref()), vec![Some("office".into())]);
+    host.set_stream_session("work", None);
+    assert_eq!(
+        host.streams()["work"].session,
+        None,
+        "read as it stands now"
+    );
+}
+
+/// The fake host's sessions for a stream's kinds and their stages, each
+/// table's other keys kept, as the test scripts them and as they stand
+/// when asked (199).
+#[test]
+fn a_streams_sessions_for_its_kinds_and_stages_are_scripted() {
+    let host = FakeHost::default();
+    let research = KindSessions {
+        session: Some("work-design".into()),
+        ..KindSessions::default()
+    };
+    let release = KindSessions {
+        stages: BTreeMap::from([(
+            "review".to_string(),
+            StageSession {
+                session: Some("work-design".into()),
+                unknown: vec![],
+            },
+        )]),
+        ..KindSessions::default()
+    };
+    let plan = KindSessions {
+        session: Some("work-plan".into()),
+        unknown: vec!["label".into()],
+        ..KindSessions::default()
+    };
+    host.set_kind_sessions("work", "research", Some(research.clone()));
+    host.set_kind_sessions("work", "release", Some(release.clone()));
+    host.set_kind_sessions("work", "plan", Some(plan.clone()));
+    assert_eq!(
+        host.streams()["work"].kinds,
+        BTreeMap::from([
+            ("plan".to_string(), plan),
+            ("release".to_string(), release),
+            ("research".to_string(), research),
+        ])
+    );
+    assert_eq!(host.streams()["work"].session, None, "work's own unnamed");
+    host.set_kind_sessions("work", "plan", None);
+    assert!(
+        !host.streams()["work"].kinds.contains_key("plan"),
+        "read as it stands now"
+    );
+}
+
+/// The seam-fakes spec's scripted label: the fake kinds give `deploy` the
+/// label `operation` wherever it is read, and with the fake host giving
+/// none, a deploy place's label is `operation` from `kind` (180).
+#[test]
+fn a_scripted_label() {
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let kinds = FakeKinds::default();
+    kinds.set_kinds("/r", vec![kind_named("deploy"), kind_named("fix")]);
+    kinds.set_own(vec![kind_named("deploy")]);
+    kinds.set_label("deploy", Some("operation"));
+    let KindsRead::Read { kinds: read, .. } = kinds.read_kinds("/r", &base) else {
+        panic!("the kinds were not read");
+    };
+    let labels: Vec<Option<&str>> = read.iter().map(|kind| kind.label.as_deref()).collect();
+    assert_eq!(labels, vec![Some("operation"), None]);
+    assert_eq!(
+        kinds.flumes_own()[0].kind.label.as_deref(),
+        Some("operation")
+    );
+    let host = FakeHost::default();
+    assert_eq!(host.label_for("/r", "deploy"), None);
+    let label = host.label_for("/r", "deploy").or_else(|| {
+        read[0].label.clone().map(|name| LabelHeld {
+            name,
+            from: LabelFrom::Kind,
+        })
+    });
+    assert_eq!(
+        label,
+        Some(LabelHeld {
+            name: "operation".into(),
+            from: LabelFrom::Kind,
+        })
+    );
+    kinds.set_label("deploy", None);
+    assert_eq!(kinds.flumes_own()[0].kind.label, None, "as it was set");
+}
+
+/// The fake host's labels for a repository and kind, else for a kind,
+/// each with where it came from; its streams' shares; and its
+/// configuration's values with their layers, its local layer's state and
+/// the keys passed over, each as scripted when asked (143, 180, 181,
+/// C.7).
+#[test]
+fn the_hosts_labels_shares_and_layers_are_scripted() {
+    let host = FakeHost::default();
+    host.name_label(None, "research", Some("inception"));
+    host.name_label(Some("/r"), "research", Some("operation"));
+    assert_eq!(
+        host.label_for("/r", "research"),
+        Some(LabelHeld {
+            name: "operation".into(),
+            from: LabelFrom::HostRepositoryKind,
+        })
+    );
+    assert_eq!(
+        host.label_for("/s", "research"),
+        Some(LabelHeld {
+            name: "inception".into(),
+            from: LabelFrom::HostKind,
+        })
+    );
+    assert_eq!(host.label_for("/s", "fix"), None);
+    host.name_label(Some("/r"), "research", None);
+    assert_eq!(
+        host.label_for("/r", "research").map(|label| label.from),
+        Some(LabelFrom::HostKind)
+    );
+
+    let share = Share {
+        reserve: 2,
+        keep_free: 1,
+        unknown: vec![],
+    };
+    host.set_share("work", "operation", Some(share.clone()));
+    host.set_share("work", "construction", Some(Share::default()));
+    host.set_share("work", "construction", None);
+    assert_eq!(
+        host.streams()["work"].labels,
+        BTreeMap::from([("operation".to_string(), share)])
+    );
+
+    assert_eq!(host.configuration(), HostConfiguration::default());
+    host.set_value("streams.work.agents", "6", ConfigLayer::Managed);
+    host.set_value("streams.work.agents", "3", ConfigLayer::Local);
+    host.set_value("streams.work.pool", "\"work\"", ConfigLayer::Managed);
+    let values = host.configuration().values;
+    assert_eq!(
+        values
+            .iter()
+            .map(|value| (value.key.as_str(), value.value.as_str(), value.layer))
+            .collect::<Vec<_>>(),
+        vec![
+            ("streams.work.agents", "3", ConfigLayer::Local),
+            ("streams.work.pool", "\"work\"", ConfigLayer::Managed),
+        ]
+    );
+    let configuration = HostConfiguration {
+        local: LocalLayer::NotTaken {
+            keys: vec!["pools.work".into()],
+            fault: None,
+        },
+        values,
+        passed_over: vec![PinnedKey {
+            key: "streams.work.agents".into(),
+            pin: "streams.work.agents".into(),
+        }],
+    };
+    host.set_configuration(configuration.clone());
+    assert_eq!(host.configuration(), configuration);
+    assert_eq!(host.log.count("configuration"), 3);
 }

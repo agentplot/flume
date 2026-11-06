@@ -1,7 +1,7 @@
 #!/bin/sh
 # Every tool the gate runs is the version the tree pins, on every host
 # (rule core.22): rustc, cargo, clippy and rustfmt the build .prototools
-# pins, which rust-toolchain.toml names too, and Claude Code, OpenSpec, herdr and sluice the releases devenv.nix
+# pins, which rust-toolchain.toml names too, and Claude Code, TypeScript, OpenSpec, herdr and sluice the releases devenv.nix
 # pins. A tool found outside its pin, a runner's rustup default or the
 # host's own `claude` say, fails here rather than holding the tree to
 # another version's rules.
@@ -52,6 +52,7 @@ release() {
   esac
 }
 release claude "$(pinned claudeVersion)" claude --version
+release tsc "$(pinned typescriptVersion)" tsc --version
 release openspec "$(pinned openspecVersion)" openspec --version
 release herdr "$(pinned herdrVersion)" herdr --version
 release sluice "$(pinned sluiceVersion)" sluice --version

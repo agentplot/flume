@@ -45,7 +45,7 @@ or by a caller, and flume runs no process of its own between commands.
 
 | Seam | What the core asks of it | Profiles |
 |---|---|---|
-| **the place** | make a worktree on a branch from a revision; make it ready; read it; remove it, and its branch only when the base holds its commits | `git-worktree`: plain `git worktree`, readied and torn down by the merge queue's policy |
+| **the place** | make a worktree on a branch from a revision; make it ready; read it; remove it, and its branch only when the base holds its commits | `git-worktree`: plain `git worktree`, made ready and torn down by the steps the merge queue's profile gives it |
 | **the kinds** | the kinds a repository declares at a revision, a launch's file declares, and flume's own; the repository's binding of its tools | the kind format, read from `.config/flume.toml`, a launch's `--kinds` file and the binary |
 | **the change** | a change's facts at a revision: written, its tasks ticked, archived | `openspec`: OpenSpec's files, read with git |
 | **the agent** | the command that starts an agent; whether it started, received a prompt, is asking, has work of its own running, ended; its last words; the way it stops short | `claude`: Claude Code with flume's plugin, read through its hooks' records and its transcript |
@@ -63,8 +63,12 @@ The core names no tool: `herdr`, `sluice`, `claude`, `openspec` and
 the rest appear only in profiles, and a profile implements its seam's
 interface and nothing of the core. One profile never calls another.
 The binary that binds them both hands the place profile what the merge
-queue's policy says of a place: its readiness, its teardown and where
-the base lives.
+queue's profile gives a place: its readiness, built for the revision
+the place's launch read, with the merge queue profile's reading of what
+it printed as the readiness's steps; its teardown; and where the base
+lives. sluice's profile gives `sluice equip <base> --at <revision> --json`
+as the readiness and `sluice release` as the teardown, and reads no
+`[tests]` key itself.
 
 ## The crates
 

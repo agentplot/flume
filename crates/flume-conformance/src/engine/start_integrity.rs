@@ -68,6 +68,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: never_quiet_until_the_limit,
         },
         Scenario {
+            name: "start integrity: a start whose agent began without its settings and is read stopped in the settle that first reads so, before it reads quiet, ends never begun, its end naming the variable",
+            cites: &["161", "35", "43"],
+            run: stopped_before_it_reads_quiet,
+        },
+        Scenario {
             name: "start integrity: no prompt is sent to an agent begun without its settings, before or after it is ended",
             cites: &["37", "161"],
             run: no_prompt_to_the_agent_ended,
@@ -138,6 +143,7 @@ fn work_pool(world: &World, env: &[(&str, &str)]) {
                 .map(|(name, value)| (name.to_string(), value.to_string()))
                 .collect(),
             agents: None,
+            usage: None,
         }],
     );
     world.host.set_host_pool(Some("work"));
@@ -540,6 +546,46 @@ fn never_quiet_until_the_limit(_: &()) -> Outcome {
             _ => None,
         })
         .ok_or("no end of code's start")?;
+    ensure_eq!(
+        end.unsettled
+            .as_ref()
+            .map(|unsettled| unsettled.missing.clone()),
+        Some(vec!["AGENT_HOME".to_string()]),
+        "the end names the variable"
+    );
+    ensure!(
+        world.terminal.sent_to(&who).is_empty(),
+        "a prompt sent to the agent begun without its settings"
+    );
+    Ok(())
+}
+
+/// The launch's own delivery is the settle that first reads the agent
+/// begun without its settings: it records so, reads the agent not quiet,
+/// its own work going on, and then stopped. The end it reads is read
+/// with that record, as one read in a later settle is (161).
+fn stopped_before_it_reads_quiet(_: &()) -> Outcome {
+    let world = World::new();
+    work_pool(&world, &ENV);
+    let who = begins_without_home(&world, "one", 1);
+    world.agent.set_own_work(&who, Reading::Yes);
+    world.terminal.comes_up(AgentState::Stopped);
+    let id = fix(&world, "one")?;
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NeverBegun),
+        "code, its agent stopped before it read quiet"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    ensure_eq!(
+        held.unsettled
+            .iter()
+            .map(|read| read.start)
+            .collect::<Vec<_>>(),
+        vec![1],
+        "the starts read begun without their settings"
+    );
+    let end = held.stages[0].end.clone().ok_or("no end of code")?;
     ensure_eq!(
         end.unsettled
             .as_ref()

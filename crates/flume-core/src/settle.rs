@@ -43,11 +43,12 @@ impl Engine {
         tidy
     }
 
-    /// Where the terminal keeps no watch, every command of flume's that
-    /// acts on places settles every place first (119, I8); under a watch
-    /// the watch settles them.
+    /// Where a terminal the host binds, its own or a stream's, keeps no
+    /// watch, every command of flume's that acts on places settles every
+    /// place first (119, 190, I8); where each keeps one the watches settle
+    /// them.
     pub(crate) fn settle_attended(&self) -> Tidied {
-        if self.terminal.watch() == Watch::None {
+        if self.attended() {
             return self.settle_every();
         }
         Tidied::default()
@@ -87,7 +88,8 @@ impl Engine {
     /// Shows the place's clues where they changed since last shown: its
     /// current stage, a repeating one with its group's place, and that
     /// stage's state, and the count of the places
-    /// of its repository on its base. A clue is display only: one that
+    /// of its repository on its base, in the place's terminal (190). A
+    /// clue is display only: one that
     /// fails is logged and fails nothing, and nothing reads one back
     /// (139).
     fn show(&self, id: &PlaceId) {
@@ -105,7 +107,11 @@ impl Engine {
         if held.shown.as_ref() == Some(&key) {
             return;
         }
-        match self.terminal.show(&place.place_ref(), &clues) {
+        let shown = match self.place_terminal(&held) {
+            Ok(terminal) => terminal.show(&place.place_ref(), &clues),
+            Err(reason) => Shown::Failed { reason },
+        };
+        match shown {
             Shown::Failed { reason } => {
                 self.host
                     .log(&format!("the clues of {id} did not show: {reason}"));
@@ -153,14 +159,23 @@ impl Engine {
     /// unless it waits on its caller's word (40, 47); after a repetition
     /// delivered its group with a task still unticked, starts the same
     /// stage again, waiting for room like any start, unless a hold names
-    /// it (70, 140; core.26).
+    /// it (70, 140; core.26). The current stage is read again in the
+    /// update, and nothing starts unless it still stands delivered,
+    /// finished or repeating there: a settle beside this one may have
+    /// moved the place on since this one read it, its next stage refused
+    /// at its start and current, and the stage after that is not this
+    /// settle's to start (75).
     fn advance(&self, id: &PlaceId) -> bool {
         let next = self.update(id, |held| {
             let Some(index) = held.current else {
                 return Step::Keep(None);
             };
             let ended = &held.stages[index];
-            if ended.start.as_ref().is_some_and(|start| start.live) {
+            let ends = matches!(
+                ended.state,
+                StageState::Delivered | StageState::Finished | StageState::Repeating
+            );
+            if !ends || ended.start.as_ref().is_some_and(|start| start.live) {
                 return Step::Keep(None);
             }
             if ended.state == StageState::Repeating {

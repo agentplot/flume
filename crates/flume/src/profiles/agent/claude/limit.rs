@@ -2,11 +2,19 @@
 //! (151, 146, C.4): the failure's `error` is `rate_limit` and its words
 //! open as one of the usage-limit messages that release itself
 //! recognizes, its own list of their openings; the reset is the words'
-//! ` · resets <when> (<zone>)` part, wherever it falls among their ` · `
-//! parts, `when` as that release's reset formatter writes it in en-US and
-//! `zone` the IANA name it resolved. Every fragment of the release this
-//! reading rests on is in [`fragments`], which a test of the check-tools
-//! layer finds byte for byte in the release the tree pins.
+//! ` · resets <when> (<zone>)` part, or their ` · your <limit> resets
+//! <when> (<zone>)` part where the limit hit is a budget and the reset
+//! its plan limit's, wherever it falls among their ` · ` parts, `when` as
+//! that release's reset formatter writes it in en-US and `zone` the IANA
+//! name it resolved. The formatter writes a reset within a day as a time
+//! of day, `5pm`, and a later one as a date and a time joined by ` at `,
+//! `Nov 8 at 12am`, the year after the day where it is not the year of
+//! the formatter's clock, `Jan 3, 2027 at 9am`: its options are its
+//! program's, and the join is ICU 78's for en-US, the ICU the release
+//! carries in its Linux build and links as the system's on macOS
+//! (record 0045). Every fragment of the release this reading rests on is
+//! in [`fragments`], which a test of the check-tools layer finds byte for
+//! byte in the release the tree pins.
 
 use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone};
 use chrono_tz::Tz;
@@ -39,10 +47,18 @@ const PART: &str = " \u{b7} ";
 /// The part naming the reset opens so.
 const RESETS: &str = "resets ";
 
+/// The part naming the plan limit's reset where the limit hit is a
+/// budget opens so, the limit's name and then [`RESETS`] after it.
+const YOUR: &str = "your ";
+
+/// What joins a date to its time where the reset is more than a day off.
+const AT: &str = " at ";
+
 /// The source fragments of 2.1.296 the reading rests on, each named and
 /// as the release's program holds it: its list of the openings, the
-/// template of the "You've hit your" messages, the reset's part and the
-/// zone its reset formatter puts after the time.
+/// template of the "You've hit your" messages, the reset's parts, the
+/// zone its reset formatter puts after the time, and the formatter's
+/// choice of a date past a day off and its options for each form.
 pub fn fragments() -> Vec<(&'static str, String)> {
     let openings: Vec<String> = OPENINGS
         .iter()
@@ -62,8 +78,24 @@ pub fn fragments() -> Vec<(&'static str, String)> {
             "` \\xB7 resets ${y}`".to_string(),
         ),
         (
+            "the part naming the plan limit's reset where a budget is hit",
+            "` \\xB7 your ${R.limitName} resets ${R.resetTime}`".to_string(),
+        ),
+        (
             "the zone after the reset's time",
             "` (${s??zIs()})`".to_string(),
+        ),
+        (
+            "a date where the reset is more than a day off",
+            "i=(o.getTime()-c.getTime())/3600000;if(n||i>24){".to_string(),
+        ),
+        (
+            "the date and time's options, the year only where it is not the clock's",
+            "{month:\"short\",day:\"numeric\",hour:r?\"numeric\":void 0,minute:!r||m===0?void 0:\"2-digit\",hour12:r?!0:void 0,timeZone:s};if(f!==v(c,s).year)l.year=\"numeric\";return o.toLocaleString(\"en-US\",l).replace(/[ \\u202f]([AP]M)/i,(g,a)=>a.toLowerCase())+u}".to_string(),
+        ),
+        (
+            "the time of day's options",
+            "return o.toLocaleTimeString(\"en-US\",{hour:\"numeric\",minute:m===0?void 0:\"2-digit\",hour12:!0,timeZone:s}).replace(/[ \\u202f]([AP]M)/i,(l,p)=>p.toLowerCase())+u}".to_string(),
         ),
     ]
 }
@@ -74,16 +106,20 @@ pub fn usage_limit(error: &str, words: &str) -> bool {
 }
 
 /// The reset the words name by the host's clock, read in the zone they
-/// name from `at`, when the hook ran; none where they name none, or a
-/// zone `chrono-tz` does not know (146).
+/// name from `at`, when the hook ran; none where they name none, name
+/// one in a form 2.1.296 does not write, or name a zone `chrono-tz` does
+/// not know (146).
 pub fn reset(words: &str, at: u64) -> Option<u64> {
-    let part = words
-        .split(PART)
-        .find_map(|part| part.strip_prefix(RESETS))?;
+    let part = words.split(PART).find_map(|part| {
+        part.strip_prefix(RESETS).or_else(|| {
+            let (_, when) = part.strip_prefix(YOUR)?.split_once(&format!(" {RESETS}"))?;
+            Some(when)
+        })
+    })?;
     let (when, zone) = part.strip_suffix(')')?.rsplit_once(" (")?;
     let zone: Tz = zone.parse().ok()?;
     let ran = zone.timestamp_opt(i64::try_from(at).ok()?, 0).single()?;
-    let reset = match when.rsplit_once(", ") {
+    let reset = match when.split_once(AT) {
         None => {
             // A time of day, within a day of when the words were written:
             // the first such time in the zone no more than a minute before
@@ -97,6 +133,8 @@ pub fn reset(words: &str, at: u64) -> Option<u64> {
             }
         }
         Some((day, time)) => {
+            // A date more than a day off, its year only where it is not
+            // the year the words were written in.
             let time = time_of_day(time)?;
             let (day, year) = match day.rsplit_once(", ") {
                 Some((day, year)) if year.len() == 4 => (day, year.parse().ok()?),
@@ -183,10 +221,37 @@ mod tests {
 
     #[test]
     fn a_weekly_limit_with_a_date() {
+        // deneb's words on 2026-11-05 at 20:40Z, read then as no reset and
+        // so an hour.
+        let words = "You've hit your weekly limit \u{b7} resets Nov 8 at 12am (America/New_York)";
+        let ran = at("UTC", 2026, 11, 5, 20, 40);
+        assert!(usage_limit(RATE_LIMIT, words));
+        assert_eq!(reset(words, ran), Some(at("UTC", 2026, 11, 8, 5, 0)));
+    }
+
+    #[test]
+    fn a_date_with_its_minutes() {
+        let words = hit("weekly limit", Some("Nov 12 at 3:30pm (UTC)"), true);
+        let ran = at("UTC", 2026, 11, 5, 9, 0);
+        assert_eq!(reset(&words, ran), Some(at("UTC", 2026, 11, 12, 15, 30)));
+    }
+
+    #[test]
+    fn a_date_joined_by_a_comma() {
+        // A form 2.1.296 does not write: no reset, so an hour (146).
         let words = hit("weekly limit", Some("Nov 2, 3:30pm (UTC)"), true);
-        let ran = at("UTC", 2026, 10, 29, 9, 0);
         assert!(usage_limit(RATE_LIMIT, &words));
-        assert_eq!(reset(&words, ran), Some(at("UTC", 2026, 11, 2, 15, 30)));
+        assert_eq!(reset(&words, at("UTC", 2026, 10, 29, 9, 0)), None);
+    }
+
+    #[test]
+    fn a_budget_with_its_plan_limits_reset() {
+        // `at("team's shared budget", `${H}${D}`)`: where to raise it,
+        // then the plan limit's reset.
+        let words = "You've hit your team's shared budget \u{b7} raise it at https://claude.ai/admin-settings/usage \u{b7} your weekly limit resets Nov 8 at 12am (America/New_York)";
+        let ran = at("UTC", 2026, 11, 5, 20, 40);
+        assert!(usage_limit(RATE_LIMIT, words));
+        assert_eq!(reset(words, ran), Some(at("UTC", 2026, 11, 8, 5, 0)));
     }
 
     #[test]
@@ -238,7 +303,7 @@ mod tests {
     fn a_date_in_another_year() {
         let words = hit(
             "weekly limit",
-            Some("Jan 3, 2027, 9am (Europe/London)"),
+            Some("Jan 3, 2027 at 9am (Europe/London)"),
             true,
         );
         let ran = at("Europe/London", 2026, 12, 30, 18, 0);
