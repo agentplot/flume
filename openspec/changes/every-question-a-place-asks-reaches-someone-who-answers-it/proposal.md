@@ -112,11 +112,14 @@ the user has read it. Its tasks are the build that follows.
   flume never does. crew writes its file from its partitions, each of
   which runs its work in one stream: each address with its run's kind,
   one of crew's own, its repository, name, intent, settings and the
-  words of what it answers; each partition's operator standing behind
-  its stream; and each role whose stream runs on another host, carried.
-  Ten partitions are ten addresses of one package, `crew/crew-<role>`.
-  A fault stays its file's, its entry's or its address's. The host's
-  `[roles]` table leaves the configuration.
+  words of what it answers; each role not yet moved onto its kind, by
+  the standing agent that holds its address, so a move trades `agent`
+  for `kind` in crew's file alone; each partition's operator standing
+  behind its stream; and each role whose stream runs on another host,
+  carried. Ten partitions are ten addresses of one package,
+  `crew/crew-<role>`. A fault stays its file's, its entry's or its
+  address's. The host's `[roles]` table leaves the configuration, its
+  standing agents' entries with it.
 - **What of the host remains.** crew declared as a source, the lock of
   crew's kinds, and its streams with their room and `planning`'s
   reserve: whose tools run under its accounts, what content it trusts,
@@ -168,8 +171,10 @@ the user has read it. Its tasks are the build that follows.
 - **Changes named in other repositories**, to be made there once the
   user has read the design, and not written here:
   - agentplot/blueprints: flume's statement, as design 12.1 words it
-    against main at c188bf3, section 3's address, its new clause 193 and
-    scenarios S93, S94, S98 and S99. sluice's is not amended.
+    against main at a4eeec3, section 3's address, answerer and key, its
+    new clause 193 and scenarios S93, S94, S98 and S99, committed on the
+    branch `design/flume-every-question-a-place-asks-reaches-someone-who-answers-it`
+    at 6d2598e. sluice's is not amended.
   - afterthought/crew: its kinds as packages declaring the label
     `planning`; its roles file, written from its partitions at their
     streams' addresses; the teams file naming each partition's one

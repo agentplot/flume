@@ -125,6 +125,37 @@ layers (7, 32, 70, 147, 155, 193, C.7).
 - **WHEN** the entry gives `east/planner` the intent `east-planner` and, under `agents`, `model = "opus"`
 - **THEN** the woken place serves the intent `east-planner`, and its agent starts with the model `opus`, which status gives as from the launch (32, 147)
 
+### Requirement: A source may declare a standing agent for an address
+
+An entry MAY give `agent`, the name the host's terminal knows a standing
+agent by, with an optional `session`, `answers` and `answerer`, in
+place of `kind` and a run's keys. Its agent SHALL be found in the
+session the entry names, else its address's stream's, in that stream's
+terminal, and the address's ends SHALL go into it as notices and wake
+no run (132, 190, 193, C.5, C.7; record 0039's amendment).
+
+#### Scenario: A standing design agent
+
+- **WHEN** `acme`'s file gives `east/design` `agent = "east-design"`, the scratch terminal holds one agent of that name in `east`'s session, and an end stands pending for `east/design`
+- **THEN** the settle delivers the end into `east-design`'s pane as a notice and launches nothing
+
+#### Scenario: A standing door
+
+- **WHEN** `acme`'s file gives `east/operator` `agent = "east-operator"` and `answerer = true`, and a place in `east` with no recipient of its own stalls
+- **THEN** the stall goes into `east-operator`'s pane as a notice, and status names `east/operator` as `east`'s answerer from `acme`
+
+### Requirement: A role's crossing to its kind is its source's entry alone
+
+A role SHALL move from a standing agent to a run by its source's entry
+trading `agent` for `kind` and a run's keys, the next end for its
+address waking a run, with nothing of the host's configuration changed
+(132, 193; record 0039's amendment).
+
+#### Scenario: The crossing to its kind
+
+- **WHEN** `acme`'s program rewrites its file so `east/design` gives `kind = "turn"` and a repository in place of the agent, the host's configuration unchanged, and the next end for `east/design` comes
+- **THEN** that end wakes a run of `acme/turn@1` in `east`, and nothing is sent to `east-design`
+
 ### Requirement: An address carried to another host
 
 An entry MAY give `carried = true`, with an optional `answers` and
@@ -142,10 +173,11 @@ keep its ends pending (132, 193).
 A roles file that cannot be read SHALL declare no role. An entry that
 names a kind not its source's, an `env`, a pool, an account or a
 `stream`, whose address names a stream the host does not declare and
-that is not carried, or that gives `carried` beside a run's keys or
+that is not carried, that gives `agent` beside `kind` or a run's other
+keys, or that gives `carried` beside a run's keys, `agent` or
 `answerer`, SHALL declare nothing for its address. Status SHALL name
-each, and every other role and launch SHALL go on (4, 56, 191, 193;
-core.30).
+each, and every other role and launch SHALL go on (3, 4, 56, 132, 191,
+193; core.30).
 
 #### Scenario: A roles file that is not TOML
 
@@ -156,6 +188,11 @@ core.30).
 
 - **WHEN** `acme`'s file gives `east/ops` `kind = "beta/turn"`
 - **THEN** `east/ops` wakes nothing, and status names the entry and that its kind is not `acme`'s
+
+#### Scenario: A standing agent beside a kind
+
+- **WHEN** `acme`'s file gives `east/design` both `agent = "east-design"` and `kind = "turn"`
+- **THEN** `east/design` wakes nothing and nothing is sent to `east-design`, and status names the entry and that it gives both
 
 ### Requirement: What two entries claim is neither's
 

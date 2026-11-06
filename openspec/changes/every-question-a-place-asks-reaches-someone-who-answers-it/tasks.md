@@ -9,9 +9,10 @@ clauses as data (106).
 Group 1 is built once the user has read the design. The groups after
 it are built once flume's statement is amended on agentplot/blueprints
 main as design 12.1 words it, and once the change
-`a-host-declares-where-its-kinds-come-from` has landed on this
-repository's main, since a source's declaration and its packages are
-read by it. Group 7 is built once record 0046's change
+`a-roles-address-may-be-held-by-a-standing-agent` has landed on this
+repository's main or been dropped, since both read a role's entry. They
+build on `a-host-declares-where-its-kinds-come-from`, landed on main,
+since a source's declaration and its packages are read by it. Group 7 is built once record 0046's change
 `an-answer-reaches-the-open-session-within-an-hour` has landed too,
 since an answer handed to an agent kept open is recorded in the end's
 answer this group's key reads. An answer of the user's that changes the
@@ -97,6 +98,19 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 - [ ] 1.4 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run root:format root:adrs site:prose
   site:build` passes.
+- [ ] 1.5 Write the statement's amendment as design 12.1 words it, on a
+  new agentplot/blueprints branch cut from main at a4eeec3, unpushed,
+  each amended clause fitted to main's text and 193, S93, S94, S98 and
+  S99 renumbered where main takes them. Reconcile it with the change
+  `a-roles-address-may-be-held-by-a-standing-agent`: a standing agent's
+  entry is declared with its source's roles, `agent` and an optional
+  `session`, `answers` and `answerer`, so a role's crossing to its kind
+  trades `agent` for `kind` in its source's entry (132, 193, C.5, C.7;
+  record 0039's amendment). Bring record 0039, the design, the
+  proposal, the role-waking spec and these tasks to it. True when the
+  branch `design/flume-every-question-a-place-asks-reaches-someone-who-answers-it`
+  holds the commit, and `sluice exec main -- moon run root:changes
+  root:format root:adrs` passes.
 
 ## 2. A source's roles and the answerer
 
@@ -105,7 +119,9 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   the stream, and `held.rs`'s role field likewise (design 1; 132, 143).
   Give `RoleRun` its source, `name`, `intent`, `agents` (the settings a
   launch's `--agent` gives), `answers`, `answerer` and `carried`, its
-  stream its address's and no `stream` of its own. Give `Host` the run a
+  stream its address's and no `stream` of its own, and give a standing
+  agent's entry its source, `answers` and `answerer` with its stream its
+  address's. Give `Host` the run or the standing agent a
   source declares for an address, or why none is; the answerer behind a
   stream, with its source, or the two that stand behind it; and the
   host's answering roles, every address a source declares with
@@ -115,11 +131,19 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   address test named for a stream and a role.
 - [ ] 2.2 Have the host's configuration reader in `crates/flume` read a
   source's `roles`, an absolute path or one under `~`, and the file it
-  names, as it stands when asked, writing nothing. Keep each fault as
+  names, as it stands when asked, writing nothing, each entry a run's, a
+  standing agent's (`agent`, an optional `session`, `answers` and
+  `answerer`) or a carried address's. Where
+  `a-roles-address-may-be-held-by-a-standing-agent` has landed, move its
+  standing entry's reading from `[roles]` to the roles file, its stream
+  its address's, and bring that change's archived requirements under
+  this change's specs by MODIFIED and REMOVED deltas, so `openspec
+  validate --strict` passes. Keep each fault as
   design 2 has it: a file that cannot be read declaring no role; an
   entry naming a kind not its source's, an `env`, a pool, an account or
   a `stream`, whose address names a stream the host does not declare and
-  that is not carried, or mixing `carried` with a run's keys or
+  that is not carried, giving `agent` beside `kind` or a run's other
+  keys, or mixing `carried` with a run's keys, `agent` or
   `answerer`, declaring nothing for its address; an address two entries
   declare, and two addresses making one place, declared by neither;
   each named, and none failing the configuration or another source.
@@ -130,7 +154,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   132, 143, 191, 193, C.7; core.30, core.35). True when `sluice exec
   main -- moon run flume:test` passes, with `crates/flume/tests/host.rs`
   holding, over a scratch `XDG_CONFIG_HOME`, the role-waking spec's
-  scenarios of a source's roles, an address's stream and its faults, and
+  scenarios of a source's roles, a standing agent's entry, an address's
+  stream and its faults, and
   the history-and-host spec's scenarios of the answerer and of the
   host's answering roles.
 - [ ] 2.3 Have a role's kind resolved as its source's own, `<source>/<kind>`,
@@ -181,7 +206,9 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   `name`, else `<stream>-<role>`, and launch it in its address's stream
   with its entry's intent and `agents` as the launch's. Have `run_of`
   find a run by its role field first, so a run an earlier flume named by
-  the role alone is found. Have a carried address wake nothing, and an
+  the role alone is found. Have a carried address wake nothing, and a
+  standing agent's address wake nothing and have its ends delivered into
+  that agent, read from its source's entry (record 0039's amendment), and an
   address declared by nothing, or by two, or whose stream the host does
   not declare, say why in its wake's refusal. Have `wake`'s refusal of a
   name of another form, and `flume wake`'s help in `commands/mod.rs`,
@@ -192,7 +219,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   spec's scenarios of an address's stream, the run's session, its intent
   and settings, its stream and label, the two streams' planners, named
   `s99_one_declaration_two_streams`, the run an earlier flume named, the
-  carried address and a fault's address, and `crates/flume/tests/commands.rs`
+  carried address, a standing design agent, its crossing to its kind and
+  a standing door, and a fault's address, and `crates/flume/tests/commands.rs`
   the wake's refusal and help.
 - [ ] 4.2 Have the settle that reads a role's run's last stage delivered
   declare it done, with no caller's word, and tidy it, so a later end
@@ -417,7 +445,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 - [ ] 11.1 Have the suite's clause list read the statement at the
   revision of agentplot/blueprints main that holds record 0039's
-  amendment, Part A with 193 and the scenarios to S108. Have 193, S93,
+  amendment, Part A with 193 and the scenarios to S118. Have 193, S93,
   S94, S98 and S99 cited by this change's scenarios, and nothing of this
   change's named unbuilt (clause-coverage spec; core.19). True when
   `sluice exec main -- moon run conformance:test conformance:coverage`
