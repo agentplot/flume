@@ -231,9 +231,13 @@ its name: the stream's `session`, else its name, and, for `default`
 naming none, the multiplexer's own, named as the multiplexer names it. The last part is
 `runs`, `not running`, `not read` where the multiplexer could not be
 read, or `no profile for <multiplexer>` where the stream's multiplexer
-names no profile flume carries. Under the printed command, which holds
-no session, a stream's line reads `<stream> · no session`. A host with
-no places prints `no places` before `streams`.
+names no profile flume carries. Then comes `session <name> · <runs>`
+for each other session the stream names for a kind or a stage, each
+once, so the line names every session a person can open for the
+stream. Where no multiplexer was asked, the sessions come first and
+`no profile for <multiplexer>` once after them. Under the printed
+command, which holds no session, a stream's line reads `<stream> · no
+session`. A host with no places prints `no places` before `streams`.
 
 ```console
 $ flume list
@@ -244,14 +248,14 @@ $ flume list
 /home/you/src/site
   change--the-search-is-rebuilt · construct · held · waits on its caller
 streams
-  work · session work · runs
+  work · session work · runs · session work-design · not running
   personal · session personal · not running
   default · session flume · runs
 ```
 
 The list reads each place's held state, and a live agent's asking mark
 from its own record, and asks each stream's multiplexer once whether
-its session runs. It reads no worktree, head, deliverable, change or
+each of its sessions runs, all of them in one reading. It reads no worktree, head, deliverable, change or
 submission, asks no merge queue, and starts no session. None of a
 place's long words, a stop-short's, a hold's, a failure's or a
 teardown's, is in its lines or its JSON. It says what the last settle

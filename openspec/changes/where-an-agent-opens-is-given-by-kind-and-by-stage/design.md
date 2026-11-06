@@ -632,7 +632,7 @@ and scenarios S106 and S107 are new, beside 186 to 192, 195 to 198,
 designs in flight hold 193, 194, S93 to S99, S104 and S105. Each item
 gives the words a clause holds at fa40c94, but 201 and C.5's runs row,
 which give the words of the blueprints branch
-`design/flume-runs-reads-several-parts-at-once` at 05c9486, cut from
+`design/flume-runs-reads-several-parts-at-once` at 9e08d54, cut from
 main at fa40c94 on the answer to the code stage's stop-short of
 2026-11-06 and unpushed until the user's card approves it (decision 11).
 

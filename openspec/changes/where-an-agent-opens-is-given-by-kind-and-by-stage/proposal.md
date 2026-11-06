@@ -128,7 +128,7 @@ None.
   f676e8f, and amended again for a kind's stage and a session's open by
   the follow-up on main at fa40c94 (design 13); and 201 and C.5's runs
   amended on the branch `design/flume-runs-reads-several-parts-at-once`
-  at 05c9486, unpushed until the user's card approves it (design 11).
+  at 9e08d54, unpushed until the user's card approves it (design 11).
 - `docs/adr`: record 0048, accepted; rules
   core.44 and core.48 amended with it, the site's rules page mirroring
   them; record 0049's amendment, proposed, for runs over several parts,

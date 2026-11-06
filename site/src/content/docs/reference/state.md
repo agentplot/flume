@@ -244,7 +244,8 @@ Each stream, in status's order:
 | `multiplexer` | `profile` and `from`: `stream`, `host` or `neither` |
 | `runs` | what the multiplexer read of the session: `{"runs":{"name":…}}`, `{"not_running":{"name":…}}`, each with the name the multiplexer knows it by; `{"no_part":{"reason":…}}`, where it holds no session; or `{"unread":{"reason":…}}`, where it could not read it, in its words |
 | `uncarried` | in place of `runs`, why no multiplexer was asked: the stream's names no profile flume carries |
-| `line` | `<stream> · session <name> · <runs>`, as `flume list` prints it |
+| `sessions` | each other session the stream names for a kind or a stage, by name: `name`, and `runs` as above, read in the same reading as the stream's own; left out where the stream names none |
+| `line` | `<stream> · session <name> · <runs>` and each other session after it, as `flume list` prints it |
 
 The JSON only ever gains fields, so a tool reading it keeps working
 across releases.
