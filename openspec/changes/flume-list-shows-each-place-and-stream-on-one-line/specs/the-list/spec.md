@@ -1,3 +1,13 @@
+## Purpose
+
+What `flume list` gives: a line for each place on the host, under its
+repository, saying its stage, its state in its line's words, whom it
+waits on and what keeps it, and a line for each stream the host
+declares, saying whether its session runs; read from flume's held
+state, each live agent's own record and each stream's terminal once by
+its runs alone, settling and writing nothing, its JSON form holding the
+same, and a place's every fact left to status (56, 58, 62, 200, 201).
+
 ## ADDED Requirements
 
 ### Requirement: The list gives a line for each place under its repository
