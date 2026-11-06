@@ -21,15 +21,17 @@
 //! `brief` and `stream`, an address it names nothing for woken by nothing
 //! (132, C.7). Its `[streams.<stream>]` tables declare the host's streams,
 //! each with `agents`, `priority`, `pool`, `session`, `multiplexer`,
-//! `view`, `terminal_app`, `title` and its labels' shares in
-//! `[streams.<stream>.labels.<label>]`, and `default` stands
+//! `view`, `terminal_app`, `title`, its labels' shares in
+//! `[streams.<stream>.labels.<label>]`, and the session it names for a
+//! kind in `[streams.<stream>.kinds.<kind>]` and for one stage of a kind
+//! in that table's `.stages.<stage>`, and `default` stands
 //! whether or not a table declares it; its `[pools.<pool>]` tables its
 //! pools, each with `strategy` and `accounts`, each account a `name`, a
 //! `program`, an `env` kept as written and an optional `agents`; `[host]
 //! pool` is the host's own pool; and `stream` in `[repos."<repository>"]`,
 //! `[repos."<repository>".kinds.<kind>]` and `[kinds.<kind>]` names a
 //! place's stream, and `label` in the last two its label (143, 144, 180,
-//! 181, C.7).
+//! 181, 199, C.7).
 //!
 //! The configuration has two layers (C.7; design 4): `config.toml` is the
 //! managed one, and `config.local.toml` beside it the local one, read
@@ -40,10 +42,10 @@
 //! command writes either file (core.16, core.45).
 
 use flume_seams::{
-    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LabelFrom,
-    LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool, PoolFrom, PoolNamed, ProfileHeld, RoleRun,
-    Settings, Share, Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld,
-    DEFAULT_STREAM, SET,
+    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSessions, KindSettings,
+    LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool, PoolFrom, PoolNamed, ProfileHeld,
+    RoleRun, Settings, Share, StageSession, Strategy, Stream, StreamDisplay, StreamFrom,
+    StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -56,10 +58,12 @@ const PRINTED: &str = "printed";
 
 /// The keys the local layer may set, each a path of segments, `*` any one
 /// name: a stream's `agents`, `priority`, `points`, `pace`, `session` and
-/// `multiplexer`, a label's `reserve` and `keep_free`, the `stream` a
+/// `multiplexer`, the `session` it names for a kind and for a kind's
+/// stage, a label's `reserve` and `keep_free`, the `stream` a
 /// repository, a repository's kind or a kind is given, the `label` a
 /// repository's kind or a kind is given, and a kind's agents table, every
-/// stage's and one stage's (32, 107, 143, 166, 167, 180, 181, 190, C.7).
+/// stage's and one stage's (32, 107, 143, 166, 167, 180, 181, 190, 199,
+/// C.7).
 /// Each is one unit, its value taken whole. A change that gives the local
 /// layer another key adds it here.
 pub const LOCAL_KEYS: &[&[&str]] = &[
@@ -69,6 +73,8 @@ pub const LOCAL_KEYS: &[&[&str]] = &[
     &["streams", "*", "pace"],
     &["streams", "*", "session"],
     &["streams", "*", "multiplexer"],
+    &["streams", "*", "kinds", "*", "session"],
+    &["streams", "*", "kinds", "*", "stages", "*", "session"],
     &["streams", "*", "labels", "*", "reserve"],
     &["streams", "*", "labels", "*", "keep_free"],
     &["repos", "*", "stream"],
@@ -986,10 +992,64 @@ fn shares_of(table: &Table, at: &str) -> Result<BTreeMap<String, Share>, String>
     Ok(shares)
 }
 
+/// A stream's `kinds` table: the session each kind's table names, and each
+/// of its stages' tables, by the kind's name and the stage's; each other
+/// key of either table kept unknown, which refuses the starts that read
+/// it rather than the configuration; and a `session` that is no string,
+/// or a `stages` that is no table of tables, refused naming its table and
+/// the key (199, C.7).
+fn kinds_sessions(table: &Table, at: &str) -> Result<BTreeMap<String, KindSessions>, String> {
+    let Some(kinds) = table.get("kinds") else {
+        return Ok(BTreeMap::new());
+    };
+    let kinds = kinds
+        .as_table()
+        .ok_or(format!("[{at}.kinds] is not a table of kinds"))?;
+    let unknown = |table: &Table, words: &[&str]| -> Vec<String> {
+        table
+            .keys()
+            .filter(|key| !words.contains(&key.as_str()))
+            .cloned()
+            .collect()
+    };
+    let mut sessions = BTreeMap::new();
+    for (kind, own) in kinds {
+        let at = format!("{at}.kinds.{}", quoted(kind));
+        let own = own.as_table().ok_or(format!("[{at}] is not a table"))?;
+        let mut stages = BTreeMap::new();
+        if let Some(named) = own.get("stages") {
+            let named = named
+                .as_table()
+                .ok_or(format!("[{at}.stages] is not a table of stages"))?;
+            for (stage, table) in named {
+                let at = format!("{at}.stages.{}", quoted(stage));
+                let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
+                stages.insert(
+                    stage.clone(),
+                    StageSession {
+                        session: text_of(table, "session", &at)?,
+                        unknown: unknown(table, &["session"]),
+                    },
+                );
+            }
+        }
+        sessions.insert(
+            kind.clone(),
+            KindSessions {
+                session: text_of(own, "session", &at)?,
+                stages,
+                unknown: unknown(own, &["session", "stages"]),
+            },
+        );
+    }
+    Ok(sessions)
+}
+
 /// The `streams` table: each stream with its bound, its priority, zero
-/// where it gives none, its pool, its session, its multiplexer, its view,
-/// its terminal app, its title and its labels' shares; a key a stream
-/// does not know refused naming it (107, 143, 181, 186, 190, C.7).
+/// where it gives none, its pool, its session, the sessions it names for
+/// its kinds and their stages, its multiplexer, its view, its terminal
+/// app, its title and its labels' shares; a key a stream does not know
+/// refused naming it (107, 143, 181, 186, 190, 199, C.7).
 fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String> {
     let streams = streams
         .as_table()
@@ -1010,6 +1070,7 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 "terminal_app",
                 "title",
                 "labels",
+                "kinds",
             ],
             &at,
             "a stream",
@@ -1027,7 +1088,7 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 priority,
                 pool: text_of(table, "pool", &at)?,
                 session: text_of(table, "session", &at)?,
-                kinds: BTreeMap::new(),
+                kinds: kinds_sessions(table, &at)?,
                 labels: shares_of(table, &at)?,
                 multiplexer: text_of(table, "multiplexer", &at)?,
                 view: view_of(table, &at)?,
@@ -1708,6 +1769,86 @@ label = "inception"
     }
 
     #[test]
+    fn a_kinds_session_and_a_stages_read_with_each_other_key_unknown() {
+        // 182, 199: the sessions read, each other key kept for the start
+        // that reads its table to refuse.
+        let config = HostConfig::parse(
+            "[streams.work.kinds.research]\nsession = \"work-design\"\nlabel = \"inception\"\n\
+             [streams.work.kinds.release.stages.review]\nsession = \"work-review\"\npool = \"work\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.streams["work"].kinds,
+            BTreeMap::from([
+                (
+                    "release".to_string(),
+                    KindSessions {
+                        session: None,
+                        stages: BTreeMap::from([(
+                            "review".to_string(),
+                            StageSession {
+                                session: Some("work-review".into()),
+                                unknown: vec!["pool".into()],
+                            }
+                        )]),
+                        unknown: vec![],
+                    }
+                ),
+                (
+                    "research".to_string(),
+                    KindSessions {
+                        session: Some("work-design".into()),
+                        stages: BTreeMap::new(),
+                        unknown: vec!["label".into()],
+                    }
+                ),
+            ])
+        );
+        assert_eq!(config.streams["default"].kinds, BTreeMap::new());
+    }
+
+    #[test]
+    fn a_session_that_is_no_word() {
+        // C.7: a kind's or a stage's `session` no string, or its tables no
+        // tables, refused naming the table and the key.
+        let refused =
+            HostConfig::parse("[streams.work.kinds.research]\nsession = 3\n").unwrap_err();
+        assert_eq!(
+            refused,
+            "[streams.work.kinds.research] session is not a string"
+        );
+        for (text, table, key) in [
+            (
+                "[streams.work.kinds.release.stages.review]\nsession = true\n",
+                "streams.work.kinds.release.stages.review",
+                "session",
+            ),
+            (
+                "[streams.work.kinds.release]\nstages = 3\n",
+                "streams.work.kinds.release",
+                "stages",
+            ),
+            (
+                "[streams.work.kinds.release.stages]\nreview = \"work-review\"\n",
+                "streams.work.kinds.release.stages",
+                "review",
+            ),
+            (
+                "[streams.work.kinds]\nresearch = \"work-design\"\n",
+                "streams.work.kinds",
+                "research",
+            ),
+            ("[streams.work]\nkinds = 3\n", "streams.work", "kinds"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains(table) && refused.contains(key),
+                "{text}: {refused}"
+            );
+        }
+    }
+
+    #[test]
     fn labels_sessions_and_a_kinds_label_set_locally() {
         // 107, 180, 181, C.7, S85: each a key the local layer may set, and
         // a label's pool one it may not.
@@ -1761,6 +1902,66 @@ label = "inception"
                 .is_some_and(|fault| fault.contains("kinds.fix.label")),
             "{fault:?}"
         );
+    }
+
+    #[test]
+    fn a_kinds_session_and_a_stages_set_locally() {
+        // 199, C.7, S107: each a key the local layer may set, kept with
+        // its layer.
+        let config = HostConfig::layers(
+            &format!("{WORK}[streams.work.kinds.research]\nsession = \"work-design\"\n"),
+            Some(
+                "[streams.work.kinds.research]\nsession = \"work-research\"\n\
+                 [streams.work.kinds.release.stages.review]\nsession = \"work-review\"\n",
+            ),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let work = &config.streams["work"];
+        assert_eq!(
+            work.kinds["research"].session.as_deref(),
+            Some("work-research")
+        );
+        assert_eq!(
+            work.kinds["release"].stages["review"].session.as_deref(),
+            Some("work-review")
+        );
+        assert_eq!(work.agents, Some(6));
+        assert_eq!(
+            value_at(&config, "streams.work.kinds.research.session"),
+            Some(("\"work-research\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.kinds.release.stages.review.session"),
+            Some(("\"work-review\"".into(), ConfigLayer::Local))
+        );
+    }
+
+    #[test]
+    fn a_kinds_table_key_the_local_layer_cannot_set() {
+        // C.7: a kind's or a stage's table holding any key but its
+        // session, set locally, is a key the local layer may not set.
+        for (local, key) in [
+            (
+                "[streams.work.kinds.research]\nlabel = \"inception\"\n",
+                "streams.work.kinds.research.label",
+            ),
+            (
+                "[streams.work.kinds.release.stages.review]\npool = \"work\"\n",
+                "streams.work.kinds.release.stages.review.pool",
+            ),
+        ] {
+            let config = HostConfig::layers(WORK, Some(local)).unwrap();
+            assert_eq!(
+                config.configuration.local,
+                LocalLayer::NotTaken {
+                    keys: vec![key.into()],
+                    fault: None,
+                },
+                "{local}"
+            );
+            assert_eq!(config.streams["work"].kinds, BTreeMap::new(), "{local}");
+        }
     }
 
     #[test]
@@ -2621,6 +2822,80 @@ label = "inception"
         assert_eq!(
             config.stream_for("/r", "fix").map(|held| held.name),
             Some("work".into())
+        );
+    }
+
+    #[test]
+    fn a_kinds_session_pinned() {
+        // 199, C.7: work's agents taken, research's session passed over
+        // and named with its pin, by the table holding it or by the key.
+        let managed = format!(
+            "{WORK}[streams.work.kinds.research]\nsession = \"work-design\"\n\
+             [streams.work.kinds.release.stages.review]\nsession = \"work-review\"\n"
+        );
+        let local = "[streams.work]\nagents = 3\n\
+             [streams.work.kinds.research]\nsession = \"work-research\"\n\
+             [streams.work.kinds.release.stages.review]\nsession = \"work-local\"\n";
+        let config = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work.kinds\"]\n{managed}"),
+            Some(local),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let work = &config.streams["work"];
+        assert_eq!(work.agents, Some(3));
+        assert_eq!(
+            work.kinds["research"].session.as_deref(),
+            Some("work-design")
+        );
+        assert_eq!(
+            work.kinds["release"].stages["review"].session.as_deref(),
+            Some("work-review")
+        );
+        assert_eq!(
+            config.configuration.passed_over,
+            vec![
+                PinnedKey {
+                    key: "streams.work.kinds.release.stages.review.session".into(),
+                    pin: "streams.work.kinds".into(),
+                },
+                PinnedKey {
+                    key: "streams.work.kinds.research.session".into(),
+                    pin: "streams.work.kinds".into(),
+                },
+            ]
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.kinds.research.session"),
+            Some(("\"work-design\"".into(), ConfigLayer::Managed))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.agents"),
+            Some(("3".into(), ConfigLayer::Local))
+        );
+        let config = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work.kinds.research.session\"]\n{managed}"),
+            Some(local),
+        )
+        .unwrap();
+        let work = &config.streams["work"];
+        assert_eq!(
+            work.kinds["research"].session.as_deref(),
+            Some("work-design")
+        );
+        assert_eq!(
+            work.kinds["release"].stages["review"].session.as_deref(),
+            Some("work-local"),
+            "the stage's session no pin holds"
+        );
+        let refused = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work.kinds.research.label\"]\n{managed}"),
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            refused.contains("[host] pin") && refused.contains("streams.work.kinds.research.label"),
+            "{refused}"
         );
     }
 
