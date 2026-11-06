@@ -772,7 +772,7 @@ fn kinds_of_the_repository(world: &World) {
 
 /// The stream `stream`'s table for `kind`: `session`, each stage's
 /// session by its name, and the table's other keys.
-fn named(
+pub(super) fn named(
     world: &World,
     stream: &str,
     kind: &str,

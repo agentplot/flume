@@ -108,7 +108,7 @@ impl LabelRoom {
 impl StreamRoom {
     /// The stream `name` as the host's configuration declares it, its
     /// labels running none yet (143, 181, 182).
-    fn of(name: &str, stream: Stream) -> StreamRoom {
+    pub(crate) fn of(name: &str, stream: Stream) -> StreamRoom {
         let fault = fault_of(name, &stream);
         StreamRoom {
             running: 0,
@@ -306,7 +306,7 @@ impl StreamRoom {
     /// Each session the stream `name`'s agents open in by its word, with
     /// how it gives it: its own, by its name where it names none, and
     /// each it names for a kind or a kind's stage (107, 199).
-    fn words(&self, name: &str) -> Vec<(String, String)> {
+    pub(crate) fn words(&self, name: &str) -> Vec<(String, String)> {
         let own = self.own_session(name);
         let mut words: Vec<(String, String)> = own
             .name

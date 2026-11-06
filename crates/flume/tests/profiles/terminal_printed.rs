@@ -202,7 +202,7 @@ fn attach_under_the_printed_command_runs_nothing() {
     for view in [View::Terminal, View::App] {
         world.host.set_display("work", None, Some(view), None);
         assert_eq!(
-            engine.open_stream(Some("work")).refusal(),
+            engine.open_session(Some("work")).refusal(),
             Some(
                 "the printed command holds no session a person can be shown; its agents run in \
                  the commands it printed"

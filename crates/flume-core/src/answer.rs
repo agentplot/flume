@@ -75,15 +75,20 @@ pub enum Answer {
     Opened(StreamOpened),
 }
 
-/// What an open showed (186): the stream, its multiplexer, the session
-/// shown, its view, the title and the terminal app of a window, each
-/// with where it came from, the command the window runs by its
-/// variables' names, and what the window did.
+/// What an open showed (186): the stream whose session it is, its
+/// multiplexer, the session shown, its view, the title and the terminal
+/// app of a window, each with where it came from, the kinds and stages
+/// the stream names the session for (199), the command the window runs
+/// by its variables' names, and what the window did.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamOpened {
     pub stream: String,
     pub multiplexer: ProfileHeld,
     pub session: SessionHeld,
+    /// The kinds and stages the stream names the session for, each with
+    /// its layer; none where it names it for none (199).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub named: Option<NamedSession>,
     pub view: ViewHeld,
     /// None for the app's view, whose app titles its own window.
     #[serde(default)]
@@ -623,19 +628,23 @@ pub struct StreamStatus {
 }
 
 /// The title a window on a stream's part of its terminal carries, and
-/// where it came from: the stream's `title`, else its name (143, 186).
+/// where it came from: for the stream's own session, the stream's
+/// `title`, else its name, and for a session it names for a kind or a
+/// stage, that session's name (143, 186, 199).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TitleHeld {
     pub title: String,
     pub from: TitleFrom,
 }
 
-/// Where a stream's title came from (143, 186).
+/// Where a window's title came from (143, 186, 199).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TitleFrom {
     Stream,
     StreamName,
+    /// The name of a session the stream names for a kind or a stage.
+    Session,
 }
 
 /// A terminal the host binds (119, 190): the profile a stream takes it

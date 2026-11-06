@@ -10,9 +10,9 @@ use flume_core::{
 };
 use flume_seams::{
     AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration,
-    IntentKey, LabelHeld, LocalLayer, Made, NamedBy, ProfileHeld, Readiness, SessionFrom,
-    SessionHeld, StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits,
-    Watch,
+    IntentKey, LabelHeld, LocalLayer, Made, NamedBy, NamedSession, ProfileHeld, Readiness,
+    SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart,
+    WaitingOn, Waits, Watch,
 };
 use serde_json::{json, Value};
 
@@ -174,6 +174,13 @@ fn opened_lines(opened: &StreamOpened) -> Vec<String> {
         facts.push(format!("terminal app {}", profile_words(app)));
     }
     lines.push(format!("  {}", facts.join(", ")));
+    if let Some(named) = &opened.named {
+        lines.push(format!(
+            "  the stream names the session {} for {}",
+            named.name,
+            named_for(named)
+        ));
+    }
     if let Some(command) = &opened.command {
         let mut words = vec![command.program.clone()];
         words.extend(command.arguments.iter().cloned());
@@ -607,6 +614,7 @@ fn title_from(from: TitleFrom) -> &'static str {
     match from {
         TitleFrom::Stream => "the stream's title",
         TitleFrom::StreamName => "the stream's name",
+        TitleFrom::Session => "the session's name",
     }
 }
 
@@ -642,22 +650,10 @@ fn named_lines(stream: &StreamStatus) -> Vec<String> {
         .sessions
         .iter()
         .map(|session| {
-            let kinds = session
-                .kinds
-                .iter()
-                .map(|kind| format!("the kind {} (from {})", kind.name, word(json!(kind.layer))));
-            let stages = session.stages.iter().map(|stage| {
-                format!(
-                    "the stage {} (from {})",
-                    stage.name,
-                    word(json!(stage.layer))
-                )
-            });
-            let named: Vec<String> = kinds.chain(stages).collect();
             format!(
                 "    it names the session {} for {}",
                 session.name,
-                and_list(&named)
+                named_for(session)
             )
         })
         .collect();
@@ -668,6 +664,25 @@ fn named_lines(stream: &StreamStatus) -> Vec<String> {
         ));
     }
     lines
+}
+
+/// The kinds and stages a stream names a session for, each with its
+/// layer: `the kind research (from managed) and the stage
+/// release.review (from local)` (56, 199, C.7).
+fn named_for(session: &NamedSession) -> String {
+    let kinds = session
+        .kinds
+        .iter()
+        .map(|kind| format!("the kind {} (from {})", kind.name, word(json!(kind.layer))));
+    let stages = session.stages.iter().map(|stage| {
+        format!(
+            "the stage {} (from {})",
+            stage.name,
+            word(json!(stage.layer))
+        )
+    });
+    let named: Vec<String> = kinds.chain(stages).collect();
+    and_list(&named)
 }
 
 /// `items` as a person reads a list: `a`, `a and b`, `a, b and c`.
@@ -1225,6 +1240,7 @@ mod tests {
                 name: Some("work".into()),
                 from: SessionFrom::StreamName,
             },
+            named: None,
             view: ViewHeld {
                 view,
                 from: if terminal {
@@ -1278,6 +1294,43 @@ mod tests {
             [
                 "mux's app showed the session work (the stream's name)",
                 "  stream work, multiplexer mux (the host's), view app (the stream's)",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_opened_lines_of_a_session_named_for_a_kind_and_a_stage() {
+        // 186, 199: a session the stream names for a kind and a stage,
+        // shown under its own name, with the kinds and stages it is
+        // named for, each with its layer.
+        let named = StreamOpened {
+            session: SessionHeld {
+                name: Some("work-design".into()),
+                from: SessionFrom::StreamKind,
+            },
+            named: Some(NamedSession {
+                name: "work-design".into(),
+                kinds: vec![flume_seams::NamedFor {
+                    name: "research".into(),
+                    layer: ConfigLayer::Managed,
+                }],
+                stages: vec![flume_seams::NamedFor {
+                    name: "release.review".into(),
+                    layer: ConfigLayer::Local,
+                }],
+            }),
+            title: Some(TitleHeld {
+                title: "work-design".into(),
+                from: TitleFrom::Session,
+            }),
+            ..opened(WindowOutcome::Opened, View::Terminal)
+        };
+        assert_eq!(
+            opened_lines(&named)[..3],
+            [
+                "opened a app-window window titled \"work-design\" (the session's name) on mux's session work-design (the stream's for its kind)",
+                "  stream work, multiplexer mux (the host's), view terminal (the default), terminal app app-window (the stream's)",
+                "  the stream names the session work-design for the kind research (from managed) and the stage release.review (from local)",
             ]
         );
     }
