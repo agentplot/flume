@@ -25,9 +25,9 @@ submission in its record alone, its inbox giving nothing for it (106,
 The fake terminal SHALL answer the nudge a test sets, nudging nothing by
 default, and the fake store SHALL hold the host's watch as any host
 document, so a test makes flume watched by settling with a bound and
-lets the watch lapse by the fake clock (106, 122, 207).
+lets the watch lapse by the fake clock (106, 122, 208).
 
 #### Scenario: A watch the clock lets lapse
 
 - **WHEN** a test settles every place with a bound of thirty seconds and moves the fake clock past a minute
-- **THEN** the engine reads attended, and reads unattended again after the test's next settle with a bound (119, 207)
+- **THEN** the engine reads attended, and reads unattended again after the test's next settle with a bound (119, 208)

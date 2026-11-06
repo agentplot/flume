@@ -47,8 +47,8 @@ it after. Those are sluice's and the host's, named below.
 
 ## What Changes
 
-- **A caller keeps watch over the host (46, 119, 120, 207, I8, S109,
-  S113).** `flume settle --every <bound>` settles every place and
+- **A caller keeps watch over the host (46, 119, 120, 208, I8, S109,
+  S118).** `flume settle --every <bound>` settles every place and
   records in the host's state when it began and the bound it stated. A
   caller keeps watch while its newest such settle began less than twice
   its bound ago, and flume runs attended while none does: every acting
@@ -148,7 +148,7 @@ it after. Those are sluice's and the host's, named below.
 - `kinds-profile`: a kind that lands with `stages = []` read through
   weir's crate.
 - `clause-coverage`: the suite reads the statement's revision holding
-  202 to 207 and S109 to S113.
+  202 to 206 and 208 and S109 to S112 and S118.
 
 ## Impact
 
@@ -164,7 +164,7 @@ it after. Those are sluice's and the host's, named below.
   watch.
 - `crates/flume-conformance`: the watch's and attended's scenarios,
   every scenario that set a terminal's watch moved to the host's,
-  settling's S109 and S113, base places' S110 to S112, the seam
+  settling's S109 and S118, base places' S110 to S112, the seam
   scenarios, and the clause list.
 - `crates/flume`: `flume settle --every`; status's watch in the person's
   form; sluice's `branch create`, `branch delete` and `submit --head`
@@ -178,10 +178,10 @@ it after. Those are sluice's and the host's, named below.
   core.5's, core.6's, core.13's, core.25's and core.49's details.
 - agentplot/blueprints: flume's vocabulary, preamble, 9, 10, 14, 18, 46,
   47, 67, 78, 80, 82, 111, 112, 117, 119, 120, 122, 133, 165, 176, 202
-  to 207, C.1, C.5, C.6, C.7, section 9, I8, section 12, S27, S28, S91 and
-  S109 to S113; weir 51, 52 and 57; sluice 124; on the branch
+  to 206, 208, C.1, C.5, C.6, C.7, section 9, I8, section 12, S27, S28, S91 and
+  S109 to S112 and S118; weir 51, 52 and 57; sluice 124; on the branch
   `design/flume-every-place-on-the-queue-is-settled-at-every-depth` at
-  a43f811, cut from main at e4fab7b, unpushed (core.19).
+  c2e3170, cut from main at c94c496, unpushed (core.19).
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool. weir-kinds' pin moves, and the pinned sluice moves
   to the release that submits a named head from no worktree.

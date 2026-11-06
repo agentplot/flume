@@ -5,7 +5,7 @@
 While a caller keeps watch over the host, a wait SHALL settle nothing
 and read only the host's state. While none does, it SHALL settle every
 place before each reading, as every acting command does, whatever any
-terminal nudges (119, 122, 207; core.13).
+terminal nudges (119, 122, 208; core.13).
 
 #### Scenario: Under a watch
 
@@ -15,7 +15,7 @@ terminal nudges (119, 122, 207; core.13).
 #### Scenario: Attended under a nudge
 
 - **WHEN** a wait follows a place while no caller keeps watch and the fake terminal nudges
-- **THEN** the wait settles every place before each reading (119, 207)
+- **THEN** the wait settles every place before each reading (119, 208)
 
 ### Requirement: The printed command delivers nothing
 

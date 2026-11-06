@@ -36,7 +36,7 @@ submission by name's outcome with its words (99, 117, 203; core.2).
 The terminal seam SHALL answer whether the terminal settles when an
 agent's state changes, or nudges nothing, in place of a watch with a
 bound; no operation of the seam SHALL answer a bound on which the
-terminal settles (122, 207).
+terminal settles (122, 208).
 
 #### Scenario: A nudge or none
 
@@ -49,19 +49,19 @@ The store seam's host documents SHALL hold the host's watch, when the
 newest settle a caller asked as its watch began and the bound it
 stated, written by compare-and-set on its version as every host
 document is, a host state written before reading as holding none (73,
-153, 207).
+153, 208).
 
 #### Scenario: Two watches at once
 
 - **WHEN** two settles with a bound write the host's watch from the same version
-- **THEN** one write takes and the other is refused, and the one that read again writes over it (73, 207)
+- **THEN** one write takes and the other is refused, and the one that read again writes over it (73, 208)
 
 ### Requirement: The types of a base place and the watch
 
 `flume-seams` SHALL hold `SubmitHead`, `Opened`, `Closed`,
 `BranchRemoved::Refused`, `Nudge`, `HostKey::Watch` and `Watched`, each
 written and read back by its round trip, a document written before
-reading as it did (61, 202 to 207).
+reading as it did (61, 202 to 206 and 208).
 
 #### Scenario: Round trips
 

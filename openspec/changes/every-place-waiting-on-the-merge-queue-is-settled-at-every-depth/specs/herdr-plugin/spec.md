@@ -3,7 +3,7 @@
 ### Requirement: flume runs unattended only while the watch is kept
 
 **Reason**: Whether flume runs attended is read from the host's watch,
-which a caller keeps (119, 207), never from a terminal or its plugin.
+which a caller keeps (119, 208), never from a terminal or its plugin.
 
 **Migration**: "The herdr terminal nudges while the watch is kept"
 below gives what the plugin's lease still decides.
@@ -11,14 +11,14 @@ below gives what the plugin's lease still decides.
 ### Requirement: The watch settles on its bound and at each state change
 
 **Reason**: The watch keeps no bound: a caller keeps the host's watch
-(207), and the plugin's watch nudges (122).
+(208), and the plugin's watch nudges (122).
 
 **Migration**: "The watch nudges at each state change and keeps no
 bound" below.
 
 ### Requirement: The watch reads a dead agent within its bound
 
-**Reason**: The watch keeps no bound to read within (122, 207).
+**Reason**: The watch keeps no bound to read within (122, 208).
 
 **Migration**: "The watch reads a dead agent at its pane's change"
 below.
@@ -29,7 +29,7 @@ below.
 
 The herdr terminal SHALL answer that it nudges only while the plugin's
 watch holds a fresh lease, and that it nudges nothing otherwise; neither
-answer SHALL decide whether flume runs attended (119, 122, 207, C.5).
+answer SHALL decide whether flume runs attended (119, 122, 208, C.5).
 
 #### Scenario: The plugin not running
 
@@ -57,7 +57,7 @@ SHALL run nothing of flume's but `flume settle` and `flume status` (46,
 #### Scenario: Nothing changes
 
 - **WHEN** no agent's state changes for ten minutes of ticks, and the stand-in flume's status names one submitted place with no agent
-- **THEN** the watch runs no `flume settle`, and writes `flume status --json` for the sidebar at its ticks as before (122, 207)
+- **THEN** the watch runs no `flume settle`, and writes `flume status --json` for the sidebar at its ticks as before (122, 208)
 
 ### Requirement: The watch reads a dead agent at its pane's change
 

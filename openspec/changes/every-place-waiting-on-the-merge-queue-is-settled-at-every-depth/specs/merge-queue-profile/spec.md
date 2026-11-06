@@ -40,10 +40,10 @@ Against the pinned sluice, with no `sluice run` live, a place submitted
 with no agent in it SHALL land by the steps of the settles a caller
 keeping watch runs, `flume settle --every`, with no other caller's act
 and no `sluice wait`; beside a live `sluice run`, those settles' steps
-SHALL do nothing and the driver SHALL land it (124, 125, 207, C.6;
+SHALL do nothing and the driver SHALL land it (124, 125, 208, C.6;
 sluice 135).
 
 #### Scenario: Settled by a watch, no agent
 
 - **WHEN** a chore in a scratch repository delivers, its agent ends and it is submitted to the pinned sluice, and the test then runs `flume settle --every 1m` until it lands
-- **THEN** each settle ran one `sluice step main`, the chore landed with no agent started after its code stage, and the settle after the landing tidied it (124, 207, S109)
+- **THEN** each settle ran one `sluice step main`, the chore landed with no agent started after its code stage, and the settle after the landing tidied it (124, 208, S109)
