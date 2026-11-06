@@ -383,11 +383,15 @@ flume kinds lock [--host] [--remove] [--hash <hash>] <identity>…
   hash. A host's source's kind is read as the host holds it, and
   flume's own as flume carries it.
 - **Where it writes.** The lock it writes is `.config/flume.lock` of the
-  working copy it runs in, or with `--host` the host's lock. It records
-  each identity beside any other version of the same kind the lock
-  holds, and replaces an entry of the same identity.
+  working copy it runs in, or with `--host` the host's lock. The working
+  copy is the one whose top git gives from the directory it runs in, or
+  from `--repository`'s, and outside a working copy it is refused,
+  naming `--host`. It records each identity beside any other version of
+  the same kind the lock holds, and replaces an entry of the same
+  identity.
 - **`--remove`** takes each named entry out, reading no package. So a
   program can unlock a version whose directory it already removed.
+  `--remove` and `--hash` are not given together.
 - **`--hash <hash>`**, with one identity named, records it only where
   its content hashes to `<hash>`. Otherwise it refuses, naming both
   hashes, and leaves the lock as it was. This is how a program records
@@ -399,10 +403,13 @@ flume kinds lock [--host] [--remove] [--hash <hash>] <identity>…
   overwrites.
 - **How it writes.** It writes the lock whole, through weir-kinds' lock
   writer, beside the lock and renamed over it. It holds an advisory lock
-  kept under flume's state directory while it reads and writes, so two
-  writers on the host never lose each other's entry and nothing is left
-  in the working copy but the lock. Run twice, it leaves the same lock
-  (core.17).
+  kept under flume's state directory, `$XDG_STATE_HOME/flume/kinds-lock.lock`,
+  while it reads and writes, so two writers on the host never lose each
+  other's entry and nothing is left in the working copy but the lock.
+  The host has one such lock, whichever lock of kinds is written, rather
+  than one per lock: the command takes it before the core names the
+  lock's file, and a write takes milliseconds. Run twice, it leaves the
+  same lock (core.17).
 - **What it never does.** It fetches nothing and commits nothing. A
   repository's lock reaches its places once its caller commits it on
   the base (155; core.16).
@@ -472,7 +479,11 @@ The person's form gives the identity on the place's kind line, followed
 by `from the source acme (<source_file>) at <kind_dir>`, or `from the
 repository at <revision>`, or `from <declaration_file>`, or `flume's
 own`. Then come the hash, and `locked in <lock_file>` where a lock
-recorded it. Every field is only added (core.14).
+recorded it. A place whose held state keeps no `kind_from` has no kind
+line, its first line giving the source from `declared`. The host's part
+gives each source on a line of its own: `source acme (<source_file>) at
+<kinds_dir>:` and the identities it holds, `holds no kind`, or `cannot
+be read:` and the fault. Every field is only added (core.14).
 
 ### 10. The seams
 
