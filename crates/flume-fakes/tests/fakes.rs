@@ -1347,8 +1347,8 @@ fn an_agent_added_removed_and_refused() {
 }
 
 /// The seam-fakes spec's "Two of one name": `w-planner` added twice in
-/// `w` is listed twice, each under its own key, which herdr never lists
-/// and the core counts (132).
+/// `w` is listed twice, each under its own key, which the core reads
+/// as no one agent (132; core.28).
 #[test]
 fn two_of_one_name() {
     let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));

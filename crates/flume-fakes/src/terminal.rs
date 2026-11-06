@@ -29,10 +29,10 @@ use std::sync::{Arc, Mutex};
 /// as one `runs <part> <part>…` and starting nothing (201). It holds
 /// named agents in parts, each a recipient's session under a key of its
 /// own, `fake:<n>@<part>`, which its sends, its state and its notices
-/// reach, two of one name in a part among them, as herdr never lists;
-/// agents in gives a part's in the order added, or the words a test
-/// refused the part with, logging each asking as `agents_in <part>`
-/// and starting nothing (132, C.5).
+/// reach, two of one name in a part among them, which the core reads
+/// as no one agent; agents in gives a part's in the order added, or the
+/// words a test refused the part with, logging each asking as
+/// `agents_in <part>` and starting nothing (132, C.5).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
