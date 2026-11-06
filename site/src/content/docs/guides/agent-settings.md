@@ -602,7 +602,9 @@ status says which window held the account and until when.
 A reading neither shortens nor lengthens a spent account's pause. An
 account spent until 15:00 stays spent until then, though a reading at
 14:00 gives it 10% used, and flume records no account spent from a
-reading. A threshold leaves the last of each window unspent: set it
+reading. Each holds the account on its own, so it takes a start again
+only once its pause has passed and no window holds it past its
+threshold. A threshold leaves the last of each window unspent: set it
 higher, up to 100, to spend more of each before new work moves on.
 
 ### A pool that cannot run a stage
@@ -656,10 +658,20 @@ such as `LANG=en_US.UTF-8`.
 When an agent's turn fails at its account's usage limit, flume records
 the account **spent** until the reset the limit's words name, or for an
 hour where they name none. It reads Claude Code's own words, as the
-Claude Code release flume pins writes them, such as `You've hit your
-session limit · resets 5pm (America/New_York)`. The record is a
-document of the host's own, so every flume process on the host skips
-the account until then.
+Claude Code release flume pins writes them. A reset within a day is a
+time of day, as in `You've hit your session limit · resets 5pm
+(America/New_York)`. A later one is a date and a time, as in `You've hit
+your weekly limit · resets Nov 8 at 12am (America/New_York)`, with the
+year after the day where it is not this year's. A limit on a budget
+names its plan limit's reset, `your weekly limit resets Nov 8 at 12am
+(America/New_York)`. Each is read in the zone the words name. The record
+is a document of the host's own, so every flume process on the host
+skips the account until then.
+
+Where the words name a reset in a form flume does not read, the account
+is spent for an hour, as where they name none, and status gives the
+words beside the account's spent time, so a person can see what flume
+could not read.
 
 Once the spent agent is quiet, flume ends it and starts its stage again
 on the account its pool chooses, or the stage waits for one. No

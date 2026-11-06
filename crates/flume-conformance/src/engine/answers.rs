@@ -482,6 +482,7 @@ fn host_status() -> HostStatus {
                     running: 0,
                     bound: None,
                     spent_until: None,
+                    spent_unread: None,
                     reading: Some(ReadingStatus::Unread {
                         unread: "the file is missing".into(),
                     }),
@@ -493,6 +494,7 @@ fn host_status() -> HostStatus {
                     running: 2,
                     bound: Some(4),
                     spent_until: Some(54_000),
+                    spent_unread: Some("You've hit your limit".into()),
                     reading: Some(ReadingStatus::Read {
                         read_at: 53_880,
                         fresh: true,
@@ -851,6 +853,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.pools[].accounts[].program",
             "status.host.pools[].accounts[].running",
             "status.host.pools[].accounts[].spent_until",
+            "status.host.pools[].accounts[].spent_unread",
             "status.host.pools[].accounts[].reading",
             "status.host.pools[].accounts[].reading.read_at",
             "status.host.pools[].accounts[].reading.fresh",

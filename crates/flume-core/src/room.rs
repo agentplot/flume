@@ -601,12 +601,14 @@ impl Engine {
                         pool: name.clone(),
                         account: account.name.clone(),
                     };
-                    let spent_until = match self.store.read_host(&key) {
+                    let (spent_until, spent_unread) = match self.store.read_host(&key) {
                         Some(HostVersioned {
                             document: HostDocument::Account(spent),
                             ..
-                        }) if spent.until > now => Some(spent.until),
-                        _ => None,
+                        }) if spent.until > now => {
+                            (Some(spent.until), spent.words.filter(|_| spent.unread))
+                        }
+                        _ => (None, None),
                     };
                     let running = on_accounts
                         .get(&(name.clone(), account.name.clone()))
@@ -617,6 +619,7 @@ impl Engine {
                         account,
                         running,
                         spent_until,
+                        spent_unread,
                         threshold,
                         now,
                     }
@@ -838,6 +841,7 @@ impl Engine {
                         running: room.running,
                         bound: room.account.agents,
                         spent_until: room.spent_until,
+                        spent_unread: room.spent_unread.clone(),
                         reading: room.reading_status(),
                         past: room.past(),
                     })

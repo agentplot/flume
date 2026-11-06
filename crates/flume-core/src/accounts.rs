@@ -29,7 +29,8 @@ pub(crate) struct PoolRoom {
 
 /// An account of a pool: as the configuration declares it, flume's
 /// agents running on it, the time it is spent until, none where it is
-/// not spent at the host's clock, and its reading, with the host's clock
+/// not spent at the host's clock, the words in which flume read no reset
+/// where that time is the hour, and its reading, with the host's clock
 /// and its pool's threshold, 90 where the pool states none, the queue
 /// read it at (144, 146, 184, 185).
 #[derive(Clone, Debug)]
@@ -37,6 +38,7 @@ pub(crate) struct AccountRoom {
     pub account: Account,
     pub running: u32,
     pub spent_until: Option<Seconds>,
+    pub spent_unread: Option<String>,
     pub reading: Reading,
     pub threshold: u32,
     pub now: Seconds,
@@ -802,6 +804,7 @@ mod tests {
             },
             running: 1,
             spent_until,
+            spent_unread: None,
             reading,
             threshold: THRESHOLD,
             now: NOW,

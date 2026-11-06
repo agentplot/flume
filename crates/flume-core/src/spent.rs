@@ -26,8 +26,9 @@ const TRIES: usize = 8;
 
 impl Engine {
     /// Records the account `account` spent until `until`, or for an hour
-    /// from now where none is named, by compare-and-set: a later time
-    /// already recorded is kept, and a pause standing with no reset named
+    /// from now where the words gave none its profile read, marked so
+    /// status gives the words (56), by compare-and-set: a later time
+    /// already recorded is kept, and a pause standing with no reset read
     /// is not lengthened by reading the same limit again (146, 153).
     pub(crate) fn record_spent(&self, account: &AccountHeld, until: Option<Seconds>, words: &str) {
         let key = HostKey::Account {
@@ -44,16 +45,17 @@ impl Engine {
                 }) => Some(spent.until).filter(|until| *until > now),
                 _ => None,
             };
-            let until = match (until, standing) {
+            let (until, unread) = match (until, standing) {
                 (Some(until), Some(standing)) if standing >= until => return,
-                (Some(until), _) => until,
+                (Some(until), _) => (until, false),
                 (None, Some(_)) => return,
-                (None, None) => now + SPENT_FOR,
+                (None, None) => (now + SPENT_FOR, true),
             };
             let next = HostDocument::Account(AccountSpent {
                 until,
                 words: Some(words.to_string()),
                 recorded_at: now,
+                unread,
             });
             let at = read.map(|read| read.version);
             if let Written::Written { .. } = self.store.write_host(&key, at, Some(&next)) {
