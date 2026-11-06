@@ -17,7 +17,7 @@ pub mod usage;
 use config::HostConfig;
 use flume_seams::{
     Host, HostConfiguration, HostSettings, LabelHeld, Pool, PoolNamed, RoleRun, RoomGuard, Seconds,
-    Secret, Stream, StreamHeld, Usage,
+    Secret, Stream, StreamDisplay, StreamHeld, Usage,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -26,6 +26,25 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// The system a profile is built for: macOS, or any other, so a profile
+/// whose program differs between them holds both paths on any host (C.8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum System {
+    MacOs,
+    Other,
+}
+
+impl System {
+    /// The system this host runs.
+    pub fn of_host() -> System {
+        if cfg!(target_os = "macos") {
+            System::MacOs
+        } else {
+            System::Other
+        }
+    }
+}
 
 /// The host this command runs on.
 #[derive(Clone, Debug)]
@@ -278,6 +297,10 @@ impl Host for RealHost {
 
     fn pool_for(&self, stream: &str) -> Option<PoolNamed> {
         self.config.pool_for(stream)
+    }
+
+    fn display_for(&self, stream: &str) -> StreamDisplay {
+        self.config.display_for(stream)
     }
 
     fn pool(&self, name: &str) -> Option<Pool> {

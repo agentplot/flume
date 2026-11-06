@@ -96,7 +96,7 @@ impl Engine {
                             tidied,
                         );
                     }
-                    if let Closed::Refused { reason } = self.terminal.close(&identity) {
+                    if let Closed::Refused { reason } = self.agent_on(start).close() {
                         self.failed_end(id, &identity, &reason);
                         return self.keep(
                             id,
@@ -143,7 +143,18 @@ impl Engine {
                 commits,
             });
         }
-        let terminal = self.terminal.tidy(&at);
+        // Each terminal its agents opened in tidies what it made for the
+        // place, whatever the configuration names by now (137, 190).
+        let (terminals, unreached) = self.tidy_terminals(&held);
+        let answers: Vec<(Option<String>, TerminalTidy)> = terminals
+            .iter()
+            .map(|(profile, terminal)| (profile.clone(), terminal.tidy(&at)))
+            .collect();
+        for reason in unreached {
+            self.host.log(&format!(
+                "the place {id} was not tidied in a terminal: {reason}"
+            ));
+        }
         self.intent_left(&place.intent, id);
         self.deliver_ends(id);
         if let Some(read) = self.store.read(id) {
@@ -151,12 +162,15 @@ impl Engine {
         }
         if self.remove_held(id) {
             tidied.removed.push(id.clone());
-            if !terminal.closed.is_empty() || !terminal.kept.is_empty() {
-                tidied.terminal.push(TerminalTidied {
-                    place: id.clone(),
-                    closed: terminal.closed,
-                    kept: terminal.kept,
-                });
+            for (profile, terminal) in answers {
+                if !terminal.closed.is_empty() || !terminal.kept.is_empty() {
+                    tidied.terminal.push(TerminalTidied {
+                        place: id.clone(),
+                        profile,
+                        closed: terminal.closed,
+                        kept: terminal.kept,
+                    });
+                }
             }
         }
         true

@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 pub mod engine;
+pub mod window;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

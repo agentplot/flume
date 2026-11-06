@@ -16,7 +16,11 @@ pub struct World {
     pub place: Arc<FakePlace>,
     pub kinds: Arc<FakeKinds>,
     pub change: Arc<FakeChange>,
+    /// The terminal the engine is built with, the resolver's `fake`.
     pub terminal: Arc<FakeTerminal>,
+    /// The resolver's `fake-window`, the fake host's terminal app where
+    /// neither a stream nor the host names one.
+    pub window: Arc<FakeWindow>,
     pub agent: Arc<FakeAgent>,
     pub queue: Arc<FakeMergeQueue>,
     pub store: Arc<FakeStore>,
@@ -34,7 +38,9 @@ impl Default for World {
 
 impl World {
     /// A repository on `main` binding the fake place, change and merge
-    /// queue, flume's own kinds, and agents run by the fake agent.
+    /// queue, flume's own kinds, agents run by the fake agent, and the
+    /// engine's own terminal and the fake window by the names the fake
+    /// host's display gives where nothing names one.
     pub fn new() -> World {
         let git = FakeGit::new();
         git.init(REPOSITORY, "main");
@@ -52,6 +58,7 @@ impl World {
         );
         let change = Arc::new(FakeChange::new(git.clone()));
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
+        let window = Arc::new(FakeWindow::default());
         let agent = Arc::new(FakeAgent::new(terminal.clone()));
         let queue = Arc::new(FakeMergeQueue::new(git.clone()));
         let store = Arc::new(FakeStore::default());
@@ -62,6 +69,8 @@ impl World {
         resolver.bind_change("plans", change.clone());
         resolver.bind_merge_queue("queue", queue.clone());
         resolver.bind_agent("agent", agent.clone());
+        resolver.with_terminal("fake", terminal.clone());
+        resolver.with_window("fake-window", window.clone());
         let defaults = Defaults {
             settings: Settings {
                 program: Some("agent".into()),
@@ -84,6 +93,7 @@ impl World {
             kinds,
             change,
             terminal,
+            window,
             agent,
             queue,
             store,
@@ -104,6 +114,15 @@ impl World {
             self.host.clone(),
             self.defaults.clone(),
         )
+    }
+
+    /// A fake terminal of its own, which the resolver gives by `name` and
+    /// the fake agent reads its agents in (190).
+    pub fn other_terminal(&self, name: &str) -> Arc<FakeTerminal> {
+        let terminal = Arc::new(FakeTerminal::new(self.host.clone()));
+        self.resolver.with_terminal(name, terminal.clone());
+        self.agent.also_on(terminal.clone());
+        terminal
     }
 
     /// The place `<kind>--<name>` of the repository, where the fake place

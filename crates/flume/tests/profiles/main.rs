@@ -14,3 +14,6 @@ mod kinds_weir;
 mod place_git_worktree;
 mod store_state_dir;
 mod terminal_printed;
+mod window_ghostty;
+mod window_printed;
+mod window_terminal;

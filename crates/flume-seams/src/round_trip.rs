@@ -287,6 +287,10 @@ fn held() -> HeldState {
                     name: "operation".into(),
                     from: LabelFrom::Kind,
                 }),
+                terminal: Some(ProfileHeld {
+                    profile: "fake".into(),
+                    from: NamedBy::Stream,
+                }),
             }),
             since: Some(120),
         }],
@@ -357,6 +361,10 @@ fn held() -> HeldState {
             start: 3,
             at: 8,
             words: "the start that carried its conversation ended before it said it started".into(),
+        }],
+        terminals: vec![ProfileHeld {
+            profile: "printed".into(),
+            from: NamedBy::Host,
         }],
         waiting: Some(Waiting {
             on: WaitingOn {
@@ -982,6 +990,7 @@ fn a_held_state_written_before_carried_starts() {
         .unwrap()
         .remove("session");
     before.as_object_mut().unwrap().remove("uncarried");
+    before.as_object_mut().unwrap().remove("terminals");
     let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
     let stage = &read.stages[0];
     assert_eq!(stage.room.as_ref().expect("a room").carry, None);
@@ -991,6 +1000,7 @@ fn a_held_state_written_before_carried_starts() {
     assert!(read.moves.iter().all(|moved| moved.carried.is_none()));
     assert!(!read.unsettled[0].unsettled.session);
     assert!(read.uncarried.is_empty());
+    assert!(read.terminals.is_empty());
     assert_eq!(
         serde_json::to_value(&read).expect("written again"),
         before,
@@ -1386,6 +1396,7 @@ fn streams_and_pools_as_the_configuration_names_them() {
                 },
             ),
         ]),
+        ..Stream::default()
     });
     round_trips(Stream::default());
     let pool = Pool {
@@ -1474,12 +1485,12 @@ fn a_pool_and_a_reading() {
     let usage = Usage {
         read_at: 1_000,
         windows: vec![
-            Window {
+            UsageWindow {
                 name: "5-hour".into(),
                 used: 4_200,
                 resets_at: Some(12_000),
             },
-            Window {
+            UsageWindow {
                 name: "7-day".into(),
                 used: 7_150,
                 resets_at: None,
@@ -2430,6 +2441,131 @@ fn the_terminal_seams_answers() {
     round_trips(Watch::None);
     round_trips(Some("pane-3".to_string()));
     round_trips(Some("Do you trust the files in this folder?".to_string()));
+}
+
+#[test]
+fn a_view_a_window_and_a_stream() {
+    // The seam-contracts spec's view, window and stream's terminal: a
+    // command needing a variable, attach's and show's answers, each view,
+    // a stream's display from each source, a stream with its four keys
+    // and a start with its terminal read back unchanged, and a stream and
+    // a start written before reading with none (143, 187, 188, 190).
+    let command = ViewCommand {
+        program: "/bin/terminal".into(),
+        arguments: vec!["session".into(), "attach".into(), "work".into()],
+        environment: BTreeMap::from([("XDG_CONFIG_HOME".into(), "/scratch/sessions".into())]),
+    };
+    round_trips(command.clone());
+    round_trips(ViewCommand {
+        environment: BTreeMap::new(),
+        ..command.clone()
+    });
+    let bare: ViewCommand =
+        serde_json::from_str(r#"{"program":"/bin/terminal","arguments":["attach"]}"#).unwrap();
+    assert!(bare.environment.is_empty());
+    assert!(!serde_json::to_string(&bare)
+        .unwrap()
+        .contains("environment"));
+    round_trips(Attached::Command { command });
+    round_trips(Attached::Shown);
+    round_trips(Attached::Refused {
+        reason: "the terminal holds no session a person can be shown".into(),
+    });
+    round_trips(WindowShown::Opened);
+    round_trips(WindowShown::Printed {
+        line: "XDG_CONFIG_HOME=<set> /bin/terminal session attach work".into(),
+    });
+    round_trips(WindowShown::Refused {
+        reason: "Unable to find application named 'Window.app'".into(),
+    });
+    for (view, spelled) in [(View::Terminal, "terminal"), (View::App, "app")] {
+        round_trips(view);
+        assert_eq!(serde_json::to_value(view).unwrap(), spelled);
+        assert_eq!(view.name(), spelled);
+    }
+    for (from, spelled) in [
+        (NamedBy::Stream, "stream"),
+        (NamedBy::Host, "host"),
+        (NamedBy::Neither, "neither"),
+    ] {
+        round_trips(from);
+        assert_eq!(serde_json::to_value(from).unwrap(), spelled);
+        let display = StreamDisplay {
+            multiplexer: ProfileHeld {
+                profile: "terminal".into(),
+                from,
+            },
+            view: ViewHeld {
+                view: View::App,
+                from,
+            },
+            terminal_app: ProfileHeld {
+                profile: "window".into(),
+                from,
+            },
+        };
+        round_trips(display.clone());
+        assert_eq!(
+            serde_json::to_value(&display).unwrap()["view"],
+            serde_json::json!({"view": "app", "from": spelled})
+        );
+    }
+    round_trips(Stream {
+        title: Some("Work Agents".into()),
+        ..Stream::default()
+    });
+    let stream = Stream {
+        multiplexer: Some("terminal".into()),
+        view: Some(View::Terminal),
+        terminal_app: Some("window".into()),
+        title: Some("Work Agents".into()),
+        ..Stream::default()
+    };
+    round_trips(stream.clone());
+    assert_eq!(
+        serde_json::to_value(&stream).unwrap(),
+        serde_json::json!({
+            "priority": 0,
+            "multiplexer": "terminal",
+            "view": "terminal",
+            "terminal_app": "window",
+            "title": "Work Agents",
+        })
+    );
+    let before: Stream = serde_json::from_str(r#"{"agents":4,"priority":10}"#).unwrap();
+    assert_eq!(before.title, None);
+    assert_eq!(
+        (&before.multiplexer, before.view, &before.terminal_app),
+        (&None, None, &None)
+    );
+    let written = serde_json::to_string(&before).unwrap();
+    for key in ["title", "multiplexer", "view", "terminal_app"] {
+        assert!(!written.contains(key), "{written} gives no {key}");
+    }
+
+    // A start holds the terminal its agent opened in; one written before
+    // reads with none, the host's, and writes none back (56, 190).
+    let state = held();
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["stages"][0]["start"]["terminal"],
+        serde_json::json!({"profile": "fake", "from": "stream"})
+    );
+    let mut before = json;
+    before["stages"][0]["start"]
+        .as_object_mut()
+        .unwrap()
+        .remove("terminal");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(
+        read.stages[0].start.as_ref().expect("a start").terminal,
+        None
+    );
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no terminal written where none is held"
+    );
 }
 
 #[test]

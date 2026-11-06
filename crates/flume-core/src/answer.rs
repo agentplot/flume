@@ -70,6 +70,54 @@ pub enum Answer {
     /// place on the host, read from its held state, the change at its
     /// head and its live agent's asking mark alone (56, 57, 58).
     Lines { lines: Vec<PlaceLine> },
+    /// A stream's session shown in its view at a person's asking, and
+    /// nothing flume holds changed (186; core.48).
+    Opened(StreamOpened),
+}
+
+/// What an open showed (186): the stream, its multiplexer, the session
+/// shown, its view, the title and the terminal app of a window, each
+/// with where it came from, the command the window runs by its
+/// variables' names, and what the window did.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamOpened {
+    pub stream: String,
+    pub multiplexer: ProfileHeld,
+    pub session: SessionHeld,
+    pub view: ViewHeld,
+    /// None for the app's view, whose app titles its own window.
+    #[serde(default)]
+    pub title: Option<TitleHeld>,
+    /// None for the app's view.
+    #[serde(default)]
+    pub terminal_app: Option<ProfileHeld>,
+    /// None for the app's view.
+    #[serde(default)]
+    pub command: Option<ViewCommandStatus>,
+    pub window: WindowOutcome,
+}
+
+/// The command a window runs to show a stream's session, by its program,
+/// its arguments and its variables' names, never their values (187;
+/// core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewCommandStatus {
+    pub program: String,
+    pub arguments: Vec<String>,
+    #[serde(default)]
+    pub environment: Vec<String>,
+}
+
+/// What showing a stream's session did (186, 188).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowOutcome {
+    /// The terminal app opened a window.
+    Opened,
+    /// No window: the line for a person to run.
+    Printed { line: String },
+    /// The multiplexer's own app showed the session.
+    App,
 }
 
 /// What a wake of a role's address came to (132): its run launched by
@@ -358,6 +406,11 @@ pub struct HostStatus {
     /// The watch the terminal keeps, with its bound, or none (122).
     #[serde(default = "no_watch")]
     pub watch: Watch,
+    /// Each terminal the host binds, its own first, then each stream's
+    /// by the stream's name, each once: its profile, what it made and
+    /// keeps for what it did not make, and its watch (56, 119, 190).
+    #[serde(default)]
+    pub terminals: Vec<TerminalStatus>,
     /// Each repository's base a live place stands on, with the count of
     /// its places show gives and where the terminal shows it (139).
     #[serde(default)]
@@ -391,6 +444,7 @@ impl Default for HostStatus {
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
+            terminals: vec![],
             bases: vec![],
             terminal_setup: vec![],
             configuration: HostConfiguration::default(),
@@ -523,16 +577,26 @@ impl RoomWanted {
 }
 
 /// A stream of the host (143): the session its agents open in where
-/// their launch names none, with where it came from, its priority among
-/// streams, its agents running, the bound it states, none where the
-/// host's alone holds it, its room, none where it states no bound, its
-/// stages waiting for room in the order they would start, its labels'
-/// shares, whether their reserves are held, and why its labels refuse
-/// its starts, none where they do not (56, 70, 107, 181, 182).
+/// their launch names none, with where it came from, its multiplexer,
+/// view and terminal app, each with where it came from, and the title a
+/// window on it carries, its priority among streams, its agents running,
+/// the bound it states, none where the host's alone holds it, its room,
+/// none where it states no bound, its stages waiting for room in the
+/// order they would start, its labels' shares, whether their reserves
+/// are held, and why it refuses: its labels' fault, its multiplexer
+/// naming a terminal profile flume does not carry, or, for a terminal
+/// view, its terminal app naming a window profile flume does not carry,
+/// that last also given alone, since it refuses the stream's open and
+/// none of its stages; none where none holds (56, 70, 107, 181, 182, 186,
+/// 188, 190; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
     pub session: SessionHeld,
+    pub multiplexer: ProfileHeld,
+    pub view: ViewHeld,
+    pub terminal_app: ProfileHeld,
+    pub title: TitleHeld,
     pub priority: i64,
     pub running: u32,
     pub bound: Option<u32>,
@@ -544,6 +608,37 @@ pub struct StreamStatus {
     pub reserves: Reserves,
     #[serde(default)]
     pub refused: Option<String>,
+    /// The terminal app's refusal alone, the last part of `refused` where
+    /// it holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_refused: Option<String>,
+}
+
+/// The title a window on a stream's part of its terminal carries, and
+/// where it came from: the stream's `title`, else its name (143, 186).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TitleHeld {
+    pub title: String,
+    pub from: TitleFrom,
+}
+
+/// Where a stream's title came from (143, 186).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TitleFrom {
+    Stream,
+    StreamName,
+}
+
+/// A terminal the host binds (119, 190): the profile a stream takes it
+/// by, none for the host's own where no profile flume carries is it,
+/// what it made and keeps for what it did not make, each named with what
+/// holds it, and the watch it keeps.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalStatus {
+    pub profile: Option<String>,
+    pub kept: Vec<String>,
+    pub watch: Watch,
 }
 
 /// A label of a stream (181): its reserve, the slots of the stream it
@@ -786,6 +881,11 @@ pub struct AgentStatus {
     /// 107, 143).
     #[serde(default)]
     pub session: Option<SessionHeld>,
+    /// The terminal the agent opened in, with where it came from; none
+    /// for a start written before, whose agent is in the host's (56,
+    /// 190).
+    #[serde(default)]
+    pub terminal: Option<ProfileHeld>,
 }
 
 /// An agent's mode at its start: `passed`, the value its profile passed,
@@ -849,8 +949,8 @@ pub struct Tidied {
     pub branches_kept: Vec<BranchKept>,
     /// Places asked of whose work is not over.
     pub not_over: Vec<PlaceId>,
-    /// What the terminal closed and kept of what it made for each place
-    /// removed (137, 138).
+    /// What each terminal closed and kept of what it made for each place
+    /// removed, by the terminal (137, 138, 190).
     #[serde(default)]
     pub terminal: Vec<TerminalTidied>,
 }
@@ -865,11 +965,15 @@ impl Tidied {
     }
 }
 
-/// What the terminal closed of what it made for a place removed, and what
-/// it kept, each named with what holds it (137, 138).
+/// What a terminal closed of what it made for a place removed, and what
+/// it kept, each named with what holds it, under the name of the
+/// terminal's profile: none for the host's own where no profile the
+/// resolver carries gives it (137, 138, 190).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalTidied {
     pub place: PlaceId,
+    #[serde(default)]
+    pub profile: Option<String>,
     pub closed: Vec<String>,
     pub kept: Vec<String>,
 }

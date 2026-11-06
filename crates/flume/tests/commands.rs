@@ -235,6 +235,18 @@ impl Resolver for StandIn {
         };
         Some(Arc::new(StandInAgent { says_started }))
     }
+    fn terminal(&self, profile: &str) -> Option<Arc<dyn Terminal>> {
+        self.0.terminal(profile)
+    }
+    fn terminal_profiles(&self) -> Vec<String> {
+        self.0.terminal_profiles()
+    }
+    fn window(&self, profile: &str) -> Option<Arc<dyn Window>> {
+        self.0.window(profile)
+    }
+    fn window_profiles(&self) -> Vec<String> {
+        self.0.window_profiles()
+    }
 }
 
 /// This test binary as flume, where the test that re-runs it asks: the
@@ -248,11 +260,14 @@ fn stand_in_flume() {
     let words: Vec<String> = serde_json::from_str(&words).expect("the command's words");
     let build = || {
         let home = std::env::var("HOME").unwrap_or_default();
+        let state = config::flume_state()?;
         core_with(
-            &config::flume_state()?,
+            &state,
             HostConfig::of_host()?,
             flume::host::recipient(),
-            Arc::new(StandIn(BuiltIn::with_login(&[("HOME", &home)]))),
+            Arc::new(StandIn(
+                BuiltIn::with_login(&[("HOME", &home)]).over(&state),
+            )),
             Some(vec![("HOME".into(), home)]),
         )
     };
@@ -2201,4 +2216,167 @@ fn flume_writes_neither_configuration_file() {
     assert_eq!(tidied.code, 0, "{}", tidied.text);
     assert!(!Path::new(&place).exists(), "{}", tidied.text);
     assert_eq!(read(), before, "a layer's file was written");
+}
+
+#[test]
+fn open_under_the_printed_command() {
+    // 187: the printed command holds no session a person can be shown,
+    // refused in its JSON, needing no repository.
+    let host = Host::new("open-printed");
+    host.configure("[streams.work]\nagents = 1\n");
+    let ran = host.flume(&host.home(), &["open", "work", "--json"], &[]);
+    assert_ne!(ran.code, 0, "{}", ran.text);
+    let reason = ran
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_else(|| panic!("open answered {}", ran.text));
+    assert!(
+        reason.contains("the printed command holds no session a person can be shown"),
+        "{reason}"
+    );
+}
+
+#[test]
+fn open_of_an_undeclared_stream() {
+    // 4, 186: refused naming the stream, outside any repository.
+    let host = Host::new("open-undeclared");
+    host.configure("[streams.work]\nagents = 1\n");
+    let ran = host.flume(&host.home(), &["open", "nightly"], &[]);
+    assert_ne!(ran.code, 0, "{}", ran.text);
+    assert!(
+        ran.text.starts_with("refused: ") && ran.text.contains("nightly"),
+        "{}",
+        ran.text
+    );
+}
+
+#[test]
+fn the_keys_and_none_in_status() {
+    // 143, 186, 190: the streams spec's keys and none, read from the
+    // host's file through the binary: `office` takes the host's
+    // multiplexer, the default view, its own terminal app and its own
+    // title; `personal` the host's multiplexer and terminal app, the
+    // default view and its name for its title, each with where it came
+    // from.
+    let host = Host::new("keys-and-none");
+    host.configure(
+        "[host]\nmultiplexer = \"printed\"\nterminal_app = \"printed\"\n\
+         [streams.office]\nterminal_app = \"terminal\"\ntitle = \"Office Agents\"\n\
+         [streams.personal]\n",
+    );
+    let status = host.flume(&host.home(), &["status", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let status = status.json();
+    let display = |name: &str| {
+        let stream = stream_of(&status, name);
+        json!({
+            "multiplexer": stream["multiplexer"],
+            "view": stream["view"],
+            "terminal_app": stream["terminal_app"],
+            "title": stream["title"],
+        })
+    };
+    assert_eq!(
+        display("office"),
+        json!({
+            "multiplexer": {"profile": "printed", "from": "host"},
+            "view": {"view": "terminal", "from": "neither"},
+            "terminal_app": {"profile": "terminal", "from": "stream"},
+            "title": {"title": "Office Agents", "from": "stream"},
+        })
+    );
+    assert_eq!(
+        display("personal"),
+        json!({
+            "multiplexer": {"profile": "printed", "from": "host"},
+            "view": {"view": "terminal", "from": "neither"},
+            "terminal_app": {"profile": "printed", "from": "host"},
+            "title": {"title": "personal", "from": "stream-name"},
+        })
+    );
+}
+
+#[test]
+fn an_unknown_terminal_app() {
+    // 105, 188, C.8: status answers, giving each stream's terminal app
+    // `kitty` from the host and its refusal, and open is refused naming
+    // `kitty` and the window profiles.
+    let host = Host::new("open-kitty");
+    host.configure("[host]\nterminal_app = \"kitty\"\n[streams.work]\nagents = 1\n");
+    let status = host.flume(&host.home(), &["status", "--json"], &[]);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let status = status.json();
+    for name in ["work", "default"] {
+        let stream = stream_of(&status, name);
+        assert_eq!(
+            stream["terminal_app"],
+            json!({"profile": "kitty", "from": "host"}),
+            "{name}: {stream}"
+        );
+        for field in ["refused", "view_refused"] {
+            assert!(
+                stream[field]
+                    .as_str()
+                    .is_some_and(|refused| refused.contains("kitty")),
+                "{name}'s {field}: {stream}"
+            );
+        }
+    }
+    let person = host.flume(&host.home(), &["status"], &[]);
+    assert!(
+        person.text.contains("    it opens no view: ")
+            && !person.text.contains("it starts no stage"),
+        "{}",
+        person.text
+    );
+    let open = host.flume(&host.home(), &["open", "work", "--json"], &[]);
+    assert_ne!(open.code, 0, "{}", open.text);
+    let reason = open
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_default();
+    assert!(
+        reason.contains("kitty") && reason.contains(&flume::profiles::window_profiles().join(", ")),
+        "{reason}"
+    );
+}
+
+#[test]
+fn a_streams_multiplexer_flume_does_not_carry() {
+    // 4, 190; core.8: a launch on `trial`, whose multiplexer is `rex`,
+    // refused naming the stream, `rex` and the terminal profiles, nothing
+    // made; a launch on another stream runs.
+    let host = Host::new("stream-rex");
+    host.configure("[streams.trial]\nmultiplexer = \"rex\"\n[streams.personal]\nagents = 2\n");
+    let repository = repository("stream-rex", None);
+    let kinds = kinds_file(&host, false);
+    let launch = |name: &str, stream: &str| {
+        host.stand_in(
+            &repository.dir,
+            &[
+                "launch", "--kind", "change", "--name", name, "--kinds", &kinds, "--stream",
+                stream, "--json",
+            ],
+            &[],
+        )
+    };
+    let refused = launch("one", "trial");
+    assert_ne!(refused.code, 0, "{}", refused.text);
+    let reason = refused
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_default();
+    assert!(
+        reason.contains("trial")
+            && reason.contains("rex")
+            && reason.contains(&flume::profiles::terminal_profiles().join(", ")),
+        "{reason}"
+    );
+    assert!(!Path::new(&host.place_of(&repository, "change--one")).exists());
+    let launched = launch("two", "personal");
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    assert!(Path::new(&host.place_of(&repository, "change--two")).exists());
 }
