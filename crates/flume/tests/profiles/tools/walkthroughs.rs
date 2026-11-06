@@ -56,14 +56,19 @@
 //! key, the layer and the file, never the value, making nothing (S101; 4,
 //! 157, 195); a fork's attribution is the host's for every stage of a
 //! fix and a chore, a repository's its own `[agents]`' and a third's its
-//! account's, each landing (S102; 32, 195, C.2, C.7); and a host's
-//! source's kind, locked by `flume kinds lock --host --hash`, runs and
-//! lands, a second version added and its source's file renamed over, the
-//! next launch running it and the place launched before landing on its own
-//! version (design 13; 21, 154, 155, 159, 191).
+//! account's, each landing (S102; 32, 195, C.2, C.7); a host's source's
+//! kind, locked by `flume kinds lock --host --hash`, runs and lands, a
+//! second version added and its source's file renamed over, the next
+//! launch running it and the place launched before landing on its own
+//! version (design 13; 21, 154, 155, 159, 191); and a talk read lost,
+//! whose session a person resumed by hand under another home, waits at its
+//! retry while that session runs, flume ending nothing, and goes on in
+//! the same session and transcript once it ends, and a lost talk whose
+//! transcript is gone starts afresh with flume's words (S113, S115, S117;
+//! 49, 77, 179, 207).
 
 use super::walk::*;
-use flume::profiles::agent::claude::carry::UNREACHED;
+use flume::profiles::agent::claude::carry::{UNREACHED, UNREADABLE};
 use flume::profiles::kinds::weir::Weir;
 use flume_seams::{Kinds, PackageRead};
 use serde_json::{json, Value};
@@ -1158,8 +1163,9 @@ fn sessions(out: &str) -> Vec<String> {
 
 /// `home` holds what it held, `held`, as it held it, and besides only the
 /// transcripts the stand-in wrote of `sessions`, under `projects`, with
-/// their folders: flume copied, linked and wrote nothing there (179, C.4;
-/// core.32).
+/// their folders, and the folder it names its running sessions in, empty
+/// once they ended: flume copied, linked and wrote nothing there (179,
+/// C.4, 207; core.32).
 fn holds_only(home: &Path, held: &BTreeMap<PathBuf, Holding>, sessions: &[String]) {
     let now = holdings(home);
     for (path, holding) in held {
@@ -1183,6 +1189,9 @@ fn holds_only(home: &Path, held: &BTreeMap<PathBuf, Holding>, sessions: &[String
                     && matches!(holding, Holding::File(_))
             }
             [projects] | [projects, _] if projects == "projects" => holding == &Holding::Folder,
+            // The folder 2.1.296 names its running sessions in, each
+            // record gone with its session.
+            [sessions] if sessions == "sessions" => holding == &Holding::Folder,
             _ => false,
         };
         assert!(
@@ -2682,4 +2691,309 @@ fn a_hosts_source_runs_its_locked_kind_and_a_place_keeps_its_version() {
     until_landed(&walk, &two);
     assert_eq!(walk.on_remote("two.rs").as_deref(), Some("fn two() {}\n"));
     assert!(!Path::new(&one).exists() && !Path::new(&two).exists());
+}
+
+/// A kind of the walkthrough's own whose one stage is a conversation, and
+/// which does not land.
+const TALK_KIND: &str = r#"[kinds.talk]
+version = 1
+branch = "talk"
+starts_unready = true
+lands = false
+
+[[kinds.talk.stages]]
+name = "talk"
+prompt = "prompts/talk.md"
+conversation = true
+agents = [{}]
+"#;
+
+/// The words of a lost conversation's carried start (49, 179).
+const RESUMED: &str = "Your session was lost and goes on here, with its conversation as it stood. Anything you had running then has stopped: read the place again before you carry on.";
+
+/// The words before a lost conversation's fresh start's own (49).
+const LOST: &str = "The stage's earlier agent was lost, and its conversation could not be carried, so this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.";
+
+/// Launches `talk--<name>` from the walkthrough's own kinds and gives the
+/// place's location.
+fn launch_talk(walk: &Walk, name: &str) -> String {
+    let kinds = walk.repository.scratch.path("talk-kinds");
+    std::fs::create_dir_all(kinds.join("prompts")).expect("the kinds' folder");
+    std::fs::write(kinds.join("kinds.toml"), TALK_KIND).expect("the kinds");
+    std::fs::write(
+        kinds.join("prompts/talk.md"),
+        "Talk with the person about {{brief}}.\n\n{{#words}}{{words}}\n\n{{/words}}To stop short: {{needs}}\n",
+    )
+    .expect("the prompt");
+    walk.launch(
+        "talk",
+        name,
+        &[
+            "--brief",
+            "the parser",
+            "--kinds",
+            &kinds.join("kinds.toml").to_string_lossy(),
+        ],
+    )
+}
+
+/// The talk's first agent run to its end, as a person leaves the printed
+/// command's session, and the stage read lost: the session it ran and the
+/// transcript it wrote.
+fn talk_lost(walk: &Walk, place: &str) -> (String, PathBuf) {
+    let out = walk.agent(place, json!([]));
+    let ran = sessions(&out);
+    assert_eq!(ran.len(), 1, "{out}");
+    walk.until(place, "talk lost", |status| {
+        stage(status, "talk")["state"] == "lost"
+    });
+    let transcripts = transcripts(walk.account());
+    assert_eq!(transcripts.len(), 1, "{transcripts:?}");
+    (ran[0].clone(), transcripts[0].clone())
+}
+
+/// Every transcript under `home`'s `projects`, links followed.
+fn transcripts(home: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(home.join("projects"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .flat_map(|folder| {
+            std::fs::read_dir(folder.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+        })
+        .map(|file| file.path())
+        .collect()
+}
+
+/// The transcript each start of the place acked, by its started ack in
+/// the place's own folder, in the order of the starts.
+fn acked_transcripts(walk: &Walk) -> Vec<(String, PathBuf)> {
+    let mut acked = vec![];
+    let mut folders = vec![walk.home().join("state/flume")];
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(&folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                folders.push(path);
+            } else if path.file_name().is_some_and(|name| name == "started.json") {
+                let ack: Value =
+                    serde_json::from_str(&std::fs::read_to_string(&path).expect("the started ack"))
+                        .expect("the started ack as JSON");
+                acked.push((
+                    path.to_string_lossy().into_owned(),
+                    PathBuf::from(ack["transcript_path"].as_str().unwrap_or_default()),
+                ));
+            }
+        }
+    }
+    acked.sort();
+    acked
+}
+
+/// The device and inode of the file at `path`, links followed.
+fn file_id(path: &Path) -> (u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    let meta =
+        std::fs::metadata(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    (meta.dev(), meta.ino())
+}
+
+#[test]
+fn a_talk_resumed_by_hand_waits_at_its_retry_and_goes_on_in_its_session_once_it_ends() {
+    // S113, S117, 49, 77, 179, 207: a talk's agent ends and the stage is
+    // read lost. A person resumes its session by hand, `claude --resume
+    // <session>`, under a second configuration home whose `projects` is a
+    // link to the account's, with no flume of its own, and says something
+    // in it. The caller's retry is taken and the stage waits on its
+    // session, status naming the process and the line saying so, while
+    // flume starts, ends and sends nothing to that process. Once the
+    // person ends it, the next settle starts the stage on the account its
+    // lost start ran under, its command resuming the lost session, its
+    // prompt flume's words for a lost session and the way to stop short;
+    // it goes on in the same transcript, by device and inode, which holds
+    // what the person said, and the place is done and tidied (core.10,
+    // core.18).
+    let walk = Walk::new("walk-lost-talk");
+    let place = launch_talk(&walk, "one");
+    let (session, transcript) = talk_lost(&walk, &place);
+
+    let by_hand_home = walk.account_folder("by-hand");
+    std::os::unix::fs::symlink(
+        walk.account().join("projects"),
+        by_hand_home.join("projects"),
+    )
+    .expect("the by-hand home's projects, a link to the account's");
+    let ended = walk.signal("by-hand-ends");
+    let script = walk.repository.scratch.path("by-hand.json");
+    std::fs::write(
+        &script,
+        json!([{ "wait_for": ended.to_string_lossy() }]).to_string(),
+    )
+    .expect("the by-hand script");
+    let mut by_hand = walk
+        .command("claude", Path::new(&place))
+        .args(["--resume", &session, "a person's word in the talk"])
+        .env("CLAUDE_CONFIG_DIR", &by_hand_home)
+        .env("STAND_IN_SCRIPT", &script)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the stand-in resumed by hand");
+    let record = by_hand_home.join(format!("sessions/{}.json", by_hand.id()));
+    let began = std::time::Instant::now();
+    while !record.is_file() {
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(30),
+            "the by-hand session never named itself"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    walk.flume(&["retry", &place, "--stage", "talk"]);
+    for _ in 0..3 {
+        walk.settle(&place);
+    }
+    let status = walk.status(&place);
+    let wait = &status["waits_on_session"];
+    assert_eq!(wait["stage"], "talk", "{status}");
+    assert_eq!(wait["processes"][0]["pid"], json!(by_hand.id()), "{status}");
+    assert!(
+        status["line"]["full"]
+            .as_str()
+            .is_some_and(|line| line.contains("waiting on its session")),
+        "{status}"
+    );
+    assert_eq!(stage(&status, "talk")["starts"], 1, "{status}");
+    assert!(!status["stalled"].as_bool().unwrap_or(false), "{status}");
+    let person = walk.person(&["status", &place]);
+    assert!(
+        person.contains("talk waits for its conversation to end since")
+            && person.contains(&format!("process {}", by_hand.id())),
+        "{person}"
+    );
+    assert!(
+        by_hand.try_wait().expect("the by-hand process").is_none(),
+        "flume ended the session run by hand"
+    );
+    assert!(record.is_file(), "the by-hand session's record");
+
+    std::fs::write(&ended, "").expect("the person ends the session");
+    let ran = finish(by_hand);
+    assert_eq!(ran.code, 0, "the by-hand session: {}", ran.out);
+    assert!(ran.out.contains(", resumed"), "{}", ran.out);
+    assert!(!record.exists(), "the by-hand session's record left behind");
+
+    let status = walk.until(&place, "talk started again", |status| {
+        stage(status, "talk")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert!(status["waits_on_session"].is_null(), "{status}");
+    assert_eq!(
+        status["agent"]["conversation"],
+        json!({ "from": 1, "cause": "lost", "carried": true }),
+        "{status}"
+    );
+    assert_eq!(
+        status["agent"]["account"],
+        json!({ "pool": "stand-in", "name": "stand-in-1", "from": "conversation" }),
+        "{status}"
+    );
+    assert_eq!(walk.resumes(&place).as_deref(), Some(session.as_str()));
+    let prompt = walk.prompt(&place);
+    assert_eq!(prompt, format!("{RESUMED}\n\n{STOP_SHORT}"));
+    let person = walk.person(&["status", &place]);
+    assert!(
+        person.contains("carries the conversation of start 1, lost")
+            && person.contains("(its conversation's)"),
+        "{person}"
+    );
+
+    let out = walk.agent(&place, json!([]));
+    assert!(out.contains(", resumed"), "{out}");
+    assert_eq!(sessions(&out), std::slice::from_ref(&session), "{out}");
+    let acked = acked_transcripts(&walk);
+    assert_eq!(acked.len(), 2, "{acked:?}");
+    for (ack, path) in &acked {
+        assert_eq!(
+            file_id(path),
+            file_id(&transcript),
+            "{ack} names another file"
+        );
+    }
+    assert_eq!(
+        transcripts(walk.account()),
+        std::slice::from_ref(&transcript)
+    );
+    let text = std::fs::read_to_string(&transcript).expect("the transcript");
+    let turns: Vec<Value> = text
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("a JSON record"))
+        .filter(|record| record["type"] == "user" && record["message"]["content"].is_string())
+        .map(|record| record["message"]["content"].clone())
+        .collect();
+    assert_eq!(
+        turns.len(),
+        3,
+        "the stage's prompt, the person's, then flume's: {text}"
+    );
+    assert_eq!(turns[1], json!("a person's word in the talk"), "{text}");
+    assert_eq!(turns[2], json!(prompt), "{text}");
+
+    walk.until(&place, "talk lost again", |status| {
+        stage(status, "talk")["state"] == "lost"
+    });
+    walk.flume(&["done", &place]);
+    walk.until(&place, "done and tidied", Value::is_null);
+}
+
+#[test]
+fn a_lost_talk_whose_transcript_is_gone_starts_afresh_with_flumes_words() {
+    // S115, 49, 179: a talk's agent ends and the stage is read lost; its
+    // transcript is then removed. The caller's retry starts the stage at
+    // once, no process running its session, afresh: its command resumes
+    // nothing, its prompt holds flume's words for a lost stage, and status
+    // says why the conversation could not be carried, naming
+    // `CLAUDE_CONFIG_DIR` and no path (core.30).
+    let walk = Walk::new("walk-lost-talk-gone");
+    let place = launch_talk(&walk, "two");
+    let (_, transcript) = talk_lost(&walk, &place);
+    std::fs::remove_file(&transcript).expect("the transcript removed");
+
+    walk.flume(&["retry", &place, "--stage", "talk"]);
+    let status = walk.until(&place, "talk started again", |status| {
+        stage(status, "talk")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert!(status["waits_on_session"].is_null(), "{status}");
+    assert_eq!(
+        status["agent"]["conversation"],
+        json!({ "from": 1, "cause": "lost", "carried": false, "why": UNREADABLE }),
+        "{status}"
+    );
+    assert!(
+        !status
+            .to_string()
+            .contains(&*walk.account().to_string_lossy()),
+        "status holds a configuration home's path: {status}"
+    );
+    assert_eq!(walk.resumes(&place), None, "{}", walk.printed(&place));
+    let prompt = walk.prompt(&place);
+    assert!(
+        prompt.starts_with("Talk with the person about the parser.") && prompt.contains(LOST),
+        "{prompt}"
+    );
+    let person = walk.person(&["status", &place]);
+    assert!(
+        person.contains(&format!("starts afresh after start 1, lost: {UNREADABLE}")),
+        "{person}"
+    );
+
+    let out = walk.agent(&place, json!([]));
+    assert!(!out.contains(", resumed"), "{out}");
+    walk.until(&place, "talk lost again", |status| {
+        stage(status, "talk")["state"] == "lost"
+    });
+    walk.flume(&["done", &place]);
+    walk.until(&place, "done and tidied", Value::is_null);
 }

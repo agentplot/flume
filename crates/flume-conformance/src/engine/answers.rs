@@ -161,6 +161,7 @@ fn place_status() -> PlaceStatus {
             state: StageState::EndedShort,
             starts: 2,
             end: Some(StageEnd {
+                left_in_pane: true,
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
@@ -189,6 +190,7 @@ fn place_status() -> PlaceStatus {
         }],
         current: Some("code".into()),
         agent: Some(AgentStatus {
+            left_in_pane: true,
             identity: "flume:/r:fix--one:code:2".into(),
             stage: "code".into(),
             program: "agent".into(),
@@ -226,6 +228,7 @@ fn place_status() -> PlaceStatus {
             }),
             conversation: Some(Conversation {
                 from: 1,
+                cause: CarryCause::Lost,
                 carried: false,
                 why: Some("its agent profile carries no conversation".into()),
             }),
@@ -292,6 +295,18 @@ fn place_status() -> PlaceStatus {
             words: Some("which design?".into()),
         }),
         stalled: true,
+        waits_on_session: Some(SessionWait {
+            stage: "code".into(),
+            processes: vec![LiveProcess {
+                pid: 4242,
+                started: 90,
+            }],
+            unread: Some(
+                "the sessions of the configuration home `CLAUDE_CONFIG_DIR` names could not be read"
+                    .into(),
+            ),
+            since: Some(95),
+        }),
         holds: vec![
             Hold {
                 on: HoldOn::Stage {
@@ -628,13 +643,25 @@ fn tidied() -> Tidied {
     let place = PlaceId::new("/r/places/fix--one");
     Tidied {
         removed: vec![place.clone()],
-        kept: vec![KeptPlace {
-            place: place.clone(),
-            why: Kept::Teardown {
-                step: "pre-remove".into(),
-                words: "busy".into(),
+        kept: vec![
+            KeptPlace {
+                place: place.clone(),
+                why: Kept::Teardown {
+                    step: "pre-remove".into(),
+                    words: "busy".into(),
+                },
             },
-        }],
+            KeptPlace {
+                place: place.clone(),
+                why: Kept::SessionRuns {
+                    processes: vec![LiveProcess {
+                        pid: 4242,
+                        started: 90,
+                    }],
+                    unread: Some("the host's processes could not be listed".into()),
+                },
+            },
+        ],
         branches_kept: vec![BranchKept {
             place: place.clone(),
             branch: "fix/one".into(),
@@ -1253,6 +1280,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].waiting_on.stage",
             "status.places[].waiting_on.why",
             "status.places[].waiting_on.words",
+            "status.places[].agent.conversation.cause",
+            "status.places[].agent.left_in_pane",
+            "status.places[].stages[].end.left_in_pane",
+            "status.places[].waits_on_session",
+            "status.places[].waits_on_session.processes",
+            "status.places[].waits_on_session.processes[].pid",
+            "status.places[].waits_on_session.processes[].started",
+            "status.places[].waits_on_session.since",
+            "status.places[].waits_on_session.stage",
+            "status.places[].waits_on_session.unread",
         ],
     ),
     (
@@ -1466,6 +1503,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.waiting_on.stage",
             "launched.place.waiting_on.why",
             "launched.place.waiting_on.words",
+            "launched.place.agent.conversation.cause",
+            "launched.place.agent.left_in_pane",
+            "launched.place.stages[].end.left_in_pane",
+            "launched.place.waits_on_session",
+            "launched.place.waits_on_session.processes",
+            "launched.place.waits_on_session.processes[].pid",
+            "launched.place.waits_on_session.processes[].started",
+            "launched.place.waits_on_session.since",
+            "launched.place.waits_on_session.stage",
+            "launched.place.waits_on_session.unread",
         ],
     ),
     (
@@ -1692,6 +1739,21 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.tidy.terminal[].kept",
             "acted.tidy.terminal[].place",
             "acted.tidy.terminal[].profile",
+            "acted.status.agent.conversation.cause",
+            "acted.status.agent.left_in_pane",
+            "acted.status.stages[].end.left_in_pane",
+            "acted.status.waits_on_session",
+            "acted.status.waits_on_session.processes",
+            "acted.status.waits_on_session.processes[].pid",
+            "acted.status.waits_on_session.processes[].started",
+            "acted.status.waits_on_session.since",
+            "acted.status.waits_on_session.stage",
+            "acted.status.waits_on_session.unread",
+            "acted.tidy.kept[].why.session_runs",
+            "acted.tidy.kept[].why.session_runs.processes",
+            "acted.tidy.kept[].why.session_runs.processes[].pid",
+            "acted.tidy.kept[].why.session_runs.processes[].started",
+            "acted.tidy.kept[].why.session_runs.unread",
         ],
     ),
     (
@@ -1717,6 +1779,11 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "settled.tidy.terminal[].kept",
             "settled.tidy.terminal[].place",
             "settled.tidy.terminal[].profile",
+            "settled.tidy.kept[].why.session_runs",
+            "settled.tidy.kept[].why.session_runs.processes",
+            "settled.tidy.kept[].why.session_runs.processes[].pid",
+            "settled.tidy.kept[].why.session_runs.processes[].started",
+            "settled.tidy.kept[].why.session_runs.unread",
         ],
     ),
     (
@@ -1741,6 +1808,11 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "tidied.tidy.terminal[].kept",
             "tidied.tidy.terminal[].place",
             "tidied.tidy.terminal[].profile",
+            "tidied.tidy.kept[].why.session_runs",
+            "tidied.tidy.kept[].why.session_runs.processes",
+            "tidied.tidy.kept[].why.session_runs.processes[].pid",
+            "tidied.tidy.kept[].why.session_runs.processes[].started",
+            "tidied.tidy.kept[].why.session_runs.unread",
         ],
     ),
     ("stop_check", &["stop_check", "stop_check.words"]),
@@ -2010,6 +2082,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waiting_on.why",
             "woken.place.waiting_on.words",
             "woken.woke",
+            "woken.place.agent.conversation.cause",
+            "woken.place.agent.left_in_pane",
+            "woken.place.stages[].end.left_in_pane",
+            "woken.place.waits_on_session",
+            "woken.place.waits_on_session.processes",
+            "woken.place.waits_on_session.processes[].pid",
+            "woken.place.waits_on_session.processes[].started",
+            "woken.place.waits_on_session.since",
+            "woken.place.waits_on_session.stage",
+            "woken.place.waits_on_session.unread",
         ],
     ),
     (

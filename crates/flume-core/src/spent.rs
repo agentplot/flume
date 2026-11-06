@@ -119,11 +119,13 @@ impl Engine {
                 stage.room = Some(RoomWait {
                     order,
                     words: Some(words.clone()),
-                    carry: Some(AfterSpent {
+                    carry: Some(CarryFrom {
                         start: identity.clone(),
+                        cause: CarryCause::Spent,
                         carry: true,
                         why: None,
                     }),
+                    ..RoomWait::default()
                 });
                 Step::Write(())
             });

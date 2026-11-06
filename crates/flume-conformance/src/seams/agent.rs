@@ -1,5 +1,5 @@
 //! The agent seam's scenarios (B.4, 88 to 93, 115, 116, 121, 128, 134,
-//! 135, 151, 161, 162, 169, 179, 196).
+//! 135, 151, 161, 162, 169, 179, 196, 207).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -64,6 +64,14 @@ pub trait AgentHarness {
     /// scripted them; none where the profile offers no carry (179).
     fn carry_accounts(&self, earlier: &Identity) -> Option<CarryAccounts>;
 
+    /// What the profile's live is read against for two starts the harness
+    /// started: `runs`, whose conversation the harness has processes run,
+    /// and `unknown`, whose conversation is read where what live reads
+    /// cannot be read, as the program's release has them or the harness
+    /// scripted them; none where the profile reads no running session
+    /// (207).
+    fn live_sessions(&self, runs: &Identity, unknown: &Identity) -> Option<LiveSessions>;
+
     /// How the profile takes its program's own settings, as its program's
     /// release has it or the harness scripted it (195, 196).
     fn own_way(&self) -> OwnWay;
@@ -72,6 +80,16 @@ pub trait AgentHarness {
     /// reads them, from a file the command lists, its arguments or its
     /// environment; none where it passes none (195, 196).
     fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>>;
+}
+
+/// What a profile's live is read against: the environments under which
+/// a start's conversation runs, with the processes that run it, and the
+/// environments under which another's cannot be read (207).
+#[derive(Clone, Debug, Default)]
+pub struct LiveSessions {
+    pub envs: Vec<BTreeMap<String, String>>,
+    pub processes: Vec<LiveProcess>,
+    pub unreadable: Vec<BTreeMap<String, String>>,
 }
 
 /// How a profile takes its program's own settings: whether it passes
@@ -229,6 +247,16 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             run: carry_to_the_account_that_reaches_it::<H>,
         },
         Scenario {
+            name: "agent: live answers unknown by a profile that reads no running session, for any start and environments",
+            cites: &["207"],
+            run: live_not_read::<H>,
+        },
+        Scenario {
+            name: "agent: live answers runs with each process running a start's conversation, unknown naming no value where it cannot read, and none where no process runs it",
+            cites: &["207", "49", "179"],
+            run: live_reads_the_processes::<H>,
+        },
+        Scenario {
             name: "agent: reserved names each key of its program's settings another setting or the account owns, by its path, with its owner, and none where its profile reserves none",
             cites: &["196", "88", "32", "162"],
             run: reserved_keys_with_their_owners::<H>,
@@ -244,6 +272,75 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
             run: the_command_passes_own_settings::<H>,
         },
     ]
+}
+
+fn live_not_read<H: AgentHarness>(harness: &H) -> Outcome {
+    let who = started(harness, "talk");
+    let unknown = started(harness, "code");
+    // A profile that reads a running session answers by the processes.
+    if harness.live_sessions(&who, &unknown).is_some() {
+        return Ok(());
+    }
+    let folder = harness.folder();
+    let home = BTreeMap::from([(
+        "AGENT_HOME".to_string(),
+        "/scratch/agent-work-2".to_string(),
+    )]);
+    for (start, envs) in [
+        (&who, vec![]),
+        (&who, vec![BTreeMap::new(), home.clone()]),
+        (&identity("verify"), vec![home]),
+    ] {
+        ensure_eq!(
+            harness.seam().live(&folder, start, &envs),
+            Live::Unknown {
+                what: READS_NO_SESSION.to_string()
+            },
+            format!("live of {start} under {envs:?}")
+        );
+    }
+    Ok(())
+}
+
+fn live_reads_the_processes<H: AgentHarness>(harness: &H) -> Outcome {
+    let runs = started(harness, "talk");
+    let unknown = started(harness, "code");
+    let none = started(harness, "verify");
+    let Some(sessions) = harness.live_sessions(&runs, &unknown) else {
+        return Ok(());
+    };
+    ensure!(
+        !sessions.processes.is_empty(),
+        "the harness ran no process for the conversation"
+    );
+    let folder = harness.folder();
+    ensure_eq!(
+        harness.seam().live(&folder, &runs, &sessions.envs),
+        Live::Runs(sessions.processes.clone()),
+        "live of the conversation the processes run"
+    );
+    match harness.seam().live(&folder, &unknown, &sessions.unreadable) {
+        Live::Unknown { what } => {
+            ensure!(!what.trim().is_empty(), "unknown, with no words");
+            for (name, value) in sessions.unreadable.iter().flatten() {
+                ensure!(
+                    value.is_empty() || !what.contains(value.as_str()),
+                    "the words give {name}'s value: {what}"
+                );
+            }
+        }
+        other => {
+            return Err(format!(
+                "live of a conversation that cannot be read answered {other:?}"
+            ))
+        }
+    }
+    ensure_eq!(
+        harness.seam().live(&folder, &none, &sessions.envs),
+        Live::None,
+        "live of a conversation no process runs"
+    );
+    Ok(())
 }
 
 /// A program's own settings as the seam's scenarios give them, one key

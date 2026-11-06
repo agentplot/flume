@@ -3,12 +3,13 @@
 //! started.
 
 use super::account_pools::{
-    account, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in, fix_of, home,
-    host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent, stops_at_limit,
-    two_programs, window, UNREACHED,
+    account, account_at_home, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in,
+    fix_of, home, host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent,
+    stops_at_limit, two_programs, window, UNREACHED,
 };
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::for_every_stage;
+use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
@@ -198,6 +199,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: the host's part gives each source with its file, its kinds_dir and every identity it holds, and a faulty one with its fault, read when asked",
             cites: &["S96", "56", "159", "191"],
             run: a_source_and_a_fault,
+        },
+        Scenario {
+            name: "status: a place whose talk start 2 carries the conversation of start 1, lost, under work-1 gives its agent's conversation from start 1, lost and carried",
+            cites: &["S113", "49", "56"],
+            run: a_lost_talk_carried,
+        },
+        Scenario {
+            name: "status: a place whose talk start 2 took work-2, the account its lost start 1 ran under, while the intent keeps work-1 gives its agent's account work-2 from the conversation",
+            cites: &["S113", "56", "145"],
+            run: the_conversations_account,
+        },
+        Scenario {
+            name: "status: a place whose lost talk waits while the fake agent reads its session live as process 4242 gives the process with when it started and since when talk waits",
+            cites: &["S117", "49", "56", "207"],
+            run: a_talk_waiting_on_its_session,
+        },
+        Scenario {
+            name: "status: a place whose talk reads lost while the fake terminal holds its agent brought back bare gives that agent left in its pane",
+            cites: &["S113", "56", "77"],
+            run: a_bare_agent_left,
         },
     ]
 }
@@ -1682,6 +1703,120 @@ fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
         json["uncarried"][0]["words"],
         serde_json::json!(ended),
         "the place's carried start that did not begin in the JSON form"
+    );
+    Ok(())
+}
+
+/// The fake agent carries a lost start's conversation to the account at
+/// `name`'s home with the session `s-1`.
+fn carries_lost_to(world: &World, name: &str) {
+    world.agent.carry_to(
+        &home(name),
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    );
+}
+
+/// The place's status as its JSON form gives it.
+fn status_json(world: &World, id: &PlaceId) -> Result<serde_json::Value, String> {
+    serde_json::to_value(world.status(id)?).map_err(|error| error.to_string())
+}
+
+fn a_lost_talk_carried(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_lost_to(&world, "work-1");
+    let id = talking(&world)?;
+    lost_with_host(&world, &id)?;
+    retry_talk(&world, &id, None, false)?;
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["agent"]["conversation"],
+        serde_json::json!({"from": 1, "cause": "lost", "carried": true}),
+        "the agent's conversation in the JSON form"
+    );
+    Ok(())
+}
+
+fn the_conversations_account(_: &()) -> Outcome {
+    let world = World::new();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account_at_home("work-2"), account_at_home("work-1")],
+    );
+    world.host.set_host_pool(Some("work"));
+    carries_lost_to(&world, "work-2");
+    let id = talking(&world)?;
+    let intent = world.held(&id).ok_or("no held state")?.place.intent;
+    let key = HostKey::Intent {
+        digest: intent.digest().to_string(),
+    };
+    let Some(HostDocument::Intent(mut affinity)) = world.store.host_document(&key) else {
+        return Err("the intent keeps no affinity".into());
+    };
+    affinity.accounts.insert(
+        "agent".into(),
+        AffinityAccount {
+            pool: "work".into(),
+            account: "work-1".into(),
+        },
+    );
+    world.store.put_host(&key, HostDocument::Intent(affinity));
+    lost_with_host(&world, &id)?;
+    retry_talk(&world, &id, None, false)?;
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["agent"]["account"],
+        serde_json::json!({"pool": "work", "name": "work-2", "from": "conversation"}),
+        "the agent's account in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_talk_waiting_on_its_session(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.terminal.kill(&talk(1));
+    world.settle(&id);
+    world.agent.live_runs("s-1", &[by_hand()]);
+    let since = world.host.now();
+    retry_talk(&world, &id, None, false)?;
+    world.host.advance(600);
+    world.settle(&id);
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["waits_on_session"],
+        serde_json::json!({
+            "stage": "talk",
+            "processes": [{"pid": 4242, "started": 9000}],
+            "since": since,
+        }),
+        "what the JSON form says talk waits on"
+    );
+    Ok(())
+}
+
+fn a_bare_agent_left(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.host.restart();
+    world.terminal.forget_all();
+    world.agent.bring_back_bare(&talk(1));
+    world.engine().settle(None);
+    let agent = world.status(&id)?.agent.ok_or("status gives no agent")?;
+    ensure_eq!(
+        (agent.identity, agent.left_in_pane),
+        (talk(1).to_string(), true),
+        "the agent status gives and whether flume left it in its pane"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["agent"]["left_in_pane"],
+        serde_json::json!(true),
+        "left_in_pane in the JSON form"
     );
     Ok(())
 }

@@ -11,7 +11,7 @@
 use crate::clues::word;
 use crate::reading::reads_change;
 use crate::start::Starts;
-use crate::status::group_status;
+use crate::status::{group_status, session_wait};
 use crate::{label, side_by_side, Answer, Engine, PlaceLine};
 use flume_seams::*;
 
@@ -194,8 +194,10 @@ fn its_agent(held: &HeldState, identity: &Identity) -> bool {
 /// merge queue: `submitted` is flume's own count of its submits and
 /// `landed` its own record of the work over, which the merge queue's
 /// record moves at the next settle (12, 27, 34, 35, 38, 42, 45, 47, 48,
-/// 51, 63, 70, 90, 112, 114, 118, 130); the list gives a place the same
-/// words (200; core.14).
+/// 51, 63, 70, 90, 112, 114, 118, 130); a stage waiting for room while a
+/// process runs the conversation its start would carry reads `waiting on
+/// its session`, as the last settle left its wait (49, 207); the list
+/// gives a place the same words (200; core.14).
 pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> String {
     match &held.phase {
         Phase::Making { .. } => return "being made".into(),
@@ -227,6 +229,9 @@ pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> 
             Waits::Delivered => "waiting on done",
         }
         .into();
+    }
+    if session_wait(held).is_some() {
+        return "waiting on its session".into();
     }
     if held
         .stages

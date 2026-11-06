@@ -604,6 +604,126 @@ fn the_agents_word_names_the_session_it_resumes() {
     assert_eq!(agent.started(folder, &fresh), Reading::Yes);
 }
 
+/// The seam-fakes spec's scenario "A bare agent brought back", as the
+/// fakes give it: the terminal holds the start's agent again, waiting,
+/// its word that it started reads no, the log names the bringing back,
+/// and the terminal reads it as the test scripts (77, 106).
+#[test]
+fn a_bare_agent_brought_back() {
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host.clone()));
+    let agent = FakeAgent::new(terminal.clone());
+    let talk = identity("talk", 1);
+    let folder = "/state/fix--one";
+    terminal.open(
+        &place_ref(),
+        folder,
+        &AgentCommand::default(),
+        &talk,
+        &OpenIn::Own,
+        None,
+    );
+    agent.keep_record_in(&talk, folder);
+    assert_eq!(agent.started(folder, &talk), Reading::Yes);
+    host.restart();
+    terminal.forget_all();
+    assert_eq!(terminal.state(&talk), AgentState::Stopped);
+    agent.bring_back_bare(&talk);
+    assert_eq!(terminal.state(&talk), AgentState::Waiting);
+    assert_eq!(agent.started(folder, &talk), Reading::No);
+    assert_eq!(
+        agent.log.of("bring"),
+        vec![format!("bring back bare {talk}")]
+    );
+    for state in [
+        AgentState::Working,
+        AgentState::Waiting,
+        AgentState::Stopped,
+    ] {
+        terminal.set_state(&talk, state);
+        assert_eq!(terminal.state(&talk), state);
+    }
+}
+
+/// The seam-fakes spec's scenario "A scripted live session that ends":
+/// live answers the processes scripted for the session a start's word
+/// names, the words scripted where it cannot be read, and none where
+/// nothing is scripted or the session ended, each reading and each
+/// scripting logged (207).
+#[test]
+fn a_scripted_live_session_that_ends() {
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host.clone()));
+    let agent = FakeAgent::new(terminal.clone());
+    let folder = "/state/fix--one";
+    let talk = identity("talk", 1);
+    let other = identity("talk", 2);
+    let unset = identity("code", 1);
+    agent.keep_record_in(&talk, folder);
+    agent.set_session(&talk, "s-1");
+    agent.set_session(&other, "s-2");
+    let home = BTreeMap::from([(FakeAgent::HOME.to_string(), "/scratch/work-1".to_string())]);
+    let envs = [BTreeMap::new(), home];
+    assert_eq!(agent.live(folder, &talk, &envs), Live::None);
+    let process = LiveProcess {
+        pid: 4242,
+        started: host.now(),
+    };
+    agent.live_runs("s-1", std::slice::from_ref(&process));
+    agent.live_unknown("s-2", "the sessions under AGENT_HOME cannot be read");
+    assert_eq!(
+        agent.live(folder, &talk, &envs),
+        Live::Runs(vec![process.clone()])
+    );
+    assert_eq!(
+        agent.live(folder, &other, &envs),
+        Live::Unknown {
+            what: "the sessions under AGENT_HOME cannot be read".into()
+        }
+    );
+    assert_eq!(agent.live(folder, &unset, &envs), Live::None);
+    // A start whose record is kept in another place's folder is not read
+    // there, so it names no session.
+    assert_eq!(agent.live("/state/fix--two", &talk, &envs), Live::None);
+    agent.live_ended("s-1");
+    assert_eq!(agent.live(folder, &talk, &[]), Live::None);
+    let talk_lives: Vec<String> = agent
+        .log
+        .of("live")
+        .into_iter()
+        .filter(|line| line.starts_with(&format!("live {talk} in {folder} ")))
+        .collect();
+    assert_eq!(
+        talk_lives,
+        vec![
+            format!("live {talk} in {folder} under no home, /scratch/work-1: none"),
+            format!("live {talk} in {folder} under no home, /scratch/work-1: runs 4242"),
+            format!("live {talk} in {folder} under no account: none"),
+        ]
+    );
+    assert_eq!(
+        (
+            agent.log.of("live_runs"),
+            agent.log.count("live_unknown"),
+            agent.log.of("live_ended")
+        ),
+        (
+            vec!["live_runs s-1: 4242".to_string()],
+            1,
+            vec!["live_ended s-1".to_string()]
+        )
+    );
+    // Set to read none, it answers the seam's default whatever is scripted.
+    agent.live_runs("s-1", &[process]);
+    agent.live_not_read();
+    assert_eq!(
+        agent.live(folder, &talk, &envs),
+        Live::Unknown {
+            what: READS_NO_SESSION.into()
+        }
+    );
+}
+
 #[test]
 fn a_carried_start_scripted_to_end_before_its_word() {
     // Scripted so, a start that resumes a session ends before its word
