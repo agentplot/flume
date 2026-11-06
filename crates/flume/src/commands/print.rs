@@ -854,6 +854,7 @@ fn session_from(from: SessionFrom) -> &'static str {
         SessionFrom::Stream => "the stream's",
         SessionFrom::StreamName => "the stream's name",
         SessionFrom::Own => "the terminal's own",
+        SessionFrom::Role => "the entry's",
     }
 }
 

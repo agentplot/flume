@@ -1748,6 +1748,74 @@ fn a_role_run_as_the_configuration_names_it() {
 }
 
 #[test]
+fn a_standing_address_round_trips() {
+    // The seam-contracts spec's "A standing address round-trips", for
+    // the seams' types: a standing entry with and without its session
+    // and stream, a part's agents read, two of one name among them, and
+    // not read, and a session from the entry's own `session` (56, 132,
+    // C.5, C.7; core.14).
+    let entry = StandingAgent {
+        agent: "madswan-planner".into(),
+        session: Some("madswan".into()),
+        stream: Some("madswan".into()),
+    };
+    round_trips(entry.clone());
+    let bare = StandingAgent {
+        session: None,
+        stream: None,
+        ..entry
+    };
+    round_trips(bare.clone());
+    assert_eq!(
+        serde_json::to_value(&bare).unwrap(),
+        serde_json::json!({"agent": "madswan-planner"}),
+        "no session or stream where the entry names none"
+    );
+    let named = |name: &str, pane: &str, state| NamedAgent {
+        name: name.into(),
+        at: format!("terminal:{pane}@/run/madswan.sock"),
+        state,
+    };
+    let read = AgentsIn::Read {
+        agents: vec![
+            named("madswan-planner", "w1-1", AgentState::Waiting),
+            named("madswan-ops", "w1-2", AgentState::Working),
+            named("madswan-ops", "w1-3", AgentState::Asking),
+        ],
+    };
+    round_trips(read.clone());
+    let json = serde_json::to_value(&read).unwrap();
+    assert_eq!(
+        json["read"]["agents"][0],
+        serde_json::json!({
+            "name": "madswan-planner",
+            "at": "terminal:w1-1@/run/madswan.sock",
+            "state": "waiting"
+        })
+    );
+    round_trips(AgentsIn::Read { agents: vec![] });
+    let unread = AgentsIn::Unread {
+        reason: NO_NAMED_AGENTS.into(),
+    };
+    round_trips(unread.clone());
+    assert_eq!(
+        serde_json::to_value(&unread).unwrap(),
+        serde_json::json!({"unread": {"reason": "the terminal holds no agent a name finds"}})
+    );
+    round_trips(SessionFrom::Role);
+    assert_eq!(serde_json::to_value(SessionFrom::Role).unwrap(), "role");
+    let session = SessionHeld {
+        name: Some("madswan".into()),
+        from: SessionFrom::Role,
+    };
+    round_trips(session.clone());
+    assert_eq!(
+        serde_json::to_value(session).unwrap(),
+        serde_json::json!({"name": "madswan", "from": "role"})
+    );
+}
+
+#[test]
 fn streams_and_pools_as_the_configuration_names_them() {
     round_trips(Stream {
         agents: Some(5),
