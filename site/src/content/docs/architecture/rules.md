@@ -36,6 +36,7 @@ yet built.
 - **[core.7]** A place's branch is cut from the base's current revision: where the merge queue's profile says the base lives, where a merge queue lands the base, and otherwise origin's after flume's own fetch, the host's own branch read only where the repository has no `origin` or origin holds no such branch; a launch that cannot read it is refused, and status says where it was read.
 - **[core.8]** A launch is refused whole, leaving nothing it made, when anything of it already stands or its kind asks for more than flume runs.
 - **[core.47]** A place is made ready only by its merge queue's equipping of it, asked at the revision its launch read; flume runs no readiness step of its own, reads no tool's step from the merge queue's policy, and keeps nothing a step makes.
+- **[core.53]** A branch other places land on, and that itself lands, is a base place's, a place whose kind lands and has no stages, known by that shape alone: the merge queue alone makes and removes its branch, at flume's asking; its worktree checks out no branch; it runs no agent; it is submitted only on its caller's retry, by its branch's name, once no place on its branch is live; and flume names no depth and no use of one.
 
 ### Stages and agents
 
