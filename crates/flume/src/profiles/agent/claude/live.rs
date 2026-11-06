@@ -8,24 +8,24 @@
 //! process that was killed names a process that is gone, or an id the host
 //! gave another since. So a record counts only where the host runs a
 //! process with its `pid` started at its `procStart`, as 2.1.296 reads its
-//! own records. A session resumed under a home no account declares has no
-//! record flume reads, so the host's processes are listed once besides,
-//! and each `claude` whose arguments resume the session after `--resume`
-//! or `-r` counts, the program by the last name of its first argument or,
-//! where that is the program a `claude` nix wrapper runs, as
-//! [`wrapper`](super::wrapper) reads one. flume reads only: it ends,
-//! signals and sends nothing to a process it counts (core.10).
+//! own records, the start compared to the second, since the host's
+//! process table, which flume reads itself, gives it in seconds and `ps`
+//! as words of the second. A session resumed under a home no account
+//! declares has no record flume reads, so the host's processes are read
+//! once besides, and each `claude` whose arguments resume the session
+//! after `--resume` or `-r` counts, the program by the last name of its
+//! first argument or, where that is the program a `claude` nix wrapper
+//! runs, as [`wrapper`](super::wrapper) reads one. flume reads only: it
+//! ends, signals and sends nothing to a process it counts (core.10).
 
 use super::carry;
 use super::record::Record;
 use super::wrapper;
-use crate::host::process::output_bounded;
+use crate::host::process::{self, Listed};
 use flume_seams::{Live, LiveProcess, Seconds};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::Duration;
 
 /// The folder under a configuration home that holds a record per running
 /// session.
@@ -40,9 +40,6 @@ pub const UNREADABLE: &str = "the running sessions of a configuration home (`CLA
 /// Unknown, where the host's processes cannot be listed.
 pub const UNLISTED: &str = "the host's processes cannot be listed";
 
-/// The most a listing of the host's processes waits on `ps`.
-const BOUND: Duration = Duration::from_secs(10);
-
 /// A session's record as 2.1.296 writes it, the fields live reads.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,73 +52,32 @@ struct SessionRecord {
     proc_start: Option<String>,
 }
 
-/// A process of the host as `ps -axo pid=,lstart=,args=` lists it under
-/// `LC_ALL=C` and `TZ=UTC`: its id, when it started in `lstart`'s words,
-/// each run of spaces one, and its arguments joined by spaces.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Process {
-    pub pid: u32,
-    pub lstart: String,
-    pub args: String,
-}
-
-impl Process {
-    fn live(&self) -> LiveProcess {
-        LiveProcess {
-            pid: self.pid,
-            started: started_at(&self.lstart).unwrap_or_default(),
-        }
-    }
-}
-
 /// The seconds since the epoch at which a process started, from `lstart`'s
-/// words under `LC_ALL=C` and `TZ=UTC`, `Fri Nov  6 19:26:39 2026`; none
-/// where they read otherwise.
+/// words under `LC_ALL=C` and `TZ=UTC`, `Fri Nov  6 19:26:39 2026`, as a
+/// session's record holds them in `procStart`; none where they read
+/// otherwise.
 pub fn started_at(lstart: &str) -> Option<Seconds> {
     chrono::NaiveDateTime::parse_from_str(&collapsed(lstart), "%a %b %d %H:%M:%S %Y")
         .ok()
         .and_then(|at| Seconds::try_from(at.and_utc().timestamp()).ok())
 }
 
+/// `lstart`'s words under `LC_ALL=C` and `TZ=UTC` for a process started at
+/// `at`, as 2.1.296 writes a session's `procStart`.
+pub fn proc_start(at: Seconds) -> Option<String> {
+    let at = chrono::DateTime::from_timestamp(i64::try_from(at).ok()?, 0)?;
+    Some(at.format("%a %b %e %H:%M:%S %Y").to_string())
+}
+
 fn collapsed(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// The host's processes, listed once; none where they cannot be.
-pub fn processes() -> Option<Vec<Process>> {
-    let mut command = Command::new("ps");
-    command
-        .args(["-axo", "pid=,lstart=,args="])
-        .env("LC_ALL", "C")
-        .env("TZ", "UTC");
-    let listed = output_bounded(command, BOUND)?;
-    Some(listed.lines().filter_map(listed_process).collect())
-}
-
-/// One line of the listing: the id, `lstart`'s five words, and the
-/// arguments after them.
-fn listed_process(line: &str) -> Option<Process> {
-    let mut rest = line.trim_start();
-    let mut word = || {
-        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
-        let found = &rest[..end];
-        rest = rest[end..].trim_start();
-        (!found.is_empty()).then_some(found)
-    };
-    let pid = word()?.parse().ok()?;
-    let lstart: Vec<&str> = (0..5).map(|_| word()).collect::<Option<_>>()?;
-    Some(Process {
-        pid,
-        lstart: lstart.join(" "),
-        args: rest.trim_end().to_string(),
-    })
 }
 
 /// Whether the process whose arguments are `args` is Claude Code's
 /// program: its first argument's last name `claude`, or the program a
 /// `claude` nix wrapper beside it runs.
-fn is_claude(args: &str) -> bool {
-    let Some(first) = args.split_whitespace().next() else {
+fn is_claude(args: &[String]) -> bool {
+    let Some(first) = args.first() else {
         return false;
     };
     let program = Path::new(first);
@@ -138,10 +94,10 @@ fn is_claude(args: &str) -> bool {
 
 /// Whether `args` resume `session`: `--resume <session>`,
 /// `--resume=<session>` or `-r <session>`.
-fn resumes(args: &str, session: &str) -> bool {
-    let words: Vec<&str> = args.split_whitespace().collect();
-    words.iter().enumerate().any(|(at, word)| {
-        ((*word == carry::FLAG || *word == SHORT) && words.get(at + 1) == Some(&session))
+fn resumes(args: &[String], session: &str) -> bool {
+    args.iter().enumerate().any(|(at, word)| {
+        ((word == carry::FLAG || word == SHORT)
+            && args.get(at + 1).map(String::as_str) == Some(session))
             || word
                 .strip_prefix(carry::FLAG)
                 .and_then(|rest| rest.strip_prefix('='))
@@ -198,9 +154,10 @@ fn records(home: &Path, session: &str) -> Result<Vec<(u32, Option<String>)>, ()>
 
 /// Live of the start whose record is `record`, under each of `envs`'
 /// homes, `login` the host user's home, against the host's processes as
-/// `list` gives them: runs with each process, by its id, where a home's
-/// record of the session names a process the host runs started at its
-/// `procStart`, a record naming none counted where its process runs, as
+/// `list` gives them: runs with each process, by its id and its start,
+/// where a home's record of the session names a process the host runs
+/// started within a second of its `procStart`, a record whose `procStart`
+/// is missing or reads otherwise counted where its process runs, as
 /// 2.1.296 reads its own; or where a `claude` resumes the session in its
 /// arguments, under any home; none where the start named no session or
 /// none runs it; and unknown, naming `CLAUDE_CONFIG_DIR` or the host's
@@ -210,7 +167,7 @@ pub fn live(
     record: &Record,
     envs: &[BTreeMap<String, String>],
     login: Option<&Path>,
-    list: impl FnOnce() -> Option<Vec<Process>>,
+    list: impl FnOnce() -> Option<Vec<Listed>>,
 ) -> Live {
     let Some(session) = session(record) else {
         return Live::None;
@@ -244,10 +201,14 @@ pub fn live(
                 *pid == process.pid
                     && proc_start
                         .as_deref()
-                        .is_none_or(|at| collapsed(at) == process.lstart)
+                        .and_then(started_at)
+                        .is_none_or(|at| at.abs_diff(process.started) <= 1)
             }) || (is_claude(&process.args) && resumes(&process.args, &session))
         })
-        .map(Process::live)
+        .map(|process| LiveProcess {
+            pid: process.pid,
+            started: process.started,
+        })
         .collect();
     running.sort_by_key(|process| process.pid);
     running.dedup_by_key(|process| process.pid);
@@ -256,6 +217,11 @@ pub fn live(
     } else {
         Live::Runs(running)
     }
+}
+
+/// The host's processes, read from its process table.
+pub fn processes() -> Option<Vec<Listed>> {
+    process::listed()
 }
 
 /// The source of the pinned release's record of a running session, each
@@ -297,36 +263,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_listing_line_is_read() {
-        assert_eq!(
-            listed_process("  4242 Fri Nov  6 19:26:39 2026     claude --resume s-1  "),
-            Some(Process {
-                pid: 4242,
-                lstart: "Fri Nov 6 19:26:39 2026".into(),
-                args: "claude --resume s-1".into(),
-            })
-        );
-        assert_eq!(listed_process("4242 Fri Nov 6"), None);
-        assert_eq!(listed_process("pid Fri Nov 6 19:26:39 2026 claude"), None);
+    fn a_procstart_read_and_written() {
+        // As `LC_ALL=C TZ=UTC ps -o lstart=` gives it, the day padded with
+        // a space.
         assert_eq!(started_at("Fri Nov  6 19:26:39 2026"), Some(1_793_993_199));
+        assert_eq!(started_at(" Fri Nov 6 19:26:39 2026 "), Some(1_793_993_199));
+        assert_eq!(
+            proc_start(1_793_993_199).as_deref(),
+            Some("Fri Nov  6 19:26:39 2026")
+        );
+        assert_eq!(
+            proc_start(1_795_030_000).as_deref(),
+            Some("Wed Nov 18 19:26:40 2026")
+        );
         assert_eq!(started_at("yesterday"), None);
     }
 
     #[test]
     fn a_resume_is_read_in_its_three_forms() {
-        for args in [
+        let args =
+            |text: &str| -> Vec<String> { text.split_whitespace().map(String::from).collect() };
+        for text in [
             "claude --resume s-1",
             "claude --plugin-dir /p -r s-1 --model opus",
             "/nix/store/x/bin/claude --resume=s-1",
         ] {
-            assert!(is_claude(args) && resumes(args, "s-1"), "{args}");
+            assert!(
+                is_claude(&args(text)) && resumes(&args(text), "s-1"),
+                "{text}"
+            );
         }
-        assert!(!resumes("claude --resume s-10", "s-1"));
-        assert!(!resumes("claude s-1", "s-1"));
-        assert!(!resumes("claude --resume", "s-1"));
-        assert!(!is_claude("vim --resume s-1"));
-        assert!(!is_claude("/opt/claude-tools/bin/other --resume s-1"));
-        assert!(!is_claude(""));
+        assert!(!resumes(&args("claude --resume s-10"), "s-1"));
+        assert!(!resumes(&args("claude s-1"), "s-1"));
+        assert!(!resumes(&args("claude --resume"), "s-1"));
+        assert!(!is_claude(&args("vim --resume s-1")));
+        assert!(!is_claude(&args(
+            "/opt/claude-tools/bin/other --resume s-1"
+        )));
+        assert!(!is_claude(&[]));
     }
 
     #[test]
@@ -344,12 +318,10 @@ mod tests {
             ),
         )
         .expect("the wrapper");
-        assert!(is_claude(&format!("{} --resume s-1", program.display())));
-        assert!(!is_claude(&format!(
-            "{} --resume s-1",
-            dir.join(".other").display()
-        )));
-        assert!(!is_claude(".claude-wrapped --resume s-1"));
+        let args = |program: &str| vec![program.to_string(), "--resume".into(), "s-1".into()];
+        assert!(is_claude(&args(&program.to_string_lossy())));
+        assert!(!is_claude(&args(&dir.join(".other").to_string_lossy())));
+        assert!(!is_claude(&args(".claude-wrapped")));
         let _ = std::fs::remove_dir_all(dir);
     }
 }

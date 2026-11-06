@@ -95,24 +95,23 @@ fn new_session() -> String {
     )
 }
 
-/// When the process `pid` started, as 2.1.296 records it in `procStart`:
-/// `ps -o lstart=` under `LC_ALL=C` and `TZ=UTC`, trimmed.
-fn proc_start(pid: u32) -> String {
-    let output = Command::new("ps")
-        .args(["-o", "lstart=", "-p", &pid.to_string()])
-        .env("LC_ALL", "C")
-        .env("TZ", "UTC")
-        .output()
-        .expect("ps");
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
-}
-
-/// The process `pid` as live names it.
+/// The process `pid` as the host's process table lists it.
 fn live_process(pid: u32) -> LiveProcess {
+    let listed = flume::host::process::listed()
+        .expect("the host's processes")
+        .into_iter()
+        .find(|process| process.pid == pid)
+        .expect("the process listed");
     LiveProcess {
         pid,
-        started: live::started_at(&proc_start(pid)).expect("the process's start"),
+        started: listed.started,
     }
+}
+
+/// When the process `pid` started, as 2.1.296 records it in `procStart`,
+/// `ps -o lstart=`'s words under `LC_ALL=C` and `TZ=UTC`.
+fn proc_start(pid: u32) -> String {
+    live::proc_start(live_process(pid).started).expect("the start in words")
 }
 
 impl Harness {
@@ -1421,7 +1420,7 @@ fn a_transcript_read_from_its_length() {
 }
 
 /// The processes live reads, by a listing of the host's.
-fn listed() -> Option<Vec<live::Process>> {
+fn listed() -> Option<Vec<flume::host::process::Listed>> {
     live::processes()
 }
 

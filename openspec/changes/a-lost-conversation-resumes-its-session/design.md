@@ -145,13 +145,20 @@ Claude Code's profile, in a new `crates/flume/src/profiles/agent/claude/live.rs`
   is live;
 - for each environment's home (`carry::home`), lists `sessions/*.json`,
   takes each whose `sessionId` is the session, and counts it where the
-  host runs a process with its `pid` started at its `procStart`. A
-  record whose process is gone, or another process under a reused id,
-  counts nothing;
-- lists the host's processes once, `ps -axo pid=,lstart=,args=`, and
-  counts each whose program is `claude`, by the last name of its first
-  argument or its wrapped program's as `wrapper.rs` reads one, and
-  whose arguments hold the session after `--resume` or `-r`;
+  host runs a process with its `pid` started at its `procStart`, within
+  a second. A record whose process is gone, or another process under a
+  reused id, counts nothing;
+- reads the host's process table once, each process's id, start and
+  arguments, and counts each whose program is `claude`, by the last
+  name of its first argument or its wrapped program's as `wrapper.rs`
+  reads one, and whose arguments hold the session after `--resume` or
+  `-r`. The table is read by `host::process::listed`, through libproc
+  and `KERN_PROCARGS2` on macOS and `/proc` on Linux, rather than by
+  running `ps`: macOS installs `ps` setuid, and a sandbox refuses to run
+  it, the merge queue's checks among them, where it lets a process read
+  its user's own processes. `procStart` holds `ps -o lstart=`'s words
+  under `LC_ALL=C` and `TZ=UTC`, read into seconds and compared to the
+  second the table gives;
 - answers `Unknown` naming `CLAUDE_CONFIG_DIR` where a home's
   `sessions` folder exists and cannot be read, or naming the host's
   processes where they cannot be listed.
@@ -354,9 +361,9 @@ one the test starts and names (core.29).
 - **An unreadable home holds a stage.** `Unknown` never opens a start,
   so a home whose `sessions` folder cannot be read keeps the stage
   waiting. Status says what could not be read.
-- **One process listing per waiting stage at each settle.** `ps` runs
-  once for each stage that waits on a session, bounded by the waits on
-  the host, six on deneb.
+- **One process listing per waiting stage at each settle.** The
+  process table is read once for each stage that waits on a session,
+  bounded by the waits on the host, six on deneb.
 - **A spent account on a host that shares nothing loses the talk from
   the place.** The transcript stays on disk and status says why, so a
   person can resume it by hand. Waiting for the reset was weighed and
