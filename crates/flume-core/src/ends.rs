@@ -49,6 +49,9 @@ pub fn what_ended(of: &EndOf) -> String {
                 }
                 StageState::EndedShort => format!("{stage} needs an answer"),
                 StageState::Finished => format!("{stage} finished"),
+                StageState::Lost if end.left_in_pane => format!(
+                    "{stage} lost, and flume left the agent the terminal brought back in its pane"
+                ),
                 StageState::Lost => format!("{stage} lost"),
                 StageState::NeverBegun => match &end.unsettled {
                     Some(unsettled) => {
