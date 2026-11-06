@@ -73,7 +73,7 @@ what lands.
 
 ## Under herdr
 
-flume's herdr plugin moves every place on with no command of yours and
+flume's herdr plugin settles flume's places as their agents change and
 shows the places in herdr. Each agent's sidebar entry gets its place's
 line less the place's name and kind, such as
 `code 1/2 · run 1 · tasks 2/5 · working`, and each workspace's row a
@@ -83,7 +83,7 @@ with keys that open, tell, stop or retry it.
 The plugin changes none of herdr's configuration, and herdr's plugins
 declare no keys. Until herdr's own `config.toml` holds what the plugin
 needs, `flume status` says what it lacks under the line naming the
-watch.
+host's watch.
 
 ### The popup's key
 

@@ -38,8 +38,9 @@ act is safe to repeat.
 
 A **settle** is the one act that moves places on: it reads every fact
 of a place again and takes each step that is then allowed. It runs
-inside a command, started by an agent going quiet, by herdr's watch,
-or by a caller, and flume runs no process of its own between commands.
+inside a command, started by an agent going quiet, by a caller keeping
+watch over the host, by a terminal's nudge, or by any other caller, and
+flume runs no process of its own between commands.
 
 ## The seams
 
@@ -49,7 +50,7 @@ or by a caller, and flume runs no process of its own between commands.
 | **the kinds** | the kinds a repository declares at a revision, a launch's file declares, and flume's own; the repository's binding of its tools | the kind format, read from `.config/flume.toml`, a launch's `--kinds` file and the binary |
 | **the change** | a change's facts at a revision: written, its tasks ticked, archived | `openspec`: OpenSpec's files, read with git |
 | **the agent** | the command that starts an agent; whether it started, received a prompt, is asking, has work of its own running, ended; its last words; the way it stops short | `claude`: Claude Code with flume's plugin, read through its hooks' records and its transcript |
-| **the terminal** | open an agent in a place; send it text; read its state and screen; close it; deliver a notice to a session; tidy what it made; show hints; keep a watch | `herdr`, and `printed`, a command printed for a person to run |
+| **the terminal** | open an agent in a place; send it text; read its state and screen; close it; deliver a notice to a session; tidy what it made; show hints; say whether it nudges a settle at an agent's change | `herdr`, and `printed`, a command printed for a person to run |
 | **the merge queue** | where the base lives; submit a place; collect its outcomes; read the submission of a branch; one round of the base's queue | `sluice` |
 | **the store** | a place's held state with its version; a write from that version; the place's own folder | the host's state directory |
 

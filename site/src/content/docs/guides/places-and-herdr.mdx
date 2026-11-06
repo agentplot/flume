@@ -133,7 +133,8 @@ command, `cd` into the place and the program with its environment and
 prompt, for you to run. It can send nothing into a pane it does not
 hold, so it cannot deliver a `tell` or a notice. Ends stay pending
 until `flume wait` or `flume inbox` collects them, and the place moves
-on at each command of flume's that acts.
+on at each command of flume's that acts, or at a caller's watch
+([keeping watch over the host](#keeping-watch-over-the-host)).
 
 Under herdr 0.9.5 or later, flume opens each agent in a pane itself,
 sends its prompts, reads its state, and delivers ends to the panes of
@@ -164,9 +165,9 @@ The local layer, `config.local.toml`, may set a stream's
 `multiplexer`, so you can try one on your own host without changing the
 managed file. A stream whose multiplexer names no profile flume carries
 refuses its own launches and starts, naming the name and the profiles
-there are, and every other stream runs. Where any multiplexer the host
-binds keeps no watch, as the printed command keeps none, every command
-of flume's that acts settles every place first.
+there are, and every other stream runs. No multiplexer decides whether
+a command settles every place first: the host's watch does
+([keeping watch over the host](#keeping-watch-over-the-host)).
 
 ## Places under herdr
 
@@ -374,8 +375,8 @@ raises or closes one.
 
 ## The herdr plugin
 
-flume's herdr plugin keeps places moving with no command of yours and
-shows them in herdr. Install it at the tag of the flume you run, so the
+flume's herdr plugin settles places as their agents change and shows
+them in herdr. Install it at the tag of the flume you run, so the
 plugin and the binary are one version:
 
 ```sh
@@ -387,20 +388,23 @@ herdr as the host's multiplexer or a stream's. It brings:
 
 - **The watch.** herdr starts it with its server, one per server. Every
   two seconds it reads every pane's agent state in one listing. When one
-  of flume's agents changes state, an agent comes up or goes in one of
-  the server's panes, or thirty seconds pass, it runs `flume settle`,
-  then writes `flume status --json` for the sidebar and the popup. An
-  agent that crashed, hung or was killed is read within that bound.
-  While the watch's lease is fresh, flume's commands leave the settling
-  to it; once it stops, each command settles every place first, as with
-  no watch. At its start and after each settle it reads herdr's
+  of flume's agents changes state, or an agent comes up or goes in one
+  of the server's panes, it runs `flume settle`. That is a nudge. What
+  the change lets move then moves within seconds: the next stage of a
+  program with no hook of its own, a crashed or killed agent, or a stage
+  waiting for room another agent held. It keeps no
+  bound, and no time passing settles there. A place with no agent in
+  it, as one whose submission waits on the merge queue, moves on at a
+  caller's watch or command, never the plugin's. At every tick it writes
+  `flume status --json` for the sidebar and the popup, and reads herdr's
   configuration file and writes down what that file lacks for the
   plugin, which `flume status` gives.
-- **Display hints.** After each settle the watch titles each agent's
-  pane `<stage> · <state>` and names it `<kind>--<name>`, and gives
-  each base's workspace the token `flume`, a count of its places:
-  `1 running · 0 asking · 1 waiting on caller · 0 stalled`. They show
-  what status says, and nothing flume decides reads them back.
+- **Display hints.** From the status it writes, the watch titles each
+  agent's pane `<stage> · <state>` and names it `<kind>--<name>`, and
+  gives each base's workspace the token `flume`, a count of its places:
+  `1 running · 0 asking · 1 waiting on caller · 0 stalled`, reporting
+  them again whenever status changes them. They show what status says,
+  and nothing flume decides reads them back.
 - **A sidebar row** on each agent's entry, the `$flume` token: its
   place's line less the place's name and kind, which the entry already
   shows. That is the stage with a repeating stage's group, how many
@@ -425,6 +429,32 @@ herdr as the host's multiplexer or a stream's. It brings:
 
 The sidebar row and the popup copy the line from `flume status --json`
 and work out nothing of their own.
+
+### Keeping watch over the host
+
+The plugin's watch decides nothing of how flume runs. A caller keeps
+watch over the host by running
+
+```sh
+flume settle --every <time>
+```
+
+on that bound, from a timer of the host's or whatever else keeps time
+there. Each run settles every place, an agent in it or none, and steps
+each open submission's base, so a place whose submission waits on the
+merge queue moves on within the bound. While
+the newest such settle began less than twice its bound ago, flume runs
+unattended: its commands leave the settling to the watch. While none
+does, the herdr plugin running or not, flume runs attended: every
+command of flume's that acts settles every place first. The places then
+move at your commands, at their agents' quiet and at the plugin's
+nudges. `flume status` says which under the host's part:
+
+```console
+$ flume status
+…
+  a caller keeps watch: every place settles every 2m, last at 1793287734
+```
 
 ### Setting up herdr
 
@@ -471,13 +501,13 @@ sidebar names `$flume`.
 
 **What `flume status` says is missing.** Until herdr's file holds the
 entry and the rows, `flume status`, of one place or of every place,
-names what the file lacks under the line naming the watch, in words
-you can act on:
+names what the file lacks under the line naming the host's watch, in
+words you can act on:
 
 ```console
 $ flume status
 …
-  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes
+  no caller keeps watch: every place settles at each command of flume's that acts
     herdr's configuration, ~/.config/herdr/config.toml, binds no key to flume's places: add a [[keys.command]] entry with key = "prefix+f", type = "plugin_action", command = "agentplot.flume.places", description = "flume: places in flight", as the README of flume's herdr plugin gives it
 ```
 
