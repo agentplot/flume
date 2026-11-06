@@ -31,6 +31,9 @@ postprocessors = [
 
 [git]
 conventional_commits = true
+# A commit `git revert` wrote, `Revert "..."`, is not conventional: it is in
+# neither the notes nor the bump, as the conventional check skips it
+# (ci.yml), and the commit it reverts stays listed.
 filter_unconventional = true
 split_commits = false
 protect_breaking_commits = true

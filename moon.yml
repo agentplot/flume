@@ -13,7 +13,8 @@ tasks:
     options: {runFromWorkspaceRoot: true}
   # The commit hooks devenv.nix installs, driven in a fresh worktree of a
   # scratch clone (check-hooks.sh): convco, treefmt and clippy each run on
-  # the main checkout's config, with no PREK_ALLOW_NO_CONFIG.
+  # the main checkout's config, with no PREK_ALLOW_NO_CONFIG, and convco
+  # takes a commit `git revert` wrote and refuses a message with no type.
   hooks:
     command: 'sh check-hooks.sh'
     inputs: ['/check-hooks.sh', '/treefmt.nix', '/.versionrc', '/devenv.nix', '/devenv.lock']
