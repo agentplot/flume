@@ -207,10 +207,14 @@ impl Terminal for Printed {
         }
     }
 
-    /// It holds no part, in attach's words, and runs nothing (187, 201).
-    fn runs(&self, _session: Option<&str>) -> SessionRuns {
-        SessionRuns::NoPart {
-            reason: NO_SESSION.into(),
-        }
+    /// It holds no part, for every part asked, in attach's words, and runs
+    /// nothing (187, 201).
+    fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns> {
+        sessions
+            .iter()
+            .map(|_| SessionRuns::NoPart {
+                reason: NO_SESSION.into(),
+            })
+            .collect()
     }
 }

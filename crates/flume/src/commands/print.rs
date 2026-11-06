@@ -2909,6 +2909,7 @@ mod tests {
                 .is_none()
                 .then(|| format!("the stream {stream} names no terminal profile flume carries")),
             runs,
+            sessions: vec![],
             line: line.into(),
         }
     }

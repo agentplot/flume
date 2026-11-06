@@ -134,10 +134,11 @@ impl WaitsOn {
     }
 }
 
-/// A stream's line in the list and its parts (107, 186, 190, 200): the
-/// stream, its session as an open resolves it, its multiplexer with where
-/// it came from, and whether its session runs, or why no terminal was
-/// asked; `line` joins them by ` · `.
+/// A stream's line in the list and its parts (107, 186, 190, 199, 200):
+/// the stream, its session as an open resolves it, its multiplexer with
+/// where it came from, whether its session runs, or why no terminal was
+/// asked, and each other session it names for a kind or a stage with
+/// whether it runs; `line` joins them by ` · `.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamListed {
     pub stream: String,
@@ -149,7 +150,21 @@ pub struct StreamListed {
     /// flume carries (190).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uncarried: Option<String>,
+    /// Each session the stream names for a kind or a stage but its own, by
+    /// name, read in the one runs its own is (199, 201).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sessions: Vec<SessionListed>,
     pub line: String,
+}
+
+/// A session a stream names for a kind or a stage, on the stream's line
+/// in the list, with whether it runs, none where no terminal was asked
+/// (199, 200, 201).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionListed {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs: Option<SessionRuns>,
 }
 
 /// What an open showed (186): the stream whose session it is, its

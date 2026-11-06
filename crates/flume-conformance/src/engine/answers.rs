@@ -742,8 +742,9 @@ pub fn full() -> Vec<(&'static str, Answer)> {
 }
 
 /// A list of a place waiting on the host and a place kept by its
-/// teardown, and of a stream that runs and one whose multiplexer names
-/// no profile flume carries (200).
+/// teardown, and of a stream that runs naming a session for a kind that
+/// does not run and one whose multiplexer names no profile flume carries
+/// (199, 200).
 pub fn list() -> Answer {
     Answer::List {
         places: vec![
@@ -785,7 +786,13 @@ pub fn list() -> Answer {
                     name: "work".into(),
                 }),
                 uncarried: None,
-                line: "work · session work · runs".into(),
+                sessions: vec![SessionListed {
+                    name: "work-design".into(),
+                    runs: Some(SessionRuns::NotRunning {
+                        name: "work-design".into(),
+                    }),
+                }],
+                line: "work · session work · runs · session work-design · not running".into(),
             },
             StreamListed {
                 stream: "trial".into(),
@@ -801,6 +808,7 @@ pub fn list() -> Answer {
                 uncarried: Some(
                     "the stream trial names the multiplexer rex, and no terminal profile is named rex; the terminal profiles there are: fake".into(),
                 ),
+                sessions: vec![],
                 line: "trial · session trial · no profile for rex".into(),
             },
         ],
@@ -2040,6 +2048,11 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "list.streams[].session",
             "list.streams[].session.from",
             "list.streams[].session.name",
+            "list.streams[].sessions",
+            "list.streams[].sessions[].name",
+            "list.streams[].sessions[].runs",
+            "list.streams[].sessions[].runs.not_running",
+            "list.streams[].sessions[].runs.not_running.name",
             "list.streams[].stream",
             "list.streams[].uncarried",
         ],
