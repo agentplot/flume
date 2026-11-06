@@ -30,14 +30,14 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Record in record 0039 the user's read of the design, quoting
+- [x] 1.1 Record in record 0039 the user's read of the design, quoting
   their words with the date, and lift the proposed mark from the parts
   they read. Its consequences give the agentplot/blueprints revision
   that holds the statement's amendment (section 3's address, 4, 7, 8,
   28, 41, 42, 43, 49, 53, 56, 130, 132, 143, 191, 192, 193, C.4, C.7,
   S93, S94, S98, S99; core.19). True when
   `sluice exec main -- moon run root:adrs root:format` passes.
-- [ ] 1.2 Add to records 0009, 0013, 0014 and 0040 an amendment line
+- [x] 1.2 Add to records 0009, 0013, 0014 and 0040 an amendment line
   each, naming record 0039 and what it changes of that record. 0009: a
   caller's start also sees what waits on it, and a notice names the
   brief and the key. 0013: an address is `<stream>/<role>`, a role of a
@@ -50,7 +50,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   roles, read as its packages are. Remove and reword nothing the records
   wrote (core.19). True when `sluice exec main -- moon run root:adrs
   root:format` passes.
-- [ ] 1.3 Amend `docs/architecture/core.md`:
+- [x] 1.3 Amend `docs/architecture/core.md`:
   - core.24's rule: a stalled place is said to each recipient, to the
     role its question named and to the answerer behind its stream.
   - core.25's details: a caller's own session collecting at its start by
@@ -95,10 +95,10 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   Have `site/src/content/docs/architecture/rules.md` mirror the new rule
   and core.28 as written (core.19, core.35). True when `sluice exec main
   -- moon run root:format site:prose site:build` passes.
-- [ ] 1.4 Run the checks of the projects this group touched. True when
+- [x] 1.4 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run root:format root:adrs site:prose
   site:build` passes.
-- [ ] 1.5 Write the statement's amendment as design 12.1 words it, on a
+- [x] 1.5 Write the statement's amendment as design 12.1 words it, on a
   new agentplot/blueprints branch cut from main at a4eeec3, unpushed,
   each amended clause fitted to main's text and 193, S93, S94, S98 and
   S99 renumbered where main takes them. Reconcile it with the change
