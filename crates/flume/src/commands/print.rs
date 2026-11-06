@@ -120,6 +120,21 @@ pub fn person(answer: &Answer) -> String {
             lines.extend(places.iter().map(|line| line.full.clone()));
         }
         Answer::Opened(opened) => lines.extend(opened_lines(opened)),
+        Answer::List { places, streams } => {
+            if places.is_empty() {
+                lines.push("no places".to_string());
+            }
+            let mut repository = None;
+            for place in places {
+                if repository != Some(&place.repository) {
+                    repository = Some(&place.repository);
+                    lines.push(place.repository.clone());
+                }
+                lines.push(format!("  {}", place.line));
+            }
+            lines.push("streams".to_string());
+            lines.extend(streams.iter().map(|stream| format!("  {}", stream.line)));
+        }
     }
     lines.join("\n")
 }

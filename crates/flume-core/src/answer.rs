@@ -73,6 +73,76 @@ pub enum Answer {
     /// A stream's session shown in its view at a person's asking, and
     /// nothing flume holds changed (186; core.48).
     Opened(StreamOpened),
+    /// Every place on the host and every stream it declares, a line
+    /// each, read from what flume keeps and each stream's terminal once
+    /// (200; core.52).
+    List {
+        places: Vec<Listed>,
+        streams: Vec<StreamListed>,
+    },
+}
+
+/// A place's line in the list and its parts (200): `<kind>--<name>`, the
+/// stage its line names, its state in its line's words, whom it waits on
+/// and what keeps it, a part it has none of left out; `line` joins them
+/// by ` · `. None of a place's long words is among them (56, 139).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Listed {
+    pub place: PlaceId,
+    pub repository: String,
+    /// `<kind>--<name>`.
+    pub name: String,
+    /// `<kind>@<version>`.
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    pub state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on: Option<WaitsOn>,
+    /// What keeps a place whose work is over, in a word (64 to 66, 68).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kept: Option<String>,
+    pub line: String,
+}
+
+/// Whom a waiting place waits on: its caller for a move 130 names, the
+/// host for room (70), or the merge queue for its submission's outcome
+/// (111).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitsOn {
+    Caller,
+    Host,
+    MergeQueue,
+}
+
+impl WaitsOn {
+    /// Whom the place waits on as its line says it.
+    pub fn words(self) -> &'static str {
+        match self {
+            WaitsOn::Caller => "waits on its caller",
+            WaitsOn::Host => "waits on the host",
+            WaitsOn::MergeQueue => "waits on the merge queue",
+        }
+    }
+}
+
+/// A stream's line in the list and its parts (107, 186, 190, 200): the
+/// stream, its session as an open resolves it, its multiplexer with where
+/// it came from, and whether its session runs, or why no terminal was
+/// asked; `line` joins them by ` · `.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamListed {
+    pub stream: String,
+    pub session: SessionHeld,
+    pub multiplexer: ProfileHeld,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs: Option<SessionRuns>,
+    /// Why no runs was asked: the stream's multiplexer names no profile
+    /// flume carries (190).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uncarried: Option<String>,
+    pub line: String,
 }
 
 /// What an open showed (186): the stream, its multiplexer, the session
