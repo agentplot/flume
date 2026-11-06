@@ -1,16 +1,21 @@
-//! A person opens a stream's agents in its view (186 to 189; core.48):
-//! the stream's own session, resolved as a start resolves its stream's,
-//! shown through the stream's multiplexer in its view, the stream's else
-//! the host's: for a terminal view, the terminal's attach for a window run
-//! by the stream's terminal app under the stream's title, else its name;
-//! for the app, the terminal's attach for its app alone. An open takes no
-//! lock, writes no held state and settles nothing, a second asking opens
-//! a second window, and no launch, settle, start or tidy asks for one; an
-//! undeclared stream, a multiplexer or a terminal app naming no profile,
-//! and a terminal's or a window's refusal refuse it; and its answer names
-//! the command's variables, never their values (4, 107, 120, 186 to 190;
-//! core.17, core.30).
+//! A person opens a session of a stream's terminal in its view, by the
+//! session's name and never a stream's (186 to 189, 199; core.48): the
+//! stream's own session, resolved as a start resolves its stream's own,
+//! or a session the stream names for a kind or a stage, shown through
+//! the stream's multiplexer in its view, the stream's else the host's:
+//! for a terminal view, the terminal's attach for a window run by the
+//! stream's terminal app, under the stream's title, else its name, for
+//! the stream's own session and under the session's name for one it
+//! names for a kind or a stage; for the app, the terminal's attach for
+//! its app alone. An open takes no lock, writes no held state and
+//! settles nothing, a second asking opens a second window, and no
+//! launch, settle, start or tidy asks for one; a name no stream's word
+//! gives, a session two streams' words give, a multiplexer or a
+//! terminal app naming no profile, and a terminal's or a window's
+//! refusal refuse it; and its answer names the command's variables,
+//! never their values (4, 107, 120, 186 to 190, 199; core.17, core.30).
 
+use super::sessions::named;
 use super::settling::{archive, construct_begun, fix_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -67,9 +72,44 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_place_run_through,
         },
         Scenario {
-            name: "open: a stream the host does not declare is refused naming it and the streams the host declares, nothing asked of the terminal or the window",
+            name: "open: a session a stream names for a kind is opened by its name under that name as its title, the answer giving the stream, the session from stream-kind and the kind",
+            cites: &["186", "199", "S107"],
+            run: the_design_session_by_its_name,
+        },
+        Scenario {
+            name: "open: a session a stream names for a kind's stage is opened by its name under that name, the answer giving the session from stream-stage and the stage",
+            cites: &["186", "199"],
+            run: a_stages_session_by_its_name,
+        },
+        Scenario {
+            name: "open: a stream's own session that it names for a kind too is opened as its own, under the stream's title",
+            cites: &["186", "199"],
+            run: a_streams_own_session_named_for_a_kind,
+        },
+        Scenario {
+            name: "open: a session a stream names for a kind, in a stream whose view is the app, has the terminal's app show it and no window asked",
+            cites: &["186", "187", "199"],
+            run: a_design_session_in_the_streams_app,
+        },
+        Scenario {
+            name: "open: a name no stream's word gives is refused naming it and each stream's sessions, nothing asked of the terminal or the window",
             cites: &["4", "186"],
             run: an_undeclared_stream,
+        },
+        Scenario {
+            name: "open: a name no stream's word gives is refused naming each stream's sessions, its own and those it names for a kind, nothing asked of the terminal or the window",
+            cites: &["4", "186", "199", "S107"],
+            run: a_name_no_streams_word_gives,
+        },
+        Scenario {
+            name: "open: a stream's name that is not one of its sessions' is refused naming the session the stream gives, nothing asked of the terminal or the window",
+            cites: &["186"],
+            run: a_streams_name_that_is_not_its_sessions,
+        },
+        Scenario {
+            name: "open: a session two streams' own words give is refused naming both, nothing asked of the terminal or the window",
+            cites: &["4", "186"],
+            run: a_session_two_streams_words_give,
         },
         Scenario {
             name: "open: a stream whose multiplexer names rex is refused naming rex and the terminal profiles carried, nothing attached",
@@ -138,10 +178,10 @@ fn title(title: &str, from: TitleFrom) -> Option<TitleHeld> {
     })
 }
 
-/// That the open of `stream` was refused with words holding each of
+/// That the open of `session` was refused with words holding each of
 /// `words`, and asked nothing of the terminal's attach or the window.
-fn refused_with(world: &World, stream: Option<&str>, words: &[&str], attached: usize) -> Outcome {
-    let reason = refused(&world.engine.open_stream(stream))?;
+fn refused_with(world: &World, session: Option<&str>, words: &[&str], attached: usize) -> Outcome {
+    let reason = refused(&world.engine.open_session(session))?;
     for word in words {
         ensure!(
             reason.contains(word),
@@ -160,7 +200,7 @@ fn refused_with(world: &World, stream: Option<&str>, words: &[&str], attached: u
 fn a_streams_window(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_title("work", Some("Work Agents"));
-    let answer = opened(&world.engine.open_stream(Some("work")))?;
+    let answer = opened(&world.engine.open_session(Some("work")))?;
     ensure_eq!(
         world.terminal.log.of("attach"),
         vec!["attach work for terminal".to_string()],
@@ -206,7 +246,8 @@ fn a_streams_window(_: &()) -> Outcome {
 fn a_stream_that_names_its_session_and_no_title(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_stream_session("work", Some("office"));
-    let answer = opened(&world.engine.open_stream(Some("work")))?;
+    let answer = opened(&world.engine.open_session(Some("office")))?;
+    ensure_eq!(answer.stream, "work", "the stream");
     ensure_eq!(
         world.terminal.log.of("attach"),
         vec!["attach office for terminal".to_string()],
@@ -237,7 +278,7 @@ fn a_stream_that_names_its_session_and_no_title(_: &()) -> Outcome {
 
 fn the_default_stream(_: &()) -> Outcome {
     let world = World::new();
-    let answer = opened(&world.engine.open_stream(None))?;
+    let answer = opened(&world.engine.open_session(None))?;
     ensure_eq!(
         world.terminal.log.of("attach"),
         vec!["attach own for terminal".to_string()],
@@ -273,7 +314,7 @@ fn the_same_session_and_terminal_as_a_stages_agent(_: &()) -> Outcome {
         }),
         "where the fix's agent opened in other"
     );
-    let answer = opened(&world.engine.open_stream(Some("trial")))?;
+    let answer = opened(&world.engine.open_session(Some("trial")))?;
     ensure_eq!(
         other.log.of("attach"),
         vec!["attach trial for terminal".to_string()],
@@ -308,8 +349,8 @@ fn a_streams_own_terminal_app(_: &()) -> Outcome {
         .host
         .set_display("office", None, None, Some("other-window"));
     world.host.set_stream("work", Some(Stream::default()));
-    let office = opened(&world.engine.open_stream(Some("office")))?;
-    let work = opened(&world.engine.open_stream(Some("work")))?;
+    let office = opened(&world.engine.open_session(Some("office")))?;
+    let work = opened(&world.engine.open_session(Some("work")))?;
     ensure_eq!(
         other_window.log.of("show"),
         vec!["show fake-terminal attach office titled office".to_string()],
@@ -336,7 +377,7 @@ fn a_streams_own_terminal_app(_: &()) -> Outcome {
 fn the_app_shows_the_session(_: &()) -> Outcome {
     let world = World::new();
     world.host.set_display("work", None, Some(View::App), None);
-    let answer = opened(&world.engine.open_stream(Some("work")))?;
+    let answer = opened(&world.engine.open_session(Some("work")))?;
     ensure_eq!(
         world.terminal.log.of("attach"),
         vec!["attach work for app".to_string()],
@@ -372,7 +413,7 @@ fn a_terminal_with_no_app(_: &()) -> Outcome {
         }),
     );
     ensure_eq!(
-        refused(&world.engine.open_stream(Some("work")))?,
+        refused(&world.engine.open_session(Some("work")))?,
         "no app of its own",
         "the refusal"
     );
@@ -394,7 +435,7 @@ fn two_askings(_: &()) -> Outcome {
     world.store.log.clear();
     world.terminal.log.clear();
     for _ in 0..2 {
-        opened(&world.engine.open_stream(Some("work")))?;
+        opened(&world.engine.open_session(Some("work")))?;
     }
     ensure_eq!(world.window.log.count("show"), 2, "the window's shows");
     ensure_eq!(world.window.windows().len(), 2, "the windows opened");
@@ -444,7 +485,199 @@ fn an_undeclared_stream(_: &()) -> Outcome {
     refused_with(
         &world,
         Some("nightly"),
-        &["nightly", "its streams are: default, work"],
+        &[
+            "no stream's word gives a session nightly",
+            "the stream default gives the terminal's own",
+            "the stream work gives work",
+        ],
+        0,
+    )
+}
+
+/// A named session's kinds and stages, each from the managed layer, the
+/// fake host giving no value's layer (56, 199).
+fn named_for(session: &str, kinds: &[&str], stages: &[&str]) -> Option<NamedSession> {
+    let each = |names: &[&str]| {
+        names
+            .iter()
+            .map(|name| NamedFor {
+                name: (*name).into(),
+                layer: ConfigLayer::Managed,
+            })
+            .collect()
+    };
+    Some(NamedSession {
+        name: session.into(),
+        kinds: each(kinds),
+        stages: each(stages),
+    })
+}
+
+fn the_design_session_by_its_name(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_title("work", Some("Work Agents"));
+    named(&world, "work", "research", Some("work-design"), &[], &[]);
+    let answer = opened(&world.engine.open_session(Some("work-design")))?;
+    ensure_eq!(
+        world.terminal.log.of("attach"),
+        vec!["attach work-design for terminal".to_string()],
+        "the terminal's attaches"
+    );
+    ensure_eq!(
+        world.window.log.of("show"),
+        vec!["show fake-terminal attach work-design titled work-design".to_string()],
+        "the window's shows"
+    );
+    ensure_eq!(answer.stream, "work", "the stream");
+    ensure_eq!(
+        answer.session,
+        session(Some("work-design"), SessionFrom::StreamKind),
+        "the session"
+    );
+    ensure_eq!(
+        answer.named,
+        named_for("work-design", &["research"], &[]),
+        "the kinds and stages it is named for"
+    );
+    ensure_eq!(
+        answer.title,
+        title("work-design", TitleFrom::Session),
+        "the title"
+    );
+    Ok(())
+}
+
+fn a_stages_session_by_its_name(_: &()) -> Outcome {
+    let world = World::new();
+    named(
+        &world,
+        "work",
+        "release",
+        None,
+        &[("review", "work-review")],
+        &[],
+    );
+    let answer = opened(&world.engine.open_session(Some("work-review")))?;
+    ensure_eq!(
+        world.terminal.log.of("attach"),
+        vec!["attach work-review for terminal".to_string()],
+        "the terminal's attaches"
+    );
+    ensure_eq!(
+        world.window.log.of("show"),
+        vec!["show fake-terminal attach work-review titled work-review".to_string()],
+        "the window's shows"
+    );
+    ensure_eq!(
+        answer.session,
+        session(Some("work-review"), SessionFrom::StreamStage),
+        "the session"
+    );
+    ensure_eq!(
+        answer.named,
+        named_for("work-review", &[], &["release.review"]),
+        "the kinds and stages it is named for"
+    );
+    ensure_eq!(
+        answer.title,
+        title("work-review", TitleFrom::Session),
+        "the title"
+    );
+    Ok(())
+}
+
+fn a_streams_own_session_named_for_a_kind(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream_session("work", Some("office"));
+    world.host.set_title("work", Some("Work Agents"));
+    named(&world, "work", "research", Some("office"), &[], &[]);
+    let answer = opened(&world.engine.open_session(Some("office")))?;
+    ensure_eq!(
+        world.terminal.log.of("attach"),
+        vec!["attach office for terminal".to_string()],
+        "the terminal's attaches"
+    );
+    ensure_eq!(
+        world.window.log.of("show"),
+        vec!["show fake-terminal attach office titled Work Agents".to_string()],
+        "the window's shows"
+    );
+    ensure_eq!(
+        answer.session,
+        session(Some("office"), SessionFrom::Stream),
+        "the session"
+    );
+    ensure_eq!(
+        answer.title,
+        title("Work Agents", TitleFrom::Stream),
+        "the title"
+    );
+    ensure_eq!(
+        answer.named,
+        named_for("office", &["research"], &[]),
+        "the kinds and stages it is named for"
+    );
+    Ok(())
+}
+
+fn a_design_session_in_the_streams_app(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_display("work", None, Some(View::App), None);
+    named(&world, "work", "research", Some("work-design"), &[], &[]);
+    let answer = opened(&world.engine.open_session(Some("work-design")))?;
+    ensure_eq!(
+        world.terminal.log.of("attach"),
+        vec!["attach work-design for app".to_string()],
+        "the terminal's attaches"
+    );
+    ensure_eq!(
+        world.window.log.calls(),
+        Vec::<String>::new(),
+        "the window's log"
+    );
+    ensure_eq!(answer.window, WindowOutcome::App, "the window");
+    ensure_eq!(answer.title, None, "the title");
+    Ok(())
+}
+
+fn a_name_no_streams_word_gives(_: &()) -> Outcome {
+    let world = World::new();
+    named(&world, "work", "research", Some("work-design"), &[], &[]);
+    refused_with(
+        &world,
+        Some("nightly"),
+        &["nightly", "the stream work gives work and work-design"],
+        0,
+    )
+}
+
+fn a_streams_name_that_is_not_its_sessions(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream_session("work", Some("office"));
+    refused_with(
+        &world,
+        Some("work"),
+        &[
+            "no stream's word gives a session work",
+            "work is a stream's name",
+            "the stream work gives office",
+        ],
+        0,
+    )
+}
+
+fn a_session_two_streams_words_give(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream_session("work", Some("shared"));
+    world.host.set_stream_session("personal", Some("shared"));
+    refused_with(
+        &world,
+        Some("shared"),
+        &[
+            "the session shared is given by 2 streams' words",
+            "the stream personal's, its own session",
+            "the stream work's, its own session",
+        ],
         0,
     )
 }
@@ -470,7 +703,7 @@ fn a_terminal_that_holds_no_session(_: &()) -> Outcome {
         }),
     );
     ensure_eq!(
-        refused(&world.engine.open_stream(Some("work")))?,
+        refused(&world.engine.open_session(Some("work")))?,
         "no session here",
         "the refusal"
     );
@@ -500,7 +733,7 @@ fn a_window_that_refuses(_: &()) -> Outcome {
         reason: "no display".into(),
     }));
     ensure_eq!(
-        refused(&world.engine.open_stream(Some("work")))?,
+        refused(&world.engine.open_session(Some("work")))?,
         "no display",
         "the refusal"
     );
@@ -516,7 +749,7 @@ fn a_scripted_window(_: &()) -> Outcome {
     world.window.answers(Some(WindowShown::Printed {
         line: "attach work".into(),
     }));
-    let answer = opened(&world.engine.open_stream(Some("work")))?;
+    let answer = opened(&world.engine.open_session(Some("work")))?;
     ensure_eq!(
         answer.window,
         WindowOutcome::Printed {
@@ -565,7 +798,7 @@ pub fn a_variables_open() -> Answer {
     world.window.answers(Some(WindowShown::Printed {
         line: VARIABLES_LINE.into(),
     }));
-    world.engine.open_stream(Some("work"))
+    world.engine.open_session(Some("work"))
 }
 
 fn a_command_that_needs_a_variable(_: &()) -> Outcome {
@@ -621,7 +854,7 @@ fn s90_a_streams_view(_: &()) -> Outcome {
         .host
         .set_display("tablet", None, Some(View::App), None);
 
-    let first = opened(&world.engine.open_stream(Some("work")))?;
+    let first = opened(&world.engine.open_session(Some("work")))?;
     ensure_eq!(
         first.session,
         session(Some("work"), SessionFrom::StreamName),
@@ -640,7 +873,7 @@ fn s90_a_streams_view(_: &()) -> Outcome {
         }),
         "where the fix on work opened its agent"
     );
-    opened(&world.engine.open_stream(Some("work")))?;
+    opened(&world.engine.open_session(Some("work")))?;
     ensure_eq!(
         world.window.windows(),
         vec![
@@ -657,7 +890,7 @@ fn s90_a_streams_view(_: &()) -> Outcome {
         "work's windows"
     );
 
-    let office = opened(&world.engine.open_stream(Some("office")))?;
+    let office = opened(&world.engine.open_session(Some("office")))?;
     ensure_eq!(
         office_window.log.of("show"),
         vec!["show fake-terminal attach office titled Office Agents".to_string()],
@@ -669,7 +902,7 @@ fn s90_a_streams_view(_: &()) -> Outcome {
         "office's title"
     );
 
-    let default = opened(&world.engine.open_stream(None))?;
+    let default = opened(&world.engine.open_session(None))?;
     ensure_eq!(
         default.session,
         session(None, SessionFrom::Own),
@@ -689,7 +922,7 @@ fn s90_a_streams_view(_: &()) -> Outcome {
     );
     let shows = world.window.log.count("show") + office_window.log.count("show");
     ensure_eq!(
-        refused(&world.engine.open_stream(Some("tablet")))?,
+        refused(&world.engine.open_session(Some("tablet")))?,
         "the terminal has no app of its own",
         "tablet's refusal"
     );
@@ -703,7 +936,7 @@ fn s90_a_streams_view(_: &()) -> Outcome {
     world.window.answers(Some(WindowShown::Printed {
         line: "fake-terminal attach work".into(),
     }));
-    let printed = opened(&world.engine.open_stream(Some("work")))?;
+    let printed = opened(&world.engine.open_session(Some("work")))?;
     ensure_eq!(
         printed.terminal_app,
         Some(profile("fake-window", NamedBy::Neither)),

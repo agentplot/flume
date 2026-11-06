@@ -64,6 +64,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_hosts_sessions_labels_and_layers,
         },
         Scenario {
+            name: "streams: the host's facts give the sessions a stream names for a kind and for a kind's stage, and each other key of their tables, as the core reads them",
+            cites: &["143", "199"],
+            run: the_hosts_sessions_for_its_kinds_and_stages,
+        },
+        Scenario {
             name: "streams: status gives each stream's multiplexer, view, terminal app and title with where each came from, in the JSON form",
             cites: &["56", "143", "186", "190"],
             run: the_display_in_status,
@@ -421,6 +426,75 @@ fn the_hosts_sessions_labels_and_layers(_: &()) -> Outcome {
         Some(("3", ConfigLayer::Local)),
         "streams.work.agents and its layer"
     );
+    Ok(())
+}
+
+/// The seam-contracts spec's fake host's sessions for its kinds and
+/// stages: `work` naming `work-design` for research and for release's
+/// review, and `work-plan` for plan with the other key `label` (143,
+/// 199).
+fn the_hosts_sessions_for_its_kinds_and_stages(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_kind_sessions(
+        "work",
+        "research",
+        Some(KindSessions {
+            session: Some("work-design".into()),
+            ..KindSessions::default()
+        }),
+    );
+    world.host.set_kind_sessions(
+        "work",
+        "release",
+        Some(KindSessions {
+            stages: [(
+                "review".to_string(),
+                StageSession {
+                    session: Some("work-design".into()),
+                    unknown: vec![],
+                },
+            )]
+            .into(),
+            ..KindSessions::default()
+        }),
+    );
+    world.host.set_kind_sessions(
+        "work",
+        "plan",
+        Some(KindSessions {
+            session: Some("work-plan".into()),
+            unknown: vec!["label".into()],
+            ..KindSessions::default()
+        }),
+    );
+    let host: &dyn Host = world.host.as_ref();
+    let streams = host.streams();
+    let work = streams
+        .get("work")
+        .ok_or("the host's streams give no work")?;
+    let research = work.kinds.get("research").ok_or("work names no research")?;
+    ensure_eq!(
+        research.session.as_deref(),
+        Some("work-design"),
+        "work's session for research"
+    );
+    let review = work
+        .kinds
+        .get("release")
+        .and_then(|release| release.stages.get("review"))
+        .ok_or("work names nothing for release's review")?;
+    ensure_eq!(
+        review.session.as_deref(),
+        Some("work-design"),
+        "work's session for release's review"
+    );
+    let plan = work.kinds.get("plan").ok_or("work names no plan")?;
+    ensure_eq!(
+        (plan.session.as_deref(), plan.unknown.clone()),
+        (Some("work-plan"), vec!["label".to_string()]),
+        "work's session for plan and its table's other key"
+    );
+    ensure_eq!(work.session, None, "work's own session unnamed");
     Ok(())
 }
 

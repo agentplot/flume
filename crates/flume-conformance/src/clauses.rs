@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "7bd1891";
+pub const REVISION: &str = "fa40c94";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -20,7 +20,7 @@ pub fn part_a() -> Vec<u32> {
         .chain(165..=173)
         .chain(175..=177)
         .chain(180..=186)
-        .chain([190, 191, 195, 197, 200])
+        .chain([190, 191, 195, 197, 198, 199, 200])
         .collect()
 }
 
@@ -62,7 +62,7 @@ pub const SCENARIOS: u32 = 108;
 
 /// The numbers section 11 skips at the revision, which designs the
 /// statement does not hold yet keep for their own scenarios.
-pub const SKIPPED: [u32; 8] = [93, 94, 98, 99, 104, 105, 106, 107];
+pub const SKIPPED: [u32; 4] = [93, 94, 98, 99];
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -104,6 +104,10 @@ pub const SETTINGS: &str = "an-agents-program-settings-come-from-flumes-layers, 
 /// flume's layers.
 pub const EFFORT: &str = "an-agents-effort-is-a-setting-of-flumes-layers, record 0044";
 
+/// The change that builds record 0046: an agent that stops short needing
+/// an answer kept open for it, `keep_open` one of flume's layers.
+pub const KEEP_OPEN: &str = "an-answer-reaches-the-open-session-within-an-hour, record 0046";
+
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
 /// asks none to be cited.
@@ -140,6 +144,9 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
     let effort = ["197".to_string(), "S103".to_string()]
         .into_iter()
         .map(|clause| (clause, EFFORT));
+    let keep_open = std::iter::once("198".to_string())
+        .chain((104..=105).map(|scenario| format!("S{scenario}")))
+        .map(|clause| (clause, KEEP_OPEN));
     standing
         .chain(plan)
         .chain(points)
@@ -149,6 +156,7 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(origin)
         .chain(settings)
         .chain(effort)
+        .chain(keep_open)
         .collect()
 }
 
@@ -160,9 +168,9 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 5);
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 7);
         assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 3);
-        for gap in [100, 150, 193, 194, 198, 199] {
+        for gap in [100, 150, 193, 194] {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
         }
         assert!(a.iter().all(|clause| !b.contains(clause)));
@@ -171,25 +179,28 @@ mod tests {
         assert_eq!(
             every,
             (1..=201)
-                .filter(|clause| ![100, 150, 193, 194, 198, 199].contains(clause))
+                .filter(|clause| ![100, 150, 193, 194].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 195 + 8 + 100);
+        assert_eq!(all().len(), 197 + 8 + 104);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
         for gap in SKIPPED.map(|scenario| format!("S{scenario}")) {
             assert!(!all().contains(&gap), "{gap} is listed");
         }
-        for scenario in ["S91", "S92", "S95", "S96", "S97", "S100", "S103", "S108"] {
+        for scenario in [
+            "S91", "S92", "S95", "S96", "S97", "S100", "S103", "S104", "S105", "S106", "S107",
+            "S108",
+        ] {
             assert!(
                 all().contains(&scenario.to_string()),
                 "{scenario} is not listed"
             );
         }
-        assert_eq!(REVISION, "7bd1891");
+        assert_eq!(REVISION, "fa40c94");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 155, 156, 157, 158, 159, 161, 162,
             163, 165, 168, 169, 173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191,
-            195, 197, 200,
+            195, 197, 198, 199, 200,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
@@ -204,7 +215,7 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 5 + 2);
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 5 + 2 + 3);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
@@ -212,7 +223,7 @@ mod tests {
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
             "S84", "S85", "184", "185", "186", "187", "188", "189", "190", "S86", "S87", "S88",
             "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
-            "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108",
+            "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "199", "S106", "S107",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

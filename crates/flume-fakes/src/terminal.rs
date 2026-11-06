@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 /// view shown, or either as scripted, and logs each asking with its view
 /// (187). Runs answers each part as scripted, and otherwise that it does
 /// not run, its own named `own` as attach names it, logging each asking
-/// as `runs <part>` and starting nothing (201).
+/// as one `runs <part> <part>…` and starting nothing (201).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -808,15 +808,25 @@ impl Terminal for FakeTerminal {
         })
     }
 
-    /// The part as scripted, else not running, its own named `own` as
-    /// attach names it; logged, and nothing started (201).
-    fn runs(&self, session: Option<&str>) -> SessionRuns {
-        let part = session.unwrap_or("own");
-        self.log.push(format!("runs {part}"));
-        lock(&self.state)
-            .runs
-            .get(part)
-            .cloned()
-            .unwrap_or_else(|| SessionRuns::NotRunning { name: part.into() })
+    /// Each part as scripted, else not running, its own named `own` as
+    /// attach names it; logged once for the call, the parts in the order
+    /// asked, and nothing started (201).
+    fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns> {
+        let parts: Vec<&str> = sessions
+            .iter()
+            .map(|session| session.unwrap_or("own"))
+            .collect();
+        self.log.push(format!("runs {}", parts.join(" ")));
+        let state = lock(&self.state);
+        parts
+            .into_iter()
+            .map(|part| {
+                state
+                    .runs
+                    .get(part)
+                    .cloned()
+                    .unwrap_or_else(|| SessionRuns::NotRunning { name: part.into() })
+            })
+            .collect()
     }
 }

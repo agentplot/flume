@@ -134,10 +134,11 @@ impl WaitsOn {
     }
 }
 
-/// A stream's line in the list and its parts (107, 186, 190, 200): the
-/// stream, its session as an open resolves it, its multiplexer with where
-/// it came from, and whether its session runs, or why no terminal was
-/// asked; `line` joins them by ` · `.
+/// A stream's line in the list and its parts (107, 186, 190, 199, 200):
+/// the stream, its session as an open resolves it, its multiplexer with
+/// where it came from, whether its session runs, or why no terminal was
+/// asked, and each other session it names for a kind or a stage with
+/// whether it runs; `line` joins them by ` · `.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamListed {
     pub stream: String,
@@ -149,18 +150,37 @@ pub struct StreamListed {
     /// flume carries (190).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uncarried: Option<String>,
+    /// Each session the stream names for a kind or a stage but its own, by
+    /// name, read in the one runs its own is (199, 201).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sessions: Vec<SessionListed>,
     pub line: String,
 }
 
-/// What an open showed (186): the stream, its multiplexer, the session
-/// shown, its view, the title and the terminal app of a window, each
-/// with where it came from, the command the window runs by its
-/// variables' names, and what the window did.
+/// A session a stream names for a kind or a stage, on the stream's line
+/// in the list, with whether it runs, none where no terminal was asked
+/// (199, 200, 201).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionListed {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs: Option<SessionRuns>,
+}
+
+/// What an open showed (186): the stream whose session it is, its
+/// multiplexer, the session shown, its view, the title and the terminal
+/// app of a window, each with where it came from, the kinds and stages
+/// the stream names the session for (199), the command the window runs
+/// by its variables' names, and what the window did.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamOpened {
     pub stream: String,
     pub multiplexer: ProfileHeld,
     pub session: SessionHeld,
+    /// The kinds and stages the stream names the session for, each with
+    /// its layer; none where it names it for none (199).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub named: Option<NamedSession>,
     pub view: ViewHeld,
     /// None for the app's view, whose app titles its own window.
     #[serde(default)]
@@ -689,10 +709,14 @@ impl RoomWanted {
     }
 }
 
-/// A stream of the host (143): the session its agents open in where
-/// their launch names none, with where it came from, its multiplexer,
-/// view and terminal app, each with where it came from, and the title a
-/// window on it carries, its priority among streams, its agents running,
+/// A stream of the host (143): its own session, the one its agents open
+/// in where neither their launch nor its word for their kind or stage
+/// names one, with where it came from; each session it names for its
+/// kinds and their stages, with the kinds and stages it names it for and
+/// each one's layer; each fault of those tables, with the refusal it
+/// causes the starts that read it; its multiplexer, view and terminal
+/// app, each with where it came from, and the title a window on it
+/// carries, its priority among streams, its agents running,
 /// the bound it states, none where the host's alone holds it, its room,
 /// none where it states no bound, its stages waiting for room in the
 /// order they would start, its labels' shares, whether their reserves
@@ -700,12 +724,16 @@ impl RoomWanted {
 /// naming a terminal profile flume does not carry, or, for a terminal
 /// view, its terminal app naming a window profile flume does not carry,
 /// that last also given alone, since it refuses the stream's open and
-/// none of its stages; none where none holds (56, 70, 107, 181, 182, 186,
-/// 188, 190; core.14).
+/// none of its stages; none where none holds (4, 56, 70, 107, 181, 182,
+/// 186, 188, 190, 199, C.7; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
     pub session: SessionHeld,
+    #[serde(default)]
+    pub sessions: Vec<NamedSession>,
+    #[serde(default)]
+    pub faults: Vec<TableFault>,
     pub multiplexer: ProfileHeld,
     pub view: ViewHeld,
     pub terminal_app: ProfileHeld,
@@ -728,19 +756,23 @@ pub struct StreamStatus {
 }
 
 /// The title a window on a stream's part of its terminal carries, and
-/// where it came from: the stream's `title`, else its name (143, 186).
+/// where it came from: for the stream's own session, the stream's
+/// `title`, else its name, and for a session it names for a kind or a
+/// stage, that session's name (143, 186, 199).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TitleHeld {
     pub title: String,
     pub from: TitleFrom,
 }
 
-/// Where a stream's title came from (143, 186).
+/// Where a window's title came from (143, 186, 199).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TitleFrom {
     Stream,
     StreamName,
+    /// The name of a session the stream names for a kind or a stage.
+    Session,
 }
 
 /// A terminal the host binds (119, 190): the profile a stream takes it
