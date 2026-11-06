@@ -3,13 +3,12 @@
 ### Requirement: A stream's agents open in its own session
 
 Where the launch's settings and the stage's declaration name no place
-in the terminal, a stage's agent SHALL open in the session its place's
-stream names for the place's kind's stage, else in the one it names for
-the place's kind, else in the stream's own session:
-the one `session` in `[streams.<stream>]` names, else the one named by
-the stream's name, and, for the host's default stream naming none, the
-terminal's own. It SHALL be read at each start, and an agent already
-started SHALL stay where it opened (32, 107, 143, 199).
+in the terminal, a stage's agent SHALL open in the session its stream
+names for the place's kind's stage, else for the kind, else in the
+stream's own: the one `session` in `[streams.<stream>]` names, else the
+one named by the stream's name, and, for the host's default stream
+naming none, the terminal's own. It SHALL be read at each start, and an
+agent already started SHALL stay where it opened (32, 107, 143, 199).
 
 #### Scenario: Two streams, each in its own session
 

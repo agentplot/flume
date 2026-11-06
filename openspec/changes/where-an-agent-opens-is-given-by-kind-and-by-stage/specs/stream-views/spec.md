@@ -2,17 +2,13 @@
 
 ### Requirement: A person opens a stream's session in its view
 
-`flume open [<session>]` SHALL show the session of that name, always a
-session and never a stream: a stream's own session, the one its
-`session` names, else the stream's name, or a session a stream names for
-a kind or a stage; the host's default stream's own where none is named.
-It SHALL be shown in its stream's `view`, else the host's, else
-`terminal`, through its stream's multiplexer: for `terminal`, the
-terminal's attach for a window giving the command and the stream's
-terminal app showing it, under the stream's `title`, else its name, for
-the stream's own session, and under the session's name for a session the
-stream names for a kind or a stage; for `app`, the terminal's attach for
-its app alone (107, 186 to 188, 199).
+`flume open [<session>]` SHALL show the session of that name, never a
+stream, the default stream's own where none is named, in its stream's
+`view`, else the host's, else `terminal`, through its stream's
+multiplexer: for `terminal`, the terminal's attach for a window giving
+the command and the stream's terminal app showing it, under the
+stream's `title`, else its name, for the stream's own session; for
+`app`, the terminal's attach for its app alone (107, 186 to 188, 199).
 
 #### Scenario: A stream's window
 
@@ -38,26 +34,6 @@ its app alone (107, 186 to 188, 199).
 
 - **WHEN** the fake host's own terminal app is `fake-window`, its `office` names the terminal app `other-window`, and `open_session` is asked for `office` and then `work`
 - **THEN** `other-window` logs the show for `office` and `fake-window` the one for `work`, the answers giving each from `stream` and `host` (186, 188, S90)
-
-#### Scenario: The design session by its name
-
-- **WHEN** the fake host's `work` names `work-design` for research and declares the title `Work Agents`, and `open_session` is asked for `work-design`
-- **THEN** the fake terminal's log names `attach work-design for terminal`, the fake window's log names its command under `work-design`, and the answer gives the stream `work`, `work-design` from `stream-kind` named for research (186, 199, S107)
-
-#### Scenario: A stage's session by its name
-
-- **WHEN** the fake host's `work` names `work-review` for release's review, and `open_session` is asked for `work-review`
-- **THEN** the fake terminal's log names `attach work-review for terminal` under the title `work-review`, and the answer gives `work-review` from `stream-stage` named for `release.review` (186, 199)
-
-#### Scenario: A stream's own session named for a kind
-
-- **WHEN** the fake host's `[streams.work]` gives `session = "office"` and the title `Work Agents` and names `office` for research, and `open_session` is asked for `office`
-- **THEN** the terminal is asked to attach `office`, under the title `Work Agents`, as the stream's own (186, 199)
-
-#### Scenario: A design session in the stream's app
-
-- **WHEN** the fake host's `work` gives `view = "app"` and names `work-design` for research, and `open_session` is asked for `work-design`
-- **THEN** the fake terminal's log names `attach work-design for app`, and the fake window logs nothing (186, 187, 199)
 
 ### Requirement: Opening a view changes nothing flume holds
 
@@ -119,3 +95,33 @@ to 188, 190, 199).
 
 - **WHEN** the fake window is scripted to refuse with `no display`
 - **THEN** the open is refused with those words (188)
+
+## ADDED Requirements
+
+### Requirement: An open shows a session a stream names for a kind or a stage
+
+`flume open <session>` SHALL show a session a stream names for a kind or
+a stage as it shows the stream's own, in that stream's view through its
+multiplexer, its window under the session's name; a session that is
+also the stream's own SHALL be shown as its own, under the stream's
+`title`, else its name (186, 187, 199).
+
+#### Scenario: The design session by its name
+
+- **WHEN** the fake host's `work` names `work-design` for research and declares the title `Work Agents`, and `open_session` is asked for `work-design`
+- **THEN** the fake terminal's log names `attach work-design for terminal`, the fake window's log names its command under `work-design`, and the answer gives the stream `work`, `work-design` from `stream-kind` named for research (186, 199, S107)
+
+#### Scenario: A stage's session by its name
+
+- **WHEN** the fake host's `work` names `work-review` for release's review, and `open_session` is asked for `work-review`
+- **THEN** the fake terminal's log names `attach work-review for terminal` under the title `work-review`, and the answer gives `work-review` from `stream-stage` named for `release.review` (186, 199)
+
+#### Scenario: A stream's own session named for a kind
+
+- **WHEN** the fake host's `[streams.work]` gives `session = "office"` and the title `Work Agents` and names `office` for research, and `open_session` is asked for `office`
+- **THEN** the terminal is asked to attach `office`, under the title `Work Agents`, as the stream's own (186, 199)
+
+#### Scenario: A design session in the stream's app
+
+- **WHEN** the fake host's `work` gives `view = "app"` and names `work-design` for research, and `open_session` is asked for `work-design`
+- **THEN** the fake terminal's log names `attach work-design for app`, and the fake window logs nothing (186, 187, 199)

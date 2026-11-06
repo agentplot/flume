@@ -3,13 +3,12 @@
 ### Requirement: The host's facts give sessions, labels and the layers
 
 The host's facts SHALL give, as its configuration stands when asked,
-each stream's `session`, the session it names for each kind and each
-kind's stage with any other key their tables hold, and its labels' shares, each with its
-`reserve`, `keep_free` and any other key its table holds; the label the
-configuration gives a repository's kind or a kind, with where from; and
-every value of the configuration with its layer, whether its local layer
-was taken, and each key passed over with its pin (143, 180, 181, 199,
-C.7).
+each stream's `session`, the sessions it names for its kinds and their
+stages, and its labels' shares with their `reserve` and `keep_free`,
+each table with any other key it holds; the label the configuration
+gives a repository's kind or a kind, with where from; and every value
+of the configuration with its layer, whether its local layer was taken,
+and each key passed over with its pin (143, 180, 181, 199, C.7).
 
 #### Scenario: The fake host's sessions, labels and layers
 
@@ -25,10 +24,10 @@ C.7).
 
 The seams SHALL pass one type each for where an agent opens, a session
 and where it came from, `launch`, `stream-stage`, `stream-kind`,
-`stream`, `stream-name` or `own`, the sessions a stream names for its
-kinds and stages, a label and where it came from, a label's share of its stream, and the
-configuration's values with their layers; each SHALL serialize to JSON
-and back unchanged, and a held state, a kind, a stream or settings
+`stream`, `stream-name` or `own`, a stream's sessions for its kinds and
+stages, a label, where it came from and its share of its stream, and
+the configuration's values with their layers; each SHALL serialize to
+JSON and back unchanged, and a held state, a kind, a stream or settings
 written before them SHALL read with none (107, 143, 180, 181, 199, C.7).
 
 #### Scenario: A held state with a session and a label
