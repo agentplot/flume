@@ -154,9 +154,7 @@ impl Walk {
         self
     }
 
-    /// The walkthrough's home.
-    // The check-live layer's, which the tools layer does not use.
-    #[allow(dead_code)]
+    /// The walkthrough's home, its configuration under `config/flume`.
     pub fn home(&self) -> &Path {
         &self.home
     }
