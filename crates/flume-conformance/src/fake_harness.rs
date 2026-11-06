@@ -350,19 +350,22 @@ pub struct FakeAgentHarness {
     pub host: Arc<FakeHost>,
     pub terminal: Arc<FakeTerminal>,
     pub agent: FakeAgent,
-    /// Whether the harness scripts the fake to carry a conversation, or
-    /// leaves it carrying none, as a profile that offers no carry (179).
+    /// Whether the harness scripts the fake to carry a conversation and
+    /// read a running session, or leaves it carrying none and reading none,
+    /// as a profile that keeps the seam's defaults (179, 207).
     carries: bool,
 }
 
 impl FakeAgentHarness {
-    /// The fake left carrying no conversation, as a profile that keeps the
-    /// seam's default (179).
+    /// The fake left carrying no conversation and reading no running
+    /// session, as a profile that keeps the seam's defaults (179, 207).
     pub fn carrying_none() -> Self {
-        FakeAgentHarness {
+        let harness = FakeAgentHarness {
             carries: false,
             ..FakeAgentHarness::default()
-        }
+        };
+        harness.agent.live_not_read();
+        harness
     }
 }
 
@@ -496,9 +499,37 @@ impl AgentHarness for FakeAgentHarness {
         self.agent.set_began_in(identity, began);
     }
 
-    /// The fake reads no running session until its live is scripted (207).
-    fn live_sessions(&self, _runs: &Identity, _unknown: &Identity) -> Option<LiveSessions> {
-        None
+    /// The fake scripted to read `runs`'s conversation run by process
+    /// 4242 and `unknown`'s as one it cannot read, by the sessions their
+    /// words name; none where the harness leaves it reading no running
+    /// session (207).
+    fn live_sessions(&self, runs: &Identity, unknown: &Identity) -> Option<LiveSessions> {
+        if !self.carries {
+            return None;
+        }
+        let processes = vec![LiveProcess {
+            pid: 4242,
+            started: self.host.now(),
+        }];
+        self.agent.set_session(runs, "s-live");
+        self.agent.live_runs("s-live", &processes);
+        self.agent.set_session(unknown, "s-unread");
+        self.agent.live_unknown(
+            "s-unread",
+            &format!(
+                "the sessions under the account's {} cannot be read",
+                FakeAgent::HOME
+            ),
+        );
+        let home = BTreeMap::from([(
+            FakeAgent::HOME.to_string(),
+            "/scratch/agent-work-2".to_string(),
+        )]);
+        Some(LiveSessions {
+            envs: vec![BTreeMap::new(), home.clone()],
+            processes,
+            unreadable: vec![home],
+        })
     }
 
     /// The fake scripted to carry to one account's home with the session
