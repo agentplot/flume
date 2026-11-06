@@ -109,7 +109,7 @@ identities, hashes and locks (design, *What this change rests on*).
   - a second launch of `acme/review` runs review@2, and a place of review@1 launched before the rename runs on to its landing.
 
   True when `sluice exec main -- moon run flume:tools` passes with it, and every existing walkthrough passes unchanged.
-- [ ] 6.4 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test flume:tools` passes.
+- [x] 6.4 Run the checks of the project this group touched. True when `sluice exec main -- moon run flume:format flume:lint flume:test flume:tools` passes.
 
 ## 7. The site and `/launch`
 
