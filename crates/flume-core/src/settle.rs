@@ -95,6 +95,24 @@ impl Engine {
         }
     }
 
+    /// The host's watch as status gives it: the bound a caller keeping
+    /// watch stated, or none; when its newest settle began; and, while
+    /// flume runs attended after a watch lapsed, when it lapsed, read
+    /// from the watch held (56, 119, 208).
+    pub(crate) fn watch_status(&self) -> (Watch, Option<Seconds>, Option<Seconds>) {
+        let Some(watched) = self.watched() else {
+            return (Watch::None, None, None);
+        };
+        if watched.kept(self.host.now()) {
+            let watch = Watch::Bound {
+                seconds: watched.bound,
+            };
+            (watch, Some(watched.began), None)
+        } else {
+            (Watch::None, Some(watched.began), Some(watched.lapses()))
+        }
+    }
+
     /// Whether flume runs attended: no caller keeps watch over the host,
     /// none being held or the newest lapsed, twice its bound having
     /// passed since it began. No terminal is read (119, 208).

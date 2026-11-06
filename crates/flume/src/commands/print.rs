@@ -11,7 +11,7 @@ use flume_core::{
 use flume_seams::{
     AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration,
     IntentKey, KindFrom, LabelHeld, LocalLayer, Made, NamedBy, NamedSession, Nudge, ProfileHeld,
-    Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart,
+    Readiness, Seconds, SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart,
     UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
@@ -987,16 +987,42 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             lines.push(format!("    not woken: {unwoken}"));
         }
     }
-    lines.push(match host.watch {
-        Watch::Bound { seconds } => format!(
-            "  the terminal keeps watch: every place settles every {seconds} seconds and when an agent's state changes"
-        ),
-        Watch::None => "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".into(),
-    });
+    lines.push(watch_line(host));
     for setup in &host.terminal_setup {
         lines.push(format!("    {setup}"));
     }
     lines
+}
+
+/// Whether a caller keeps watch over the host, with its bound and when
+/// its newest settle began, or since when none has (56, 119, 208).
+fn watch_line(host: &HostStatus) -> String {
+    match (host.watch, host.watch_lapsed) {
+        (Watch::Bound { seconds }, _) => format!(
+            "  a caller keeps watch: every place settles every {}, last at {}",
+            duration(seconds),
+            host.watch_settled
+                .map_or_else(|| "an unknown time".to_string(), |at| at.to_string())
+        ),
+        (Watch::None, Some(lapsed)) => format!(
+            "  no caller keeps watch since {lapsed}: every place settles at each command of flume's that acts"
+        ),
+        (Watch::None, None) => {
+            "  no caller keeps watch: every place settles at each command of flume's that acts"
+                .into()
+        }
+    }
+}
+
+/// A duration in its largest whole unit, as `flume wait --timeout` and
+/// `flume settle --every` take one: `2m`, `1h`, `90s`.
+fn duration(seconds: Seconds) -> String {
+    match seconds {
+        0 => "0s".into(),
+        _ if seconds.is_multiple_of(3600) => format!("{}h", seconds / 3600),
+        _ if seconds.is_multiple_of(60) => format!("{}m", seconds / 60),
+        _ => format!("{seconds}s"),
+    }
 }
 
 /// A start whose agent began without its settings, each variable by its
@@ -1986,7 +2012,7 @@ mod tests {
                     .to_string(),
                 "      spent an hour: no reset read in \"You've hit your weekly limit \u{b7} resets Nov 8, 12am (UTC)\""
                     .to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }
@@ -2114,7 +2140,7 @@ mod tests {
                 "  source bad (/c/flume/sources/bad.toml): cannot be read: gives no `kinds_dir`, the directory holding the source's packages".to_string(),
                 "  source beta (/c/flume/sources/beta.toml) at /k/beta: holds no kind".to_string(),
                 "  source gamma (/c/flume/sources/gamma.toml) at /k/gamma: cannot be read: /k/gamma, the directory of the source gamma, does not exist".to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }
@@ -2253,20 +2279,46 @@ mod tests {
         };
         assert_eq!(
             person(&status),
-            "no place stands on this host\nhost: 0 agents running, no bound\n  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+            "no place stands on this host\nhost: 0 agents running, no bound\n  no caller keeps watch: every place settles at each command of flume's that acts"
         );
     }
 
     #[test]
     fn a_host_under_a_watch() {
+        // The place-status spec's watched host: a caller's bound and when
+        // its newest settle began (56, 208).
         let host = HostStatus {
-            watch: Watch::Bound { seconds: 30 },
+            watch: Watch::Bound { seconds: 120 },
+            watch_settled: Some(47_400),
             ..HostStatus::default()
         };
         assert_eq!(
             host_lines(&host)[1],
-            "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes"
+            "  a caller keeps watch: every place settles every 2m, last at 47400"
         );
+    }
+
+    #[test]
+    fn a_host_whose_watch_lapsed() {
+        // The place-status spec's unwatched host: since when no caller
+        // keeps watch, the watch's lapse (119, 208).
+        let host = HostStatus {
+            watch_settled: Some(47_400),
+            watch_lapsed: Some(47_640),
+            ..HostStatus::default()
+        };
+        assert_eq!(
+            host_lines(&host)[1],
+            "  no caller keeps watch since 47640: every place settles at each command of flume's that acts"
+        );
+    }
+
+    #[test]
+    fn a_duration_in_its_largest_whole_unit() {
+        assert_eq!(duration(120), "2m");
+        assert_eq!(duration(90), "90s");
+        assert_eq!(duration(3600), "1h");
+        assert_eq!(duration(30), "30s");
     }
 
     #[test]
@@ -2275,6 +2327,7 @@ mod tests {
         let key = "the terminal's /t/config.toml binds no key to flume's places".to_string();
         let host = HostStatus {
             watch: Watch::Bound { seconds: 30 },
+            watch_settled: Some(100),
             terminal_setup: vec![key.clone()],
             ..HostStatus::default()
         };
@@ -2282,7 +2335,7 @@ mod tests {
         assert_eq!(
             lines[lines.len() - 2..],
             [
-                "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes".to_string(),
+                "  a caller keeps watch: every place settles every 30s, last at 100".to_string(),
                 format!("    {key}"),
             ]
         );
@@ -2560,7 +2613,7 @@ mod tests {
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
                 "    its agents open in the terminal's own session".to_string(),
                 "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"default\" (the stream's name)".to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }

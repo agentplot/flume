@@ -515,9 +515,19 @@ pub struct HostStatus {
     /// was not woken (132; core.28).
     #[serde(default)]
     pub addresses: Vec<AddressStatus>,
-    /// The watch the terminal keeps, with its bound, or none (122).
+    /// The watch a caller keeps over the host, with the bound it stated,
+    /// or none while none is kept (56, 119, 208).
     #[serde(default = "no_watch")]
     pub watch: Watch,
+    /// When the newest settle a caller asked as its watch began, by the
+    /// host's clock; none where the host holds no watch (56, 208).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch_settled: Option<Seconds>,
+    /// When the watch lapsed, twice its bound after its newest settle
+    /// began, given while flume runs attended after one; none while a
+    /// watch is kept or none was ever held (56, 119, 208).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch_lapsed: Option<Seconds>,
     /// Each terminal the host binds, its own first, then each stream's
     /// by the stream's name, each once: its profile, what it made and
     /// keeps for what it did not make, its watch, none, and its nudge
@@ -577,6 +587,8 @@ impl Default for HostStatus {
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
+            watch_settled: None,
+            watch_lapsed: None,
             terminals: vec![],
             bases: vec![],
             terminal_setup: vec![],

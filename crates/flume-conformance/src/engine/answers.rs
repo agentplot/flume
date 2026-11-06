@@ -32,6 +32,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["2", "61"],
             run: a_refusal_is_an_answer,
         },
+        Scenario {
+            name: "answers: status gives the host's watch, a caller's bound and when its newest settle began, and once it lapsed since when none is kept",
+            cites: &["56", "61", "119", "208", "S118"],
+            run: a_watched_host_and_an_unwatched_one,
+        },
+        Scenario {
+            name: "answers: each terminal's answer in status gives its watch none and its nudge, which decides nothing of the host's watch",
+            cites: &["61", "122"],
+            run: the_terminals_nudge_in_status,
+        },
     ]
 }
 
@@ -569,6 +579,8 @@ fn host_status() -> HostStatus {
             unwoken: Some("the run of madswan/planner was not launched: the kind planner resolves to no declaration".into()),
         }],
         watch: Watch::Bound { seconds: 30 },
+        watch_settled: Some(47_400),
+        watch_lapsed: Some(47_460),
         terminals: vec![TerminalStatus {
             profile: Some("fake".into()),
             kept: vec!["the workspace r main, held by the pane w1:p3".into()],
@@ -1010,6 +1022,8 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",
+            "status.host.watch_lapsed",
+            "status.host.watch_settled",
             "status.host.terminals",
             "status.host.terminals[].kept",
             "status.host.terminals[].nudge",
@@ -2058,3 +2072,80 @@ pub const FIELDS: &[(&str, &[&str])] = &[
         ],
     ),
 ];
+
+/// The host's part of status as the engine gives it now.
+fn host_now(world: &super::world::World) -> Result<HostStatus, String> {
+    match world.engine().status(None) {
+        Answer::Status { host, .. } => Ok(host),
+        other => Err(format!("status answered {other:?}")),
+    }
+}
+
+/// The place-status spec's "A watched host and an unwatched one": a
+/// caller's settle with a bound of two minutes, status asked a minute
+/// later, then five minutes on with no such settle (56, 119, 208).
+fn a_watched_host_and_an_unwatched_one(_: &()) -> Outcome {
+    let world = super::world::World::new();
+    let before = host_now(&world)?;
+    ensure_eq!(
+        (before.watch, before.watch_settled, before.watch_lapsed),
+        (Watch::None, None, None),
+        "the watch on a host where none was kept"
+    );
+    let began = world.host.now();
+    world.engine.settle_every(120);
+    world.host.advance(60);
+    let watched = host_now(&world)?;
+    ensure_eq!(
+        (watched.watch, watched.watch_settled, watched.watch_lapsed),
+        (Watch::Bound { seconds: 120 }, Some(began), None),
+        "the watch a minute after the caller's settle"
+    );
+    let json = serde_json::to_value(&watched).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        (
+            json["watch"]["bound"]["seconds"].as_u64(),
+            json["watch_settled"].as_u64(),
+            json.get("watch_lapsed").is_none()
+        ),
+        (Some(120), Some(began), true),
+        "the watch in the JSON form"
+    );
+    world.host.advance(5 * 60);
+    let lapsed = host_now(&world)?;
+    ensure_eq!(
+        (lapsed.watch, lapsed.watch_settled, lapsed.watch_lapsed),
+        (Watch::None, Some(began), Some(began + 4 * 60)),
+        "the watch five minutes on, lapsed four minutes after its settle began"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "The terminal's nudge in status": the host's
+/// fake terminal nudges, and no caller keeps watch (61, 122).
+fn the_terminals_nudge_in_status(_: &()) -> Outcome {
+    let world = super::world::World::new();
+    world.terminal.set_nudge(Nudge::OnChange);
+    let host = host_now(&world)?;
+    let own = host.terminals.first().ok_or("no terminal in status")?;
+    ensure_eq!(
+        (own.watch, own.nudge),
+        (Watch::None, Nudge::OnChange),
+        "the host's own terminal's watch and nudge"
+    );
+    ensure_eq!(
+        (host.watch, host.watch_settled),
+        (Watch::None, None),
+        "the host's watch beside a terminal that nudges"
+    );
+    let json = serde_json::to_value(&host).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        (
+            json["terminals"][0]["watch"].as_str(),
+            json["terminals"][0]["nudge"].as_str()
+        ),
+        (Some("none"), Some("on_change")),
+        "the terminal's answer in the JSON form"
+    );
+    Ok(())
+}
