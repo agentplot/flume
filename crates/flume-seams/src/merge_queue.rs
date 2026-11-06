@@ -216,10 +216,25 @@ pub trait MergeQueue: Send + Sync {
     /// given once (133).
     fn inbox(&self, place: &crate::PlaceRef) -> Inbox;
 
-    /// The newest submission of `branch`, whoever made it, on the
-    /// branches the merge queue could read, passing over each it could
-    /// not (99).
-    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross;
+    /// The newest submission of each of `branches`, whoever made it, on
+    /// the branches the merge queue could read, passing over each it
+    /// could not, one answer for each branch in their order: the
+    /// repository's records read once for them all, so a status of every
+    /// place asks each repository once (58, 99, C.6).
+    fn read_submissions(&self, repository: &str, branches: &[&str]) -> Vec<ReadAcross>;
+
+    /// The newest submission of `branch` alone, as
+    /// [`MergeQueue::read_submissions`] reads it (99).
+    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross {
+        self.read_submissions(repository, &[branch])
+            .pop()
+            .unwrap_or_else(|| {
+                SubmissionRead::CouldNotRead {
+                    reason: format!("the merge queue gave no answer for {branch}"),
+                }
+                .into()
+            })
+    }
 
     /// One round of `base`'s queue, so it moves where nothing else
     /// drives it (125).

@@ -12,7 +12,7 @@ use crate::clues::word;
 use crate::reading::reads_change;
 use crate::start::Starts;
 use crate::status::group_status;
-use crate::{label, Answer, Engine, PlaceLine};
+use crate::{label, side_by_side, Answer, Engine, PlaceLine};
 use flume_seams::*;
 
 /// What a full line ends with, asked for a session that is not the
@@ -26,9 +26,10 @@ const SEPARATOR: &str = " · ";
 impl Engine {
     /// The line of each place, of the place named or of every place on
     /// the host, a place tidied whose document stays for its pending ends
-    /// among them, each asked alone with no session's identity; refused
-    /// for a place no document of the host holds (43, 62). It settles
-    /// nothing, since it acts on no place (119).
+    /// among them, each asked alone with no session's identity, the
+    /// places read side by side; refused for a place no document of the
+    /// host holds (43, 58, 62). It settles nothing, since it acts on no
+    /// place (119).
     pub fn lines(&self, place: Option<&PlaceId>) -> Answer {
         let held = match place {
             Some(id) => {
@@ -46,7 +47,7 @@ impl Engine {
                 .collect(),
         };
         Answer::Lines {
-            lines: held.iter().map(|held| self.line_of(held, None)).collect(),
+            lines: side_by_side(&held, |held| self.line_of(held, None)),
         }
     }
 
