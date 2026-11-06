@@ -1,7 +1,8 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
     AgentCommand, AgentState, Attached, Closed, Clues, Host, Identity, OpenIn, Opened, PlaceRef,
-    Seconds, Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, ViewCommand, Watch,
+    Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    ViewCommand, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -793,5 +794,13 @@ impl Terminal for FakeTerminal {
             },
             View::App => Attached::Shown,
         })
+    }
+
+    /// The part named does not run, its own named `own` as attach names
+    /// it (201).
+    fn runs(&self, session: Option<&str>) -> SessionRuns {
+        SessionRuns::NotRunning {
+            name: session.unwrap_or("own").into(),
+        }
     }
 }

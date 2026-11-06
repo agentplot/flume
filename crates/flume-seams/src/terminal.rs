@@ -1,4 +1,4 @@
-//! The terminal seam's answers (94 to 98, 122, 136 to 139, 187, 7), what
+//! The terminal seam's answers (94 to 98, 122, 136 to 139, 187, 201, 7), what
 //! its configuration lacks for flume's plugin (122), and an agent's state.
 
 use crate::Seconds;
@@ -215,6 +215,18 @@ pub enum Attached {
     Refused { reason: String },
 }
 
+/// runs: whether a part of the terminal runs now, with the name the
+/// terminal knows it by; or that the terminal holds no part, or could
+/// not read it, in its words (201).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRuns {
+    Runs { name: String },
+    NotRunning { name: String },
+    NoPart { reason: String },
+    Unread { reason: String },
+}
+
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
 /// never reports an end that did not happen (98).
@@ -311,4 +323,9 @@ pub trait Terminal: Send + Sync {
     /// a person in `view`: a terminal view answers a command or a
     /// refusal, and the app's view shown or a refusal (187).
     fn attach(&self, session: Option<&str>, view: crate::View) -> Attached;
+
+    /// Whether the part named `session`, the terminal's own where none,
+    /// runs now, starting nothing, within a bound the profile states (98,
+    /// 201).
+    fn runs(&self, session: Option<&str>) -> SessionRuns;
 }

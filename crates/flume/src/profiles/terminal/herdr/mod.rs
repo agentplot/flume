@@ -90,7 +90,8 @@
 use crate::host::process::{executable, program_path};
 use flume_seams::{
     AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
-    PlaceRef, Sent, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, ViewCommand, Watch,
+    PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    ViewCommand, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -2299,6 +2300,14 @@ impl Terminal for Herdr {
                     })
                     .unwrap_or_default(),
             },
+        }
+    }
+
+    /// Unread until the change that lists a host's places and streams
+    /// reads herdr's session listing for it (201).
+    fn runs(&self, _session: Option<&str>) -> SessionRuns {
+        SessionRuns::Unread {
+            reason: "not yet built".into(),
         }
     }
 }

@@ -2569,6 +2569,32 @@ fn a_view_a_window_and_a_stream() {
 }
 
 #[test]
+fn each_answer_of_runs() {
+    // The seam-contracts spec's runs: each of its four answers, with its
+    // name or its reason, written and read back unchanged (61, 201).
+    for (runs, spelled) in [
+        (SessionRuns::Runs { name: "w".into() }, "runs"),
+        (SessionRuns::NotRunning { name: "w".into() }, "not_running"),
+        (
+            SessionRuns::NoPart {
+                reason: "the terminal holds no session a person can be shown".into(),
+            },
+            "no_part",
+        ),
+        (
+            SessionRuns::Unread {
+                reason: "the terminal did not answer within its bound".into(),
+            },
+            "unread",
+        ),
+    ] {
+        round_trips(runs.clone());
+        let json = serde_json::to_value(&runs).unwrap();
+        assert!(json.get(spelled).is_some(), "{json} is tagged {spelled}");
+    }
+}
+
+#[test]
 fn the_room_guard_holds_until_dropped() {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
