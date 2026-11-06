@@ -50,7 +50,9 @@ jobs:
   # session can skip the commit-msg hook, and git-cliff releases from them.
   # The newest tag names a release commit off main, so the range runs from
   # the newest tag by version, not from the newest main's history holds.
-  # Merge commits are not checked.
+  # Merge commits are not checked, nor a commit `git revert` wrote, its
+  # message starting `Revert "`, which the commit-msg hook takes too
+  # (devenv.nix) and git-cliff leaves out of a release (cliff.toml).
   conventional:
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +62,7 @@ jobs:
       - uses: cachix/install-nix-action@v31
       - run: |
           last="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
-          nix shell nixpkgs#convco -c convco check ${last:+"$last..HEAD"}
+          nix shell nixpkgs#convco -c convco check --ignore-reverts ${last:+"$last..HEAD"}
 
   # The next version from the commits since the newest v* tag; empty when
   # it is already tagged. `--unreleased` starts the range at the newest tag,
