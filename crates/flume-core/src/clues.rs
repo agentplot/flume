@@ -7,8 +7,9 @@
 
 use crate::start::Starts;
 use crate::terminals::{add, Terminals};
-use crate::{label, BaseClues, Engine, GroupStatus, PlaceClues};
+use crate::{label, side_by_side, BaseClues, Engine, GroupStatus, PlaceClues};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 impl Engine {
     /// The clues of a live place with a current stage, its agent's state
@@ -77,27 +78,29 @@ impl Engine {
                 && other.place.repository == place.repository
                 && other.place.base == place.base
             {
-                self.count(&mut base, &other);
+                let state = self.counted_state(&other, &BTreeMap::new());
+                count(&mut base, &other, state);
             }
         }
         base
     }
 
-    /// Counts one live place in its base's count.
-    fn count(&self, base: &mut BaseCount, held: &HeldState) {
-        if let Some(waiting) = &held.waiting {
-            if waiting.stalled {
-                base.stalled += 1;
-            } else {
-                base.waiting_on_caller += 1;
-            }
-        } else if let Some((_, start)) = held.live_start() {
-            if self.read_agent(&held.place.id, start).state == AgentState::Asking {
-                base.asking += 1;
-            } else {
-                base.running += 1;
-            }
+    /// The state a live place's agent is counted by: none where the place
+    /// waits or has no live agent, else the state in `agents` read for
+    /// the place, or read now where none was (139).
+    fn counted_state(
+        &self,
+        held: &HeldState,
+        agents: &BTreeMap<PlaceId, AgentState>,
+    ) -> Option<AgentState> {
+        if held.waiting.is_some() {
+            return None;
         }
+        let (_, start) = held.live_start()?;
+        Some(match agents.get(&held.place.id) {
+            Some(state) => *state,
+            None => self.read_agent(&held.place.id, start).state,
+        })
     }
 
     /// Every repository's base a live place stands on, with its count, the
@@ -105,14 +108,20 @@ impl Engine {
     /// once for each of the base's workspaces each terminal its places
     /// run in names, each with the one count, and once with what a
     /// terminal names of it where it names no workspace of each session
-    /// (139, 190; record 0031).
-    pub(crate) fn bases(&self) -> Vec<BaseClues> {
+    /// (139, 190; record 0031). Each agent is counted by its state in
+    /// `agents`, and an agent status did not read is read once, the
+    /// places side by side (58).
+    pub(crate) fn bases(&self, agents: &BTreeMap<PlaceId, AgentState>) -> Vec<BaseClues> {
+        let live: Vec<HeldState> = self
+            .store
+            .read_every()
+            .into_iter()
+            .map(|read| read.state)
+            .filter(|held| held.phase == Phase::Live)
+            .collect();
+        let states = side_by_side(&live, |held| self.counted_state(held, agents));
         let mut bases: Vec<(PlaceRef, BaseCount, Terminals)> = vec![];
-        for read in self.store.read_every() {
-            let held = read.state;
-            if held.phase != Phase::Live {
-                continue;
-            }
+        for (held, state) in live.iter().zip(states) {
             let at = held.place.place_ref();
             let index = match bases.iter().position(|(place, _, _)| {
                 place.repository == at.repository && place.base == at.base
@@ -123,8 +132,8 @@ impl Engine {
                     bases.len() - 1
                 }
             };
-            self.count(&mut bases[index].1, &held);
-            if let Ok(terminal) = self.place_terminal(&held) {
+            count(&mut bases[index].1, held, state);
+            if let Ok(terminal) = self.place_terminal(held) {
                 add(&mut bases[index].2, terminal);
             }
         }
@@ -155,6 +164,24 @@ impl Engine {
                 })
             })
             .collect()
+    }
+}
+
+/// Counts one live place in its base's count, its agent by `state`, the
+/// state it is counted by.
+fn count(base: &mut BaseCount, held: &HeldState, state: Option<AgentState>) {
+    if let Some(waiting) = &held.waiting {
+        if waiting.stalled {
+            base.stalled += 1;
+        } else {
+            base.waiting_on_caller += 1;
+        }
+    } else if let Some(state) = state {
+        if state == AgentState::Asking {
+            base.asking += 1;
+        } else {
+            base.running += 1;
+        }
     }
 }
 

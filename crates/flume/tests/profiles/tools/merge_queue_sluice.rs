@@ -12,9 +12,10 @@
 //! no entry and the entry taken in from it read to its landing, through
 //! the stand-in for sluice on a base that takes pull requests, a branch
 //! whose records sluice cannot read passed over by the inbox and
-//! read-submission while the place's landing is collected, a fetch that
-//! fails, and what the policy says of a place, its readiness asked of
-//! the pinned sluice's equip and its answer read.
+//! read-submission while the place's landing is collected, every branch
+//! asked at once read from one overview and one status of each base, a
+//! fetch that fails, and what the policy says of a place, its readiness
+//! asked of the pinned sluice's equip and its answer read.
 
 use super::walk::{user_scratch, USER_SCRATCH};
 use crate::common::*;
@@ -417,6 +418,71 @@ fn a_failed_entry_is_collected_once_with_sluices_notice() {
             passed_over: vec![]
         },
         "the second collect"
+    );
+}
+
+#[test]
+fn every_branch_asked_at_once_is_read_from_one_overview_and_one_status_of_each_base() {
+    let harness = Harness::new();
+    let (one, head) = harness.place();
+    let two = Harness::worktree(&harness.repository, "fix/two", "fix--two", "two.rs");
+    let two_head = Revision::new(git(Path::new(&two.location), &["rev-parse", "HEAD"]));
+    let submitted = |place: &PlaceRef, head: &Revision| match harness.seam.submit(place, head) {
+        Submitted::Submitted { submission } => submission.id,
+        other => panic!("the submit gave {other:?}"),
+    };
+    let ids = [submitted(&one, &head), submitted(&two, &two_head)];
+    let real = Command::new("sh")
+        .args(["-c", "command -v sluice"])
+        .output()
+        .expect("sh runs");
+    let real = String::from_utf8_lossy(&real.stdout).trim().to_string();
+    let bin = harness.repository.scratch.path("counting");
+    fs::create_dir_all(&bin).expect("the counting sluice's folder");
+    let ran = harness.repository.scratch.path("sluice-ran");
+    let counting = bin.join("sluice");
+    fs::write(
+        &counting,
+        format!(
+            "#!/bin/sh\necho \"$1\" >>'{}'\nexec '{real}' \"$@\"\n",
+            ran.display()
+        ),
+    )
+    .expect("the counting sluice");
+    fs::set_permissions(&counting, fs::Permissions::from_mode(0o755)).expect("it runs");
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    )))
+    .expect("a PATH");
+    let seam = harness
+        .seam
+        .clone()
+        .with_env("PATH", Some(&path.to_string_lossy()));
+    let read = seam.read_submissions(&one.repository, &["fix/one", "fix/two", "fix/none"]);
+    let found: Vec<Option<(String, String)>> = read
+        .iter()
+        .map(|across| match &across.read {
+            SubmissionRead::Found { submission } => {
+                Some((submission.id.clone(), submission.branch.clone()))
+            }
+            SubmissionRead::None => None,
+            other => panic!("read-submission gave {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            Some((ids[0].clone(), "fix/one".to_string())),
+            Some((ids[1].clone(), "fix/two".to_string())),
+            None
+        ],
+        "each branch's own submission"
+    );
+    let ran = fs::read_to_string(&ran).expect("sluice ran");
+    assert_eq!(
+        ran.lines().collect::<Vec<_>>(),
+        vec!["overview", "status"],
+        "sluice's commands, once for the three branches"
     );
 }
 

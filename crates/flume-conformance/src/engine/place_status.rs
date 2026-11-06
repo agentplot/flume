@@ -35,6 +35,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: every_fact_of_every_place,
         },
         Scenario {
+            name: "status: three places of one repository each give their own submission from one read of the merge queue naming all three branches, and each live agent's state is read once for its place and its base's count",
+            cites: &["58", "99", "139"],
+            run: one_read_for_every_place,
+        },
+        Scenario {
             name: "status: a fake terminal scripted to lack one entry for flume's plugin gives it as the host's terminal setup, and status opens, sends to and closes nothing",
             cites: &["122", "57", "72"],
             run: the_terminals_setup,
@@ -563,6 +568,49 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
         .find(|place| place.kind == "change")
         .ok_or("no change")?;
     ensure!(plan.tasks.is_some(), "no tasks for a change's place");
+    Ok(())
+}
+
+fn one_read_for_every_place(_: &()) -> Outcome {
+    let world = World::new();
+    for name in ["one", "two", "three"] {
+        launched(&world.engine.launch(&launch("fix", name, Some("x"))))?;
+    }
+    world.engine().settle(None);
+    let handed =
+        world
+            .queue
+            .hand_submission(REPOSITORY, "fix/two", "main", SubmissionState::Waiting);
+    world.queue.log.clear();
+    world.terminal.log.clear();
+    let all = places(world.engine.status(None))?;
+    ensure_eq!(
+        world.queue.log.of("read_submission"),
+        vec![format!(
+            "read_submission {REPOSITORY} fix/one fix/three fix/two"
+        )],
+        "the merge queue's reads"
+    );
+    for place in &all {
+        let submission = place.submission.as_ref().ok_or("no submission")?;
+        let expected = match place.name.as_str() {
+            "two" => SubmissionRead::Found {
+                submission: handed.clone(),
+            },
+            _ => SubmissionRead::None,
+        };
+        ensure_eq!(
+            submission.read,
+            expected,
+            format!("{}'s submission", place.name)
+        );
+        ensure!(place.agent.is_some(), "{} has no agent", place.name);
+    }
+    ensure_eq!(
+        world.terminal.log.count("state"),
+        3,
+        "the agents' states read"
+    );
     Ok(())
 }
 

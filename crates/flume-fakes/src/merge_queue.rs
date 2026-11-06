@@ -465,33 +465,43 @@ impl MergeQueue for FakeMergeQueue {
         }
     }
 
-    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross {
-        self.log
-            .push(format!("read_submission {repository} {branch}"));
+    fn read_submissions(&self, repository: &str, branches: &[&str]) -> Vec<ReadAcross> {
+        self.log.push(format!(
+            "read_submission {repository} {}",
+            branches.join(" ")
+        ));
         let queue = lock(&self.state);
-        if let Some(reason) = &queue.unreadable {
-            return SubmissionRead::CouldNotRead {
-                reason: reason.clone(),
-            }
-            .into();
-        }
         let passed_over = Self::passed_over(&queue, repository);
-        let read = match queue
-            .submissions
-            .get(&(repository.to_string(), branch.to_string()))
-            .and_then(|all| {
-                all.iter().rev().find(|submission| {
-                    !passed_over
-                        .iter()
-                        .any(|over| over.branch == submission.target)
-                })
-            }) {
-            Some(submission) => SubmissionRead::Found {
-                submission: submission.clone(),
-            },
-            None => SubmissionRead::None,
-        };
-        ReadAcross { read, passed_over }
+        branches
+            .iter()
+            .map(|branch| {
+                if let Some(reason) = &queue.unreadable {
+                    return SubmissionRead::CouldNotRead {
+                        reason: reason.clone(),
+                    }
+                    .into();
+                }
+                let read = match queue
+                    .submissions
+                    .get(&(repository.to_string(), branch.to_string()))
+                    .and_then(|all| {
+                        all.iter().rev().find(|submission| {
+                            !passed_over
+                                .iter()
+                                .any(|over| over.branch == submission.target)
+                        })
+                    }) {
+                    Some(submission) => SubmissionRead::Found {
+                        submission: submission.clone(),
+                    },
+                    None => SubmissionRead::None,
+                };
+                ReadAcross {
+                    read,
+                    passed_over: passed_over.clone(),
+                }
+            })
+            .collect()
     }
 
     fn step(&self, repository: &str, base: &str) -> Stepped {

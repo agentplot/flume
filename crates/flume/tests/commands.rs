@@ -148,8 +148,11 @@ impl MergeQueue for StandInQueue {
             passed_over: vec![],
         }
     }
-    fn read_submission(&self, _repository: &str, _branch: &str) -> ReadAcross {
-        SubmissionRead::None.into()
+    fn read_submissions(&self, _repository: &str, branches: &[&str]) -> Vec<ReadAcross> {
+        branches
+            .iter()
+            .map(|_| SubmissionRead::None.into())
+            .collect()
     }
     fn step(&self, _repository: &str, _base: &str) -> Stepped {
         Stepped::MovesOnItsOwn
