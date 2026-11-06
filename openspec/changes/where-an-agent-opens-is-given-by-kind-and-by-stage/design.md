@@ -338,7 +338,9 @@ resolves, as every start does.
   stage, on that stream are refused. A `session` that is not a string,
   or a `stages` that is not a table of tables, refuses the configuration
   naming the key, as a stream's `session` that is not a string does
-  today.
+  today. A kind's table is read by every start of the kind, so its
+  other key refuses each of them; a stage's table is read by that
+  stage's starts alone.
 - **Another stream's session.** A session a stream names for a kind or
   a stage is that stream's alone. Where it is a session another
   stream's agents open in by that stream's word, its own session, its
@@ -348,7 +350,14 @@ resolves, as every start does.
   session by its name finds one stream's view (decision 7), and two
   partitions' research never share a session. A stream may name its own
   session for a kind or a stage; that is its own session, from
-  `stream-kind` or `stream-stage`.
+  `stream-kind` or `stream-stage`. A start reads only the session it
+  would open in: a kind's session that a stage's table names another
+  for is not read by that stage's starts. The other streams are those
+  the queue reads, a stream a live place runs in that the host no
+  longer declares among them, whose agents open in its name.
+- **A stage waiting for room** whose stream's table comes to be at
+  fault is refused at the next settle, ahead of the room, as a stage
+  whose stream's labels are at fault is (182).
 - A session's name is herdr's to judge: one the pinned herdr refuses
   refuses the open in herdr's words, nothing of flume's left open
   (core.29, core.44).
@@ -357,7 +366,10 @@ The path not taken for another stream's session: letting two streams
 name one session for their kinds, `flume open` refusing that name as
 ambiguous. A session two streams' agents open in has two views, two
 terminal apps and two titles to choose from, and a person could not
-open it by its name; nothing asks for it.
+open it by its name; nothing asks for it. Nor is a stage refused for a
+kind's session that is another's where its own table names it another,
+since it never opens there, nor a stage left waiting for room that its
+table refuses, which no room would end.
 
 ### 5. The place keeps its stream
 
