@@ -11,8 +11,9 @@
 //! a session another stream's agents open in by that stream's word,
 //! refuses the starts that read it, every other start running; the place
 //! keeps its stream's room and shares (4, 70, 143, 182, 199). Status
-//! gives each agent's session and each stream's with where it came from
-//! (56).
+//! gives each agent's session and each stream's with where it came from,
+//! each session a stream names for its kinds and stages with each one's
+//! layer, and each of its tables at fault with its refusal (56, 199, C.7).
 
 use super::account_pools::{account, pool};
 use super::settling::{construct_begun, write_change};
@@ -68,6 +69,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "sessions: status gives each agent's session and each stream's with where it came from, in the JSON form",
             cites: &["S82", "56", "107", "143"],
             run: the_sessions_in_status,
+        },
+        Scenario {
+            name: "sessions: status gives each agent's session from its stream's word for its kind or its stage, and each session the stream names for its kinds and stages with each one's layer, in the JSON form",
+            cites: &["S106", "56", "199"],
+            run: the_sessions_a_stream_names_for_its_kinds_and_stages,
+        },
+        Scenario {
+            name: "sessions: status gives each of a stream's tables at fault once, by its table, with the refusal it causes the starts that read it",
+            cites: &["4", "56", "199"],
+            run: the_tables_at_fault_in_status,
         },
         Scenario {
             name: "sessions: a stream's session for a kind opens every agent of the kind's places there, and its other places' agents in its own",
@@ -524,6 +535,210 @@ fn the_sessions_in_status(_: &()) -> Outcome {
         Some(default.session.clone()),
         held(None, SessionFrom::Own),
         "the default stream's session"
+    );
+    Ok(())
+}
+
+/// The stream `name` as status gives it, in its own form and in the JSON
+/// form.
+fn stream_status(
+    world: &World,
+    name: &str,
+) -> Result<(flume_core::StreamStatus, serde_json::Value), String> {
+    let flume_core::Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let stream = host
+        .streams
+        .into_iter()
+        .find(|stream| stream.name == name)
+        .ok_or_else(|| format!("the host's streams give no {name}"))?;
+    let json = serde_json::to_value(&stream).map_err(|error| error.to_string())?;
+    Ok((stream, json))
+}
+
+fn the_sessions_a_stream_names_for_its_kinds_and_stages(_: &()) -> Outcome {
+    let world = World::new();
+    kinds_of_the_repository(&world);
+    named(&world, "work", "research", Some("work-design"), &[], &[]);
+    named(
+        &world,
+        "work",
+        "release",
+        None,
+        &[("review", "work-design")],
+        &[],
+    );
+    world.host.set_value(
+        "streams.work.kinds.research.session",
+        "\"work-design\"",
+        ConfigLayer::Managed,
+    );
+    world.host.set_value(
+        "streams.work.kinds.release.stages.review.session",
+        "\"work-design\"",
+        ConfigLayer::Local,
+    );
+    placed_on(&world, "work", "research", "one", Settings::default())?;
+    placed_on(&world, "work", "release", "two", Settings::default())?;
+    fix_on(&world, Some("work"), "three")?;
+    delivered(&world, "release", "two", "build");
+    for (id, expected, from) in [
+        (
+            World::id("research", "one"),
+            held(Some("work-design"), SessionFrom::StreamKind),
+            "stream-kind",
+        ),
+        (
+            World::id("release", "two"),
+            held(Some("work-design"), SessionFrom::StreamStage),
+            "stream-stage",
+        ),
+        (
+            World::id("fix", "three"),
+            held(Some("work"), SessionFrom::StreamName),
+            "stream-name",
+        ),
+    ] {
+        let status = world.status(&id)?;
+        let agent = status.agent.ok_or_else(|| format!("{id} has no agent"))?;
+        ensure_eq!(agent.session, expected, format!("{id}'s agent's session"));
+        let json = serde_json::to_value(&agent).map_err(|error| error.to_string())?;
+        ensure_eq!(
+            json["session"]["from"].as_str(),
+            Some(from),
+            format!("{id}'s agent's session's from in the JSON form")
+        );
+    }
+    ensure_eq!(
+        world
+            .status(&World::id("release", "two"))?
+            .agent
+            .map(|agent| agent.stage),
+        Some("review".to_string()),
+        "the release's agent's stage"
+    );
+    let (work, json) = stream_status(&world, "work")?;
+    ensure_eq!(
+        Some(work.session.clone()),
+        held(Some("work"), SessionFrom::StreamName),
+        "the stream work's own session"
+    );
+    ensure_eq!(
+        work.sessions,
+        vec![NamedSession {
+            name: "work-design".into(),
+            kinds: vec![NamedFor {
+                name: "research".into(),
+                layer: ConfigLayer::Managed,
+            }],
+            stages: vec![NamedFor {
+                name: "release.review".into(),
+                layer: ConfigLayer::Local,
+            }],
+        }],
+        "the sessions the stream work names"
+    );
+    ensure_eq!(work.faults, vec![], "the stream work's tables at fault");
+    ensure_eq!(
+        (
+            json["session"]["name"].as_str(),
+            json["session"]["from"].as_str()
+        ),
+        (Some("work"), Some("stream-name")),
+        "the stream work's own session in the JSON form"
+    );
+    let named = &json["sessions"][0];
+    ensure_eq!(
+        (
+            named["name"].as_str(),
+            named["kinds"][0]["name"].as_str(),
+            named["kinds"][0]["layer"].as_str(),
+            named["stages"][0]["name"].as_str(),
+            named["stages"][0]["layer"].as_str(),
+        ),
+        (
+            Some("work-design"),
+            Some("research"),
+            Some("managed"),
+            Some("release.review"),
+            Some("local"),
+        ),
+        "the session the stream work names in the JSON form"
+    );
+    Ok(())
+}
+
+fn the_tables_at_fault_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    kinds_of_the_repository(&world);
+    two_streams(&world);
+    named(
+        &world,
+        "work",
+        "research",
+        Some("work-design"),
+        &[],
+        &["pool"],
+    );
+    named(
+        &world,
+        "work",
+        "release",
+        Some("work-release"),
+        &[("review", "personal")],
+        &[],
+    );
+    let research = placed_on(&world, "work", "research", "one", Settings::default())?;
+    let (work, json) = stream_status(&world, "work")?;
+    let tables: Vec<&str> = work
+        .faults
+        .iter()
+        .map(|fault| fault.table.as_str())
+        .collect();
+    ensure_eq!(
+        tables,
+        vec![
+            "streams.work.kinds.release.stages.review",
+            "streams.work.kinds.research",
+        ],
+        "the stream work's tables at fault"
+    );
+    let review = &work.faults[0].refused;
+    ensure!(
+        names_both(review, "personal"),
+        "the review table's fault names not both streams and the session: {review}"
+    );
+    let words = refused_with(&world, &research, "explore")?;
+    ensure_eq!(
+        Some(&words),
+        work.faults.get(1).map(|fault| &fault.refused),
+        "the research table's fault and the refusal of its start"
+    );
+    ensure!(
+        words.contains("streams.work.kinds.research.pool"),
+        "the research table's fault names not the table and the key: {words}"
+    );
+    let names: Vec<&str> = work
+        .sessions
+        .iter()
+        .map(|named| named.name.as_str())
+        .collect();
+    ensure_eq!(
+        names,
+        vec!["personal", "work-design", "work-release"],
+        "the sessions the stream work names, each at fault or not"
+    );
+    ensure_eq!(
+        json["faults"][1]["table"].as_str(),
+        Some("streams.work.kinds.research"),
+        "the research table's fault in the JSON form"
+    );
+    let (personal, _) = stream_status(&world, "personal")?;
+    ensure_eq!(
+        personal.faults,
+        vec![],
+        "the stream personal's tables at fault"
     );
     Ok(())
 }
