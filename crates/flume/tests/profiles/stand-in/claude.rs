@@ -57,6 +57,15 @@
 //! SessionStart, StopFailure and SessionEnd name none, as that release's
 //! do not.
 //!
+//! While its session runs it names it in `<home>/sessions/<pid>.json`, as
+//! that release does, the folder made readable by the host's user alone:
+//! its `pid`, its `sessionId`, its `cwd`, when it started, and its
+//! `procStart`, the words `ps -o lstart=` gives under `LC_ALL=C` and
+//! `TZ=UTC`, here read from the host's process table, which a sandbox
+//! lets it read where it refuses to run a setuid `ps`; it removes the
+//! record as it exits, as that release does at its process's exit, and a
+//! process killed leaves it.
+//!
 //! The prompt is submitted as given, or, where `STAND_IN_PASTE_TAG` names
 //! a four-hex-digit id, inside the paste tags that release wraps a pasted
 //! prompt in where the account's features turn them on.
@@ -70,6 +79,8 @@
 //! output as one line; the exit status is 1 where an act failed that no
 //! hook refused. It never reaches a model, an account or the network.
 
+use flume::host::process::listed;
+use flume::profiles::agent::claude::live::{proc_start, SESSIONS};
 use flume::profiles::agent::claude::withheld::WITHHELD;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -137,8 +148,22 @@ fn main() {
         (session, transcript)
     });
     let mut session = Session::new(cwd, plugin, mode, resumed);
+    let record = session.name_running();
     let failed = session.run(prompt.as_deref(), &script);
+    if let Some(record) = record {
+        let _ = std::fs::remove_file(record);
+    }
     std::process::exit(i32::from(failed));
+}
+
+/// The configuration home: `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+fn config_home() -> PathBuf {
+    std::env::var_os("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
+        })
 }
 
 /// The prompt as the session submits it: as given, or where
@@ -160,12 +185,7 @@ fn submitted(prompt: &str) -> String {
 /// the working directory with every character that is not a letter or a
 /// digit written `-`.
 fn transcript_of(cwd: &Path, session: &str) -> PathBuf {
-    let config = std::env::var_os("CLAUDE_CONFIG_DIR")
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
-        });
+    let config = config_home();
     let project: String = cwd
         .to_string_lossy()
         .chars()
@@ -249,6 +269,43 @@ impl Session {
             mode,
             resumed: is_resumed,
         }
+    }
+
+    /// The session named in `<home>/sessions/<pid>.json` while it runs, as
+    /// that release names it, the folder made readable by the host's user
+    /// alone; the record's path, none where it could not be written.
+    fn name_running(&self) -> Option<PathBuf> {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        let folder = config_home().join(SESSIONS);
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&folder)
+            .ok()?;
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).ok()?;
+        let pid = std::process::id();
+        let started = listed()
+            .into_iter()
+            .flatten()
+            .find(|process| process.pid == pid)
+            .and_then(|process| proc_start(process.started));
+        let mut record = json!({
+            "pid": pid,
+            "sessionId": self.id,
+            "cwd": self.cwd,
+            "startedAt": SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |since| since.as_millis()),
+            "version": VERSION,
+            "kind": "interactive",
+            "entrypoint": "cli",
+        });
+        if let Some(started) = started {
+            record["procStart"] = json!(started);
+        }
+        let path = folder.join(format!("{pid}.json"));
+        std::fs::write(&path, record.to_string()).ok()?;
+        Some(path)
     }
 
     /// The session: its start, the prompt, the script's acts, the stop
