@@ -10,5 +10,5 @@ The work is on `chore/the-conventional-check-takes-a-revert`.
 
 ## 2. The gate
 
-- [ ] 2.1 Run the gate's checks. True when `sluice exec main` passes.
-- [ ] 2.2 Archive this change so the specs reconcile (core.19). True when `openspec validate --specs --strict` passes.
+- [x] 2.1 Run the gate's checks. True when `sluice exec main` passes, as it did at 5324740, 37 tasks.
+- [x] 2.2 Archive this change so the specs reconcile (core.19). True when `openspec validate --specs --strict` passes.
