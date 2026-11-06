@@ -41,12 +41,11 @@ write either file (32, C.7; core.16).
 ### Requirement: The local layer sets only C.7's keys
 
 The local layer SHALL set only a stream's `agents`, `priority`,
-`points`, `pace`, `session` and `multiplexer`, the `session` a stream
-names for a kind and for a kind's stage, a label's `reserve` and `keep_free`, the `stream` and
-`label` a repository's kind or a kind is given, the `stream` a
-repository is given, and a kind's agents table; a local file setting any
-other key, unreadable, or setting a value its key refuses, SHALL not be
-taken at all, the managed layer read alone (C.7, 199).
+`points`, `pace`, `session` and `multiplexer`, a label's `reserve` and
+`keep_free`, the `stream` and `label` a repository's kind or a kind is
+given, the `stream` a repository is given, and a kind's agents table; a
+local file setting any other key, unreadable, or setting a value its key
+refuses, SHALL not be taken at all, the managed layer read alone (C.7).
 
 #### Scenario: A local file that sets a pool
 
@@ -72,21 +71,6 @@ taken at all, the managed layer read alone (C.7, 199).
 
 - **WHEN** the managed layer gives `[host] multiplexer = "herdr"` and `[streams.trial] multiplexer = "printed"`, and the local layer gives `[streams.trial] multiplexer = "herdr"`
 - **THEN** the local layer is taken, `trial` reads `herdr` from `stream` in the local layer, and status gives it with that layer (190, C.7, S91)
-
-#### Scenario: A kind's session and a stage's set locally
-
-- **WHEN** the managed layer gives `[streams.work.kinds.research] session = "work-design"`, and the local layer gives it `session = "work-research"` and `[streams.work.kinds.release.stages.review] session = "work-review"`
-- **THEN** the local layer is taken, research reads `work-research` and release's review `work-review` in `work`, each from the local layer, and status gives each with that layer (199, C.7, S107)
-
-#### Scenario: A kind's table key the local layer cannot set
-
-- **WHEN** the local layer gives `[streams.work.kinds.research] label = "inception"`
-- **THEN** no key of it is taken, and status names `streams.work.kinds.research.label` (C.7)
-
-#### Scenario: A kind's session pinned
-
-- **WHEN** the managed layer gives `[streams.work.kinds.research] session = "work-design"` and pins `"streams.work.kinds"`, and the local layer gives research `session = "work-research"` and `work` three agents
-- **THEN** `work`'s three agents are taken, research's session is passed over and reads `work-design` from the managed layer, and status names `streams.work.kinds.research.session` with its pin (199, C.7)
 
 ### Requirement: The managed layer pins keys
 

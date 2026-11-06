@@ -4,16 +4,16 @@
 
 The list SHALL read each place's held state, each live agent's asking
 mark from its own record, and each stream's terminal once by runs, for
-every session the stream gives together, and nothing else: no place's
-worktree, head, deliverable, change or submission, no terminal's state,
-screen or clues of a place's agent, no repository's binding; and asking
-it SHALL settle, start, send and write nothing, and start no session's
-server (57, 58, 199, 200, 201; core.52).
+all its sessions together, and nothing else: no place's worktree, head,
+deliverable, change or submission, no terminal's state, screen or clues
+of a place's agent, no repository's binding; and asking it SHALL
+settle, start, send and write nothing, and start no session's server,
+whether every place is asked or not (57, 58, 199, 200, 201; core.52).
 
 #### Scenario: Fifty places in three repositories
 
 - **WHEN** the list is asked over the fakes of fifty places in three repositories: places whose agents work, one whose agent asks a person, one held, one waiting for room, one submitted, one landed and tidied whose document stays for an end pending, and one landed whose teardown failed at `sluice release` with forty lines of words; the streams `work` and `office` declared, the fake terminal reading `work` running and `office` not
-- **THEN** it gives fifty places' lines under their repositories, each waiting place's with whom it waits on and the failed teardown's with `kept by sluice release` alone, and the lines of `default`, `work` and `office`; the fake change, merge queue and history log no read, the fake terminal logs three runs and nothing else, no session is started, and every document's version is the one it had (57, 62, 66, 70, 130, 200, 201, S108)
+- **THEN** it gives forty-eight places' lines under their repositories, the two landed left out, each waiting place's with whom it waits on, and the lines of `default`, `work` and `office`; the fake change, merge queue and history log no read, the fake terminal logs three runs and nothing else, no session is started, and every document's version is the one it had; and, asked for every place, it gives fifty places' lines, the tidied one's reading `landed · tidied` and the failed teardown's with `kept by sluice release` alone, the store read once and written never (57, 62, 63, 66, 70, 130, 200, 201, S108)
 
 ### Requirement: The list's JSON form
 
