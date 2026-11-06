@@ -11,6 +11,7 @@
 
 use crate::line::{stage_at, state_words, SEPARATOR};
 use crate::room::StreamRoom;
+use crate::status::session_wait;
 use crate::terminals::{uncarried, Setting};
 use crate::{label, Answer, Engine, Listed, StreamListed, WaitsOn};
 use flume_seams::*;
@@ -122,14 +123,18 @@ fn order(places: &mut [Listed]) {
 
 /// Whom a live place waits on, from its held state alone: its caller
 /// where it waits on its caller's move, stalled or not (130); the host
-/// where a stage waits for room and nothing waits on its caller (70); the
-/// merge queue where it is `submitted` (111); and nobody for an agent's
-/// own question in its pane (90).
+/// where a stage waits for room and nothing waits on its caller (70), or
+/// its session where that stage waits while a process runs the
+/// conversation its start would carry, as the last settle read it, asking
+/// no agent program (49, 207); the merge queue where it is `submitted`
+/// (111); and nobody for an agent's own question in its pane (90).
 fn waits_on(held: &HeldState, state: &str) -> Option<WaitsOn> {
     if held.phase != Phase::Live {
         None
     } else if held.waiting.is_some() {
         Some(WaitsOn::Caller)
+    } else if session_wait(held).is_some() {
+        Some(WaitsOn::Session)
     } else if held
         .stages
         .iter()

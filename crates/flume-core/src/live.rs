@@ -8,8 +8,9 @@
 //! it only waits, or keeps the place, while one runs or it cannot read
 //! whether one does.
 
-use crate::room::Queue;
-use crate::Engine;
+use crate::room::{Queue, Waiting};
+use crate::start::Starts;
+use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -84,6 +85,89 @@ impl Engine {
             ordered.push(BTreeMap::new());
         }
         ordered
+    }
+
+    /// What holds the start of a stage that would carry `after`'s
+    /// conversation, or start a lost one afresh, from opening, read under
+    /// the room lock: where `ask`, each process live reads running that
+    /// conversation, or what it could not read; else, for a lost one, the
+    /// agent the terminal brought back in `lost`'s pane, the lost start
+    /// while it is the stage's last and live, while it stands. With it,
+    /// whether that agent stands, none where the lost start is not live:
+    /// one read stopped has its start go not live (49, 77, 207; core.10).
+    pub(crate) fn session_holds(
+        &self,
+        id: &PlaceId,
+        after: &CarryFrom,
+        lost: Option<&StartHeld>,
+        program: &str,
+        queue: &Queue,
+        ask: bool,
+    ) -> (Option<LiveRead>, Option<bool>) {
+        let session = if ask {
+            self.live_session(id, program, &after.start, queue)
+        } else {
+            None
+        };
+        let standing = lost
+            .filter(|start| start.live)
+            .map(|start| self.read_agent(id, start).state != AgentState::Stopped);
+        let session = match (session, standing) {
+            (None, Some(true)) => Some(LiveRead {
+                processes: vec![],
+                unread: Some(LEFT_STANDS.to_string()),
+            }),
+            (session, _) => session,
+        };
+        (session, standing)
+    }
+
+    /// Reads again what holds `waiting`, a stage waiting for room while a
+    /// process runs the conversation its start would carry, whatever room
+    /// the host has, and keeps it in its wait as read, so its line follows
+    /// the session at each settle; true while it still holds the stage
+    /// (49, 70, 207; core.13).
+    pub(crate) fn session_again(&self, waiting: &Waiting, queue: &Queue) -> bool {
+        let Some(read) = self.store.read(&waiting.place) else {
+            return false;
+        };
+        let stage = &read.state.stages[waiting.index];
+        let Some(after) = stage.room.as_ref().and_then(|room| room.carry.clone()) else {
+            return false;
+        };
+        let lost = stage
+            .start
+            .as_ref()
+            .filter(|start| after.cause == CarryCause::Lost && start.identity == after.start);
+        let (session, standing) = self.session_holds(
+            &waiting.place,
+            &after,
+            lost,
+            waiting.program.as_deref().unwrap_or_default(),
+            queue,
+            true,
+        );
+        let lost = lost.map(|start| start.identity.clone());
+        self.update(&waiting.place, |held| {
+            if held.phase != Phase::Live
+                || held.stages[waiting.index].state != StageState::WaitingForRoom
+            {
+                return Step::Keep(());
+            }
+            if let Some(lost) = lost.as_ref().filter(|_| standing == Some(false)) {
+                if let Some(start) = held
+                    .index_of(lost)
+                    .and_then(|at| held.stages[at].start.as_mut())
+                {
+                    start.live = false;
+                }
+            }
+            if let Some(room) = held.stages[waiting.index].room.as_mut() {
+                session.clone().unwrap_or_default().hold(room);
+            }
+            Step::Write(())
+        });
+        session.is_some()
     }
 
     /// Whether a process runs the conversation of `start`, a start of

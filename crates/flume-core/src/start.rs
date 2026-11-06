@@ -6,7 +6,7 @@
 //! the host's bound (70, 190).
 
 use crate::accounts::Choice;
-use crate::live::{LiveRead, LEFT_STANDS};
+use crate::live::LiveRead;
 use crate::prompt::{asks, group_text, notes_path, render};
 use crate::room::Admit;
 use crate::start_record::start_record;
@@ -438,33 +438,20 @@ impl Engine {
         // and the stage waits while one runs it or live cannot read whether
         // one does, flume adopting, ending and sending nothing to it (30,
         // 49, 207; core.10).
-        let session = match (&after, &chosen, &resolution) {
-            (Some(after), Choice::Chose { .. } | Choice::NoPool, Ok(_))
-                if resume.is_some() || lost =>
-            {
-                self.live_session(
-                    id,
-                    program.as_deref().unwrap_or_default(),
-                    &after.start,
-                    queue,
-                )
-            }
-            _ => None,
-        };
-        // The agent the terminal brought back in the lost start's pane, while
-        // its start stays live: once the terminal reads it stopped, its
-        // start goes not live with this claim; while it stands, no start
-        // opens beside it (77; core.10).
-        let standing = lost_start
-            .as_ref()
-            .filter(|start| start.live)
-            .map(|start| self.read_agent(id, start).state != AgentState::Stopped);
-        let session = match (session, standing) {
-            (None, Some(true)) => Some(LiveRead {
-                processes: vec![],
-                unread: Some(LEFT_STANDS.to_string()),
-            }),
-            (session, _) => session,
+        let ask = matches!(
+            (&after, &chosen, &resolution),
+            (Some(_), Choice::Chose { .. } | Choice::NoPool, Ok(_))
+        ) && (resume.is_some() || lost);
+        let (session, standing) = match &after {
+            Some(after) => self.session_holds(
+                id,
+                after,
+                lost_start.as_ref(),
+                program.as_deref().unwrap_or_default(),
+                queue,
+                ask,
+            ),
+            None => (None, None),
         };
         let lost_identity = lost_start.as_ref().map(|start| start.identity.clone());
         let fresh = if lost {

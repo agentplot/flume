@@ -701,7 +701,10 @@ impl Engine {
     /// whose pool holds no account of its program, whose stream's labels
     /// are at fault, or whose stream's multiplexer names a terminal
     /// profile the resolver does not carry, is claimed, which refuses it,
-    /// whatever room the host has (4, 32, 145, 182, 190).
+    /// whatever room the host has (4, 32, 145, 182, 190); and each stage
+    /// waiting while a process runs the conversation its start would carry
+    /// has the agent profile's live asked again, passed over while it runs
+    /// and claimed, room allowing, once it reads none (49, 207).
     pub(crate) fn start_waiting(&self) {
         let any = self.store.read_every().iter().any(|read| {
             read.state
@@ -736,11 +739,17 @@ impl Engine {
             for waiting in refused {
                 claim(&mut queue, waiting);
             }
+            // A stage waiting on a process that runs the conversation its
+            // start would carry is read again at each settle, whatever
+            // room the host has, and passed over while it runs (49, 207).
+            for waiting in runs.iter_mut().filter(|waiting| waiting.session) {
+                waiting.session = self.session_again(waiting, &queue);
+            }
             while queue.room() != Some(0) {
                 runs = queue.ordered(runs);
                 let Some(at) = runs
                     .iter()
-                    .position(|waiting| waiting.wants(&queue).is_none())
+                    .position(|waiting| !waiting.session && waiting.wants(&queue).is_none())
                 else {
                     break;
                 };

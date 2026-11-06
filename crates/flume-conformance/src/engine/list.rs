@@ -11,6 +11,7 @@
 use super::account_pools::begun_fix;
 use super::answers::missing;
 use super::caller_waits::construct_asks;
+use super::carried_conversations::{by_hand, retry_talk, talk, talking};
 use super::place_line::{code_of_change, fix_for_a_role, TWO_GROUPS};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -75,6 +76,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "list: a list of a place waiting on the host, a place kept by its teardown, a stream that runs and one uncarried reads back unchanged, waits_on reading host, and the field list holds every field, failing naming the answer and the field where one is dropped",
             cites: &["60", "61", "200"],
             run: the_list_round_trips_and_holds_its_fields,
+        },
+        Scenario {
+            name: "list: a place whose lost talk waits on its session ends `waiting on its session · waits on its session`, the list asking no agent program whether the session runs",
+            cites: &["49", "200", "207"],
+            run: a_talk_waiting_on_its_session,
         },
     ]
 }
@@ -728,5 +734,34 @@ fn the_list_round_trips_and_holds_its_fields(_: &()) -> Outcome {
     let back: Answer =
         serde_json::from_str(&listed.to_json()).map_err(|error| error.to_string())?;
     ensure_eq!(back, listed, "the engine's list read back");
+    Ok(())
+}
+
+fn a_talk_waiting_on_its_session(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.terminal.kill(&talk(1));
+    world.settle(&id);
+    world.agent.live_runs("s-1", &[by_hand()]);
+    retry_talk(&world, &id, None, false)?;
+    let asked = world.agent.log.count("live");
+    let (places, _) = list(&world)?;
+    let listed = places
+        .iter()
+        .find(|place| place.place == id)
+        .ok_or("the list gives no line of the research place")?;
+    ensure_eq!(
+        (listed.line.as_str(), listed.waits_on),
+        (
+            "research--one · talk · waiting on its session · waits on its session",
+            Some(WaitsOn::Session)
+        ),
+        "the research place's line and whom it waits on"
+    );
+    ensure_eq!(
+        world.agent.log.count("live"),
+        asked,
+        "the live readings the list asked"
+    );
     Ok(())
 }
