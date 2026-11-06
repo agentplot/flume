@@ -3,11 +3,12 @@
 //! place is asked, a tidied place whose document stays among them then,
 //! in the words its own line gives it, with whom a waiting place waits on
 //! and what keeps a place whose work is over; and a line for each stream
-//! the host declares with whether its session runs. It reads each
-//! place's held state, each live agent's asking mark and each stream's
-//! terminal once by runs, and nothing else; it settles, starts, sends and
-//! writes nothing, and gives none of a place's long words (56, 57, 62,
-//! 63, 64 to 66, 68, 70, 90, 107, 111, 130, 139, 186, 190, 201).
+//! the host declares with whether each of its sessions runs, its own and
+//! each it names for a kind or a stage. It reads each place's held
+//! state, each live agent's asking mark and each stream's terminal once
+//! by runs, and nothing else; it settles, starts, sends and writes
+//! nothing, and gives none of a place's long words (56, 57, 62, 63, 64
+//! to 66, 68, 70, 90, 107, 111, 130, 139, 186, 190, 199, 201).
 
 use super::account_pools::begun_fix;
 use super::answers::missing;
@@ -15,7 +16,7 @@ use super::caller_waits::construct_asks;
 use super::place_line::{code_of_change, fix_for_a_role, TWO_GROUPS};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Answer, Listed, StreamListed, WaitsOn};
+use flume_core::{Answer, Listed, SessionListed, StreamListed, WaitsOn};
 use flume_fakes::place_location;
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -61,6 +62,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "list: work, office naming desk, and default over the fake terminal read runs, not running and not read, one runs each",
             cites: &["107", "186", "201"],
             run: three_streams_over_the_fake_terminal,
+        },
+        Scenario {
+            name: "list: work naming work-design for research and release's review, and work for fix, gives `work · session work · runs · session work-design · not running`, read by the one runs `runs work work-design`",
+            cites: &["199", "200", "201"],
+            run: a_streams_sessions_for_its_kinds_and_stages,
         },
         Scenario {
             name: "list: a stream whose multiplexer is rex reads `no profile for rex`, no terminal asked of it, the other streams' lines standing and the list not refused",
@@ -573,6 +579,81 @@ fn three_streams_over_the_fake_terminal(_: &()) -> Outcome {
         }),
         "the own session's runs, in the terminal's words"
     );
+    Ok(())
+}
+
+fn a_streams_sessions_for_its_kinds_and_stages(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream("work", Some(Stream::default()));
+    let design = || Some("work-design".to_string());
+    world.host.set_kind_sessions(
+        "work",
+        "research",
+        Some(KindSessions {
+            session: design(),
+            ..KindSessions::default()
+        }),
+    );
+    world.host.set_kind_sessions(
+        "work",
+        "release",
+        Some(KindSessions {
+            stages: BTreeMap::from([(
+                "review".to_string(),
+                StageSession {
+                    session: design(),
+                    ..StageSession::default()
+                },
+            )]),
+            ..KindSessions::default()
+        }),
+    );
+    world.host.set_kind_sessions(
+        "work",
+        "fix",
+        Some(KindSessions {
+            session: Some("work".into()),
+            ..KindSessions::default()
+        }),
+    );
+    world.terminal.runs_as(
+        "work",
+        SessionRuns::Runs {
+            name: "work".into(),
+        },
+    );
+    let (_, streams) = list(&world)?;
+    let work = streams
+        .iter()
+        .find(|stream| stream.stream == "work")
+        .ok_or("no line for work")?;
+    ensure_eq!(
+        work.line.as_str(),
+        "work · session work · runs · session work-design · not running",
+        "work's line"
+    );
+    ensure_eq!(
+        work.sessions.clone(),
+        vec![SessionListed {
+            name: "work-design".into(),
+            runs: Some(SessionRuns::NotRunning {
+                name: "work-design".into(),
+            }),
+        }],
+        "work's sessions"
+    );
+    let json = serde_json::to_value(work).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        json["sessions"][0]["runs"]["not_running"]["name"].as_str(),
+        Some("work-design"),
+        "work-design's runs in the JSON"
+    );
+    let logged = world.terminal.log.of("runs");
+    ensure!(
+        logged.contains(&"runs work work-design".to_string()),
+        "the terminal's runs: {logged:?}"
+    );
+    ensure_eq!(logged.len(), 2, "the terminal's runs, one for each stream");
     Ok(())
 }
 

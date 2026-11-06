@@ -9,7 +9,9 @@ decision-makers:
 
 # flume's list gives a line for each place and each stream, read from what flume keeps
 
-Status: accepted by the user on 2026-11-05, on their yes in the Plannotator Inbox. Its statement amendment is on agentplot/blueprints main at 7bd1891 (57, 62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, section 9, S108). Proposed earlier that day by the construct stage of the change `flume-list-shows-each-place-and-stream-on-one-line`, from the user's words of the same day, quoted below. The command, what it reads and what it leaves out are the user's. How each line is worded, the terminal's new operation and its bound are the stage's. Amended 2026-11-06, the section below, accepted on the user's yes the same day: the list leaves out a place that landed or was dropped, and gives it only when every place is asked, `flume list --all`.
+Status: accepted by the user on 2026-11-05, on their yes in the Plannotator Inbox. Its statement amendment is on agentplot/blueprints main at 7bd1891 (57, 62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, section 9, S108). Proposed earlier that day by the construct stage of the change `flume-list-shows-each-place-and-stream-on-one-line`, from the user's words of the same day, quoted below. The command, what it reads and what it leaves out are the user's. How each line is worded, the terminal's new operation and its bound are the stage's. Amended 2026-11-06, the last section below, accepted on the user's yes the same day: the list leaves out a place that landed or was dropped, and gives it only when every place is asked, `flume list --all`.
+
+Amended 2026-11-06, the first section below, accepted on the user's Pending You card of 2026-11-06, its statement amendment on agentplot/blueprints main at 12866a8: runs reads one or more parts of the terminal together, in one reading, so each stream's line gives each of its sessions, its own and each it names for a kind or a stage, its terminal still read once.
 
 Deciders: the user, who ran `flume status` with no place on deneb, under flume 0.9.1 and 53 places, and said: "It was extremely slow and returns a bunch of errors too. It's completely unusable." Then: "We need a short name because I need a short list because I don't know what's available to open." The brief that carried their words asked for one short line per place, with its kind and name, its stage and its state, and one line per stream with its session and whether it runs. It asked that the list read what flume keeps, settle nothing, answer within a second on a host with fifty places, and leave a place's long words to `flume status <place>`. "list" is the user's word. The construct stage chose each line's words, the grouping by repository, the terminal seam's `runs` and its bound of one second.
 Sources: `agentplot/blueprints:design/flume/requirements.md` on main at 7bd1891, clauses 56, 57, 58, 60 to 62, 64 to 66, 68, 70, 107, 111, 130, 139, 186, 200 and 201, B.5, C.5 and section 9, and S108; records 0005, 0006, 0031 and 0037; rules core.1, core.13 to core.17, core.29, core.35 and core.48; `crates/flume-core/src/status.rs` (`Engine::status`), `crates/flume-core/src/line.rs` (`Engine::lines`, `state_words`), `crates/flume-core/src/open.rs` (`Engine::open_stream`), `crates/flume-seams/src/terminal.rs` (`Terminal`), `crates/flume-seams/src/held.rs` (`Phase`, `Kept`) and `crates/flume/src/profiles/terminal/herdr/mod.rs` (`running`); flume 0.9.1's status and `status --line` timed on deneb on 2026-11-05.
@@ -62,6 +64,37 @@ The name is the user's word. `flume places` names half of what it lists, and `fl
 - Bad: what the list says is what the last settle left. A place stalls, or is read landed, at the next settle, under the herdr plugin's watch within its bound of thirty seconds.
 - Bad: a place's repeating stage shows no group, and its change's tasks are not counted; `status --line` gives both.
 - Bad: the terminal seam has one more operation for every terminal profile to answer.
+
+## Amendment, 2026-11-06: runs reads several parts in one reading, and a stream's line gives each of its sessions
+
+Status: accepted on the user's Pending You card of 2026-11-06, which approved "Let Flume ask herdr about all of a stream's sessions in one call, so flume list stays instant?"; its statement amendment, of 201 and C.5's runs, is on agentplot/blueprints main at 12866a8, cut from fa40c94, its message marking this amendment accepted on that card. Proposed the same day by the code stage of the change `where-an-agent-opens-is-given-by-kind-and-by-stage`, on the answer it was started again with, quoted below.
+
+Deciders: the answer to the stage's stop-short, which chose which reading of 200 and 201 holds: "Yes, this change adds the group for the list's sessions: its own statement follow-up (fa40c94) amended 200 to list each session, so the work is this change's, and design 11 and task 5.2 are rewritten to say so. Keep 200 as written, each stream's terminal read once: runs (201) answers several parts in one call, the terminal's sessions listed together, never one call per session, which would read 200's 'once' otherwise than it says." It gave 201's words, "given one or more parts of the terminal … whether each runs now", and asked for the seam's and the herdr profile's matching lines. The stage chose the seam's shape, an answer for each part in the order asked, and each line's words.
+Sources: `agentplot/blueprints:design/flume/requirements.md` on main at fa40c94, clauses 199, 200 and 201 and C.5, and on main at 12866a8, 201 and C.5's runs amended; record 0048 and its amendment; rules core.2, core.14, core.29 and core.52; `crates/flume-seams/src/terminal.rs` (`Terminal::runs`, `SessionRuns`), `crates/flume-core/src/list.rs` (`stream_listed`, `stream_line`), `crates/flume-core/src/room.rs` (`StreamRoom::words`) and `crates/flume/src/profiles/terminal/herdr/mod.rs` (`runs`).
+
+### Context and problem statement
+
+Record 0048's amendment, on blueprints main at fa40c94, has 200 give each stream's line each of its sessions, its own and each it names for a kind or a stage, and whether each runs now (201). The list landed on flume's main with each stream's own session alone. 200 still reads each stream's terminal once, and 201 answered one part for each call, so a stream naming a session for a kind could not be listed under both as they were written.
+
+### Considered options
+
+1. **runs takes one or more parts and reads them together,** 201 amended, the list asking each stream's terminal once for all its sessions.
+2. **One runs for each session,** 201 as written, and 200's "once" read as once for each session.
+3. **The list gives the own session alone,** and 200 is amended back.
+
+### Decision outcome
+
+Option 1, as the answer ruled. The terminal seam's runs is given one or more parts, each by its name or the terminal's own, and answers for each, in the order asked, whether it runs, with the name the terminal knows it by, or that the terminal holds no part, or that it could not read the part. herdr reads one `herdr session list --json`, bounded at a second, for every part asked, and a listing not read is unread for each. A part only the profile's socket names is unread alone where no session is listed at that socket. The printed command holds no part for any. The list asks each stream's terminal once, for its own session and each session it names for a kind or a stage, each once by name. The line gives each session after the own with its word: `work · session work · runs · session work-design · not running`. Where no terminal is asked, the sessions come before the one `no profile for <multiplexer>`. Where the terminal holds no part, the line is `<stream> · no session`. The JSON form gains each stream's `sessions`, each with its `name` and `runs`, written only where the stream names one.
+
+Option 2 asks a stream's terminal once for each of its sessions, which reads 200 otherwise than it says. Option 3 undoes a ruling the user accepted on their card.
+
+### Consequences
+
+- Good: a person sees at once which of a stream's sessions run, and opens each by the name the line gives.
+- Good: the list still costs one session listing per stream, however many sessions the stream names.
+- Bad: every terminal profile's runs answers a list of parts, the fake and the printed command among them.
+- Clause 201 and C.5's runs are amended on agentplot/blueprints main at 12866a8 (core.19). Rule core.52's details say a runs for each session is ruled out.
+
 
 ## Amendment, 2026-11-06: the list leaves out a place that landed or was dropped unless every place is asked
 

@@ -3049,6 +3049,50 @@ fn open_of_an_undeclared_stream() {
 }
 
 #[test]
+fn a_name_no_streams_word_gives() {
+    // 186, 199: a name that is no session a stream's word gives is
+    // refused naming it and each stream's sessions, its own and the one
+    // it names for a kind, before the terminal is asked anything.
+    let host = Host::new("open-no-session");
+    host.configure(
+        "[host]\nmultiplexer = \"printed\"\n\
+         [streams.work]\nagents = 1\n\
+         [streams.work.kinds.research]\nsession = \"work-design\"\n",
+    );
+    let ran = host.flume(&host.home(), &["open", "nightly", "--json"], &[]);
+    assert_ne!(ran.code, 0, "{}", ran.text);
+    let reason = ran
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_else(|| panic!("open answered {}", ran.text));
+    assert!(
+        reason.contains("no stream's word gives a session nightly")
+            && reason.contains("the stream work gives work and work-design"),
+        "{reason}"
+    );
+    let person = host.flume(&host.home(), &["open", "nightly"], &[]);
+    assert_ne!(person.code, 0, "{}", person.text);
+    assert!(
+        person.text.starts_with("refused: ")
+            && person.text.contains("nightly")
+            && person.text.contains("work-design"),
+        "{}",
+        person.text
+    );
+    let help = host.flume(&host.home(), &["open", "--help"], &[]);
+    assert_eq!(help.code, 0, "{}", help.text);
+    assert!(
+        help.text.contains("A session's name")
+            && help
+                .text
+                .contains("one a stream names for a kind or a stage"),
+        "{}",
+        help.text
+    );
+}
+
+#[test]
 fn the_keys_and_none_in_status() {
     // 143, 186, 190: the streams spec's keys and none, read from the
     // host's file through the binary: `office` takes the host's

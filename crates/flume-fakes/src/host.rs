@@ -1,9 +1,9 @@
 use crate::{lock, Log};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, HostSource, HostSourceRead,
-    KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed, ProfileHeld, RoleRun,
-    RoomGuard, Seconds, Secret, Share, Stream, StreamDisplay, StreamFrom, StreamHeld, Usage, View,
-    ViewHeld, DEFAULT_STREAM,
+    KindSessions, KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed,
+    ProfileHeld, RoleRun, RoomGuard, Seconds, Secret, Share, Stream, StreamDisplay, StreamFrom,
+    StreamHeld, Usage, View, ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -11,8 +11,8 @@ use std::sync::{Arc, Condvar, Mutex};
 /// The host: a clock that moves only when a test advances it or a command
 /// sleeps on it, numbered secrets, files' write times, the commands of
 /// flume's that live, the bound on agents and the agents' settings its
-/// configuration states, its streams with their sessions, labels'
-/// shares, titles and displays, the host's own display, its pools of
+/// configuration states, its streams with their sessions, their kinds'
+/// and stages' sessions, labels' shares, titles and displays, the host's own display, its pools of
 /// accounts, each account's reading by its path, the labels it gives
 /// kinds, its configuration's values with their layers, the sources of
 /// its kinds with where their files and its lock lie, the recipient the
@@ -299,6 +299,18 @@ impl FakeHost {
             .entry(name.to_string())
             .or_default()
             .session = session.map(str::to_string);
+    }
+
+    /// The table the configuration gives `kind` in the stream `name`, its
+    /// session, its stages' tables and its other keys as the test writes
+    /// them, or none, the stream declared where it was not (199).
+    pub fn set_kind_sessions(&self, name: &str, kind: &str, sessions: Option<KindSessions>) {
+        let mut state = lock(&self.state);
+        let kinds = &mut state.streams.entry(name.to_string()).or_default().kinds;
+        match sessions {
+            Some(sessions) => kinds.insert(kind.to_string(), sessions),
+            None => kinds.remove(kind),
+        };
     }
 
     /// The share the configuration gives `label` of the stream `name`'s

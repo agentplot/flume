@@ -159,14 +159,23 @@ impl Engine {
     /// unless it waits on its caller's word (40, 47); after a repetition
     /// delivered its group with a task still unticked, starts the same
     /// stage again, waiting for room like any start, unless a hold names
-    /// it (70, 140; core.26).
+    /// it (70, 140; core.26). The current stage is read again in the
+    /// update, and nothing starts unless it still stands delivered,
+    /// finished or repeating there: a settle beside this one may have
+    /// moved the place on since this one read it, its next stage refused
+    /// at its start and current, and the stage after that is not this
+    /// settle's to start (75).
     fn advance(&self, id: &PlaceId) -> bool {
         let next = self.update(id, |held| {
             let Some(index) = held.current else {
                 return Step::Keep(None);
             };
             let ended = &held.stages[index];
-            if ended.start.as_ref().is_some_and(|start| start.live) {
+            let ends = matches!(
+                ended.state,
+                StageState::Delivered | StageState::Finished | StageState::Repeating
+            );
+            if !ends || ended.start.as_ref().is_some_and(|start| start.live) {
                 return Step::Keep(None);
             }
             if ended.state == StageState::Repeating {

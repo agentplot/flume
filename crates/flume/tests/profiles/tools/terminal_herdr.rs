@@ -3433,8 +3433,8 @@ fn runs_of_a_session_not_listed_reads_not_running_and_leaves_it_so() {
     let profile = server.profile().with_session_home(home.path());
     assert!(!listed(&home, "w"), "w listed before runs");
     assert_eq!(
-        profile.runs(Some("w")),
-        SessionRuns::NotRunning { name: "w".into() }
+        profile.runs(&[Some("w")]),
+        vec![SessionRuns::NotRunning { name: "w".into() }]
     );
     assert!(!listed(&home, "w"), "w listed after runs");
     assert!(home.running().is_empty(), "{:?}", home.running());
@@ -3463,15 +3463,69 @@ fn runs_reads_a_running_session_and_the_own_session_by_its_name() {
         &OpenIn::Session { name: "w".into() },
     );
     assert_eq!(
-        profile.runs(Some("w")),
-        SessionRuns::Runs { name: "w".into() }
+        profile.runs(&[Some("w")]),
+        vec![SessionRuns::Runs { name: "w".into() }]
     );
     assert_eq!(
-        profile.runs(None),
-        SessionRuns::Runs {
+        profile.runs(&[None]),
+        vec![SessionRuns::Runs {
             name: SESSION.into()
-        }
+        }]
     );
+}
+
+#[test]
+fn runs_of_several_sessions_reads_them_in_one_listing() {
+    // 200, 201: `w`, `x`, which no listing names, and the own session
+    // asked in one call, through a herdr of the test's own that logs each
+    // call and runs the pinned herdr, answer from one `session list`.
+    let server = TestServer::start("herdr-runs-several");
+    let home = SessionHome::new(&[SESSION, "w"]);
+    let profile = own_session(&server, &home);
+    opened_in(
+        &server,
+        &profile,
+        &server.place("fix--one"),
+        &identity_of("fix--one", 1),
+        &server.command(&[]),
+    );
+    opened_at(
+        &server,
+        &profile,
+        &server.place("fix--two"),
+        &identity_of("fix--two", 1),
+        &server.command(&[]),
+        &OpenIn::Session { name: "w".into() },
+    );
+    let calls = server.scratch.path("calls");
+    let logging = server.scratch.path("logging-herdr");
+    fs::write(
+        &logging,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec herdr \"$@\"\n",
+            calls.display()
+        ),
+    )
+    .expect("the logging herdr");
+    fs::set_permissions(&logging, fs::Permissions::from_mode(0o755))
+        .expect("the logging herdr made executable");
+    let logged = own_session(&server, &home).with_program(&logging);
+    assert_eq!(
+        logged.runs(&[Some("w"), Some("x"), None]),
+        vec![
+            SessionRuns::Runs { name: "w".into() },
+            SessionRuns::NotRunning { name: "x".into() },
+            SessionRuns::Runs {
+                name: SESSION.into()
+            },
+        ]
+    );
+    assert_eq!(
+        fs::read_to_string(&calls).expect("the logged calls"),
+        "session list --json\n",
+        "herdr's calls"
+    );
+    assert!(!listed(&home, "x"), "x listed after runs");
 }
 
 #[test]
@@ -3488,10 +3542,10 @@ fn runs_of_a_herdr_that_does_not_answer_is_unread_within_two_seconds() {
         .with_program(&silent)
         .with_session_home(scratch.path("home"));
     let began = Instant::now();
-    let runs = profile.runs(Some("w"));
+    let runs = profile.runs(&[Some("w")]);
     let took = began.elapsed();
     assert!(
-        matches!(&runs, SessionRuns::Unread { reason } if reason.contains("did not answer within 1 seconds")),
+        matches!(&runs[..], [SessionRuns::Unread { reason }] if reason.contains("did not answer within 1 seconds")),
         "runs of a herdr that does not answer gave {runs:?}"
     );
     assert!(
@@ -3516,7 +3570,10 @@ fn runs_of_an_own_server_held_by_its_socket_reads_the_session_listed_there() {
     let held = Herdr::new(Server::Socket(socket), server.scratch.path("records-w"))
         .with_bound(BOUND)
         .with_session_home(home.path());
-    assert_eq!(held.runs(None), SessionRuns::Runs { name: "w".into() });
+    assert_eq!(
+        held.runs(&[None]),
+        vec![SessionRuns::Runs { name: "w".into() }]
+    );
     let unlisted = server.scratch.path("none.sock");
     let none = Herdr::new(
         Server::Socket(unlisted.clone()),
@@ -3524,8 +3581,8 @@ fn runs_of_an_own_server_held_by_its_socket_reads_the_session_listed_there() {
     )
     .with_bound(BOUND)
     .with_session_home(home.path());
-    match none.runs(None) {
-        SessionRuns::Unread { reason } => assert!(
+    match &none.runs(&[None])[..] {
+        [SessionRuns::Unread { reason }] => assert!(
             reason.contains(&unlisted.display().to_string()),
             "the words name no socket: {reason}"
         ),

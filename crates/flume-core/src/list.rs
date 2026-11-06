@@ -4,8 +4,8 @@
 //! a line for each stream the host declares. A place's line is read
 //! from its held state and its live agent's asking mark alone, in the
 //! words its own line gives it (56, 139; core.14); a stream's from the
-//! host's configuration and its terminal's runs, asked once (107, 186,
-//! 190, 201). No worktree, head, deliverable, change or submission is
+//! host's configuration and its terminal's runs, asked once for every
+//! session the stream gives (107, 186, 190, 199, 201). No worktree, head, deliverable, change or submission is
 //! read, no terminal asked of a place's agent and no repository's binding
 //! resolved; it takes no lock, writes nothing, settles nothing and
 //! refuses nothing (57; core.13, core.16, core.17).
@@ -13,8 +13,9 @@
 use crate::line::{stage_at, state_words, SEPARATOR};
 use crate::room::StreamRoom;
 use crate::terminals::{uncarried, Setting};
-use crate::{label, Answer, Engine, Listed, StreamListed, WaitsOn};
+use crate::{label, Answer, Engine, Listed, SessionListed, StreamListed, WaitsOn};
 use flume_seams::*;
+use std::collections::BTreeSet;
 
 impl Engine {
     /// Each place's line, by repository, then by `<kind>--<name>`, then
@@ -78,21 +79,43 @@ impl Engine {
         }
     }
 
-    /// The stream's line: its session as an open resolves it, and its
-    /// terminal's runs of that session asked once, or no terminal asked
-    /// where its multiplexer names no profile the resolver carries (107,
-    /// 186, 190, 201).
+    /// The stream's line: its session as an open resolves it, and each
+    /// other session it names for a kind or a stage, by name, its
+    /// terminal's runs of them all asked once, or no terminal asked where
+    /// its multiplexer names no profile the resolver carries (107, 186,
+    /// 190, 199, 201).
     fn stream_listed(&self, name: &str, declared: &Stream) -> StreamListed {
-        let session = StreamRoom {
-            session: declared.session.clone(),
-            ..StreamRoom::default()
-        }
-        .session(name);
+        let room = StreamRoom::of(name, declared.clone());
+        let session = room.own_session(name);
+        let named: BTreeSet<String> = room
+            .words(name)
+            .into_iter()
+            .map(|(named, _)| named)
+            .filter(|named| session.name.as_ref() != Some(named))
+            .collect();
         let multiplexer = self.host.display_for(name).multiplexer;
-        let (runs, uncarried) = match self.resolver.terminal(&multiplexer.profile) {
-            Some(terminal) => (Some(terminal.runs(session.name.as_deref())), None),
+        let (runs, sessions, uncarried) = match self.resolver.terminal(&multiplexer.profile) {
+            Some(terminal) => {
+                let parts: Vec<Option<&str>> = std::iter::once(session.name.as_deref())
+                    .chain(named.iter().map(|named| Some(named.as_str())))
+                    .collect();
+                let mut answers = terminal.runs(&parts).into_iter();
+                let runs = answers.next();
+                let sessions: Vec<SessionListed> = named
+                    .into_iter()
+                    .map(|name| SessionListed {
+                        name,
+                        runs: answers.next(),
+                    })
+                    .collect();
+                (runs, sessions, None)
+            }
             None => (
                 None,
+                named
+                    .into_iter()
+                    .map(|name| SessionListed { name, runs: None })
+                    .collect(),
                 Some(uncarried(
                     name,
                     Setting::Multiplexer,
@@ -101,13 +124,20 @@ impl Engine {
                 )),
             ),
         };
-        let line = stream_line(name, &session, runs.as_ref(), &multiplexer.profile);
+        let line = stream_line(
+            name,
+            &session,
+            runs.as_ref(),
+            &sessions,
+            &multiplexer.profile,
+        );
         StreamListed {
             stream: name.to_string(),
             session,
             multiplexer,
             runs,
             uncarried,
+            sessions,
             line,
         }
     }
@@ -206,32 +236,44 @@ fn joined(parts: &[Option<&str>]) -> String {
 
 /// A stream's line: `<stream> · session <name> · <runs>`, the name the
 /// session's, or for the terminal's own the name its runs gives, else
-/// `its terminal's own session`; `<stream> · no session` where the
-/// terminal holds no part; and `no profile for <multiplexer>` where no
-/// terminal was asked (107, 186, 190, 201).
+/// `its terminal's own session`, then `session <name> · <runs>` for each
+/// other session the stream names; `<stream> · no session` where the
+/// terminal holds no part; and, where no terminal was asked, the
+/// sessions and then `no profile for <multiplexer>` (107, 186, 190, 199,
+/// 201).
 fn stream_line(
     stream: &str,
     session: &SessionHeld,
     runs: Option<&SessionRuns>,
+    sessions: &[SessionListed],
     multiplexer: &str,
 ) -> String {
     let named = |name: &str| format!("session {name}");
-    let session = match (runs, &session.name) {
-        (Some(SessionRuns::NoPart { .. }), _) => None,
-        (_, Some(name)) => Some(named(name)),
-        (Some(SessionRuns::Runs { name } | SessionRuns::NotRunning { name }), None) => {
-            Some(named(name))
+    let own = match (runs, &session.name) {
+        (Some(SessionRuns::NoPart { .. }), _) => {
+            return joined(&[Some(stream), Some("no session")]);
         }
-        (_, None) => Some("its terminal's own session".to_string()),
+        (_, Some(name)) => named(name),
+        (Some(SessionRuns::Runs { name } | SessionRuns::NotRunning { name }), None) => named(name),
+        (_, None) => "its terminal's own session".to_string(),
     };
-    let runs = match runs {
-        Some(SessionRuns::Runs { .. }) => "runs".to_string(),
-        Some(SessionRuns::NotRunning { .. }) => "not running".to_string(),
-        Some(SessionRuns::NoPart { .. }) => "no session".to_string(),
-        Some(SessionRuns::Unread { .. }) => "not read".to_string(),
-        None => format!("no profile for {multiplexer}"),
+    let word = |runs: Option<&SessionRuns>| match runs {
+        Some(SessionRuns::Runs { .. }) => Some("runs"),
+        Some(SessionRuns::NotRunning { .. }) => Some("not running"),
+        Some(SessionRuns::NoPart { .. }) => Some("no session"),
+        Some(SessionRuns::Unread { .. }) => Some("not read"),
+        None => None,
     };
-    joined(&[Some(stream), session.as_deref(), Some(runs.as_str())])
+    let mut parts = vec![stream.to_string(), own];
+    parts.extend(word(runs).map(str::to_string));
+    for listed in sessions {
+        parts.push(named(&listed.name));
+        parts.extend(word(listed.runs.as_ref()).map(str::to_string));
+    }
+    if runs.is_none() {
+        parts.push(format!("no profile for {multiplexer}"));
+    }
+    parts.join(SEPARATOR)
 }
 
 #[cfg(test)]
@@ -460,6 +502,7 @@ mod tests {
                     Some(&SessionRuns::Runs {
                         name: "work".into(),
                     }),
+                    &[],
                     "fake",
                 ),
                 "work · session work · runs",
@@ -471,6 +514,7 @@ mod tests {
                     Some(&SessionRuns::NotRunning {
                         name: "desk".into(),
                     }),
+                    &[],
                     "fake",
                 ),
                 "office · session desk · not running",
@@ -482,6 +526,7 @@ mod tests {
                     Some(&SessionRuns::Runs {
                         name: "flume".into(),
                     }),
+                    &[],
                     "fake",
                 ),
                 "default · session flume · runs",
@@ -493,6 +538,7 @@ mod tests {
                     Some(&SessionRuns::Unread {
                         reason: "no answer".into(),
                     }),
+                    &[],
                     "fake",
                 ),
                 "default · its terminal's own session · not read",
@@ -504,13 +550,66 @@ mod tests {
                     Some(&SessionRuns::NoPart {
                         reason: "it holds no session".into(),
                     }),
+                    &[],
                     "printed",
                 ),
                 "work · no session",
             ),
             (
-                stream_line("trial", &work, None, "rex"),
+                stream_line("trial", &work, None, &[], "rex"),
                 "trial · session work · no profile for rex",
+            ),
+        ];
+        for (got, want) in rows {
+            assert_eq!(got, want);
+        }
+    }
+
+    #[test]
+    fn a_streams_line_gives_each_session_it_names_after_its_own() {
+        let work = SessionHeld {
+            name: Some("work".into()),
+            from: SessionFrom::StreamName,
+        };
+        let design = |runs| {
+            vec![SessionListed {
+                name: "work-design".into(),
+                runs,
+            }]
+        };
+        let runs = SessionRuns::Runs {
+            name: "work".into(),
+        };
+        let rows = [
+            (
+                stream_line(
+                    "work",
+                    &work,
+                    Some(&runs),
+                    &design(Some(SessionRuns::NotRunning {
+                        name: "work-design".into(),
+                    })),
+                    "fake",
+                ),
+                "work · session work · runs · session work-design · not running",
+            ),
+            (
+                stream_line("work", &work, None, &design(None), "rex"),
+                "work · session work · session work-design · no profile for rex",
+            ),
+            (
+                stream_line(
+                    "work",
+                    &work,
+                    Some(&SessionRuns::NoPart {
+                        reason: "it holds no session".into(),
+                    }),
+                    &design(Some(SessionRuns::NoPart {
+                        reason: "it holds no session".into(),
+                    })),
+                    "printed",
+                ),
+                "work · no session",
             ),
         ];
         for (got, want) in rows {

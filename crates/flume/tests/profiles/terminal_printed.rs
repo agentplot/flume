@@ -221,7 +221,7 @@ fn attach_under_the_printed_command_runs_nothing() {
     for view in [View::Terminal, View::App] {
         world.host.set_display("work", None, Some(view), None);
         assert_eq!(
-            engine.open_stream(Some("work")).refusal(),
+            engine.open_session(Some("work")).refusal(),
             Some(
                 "the printed command holds no session a person can be shown; its agents run in \
                  the commands it printed"
@@ -244,13 +244,24 @@ fn runs_under_the_printed_command_holds_no_part_and_runs_nothing() {
     // commands it prints.
     for part in [Some("work"), None] {
         assert_eq!(
-            Printed.runs(part),
-            SessionRuns::NoPart {
+            Printed.runs(&[part]),
+            vec![SessionRuns::NoPart {
                 reason: NO_SESSION.into()
-            },
+            }],
             "runs of {part:?}"
         );
     }
+    // 201: several parts in one call each hold no part, in that order.
+    assert_eq!(
+        Printed.runs(&[Some("work"), Some("work-design"), None]),
+        vec![
+            SessionRuns::NoPart {
+                reason: NO_SESSION.into()
+            };
+            3
+        ],
+        "runs of several parts"
+    );
     let scratch = Scratch::new("printed-runs");
     let world = World::new();
     let osascript = StandIn::new(&scratch.path("stand-in"), "osascript");

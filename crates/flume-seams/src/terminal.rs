@@ -63,12 +63,16 @@ pub enum OpenIn {
 }
 
 /// Where the session an agent opens in came from: the launch's
-/// settings, its stream's `session`, its stream's name, or, for the
-/// host's default stream naming none, the terminal's own (32, 107, 143).
+/// settings, its stream's word for its kind's stage, its stream's word
+/// for its kind, its stream's `session`, its stream's name, or, for the
+/// host's default stream naming none, the terminal's own (32, 107, 143,
+/// 199).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionFrom {
     Launch,
+    StreamStage,
+    StreamKind,
     Stream,
     StreamName,
     Own,
@@ -215,7 +219,7 @@ pub enum Attached {
     Refused { reason: String },
 }
 
-/// runs: whether a part of the terminal runs now, with the name the
+/// runs, for each part asked: whether it runs now, with the name the
 /// terminal knows it by; or that the terminal holds no part, or could
 /// not read it, in its words (201).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -324,8 +328,9 @@ pub trait Terminal: Send + Sync {
     /// refusal, and the app's view shown or a refusal (187).
     fn attach(&self, session: Option<&str>, view: crate::View) -> Attached;
 
-    /// Whether the part named `session`, the terminal's own where none,
-    /// runs now, starting nothing, within a bound the profile states (98,
-    /// 201).
-    fn runs(&self, session: Option<&str>) -> SessionRuns;
+    /// Whether each part of `sessions`, each named or the terminal's own
+    /// where none, runs now, read together in one reading of the
+    /// terminal, one answer for each in the order asked, starting
+    /// nothing, within a bound the profile states (98, 200, 201).
+    fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns>;
 }
