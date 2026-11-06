@@ -9,7 +9,8 @@
 //! prompt; the folder-trust dialog the command names, against that
 //! release's screen; the carry of a stopped start's conversation over
 //! scratch configuration homes, one whose `projects` is a link to
-//! another's and one of its own, and the command that resumes it; each reading of a carried start past
+//! another's and one of its own, and the command that resumes it, and of
+//! a lost start's to its own home; each reading of a carried start past
 //! the length its started ack recorded; and live, over scratch homes'
 //! session records and processes the tests start. The hooks themselves are driven through the built binary in
 //! `hooks_claude.rs`.
@@ -1417,6 +1418,39 @@ fn a_transcript_read_from_its_length() {
         transcript::Read::NotWritten
     ));
     assert_eq!(transcript::length(&harness.scratch.path("none.jsonl")), 0);
+}
+
+#[test]
+fn a_lost_starts_conversation_carried_to_its_own_home() {
+    // The lost start's transcript is in work-1's home, whose `projects` it
+    // shares with no other: carry to that home answers yes with the ack's
+    // session, as it does under no pool to the login environment's
+    // `~/.claude` where that is the home; once the transcript is removed,
+    // no, saying it cannot be read, naming `CLAUDE_CONFIG_DIR` and no path
+    // (49, 179, C.4, S115; core.30).
+    let harness = Harness::new();
+    let who = identity("talk");
+    let folder = harness.folder();
+    harness.start(&AgentCommand::default(), &who, &folder);
+    let own = at_home(&harness.home("work-1"));
+    let yes = Carry::Yes {
+        session: SESSION.into(),
+    };
+    assert_eq!(harness.seam.carry(&folder, &who, &own), yes);
+    let login = harness.scratch.path("login");
+    std::fs::create_dir_all(&login).expect("the login home");
+    std::os::unix::fs::symlink(harness.home("work-1"), login.join(".claude")).expect("the link");
+    let record = Record::at(&folder, &who);
+    assert_eq!(carry::carry(&record, &BTreeMap::new(), Some(&login)), yes);
+
+    std::fs::remove_file(harness.transcript(&who)).expect("the transcript removed");
+    let why = no_words(&harness, harness.seam.carry(&folder, &who, &own));
+    assert_eq!(why, carry::UNREADABLE);
+    let why = no_words(
+        &harness,
+        carry::carry(&record, &BTreeMap::new(), Some(&login)),
+    );
+    assert_eq!(why, carry::UNREADABLE);
 }
 
 /// The processes live reads, by a listing of the host's.
