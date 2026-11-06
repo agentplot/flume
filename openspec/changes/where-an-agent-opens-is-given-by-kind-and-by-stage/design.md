@@ -132,11 +132,12 @@ of it (core.4).
   seam (186 to 190, record 0037) are what decision 7 builds on, `open`
   taking a session's name where it took a stream's.
 - **`flume-list-shows-each-place-and-stream-on-one-line`** (record
-  0049, clause 200 on blueprints main, its code in its own place): the
-  list gives a line for each stream. This amendment has that line give
-  each of the stream's sessions, and says the sessions are what a person
-  opens, by name; whichever change's code lands on flume's main second
-  builds that line (decision 11).
+  0049, clause 200 on blueprints main) landed on main as #118 and is
+  merged here: the list gives a line for each stream, with its own
+  session and whether it runs, read by the terminal's runs (201). This
+  amendment has that line give each of the stream's sessions, and says
+  the sessions are what a person opens, by name; this change builds
+  that line (decision 11).
 - **`every-question-a-place-asks-reaches-someone-who-answers-it`**
   (designing): crew's roles run as kinds in their partition's stream,
   each run a place of its role's kind. A host names a session for a
@@ -538,6 +539,11 @@ every session (task 6.2).
   and each stream's sessions.
 - `flume-fakes`: the fake host's `Stream` carries `kinds` as written by
   a test.
+- The list (decision 11): the terminal seam's `runs` takes one or more
+  parts and answers each, herdr's from one listing, the printed
+  command's and the fake's beside it; `list.rs` asks each stream's
+  terminal once for every session the stream gives, and `StreamListed`
+  gains `sessions`.
 
 ### 11. Agreement with the changes in flight
 
@@ -550,12 +556,42 @@ every session (task 6.2).
   writes a session: `session` stays out of `Settings::under`'s fold
   but the launch's, and out of every agents table. Should any of them
   land first, nothing here changes.
-- **The list (200, record 0049).** Clause 200, as amended, gives each
-  stream's line each of its sessions, with whether each runs (201), and
-  says the sessions are what a person opens, by name. Where `flume list`
-  is on flume's main when this change's group 5 starts, this change
-  gives each stream's line those sessions (task 5.2); otherwise the
-  list's change builds it from 200 as amended, and is told so.
+- **The list (200, 201, record 0049).** Clause 200, as amended at
+  fa40c94, gives each stream's line each of its sessions, its own and
+  each it names for a kind or a stage, with whether each runs (201), and
+  says the sessions are what a person opens, by name. The list's change
+  landed on main (#118) with the stream's own session alone, and this
+  change builds the rest (group 8), since its own statement follow-up
+  amended 200. The answer to the code stage's stop-short of 2026-11-06
+  ruled how 200 and 201 meet: "Keep 200 as written, each stream's
+  terminal read once: runs (201) answers several parts in one call, the
+  terminal's sessions listed together, never one call per session, which
+  would read 200's 'once' otherwise than it says". So:
+  - **runs (201)** is amended on a blueprints branch,
+    `design/flume-runs-reads-several-parts-at-once`, unpushed until the
+    user's card approves it: given one or more parts of the terminal,
+    whether each runs now, the parts read together in one reading of
+    the terminal. herdr's reads one `herdr session list --json` for every
+    part asked, and the printed command holds no part for any (C.5).
+  - **The seam.** `Terminal::runs(&[Option<&str>]) -> Vec<SessionRuns>`,
+    one answer for each part asked, in the order asked; `SessionRuns`
+    is unchanged. A listing herdr does not give within its bound is
+    unread for every part, and a part only the profile's socket names,
+    with no session listed there, is unread alone. The fake logs one
+    `runs <part> <part>…` for each call.
+  - **The list** asks each stream's terminal once, for its own session
+    and each session the stream names for a kind or a stage that is not
+    its own, by name, each once. The line gives each session after the
+    stream's own with its word: `work · session work · runs · session
+    work-design · not running`. Where no terminal is asked, the
+    sessions come before the one `no profile for <multiplexer>`, and
+    where the terminal holds no part, the line is `<stream> · no
+    session` as before. A stream naming no session for a kind or a stage
+    reads as it did. `StreamListed` gains `sessions`, each `{ name,
+    runs }`, written only where the stream names one (core.14).
+  - The other reading, a runs for each session, answers 201 as written
+    but asks a stream's terminal once for each of its sessions, against
+    200's "once".
 - **Questions.** A role's run is a place of its role's kind in its
   partition's stream; a host names a session for that kind as for any
   other. A role's run is reached by the pane its live start holds,
@@ -594,7 +630,11 @@ On agentplot/blueprints main at f676e8f, on the user's word of
 and scenarios S106 and S107 are new, beside 186 to 192, 195 to 198,
 200, 201, S90 to S92, S95 to S97, S100 to S103 and S108 on main, and the
 designs in flight hold 193, 194, S93 to S99, S104 and S105. Each item
-gives the words a clause holds at fa40c94.
+gives the words a clause holds at fa40c94, but 201 and C.5's runs row,
+which give the words of the blueprints branch
+`design/flume-runs-reads-several-parts-at-once` at 05c9486, cut from
+main at fa40c94 on the answer to the code stage's stop-short of
+2026-11-06 and unpushed until the user's card approves it (decision 11).
 
 - **32**: "Where in the terminal an agent runs (107) is read from the
   launch's settings and the stage's declaration, else from its place's
@@ -658,6 +698,16 @@ gives the words a clause holds at fa40c94.
   (107) and each it names for a kind or a stage (199), and whether each
   runs now (201). The sessions are what a person opens, each by its name
   (186)."
+- **201**, on the branch: "given one or more parts of the terminal, each
+  one by its name or the terminal's own, whether each runs now, with the
+  name the terminal knows it by. Or that the terminal holds no part a
+  person can be shown, or that it cannot read a part. The parts are read
+  together, in one reading of the terminal."
+- **C.5's herdr row**, runs, on the branch: "one `herdr session list
+  --json` for every part asked, its `sessions[]` read by `name` and
+  `running` for each", a listing not read "read as not read for every
+  part asked"; and the printed command's runs "answers that it holds no
+  part, for every part asked".
 - **C.5's herdr row**, open: "a pane in the herdr session the launch's
   settings name, else the one its place's stream names for the place's
   kind's stage or its kind (199), else the one its place's stream names,
@@ -703,9 +753,10 @@ Written to any host's operator, naming no host, team or word of ours
   it is the stream's word, not a layered setting.
 - `reference/configuration.md`: `[streams.<stream>.kinds.<kind>]` and
   its `stages`, the local layer's keys and their pins.
-- `reference/commands.md`: `flume open [<session>]`.
-- `reference/state.md`: `SessionFrom`'s two new values and each
-  stream's `sessions`.
+- `reference/commands.md`: `flume open [<session>]`, and `flume list`'s
+  stream line giving each of the stream's sessions.
+- `reference/state.md`: `SessionFrom`'s two new values, each stream's
+  `sessions` in status, and each listed stream's `sessions`.
 
 ## Risks / Trade-offs
 

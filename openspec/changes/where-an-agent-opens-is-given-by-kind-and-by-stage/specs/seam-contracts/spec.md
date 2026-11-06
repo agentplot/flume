@@ -40,3 +40,23 @@ written before them SHALL read with none (107, 143, 180, 181, 199, C.7).
 
 - **WHEN** a held state whose live start holds the session `work-review` from `stream-stage`, and a stream naming `work-design` for research and `work-review` for release's review, are written and read
 - **THEN** each reads back unchanged, and a stream written before reads with no session for any kind or stage (199)
+
+### Requirement: The terminal seam's runs
+
+The terminal seam SHALL offer runs: given one or more parts, each by
+its name or the terminal's own, read together in one reading of the
+terminal, for each in the order asked, that it runs or does not, with
+the name the terminal knows it by; or that the terminal holds no part a
+person can be shown, or that it could not read the part, in the
+terminal's words; starting nothing, within a bound the profile states.
+No terminal SHALL take a default answer for it (98, 200, 201; core.2).
+
+#### Scenario: Runs over the fake
+
+- **WHEN** the fake terminal is scripted to read `work` running and `desk` unread with `no listing`, and is asked runs of `work`, `desk`, `office` and its own part, one at a time
+- **THEN** it answers `work` running, `desk` unread with `no listing`, `office` not running and its own part not running as `own`, logs `runs work`, `runs desk`, `runs office` and `runs own`, and opens nothing (201)
+
+#### Scenario: Runs of several parts over the fake
+
+- **WHEN** the same fake terminal is asked runs of `work`, `desk`, `office` and its own part in one call
+- **THEN** it answers each as it answered alone, in that order, and logs the one `runs work desk office own` (201)

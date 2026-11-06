@@ -67,8 +67,13 @@ C.7, S106, S107; core.19).
   names for a kind or a stage, and shows it in that stream's view and
   terminal app. A name no stream's word gives is refused naming each
   stream's sessions, and nothing is started.
-- **The list (200).** Each stream's line names each of its sessions,
-  built here where `flume list` is on main first.
+- **The list (200, 201).** Each stream's line names each of its
+  sessions, its own and each it names for a kind or a stage, with
+  whether each runs, read by one runs of the stream's terminal over
+  them all. `flume list` landed on main first, so this change builds
+  it. runs (201) answers one or more parts together in one reading, as
+  the answer to the code stage's stop-short of 2026-11-06 ruled, which
+  keeps 200's reading of each stream's terminal once.
 - **The terminal profile (190, C.5).** Nothing new is asked of herdr:
   every call on an agent goes to its recorded pane, and the tidy closes
   each tab in every session, as record 0031 built. A test through the
@@ -109,24 +114,35 @@ None.
   `stream-stage`, written before reading as it did.
 - `clause-coverage`: the list at the revision holding 199, S106 and
   S107 as the follow-up leaves them.
+- `the-list`: each stream's line gives each of its sessions with whether
+  each runs, the terminal asked once for them all, and the JSON form
+  gains each stream's `sessions`.
+- `seam-contracts`, `seam-fakes`, `terminal-profiles`: the terminal's
+  runs answers one or more parts in one reading, herdr's from one
+  session listing, the fake logging one runs for each call.
 
 ## Impact
 
 - agentplot/blueprints: clauses 32, 107, 143, 186, 190 and 200, C.5's
   herdr row and C.7 amended, and 199, S106 and S107 added, on main at
   f676e8f, and amended again for a kind's stage and a session's open by
-  the follow-up on main at fa40c94 (design 13).
+  the follow-up on main at fa40c94 (design 13); and 201 and C.5's runs
+  amended on the branch `design/flume-runs-reads-several-parts-at-once`
+  at 05c9486, unpushed until the user's card approves it (design 11).
 - `docs/adr`: record 0048, accepted; rules
   core.44 and core.48 amended with it, the site's rules page mirroring
-  them.
+  them; record 0049's amendment, proposed, for runs over several parts,
+  with core.52's details.
 - `crates/flume-seams`: `Stream::kinds`, `KindSessions` and
   `StageSession`, `SessionFrom::StreamKind` and `StreamStage`, and the
   stream status's sessions, each only added.
 - `crates/flume-core`: `StreamRoom` keeps the stream's kinds' sessions,
   `Queue::session_of` takes the place's kind and stage, a start refused
   for its stream's table's other key or another stream's session,
-  status's sessions, and `open_stream` becoming `open_session`, taking a
-  session's name.
+  status's sessions, `open_stream` becoming `open_session`, taking a
+  session's name, and the list's line giving each stream's sessions.
+- `crates/flume-seams`, `crates/flume`: the terminal seam's `runs`
+  taking one or more parts, herdr's and the printed command's beside it.
 - `crates/flume`: `host/config.rs` reads `[streams.<stream>.kinds]` and
   adds its keys to `LOCAL_KEYS`, `open`'s session name, the person's
   form of status, and a test through the binary under the pinned herdr.
