@@ -229,7 +229,7 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
         },
         Scenario {
             name: "agent: live answers unknown by a profile that reads no running session, for any start and environments",
-            cites: &["207", "171"],
+            cites: &["207"],
             run: live_not_read::<H>,
         },
         Scenario {
