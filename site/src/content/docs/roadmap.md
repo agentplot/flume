@@ -111,6 +111,16 @@ the rest of this site says.
   override. It waits on the kind format's reader taking the field.
   Until then only the host's configuration gives a place a label.
 
+- **A standing agent holds a role's address**
+  ([record 0013](https://github.com/agentplot/flume/blob/main/docs/adr/0013-a-waiter-may-be-a-roles-address-and-an-end-untold-to-it-wakes-the-role.md),
+  as amended 2026-11-06). The host's configuration may give a role's
+  address an agent that already runs, `[roles."<partition>/<role>"]`
+  with `agent`, the name the terminal knows it by, and an optional
+  `session`. Each end for the address then goes into that agent as a
+  notice and wakes no run, and status says where the address lives.
+  Until then an end for an address with no run stays pending, and the
+  agent collects it with `flume inbox --recipient <address>`.
+
 - **An MCP server's labels.** The host's configuration declares each
   MCP server its agents may have, under `[mcp.<server>]`, with the
   labels whose places may have it. At each agent's start flume hands
