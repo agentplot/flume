@@ -68,6 +68,23 @@ let
     '';
   };
 
+  # The convco hook's check of a message (.versionrc), which takes one
+  # `git revert` wrote, its first line starting `Revert "`, as CI's
+  # `convco check --ignore-reverts` takes the commit: `--from-stdin`, how a
+  # hook reads a message before its commit exists, skips no revert. git
+  # runs the hook on a revert committed after a conflict or `--no-commit`.
+  conventional = pkgs.writeShellApplication {
+    name = "conventional";
+    runtimeInputs = [ config.git-hooks.hooks.convco.package ];
+    text = ''
+      IFS= read -r first <"$1" || true
+      case "$first" in
+        'Revert "'*) exit 0 ;;
+      esac
+      exec convco check --from-stdin --config .versionrc <"$1"
+    '';
+  };
+
   # target/ grows unseen across worktrees until the disk is full.
   disk = pkgs.writeShellApplication {
     name = "disk";
@@ -472,12 +489,13 @@ in
   };
   # The floor under every commit, installed into the common hooks directory
   # on `devenv shell`. convco refuses a message that is not a conventional
-  # commit (.versionrc); treefmt formats what is staged; clippy fails a
-  # warning when a Rust file or the cargo manifests change.
+  # commit (.versionrc), but one `git revert` wrote (conventional above);
+  # treefmt formats what is staged; clippy fails a warning when a Rust file
+  # or the cargo manifests change.
   git-hooks.hooks = {
     convco = {
       enable = true;
-      settings.configPath = ".versionrc";
+      entry = lib.mkForce (lib.getExe conventional);
     };
     treefmt.enable = true;
     clippy-gate = {

@@ -601,12 +601,14 @@ impl Engine {
                         pool: name.clone(),
                         account: account.name.clone(),
                     };
-                    let spent_until = match self.store.read_host(&key) {
+                    let (spent_until, spent_unread) = match self.store.read_host(&key) {
                         Some(HostVersioned {
                             document: HostDocument::Account(spent),
                             ..
-                        }) if spent.until > now => Some(spent.until),
-                        _ => None,
+                        }) if spent.until > now => {
+                            (Some(spent.until), spent.words.filter(|_| spent.unread))
+                        }
+                        _ => (None, None),
                     };
                     let running = on_accounts
                         .get(&(name.clone(), account.name.clone()))
@@ -617,6 +619,7 @@ impl Engine {
                         account,
                         running,
                         spent_until,
+                        spent_unread,
                         threshold,
                         now,
                     }
@@ -744,8 +747,9 @@ impl Engine {
     /// The host's part of status: the agents running, the bound, the room
     /// and the queue in the order it would start, each stage waiting with
     /// the room it is short of, and the same for each stream (56, 70,
-    /// 130, 143).
-    pub(crate) fn host_status(&self) -> HostStatus {
+    /// 130, 143); each base's count taking the state of each agent in
+    /// `agents` as status read it for its place (139).
+    pub(crate) fn host_status(&self, agents: &BTreeMap<PlaceId, AgentState>) -> HostStatus {
         let queue = self.queue();
         let declared = self.host.streams();
         let queued: Vec<Queued> = queue
@@ -838,6 +842,7 @@ impl Engine {
                         running: room.running,
                         bound: room.account.agents,
                         spent_until: room.spent_until,
+                        spent_unread: room.spent_unread.clone(),
                         reading: room.reading_status(),
                         past: room.past(),
                     })
@@ -855,9 +860,10 @@ impl Engine {
             addresses: self.addresses(),
             watch: self.terminal.watch(),
             terminals: self.terminals_status(),
-            bases: self.bases(),
+            bases: self.bases(agents),
             terminal_setup: self.terminal.setup(),
             configuration: self.host.configuration(),
+            sources: self.host_sources(),
         }
     }
 

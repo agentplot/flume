@@ -66,6 +66,13 @@ pub enum Answer {
         woke: Woke,
         place: PlaceStatus,
     },
+    /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
+    /// at its content's hash, and each it removed (155).
+    Locked {
+        lock_file: String,
+        recorded: Vec<LockedKind>,
+        removed: Vec<String>,
+    },
     /// Each place's line asked alone, of the place named or of every
     /// place on the host, read from its held state, the change at its
     /// head and its live agent's asking mark alone (56, 57, 58).
@@ -190,6 +197,14 @@ pub enum WindowOutcome {
     App,
 }
 
+/// A kind `flume kinds lock` recorded: its identity and its content's
+/// hash (155).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedKind {
+    pub kind: String,
+    pub hash: String,
+}
+
 /// What a wake of a role's address came to (132): its run launched by
 /// this wake, or the run that stood, its agent live or the run waiting,
 /// for room, on its caller or for another settle's launch to finish.
@@ -260,6 +275,13 @@ pub struct PlaceStatus {
     pub kind: String,
     pub version: u32,
     pub declared: Declared,
+    /// The kind's identity as its launch read it, `acme/review@2`; none
+    /// for a place whose held state keeps no `kind_from` (19, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<String>,
+    /// Where the kind came from, as its launch read it (19, 21, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind_from: Option<KindFrom>,
     pub name: String,
     pub branch: String,
     pub base: String,
@@ -496,6 +518,26 @@ pub struct HostStatus {
     /// core.30, core.45).
     #[serde(default)]
     pub configuration: HostConfiguration,
+    /// Each source the host declares, by name, read when asked (56, 159,
+    /// 191; core.15).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<SourceStatus>,
+}
+
+/// A source the host declares as status gives it (56, 191): its name, its
+/// file, the directory its packages lie in, the identity of every package
+/// that directory holds, and why the file or the directory cannot be read
+/// where either cannot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceStatus {
+    pub name: String,
+    pub source_file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kinds_dir: Option<String>,
+    #[serde(default)]
+    pub kinds: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cannot_read: Option<String>,
 }
 
 fn no_watch() -> Watch {
@@ -518,6 +560,7 @@ impl Default for HostStatus {
             bases: vec![],
             terminal_setup: vec![],
             configuration: HostConfiguration::default(),
+            sources: vec![],
         }
     }
 }
@@ -753,10 +796,11 @@ fn threshold() -> u32 {
 
 /// An account of a pool (144 to 146, 184, 185): the program it runs,
 /// flume's agents running on it, its own bound, none where it states
-/// none, the time it is spent until, none where it is not spent, its
-/// reading, none where it names none, and what holds it past its
-/// threshold, none where nothing does; never a value of its environment
-/// or a reading's path.
+/// none, the time it is spent until, none where it is not spent, and,
+/// where that time is the hour 146 gives because flume read no reset in
+/// its agent's words, those words, its reading, none where it names none,
+/// and what holds it past its threshold, none where nothing does; never a
+/// value of its environment or a reading's path.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountStatus {
     pub name: String,
@@ -764,6 +808,8 @@ pub struct AccountStatus {
     pub running: u32,
     pub bound: Option<u32>,
     pub spent_until: Option<Seconds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spent_unread: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reading: Option<ReadingStatus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

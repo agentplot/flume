@@ -1,13 +1,14 @@
 ---
 title: Configuration
-description: The host's configuration, the repository's .config/flume.toml, the kind format, and the variables flume reads.
+description: The host's configuration and its sources of kinds, the repository's .config/flume.toml, the locks of kinds, the kind format, and the variables flume reads.
 sidebar:
   order: 2
 ---
 
-flume reads the host's configuration, the repository's
-`.config/flume.toml`, and a launch's own declaration of kinds when it
-names one. Every part of each is optional.
+flume reads the host's configuration with its sources of kinds, the
+repository's `.config/flume.toml`, a launch's own declaration of kinds
+when it names one, and the locks of kinds. Every part of each is
+optional.
 
 ## The host's configuration
 
@@ -237,7 +238,7 @@ The run the host launches for a role's address
 | Key | Meaning | Left out |
 |---|---|---|
 | `repository` | the repository of the run's place; a leading `~` is your home | refused |
-| `kind` | the kind the run launches | refused |
+| `kind` | the kind the run launches, named as `flume launch --kind` names one: `planner`, or by its source, as `beta/planner@1` | refused |
 | `priority` | a whole number, the run's priority in the host's queue | `0` |
 | `base` | the base the run's place is cut from | the repository's default branch |
 | `brief` | the run's brief | none |
@@ -246,6 +247,52 @@ The run the host launches for a role's address
 A key that is no `<group>/<role>` address, or a key the table does not
 know, makes the file unreadable.
 
+## The host's sources
+
+`$XDG_CONFIG_HOME/flume/sources/`, beside `config.toml`, holds one file
+per source of kinds the host declares
+([kinds from a source on the host](/flume/guides/kinds/#kinds-from-a-source-on-the-host)):
+
+```toml
+# ~/.config/flume/sources/acme.toml
+kinds_dir = "~/.local/share/flume/kinds/acme"
+```
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `kinds_dir` | an absolute path, or one whose leading `~` is your home | the directory holding the source's packages, each at `<name>@<version>/` with its `kind.toml` at its root | refused |
+
+The file's name, less `.toml`, is the source's name. flume reads every
+file in the directory whose name ends in `.toml` and begins with no
+`.`, a link as the file it leads to, and ignores every other entry. It
+reads the directory as it stands at each launch, each wake of a role,
+each `flume kinds lock` and each status, and writes nothing in it or in
+a `kinds_dir`.
+
+The sources belong to the host's configuration as its accounts do: a
+person, or a program that manages the host, writes each file whole,
+renames a new one over it, and deletes it. `config.local.toml` declares
+no source. No sources directory is a host with no sources. A `sources`
+that cannot be listed, a file of that name among them, makes every
+command refuse, as a `config.toml` that cannot be read does.
+
+### A source's faults
+
+Each of these is its source's own: it refuses every launch that names
+the source, naming the file and the fault, and no other launch. The
+host's part of `flume status` names it.
+
+- a file that is not TOML;
+- no `kinds_dir`, a `kinds_dir` that is neither absolute nor under `~`,
+  or a key other than `kinds_dir`;
+- a name that is not a legal source's name;
+- the name `flume`, `repo` or `launch`, the sources of flume's own
+  kinds, the repository's and a launch's, which no host declares.
+
+A `kinds_dir` that does not exist is no fault of the file's, since a
+program may write the file before the packages. A launch naming that
+source is refused, naming the directory as missing.
+
 ## The repository's `.config/flume.toml`
 
 flume reads it from git at a revision, never from the working copy. It
@@ -253,6 +300,10 @@ reads the `[profiles]` table at the repository's default branch, after
 one fetch of `origin` where the repository has it, and the kinds at the
 base's current revision for each launch. A place keeps what its launch read.
 flume never writes it.
+
+It reads the repository's lock of kinds, `.config/flume.lock`, at the
+base's current revision too, where a launch's kind needs a lock
+([the locks of kinds](#the-locks-of-kinds)).
 
 The repository's default branch is its remote's: the branch
 `origin/HEAD` names. Where the repository has `origin` and no
@@ -311,9 +362,42 @@ since an agent's environment is its account's alone.
 ## A launch's declaration
 
 `flume launch --kinds <file>` names a file in the same format, read
-from disk at the launch with its prompts beside it. Its kinds stand
-over the repository's and flume's own for that launch alone. Its
-`[profiles]` table, if any, is not read.
+from disk at the launch with its prompts beside it, the source `launch`.
+Its kinds stand over the repository's and flume's own for a bare name,
+for that launch alone, and need no lock. Its `[profiles]` table, if
+any, is not read.
+
+## The locks of kinds
+
+A kind from a source on the host runs only where a lock records its
+identity at its content's hash. A lock records flume's own kinds too,
+to pick the version a launch that names none takes
+([locks](/flume/guides/kinds/#locks)). flume reads two:
+
+| Lock | Read |
+|---|---|
+| `.config/flume.lock` in the repository | from git at the base's current revision, as its kinds are |
+| `$XDG_CONFIG_HOME/flume/flume.lock`, the host's | as it stands at each launch |
+
+Each is TOML, one `[[kinds]]` table per entry, `kind` its identity and
+`hash` its content's:
+
+```toml
+[[kinds]]
+kind = "acme/review@1"
+hash = "sha256:ab12…"
+
+[[kinds]]
+kind = "acme/review@2"
+hash = "sha256:cd34…"
+```
+
+A lock that is not there records nothing. A lock that cannot be read
+refuses each launch that needs it, naming the file and its fault, and
+no other. flume writes a lock only at
+[`flume kinds lock`](/flume/reference/commands/#flume-kinds-lock), and
+never commits one: the repository's lock reaches its places once you
+commit it on their base.
 
 ## The kind format
 
@@ -356,7 +440,7 @@ lists what a prompt may ask for.
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `XDG_CONFIG_HOME` | every command | where the host's configuration lies, `~/.config` where unset |
+| `XDG_CONFIG_HOME` | every command | where the host's configuration lies, with its sources and its lock of kinds, `~/.config` where unset |
 | `XDG_STATE_HOME` | every command | where flume keeps its state, `~/.local/state` where unset |
 | `XDG_DATA_HOME` | every command that starts an agent | where flume writes its Claude Code plugin, `~/.local/share` where unset |
 | `FLUME_RECIPIENT` | `launch`, `wait`, `inbox` | the recipient where a command names none |

@@ -83,4 +83,4 @@ yet built.
 
 - **[core.21]** Every file the tree tracks is owned by a formatter the gate runs, or is excluded by name with its reason; every crate, every directory under `plugins/`, and `site/`, is a moon project of its own, listed in `.moon/workspace.yml` with its language declared, whose check-fast tasks validate, lint and test it, one task per check.
 - **[core.22]** Every tool a gate task runs is the version the tree pins, on every host that runs the gate.
-- **[core.51]** A check that finds the host lacking what it needs of it, a socket's path with no room among them, ends with the exit `.config/sluice.toml`'s `[tests] not_run` names, saying what the host lacked; it never fails for that lack, and never passes without running.
+- **[core.51]** A check finds room for what it makes, a socket's path among them, in the scratch the merge queue gives its place, and a test that finds none fails naming what lacked room; it never passes, skips or returns early without running.

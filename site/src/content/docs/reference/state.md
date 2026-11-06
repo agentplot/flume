@@ -18,6 +18,7 @@ is asked, and keeps no copy between asks.
 ```
 $XDG_STATE_HOME/flume/              ~/.local/state/flume by default
   room.lock                         held while a start takes the host's room
+  kinds-lock.lock                   held while flume kinds lock reads and writes a lock of kinds
   flume.log                         a timed line per display hint or notice that did not go through
   places/
     <place>.json                    the place's held state, one document, with its version
@@ -61,7 +62,7 @@ flume process on the host reads them.
 
 | Document | What it holds |
 |---|---|
-| `accounts/<pool>/<account>.json` | the account spent: `until`, the time it is spent until; `words`, the usage limit's words; `recorded_at`, when flume recorded it. A later time already recorded stands. |
+| `accounts/<pool>/<account>.json` | the account spent: `until`, the time it is spent until; `words`, the usage limit's words; `recorded_at`, when flume recorded it; and `unread`, `true` where flume read no reset in the words, so `until` is an hour after `recorded_at`, left out otherwise. A later time already recorded stands. |
 | `intents/<digest>.json` | the intent's affinity: its `stream`; `accounts`, for each program its agents run, keyed by the program as an account's `program` names it, the `pool` and `account` the first of them on that program started on, as moved since; each move between accounts, with `on` `intent`, `program`, the program whose account moved, `from`, `to`, `why`, `spent`, `threshold` or `full`, `at`, and, where `why` is `threshold`, `window` and `until`, the window that held the account and until when; and `gone`, when its last place went. flume removes it on a read an hour after `gone`. |
 
 `<digest>` is the SHA-256, in hex, of `name:<name>` for an intent the
@@ -94,11 +95,23 @@ none, and its agent is read as the host's. The place's `unsettled`
 lists each start whose agent began otherwise than its record says
 ([the start check](/flume/guides/agent-settings/#the-start-check)).
 
+### The kind a place keeps
+
+A place's held state keeps the whole kind its launch read, its prompts
+among it, as `kind`, and where it came from as `kind_from`, written
+once at the launch with the fields status gives. Nothing a source, a
+package or a lock does after the launch reaches it
+([a place keeps its kind](/flume/guides/kinds/#a-place-keeps-its-kind)).
+A place an earlier release launched keeps no `kind_from`.
+
 ## Elsewhere on the host
 
 | Path | What |
 |---|---|
 | `$XDG_CONFIG_HOME/flume/config.toml` | the host's configuration ([configuration](/flume/reference/configuration/#the-hosts-configuration)) |
+| `$XDG_CONFIG_HOME/flume/sources/<source>.toml` | a source of kinds the host declares, which flume reads and never writes ([the host's sources](/flume/reference/configuration/#the-hosts-sources)) |
+| `$XDG_CONFIG_HOME/flume/flume.lock` | the host's lock of kinds, written by `flume kinds lock --host` ([the locks of kinds](/flume/reference/configuration/#the-locks-of-kinds)) |
+| `$XDG_DATA_HOME/flume/kinds/<source>/` | where a program that fetches a source's packages may put them, each at `<name>@<version>/`; flume reads them and never writes them |
 | `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>/` | the Claude Code plugin flume hands its agents, written once per version and binary |
 | `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>/` | a place, a worktree of its repository outside the repository's own directory; `<id>` is the repository's, as its agents' identities carry it |
 | the file an account's `usage` names | the account's reading, which something of the host's writes whole and flume reads at each choice of an account and whenever status is asked, and never writes, keeps or renews ([an account's reading](/flume/guides/agent-settings/#an-accounts-reading)) |
@@ -106,7 +119,9 @@ lists each start whose agent began otherwise than its record says
 
 ## In the repository
 
-Nothing of flume's. A place is a worktree on a branch of its own,
+Nothing of flume's, but the lock of kinds `flume kinds lock` writes into
+a working copy's `.config/flume.lock` where you run it there, which you
+commit. A place is a worktree on a branch of its own,
 under flume's data directory, inside no working tree or directory of
 the repository, whether the repository is a clone or a bare repository
 beside its worktrees. It holds only what its agents commit. flume writes no record into a repository's tree or onto
@@ -142,7 +157,9 @@ Each place:
 | Field | |
 |---|---|
 | `place`, `repository` | the place's location and its repository |
-| `kind`, `version`, `declared` | the kind, its version, and where it was declared: `flume`, `repository` or `launch` |
+| `kind`, `version`, `declared` | the kind, its version, and where it was declared: `flume`, `repository`, `launch`, or `host` for a source the host declares |
+| `identity` | the kind's identity as its launch read it, as `acme/review@2`; none for a place an earlier release launched |
+| `kind_from` | where the kind came from, as its launch read it, each field given only where it applies. `identity` gives its `source`, `name`, `version` and `spelled`, and `source` the source's name. A source the host declares gives `source_file` and `kind_dir`, the package's directory. The repository's gives `declaration_file`, `.config/flume.toml`, and `revision`, the base's, and a launch's `declaration_file`, the file's path. A package gives `hash`, and `lock_file`, the lock that recorded it: the repository's where it does, else the host's |
 | `name`, `branch`, `base`, `mark` | as the launch gave them |
 | `lands` | whether the kind lands |
 | `phase` | `live`, or `tidied` with when and why: `landed` with its commit, `dropped` or `done` |
@@ -185,7 +202,7 @@ The host:
 | `bound`, `room` | the host's bound, and how many more may start; `null` with no bound |
 | `queue` | the stages waiting for room, in the order they start, each with its stream, its `label`, its priority and the room it wants. That room, by `room`, is the host's, `host`; its stream's, `stream`, at its `bound`; its stream's past what other labels keep free, `kept-free`, naming those `labels`; or a usable account of its pool, `pool`, with `until`, the soonest time an account of the pool is neither spent nor past its threshold, `null` where each is only at its bound. A stage whose pool holds no account of its program waits for none: it is refused ([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)). |
 | `streams` | each stream: `name`, `session`, the herdr session its agents open in with `from`, `stream`, `stream-name` or `own`; `multiplexer` and `terminal_app`, each its `profile` and `from`, `stream`, `host` or `neither`; `view`, its `view`, `terminal` or `app`, and `from`; `title`, its `title` and `from`, `stream` or `stream-name`; `priority`, `running`, `bound`, `room` and `queue`, `bound` and `room` `null` where the stream has no bound of its own; `labels`, each with its `name`, `reserve`, `keep_free`, `running` and `waiting`; `reserves`, `held`, `passed-over` where the stream states no bound, or `none` where it gives no label a share; `refused`, why its labels, its multiplexer or its terminal app refuse it, `null` where none does; and `view_refused`, the terminal app's refusal alone, which refuses its `flume open` and none of its stages, left out where it holds none |
-| `pools` | each pool: `name`, `strategy`, `threshold`, `90` where the pool states none, and `accounts`, each account's `name`, `program`, `running`, `bound` and `spent_until`, `null` where it is not spent; `reading`, where the account names a `usage`; and `past`, while it is past its threshold, `window`, the window that holds it, and `until`, when that window resets, or, for a window that names no reset, when its reading stops being fresh. A `reading` is `read_at`, when the host read the allowance, `fresh`, whether that was less than fifteen minutes ago, and `windows`, each with its `name`, `used`, the percentage the reading gives, `resets_at` where it gives one, and `past`, whether that window holds the account past its threshold now; or `unread`, why there is none, naming no path |
+| `pools` | each pool: `name`, `strategy`, `threshold`, `90` where the pool states none, and `accounts`, each account's `name`, `program`, `running`, `bound` and `spent_until`, `null` where it is not spent; `spent_unread`, while it is spent for an hour because flume read no reset in its agent's words, those words; `reading`, where the account names a `usage`; and `past`, while it is past its threshold, `window`, the window that holds it, and `until`, when that window resets, or, for a window that names no reset, when its reading stops being fresh. A `reading` is `read_at`, when the host read the allowance, `fresh`, whether that was less than fifteen minutes ago, and `windows`, each with its `name`, `used`, the percentage the reading gives, `resets_at` where it gives one, and `past`, whether that window holds the account past its threshold now; or `unread`, why there is none, naming no path |
 | `watch` | the host's own multiplexer's watch, `{"bound":{"seconds":…}}`, or `none` with no herdr plugin running |
 | `terminals` | each multiplexer the host binds, the host's own first, then each stream's by the stream's name, each once: `profile`, `kept`, what a tidy kept there, and `watch`. Where any keeps no watch, every command of flume's that acts settles every place first |
 | `bases` | for each repository and base, its places running, asking, waiting on their caller and stalled, and the line shown in herdr |
@@ -193,6 +210,7 @@ The host:
 | `terminal_kept` | what a tidy kept in the host's own multiplexer because something flume did not make holds it |
 | `terminal_setup` | what the host's own multiplexer's configuration lacks for flume's plugin there, each in words a person acts on, naming the file read: under herdr, the popup's `[[keys.command]]` entry or the sidebar rows' `$flume`, as the plugin's watch last read herdr's configuration; empty where nothing is missing, there is no watch or the terminal reads none |
 | `configuration` | the host's configuration: `local`, its local layer's `state`, `no-file`, `taken` or `not-taken` with each of its `keys` the local layer may not set or its `fault`; `values`, every value by its dotted `key`, as TOML writes it, with its `layer`, `managed` or `local`, an account's variables `<set>`; and `passed_over`, each local `key` a `pin` holds |
+| `sources` | each source of kinds the host declares, read when asked: `name`, `source_file`, `kinds_dir`, `kinds`, the identity of every package its directory holds, and `cannot_read`, the fault where the file or the directory cannot be read |
 
 ## The answer of flume list --json
 

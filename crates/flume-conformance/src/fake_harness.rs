@@ -5,7 +5,7 @@ use crate::seams::{
     agent::{AgentHarness, CarryAccounts, Modes},
     change::ChangeHarness,
     history::HistoryHarness,
-    kinds::KindsHarness,
+    kinds::{KindsHarness, SourceDir},
     merge_queue::MergeQueueHarness,
     place::{Pinned, PlaceHarness},
     store::StoreHarness,
@@ -238,6 +238,80 @@ impl KindsHarness for FakeKindsHarness {
     fn binding(&self, binding: &Binding) -> String {
         self.kinds.set_binding(REPOSITORY, binding.clone());
         REPOSITORY.into()
+    }
+
+    fn source(&self, kinds: &[Kind]) -> Option<SourceDir> {
+        let dir = acme();
+        for kind in kinds {
+            let hash = packaged(&dir.source, kind.clone(), None).hash;
+            self.kinds.set_package(&dir.kinds_dir, kind.clone(), &hash);
+        }
+        Some(dir)
+    }
+
+    fn unreadable_source(&self) -> Option<SourceDir> {
+        let dir = SourceDir {
+            source: "broken".into(),
+            kinds_dir: "/kinds/broken".into(),
+        };
+        self.kinds
+            .unreadable_source(&dir.kinds_dir, "the directory cannot be listed");
+        Some(dir)
+    }
+
+    fn refused_package(&self) -> Option<(SourceDir, String, u32)> {
+        let dir = acme();
+        self.kinds.refuse_package(
+            &dir.kinds_dir,
+            "review",
+            3,
+            "kinds.review.version: makes the package acme/review@2, but it is held at acme/review@3",
+        );
+        Some((dir, "review".into(), 3))
+    }
+
+    fn lock_at(&self, entries: &[LockEntry]) -> Option<(String, Revision)> {
+        let revision = self.git.init("/locked", "main");
+        self.kinds
+            .set_lock_at("/locked", &revision, entries.to_vec());
+        Some(("/locked".into(), revision))
+    }
+
+    fn no_lock_at(&self) -> Option<(String, Revision)> {
+        Some(("/unlocked".into(), self.git.init("/unlocked", "main")))
+    }
+
+    fn lock_file(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = "/config/flume/flume.lock";
+        self.kinds.set_lock_file(path, entries.to_vec());
+        Some(path.into())
+    }
+
+    fn no_lock_file(&self) -> Option<String> {
+        Some("/work/.config/flume.lock".into())
+    }
+
+    fn unreadable_lock_file(&self) -> Option<String> {
+        let path = "/broken/flume.lock";
+        self.kinds
+            .unreadable_lock_file(path, "kinds[0].hash: is no content hash");
+        Some(path.into())
+    }
+
+    fn unwritable_lock(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = "/read-only/flume.lock";
+        self.kinds.set_lock_file(path, entries.to_vec());
+        self.kinds
+            .unwritable_lock(path, "/read-only is not writable");
+        Some(path.into())
+    }
+}
+
+/// The source `acme`, its packages in `/kinds/acme`.
+fn acme() -> SourceDir {
+    SourceDir {
+        source: "acme".into(),
+        kinds_dir: "/kinds/acme".into(),
     }
 }
 

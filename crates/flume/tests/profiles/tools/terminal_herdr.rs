@@ -254,13 +254,13 @@ impl TestServer {
             ));
             let _ = fs::remove_file(&link);
             std::os::unix::fs::symlink(&scratch.root, &link).unwrap_or_else(|error| {
-                crate::could_not_run(&format!(
+                panic!(
                     "the server's socket needs a short link, its scratch {} being {} bytes, \
                      and {} cannot be made: {error}",
                     scratch.root.display(),
                     scratch.root.as_os_str().len(),
                     link.display()
-                ))
+                )
             });
             (link.join("s"), Some(link))
         } else {
@@ -2807,9 +2807,9 @@ struct SessionHome {
 }
 
 impl SessionHome {
-    /// The home for a test that starts the sessions `names`; where a
-    /// session's socket would not fit a socket's address, the run ends as
-    /// one that could not run here, naming the bytes (record 0047).
+    /// The home for a test that starts the sessions `names`: refused, with
+    /// the bytes, where no folder the run may write leaves a session's
+    /// socket room in a socket's address (record 0047, rule core.51).
     fn new(names: &[&str]) -> SessionHome {
         let scratch = Scratch::new("herdr-sessions");
         fs::create_dir_all(scratch.path("home")).expect("the session home");
@@ -2851,12 +2851,12 @@ impl SessionHome {
                     })
                     .collect::<Vec<_>>()
                     .join("; ");
-                crate::could_not_run(&format!(
+                panic!(
                     "no folder this run may write, {} or /tmp, leaves herdr's sessions {} room \
                      within the {limit} bytes a socket's path holds on this host: {sockets}",
                     short.display(),
                     names.join(", ")
-                ))
+                )
             });
         SessionHome { scratch, link }
     }

@@ -93,6 +93,35 @@ fn identity() -> Identity {
     }
 }
 
+/// A kind's identity of the host's source `acme`, as a reader spells it.
+fn kind_identity() -> KindIdentity {
+    KindIdentity {
+        source: "acme".into(),
+        name: "review".into(),
+        version: 2,
+        spelled: "acme/review@2".into(),
+    }
+}
+
+fn hash() -> String {
+    format!("sha256:{}", "ab".repeat(32))
+}
+
+/// A kind of the host's source `acme`, locked in the host's lock (19, 21,
+/// 155, 191).
+fn kind_from() -> KindFrom {
+    KindFrom {
+        identity: kind_identity(),
+        source: "acme".into(),
+        source_file: Some("/config/flume/sources/acme.toml".into()),
+        kind_dir: Some("/data/flume/kinds/acme/review@2".into()),
+        declaration_file: None,
+        revision: None,
+        hash: Some(hash()),
+        lock_file: Some("/config/flume/flume.lock".into()),
+    }
+}
+
 fn holds() -> Holds {
     Holds {
         uncommitted: vec!["a.rs".into()],
@@ -133,7 +162,8 @@ fn held() -> HeldState {
             id: PlaceId::new("/r/places/bump--one"),
             repository: "/r".into(),
             kind: kind(),
-            declared: Declared::Repository,
+            declared: Declared::Host,
+            kind_from: Some(kind_from()),
             name: "one".into(),
             branch: "bump/one".into(),
             base: "main".into(),
@@ -1607,8 +1637,29 @@ fn the_hosts_own_documents_and_their_keys() {
             until: 54_000,
             words: Some("You've hit your session limit".into()),
             recorded_at: 47_400,
+            unread: false,
         }),
     });
+    let unread = AccountSpent {
+        until: 51_000,
+        words: Some("You've hit your weekly limit \u{b7} resets soon (UTC)".into()),
+        recorded_at: 47_400,
+        unread: true,
+    };
+    round_trips(unread.clone());
+    // A document written before reads as a reset read.
+    let before: AccountSpent = serde_json::from_value(serde_json::json!({
+        "until": 54_000,
+        "words": "You've hit your session limit",
+        "recorded_at": 47_400,
+    }))
+    .expect("a spent document written before");
+    assert!(!before.unread);
+    assert!(serde_json::to_value(&before)
+        .expect("json")
+        .get("unread")
+        .is_none());
+    assert_eq!(serde_json::to_value(&unread).expect("json")["unread"], true);
     round_trips(HostVersioned {
         version: 4,
         document: HostDocument::Intent(two_programs()),
@@ -1746,9 +1797,229 @@ fn a_kind_with_its_stages() {
     round_trips(KindsRead::CouldNotRead {
         reason: "no file".into(),
     });
-    for declared in [Declared::Launch, Declared::Repository, Declared::Flume] {
+    for declared in [
+        Declared::Launch,
+        Declared::Repository,
+        Declared::Flume,
+        Declared::Host,
+    ] {
         round_trips(declared);
     }
+    assert_eq!(serde_json::to_value(Declared::Host).unwrap(), "host");
+}
+
+#[test]
+fn a_held_state_with_where_its_kind_came_from() {
+    // A held state whose kind came from the host's source acme, with its
+    // file, its kind's directory, its hash and the host's lock, reads back
+    // as written; one written before a launch kept where its kind came
+    // from reads with none, and writes none back (19, 21; core.14).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let from = &json["place"]["kind_from"];
+    assert_eq!(from["identity"]["spelled"], "acme/review@2");
+    assert_eq!(from["source"], "acme");
+    assert_eq!(from["source_file"], "/config/flume/sources/acme.toml");
+    assert_eq!(from["kind_dir"], "/data/flume/kinds/acme/review@2");
+    assert_eq!(from["hash"], hash());
+    assert_eq!(from["lock_file"], "/config/flume/flume.lock");
+    assert!(
+        from.get("declaration_file").is_none() && from.get("revision").is_none(),
+        "a field that does not apply is written: {from}"
+    );
+    let mut before = json;
+    before["place"].as_object_mut().unwrap().remove("kind_from");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert_eq!(read.place.kind_from, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no kind_from written where none is held"
+    );
+}
+
+#[test]
+fn a_kinds_identity_name_package_source_and_lock() {
+    // Each type the kinds seam passes for a name, a package, a source's
+    // listing and a lock (154 to 157, 160, 192).
+    round_trips(kind_identity());
+    assert_eq!(kind_identity().to_string(), "acme/review@2");
+    round_trips(KindNamed {
+        source: Some("acme".into()),
+        name: "review".into(),
+        version: Some(2),
+        spelled: "acme/review@2".into(),
+    });
+    let bare = KindNamed {
+        source: None,
+        name: "review".into(),
+        version: None,
+        spelled: "review".into(),
+    };
+    round_trips(bare.clone());
+    assert_eq!(
+        serde_json::to_value(&bare).unwrap(),
+        serde_json::json!({"name": "review", "spelled": "review"}),
+        "a part not given is not written"
+    );
+    let package = Packaged {
+        identity: kind_identity(),
+        kind: kind(),
+        hash: hash(),
+        dir: Some("/kinds/acme/review@2".into()),
+    };
+    round_trips(package.clone());
+    round_trips(Packaged {
+        dir: None,
+        ..package.clone()
+    });
+    round_trips(PackageRead::Read {
+        package: Box::new(package),
+    });
+    round_trips(PackageRead::CouldNotRead {
+        reason: "kinds.review.version: makes the package acme/review@3".into(),
+    });
+    round_trips(SourceRead::Read {
+        kinds: vec![kind_identity()],
+    });
+    round_trips(SourceRead::CouldNotRead {
+        reason: "/data/flume/kinds/acme does not exist".into(),
+    });
+    let entry = LockEntry {
+        kind: kind_identity(),
+        hash: hash(),
+    };
+    round_trips(entry.clone());
+    round_trips(LockRead::None);
+    round_trips(LockRead::Read {
+        entries: vec![entry],
+    });
+    round_trips(LockRead::CouldNotRead {
+        reason: "kinds[0].hash: is no content hash".into(),
+    });
+}
+
+#[test]
+fn where_a_kind_came_from() {
+    // A host's source's, the repository's at the base's revision and a
+    // launch's, each with only the fields that apply (19, 21, 56).
+    round_trips(kind_from());
+    let repository = KindFrom {
+        identity: KindIdentity {
+            source: "repo".into(),
+            name: "bump".into(),
+            version: 2,
+            spelled: "repo/bump@2".into(),
+        },
+        source: "repo".into(),
+        source_file: None,
+        kind_dir: None,
+        declaration_file: Some(".config/flume.toml".into()),
+        revision: Some(Revision::new("c1")),
+        hash: None,
+        lock_file: None,
+    };
+    round_trips(repository.clone());
+    let launch = KindFrom {
+        identity: KindIdentity {
+            source: "launch".into(),
+            name: "x".into(),
+            version: 1,
+            spelled: "launch/x@1".into(),
+        },
+        source: "launch".into(),
+        declaration_file: Some("/tmp/kinds.toml".into()),
+        revision: None,
+        ..repository
+    };
+    round_trips(launch.clone());
+    let json = serde_json::to_value(&launch).unwrap();
+    assert_eq!(
+        json.as_object().unwrap().keys().collect::<Vec<_>>(),
+        ["declaration_file", "identity", "source"],
+        "only the fields that apply"
+    );
+}
+
+#[test]
+fn a_source_the_host_declares() {
+    // A source's file read, its kinds_dir, or its fault (159, 191, C.7).
+    round_trips(HostSource {
+        file: "/config/flume/sources/acme.toml".into(),
+        read: HostSourceRead::Read {
+            kinds_dir: "/data/flume/kinds/acme".into(),
+        },
+    });
+    round_trips(HostSource {
+        file: "/config/flume/sources/bad.toml".into(),
+        read: HostSourceRead::CouldNotRead {
+            reason: "it gives no kinds_dir".into(),
+        },
+    });
+}
+
+/// A kinds profile that keeps every default of the kinds seam.
+struct BareKinds;
+
+impl Kinds for BareKinds {
+    fn read_kinds(&self, _repository: &str, _revision: &Revision) -> KindsRead {
+        KindsRead::CouldNotRead {
+            reason: "bare".into(),
+        }
+    }
+
+    fn read_declaration(&self, _declaration: &str) -> KindsRead {
+        KindsRead::CouldNotRead {
+            reason: "bare".into(),
+        }
+    }
+
+    fn flumes_own(&self) -> Vec<Packaged> {
+        vec![]
+    }
+
+    fn read_binding(&self, _repository: &str) -> BindingRead {
+        BindingRead::Read {
+            binding: Binding::default(),
+        }
+    }
+}
+
+#[test]
+fn a_kinds_profile_that_reads_no_name_source_package_or_lock() {
+    // A profile that keeps the seam's defaults answers that it reads none
+    // of them and writes no lock, naming what it was asked where it was
+    // given a name (154, 160, 192).
+    let words = BareKinds
+        .read_named("acme/review@2")
+        .expect_err("a bare profile read a name");
+    assert!(words.contains("`acme/review@2`"), "{words}");
+    assert!(matches!(
+        BareKinds.read_source("acme", "/kinds/acme"),
+        SourceRead::CouldNotRead { .. }
+    ));
+    match BareKinds.read_package("acme", "/kinds/acme", "review", 2) {
+        PackageRead::CouldNotRead { reason } => assert!(reason.contains("review@2"), "{reason}"),
+        read => panic!("a bare profile read a package: {read:?}"),
+    }
+    assert!(matches!(
+        BareKinds.read_lock_at("/r", &Revision::new("c1")),
+        LockRead::CouldNotRead { .. }
+    ));
+    assert!(matches!(
+        BareKinds.read_lock_file("/config/flume/flume.lock"),
+        LockRead::CouldNotRead { .. }
+    ));
+    assert!(BareKinds
+        .write_lock("/config/flume/flume.lock", &[])
+        .is_err());
+    let words = BareKinds
+        .identity_of("repo", "bump", 2)
+        .expect_err("a bare profile spelled an identity");
+    assert!(words.contains("bump@2"), "{words}");
+    assert_eq!(BareKinds.declaration_path(), None);
+    assert_eq!(BareKinds.lock_path(), None);
 }
 
 #[test]

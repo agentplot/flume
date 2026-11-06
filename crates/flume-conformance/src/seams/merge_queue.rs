@@ -129,6 +129,38 @@ fn the_one_outcome<H: MergeQueueHarness>(
     Ok(first.remove(0))
 }
 
+fn two_branches_at_once<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, head) = harness.place();
+    harness.will_hold();
+    let submission = submitted(harness, &place, &head)?;
+    let none = format!("{}-none", place.branch);
+    let both = harness
+        .seam()
+        .read_submissions(&place.repository, &[none.as_str(), place.branch.as_str()]);
+    ensure_eq!(both.len(), 2, "the answers for two branches");
+    ensure_eq!(
+        both[0].read,
+        SubmissionRead::None,
+        "the branch with nothing"
+    );
+    ensure_eq!(
+        found(both[1].clone())?.id,
+        submission.id,
+        "the place's branch"
+    );
+    ensure_eq!(
+        found(
+            harness
+                .seam()
+                .read_submission(&place.repository, &place.branch)
+        )?
+        .id,
+        submission.id,
+        "the place's branch alone"
+    );
+    Ok(())
+}
+
 // ---- the merge queue seam: a profile unit appends its own scenarios at the list's end ----
 
 pub fn scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
@@ -167,6 +199,11 @@ pub fn scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
             name: "merge queue: read-submission gives the newest of a branch, whoever made it",
             cites: &["99", "63", "71"],
             run: read_gives_the_newest::<H>,
+        },
+        Scenario {
+            name: "merge queue: read-submission asked of two branches at once gives each its own newest, in the order asked, and one of them alone the same",
+            cites: &["99"],
+            run: two_branches_at_once::<H>,
         },
         Scenario {
             name: "merge queue: landed is said only of that branch's own submission",
