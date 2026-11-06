@@ -2428,7 +2428,7 @@ mod tests {
                 from: SessionFrom::StreamName,
             },
             multiplexer: ProfileHeld {
-                profile: "herdr".into(),
+                profile: "mux".into(),
                 from: NamedBy::Neither,
             },
             uncarried: runs
@@ -2468,7 +2468,7 @@ mod tests {
             stream_listed(
                 "office",
                 Some(SessionRuns::Unread {
-                    reason: named("herdr session list --json did not answer"),
+                    reason: named("the terminal did not answer"),
                 }),
                 "office · session office · not read",
             ),
@@ -2493,7 +2493,7 @@ mod tests {
                     "/code/flume",
                     "chore--rename",
                     None,
-                    &["landed", "kept by sluice release"],
+                    &["landed", "kept by release"],
                 ),
                 listed(
                     "/code/boomdrive",
@@ -2507,7 +2507,7 @@ mod tests {
         assert_eq!(
             person(&list),
             "/code/flume\n  change--list · construct · working\n  chore--rename · landed · kept by \
-             sluice release\n/code/boomdrive\n  change--records · construct · held · waits on its \
+             release\n/code/boomdrive\n  change--records · construct · held · waits on its \
              caller\nstreams\n  madswan · session madswan · runs\n  swancloud · session swancloud \
              · not running\n  work · no session\n  office · session office · not read\n  trial · \
              session trial · no profile for rex"
