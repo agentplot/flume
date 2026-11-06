@@ -207,9 +207,8 @@ it after. Those are sluice's and the host's, named below.
   S109 to S112 and S118, weir 51, 52 and 57 and sluice 124, on main at
   51b6316; and flume's vocabulary, 46, 119, 120, 122, 139, 176, the
   common profile's list, C.4's row, C.5, section 9, I8, S27, S28, S109
-  and S118 on the branch `design/flume-only-the-hosts-watch-settles` at
-  6dc9399, cut from main at 84c7a01 and unpushed, on the user's ruling
-  that no terminal settles (core.19).
+  and S118 on main at 6dc9399, on the user's ruling that no terminal
+  settles (core.19).
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool. weir-kinds' pin moves, and the pinned sluice moves
   to the release that submits a named head from no worktree.

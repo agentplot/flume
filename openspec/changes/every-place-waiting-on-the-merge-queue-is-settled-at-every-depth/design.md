@@ -577,10 +577,9 @@ stages as any kind. The fake place logs nothing for a base place.
   9's surfaces, givens, callers and the runner's row, I8, section 12,
   S27, S28, S91 and S109 to S112 and S118; weir's 51, 52, 57 and the
   format's example; sluice's 124, a submission naming its head from
-  anywhere in the repository with no worktree as its submitter. The
-  branch `design/flume-only-the-hosts-watch-settles` at 6dc9399, cut
-  from main at 84c7a01 and unpushed, amends flume's statement to the
-  user's ruling that no terminal settles: 122, the terminal settles
+  anywhere in the repository with no worktree as its submitter. Main
+  at 6dc9399 amends flume's statement to the user's ruling that no
+  terminal settles: 122, the terminal settles
   nothing; the vocabulary; 46, 119, 120, 176, the common
   profile's list and C.4's row; 139, show's clues carrying the line's
   short form; C.5's table, its show row and its prose on the clues and
@@ -651,7 +650,7 @@ queue, and no terminal is relied on.
   weir 51, 52 and 57 as the statement branch amends them; weir-kinds
   reads `stages = []` on a kind that lands, refuses it on one that does
   not, and reads a table that leaves `stages` out as settings, as
-  today. flume's task 3.4 moves its pin to the revision that lands it.
+  today. flume's task 4.3 moves its pin to the revision that lands it.
 - **agentplot/sluice, S1: a submit names its head, from no worktree.**
   sluice 124 as amended: `sluice submit <target> --head <branch>
   --no-wait --json` without `--check` submits a branch sluice lands on
@@ -662,7 +661,7 @@ queue, and no terminal is relied on.
   `sluice inbox` anywhere answers nothing for it, and `sluice status
   <target> --all --json` gives it with the words an inbox gives, the
   failed checks' notice, the conflict's paths and `tested.on`. flume's
-  task 5.2 moves its pin of sluice to the release that carries it.
+  task 6.2 moves its pin of sluice to the release that carries it.
 - **agentplot/sluice, S2: a round keeps the room it counted.** The
   research note's two gaps: a round counts room before its checkout and
   asks for it after, and nothing gives a queued candidate the first free

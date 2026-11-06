@@ -5,10 +5,8 @@ Each group is one session's work for an agent that reads this change
 groups before it. The statement's base places and watch are on
 agentplot/blueprints main at 51b6316, and record 0051 accepted, on the
 user's approval of 2026-11-06. Its amendment to the user's ruling the
-same day that no terminal settles is on the branch
-`design/flume-only-the-hosts-watch-settles` at 6dc9399, cut from main at
-84c7a01 and unpushed, record 0051's amendment proposed until the user's
-yes; group 3 builds to it. A group's last task runs the checks it
+same day that no terminal settles is on main at 6dc9399, record 0051's
+amendment proposed until the user's yes; group 3 builds to it. A group's last task runs the checks it
 touched through sluice. Every conformance scenario a group adds cites
 its clauses as data (106), and the engine's scenarios name no tool
 (core.1). No code of the core names a kind, a prefix or a depth to tell
@@ -75,5 +73,5 @@ naming it, its other tasks done.
 ## 7. The site and the clause list
 
 - [ ] 7.1 Give `site/src/content/docs/guides/merge-queue.md` a section "Branches that land on branches": a kind with `stages = []` that lands, a place of it launched on `main` with no worktree, places launched on its branch, its submission by `flume retry <place> --submission` once they land, where its outcome is read, what a failure asks of its caller, and its tidy; and say in its "Reading the outcome" that a caller keeping watch, `flume settle --every`, moves a submitted place with no agent, and that flume runs attended while none does. Give `site/src/content/docs/guides/kinds.mdx` a kind that lands declaring `stages = []`, and `site/src/content/docs/reference/state.md` the host's watch, the line show gives a pane, `worktree`, `on_branch` and `waits_on: places`, to any host's operator, naming no bolt and no caller of ours (119, 202 to 206 and 208; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 7.2 Have `crates/flume-conformance/src/clauses.rs` read agentplot/blueprints main at the revision that holds record 0051's amendment of 6dc9399 once it has landed, else at 51b6316, the clause list the same at either, or the later one of main the build reads, 202 to 204 and 208 in Part A, 205 and 206 in Part B and S109 to S112 and S118 among the scenarios, 207 and S113 to S117 named as a-lost-conversation-resumes-its-session's while that change has not landed, as the clause-coverage spec has it (106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes, each of 202 to 206 and 208 and S109 to S112 and S118 cited by this change's scenarios.
+- [ ] 7.2 Have `crates/flume-conformance/src/clauses.rs` read agentplot/blueprints main at 6dc9399, which holds record 0051's amendment, or the later one of main the build reads, 202 to 204 and 208 in Part A, 205 and 206 in Part B and S109 to S112 and S118 among the scenarios, 207 and S113 to S117 named as a-lost-conversation-resumes-its-session's while that change has not landed, as the clause-coverage spec has it (106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes, each of 202 to 206 and 208 and S109 to S112 and S118 cited by this change's scenarios.
 - [ ] 7.3 Run the checks of the projects this change touched. True when `sluice exec main -- moon run root:format root:adrs root:specs root:changes root:toolchain root:versions seams:test fakes:test core:test conformance:test conformance:coverage flume:test flume:tools plugin-herdr:test site:prose site:build` passes.
