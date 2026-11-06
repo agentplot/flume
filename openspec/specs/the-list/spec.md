@@ -94,12 +94,12 @@ names no profile flume carries, which asks no terminal; and
 ### Requirement: The list reads only what flume keeps
 
 The list SHALL read each place's held state, each live agent's asking
-mark from its own record, and each stream's terminal once by runs, and
-nothing else: no place's worktree, head, deliverable, change or
-submission, no terminal's state, screen or clues of a place's agent, no
-repository's binding; and asking it SHALL settle, start, send and
-write nothing, and start no session's server, whether every place is
-asked or not (57, 58, 200, 201; core.52).
+mark from its own record, and each stream's terminal once by runs, for
+all its sessions together, and nothing else: no place's worktree, head,
+deliverable, change or submission, no terminal's state, screen or clues
+of a place's agent, no repository's binding; and asking it SHALL
+settle, start, send and write nothing, and start no session's server,
+whether every place is asked or not (57, 58, 199, 200, 201; core.52).
 
 #### Scenario: Fifty places in three repositories
 
@@ -124,12 +124,14 @@ The list's answer SHALL be `{"list":{"places":[…],"streams":[…]}}`,
 each place with `place`, `repository`, `name`, `kind`, `stage`,
 `state`, `waits_on`, `kept` and `line`, a part it has none of left out,
 and each stream with `stream`, `session`, `multiplexer`, `runs` or
-`uncarried`, and `line`; written to JSON and read back unchanged, its
-form only gaining fields (60, 61, 200).
+`uncarried`, `sessions`, each other session it names with its `name`
+and `runs`, left out where it names none, and `line`; written to JSON
+and read back unchanged, its form only gaining fields (60, 61, 199,
+200).
 
 #### Scenario: The list round-trips and holds its fields
 
-- **WHEN** a list with a place waiting on the host and a place kept by its teardown, and a stream that runs and one uncarried, is written to JSON and read back, and the suite's field list is read
+- **WHEN** a list with a place waiting on the host and a place kept by its teardown, and a stream that runs naming a session for a kind that does not run and one uncarried, is written to JSON and read back, and the suite's field list is read
 - **THEN** each equals the value written, `waits_on` reads `host`, and the field list holds every field above, the suite failing naming the answer and the field where one is dropped (61)
 
 ### Requirement: The list leaves out a place that landed or was dropped unless every place is asked
@@ -144,3 +146,17 @@ SHALL be listed either way (62, 63, 200).
 
 - **WHEN** the list is asked of the repository `/r` holding a fix named live whose code agent works, and fixes copied from it whose phases say: landed, with nothing keeping it; dropped, kept holding a file neither committed nor ignored; landed and being tidied; dropped and tidied, its document kept for an end pending; and done
 - **THEN** it gives under `/r` the lines `fix--done · done` and `fix--live · code · working` alone; and, asked for every place, the lines `fix--done · done`, `fix--dropped · dropped · kept holding work`, `fix--going · landed · being tidied`, `fix--landed · landed`, `fix--live · code · working` and `fix--tidied · dropped · tidied`, in that order (62, 63, 200)
+
+### Requirement: A stream's line gives each session it names for a kind or a stage
+
+After its own session, a stream's line SHALL give `session <name> ·
+<runs>` for each other session the stream names for a kind or a stage,
+each once, by name, every session read in the stream's one runs; where
+its multiplexer names no profile flume carries, each SHALL be given
+with no runs part, before the line's one `no profile for <multiplexer>`
+(190, 199, 200, 201).
+
+#### Scenario: A stream's sessions for its kinds and stages
+
+- **WHEN** the fake host's `work` names `work-design` for research and for release's review, and `work` for the kind fix, and the fake terminal is scripted to read `work` running and `work-design` not
+- **THEN** `work`'s line is `work · session work · runs · session work-design · not running`, its JSON gives `work-design` not running among its `sessions` and no `work` there, and the fake terminal logs the one runs `runs work work-design` for `work` (199, 200, 201)
