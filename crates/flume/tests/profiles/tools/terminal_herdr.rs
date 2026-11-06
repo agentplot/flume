@@ -29,9 +29,10 @@
 //! refuses as an argument started from the agent profile by a file, a
 //! role run's pane reached by its
 //! address after a move, and a recipient on another server reached
-//! through its own socket; and what flume's herdr plugin's own watch
-//! writes herdr's configuration lacks, given by status while its lease
-//! is fresh. Under a scratch home of herdr's named sessions: two
+//! through its own socket; what flume's herdr plugin's own watch writes
+//! herdr's configuration lacks, given by status while its lease is
+//! fresh; and the nudge answered from that lease, fresh or stale, flume
+//! unattended either way while a caller keeps watch. Under a scratch home of herdr's named sessions: two
 //! streams' sessions (S82), a session name herdr refuses, a place tidied
 //! in two sessions, records written before they were kept by server, and
 //! attach: a stream's session started for a window's command, a client
@@ -46,7 +47,7 @@ use flume::host::config::HostConfig;
 use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::terminal::herdr::{
-    herdr_name, Herdr, Pane, Server, NAME, SESSION, SESSION_HOME, START_TIMEOUT,
+    herdr_name, Herdr, Pane, Server, LEASE_TERM, NAME, SESSION, SESSION_HOME, START_TIMEOUT,
 };
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
@@ -2779,6 +2780,89 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
     assert_eq!(terminal_setup(&server, flume), lacking);
     drop(watch);
     assert_eq!(terminal_setup(&server, flume), Value::Array(vec![]));
+}
+
+/// The plugin's lease on its server `1` under `plugin`, renewed `ago`
+/// seconds before now by this process, as the watch writes it.
+fn lease_renewed(plugin: &Path, ago: u64) {
+    let server = plugin.join("servers/1");
+    fs::create_dir_all(&server).expect("the plugin's server state");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock")
+        .as_secs();
+    fs::write(
+        server.join("watch.lease"),
+        format!("{} {}\n", std::process::id(), now - ago),
+    )
+    .expect("the lease");
+}
+
+/// The host's watch and the host's terminal's nudge, as status gives
+/// them.
+fn watch_and_nudge(engine: &Engine) -> (Watch, Option<Nudge>) {
+    match engine.status(None) {
+        Answer::Status { host, .. } => (
+            host.watch,
+            host.terminals.first().map(|terminal| terminal.nudge),
+        ),
+        other => panic!("status answered {other:?}"),
+    }
+}
+
+#[test]
+fn the_nudge_is_the_plugins_lease_and_decides_nothing_of_attended() {
+    // 119, 122, 208, C.5: the herdr terminal answers that it nudges while
+    // the plugin's watch holds a fresh lease and nothing once it is
+    // stale; a caller keeping watch over the host keeps flume unattended
+    // either way, and no lease makes it so.
+    let server = TestServer::start("nudge");
+    let world = World::new();
+    let plugin = server.scratch.path("plugin");
+    let herdr = server.profile().with_plugin(Some(plugin.clone()));
+    let terminal: Arc<dyn Terminal> = Arc::new(herdr.clone());
+    world.resolver.with_terminal(NAME, terminal.clone());
+    let state = server.scratch.path("state/flume");
+    let engine = Engine::new(
+        world.resolver.clone(),
+        terminal,
+        Arc::new(StateDir::at(&state)),
+        world.history.clone(),
+        Arc::new(RealHost::new(
+            &state,
+            HostConfig {
+                terminal: Some(NAME.into()),
+                ..HostConfig::default()
+            },
+            None,
+        )),
+        world.defaults.clone(),
+    );
+    assert_eq!(herdr.nudge(), Nudge::None, "with no lease");
+
+    lease_renewed(&plugin, 0);
+    assert_eq!(herdr.nudge(), Nudge::OnChange, "with a fresh lease");
+    assert_eq!(
+        watch_and_nudge(&engine),
+        (Watch::None, Some(Nudge::OnChange)),
+        "a fresh lease and no caller keeping watch: flume runs attended"
+    );
+
+    let settled = engine.settle_every(60);
+    assert!(settled.refusal().is_none(), "{settled:?}");
+    assert_eq!(
+        watch_and_nudge(&engine),
+        (Watch::Bound { seconds: 60 }, Some(Nudge::OnChange)),
+        "a caller keeping watch beside a fresh lease"
+    );
+
+    lease_renewed(&plugin, 2 * LEASE_TERM.as_secs());
+    assert_eq!(herdr.nudge(), Nudge::None, "with a stale lease");
+    assert_eq!(
+        watch_and_nudge(&engine),
+        (Watch::Bound { seconds: 60 }, Some(Nudge::None)),
+        "a caller keeping watch beside a stale lease: flume still runs unattended"
+    );
 }
 
 /// The longer of the two sockets the pinned herdr binds in a named
