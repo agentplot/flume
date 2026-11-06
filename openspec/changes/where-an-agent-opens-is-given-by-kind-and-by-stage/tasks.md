@@ -13,7 +13,7 @@ scratch file of the test's own.
 
 ## 1. Before the code
 
-- [ ] 1.1 agentplot/blueprints main holds design 13's amendment at f676e8f and its follow-up at fa40c94, the user's card of 2026-11-06 accepting it. Merge main into the branch. Check that record 0048 is still free on every branch and in every place on the host, renumbering here where another took it, and fit every delta that names `Stream`, `StreamStatus`, `open_stream`, `flume open`, `flume list` or the local layer's keys to the specs and code as main then holds them (design 11; core.19). True when the merge is committed, and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
+- [x] 1.1 agentplot/blueprints main holds design 13's amendment at f676e8f and its follow-up at fa40c94, the user's card of 2026-11-06 accepting it. Merge main into the branch. Check that record 0048 is still free on every branch and in every place on the host, renumbering here where another took it, and fit every delta that names `Stream`, `StreamStatus`, `open_stream`, `flume open`, `flume list` or the local layer's keys to the specs and code as main then holds them (design 11; core.19). True when the merge is committed, and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
 
 ## 2. The seams
 
