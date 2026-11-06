@@ -167,6 +167,7 @@ fn kept_words(phase: &Phase) -> Option<String> {
                 }
             }
             Kept::AgentLive { .. } => "kept while its agent runs",
+            Kept::SessionRuns { .. } => "kept while its session runs",
             Kept::Unreadable { .. } => "kept unread",
         },
         Phase::Gone { .. } => "being tidied",

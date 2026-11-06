@@ -110,6 +110,7 @@ impl Engine {
                     order,
                     words: Some(words.clone()),
                     carry: carry.clone(),
+                    ..RoomWait::default()
                 });
                 Step::Write(())
             });

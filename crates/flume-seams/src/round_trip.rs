@@ -213,6 +213,7 @@ fn held() -> HeldState {
             refused_part: Some("words".into()),
             refused_setting: Some("the program nothing-here, from host-kind".into()),
             end: Some(StageEnd {
+                left_in_pane: false,
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
@@ -230,13 +231,16 @@ fn held() -> HeldState {
                 unsettled: Some(Box::new(unsettled())),
             }),
             room: Some(RoomWait {
+                live_unread: None,
+                live: vec![],
                 order: 3,
                 words: Some("the merge queue's words".into()),
-                carry: Some(AfterSpent {
+                carry: Some(CarryFrom {
                     start: Identity {
                         start: 1,
                         ..identity()
                     },
+                    cause: CarryCause::Spent,
                     carry: true,
                     why: None,
                 }),
@@ -306,6 +310,7 @@ fn held() -> HeldState {
                 }),
                 conversation: Some(Conversation {
                     from: 1,
+                    cause: CarryCause::Spent,
                     carried: true,
                     why: None,
                 }),
@@ -984,13 +989,15 @@ fn a_held_state_with_a_carried_start() {
             "words": "the start that carried its conversation ended before it said it started",
         })
     );
-    round_trips(AfterSpent {
+    round_trips(CarryFrom {
         start: identity(),
+        cause: CarryCause::Spent,
         carry: false,
         why: Some("the start that carried its conversation ended before it said it started".into()),
     });
     round_trips(Conversation {
         from: 1,
+        cause: CarryCause::Spent,
         carried: false,
         why: Some("its agent profile carries no conversation".into()),
     });
@@ -1036,6 +1043,198 @@ fn a_held_state_written_before_carried_starts() {
         before,
         "nothing of a carried start written where none is held"
     );
+}
+
+/// A held state whose talk was reported lost and its caller retried it:
+/// its wait carries the conversation of the lost start 1, as live last
+/// read it run by process 4242, and its start 2 carries that conversation
+/// under work-2, the account start 1 ran under, chosen from its
+/// conversation; its end before says flume left the agent the terminal
+/// brought back in its pane (43, 49, 145, 179, 207).
+fn talk() -> HeldState {
+    let mut state = held();
+    let talk = Identity {
+        stage: "talk".into(),
+        ..identity()
+    };
+    let stage = &mut state.stages[0];
+    stage.name = "talk".into();
+    stage.state = StageState::WaitingForRoom;
+    stage.end = Some(StageEnd {
+        left_in_pane: true,
+        ..StageEnd::default()
+    });
+    stage.room = Some(RoomWait {
+        order: 4,
+        words: Some("we were on the second option".into()),
+        carry: Some(CarryFrom {
+            start: Identity {
+                start: 1,
+                ..talk.clone()
+            },
+            cause: CarryCause::Lost,
+            carry: true,
+            why: None,
+        }),
+        live: vec![LiveProcess {
+            pid: 4242,
+            started: 100,
+        }],
+        live_unread: None,
+    });
+    let start = stage.start.as_mut().expect("a start");
+    start.identity = talk;
+    start.account = Some(AccountHeld {
+        pool: "work".into(),
+        name: "work-2".into(),
+        from: AccountFrom::Conversation,
+    });
+    start.conversation = Some(Conversation {
+        from: 1,
+        cause: CarryCause::Lost,
+        carried: true,
+        why: None,
+    });
+    state
+}
+
+/// The seam-contracts spec's scenario "A lost conversation's wait and
+/// conversation" (49, 179).
+#[test]
+fn a_lost_conversations_wait_and_conversation() {
+    let state = talk();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let stage = &json["stages"][0];
+    assert_eq!(stage["room"]["carry"]["start"]["start"], 1);
+    assert_eq!(stage["room"]["carry"]["cause"], "lost");
+    assert_eq!(
+        stage["start"]["conversation"],
+        serde_json::json!({"from": 1, "cause": "lost", "carried": true})
+    );
+    // A spent start's wait and conversation write no cause, so what a
+    // reader of either wrote before stands (core.14).
+    let spent = serde_json::to_value(held()).expect("held state as JSON");
+    assert!(spent["stages"][0]["room"]["carry"].get("cause").is_none());
+    assert!(spent["stages"][0]["start"]["conversation"]
+        .get("cause")
+        .is_none());
+    // One whose wait and conversation name no cause reads as spent.
+    let mut before = json;
+    let stage = &mut before["stages"][0];
+    stage["room"]["carry"]
+        .as_object_mut()
+        .unwrap()
+        .remove("cause");
+    stage["start"]["conversation"]
+        .as_object_mut()
+        .unwrap()
+        .remove("cause");
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    let stage = &read.stages[0];
+    let carry = stage.room.as_ref().and_then(|room| room.carry.as_ref());
+    assert_eq!(carry.map(|carry| carry.cause), Some(CarryCause::Spent));
+    let start = stage.start.as_ref().expect("a start");
+    assert_eq!(
+        start
+            .conversation
+            .as_ref()
+            .map(|conversation| conversation.cause),
+        Some(CarryCause::Spent)
+    );
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no cause written where a spent one is held"
+    );
+    assert_eq!(
+        (CarryCause::Spent.name(), CarryCause::Lost.name()),
+        ("spent", "lost")
+    );
+}
+
+/// The seam-contracts spec's scenario "An account from the conversation
+/// and an agent left" (43, 145).
+#[test]
+fn an_account_from_the_conversation_and_an_agent_left() {
+    let state = talk();
+    round_trips(state.clone());
+    round_trips(AccountFrom::Conversation);
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let stage = &json["stages"][0];
+    assert_eq!(
+        stage["start"]["account"],
+        serde_json::json!({"pool": "work", "name": "work-2", "from": "conversation"})
+    );
+    assert_eq!(stage["end"]["left_in_pane"], true);
+    // An end written before reads with no agent left, and writes none.
+    let held = serde_json::to_value(held()).expect("held state as JSON");
+    assert!(held["stages"][0]["end"].get("left_in_pane").is_none());
+    for end in held["ends"].as_array().unwrap() {
+        assert!(end["end"].get("left_in_pane").is_none(), "{end}");
+    }
+    let read: HeldState = serde_json::from_value(held).expect("read from before");
+    assert!(!read.stages[0].end.as_ref().expect("an end").left_in_pane);
+}
+
+/// The seam-contracts spec's scenario "A wait on a live session" (49, 64,
+/// 207).
+#[test]
+fn a_wait_on_a_live_session() {
+    let state = talk();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["stages"][0]["room"]["live"],
+        serde_json::json!([{"pid": 4242, "started": 100}])
+    );
+    assert!(json["stages"][0]["room"].get("live_unread").is_none());
+    // A wait on a session live could not read, naming a variable and no
+    // path (core.30).
+    let unread = RoomWait {
+        order: 5,
+        words: None,
+        carry: None,
+        live: vec![],
+        live_unread: Some("the sessions under CLAUDE_CONFIG_DIR cannot be read".into()),
+    };
+    round_trips(unread.clone());
+    assert!(serde_json::to_value(&unread)
+        .expect("a wait as JSON")
+        .get("live")
+        .is_none());
+    // A place kept while its session runs, by the process that runs it,
+    // or by what could not be read.
+    let kept = Phase::Over {
+        over: Over::Dropped,
+        kept: Some(Kept::SessionRuns {
+            processes: vec![LiveProcess {
+                pid: 4242,
+                started: 100,
+            }],
+            unread: None,
+        }),
+    };
+    round_trips(kept.clone());
+    assert_eq!(
+        serde_json::to_value(&kept).expect("a phase as JSON")["over"]["kept"],
+        serde_json::json!({"session_runs": {"processes": [{"pid": 4242, "started": 100}]}})
+    );
+    round_trips(Phase::Over {
+        over: Over::Done,
+        kept: Some(Kept::SessionRuns {
+            processes: vec![],
+            unread: Some("the host's processes cannot be listed".into()),
+        }),
+    });
+    // A wait written before reads with no process and nothing unread, and
+    // writes none.
+    let before = serde_json::to_value(held()).expect("held state as JSON");
+    let room = &before["stages"][0]["room"];
+    assert!(room.get("live").is_none() && room.get("live_unread").is_none());
+    let read: HeldState = serde_json::from_value(before).expect("read from before");
+    let room = read.stages[0].room.as_ref().expect("a room");
+    assert_eq!((&room.live, &room.live_unread), (&vec![], &None));
 }
 
 #[test]

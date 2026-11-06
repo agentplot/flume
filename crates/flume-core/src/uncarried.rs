@@ -45,15 +45,17 @@ pub(crate) fn uncarried<'a>(held: &'a HeldState, start: &StartHeld) -> Option<&'
 }
 
 /// The wait of a stage whose carried start `start` did not begin: after
-/// the start whose agent stopped at its account's usage limit, carrying
-/// nothing, with `why` (146, 179).
-pub(crate) fn after_uncarried(start: &StartHeld, why: String) -> Option<AfterSpent> {
-    let from = start.conversation.as_ref()?.from;
-    Some(AfterSpent {
+/// the start whose agent stopped at its account's usage limit or was
+/// reported lost, for the same cause, carrying nothing, with `why` (146,
+/// 179).
+pub(crate) fn after_uncarried(start: &StartHeld, why: String) -> Option<CarryFrom> {
+    let conversation = start.conversation.as_ref()?;
+    Some(CarryFrom {
         start: Identity {
-            start: from,
+            start: conversation.from,
             ..start.identity.clone()
         },
+        cause: conversation.cause,
         carry: false,
         why: Some(why),
     })
@@ -120,6 +122,7 @@ impl Engine {
                     order,
                     words: Some(again.clone()),
                     carry: carry.clone(),
+                    ..RoomWait::default()
                 });
                 Step::Write(())
             });

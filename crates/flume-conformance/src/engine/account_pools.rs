@@ -1536,6 +1536,7 @@ fn the_stage_moves(_: &()) -> Outcome {
         start.conversation,
         Some(Conversation {
             from: 1,
+            cause: CarryCause::Spent,
             carried: false,
             why: Some(UNREACHED.into()),
         }),
@@ -1593,6 +1594,7 @@ fn the_stage_moves(_: &()) -> Outcome {
             Some(false),
             Some(Conversation {
                 from: 1,
+                cause: CarryCause::Spent,
                 carried: false,
                 why: Some(UNREACHED.into()),
             })

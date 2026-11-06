@@ -160,6 +160,7 @@ fn place_status() -> PlaceStatus {
             state: StageState::EndedShort,
             starts: 2,
             end: Some(StageEnd {
+                left_in_pane: false,
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
@@ -188,6 +189,7 @@ fn place_status() -> PlaceStatus {
         }],
         current: Some("code".into()),
         agent: Some(AgentStatus {
+            left_in_pane: false,
             identity: "flume:/r:fix--one:code:2".into(),
             stage: "code".into(),
             program: "agent".into(),
@@ -224,6 +226,7 @@ fn place_status() -> PlaceStatus {
             }),
             conversation: Some(Conversation {
                 from: 1,
+                cause: CarryCause::Spent,
                 carried: false,
                 why: Some("its agent profile carries no conversation".into()),
             }),

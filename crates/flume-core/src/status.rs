@@ -229,6 +229,10 @@ impl Engine {
                 conversation: start.conversation.clone(),
                 session: start.session.clone(),
                 terminal: start.terminal.clone(),
+                left_in_pane: held.stages[index]
+                    .end
+                    .as_ref()
+                    .is_some_and(|end| end.left_in_pane),
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);

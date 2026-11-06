@@ -1002,6 +1002,11 @@ pub struct AgentStatus {
     /// 190).
     #[serde(default)]
     pub terminal: Option<ProfileHeld>,
+    /// For the agent of a conversation's stage read lost, one the terminal
+    /// brought back in its last start's pane, that flume left it there,
+    /// sent nothing; written only where it did (56, 77; core.10).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub left_in_pane: bool,
 }
 
 /// An agent's mode at its start: `passed`, the value its profile passed,

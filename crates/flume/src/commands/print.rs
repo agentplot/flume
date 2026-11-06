@@ -612,6 +612,7 @@ fn agent_line(agent: &AgentStatus) -> String {
         let from = match account.from {
             AccountFrom::Affinity => format!("the affinity for {}", agent.program),
             AccountFrom::Strategy => "the strategy".to_string(),
+            AccountFrom::Conversation => "its conversation's".to_string(),
         };
         line.push_str(&format!(
             " on the account {} of {} (from {from})",
@@ -1111,6 +1112,7 @@ mod tests {
     #[test]
     fn an_agents_account() {
         let agent = AgentStatus {
+            left_in_pane: false,
             identity: "flume:r:fix--one:code:2".into(),
             stage: "code".into(),
             program: "agent".into(),
@@ -1433,6 +1435,7 @@ mod tests {
     /// mode as `status` gives it.
     fn in_mode(written: &str, layer: Layer, status: ModeStatus) -> AgentStatus {
         AgentStatus {
+            left_in_pane: false,
             identity: "flume:r:fix--one:code:1".into(),
             stage: "code".into(),
             program: "agent".into(),
@@ -1559,6 +1562,7 @@ mod tests {
         assert_eq!(
             conversation_line(&Conversation {
                 from: 1,
+                cause: flume_seams::CarryCause::Spent,
                 carried: true,
                 why: None,
             }),
@@ -1571,6 +1575,7 @@ mod tests {
         assert_eq!(
             conversation_line(&Conversation {
                 from: 1,
+                cause: flume_seams::CarryCause::Spent,
                 carried: false,
                 why: Some("the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's".into()),
             }),

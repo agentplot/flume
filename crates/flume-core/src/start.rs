@@ -114,7 +114,7 @@ pub(crate) const CARRIES_NONE: &str = "its agent profile carries no conversation
 /// `carry`, its profile's answer for the account chosen, says; or why
 /// not: the profile's words, or the wait's where it may not carry, or
 /// that no account was chosen to carry it to (146, 179).
-fn conversation(after: &AfterSpent, carry: Option<&Carry>) -> Conversation {
+fn conversation(after: &CarryFrom, carry: Option<&Carry>) -> Conversation {
     let why = match carry {
         Some(Carry::Yes { .. }) => None,
         Some(Carry::No { why }) => Some(why.clone()),
@@ -129,6 +129,7 @@ fn conversation(after: &AfterSpent, carry: Option<&Carry>) -> Conversation {
     };
     Conversation {
         from: after.start.start,
+        cause: after.cause,
         carried: why.is_none(),
         why,
     }
@@ -462,6 +463,7 @@ impl Engine {
                         order: queue.next_order(),
                         words: words.clone(),
                         carry: after.clone(),
+                        ..RoomWait::default()
                     });
                     held.current = Some(index);
                     return Step::Write(Err(Start::WaitingForRoom));

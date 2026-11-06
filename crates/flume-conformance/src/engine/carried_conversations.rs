@@ -144,6 +144,7 @@ fn carried(world: &World, id: &PlaceId, start: &StartHeld) -> Outcome {
         start.conversation,
         Some(Conversation {
             from: 1,
+            cause: CarryCause::Spent,
             carried: true,
             why: None,
         }),
@@ -267,8 +268,9 @@ fn a_carried_start_waits_for_a_usable_account(_: &()) -> Outcome {
         .ok_or("the waiting stage holds no room")?;
     ensure_eq!(
         room.carry,
-        Some(AfterSpent {
+        Some(CarryFrom {
             start: code("one", 1),
+            cause: CarryCause::Spent,
             carry: true,
             why: None,
         }),
@@ -522,6 +524,7 @@ fn a_profile_that_carries_nothing(_: &()) -> Outcome {
             2,
             Some(Conversation {
                 from: 1,
+                cause: CarryCause::Spent,
                 carried: false,
                 why: Some("its agent profile carries no conversation".into()),
             })
@@ -592,6 +595,7 @@ fn afresh_after(world: &World, start: &StartHeld, why: &str) -> Outcome {
         start.conversation,
         Some(Conversation {
             from: 1,
+            cause: CarryCause::Spent,
             carried: false,
             why: Some(why.to_string()),
         }),
