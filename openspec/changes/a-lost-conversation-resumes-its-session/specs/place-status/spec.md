@@ -44,21 +44,21 @@ beside the affinity and the strategy, in the JSON and the person's form
 - **WHEN** status is asked of a place whose talk start 2 took work-2, the account its lost start 1 ran under, while the intent keeps work-1
 - **THEN** the agent's account reads work-2 from the conversation, and the person's form says it is its conversation's (56, 145, S113)
 
-### Requirement: Status names an agent left in a lost conversation's pane
+### Requirement: Status names each process running a waiting conversation
 
-Status SHALL say, with a conversation's stage reported lost, whether an
-agent the terminal brought back stands in its last start's pane, read
-through the terminal that start recorded whether or not its start is
-live, as `left_in_pane` in the JSON, and in the person's form that the
-terminal brought it back, that flume left it and that a retry ends it
-once quiet and carries its conversation (56, 77).
+Status SHALL give, with a place whose stage waits to carry a
+conversation a process runs, each process as live last read it, by its
+id and when it started, or what could not be read, and since when the
+stage waits; and, with a conversation's stage reported lost whose last
+start's pane holds an agent the terminal brought back, that flume left
+it there (49, 56, 77, 207; core.30).
+
+#### Scenario: A talk waiting on its session
+
+- **WHEN** status is asked of a place whose lost talk waits while the fake agent reads its session live as process 4242
+- **THEN** it gives process 4242 with when it started and since when talk waits, in the JSON and the person's form (49, 56, 207, S117)
 
 #### Scenario: A bare agent left
 
 - **WHEN** status is asked of a place whose talk reads lost while the fake terminal holds its agent brought back bare
 - **THEN** the agent gives `left_in_pane`, and the person's form says the terminal brought it back and flume left it in its pane (56, 77, S113)
-
-#### Scenario: Brought back after the stage was read lost
-
-- **WHEN** status is asked of a place whose talk was read lost with its start not live, and the fake terminal has since brought its agent back bare in the same pane
-- **THEN** status gives `left_in_pane` for it (56, 77)

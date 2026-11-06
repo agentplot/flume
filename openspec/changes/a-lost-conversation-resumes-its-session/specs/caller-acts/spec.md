@@ -1,19 +1,20 @@
 ## ADDED Requirements
 
-### Requirement: A retry of a lost conversation ends an agent in its pane first
+### Requirement: A retry of a lost conversation waits while its session runs
 
-A retry of a conversation's stage reported lost SHALL first read its
-lost start's pane again through the terminal that start recorded, live
-or not, and end an agent standing there as it ends the place's agent,
-once quiet or when forced, and SHALL then carry the lost start's
-conversation as carried-conversations says (49, 50, 77).
+A retry of a conversation's stage reported lost SHALL be taken at once
+and SHALL end no agent of that stage: an agent standing in its lost
+start's pane, and any process running its session, are left as they
+are. The retry SHALL mark the stage's start to carry the lost start's
+conversation and SHALL answer that the stage waits for its conversation
+to end, naming each process, where one runs it (49, 50, 77, 207).
 
 #### Scenario: A bare agent at work in a lost talk's pane
 
-- **WHEN** the fake terminal brought a lost talk's agent back bare and reads it working, and the caller retries talk unforced, then forced
-- **THEN** the first retry is refused naming the agent and that it is not quiet, and starts nothing; the second closes it and starts talk carrying its conversation (31, 49, 50, 77)
+- **WHEN** the fake terminal brought a lost talk's agent back bare and reads it working, its session scripted live, and the caller retries talk unforced
+- **THEN** the retry is taken, its answer says talk waits for its conversation to end naming the process, and the fake terminal's log shows no close and no send (49, 77, 207)
 
-#### Scenario: A bare agent brought back after the stage was read lost
+#### Scenario: A session run in a pane flume did not make
 
-- **WHEN** a talk's agent stopped and the settle read talk lost with its start no longer live, and the fake terminal then brings the agent back bare in the same pane, quiet, before the caller retries talk
-- **THEN** the retry closes that agent before talk's carried start opens, and the fake terminal's log shows the close before the open (49, 50, 77)
+- **WHEN** a lost talk's session runs in a pane of a caller's own, scripted live, and the caller retries talk forced
+- **THEN** the retry is taken, talk waits, and flume closes nothing, forced or not (49, 207; core.18)

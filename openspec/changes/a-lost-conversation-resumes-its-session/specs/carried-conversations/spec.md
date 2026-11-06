@@ -170,3 +170,38 @@ variable by its name alone (49, 56, 179; core.30).
 
 - **WHEN** a lost talk's start ran under no account, and the fake agent answers for the login environment that it reaches the conversation
 - **THEN** talk starts resuming its session under no account, and the fake agent's log shows the `carry` reading for an empty environment (49, 179)
+
+### Requirement: A carried start opens only while no process runs its conversation
+
+A start that carries a conversation, after a spent agent or a lost one,
+and a lost conversation's fresh start, SHALL open only once the agent
+profile's live answers that no process runs the conversation. While it
+answers that one does, or cannot read it, the stage SHALL wait for room
+with each process or what could not be read, flume adopting, ending,
+signalling and sending nothing to any process, and each settle SHALL ask
+again (30, 49, 70, 207).
+
+#### Scenario: A lost talk whose session a person runs by hand
+
+- **WHEN** a lost talk's session is scripted live in the fake agent as process 4242, the caller retries talk, and the place is settled twice
+- **THEN** no agent opens, talk waits for room naming process 4242, the place is not stalled, and the fakes' log shows no close, send or open for the place (49, 207, S117)
+
+#### Scenario: The session ends
+
+- **WHEN** the fake agent then reads that session live no more, and any place on the host is settled
+- **THEN** talk starts carrying the conversation at that settle (49, 70, 207, S113)
+
+#### Scenario: A session that cannot be read
+
+- **WHEN** a lost talk's session is scripted unknown, naming `CLAUDE_CONFIG_DIR`, and the caller retries talk
+- **THEN** talk waits, and status gives what could not be read, naming `CLAUDE_CONFIG_DIR` and no path (207; core.30)
+
+#### Scenario: A spent agent's session resumed by hand
+
+- **WHEN** a code agent stops at work-1's limit and is ended, and before work-2's start a person resumes its session by hand, scripted live
+- **THEN** code's carried start does not open while the session is live, and starts at the first settle after it ends (30, 146, 207)
+
+#### Scenario: A lost talk that cannot be carried, its session still live
+
+- **WHEN** a lost talk's transcript cannot be read and its session is scripted live
+- **THEN** talk's fresh start waits as the carried one would, and starts afresh once the session ends (49, 207)

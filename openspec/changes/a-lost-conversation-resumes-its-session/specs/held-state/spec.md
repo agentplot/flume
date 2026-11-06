@@ -5,8 +5,8 @@
 After a restart, an agent the terminal brought back that is not the
 stage's SHALL be ended once quiet, but one in a conversation's pane,
 which SHALL be left in its pane, sent nothing, and ended only by its
-caller's retry, stop, drop or done; its start SHALL go not live once
-the terminal reads it stopped (31, 50 to 52, 77, 114).
+caller's stop, drop or done; its start SHALL go not live once the
+terminal reads it stopped (31, 49, 51, 52, 77, 114).
 
 #### Scenario: A bare agent in a conversation's pane
 
@@ -17,3 +17,8 @@ the terminal reads it stopped (31, 50 to 52, 77, 114).
 
 - **WHEN** after a rebuild the fake terminal brings a code stage's agent back bare and quiet
 - **THEN** code reads lost and the settle closes that agent (31, 77, S41, S116)
+
+#### Scenario: A stop ends it
+
+- **WHEN** the caller stops a place whose lost talk's pane holds an agent the fake terminal brought back bare, quiet
+- **THEN** the stop closes it (51, 77)

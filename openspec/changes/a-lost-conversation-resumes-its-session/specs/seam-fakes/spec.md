@@ -12,3 +12,15 @@ SHALL read it working, waiting or stopped as the test scripts (77, 106).
 
 - **WHEN** a test brings a talk start's agent back bare and settles the place
 - **THEN** the core reads the start's agent waiting with its started ack no, talk reads lost, and the fakes' log shows `bring back bare` for that identity (77)
+
+### Requirement: The fake agent scripts a live session
+
+The fake agent SHALL script, per session, the processes live answers
+that run it, or that it cannot read it with words, answering none
+otherwise; its log SHALL name each `live` it answers (106, 207).
+
+#### Scenario: A scripted live session that ends
+
+- **WHEN** a test scripts the session `s-1` live as process 4242, asks live, then scripts it ended and asks again
+- **THEN** live answers runs with process 4242, then none, and the fake's log shows both readings (207)
+

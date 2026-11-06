@@ -19,16 +19,20 @@ still on disk under its account's `CLAUDE_CONFIG_DIR/projects/`. But
 `flume retry --stage talk` starts a fresh agent with the stage's
 prompt, so the conversation is gone from the place. flume carries a
 conversation only for the start after an agent stopped at its
-account's usage limit (146, 179); a retry carries none (30). herdr's
-restore brought `research--effect-in-the-control-plane` back as a bare
-`claude --resume` in the `flume` session, with no `FLUME_*`, and flume
-ended it once it was quiet (77).
+account's usage limit (146, 179); a retry carries none (30).
+
+Since 17:00Z all six sessions run again outside flume: five the
+orchestrator resumed by hand in herdr workspaces of their own, as
+`claude --resume <session> --permission-mode bypassPermissions` on
+another account with no `FLUME_*` and no flume plugin, and one herdr's
+restore brought back bare. The user may be typing in any of them. A
+retry must never start a second agent on a session a process runs.
 
 The user wants the six back with their history. Record 0052, proposed,
 decides how; the statement's amendment is on agentplot/blueprints'
 branch `design/flume-a-lost-conversation-resumes-its-session` at
-1192a5a, unpushed (30, 43, 45, 49, 56, 77, 145, 147, 161, 179, C.4,
-C.5, S113 to S116). The change is built once the user accepts the
+6b7d3fc, unpushed (30, 43, 45, 49, 56, 64, 77, 145, 147, 161, 179, 207,
+C.4, C.5, S113 to S117). The change is built once the user accepts the
 record and the amendment lands on blueprints main.
 
 ## What Changes
@@ -42,6 +46,16 @@ record and the amendment lands on blueprints main.
   words, that its session was lost and goes on here and that what it
   had running then has stopped, then the retry's words, then the way
   to stop short (28).
+- **No carried start beside a live session (30, 207).** A new part of
+  the agent seam, live, reads whether a process of the program runs a
+  conversation: for Claude Code, a `sessions/<pid>.json` naming the
+  session in a home the host declares, whose process runs with its
+  `pid` and `procStart`, or a `claude` whose arguments resume the
+  session. A start that carries a conversation, after a loss or after a
+  spent agent, opens only while none runs it. A lost conversation's
+  retry is taken at once, and its stage waits as for room, never
+  stalled, until a settle reads the session ended, while flume adopts,
+  ends and sends nothing to the process.
 - **The account that holds the conversation first (145).** The start
   takes the account the lost start ran under while it is usable, of the
   stage's program and in the stream's pool, moving no intent's
@@ -60,20 +74,22 @@ record and the amendment lands on blueprints main.
   place holds, and its lost agent stopped at no turn's end.
 - **An agent the terminal brought back bare in a conversation's pane
   is left for a person (77).** flume sends it nothing and does not end
-  it. The lost end and status say flume left it. A caller's retry,
-  stop, drop or done ends it, once quiet or forced (50 to 52, 114),
-  and the retry reads the lost start's pane again first, so an agent
-  the terminal brought back after the stage was read lost is ended too.
-  In a stage that is not a conversation it is ended once quiet, as
+  it; a caller's stop, drop or done ends it, and a retry waits for it to
+  end. In a stage that is not a conversation it is ended once quiet, as
   today (S41).
-- **Status and the end.** A start's conversation says whether the start
-  it carries stopped at its account's limit or was lost. The account
-  says it came from the conversation. The agent and the lost end say
-  where flume left an agent the terminal brought back. The JSON form
-  only gains fields and values (56, 61).
+- **A place kept while a process runs its conversation (64).** Its tidy
+  keeps the worktree, `kept while its session runs`, naming the
+  process.
+- **Status, the line, the list and the end.** A waiting stage names each
+  process running its session; its line reads `waiting on its session`
+  and the list `waits on its session`. A start's conversation says
+  whether the start it carries stopped at its account's limit or was
+  lost, the account says it came from the conversation, and the lost end
+  says where flume left an agent in its pane. The JSON form only gains
+  fields and values (56, 61).
 - **Docs.** The agent-settings and callers guides say what a retry of a
-  lost conversation does and what a person in a pane herdr brought back
-  loses: nothing they sent.
+  lost conversation does, that it waits while a person's session runs,
+  and that a person loses nothing they sent.
 
 ## Capabilities
 
@@ -84,43 +100,54 @@ None.
 ### Modified Capabilities
 
 - `carried-conversations`: a retry of a conversation reported lost
-  carries its conversation on the account that holds it first, starts
-  afresh where it cannot, and a stage that is not a conversation
-  carries nothing.
-- `caller-acts`: retry carries a lost conversation's session and ends
-  an agent the terminal brought back in its pane first.
+  carries its conversation on the account that holds it first, opens no
+  carried start while a process runs the conversation, starts afresh
+  where it cannot carry, and a stage that is not a conversation carries
+  nothing.
+- `caller-acts`: a lost conversation's retry is taken at once, ends
+  nothing that runs its session, and waits for it to end.
 - `held-state`: after a restart, an agent the terminal brought back in
   a conversation's pane is left for a person.
 - `account-pools`: a lost conversation's start takes the account its
   lost start ran under first.
+- `agent-profile`: Claude Code reads a session live from 2.1.296's
+  `sessions/<pid>.json` and the host's processes, pinned to the release.
+- `tidying`: a place is kept while a process runs its conversation.
 - `end-delivery`: a lost conversation's end says flume left an agent
   in its pane.
-- `place-status`: a start's conversation names its cause, the account
-  names the conversation, and the agent says it was left.
-- `seam-contracts`: the types that hold a lost conversation's carry, its
-  account's choice and an agent left.
-- `seam-fakes`: the fake agent and terminal script a bare agent and a
-  carry after a loss.
-- `clause-coverage`: the suite's list at the revision that states
-  S113 to S116.
+- `place-status`: a waiting stage names each process running its
+  session; a start's conversation names its cause; the account names the
+  conversation.
+- `place-line`: `waiting on its session`.
+- `the-list`: `waits on its session`.
+- `seam-contracts`: the agent seam's live, and the types that hold a
+  lost conversation's carry, its account's choice, a live session and an
+  agent left.
+- `seam-fakes`: the fakes script a bare agent and a live session.
+- `clause-coverage`: the suite's list at the revision that states 207
+  and S113 to S117.
 
 ## Impact
 
 - agentplot/blueprints: the statement's amendment, read by the build
   once on main (core.19). Nothing in weir changes, and no kind gains a
   field (core.4).
-- `crates/flume-seams`: `held.rs`'s carry marker, `Conversation`,
-  `AccountFrom`, `StageEnd` and the status types, only added to.
+- `crates/flume-seams`: `Agent::live` with a default, `Live`, and
+  `held.rs`'s carry marker, `RoomWait`, `Conversation`, `AccountFrom`,
+  `StageEnd` and the status types, only added to.
 - `crates/flume-core`: `acts.rs`'s retry, `start.rs`'s claim and
-  `StartReason`, `accounts.rs`'s `choose_account`, `end.rs`'s lost
-  reading, `uncarried.rs`, `status.rs` and `deliver.rs`.
-- `crates/flume`: the person's form of status and of a notice; a
-  walkthrough under the stand-in; no profile's code, since carry's
-  check is the same.
+  `StartReason`, `room.rs`'s `start_waiting`, `accounts.rs`'s
+  `choose_account`, `end.rs`'s lost reading, `uncarried.rs`, `tidy.rs`,
+  `line.rs`, `list.rs`, `status.rs` and `deliver.rs`.
+- `crates/flume`: the Claude Code profile's `live.rs` and its fragments,
+  the person's form of status and of a notice, the stand-in's
+  `sessions/<pid>.json`, and a walkthrough under the stand-in.
 - `crates/flume-fakes`, `crates/flume-conformance`: the scenarios citing
-  45, 49, 77, 145, 179 and S113 to S116, and the clause list.
+  30, 45, 49, 64, 77, 145, 179, 207 and S113 to S117, and the clause
+  list.
 - `site/`: the agent-settings and callers guides and the state
   reference.
-- `docs/adr/0052`, rules core.10 and core.32: written with this change.
+- `docs/adr/0052`, rules core.10, core.18 and core.32: written with this
+  change.
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency.

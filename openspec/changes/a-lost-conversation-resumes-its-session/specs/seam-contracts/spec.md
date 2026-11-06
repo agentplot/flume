@@ -60,3 +60,36 @@ end or a status written before SHALL read with no agent left (43, 56,
 
 - **WHEN** a held state whose talk start runs under work-2 chosen from its conversation, and whose earlier talk end gives `left_in_pane`, is written and read
 - **THEN** it reads back unchanged (43, 145)
+
+### Requirement: The agent seam reads whether a conversation runs
+
+The agent seam SHALL answer, given the start whose conversation a start
+would carry and the environments of the host's accounts for its
+program, whether a process runs that conversation, naming each by its
+id and when it started, or that none does, or unknown with what could
+not be read; the default SHALL answer unknown, saying its profile reads
+no running session (171, 207).
+
+#### Scenario: A profile that reads no running session
+
+- **WHEN** the seam's scenarios run against a profile that implements no live
+- **THEN** live answers unknown, saying the profile reads no running session (207)
+
+#### Scenario: The fake's live over the seam's scenarios
+
+- **WHEN** the seam's scenarios run against the fake agent scripted live for one session and unknown for another
+- **THEN** live answers runs with the scripted processes for the first, unknown with the scripted words for the second, and none for a third (207)
+
+### Requirement: The types of a live session
+
+The seams SHALL pass one type for live's answer and one for a process it
+names; a stage's wait SHALL hold the processes or what could not be read
+as last read, and a place kept SHALL hold the processes that keep it.
+Each SHALL serialize to JSON and back unchanged, and held state written
+before SHALL read with none (49, 64, 207).
+
+#### Scenario: A wait on a live session
+
+- **WHEN** a held state whose talk waits on process 4242, and a place kept while its session runs, are written and read
+- **THEN** each reads back unchanged (49, 64, 207)
+
