@@ -16,6 +16,7 @@ pub mod carry;
 pub mod guard;
 pub mod hook;
 pub mod limit;
+pub mod live;
 pub mod mode;
 pub mod record;
 pub mod status_line;
@@ -24,7 +25,7 @@ pub mod withheld;
 pub mod wrapper;
 
 use flume_seams::{
-    Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, ModeEntry, Offered, PlaceRef,
+    Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Live, ModeEntry, Offered, PlaceRef,
     Reading, Received, Secret, Settings, Spent, Unsettled,
 };
 use record::Record;
@@ -507,6 +508,24 @@ impl Agent for Claude {
             .filter(|home| !home.is_empty())
             .map(PathBuf::from);
         carry::carry(&Record::at(folder, earlier), env, login.as_deref())
+    }
+
+    /// Runs with each process whose record under a given account's
+    /// configuration home names the start's session and runs as recorded,
+    /// or whose arguments resume it under any home; none where none does;
+    /// unknown naming `CLAUDE_CONFIG_DIR` or the host's processes and no
+    /// path where they cannot be read; read only, the host user's home its
+    /// `HOME` ([`live`]; 207, C.4).
+    fn live(&self, folder: &str, start: &Identity, envs: &[BTreeMap<String, String>]) -> Live {
+        let login = std::env::var_os("HOME")
+            .filter(|home| !home.is_empty())
+            .map(PathBuf::from);
+        live::live(
+            &Record::at(folder, start),
+            envs,
+            login.as_deref(),
+            live::processes,
+        )
     }
 
     /// The credentials 2.1.296 keeps from every process it starts, its

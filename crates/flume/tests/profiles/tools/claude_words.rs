@@ -5,12 +5,14 @@
 //! the usage-limit words it reads, the credentials the release keeps
 //! from its hooks, which no start's record names, its permission modes,
 //! which its map of flume's modes rests on (design 10 of record 0024's
-//! change), and how it keeps and resumes a session, which its carry rests
-//! on (design 9 of record 0020's amendment's change). A release that
+//! change), how it keeps and resumes a session, which its carry rests
+//! on (design 9 of record 0020's amendment's change), and how it names a
+//! session it runs, which its live rests on (design 2 of record 0052's
+//! change). A release that
 //! changes any of them, or only renames what its minifier names in those
 //! fragments, fails here until the reading is made again. No agent runs.
 
-use flume::profiles::agent::claude::{carry, limit, mode, withheld, wrapper};
+use flume::profiles::agent::claude::{carry, limit, live, mode, withheld, wrapper};
 use std::path::{Path, PathBuf};
 
 /// The Claude Code version `devenv.nix` pins.
@@ -117,6 +119,17 @@ fn the_pinned_release_resumes_as_the_carry_reads_it() {
     assert!(
         missing.is_empty(),
         "Claude Code {version}, at {}, does not hold the fragments the carry of a conversation rests on:\n{}",
+        program.display(),
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn the_pinned_release_names_its_running_sessions_as_live_reads_them() {
+    let (missing, program, version) = missing(&live::fragments());
+    assert!(
+        missing.is_empty(),
+        "Claude Code {version}, at {}, does not hold the fragments the reading of a running session rests on:\n{}",
         program.display(),
         missing.join("\n")
     );
