@@ -6,6 +6,7 @@
 //! clue is display only: nothing flume decides reads one back.
 
 use crate::start::Starts;
+use crate::terminals::{add, Terminals};
 use crate::{label, BaseClues, Engine, GroupStatus, PlaceClues};
 use flume_seams::*;
 
@@ -52,9 +53,11 @@ impl Engine {
     ) -> Option<PlaceClues> {
         let clues = self.clues(held, state, group)?;
         let mut shown_at = self
-            .terminal
-            .shown_at(&held.place.place_ref(), clues.agent.as_ref());
+            .place_terminal(held)
+            .map(|terminal| terminal.shown_at(&held.place.place_ref(), clues.agent.as_ref()))
+            .unwrap_or_default();
         shown_at.base = None;
+        shown_at.bases.clear();
         Some(PlaceClues {
             title: format!("{} · {}", clues.stage, clues.state),
             display_agent: held.place.short(),
@@ -98,37 +101,58 @@ impl Engine {
     }
 
     /// Every repository's base a live place stands on, with its count, the
-    /// count's one line as show gives it, and where the terminal shows it
-    /// (139).
+    /// count's one line as show gives it, and where the terminal shows it:
+    /// once for each of the base's workspaces each terminal its places
+    /// run in names, each with the one count, and once with what a
+    /// terminal names of it where it names no workspace of each session
+    /// (139, 190; record 0031).
     pub(crate) fn bases(&self) -> Vec<BaseClues> {
-        let mut bases: Vec<(PlaceRef, BaseCount)> = vec![];
+        let mut bases: Vec<(PlaceRef, BaseCount, Terminals)> = vec![];
         for read in self.store.read_every() {
             let held = read.state;
             if held.phase != Phase::Live {
                 continue;
             }
             let at = held.place.place_ref();
-            let index = match bases
-                .iter()
-                .position(|(place, _)| place.repository == at.repository && place.base == at.base)
-            {
+            let index = match bases.iter().position(|(place, _, _)| {
+                place.repository == at.repository && place.base == at.base
+            }) {
                 Some(index) => index,
                 None => {
-                    bases.push((at, BaseCount::default()));
+                    bases.push((at, BaseCount::default(), vec![]));
                     bases.len() - 1
                 }
             };
             self.count(&mut bases[index].1, &held);
+            if let Ok(terminal) = self.place_terminal(&held) {
+                add(&mut bases[index].2, terminal);
+            }
         }
         bases.sort_by(|a, b| (&a.0.repository, &a.0.base).cmp(&(&b.0.repository, &b.0.base)));
         bases
             .into_iter()
-            .map(|(place, count)| BaseClues {
-                shown_at: self.terminal.shown_at(&place, None).base,
-                repository: place.repository,
-                base: place.base,
-                line: count.to_string(),
-                count,
+            .flat_map(|(place, count, mut terminals)| {
+                if terminals.is_empty() {
+                    terminals.push(self.terminal.clone());
+                }
+                let at: Vec<Option<String>> = terminals
+                    .iter()
+                    .flat_map(|terminal| {
+                        let shown = terminal.shown_at(&place, None);
+                        if shown.bases.is_empty() {
+                            vec![shown.base]
+                        } else {
+                            shown.bases.into_iter().map(Some).collect()
+                        }
+                    })
+                    .collect();
+                at.into_iter().map(move |shown_at| BaseClues {
+                    shown_at,
+                    repository: place.repository.clone(),
+                    base: place.base.clone(),
+                    line: count.to_string(),
+                    count,
+                })
             })
             .collect()
     }

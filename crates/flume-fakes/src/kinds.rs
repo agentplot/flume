@@ -11,8 +11,9 @@ use std::sync::Mutex;
 /// declarations launches carry, flume's own as packages with their
 /// hashes, each repository's binding, the names it reads, each source's
 /// directory with its packages by name and version, the repository's
-/// lock at a revision or at every revision, and each lock on disk, which
-/// a lock written replaces.
+/// lock at a revision or at every revision, each lock on disk, which a
+/// lock written replaces, and the label a kind of a name declares
+/// wherever it is read (180).
 #[derive(Default)]
 pub struct FakeKinds {
     state: Mutex<KindsState>,
@@ -50,6 +51,29 @@ struct KindsState {
     lock_files: BTreeMap<String, LockRead>,
     /// The paths a lock's write fails at, with why.
     unwritable: BTreeMap<String, String>,
+    /// The label each kind of a name declares, by the kind's name.
+    labels: BTreeMap<String, String>,
+}
+
+impl KindsState {
+    /// `read` with each kind given the label its name is scripted with.
+    fn labelled(&self, read: KindsRead) -> KindsRead {
+        match read {
+            KindsRead::Read { kinds, settings } => KindsRead::Read {
+                kinds: kinds.into_iter().map(|kind| self.label(kind)).collect(),
+                settings,
+            },
+            refused => refused,
+        }
+    }
+
+    /// `kind` with the label its name is scripted with, where it is.
+    fn label(&self, mut kind: Kind) -> Kind {
+        if let Some(label) = self.labels.get(&kind.name) {
+            kind.label = Some(label.clone());
+        }
+        kind
+    }
 }
 
 impl FakeKinds {
@@ -115,6 +139,16 @@ impl FakeKinds {
             .entry((repository.into(), Some(revision.clone())))
             .or_default()
             .insert(kind.into(), settings);
+    }
+
+    /// The label every kind named `kind` declares, wherever it is read,
+    /// or the one each was set with where none is given (180).
+    pub fn set_label(&self, kind: &str, label: Option<&str>) {
+        let mut state = lock(&self.state);
+        match label {
+            Some(label) => state.labels.insert(kind.into(), label.into()),
+            None => state.labels.remove(kind),
+        };
     }
 
     /// flume's own kinds, each a package at `flume/<name>@<version>` with
@@ -266,29 +300,37 @@ impl Kinds for FakeKinds {
             .or_else(|| state.settings.get(&(repository.to_string(), None)))
             .cloned()
             .unwrap_or_default();
-        match read {
+        state.labelled(match read {
             KindsRead::Read { kinds, .. } => KindsRead::Read {
                 kinds,
                 settings: given,
             },
             refused => refused,
-        }
+        })
     }
 
     fn read_declaration(&self, declaration: &str) -> KindsRead {
         self.log.push(format!("read_declaration {declaration}"));
-        lock(&self.state)
-            .declarations
-            .get(declaration)
-            .cloned()
-            .unwrap_or(KindsRead::CouldNotRead {
+        let state = lock(&self.state);
+        state.labelled(state.declarations.get(declaration).cloned().unwrap_or(
+            KindsRead::CouldNotRead {
                 reason: format!("no declaration at {declaration}"),
-            })
+            },
+        ))
     }
 
     fn flumes_own(&self) -> Vec<Packaged> {
         self.log.push("flumes_own");
-        lock(&self.state).own.clone()
+        let state = lock(&self.state);
+        state
+            .own
+            .iter()
+            .cloned()
+            .map(|package| Packaged {
+                kind: state.label(package.kind),
+                ..package
+            })
+            .collect()
     }
 
     fn read_binding(&self, repository: &str) -> BindingRead {
@@ -347,12 +389,13 @@ impl Kinds for FakeKinds {
             "read_package {source} {kinds_dir} {name}@{version}"
         ));
         let refused = |reason: String| PackageRead::CouldNotRead { reason };
-        match lock(&self.state).directories.get(kinds_dir) {
+        let state = lock(&self.state);
+        match state.directories.get(kinds_dir) {
             Some(Directory::Holds(packages)) => match packages.get(&(name.to_string(), version)) {
                 Some(Ok((kind, hash))) => PackageRead::Read {
                     package: Box::new(Packaged {
                         dir: Some(package_dir(kinds_dir, name, version)),
-                        ..packaged(source, kind.clone(), Some(hash))
+                        ..packaged(source, state.label(kind.clone()), Some(hash))
                     }),
                 },
                 Some(Err(reason)) => refused(reason.clone()),

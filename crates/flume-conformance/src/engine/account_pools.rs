@@ -1,11 +1,12 @@
 //! Pools of accounts (144, 145; core.32): a stage's pool is its stream's,
 //! else the host's own; at each start of an agent with a pool an account
 //! is chosen under the room lock, the strategy's over the pool's usable
-//! accounts in order, usable meaning not spent, under its own bound and
-//! running the stage's program; with none usable the stage waits for
-//! room, its want naming the pool, while the pool holds an account of its
-//! program, and is refused at its launch or a later start where the pool
-//! holds none (4, 32). An intent keeps an account for each
+//! accounts in order, usable meaning not spent, not past its threshold
+//! by the host's reading, under its own bound and running the stage's
+//! program; with none usable the stage waits for room, its want naming
+//! the pool and the soonest time an account is back, while the pool holds
+//! an account of its program, and is refused at its launch or a later
+//! start where the pool holds none (4, 32, 184, 185). An intent keeps an account for each
 //! program its agents run while it is usable, its affinity for that
 //! program alone moving where the strategy goes when that account is
 //! spent or full and never back, a document written before read as its
@@ -118,8 +119,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_reset_at_fifteen,
         },
         Scenario {
-            name: "account pools: a usage limit naming no reset pauses its account for an hour from the reading, and a later time already recorded is kept",
-            cites: &["146", "151", "153"],
+            name: "account pools: a usage limit naming no reset its profile reads pauses its account for an hour from the reading, status giving the words while it stands and none for a reset read, and a later time already recorded is kept",
+            cites: &["146", "151", "153", "56"],
             run: no_reset_named,
         },
         Scenario {
@@ -142,6 +143,106 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["43", "146", "151"],
             run: a_stage_under_no_account,
         },
+        Scenario {
+            name: "account pools: the host gives the reading set for work-1's path, the refusal's words for work-2's, and that the file is missing for work-3's",
+            cites: &["184", "106"],
+            run: the_hosts_reading,
+        },
+        Scenario {
+            name: "account pools: a reading set again with a later read_at is the one the host gives when next asked, and the fake host's log shows each reading asked",
+            cites: &["184", "106"],
+            run: a_scripted_reading,
+        },
+        Scenario {
+            name: "account pools: fill-first and least-busy pools whose accounts give readings under their threshold choose as with none",
+            cites: &["145", "184", "S54"],
+            run: readings_under_the_threshold,
+        },
+        Scenario {
+            name: "account pools: a window past its reset reads as nothing used, and an account it would hold past its threshold takes the start",
+            cites: &["184", "185"],
+            run: a_window_past_its_reset,
+        },
+        Scenario {
+            name: "account pools: an account whose reading's file is missing, is not a reading, or names a variable the login environment lacks has no reading, and a start on its pool is not refused",
+            cites: &["184", "29"],
+            run: a_reading_that_cannot_be_read,
+        },
+        Scenario {
+            name: "account pools: an account's reading is read at each choice and when status is asked, and flume writes nothing of it, its file as the host wrote it and no document of the host's holding it",
+            cites: &["184", "153"],
+            run: nothing_written,
+        },
+        Scenario {
+            name: "account pools: a fill-first pool's account whose reading gives its 5-hour window 92% used takes no start until 17:00, its two agents working on, the intent's affinity moving off it for the next stage, and after 17:00 a place of another intent starts on it while the intent stays where it moved",
+            cites: &["S87", "31", "145", "147", "185"],
+            run: s87_past_ninety_percent,
+        },
+        Scenario {
+            name: "account pools: a reading three hours old whose 7-day window is 95% used holds its account until that window resets, the stage waiting with that time as its pool's soonest",
+            cites: &["185", "145"],
+            run: an_old_reading_holds,
+        },
+        Scenario {
+            name: "account pools: a window 95% used with no reset holds its account while the reading is fresh, and no longer once it is fifteen minutes old with none newer",
+            cites: &["185", "184"],
+            run: a_window_with_no_reset,
+        },
+        Scenario {
+            name: "account pools: a least-busy pool passes over an account past its threshold that runs no agent for one running two",
+            cites: &["145", "185"],
+            run: under_least_busy,
+        },
+        Scenario {
+            name: "account pools: a pool's threshold of 100 holds an account at 100% and not at 99%, and one of 50 at 50% and not below",
+            cites: &["185"],
+            run: a_threshold_the_pool_states,
+        },
+        Scenario {
+            name: "account pools: a most-left pool whose one account is past its threshold until Monday and whose other is spent until 15:00 though its reading gives 50% holds the stage waiting for room, not on its caller, 15:00 its pool's soonest time, a reading of 10% at 14:00 leaving the pause, and the first settle after 15:00 starts it on the spent one",
+            cites: &["S88", "70", "130", "145", "146", "185"],
+            run: s88_every_account_past_its_threshold_or_spent,
+        },
+        Scenario {
+            name: "account pools: a spent account whose reading written before its reset gives it 10% used takes no start until its reset",
+            cites: &["146", "185"],
+            run: a_reading_under_the_threshold_while_spent,
+        },
+        Scenario {
+            name: "account pools: a reading at 100% with no agent's record of the limit writes no spent time, and its account takes no start by its threshold",
+            cites: &["146", "153", "185"],
+            run: a_reading_at_its_limit,
+        },
+        Scenario {
+            name: "account pools: a stage started again once its account is past its threshold moves to another, its move and its intent's saying the window and when it resets",
+            cites: &["185", "145", "147", "56"],
+            run: a_stage_moved_off_a_threshold,
+        },
+        Scenario {
+            name: "account pools: a most-left pool's account reading 40% and 80% used two minutes ago has 20 left, taking a start before one with 19 left and after one with 21",
+            cites: &["184", "145"],
+            run: a_fresh_reading,
+        },
+        Scenario {
+            name: "account pools: a most-left pool ranks an account whose reading is twenty minutes old with the accounts that have no reading, after every account with a fresh one",
+            cites: &["184", "145"],
+            run: a_stale_reading,
+        },
+        Scenario {
+            name: "account pools: four places of four intents on a most-left pool start on the account with most left, twice while its reading stands, then on the one fresh reading once that one's is twenty minutes old, then on the account with no reading running fewest once the fresh one is spent",
+            cites: &["S86", "145", "147", "184"],
+            run: s86_four_places_of_four_intents,
+        },
+        Scenario {
+            name: "account pools: a most-left pool whose accounts give no reading chooses as least-busy does",
+            cites: &["145", "S54"],
+            run: most_left_with_no_reading_anywhere,
+        },
+        Scenario {
+            name: "account pools: an intent's next start on a most-left pool stays on its affinity's account while it is usable, though another's reading leaves more",
+            cites: &["147", "145"],
+            run: most_left_after_the_affinity,
+        },
     ]
 }
 
@@ -152,12 +253,20 @@ pub fn account(name: &str, agents: Option<u32>) -> Account {
         program: "agent".into(),
         env: BTreeMap::new(),
         agents,
+        usage: None,
     }
 }
 
 /// The host declares `name` with `accounts` under `strategy`.
 pub fn pool(world: &World, name: &str, strategy: Strategy, accounts: Vec<Account>) {
-    world.host.set_pool(name, Some(Pool { strategy, accounts }));
+    world.host.set_pool(
+        name,
+        Some(Pool {
+            strategy,
+            threshold: None,
+            accounts,
+        }),
+    );
 }
 
 /// The host declares the stream `name` taking its accounts from `pool`.
@@ -168,6 +277,7 @@ pub fn stream_on(world: &World, name: &str, pool: Option<&str>, priority: i64) {
             agents: None,
             priority,
             pool: pool.map(str::to_string),
+            ..Stream::default()
         }),
     );
 }
@@ -183,6 +293,7 @@ pub fn spent(world: &World, pool: &str, account: &str, until: Seconds) {
             until,
             words: Some("You've hit your session limit".into()),
             recorded_at: world.host.now(),
+            unread: false,
         }),
     );
 }
@@ -722,6 +833,8 @@ fn s56_three_units_of_one_intent(_: &()) -> Outcome {
         why: MoveWhy::Spent,
         at: world.host.now(),
         carried: None,
+        window: None,
+        until: None,
     };
     let held = affinity(&world, &intent).ok_or("no affinity")?;
     ensure_eq!(
@@ -1000,6 +1113,8 @@ fn s80_two_programs_of_one_intent(_: &()) -> Outcome {
         why: MoveWhy::Spent,
         at: world.host.now(),
         carried: None,
+        window: None,
+        until: None,
     };
     ensure_eq!(
         world.held(&next).map(|held| held.moves),
@@ -1101,6 +1216,8 @@ fn a_document_written_before(_: &()) -> Outcome {
         why: MoveWhy::Spent,
         at: world.host.now(),
         carried: None,
+        window: None,
+        until: None,
     };
     written_before(
         &world,
@@ -1209,6 +1326,19 @@ pub fn stops_at_limit(world: &World, name: &str, start: u32, until: Option<Secon
     who
 }
 
+/// The words status gives for the account `account` of the pool `work`,
+/// where flume read no reset in them (56, 146).
+fn spent_unread(world: &World, account: &str) -> Result<Option<String>, String> {
+    host(world)?
+        .pools
+        .into_iter()
+        .filter(|pool| pool.name == "work")
+        .flat_map(|pool| pool.accounts)
+        .find(|status| status.name == account)
+        .map(|status| status.spent_unread)
+        .ok_or_else(|| format!("status gives no account {account} of work"))
+}
+
 /// The account `account` of `pool`'s spent time as the host's document
 /// records it.
 fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent> {
@@ -1287,9 +1417,14 @@ fn a_reset_at_fifteen(_: &()) -> Outcome {
         "the fake's log shows no spent reading"
     );
     ensure_eq!(
-        spent_until(&world, "work", "work-1").map(|spent| spent.until),
-        Some(fifteen),
-        "work-1's spent time"
+        spent_until(&world, "work", "work-1").map(|spent| (spent.until, spent.unread)),
+        Some((fifteen, false)),
+        "work-1's spent time, its reset read"
+    );
+    ensure_eq!(
+        spent_unread(&world, "work-1")?,
+        None,
+        "status's words for a reset read"
     );
     // Another flume process, an engine of its own over the same store,
     // starts a stage of another place on the same pool before 15:00.
@@ -1323,9 +1458,18 @@ fn no_reset_named(_: &()) -> Outcome {
     let read_at = world.host.now();
     world.settle(&first);
     ensure_eq!(
-        spent_until(&world, "work", "work-1").map(|spent| (spent.until, spent.recorded_at)),
-        Some((read_at + 3600, read_at)),
-        "work-1's spent time and when it was recorded"
+        spent_until(&world, "work", "work-1").map(|spent| (
+            spent.until,
+            spent.recorded_at,
+            spent.unread
+        )),
+        Some((read_at + 3600, read_at, true)),
+        "work-1's spent time, when it was recorded, and that no reset was read"
+    );
+    ensure_eq!(
+        spent_unread(&world, "work-1")?,
+        Some("a usage limit this test writes".to_string()),
+        "the words status gives for work-1's hour"
     );
     let later = world.host.now() + 5 * 3600;
     let second = World::id("fix", "one");
@@ -1616,6 +1760,946 @@ fn a_stage_under_no_account(_: &()) -> Outcome {
         world.store.log.of("write_host").is_empty(),
         "an account recorded spent: {:?}",
         world.store.log.of("write_host")
+    );
+    Ok(())
+}
+
+/// The path of `account`'s reading under the fake host's `HOME`.
+pub fn usage_path(account: &str) -> String {
+    format!("/home/user/.local/state/usage/{account}.json")
+}
+
+/// A reading read at `read_at` of a 5-hour window `used` hundredths used,
+/// resetting five hours after it, and a 7-day window with no reset.
+fn reading(read_at: Seconds, used: u32) -> Usage {
+    Usage {
+        read_at,
+        windows: vec![
+            UsageWindow {
+                name: "5-hour".into(),
+                used,
+                resets_at: Some(read_at + 5 * 3600),
+            },
+            UsageWindow {
+                name: "7-day".into(),
+                used: 3_000,
+                resets_at: None,
+            },
+        ],
+    }
+}
+
+/// The seam-contracts spec's fake host's reading: the reading set for a
+/// path, the refusal set for another, and no reading for a path nothing
+/// set, each as the core asks the host (184).
+fn the_hosts_reading(_: &()) -> Outcome {
+    let world = World::new();
+    let read = reading(world.host.now(), 4_200);
+    world
+        .host
+        .set_usage(&usage_path("work-1"), Ok(read.clone()));
+    world.host.set_usage(
+        &usage_path("work-2"),
+        Err("the file is not JSON: expected value at line 1 column 1".into()),
+    );
+    let host: &dyn Host = world.host.as_ref();
+    ensure_eq!(
+        host.usage(&usage_path("work-1")),
+        Ok(read),
+        "work-1's reading"
+    );
+    ensure_eq!(
+        host.usage(&usage_path("work-2")),
+        Err("the file is not JSON: expected value at line 1 column 1".to_string()),
+        "work-2's refusal"
+    );
+    ensure_eq!(
+        host.usage(&usage_path("work-3")),
+        Err("the file is missing".to_string()),
+        "work-3, whose path nothing set"
+    );
+    Ok(())
+}
+
+/// The seam-fakes spec's scripted reading: a reading set again with a
+/// later `read_at` is the one given at the next asking, and the fake's
+/// log names each reading asked, in order (184).
+fn a_scripted_reading(_: &()) -> Outcome {
+    let world = World::new();
+    let path = usage_path("work-1");
+    let first = reading(world.host.now(), 4_200);
+    world.host.set_usage(&path, Ok(first.clone()));
+    let host: &dyn Host = world.host.as_ref();
+    ensure_eq!(host.usage(&path), Ok(first), "the reading first set");
+    world.host.advance(300);
+    let later = reading(world.host.now(), 4_800);
+    world.host.set_usage(&path, Ok(later.clone()));
+    ensure_eq!(host.usage(&path), Ok(later), "the later reading");
+    ensure_eq!(
+        world.host.log.of("usage"),
+        vec![format!("usage {path}"), format!("usage {path}")],
+        "each reading asked"
+    );
+    Ok(())
+}
+
+/// An account like `account` whose reading is the file [`usage_path`]
+/// names, under the fake host's `HOME` (184).
+pub fn reading_at(account: Account) -> Account {
+    Account {
+        usage: Some(format!("~/.local/state/usage/{}.json", account.name)),
+        ..account
+    }
+}
+
+/// A window `name`, `used` hundredths used, resetting at `resets_at`.
+pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> UsageWindow {
+    UsageWindow {
+        name: name.into(),
+        used,
+        resets_at,
+    }
+}
+
+/// The host writes `account`'s reading, read at `read_at`, of `windows`.
+pub fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<UsageWindow>) {
+    world
+        .host
+        .set_usage(&usage_path(account), Ok(Usage { read_at, windows }));
+}
+
+/// The host declares `name` with `accounts` under `strategy` and
+/// `threshold`, the host's own pool.
+pub fn pool_at(
+    world: &World,
+    name: &str,
+    strategy: Strategy,
+    threshold: Option<u32>,
+    accounts: Vec<Account>,
+) {
+    world.host.set_pool(
+        name,
+        Some(Pool {
+            strategy,
+            threshold,
+            accounts,
+        }),
+    );
+    world.host.set_host_pool(Some(name));
+}
+
+/// A pool `work` of `strategy` whose accounts `names` each give a
+/// reading, unbounded, the host's own.
+fn read_pool(world: &World, strategy: Strategy, names: &[&str]) {
+    pool_at(
+        world,
+        "work",
+        strategy,
+        None,
+        names
+            .iter()
+            .map(|name| reading_at(account(name, None)))
+            .collect(),
+    );
+}
+
+/// The fix `name`'s code stage waits for room on the pool `work`, its
+/// want naming `until` as the pool's soonest time, and not on its caller.
+fn waits_on_the_pool(world: &World, id: &PlaceId, until: Option<Seconds>) -> Outcome {
+    ensure_eq!(
+        world.stage_state(id, "code"),
+        Some(StageState::WaitingForRoom),
+        format!("{id}'s code")
+    );
+    let queued = host(world)?
+        .queue
+        .into_iter()
+        .find(|queued| &queued.place == id)
+        .ok_or("the stage is not in the queue")?;
+    ensure_eq!(
+        queued.wants,
+        RoomWanted::Pool {
+            pool: "work".into(),
+            until
+        },
+        format!("what {id}'s code waits on")
+    );
+    ensure!(
+        world.status(id)?.waiting_on.is_none(),
+        "{id} waits on its caller"
+    );
+    Ok(())
+}
+
+fn readings_under_the_threshold(_: &()) -> Outcome {
+    for (strategy, expected) in [
+        (Strategy::FillFirst, ["work-1", "work-1", "work-2"]),
+        (Strategy::LeastBusy, ["work-1", "work-2", "work-1"]),
+    ] {
+        let world = World::new();
+        let now = world.host.now();
+        pool_at(
+            &world,
+            "work",
+            strategy,
+            None,
+            vec![
+                reading_at(account("work-1", Some(2))),
+                reading_at(account("work-2", None)),
+            ],
+        );
+        reads(&world, "work-1", now, vec![window("5-hour", 8_900, None)]);
+        reads(
+            &world,
+            "work-2",
+            now,
+            vec![window("5-hour", 1_000, Some(now + 3600))],
+        );
+        for (name, expected) in ["one", "two", "three"].into_iter().zip(expected) {
+            let id = fix_in(&world, None, name)?;
+            ensure_eq!(
+                account_of(&world, &id, "code"),
+                on("work", expected),
+                format!("{} {name}'s account", strategy.name())
+            );
+        }
+    }
+    Ok(())
+}
+
+fn a_window_past_its_reset(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    read_pool(&world, Strategy::FillFirst, &["work-1", "work-2"]);
+    reads(
+        &world,
+        "work-1",
+        now - 2 * 3600,
+        vec![window("5-hour", 9_500, Some(now - 3600))],
+    );
+    let id = fix_in(&world, None, "one")?;
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-1"),
+        "the start on work-1, its 5-hour window reset an hour ago"
+    );
+    Ok(())
+}
+
+fn a_reading_that_cannot_be_read(_: &()) -> Outcome {
+    let not_json = "the file is not JSON: expected value at line 1 column 1";
+    for (case, usage, set) in [
+        ("missing", "~/.local/state/usage/work-1.json", None),
+        (
+            "not JSON",
+            "~/.local/state/usage/work-1.json",
+            Some(not_json),
+        ),
+        ("naming $GONE", "$GONE/work-1.json", None),
+    ] {
+        let world = World::new();
+        pool_at(
+            &world,
+            "work",
+            Strategy::FillFirst,
+            None,
+            vec![Account {
+                usage: Some(usage.into()),
+                ..account("work-1", None)
+            }],
+        );
+        if let Some(words) = set {
+            world
+                .host
+                .set_usage(&usage_path("work-1"), Err(words.into()));
+        }
+        let id = fix_in(&world, None, "one")?;
+        ensure!(
+            world
+                .stage_state(&id, "code")
+                .is_some_and(StageState::running),
+            "the start on work-1, its reading {case}: {:?}",
+            world.stage_state(&id, "code")
+        );
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", "work-1"),
+            format!("the account, its reading {case}")
+        );
+        ensure_eq!(
+            world.status(&id)?.stages[0].refused_setting,
+            None,
+            format!("the refusal, its reading {case}")
+        );
+        let asked = world.host.log.of("usage");
+        match case {
+            "naming $GONE" => ensure!(
+                asked.is_empty(),
+                "a reading asked of a path the login environment cannot give: {asked:?}"
+            ),
+            _ => ensure!(
+                asked.contains(&format!("usage {}", usage_path("work-1"))),
+                "the reading {case} was not asked: {asked:?}"
+            ),
+        }
+    }
+    Ok(())
+}
+
+fn nothing_written(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    read_pool(&world, Strategy::FillFirst, &["work-1", "work-2"]);
+    let first = Usage {
+        read_at: now,
+        windows: vec![window("5-hour", 4_200, Some(now + 3600))],
+    };
+    let second = Usage {
+        read_at: now,
+        windows: vec![window("7-day", 9_700, Some(now + 3 * 24 * 3600))],
+    };
+    world
+        .host
+        .set_usage(&usage_path("work-1"), Ok(first.clone()));
+    world
+        .host
+        .set_usage(&usage_path("work-2"), Ok(second.clone()));
+    let id = fix_in(&world, None, "one")?;
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-1"),
+        "the start"
+    );
+    let asked = |account: &str| {
+        let line = format!("usage {}", usage_path(account));
+        world
+            .host
+            .log
+            .of("usage")
+            .iter()
+            .filter(|asked| **asked == line)
+            .count()
+    };
+    let before = (asked("work-1"), asked("work-2"));
+    ensure!(
+        before.0 > 0 && before.1 > 0,
+        "the readings were not read at the choice: {before:?}"
+    );
+    host(&world)?;
+    ensure!(
+        asked("work-1") > before.0 && asked("work-2") > before.1,
+        "the readings were not read when status was asked"
+    );
+    let host_now: &dyn Host = world.host.as_ref();
+    ensure_eq!(
+        (
+            host_now.usage(&usage_path("work-1")),
+            host_now.usage(&usage_path("work-2"))
+        ),
+        (Ok(first), Ok(second)),
+        "the readings as the host wrote them"
+    );
+    let written: Vec<String> = world
+        .store
+        .log
+        .of("write_host")
+        .into_iter()
+        .filter(|line| !line.starts_with("write_host intent "))
+        .collect();
+    ensure!(
+        written.is_empty(),
+        "documents of the host's written: {written:?}"
+    );
+    for account in ["work-1", "work-2"] {
+        ensure_eq!(
+            spent_until(&world, "work", account),
+            None,
+            format!("{account}'s spent time")
+        );
+    }
+    let affinity = affinity(&world, &intent_of(&world, &id)?).ok_or("no affinity")?;
+    let document = serde_json::to_string(&affinity).map_err(|error| error.to_string())?;
+    ensure!(
+        !document.contains("read_at") && !document.contains("windows"),
+        "the intent's document holds a reading: {document}"
+    );
+    Ok(())
+}
+
+fn s87_past_ninety_percent(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let seventeen = now + 2 * 3600;
+    pool_at(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        None,
+        vec![
+            reading_at(account_at_home("work-1")),
+            reading_at(account_at_home("work-2")),
+        ],
+    );
+    let first = fix_of(&world, None, "a", Some("the-surfaces"))?;
+    let other = fix_of(&world, None, "b", Some("another"))?;
+    for id in [&first, &other] {
+        ensure_eq!(
+            account_of(&world, id, "code"),
+            on("work", "work-1"),
+            format!("{id}'s account")
+        );
+    }
+    let intent = intent_of(&world, &first)?;
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![
+            window("5-hour", 9_200, Some(seventeen)),
+            window("7-day", 3_000, Some(now + 3 * 24 * 3600)),
+        ],
+    );
+    let next = fix_of(&world, None, "c", Some("the-surfaces"))?;
+    ensure_eq!(
+        chosen(&world, &next, "code"),
+        by("work-2", AccountFrom::Strategy),
+        "the intent's next stage, work-1 past its threshold"
+    );
+    for id in [&first, &other] {
+        world.settle(id);
+        ensure_eq!(
+            (
+                world.stage_state(id, "code"),
+                account_of(&world, id, "code")
+            ),
+            (Some(StageState::Begun), on("work", "work-1")),
+            format!("{id}'s agent on work-1")
+        );
+    }
+    ensure_eq!(
+        world.terminal.log.count("close"),
+        0,
+        "agents ended for work-1's threshold"
+    );
+    let moved = world
+        .status(&next)?
+        .moves
+        .into_iter()
+        .map(|status| status.moved)
+        .find(|moved| {
+            moved.on
+                == MoveOn::Intent {
+                    program: Some("agent".into()),
+                }
+        })
+        .ok_or("status gives no move of the intent")?;
+    ensure_eq!(
+        (
+            moved.from.as_str(),
+            moved.to.as_str(),
+            moved.why,
+            moved.window.as_deref(),
+            moved.until
+        ),
+        (
+            "work-1",
+            "work-2",
+            MoveWhy::Threshold,
+            Some("5-hour"),
+            Some(seventeen)
+        ),
+        "the intent's move, work-1 past its threshold in 5-hour until 17:00"
+    );
+    ensure_eq!(
+        kept(&world, &intent, "agent"),
+        on("work", "work-2"),
+        "the intent's affinity for agent"
+    );
+    world.host.advance(seventeen + 1 - world.host.now());
+    let another = fix_of(&world, None, "d", Some("a-third"))?;
+    ensure_eq!(
+        account_of(&world, &another, "code"),
+        on("work", "work-1"),
+        "a place of another intent after 17:00, no newer reading written"
+    );
+    let stays = fix_of(&world, None, "e", Some("the-surfaces"))?;
+    ensure_eq!(
+        chosen(&world, &stays, "code"),
+        by("work-2", AccountFrom::Affinity),
+        "the intent that moved, after 17:00"
+    );
+    ensure_eq!(
+        kept(&world, &intent, "agent"),
+        on("work", "work-2"),
+        "the intent's affinity for agent after 17:00"
+    );
+    let carried = world.agent.log.of("carry");
+    ensure!(
+        carried.is_empty(),
+        "something was sent to an account's folders: {carried:?}"
+    );
+    Ok(())
+}
+
+fn an_old_reading_holds(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let monday = now + 3 * 24 * 3600;
+    read_pool(&world, Strategy::FillFirst, &["work-1"]);
+    reads(
+        &world,
+        "work-1",
+        now - 3 * 3600,
+        vec![window("7-day", 9_500, Some(monday))],
+    );
+    let id = fix_in(&world, None, "one")?;
+    waits_on_the_pool(&world, &id, Some(monday))?;
+    world.host.advance(monday - 1 - world.host.now());
+    world.engine().settle(None);
+    waits_on_the_pool(&world, &id, Some(monday))?;
+    world.host.advance(1);
+    world.engine().settle(None);
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-1"),
+        "the start once the 7-day window reset"
+    );
+    Ok(())
+}
+
+fn a_window_with_no_reset(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    read_pool(&world, Strategy::FillFirst, &["work-1"]);
+    reads(&world, "work-1", now, vec![window("weekly", 9_500, None)]);
+    let id = fix_in(&world, None, "one")?;
+    let stale = now + flume_core::FRESH;
+    waits_on_the_pool(&world, &id, Some(stale))?;
+    world.host.advance(stale - 1 - world.host.now());
+    world.engine().settle(None);
+    waits_on_the_pool(&world, &id, Some(stale))?;
+    world.host.advance(1);
+    world.engine().settle(None);
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-1"),
+        "the start once the reading is fifteen minutes old"
+    );
+    Ok(())
+}
+
+fn under_least_busy(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    read_pool(&world, Strategy::LeastBusy, &["work-1", "work-2"]);
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![window("5-hour", 9_100, Some(now + 3600))],
+    );
+    for name in ["one", "two", "three"] {
+        let id = fix_in(&world, None, name)?;
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", "work-2"),
+            format!("{name}'s account")
+        );
+    }
+    let pool = host(&world)?
+        .pools
+        .into_iter()
+        .find(|pool| pool.name == "work")
+        .ok_or("status gives no pool work")?;
+    let running: Vec<(String, u32)> = pool
+        .accounts
+        .into_iter()
+        .map(|account| (account.name, account.running))
+        .collect();
+    ensure_eq!(
+        running,
+        vec![("work-1".to_string(), 0), ("work-2".to_string(), 3)],
+        "the agents running on each account"
+    );
+    Ok(())
+}
+
+fn a_threshold_the_pool_states(_: &()) -> Outcome {
+    for (threshold, under, at) in [(100, 9_900, 10_000), (50, 4_999, 5_000)] {
+        let world = World::new();
+        let now = world.host.now();
+        pool_at(
+            &world,
+            "work",
+            Strategy::FillFirst,
+            Some(threshold),
+            vec![
+                reading_at(account("work-1", None)),
+                reading_at(account("work-2", None)),
+            ],
+        );
+        let resets = Some(now + 3600);
+        reads(&world, "work-1", now, vec![window("5-hour", under, resets)]);
+        let first = fix_in(&world, None, "one")?;
+        ensure_eq!(
+            account_of(&world, &first, "code"),
+            on("work", "work-1"),
+            format!(
+                "the first start, work-1 {under} hundredths used under a threshold of {threshold}"
+            )
+        );
+        reads(&world, "work-1", now, vec![window("5-hour", at, resets)]);
+        let second = fix_in(&world, None, "two")?;
+        ensure_eq!(
+            account_of(&world, &second, "code"),
+            on("work", "work-2"),
+            format!(
+                "the second start, work-1 {at} hundredths used under a threshold of {threshold}"
+            )
+        );
+    }
+    Ok(())
+}
+
+fn s88_every_account_past_its_threshold_or_spent(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let fifteen = now + 2 * 3600;
+    let monday = now + 3 * 24 * 3600;
+    read_pool(&world, Strategy::MostLeft, &["work-1", "work-2"]);
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![window("7-day", 9_500, Some(monday))],
+    );
+    reads(
+        &world,
+        "work-2",
+        now,
+        vec![window("5-hour", 5_000, Some(now + 4 * 3600))],
+    );
+    spent(&world, "work", "work-2", fifteen);
+    let id = fix_in(&world, None, "one")?;
+    waits_on_the_pool(&world, &id, Some(fifteen))?;
+    world.host.advance(3600);
+    reads(
+        &world,
+        "work-2",
+        world.host.now(),
+        vec![window("5-hour", 1_000, Some(now + 4 * 3600))],
+    );
+    world.engine().settle(None);
+    waits_on_the_pool(&world, &id, Some(fifteen))?;
+    world.host.advance(fifteen + 1 - world.host.now());
+    world.engine().settle(None);
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the start at the first settle after 15:00"
+    );
+    Ok(())
+}
+
+fn a_reading_under_the_threshold_while_spent(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let fifteen = now + 2 * 3600;
+    read_pool(&world, Strategy::FillFirst, &["work-2"]);
+    spent(&world, "work", "work-2", fifteen);
+    world.host.advance(3600);
+    reads(
+        &world,
+        "work-2",
+        world.host.now(),
+        vec![window("5-hour", 1_000, Some(now + 4 * 3600))],
+    );
+    let id = fix_in(&world, None, "one")?;
+    waits_on_the_pool(&world, &id, Some(fifteen))?;
+    world.host.advance(fifteen - 1 - world.host.now());
+    world.engine().settle(None);
+    waits_on_the_pool(&world, &id, Some(fifteen))?;
+    world.host.advance(1);
+    world.engine().settle(None);
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the start once 15:00 passed"
+    );
+    Ok(())
+}
+
+fn a_reading_at_its_limit(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    read_pool(&world, Strategy::FillFirst, &["work-1", "work-2"]);
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![window("5-hour", 10_000, Some(now + 3600))],
+    );
+    let id = fix_in(&world, None, "one")?;
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the start, work-1 at its limit by its reading"
+    );
+    ensure_eq!(
+        spent_until(&world, "work", "work-1"),
+        None,
+        "work-1's spent time"
+    );
+    Ok(())
+}
+
+/// The window of a reading leaving `left` hundredths, resetting an hour
+/// after `now`.
+fn leaving(now: Seconds, left: u32) -> Vec<UsageWindow> {
+    vec![window("5-hour", 10_000 - left, Some(now + 3600))]
+}
+
+fn a_fresh_reading(_: &()) -> Outcome {
+    for (other, expected) in [(1_900, "work-1"), (2_100, "work-2")] {
+        let world = World::new();
+        let now = world.host.now();
+        read_pool(&world, Strategy::MostLeft, &["work-2", "work-1"]);
+        reads(
+            &world,
+            "work-1",
+            now - 120,
+            vec![
+                window("5-hour", 4_000, Some(now + 3600)),
+                window("7-day", 8_000, Some(now + 3 * 24 * 3600)),
+            ],
+        );
+        reads(&world, "work-2", now - 120, leaving(now, other));
+        let id = fix_in(&world, None, "one")?;
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", expected),
+            format!("the start, work-2 leaving {other} hundredths")
+        );
+    }
+    Ok(())
+}
+
+fn a_stale_reading(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    pool_at(
+        &world,
+        "work",
+        Strategy::MostLeft,
+        None,
+        vec![
+            reading_at(account("work-1", None)),
+            reading_at(account("work-2", None)),
+            reading_at(account("work-3", Some(1))),
+        ],
+    );
+    reads(&world, "work-1", now - 20 * 60, leaving(now, 9_000));
+    reads(&world, "work-3", now - 120, leaving(now, 1_500));
+    for (name, expected) in [("one", "work-3"), ("two", "work-1"), ("three", "work-2")] {
+        let id = fix_in(&world, None, name)?;
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", expected),
+            format!("{name}'s account")
+        );
+    }
+    Ok(())
+}
+
+fn s86_four_places_of_four_intents(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    pool_at(
+        &world,
+        "work",
+        Strategy::MostLeft,
+        None,
+        vec![
+            reading_at(account("work-1", None)),
+            reading_at(account("work-2", None)),
+            account("work-3", None),
+        ],
+    );
+    let work_1 = |read_at| {
+        reads(
+            &world,
+            "work-1",
+            read_at,
+            vec![
+                window("5-hour", 4_000, Some(now + 5 * 3600)),
+                window("7-day", 8_000, Some(now + 3 * 24 * 3600)),
+            ],
+        );
+    };
+    work_1(now - 120);
+    reads(
+        &world,
+        "work-2",
+        now - 120,
+        vec![
+            window("5-hour", 6_000, Some(now + 5 * 3600)),
+            window("7-day", 3_000, Some(now + 3 * 24 * 3600)),
+        ],
+    );
+    let first = fix_in(&world, None, "one")?;
+    let second = fix_in(&world, None, "two")?;
+    for (id, name) in [(&first, "the first"), (&second, "the second")] {
+        ensure_eq!(
+            chosen(&world, id, "code"),
+            by("work-2", AccountFrom::Strategy),
+            format!("{name} place's account")
+        );
+    }
+    world.host.advance(18 * 60);
+    work_1(world.host.now());
+    let third = fix_in(&world, None, "three")?;
+    ensure_eq!(
+        account_of(&world, &third, "code"),
+        on("work", "work-1"),
+        "the third, work-2's reading twenty minutes old"
+    );
+    spent(&world, "work", "work-1", world.host.now() + 3600);
+    let fourth = fix_in(&world, None, "four")?;
+    ensure_eq!(
+        account_of(&world, &fourth, "code"),
+        on("work", "work-3"),
+        "the fourth, work-1 spent"
+    );
+    for id in [&first, &second, &third, &fourth] {
+        ensure_eq!(
+            world.held(id).map(|held| held.moves),
+            Some(vec![]),
+            format!("{id}'s moves")
+        );
+    }
+    Ok(())
+}
+
+fn most_left_with_no_reading_anywhere(_: &()) -> Outcome {
+    let world = World::new();
+    read_pool(&world, Strategy::MostLeft, &["work-1", "work-2"]);
+    for (name, expected) in [("one", "work-1"), ("two", "work-2"), ("three", "work-1")] {
+        let id = fix_in(&world, None, name)?;
+        ensure_eq!(
+            account_of(&world, &id, "code"),
+            on("work", expected),
+            format!("{name}'s account")
+        );
+    }
+    Ok(())
+}
+
+fn most_left_after_the_affinity(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    read_pool(&world, Strategy::MostLeft, &["work-1", "work-2"]);
+    reads(&world, "work-1", now, leaving(now, 9_000));
+    reads(&world, "work-2", now, leaving(now, 5_000));
+    let first = fix_of(&world, None, "a", Some("the-surfaces"))?;
+    ensure_eq!(
+        chosen(&world, &first, "code"),
+        by("work-1", AccountFrom::Strategy),
+        "the intent's first start"
+    );
+    reads(&world, "work-2", now, leaving(now, 9_500));
+    let next = fix_of(&world, None, "b", Some("the-surfaces"))?;
+    ensure_eq!(
+        chosen(&world, &next, "code"),
+        by("work-1", AccountFrom::Affinity),
+        "the intent's next start, work-2 leaving more"
+    );
+    ensure_eq!(
+        world.held(&next).map(|held| held.moves),
+        Some(vec![]),
+        "the next start's moves"
+    );
+    let other = fix_in(&world, None, "c")?;
+    ensure_eq!(
+        account_of(&world, &other, "code"),
+        on("work", "work-2"),
+        "a place of another intent"
+    );
+    Ok(())
+}
+
+fn a_stage_moved_off_a_threshold(_: &()) -> Outcome {
+    let world = World::new();
+    let now = world.host.now();
+    let monday = now + 3 * 24 * 3600;
+    read_pool(&world, Strategy::FillFirst, &["work-1", "work-2"]);
+    let id = begun_fix(&world, "one")?;
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-1"),
+        "the first start"
+    );
+    let first = World::identity("fix", "one", "code", 1);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    let asked = world.engine.needs(
+        &first.to_string(),
+        &secret.0,
+        "which file?",
+        StopKind::NeedsAnswer,
+    );
+    ensure!(asked.refusal().is_none(), "the stop-short: {asked:?}");
+    reads(
+        &world,
+        "work-1",
+        now,
+        vec![
+            window("5-hour", 9_300, Some(now + 3600)),
+            window("7-day", 9_100, Some(monday)),
+        ],
+    );
+    let at = world.host.now();
+    let retried = world.engine().retry(
+        &id,
+        Retry::Stage("code".into()),
+        Some("fix.rs".into()),
+        false,
+    );
+    ensure!(retried.refusal().is_none(), "the retry: {retried:?}");
+    ensure_eq!(
+        account_of(&world, &id, "code"),
+        on("work", "work-2"),
+        "the start after work-1 passed its threshold"
+    );
+    let moves: Vec<AccountMove> = world
+        .status(&id)?
+        .moves
+        .into_iter()
+        .map(|status| status.moved)
+        .collect();
+    let off = |on: MoveOn| AccountMove {
+        on,
+        from: "work-1".into(),
+        to: "work-2".into(),
+        why: MoveWhy::Threshold,
+        at,
+        carried: None,
+        window: Some("7-day".into()),
+        until: Some(monday),
+    };
+    ensure_eq!(
+        moves,
+        vec![
+            off(MoveOn::Stage {
+                stage: "code".into()
+            }),
+            off(MoveOn::Intent {
+                program: Some("agent".into())
+            })
+        ],
+        "the moves, the window that holds work-1 latest named"
     );
     Ok(())
 }

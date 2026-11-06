@@ -91,12 +91,16 @@ pub enum HostDocument {
 }
 
 /// An account spent until a time by the host's clock, with the words its
-/// agent's record gave and when flume recorded it (146, 151).
+/// agent's record gave, when flume recorded it, and whether flume read no
+/// reset in the words, so the time is the hour 146 gives, false in a
+/// document written before (146, 151).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountSpent {
     pub until: Seconds,
     pub words: Option<String>,
     pub recorded_at: Seconds,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unread: bool,
 }
 
 /// An intent's affinity: the stream its agents keep to, the pool and

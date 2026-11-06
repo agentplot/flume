@@ -1,9 +1,9 @@
 //! A stage's start (27 to 33): its settings resolved from their six
 //! layers, or the stage refused naming the setting (32), a fresh identity
 //! and secret, its prompt filled or the stage refused naming the part,
-//! and one agent opened through the agent seam's command and the
+//! and one agent opened through the agent seam's command in its stream's
 //! terminal, never while another of the place's is live, and only under
-//! the host's bound (70).
+//! the host's bound (70, 190).
 
 use crate::accounts::Choice;
 use crate::prompt::{asks, group_text, notes_path, render};
@@ -28,6 +28,12 @@ pub(crate) struct Claim {
     agent: Arc<dyn Agent>,
     /// The session name the agent carries: a role's run's address (132).
     session: Option<String>,
+    /// The terminal it opens in, its stream's as the host's
+    /// configuration stands now (190).
+    terminal: Arc<dyn Terminal>,
+    /// The terminal's session the agent opens in, none where it opens
+    /// beside the pane its settings name (107, 143).
+    opens_in: Option<SessionHeld>,
     /// The account the start runs under (144, 145).
     account: Option<AccountHeld>,
     /// The value its agent profile passes for its mode, none where no
@@ -303,8 +309,20 @@ impl Engine {
             return Err(Start::NoPlace);
         };
         let place = &read.state.place;
-        let resolution = self.resolution(place, &place.kind.stages[index]);
         let queue = admit.queue();
+        // A stream whose labels are at fault, or whose multiplexer names a
+        // terminal profile the resolver does not carry, starts no stage:
+        // its words refuse the start before its settings are resolved (4,
+        // 181, 182, 190).
+        let resolution = match (
+            queue.stream(&place.stream.name).fault,
+            self.stream_terminal(&place.stream.name),
+        ) {
+            (Some(fault), _) | (None, Err(fault)) => Err(fault),
+            (None, Ok(terminal)) => self
+                .resolution(place, &place.kind.stages[index])
+                .map(|resolution| (resolution, terminal)),
+        };
         let now = self.host.now();
         let affinity = queue
             .pool_of(&place.stream.name)
@@ -313,7 +331,7 @@ impl Engine {
         let program = resolution
             .as_ref()
             .ok()
-            .and_then(|resolution| resolution.resolved.settings.program.clone());
+            .and_then(|(resolution, _)| resolution.resolved.settings.program.clone());
         let stage_name = &place.kind.stages[index].name;
         let (chosen, intent_moved) = match &resolution {
             Ok(_) => self.choose_account(
@@ -346,7 +364,7 @@ impl Engine {
             .as_ref()
             .and_then(|room| room.carry.clone());
         let carry = match (&after, &chosen, &resolution) {
-            (Some(after), Choice::Chose { .. }, Ok(resolution)) if after.carry => Some(
+            (Some(after), Choice::Chose { .. }, Ok((resolution, _))) if after.carry => Some(
                 resolution
                     .agent
                     .carry(&self.store.folder(id), &after.start, &env),
@@ -361,6 +379,7 @@ impl Engine {
             _ => None,
         };
         let made_from = self.store.made(id).len();
+        let label = self.label_of(place);
         let claimed = self.update(id, |held| {
             if let Admit::Waiting(_) = admit {
                 if held.phase != Phase::Live
@@ -376,8 +395,8 @@ impl Engine {
             {
                 return Step::Keep(Err(Start::AgentLive));
             }
-            let resolution = match &resolution {
-                Ok(resolution) => resolution,
+            let (resolution, (terminal, named)) = match &resolution {
+                Ok((resolution, terminal)) => (resolution, terminal),
                 Err(reason) => {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::Refused;
@@ -429,7 +448,13 @@ impl Engine {
             if let Admit::Queue(queue) = admit {
                 let program = resolution.resolved.settings.program.as_deref();
                 if matches!(chosen, Choice::Wait)
-                    || queue.must_wait(id, &held.place.stream.name, program, held.priority)
+                    || queue.must_wait(
+                        id,
+                        &held.place.stream.name,
+                        label.as_ref().map(|label| label.name.as_str()),
+                        program,
+                        held.priority,
+                    )
                 {
                     let stage = &mut held.stages[index];
                     stage.state = StageState::WaitingForRoom;
@@ -469,6 +494,7 @@ impl Engine {
                     );
                 }
             }
+            let opens_in = queue.session_of(&held.place.stream.name, &resolution.resolved.settings);
             let secret = self.host.secret();
             let program = resolution
                 .resolved
@@ -531,7 +557,17 @@ impl Engine {
                 opening: Some(self.host.command()),
                 dialog: None,
                 conversation: conversation.clone(),
+                session: opens_in.clone(),
+                label: label.clone(),
+                terminal: Some(named.clone()),
             });
+            if !held
+                .terminals
+                .iter()
+                .any(|opened| opened.profile == named.profile)
+            {
+                held.terminals.push(named.clone());
+            }
             held.current = Some(index);
             Step::Write(Ok(Claim {
                 identity,
@@ -542,6 +578,8 @@ impl Engine {
                 env: env.clone(),
                 agent: resolution.agent.clone(),
                 session: held.role.clone(),
+                terminal: terminal.clone(),
+                opens_in,
                 account,
                 mode: resolution.mode.clone(),
                 resume: resume.clone(),
@@ -575,11 +613,15 @@ impl Engine {
             env,
             agent,
             session,
+            terminal,
+            opens_in,
             account: _,
             mode,
             resume,
         } = claim;
+        let folder = self.store.folder(id);
         let command = agent.command(
+            &folder,
             &settings,
             mode.as_deref(),
             resume.as_deref(),
@@ -589,13 +631,22 @@ impl Engine {
             &secret,
             &text,
         );
-        let folder = self.store.folder(id);
-        let opened = self.terminal.open(
+        let at = match (&settings.beside, opens_in) {
+            (Some(pane), _) => OpenIn::Beside { pane: pane.clone() },
+            (
+                None,
+                Some(SessionHeld {
+                    name: Some(name), ..
+                }),
+            ) => OpenIn::Session { name },
+            (None, _) => OpenIn::Own,
+        };
+        let opened = terminal.open(
             &place,
             &folder,
             &command,
             &identity,
-            settings.beside.as_deref(),
+            &at,
             session.as_deref(),
         );
         self.with_start(id, &identity, |start, _| {

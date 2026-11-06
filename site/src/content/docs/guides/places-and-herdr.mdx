@@ -9,8 +9,9 @@ import Diagram from '../../../components/Diagram.astro';
 
 A place is the worktree flume makes for one launch. Every stage of the
 work runs there, one agent at a time, and flume removes it once the
-work lands or is dropped. Where the agents run is the host's choice:
-in herdr panes, or as commands flume prints.
+work lands or is dropped. Where the agents run is the host's choice,
+and each stream's: in herdr panes, or as commands flume prints.
+`flume open` shows a stream's agents in a window.
 
 ## The place
 
@@ -19,8 +20,14 @@ flume makes a plain `git worktree` of the repository, named
 the kind's. It cuts the branch from the base's
 current revision. Where the repository's sluice policy lands the base
 on a remote, flume fetches that remote first and cuts the branch from
-the remote's revision; a launch whose fetch fails is refused. With no
-merge queue bound, it cuts from the local base.
+the remote's revision. Where the policy lands the base locally, it cuts
+from the local base, where each landing goes. Where no merge queue is
+bound, or the policy names no table for the base, flume fetches the
+base from `origin` and cuts from `origin/<base>`, so a local copy that
+lags origin is never read. It cuts from the local base only where the
+repository has no `origin`, or `origin` holds no such branch. A launch
+whose fetch fails otherwise is refused. `flume status` says beside each
+place's base where its revision was read.
 
 The repository is the directory git finds one in, a clone's main
 worktree, or, in a bare layout, `project/project.git` with its
@@ -51,25 +58,39 @@ name. Nothing is left behind by a refused launch.
 
 ## Making a place ready
 
-What a worktree needs before an agent works in it is the merge queue's
-policy to say. With sluice bound, flume reads `.config/sluice.toml` at
-the base's revision and runs, in the new place:
+A place is made ready by its merge queue, as the merge queue makes
+ready the working copies of its own runs. flume runs no step of its
+own. With sluice bound, flume runs one command in the new place:
 
-1. `[tests] toolchain`, when it names one, such as
-   `["devenv", "print-dev-env"]`. Its output is the environment every
-   later step runs under, kept in the place's own git directory.
-2. `proto install --config-mode upwards`, when `[tests] runner = "moon"`
-   and the base holds a `.prototools`. It installs the versions the
-   repository pins, under the toolchain's environment, as sluice's moon
-   runner does before any moon command. A toolchain that only activates
-   those versions leaves them uninstalled in a fresh clone.
-3. `moon setup`, when `[tests] runner = "moon"`.
+```sh
+sluice equip <base> --at <revision> --json
+```
 
-Each step runs with the host user's login environment, nothing of the
-caller's session. A step that fails leaves the place made: a fix or a
-chore starts anyway and its prompt names the failed step, and a change
-waits with the step in `flume status`. A repository with no such steps
-is ready at once, and the prompt says it declares no readiness.
+`<revision>` is the base's revision the launch read, which the place's
+branch was cut from. sluice reads `.config/sluice.toml` at that
+revision and runs in the place what it runs before a run of its own:
+the `[tests] toolchain` the policy names, then, with
+`[tests] runner = "moon"`, `proto install` of what the place's
+`.prototools` pins, `moon --version` and `moon setup`. It answers each
+step with whether it passed and what it printed, and stops at the first
+that fails. Those steps are the place's readiness. flume keeps nothing
+a step makes.
+
+`sluice equip` runs with the host user's login environment, nothing of
+the caller's session, so the sluice it runs is the one that
+environment's `PATH` finds. sluice 0.67.0 is the first with
+`sluice equip`. An older one fails the readiness at its one step,
+`sluice equip`, with sluice's words, as does a refusal or an answer
+flume cannot read.
+
+A step that fails leaves the place made: a fix or a chore starts anyway
+and its prompt names the failed step, and a change waits with the step
+in `flume status`. A retry of that first stage runs `sluice equip` again
+at the launch's revision, so sluice reads the policy as the launch read
+it and installs what the place holds then, its agent's commits among
+them. A repository whose merge queue equips it with no step, or that
+binds none, is ready at once, and the prompt says it declares no
+readiness.
 
 `flume status` gives each step in one line, passed or failed, and under
 a failed step the last ten lines it printed, its terminal escapes
@@ -78,9 +99,12 @@ stripped:
 ```console
 $ flume status change--tabs-in-quotes
 ~/.local/share/flume/places/f5f5e14159a8/change--tabs-in-quotes: change@2 (flume), live
+  change--tabs-in-quotes · change@2 · construct · not ready
   branch change/tabs-in-quotes from main, head 84130b3cd2adae9a0ac2117884849d513da80181
   …
   readiness toolchain: passed
+  readiness proto install: passed
+  readiness moon --version: passed
   readiness moon setup: failed
     Installing node 22.11.0
     Error: node 22.11.0 could not be downloaded: the connection timed out
@@ -92,17 +116,19 @@ $ flume status change--tabs-in-quotes
 `flume status --json` gives what each step printed, its escapes and
 all, passed or failed.
 
-## The terminal: printed or herdr
+## The multiplexer: printed or herdr
 
-The host's configuration names the terminal:
+The host's configuration names the multiplexer every stream's agents
+run in, and a stream may name its own over it:
 
 ```toml
 # ~/.config/flume/config.toml
 [host]
-terminal = "herdr"
+multiplexer = "herdr"
 ```
 
-With none, or `terminal = "printed"`, flume prints each agent's
+`terminal = "herdr"`, the word written before `multiplexer`, reads the
+same. With none, or `multiplexer = "printed"`, flume prints each agent's
 command, `cd` into the place and the program with its environment and
 prompt, for you to run. It can send nothing into a pane it does not
 hold, so it cannot deliver a `tell` or a notice. Ends stay pending
@@ -113,16 +139,56 @@ Under herdr 0.9.5 or later, flume opens each agent in a pane itself,
 sends its prompts, reads its state, and delivers ends to the panes of
 the recipients.
 
+### Trying a multiplexer on one stream
+
+A stream's `multiplexer` stands over the host's, so you can try a
+setup on one stream while the others run as they did:
+
+```toml
+[host]
+multiplexer = "herdr"
+
+[streams.trial]
+multiplexer = "printed"
+```
+
+Each start reads its stream's multiplexer and records it, and its agent
+stays in the one it opened in: flume sends to it, reads it and ends it
+there. Change a stream's multiplexer while a place runs and its live
+agent stays where it is, its next stage opening in the new one; flume
+tidies that place in both. A recipient's notice goes to the multiplexer
+that holds a session of the recipient's name. Status gives each agent's
+multiplexer and each stream's, with where each came from.
+
+The local layer, `config.local.toml`, may set a stream's
+`multiplexer`, so you can try one on your own host without changing the
+managed file. A stream whose multiplexer names no profile flume carries
+refuses its own launches and starts, naming the name and the profiles
+there are, and every other stream runs. Where any multiplexer the host
+binds keeps no watch, as the printed command keeps none, every command
+of flume's that acts settles every place first.
+
 ## Places under herdr
 
 <Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
 
-flume keeps its agents in a herdr session of its own, named `flume`:
+flume keeps each stream's agents in a herdr session of the stream's:
+the one its `session` names, else the one named by the stream's name.
+So `flume open work`, or `herdr --session work`, shows every agent of
+the `work` stream ([seeing a stream's agents](#seeing-a-streams-agents)). The
+`default` stream's agents run in flume's own session, `flume`, unless
+`[streams.default]` names another. A launch's `--agent
+session=<name>` opens its place's agents in that session whatever their
+stream ([a stream's session](/flume/guides/agent-settings/#a-streams-session)).
+flume starts a session's server, headless, the first time an agent
+opens in it. Where herdr does not take a session's name, the start is
+refused in herdr's words. In each session:
 
 - **A workspace per repository and base**, labelled
   `<repository> <base>` from the repository's directory name, such as
   `acme main`. flume opens it the first time a place on that base
-  starts.
+  starts in that session, so a base whose places run in two streams
+  has a workspace in each.
 - **A tab per place**, `<kind>--<name>`, in its base's workspace.
 - **A pane per agent** in the place's tab. flume starts each agent with
   herdr's `agent start`, with the agent's environment set on the pane,
@@ -156,13 +222,96 @@ the settings name, such as a `claude` your shell found earlier on the
 
 An agent's `beside` setting opens its pane as a split beside another
 pane instead, named by its label or id on flume's server, or as
-`herdr:<pane>@<socket>`. A conversation stage uses it to open beside
-the caller's own pane.
+`herdr:<pane>@<socket>`, in whatever session that pane is. A
+conversation stage uses it to open beside the caller's own pane.
 
 Every herdr call flume makes runs under a bound, ten seconds where the
 call states none, with the calling session's `HERDR_*` variables
 stripped and the recorded server's socket passed. A call that does not
 answer in time reads as unknown, never as an answer.
+
+## Seeing a stream's agents
+
+`flume open <stream>` shows a stream's agents, and `flume open` the
+`default` stream's. It opens the session the stream's agents open in,
+in the stream's view, else the host's:
+
+```toml
+[host]
+multiplexer = "herdr"
+terminal_app = "ghostty"
+
+[streams.work]
+title = "Work Agents"
+
+[streams.office]
+terminal_app = "terminal"
+title = "Office Agents"
+```
+
+Here `flume open work` opens a Ghostty window titled `Work Agents`
+running `herdr session attach work`, and `flume open office` a
+Terminal.app window titled `Office Agents` on the session `office`.
+Under herdr, flume names the herdr it runs by its full path, so the
+window runs the same release whatever its own `PATH`. A session not yet
+running is started headless first, before any of its places has an
+agent, and stays running as every session's server does.
+
+A stream's `view` is `terminal` unless the stream or the host names
+`app`. The view `terminal` is a window of a terminal app running the
+multiplexer's attach. The view `app` is the multiplexer's own app,
+which titles its own window and needs no terminal app. herdr has no app
+of its own: the app of the same name runs on herdr-core, a backend with
+sessions of its own. So a stream under herdr whose view is `app`
+refuses its open, saying so.
+
+### The terminal apps
+
+- **`ghostty`**, Ghostty. On macOS flume runs `open -na Ghostty.app`
+  with the window's title and the command, waiting up to ten seconds
+  for it. Elsewhere it starts `ghostty --title=<title> -e <command>`
+  apart from itself, under your login environment, and does not wait
+  on it. Ghostty keeps the title it was given whatever the program
+  inside sets. An `open` that cannot find Ghostty refuses in its words.
+  Checked against Ghostty 1.4.0.
+- **`terminal`**, Terminal.app, on macOS alone. flume asks Terminal
+  through `osascript` to run the command in a new window and give its
+  tab a custom title, waiting up to ten seconds. The first time, macOS
+  asks you to let the program running flume control Terminal; an open
+  you have not allowed is refused in `osascript`'s words, and the next
+  opens once you allow it. Terminal shows the custom title beside what
+  your Terminal profile adds there, such as the process or the window's
+  size. It types the command into the window's shell, so a variable the
+  command needs shows its value there. Checked against Terminal 2.15 on
+  macOS 27.
+- **`printed`**, where neither the stream nor the host names a terminal
+  app. flume opens no window and prints the command on the answer's
+  last line, after `run: `:
+
+  ```console
+  $ flume open work
+  the terminal app printed opens no window; run this line to show herdr's session work (the stream's name) titled "Work Agents" (the stream's title):
+    stream work, multiplexer herdr (the host's), view terminal (the default), terminal app printed (the default)
+    its command /usr/local/bin/herdr session attach work
+  run: /usr/local/bin/herdr session attach work
+  ```
+
+  You run the line, or a launcher of your own takes what follows
+  `run: ` and runs it. A variable the command needs prints as
+  `<name>=<set>`, never its value.
+
+### Filing a window by its title
+
+A window carries its stream's `title`, else the stream's name. A window
+manager that places windows by a rule on their title files each
+stream's window where you keep it. Match the stream's title within the
+whole title, since Terminal.app may add to it.
+
+flume keeps nothing of a window. Each asking opens a window of its own,
+so a key bound to `flume open work` opens one each press; finding the
+one already open is your window manager's. flume opens a window only
+at your asking, never at a launch, a settle or a start, and never
+raises or closes one.
 
 ## The herdr plugin
 
@@ -175,7 +324,7 @@ herdr plugin install agentplot/flume/plugins/herdr --ref v<version>
 ```
 
 It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
-`terminal = "herdr"` in the host's configuration. It brings:
+herdr as the host's multiplexer or a stream's. It brings:
 
 - **The watch.** herdr starts it with its server, one per server. Every
   two seconds it reads every pane's agent state in one listing. When one
@@ -185,35 +334,64 @@ It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
   agent that crashed, hung or was killed is read within that bound.
   While the watch's lease is fresh, flume's commands leave the settling
   to it; once it stops, each command settles every place first, as with
-  no watch.
+  no watch. At its start and after each settle it reads herdr's
+  configuration file and writes down what that file lacks for the
+  plugin, which `flume status` gives.
 - **Display hints.** After each settle the watch titles each agent's
   pane `<stage> · <state>` and names it `<kind>--<name>`, and gives
   each base's workspace the token `flume`, a count of its places:
   `1 running · 0 asking · 1 waiting on caller · 0 stalled`. They show
   what status says, and nothing flume decides reads them back.
-- **A sidebar row** on each agent's entry, the `$flume` token, such as
-  `change · code · working · 2/5`: the kind, the stage, its state, the
-  change's tasks ticked, the submission, and whether the place waits on
-  you or is stalled.
-- **A popup** of every place in flight, `agentplot.flume.places`, the
-  chosen place marked `▶`. Each key acts at once, with no Enter: the
-  arrow keys or `j` and `k` move the choice, and `1` to `9` choose the
-  place so numbered. `o` opens its tab, `t` tells its agent the words
-  you give, `s` stops its agent and `r` retries its stage; the words,
-  and whether to force, are asked for as a line, ended by Enter. `q` or
-  Escape closes the popup. Each key runs one flume command or focuses
-  the tab, and none types into an agent's pane.
+- **A sidebar row** on each agent's entry, the `$flume` token: its
+  place's line less the place's name and kind, which the entry already
+  shows. That is the stage with a repeating stage's group, how many
+  times it started, the change's tasks ticked and the place's state, as
+  in `code 1/2 · run 1 · tasks 2/5 · working`.
+- **A popup** of every place in flight, `agentplot.flume.places`, each
+  place its number and its line, the words its agents' status line
+  gives, with its location beneath:
 
-The plugin changes none of herdr's configuration. Add the key and the
-rows to herdr's `config.toml` yourself:
+  ```text
+  ▶ 1  fix--the-parser-reads-tabs · fix@1 · code · run 1 · working
+       ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+  ```
+
+  The chosen place is marked `▶`. Each key acts at once, with no Enter:
+  the arrow keys or `j` and `k` move the choice, and `1` to `9` choose
+  the place so numbered. `o` opens its tab, `t` tells its agent the
+  words you give, `s` stops its agent and `r` retries its stage; the
+  words, and whether to force, are asked for as a line, ended by Enter.
+  `q` or Escape closes the popup. Each key runs one flume command or
+  focuses the tab, and none types into an agent's pane.
+
+The sidebar row and the popup copy the line from `flume status --json`
+and work out nothing of their own.
+
+### Setting up herdr
+
+The plugin changes none of herdr's configuration. Add the popup's key
+and the sidebar's rows yourself, to the file herdr reads, or to
+whatever writes it: the file `HERDR_CONFIG_PATH` names, else
+`$XDG_CONFIG_HOME/herdr/config.toml`, else
+`~/.config/herdr/config.toml`.
+
+**The popup's key.** herdr's plugins declare no keys, so a key reaches
+the popup only through an entry of your own. Add this one, or bind
+another key the same way:
 
 ```toml
 [[keys.command]]
 key = "prefix+f"
 type = "plugin_action"
 command = "agentplot.flume.places"
-description = "flume: the places in flight"
+description = "flume: places in flight"
+```
 
+`prefix+f` is free among herdr's own keys.
+
+**The sidebar's rows.** The rows below are herdr's own plus flume's:
+
+```toml
 [ui.sidebar.agents]
 rows = [
   ["state_icon", "machine", "workspace", "tab"],
@@ -230,8 +408,28 @@ rows = [
 
 If you have rows of your own, add only the `$flume` entries. The pane
 titles show wherever herdr shows a pane; the rows show only where your
-sidebar names `$flume`. The plugin keeps its lease, the status it last
-wrote and its log, `watch.log`, under
+sidebar names `$flume`.
+
+**What `flume status` says is missing.** Until herdr's file holds the
+entry and the rows, `flume status`, of one place or of every place,
+names what the file lacks under the line naming the watch, in words
+you can act on:
+
+```console
+$ flume status
+…
+  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes
+    herdr's configuration, ~/.config/herdr/config.toml, binds no key to flume's places: add a [[keys.command]] entry with key = "prefix+f", type = "plugin_action", command = "agentplot.flume.places", description = "flume: places in flight", as the README of flume's herdr plugin gives it
+```
+
+`flume status --json` gives the same words in the host's
+`terminal_setup`. flume says them only when asked: no notice, no herdr
+notification. The watch reads the file by its lines and parses no TOML,
+so an entry written as an inline table may read as missing. Nothing
+flume decides reads the words.
+
+The plugin keeps its lease, the status it last wrote, its log,
+`watch.log`, and what herdr's configuration lacks, `setup.json`, under
 `$XDG_STATE_HOME/herdr/plugins/agentplot.flume`, one directory per
 herdr server.
 
@@ -258,10 +456,12 @@ place or all. flume:
    kept the branch chore/tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme, 1 commits not landed
    ```
 
-4. under herdr, closes the place's tab, and its base's workspace once
-   that holds no tab of a live place and no pane flume did not open. A
-   workspace where you opened a pane of your own stays open, and status
-   names it under the host's `terminal_kept`.
+4. closes the place's tab in each multiplexer its agents opened in,
+   under herdr in each session it has a tab in. It closes its base's
+   workspace there once that holds no tab of a live place and no pane
+   flume did not open. A workspace where you opened a pane of your own
+   stays open, and status names it under the host's `terminal_kept`,
+   or that multiplexer's `kept` in `terminals`.
 
 flume removes nothing it did not make: no worktree made by hand, no
 repository's main worktree, and no herdr workspace, tab or pane of

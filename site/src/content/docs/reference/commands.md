@@ -8,7 +8,7 @@ sidebar:
 | Command | |
 |---|---|
 | `flume launch` | Make one place and start, hold or queue its first stage. |
-| `flume status [<place>]` | Every fact of a place, or of every place, and of the host. |
+| `flume status [<place>]` | Every fact of a place, or of every place, and of the host; with `--line`, each place's one line. |
 | `flume prompt <place> <stage>` | The exact prompt a stage would be sent at its next start, starting nothing. |
 | `flume tell <place> <words>` | Hand the place's agent words as a prompt, once it waits. |
 | `flume hold <place> <words>` | Hold the place's next stage, `--stage`, or its submission, `--submission`, with words saying what for. |
@@ -24,6 +24,7 @@ sidebar:
 | `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
 | `flume wake <address>` | Wake a role's address: launch its run where none stands. |
 | `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
+| `flume open [<stream>]` | Show a stream's agents in its view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
 | `flume mcp` | Serve flume's status over MCP on standard input and output. |
 | `flume needs <words>` | From an agent flume started: its stage cannot deliver without an answer, or found work. |
 | `flume ack started`, `flume ack received` | From an agent flume started: it started, or it received a prompt. |
@@ -59,8 +60,10 @@ error. `flume wait` has exits of its own.
 **Settling first.** Every command that acts, `launch`, `tell`,
 `hold`, `retry`, `stop`, `finish`, `drop`, `done`, `priority`, `tidy`,
 `wait`, `inbox` and `wake`, settles every place on the host first,
-unless herdr's watch keeps them moving. `flume status`, `flume prompt`
-and `flume mcp` only read, and `flume kinds lock` writes its lock and
+unless every multiplexer the host binds keeps a watch, as herdr's plugin
+does. `flume status`, `flume prompt` and `flume mcp` only read,
+`flume status --line` and `flume hook status-line` among them.
+`flume open` settles nothing, and `flume kinds lock` writes its lock and
 settles nothing.
 
 ## `flume launch`
@@ -83,7 +86,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
-| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside` or `mode`: `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. Repeatable. |
+| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside`, `session` or `mode`. `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. Repeatable. |
 | `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
 | `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
 
@@ -108,7 +111,9 @@ nothing it made, when:
   causes;
 - a declaration sets `env` in an agents table, or a setting names a
   stage the kind lacks, or a program no agent profile runs;
-- the stream is one the host's configuration does not declare.
+- the stream is one the host's configuration does not declare;
+- the stream's multiplexer names no terminal profile flume carries.
+  A launch on another stream runs.
 
 ```console
 $ flume launch --kind deploy --name x --brief x
@@ -123,18 +128,21 @@ its bound waits for room, and the answer says so.
 ## `flume status`
 
 ```sh
-flume status [<place>]
+flume status [<place>] [--line]
 ```
 
 With a place, its status; with none, every place on the host. Each
 place gives:
 
+- its line, the one `--line` prints;
 - its kind, version and origin, and its phase, live or tidied;
 - its kind's identity, where it came from, and for a package its hash
   and the lock that recorded it;
-- its branch, base and head, and whether each readiness step passed or
-  failed, with the last ten lines a failed step printed, its terminal
-  escapes stripped;
+- its branch, base and head, and where the base's revision was read:
+  where its merge queue lands it, at `origin`, or the local branch's,
+  with why;
+- whether each readiness step passed or failed, with the last ten lines
+  a failed step printed, its terminal escapes stripped;
 - each stage's state and starts;
 - its current agent's identity, program, settings with their layers
   and state, and whether it started, is asking or has its own work
@@ -143,17 +151,46 @@ place gives:
 - its submission;
 - what it waits on, since when and in whose words, and whether it is
   stalled;
-- its stream and intent, its current agent's account, each move
-  between accounts, and each start that began without its settings;
+- its stream, its label and its intent, its current agent's account,
+  the multiplexer and the session it opened in, each move between
+  accounts, and each start that began without its settings;
 - its holds, priority, recipients and ends, and what flume could not
   read.
 
-The host part gives the agents running, the bound, the room, the
-queue, each stream's and each pool's part, the watch, each base's
-count, the role addresses with ends pending, and what a tidy kept in
-the terminal. It gives each source of kinds the host declares too, with
-the kinds it holds or why it cannot be read. Where the terminal keeps no watch, it says so: places
+The host part gives the agents running, the bound, the room and the
+queue. Each stream's part gives its session, its multiplexer, view,
+terminal app and title, each with where it came from, and its labels.
+Then come each pool's part, each source of kinds the host declares with
+the kinds it holds or why it cannot be read, each base's count and the
+role addresses with ends pending. Each multiplexer the host binds gives
+its watch and what a tidy kept there. Last comes the host's
+configuration: whether its local layer was taken, each value it set and
+each key passed over with its pin. Where a multiplexer keeps no watch, it says so: places
 then move on only at flume's commands and when their agents go quiet.
+Under the line naming the watch, it gives what the terminal's own
+configuration lacks for flume's plugin there, such as herdr's key for
+the popup, in words you can act on.
+
+**`--line`** gives each place's one line and nothing else, reading only
+what a line holds: the place's held state, the change at its head and
+its agent's own record. It calls no terminal and no merge queue. Each
+line holds the place, its kind and version, its current stage with a
+repeating stage's group, how many times that stage started, a change's
+tasks ticked and the place's state. A part the place has none of is
+left out:
+
+```console
+$ flume status --line
+change--parser · change@2 · code 1/2 · run 1 · tasks 0/3 · working
+fix--the-parser-reads-tabs · fix@1 · code · run 2 · waiting on an answer
+```
+
+The words are the ones status gives each place, the herdr plugin's
+sidebar and popup show, and every agent's status line pins under its
+prompt ([the status line](/flume/guides/claude-code/#the-status-line)
+lists the states). With `--json` the answer is
+`{"lines":{"lines":[…]}}`, each line with the fields of status's
+`line`.
 
 flume reads each fact where it lives when asked, and keeps none
 between asks. The [state reference](/flume/reference/state/) lists the
@@ -257,16 +294,20 @@ or is done and whose agent stopped:
 - its worktree, through the repository's teardown and
   `git worktree remove`;
 - its branch, where the base holds every commit of it;
-- under herdr, its tab, and its base's workspace once that holds
-  nothing else of flume's or yours.
- It keeps a place
+- in each multiplexer its agents opened in, under herdr its tab, and
+  its base's workspace once that holds nothing else of flume's or
+  yours.
+
+It keeps a place
 holding uncommitted or unignored work, and a branch with commits the
-base lacks, naming each.
+base lacks, naming each. What it closed or kept in a multiplexer is
+named with that multiplexer, `profile` in the JSON form.
 
 ```console
 $ flume tidy
 removed ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme
 kept the branch chore/tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme, 1 commits not landed
+closed the tab chore--tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme in the terminal herdr
 ```
 
 ## `flume settle`
@@ -371,6 +412,78 @@ $ flume kinds lock --host --remove acme/review@1
 ~/.config/flume/flume.lock is as it was
 ```
 
+## `flume open`
+
+```sh
+flume open [<stream>]
+```
+
+Shows a stream's agents, `default`'s where none is named, in the
+stream's view. It needs no repository. It shows the session the
+stream's agents open in: the stream's `session`, else its name, and,
+for `default` naming none, the multiplexer's own. Under herdr, a
+session not yet running is started first, as an agent's start would
+start it, and stays running.
+
+- **View `terminal`**, the default. The stream's multiplexer gives the
+  command that attaches to the session, and the stream's terminal app
+  opens a window running it, titled with the stream's `title`, else its
+  name. Where no terminal app is named, flume opens no window and
+  prints the command on its last line, after `run: `, for you or a
+  launcher of your own to run.
+- **View `app`.** The multiplexer's own app shows the session. No
+  title is given and no terminal app is read.
+
+[Configuration](/flume/reference/configuration/#host) gives the keys,
+and [seeing a stream's agents](/flume/guides/places-and-herdr/#seeing-a-streams-agents)
+the views and the terminal apps.
+
+```console
+$ flume open work
+opened a ghostty window titled "Work Agents" (the stream's title) on herdr's session work (the stream's name)
+  stream work, multiplexer herdr (the host's), view terminal (the default), terminal app ghostty (the host's)
+  its command /usr/local/bin/herdr session attach work
+$ flume open personal
+the terminal app printed opens no window; run this line to show herdr's session personal (the stream's name) titled "personal" (the stream's name):
+  stream personal, multiplexer herdr (the host's), view terminal (the default), terminal app printed (the default)
+  its command /usr/local/bin/herdr session attach personal
+run: /usr/local/bin/herdr session attach personal
+```
+
+The answer gives the stream, its multiplexer, session, view, title and
+terminal app, each with where it came from, the command and what the
+window did. A variable the command needs is named, never its value:
+the printed line gives it as `<name>=<set>`. With `--json` the answer
+is `{"opened":{…}}`:
+
+| Field | |
+|---|---|
+| `stream` | the stream's name |
+| `multiplexer` | `profile` and `from`: `stream`, `host` or `neither` |
+| `session` | `name`, `null` for the multiplexer's own, and `from`: `stream`, `stream-name` or `own` |
+| `view` | `view`, `terminal` or `app`, and `from` |
+| `title` | `title` and `from`: `stream` or `stream-name`; `null` for the view `app` |
+| `terminal_app` | `profile` and `from`; `null` for the view `app` |
+| `command` | `program`, by its full path, `arguments`, and `environment`, the names of the variables it needs; `null` for the view `app` |
+| `window` | `"opened"`, `{"printed":{"line":…}}` or `"app"` |
+
+Each asking opens a window of its own. flume keeps nothing of a window:
+it never finds, raises or closes one, and opens one only at your
+asking, never at a launch, a settle or a start. It takes no lock and
+writes nothing it holds. It is refused, opening nothing, when:
+
+- the stream is one the host's configuration does not declare, naming
+  the streams it does;
+- the stream's multiplexer or terminal app names no profile flume
+  carries, naming the profiles there are;
+- the multiplexer holds no session to show, as the printed command,
+  whose agents run in the commands it printed;
+- the view is `app` and the multiplexer has no app of its own, as
+  herdr;
+- the terminal app refuses, in its own words: Ghostty not installed,
+  Terminal.app not allowed to be controlled, or Terminal.app on a host
+  that is not macOS.
+
 ## `flume mcp`
 
 Serves MCP on standard input and output with one tool, `status`, which
@@ -390,7 +503,9 @@ case do nothing.
 | `flume ack started --session <id> --transcript <path> --plugin-version <v> [--source <how>]` | The agent started under its identity and secret, in a session with a transcript. `--source` says how the session began, `startup` where none is given. flume takes it only where the agent runs the program its start recorded and every variable of the record matches. Otherwise it refuses, naming each variable that differed and whether the program did, and starts a settle of the place. |
 | `flume ack received --digest <hex> [--mode <mode>]` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. At the start's first prompt, where its start passed a mode, flume takes it only where `--mode` names that mode as the program names it. Otherwise it refuses, naming the mode asked and the one given, records the start begun without its settings and starts a settle of the place. A later prompt compares no mode. |
 | `flume hook <event>` | What the hook for the event does with the input on standard input: `session-start`, `user-prompt-submit`, `pre-tool-use`, `permission-request`, `post-tool-use`, `stop`, `stop-failure` or `session-end`. Any other event does nothing. It always exits `0`. |
+| `flume hook status-line` | Prints the line of the place `FLUME_PLACE` names, as `flume status <place> --line` gives it, ending `· this session is not its agent` where `FLUME_AGENT` is not the current stage's live start. It needs `FLUME_PLACE` and `FLUME_AGENT` alone, and reads no standard input. It prints nothing where they are missing or the place cannot be read, writes nothing, settles nothing and always exits `0`. |
 
-flume's Claude Code plugin runs `flume hook` for every event;
+flume's Claude Code plugin runs `flume hook` for every event, and its
+module runs `flume hook status-line` to pin the place's line;
 [the Claude Code plugin](/flume/guides/claude-code/#what-each-hook-does)
 says what each does.

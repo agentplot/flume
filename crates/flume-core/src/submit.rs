@@ -330,7 +330,7 @@ impl Engine {
                 if !reading.quiet() {
                     return false;
                 }
-                if let Closed::Refused { reason } = self.terminal.close(&start.identity) {
+                if let Closed::Refused { reason } = self.agent_on(&start).close() {
                     self.failed_end(id, &start.identity, &reason);
                     return false;
                 }
@@ -440,7 +440,7 @@ fn recorded(
                 Some(base) => base.clone(),
                 None => match queue.base_revision(&place.repository, &place.base) {
                     BaseRevision::At { revision } => revision,
-                    BaseRevision::Refused { .. } => return None,
+                    BaseRevision::Refused { .. } | BaseRevision::Unlanded => return None,
                 },
             };
             Some(SubmissionOutcome::Conflict {

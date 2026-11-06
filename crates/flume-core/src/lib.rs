@@ -18,6 +18,8 @@ mod ends;
 mod held;
 mod kinds_lock;
 mod launch;
+mod line;
+mod open;
 mod prompt;
 mod reading;
 mod room;
@@ -28,17 +30,20 @@ mod start;
 mod start_record;
 mod status;
 mod submit;
+mod terminals;
 mod tidy;
 mod uncarried;
 mod unsettled;
 mod wait;
 mod wake;
 
+pub use accounts::{FRESH, THRESHOLD};
 pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};
+pub use line::NOT_ITS_AGENT;
 pub use prompt::group_name;
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
@@ -210,6 +215,7 @@ mod tests {
                 lands: true,
                 agents: KindSettings::default(),
                 stages: vec![],
+                label: None,
             },
             declared: Declared::Flume,
             kind_from: None,
@@ -217,6 +223,7 @@ mod tests {
             branch: "fix/one".into(),
             base: "main".into(),
             base_revision: Revision::new("c1"),
+            base_from: None,
             location: "/r/places/fix--one".into(),
             binding,
             brief: None,

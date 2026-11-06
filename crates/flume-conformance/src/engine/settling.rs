@@ -33,6 +33,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s28_crashed_under_a_watch,
         },
         Scenario {
+            name: "settle: on a host whose own terminal keeps a watch, a stream under a terminal that keeps none has a caller's act settle every place first",
+            cites: &["119", "190", "S91"],
+            run: a_watched_host_with_one_stream_unwatched,
+        },
+        Scenario {
             name: "settle: under a watch, a launch and a retry each send the agent they opened its prompt, waiting on no receipt, which the watch's settles read",
             cites: &["6", "37", "38", "46", "49", "122"],
             run: opened_and_sent_under_a_watch,
@@ -349,6 +354,41 @@ fn s28_crashed_under_a_watch(_: &()) -> Outcome {
         "the stage the watch read"
     );
     ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
+    Ok(())
+}
+
+fn a_watched_host_with_one_stream_unwatched(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.other_terminal("other");
+    world.host.set_stream("work", Some(Stream::default()));
+    world.host.set_display("trial", Some("other"), None, None);
+    let id = World::id("fix", "one");
+    let other = World::id("fix", "two");
+    for name in ["one", "two"] {
+        launched(&world.engine.launch(&Launch {
+            stream: Some("work".into()),
+            ..launch("fix", name, Some("x"))
+        }))?;
+    }
+    world
+        .terminal
+        .kill(&World::identity("fix", "one", "code", 1));
+    ensure_eq!(
+        world.status(&id)?.stages[0].state,
+        StageState::Begun,
+        "the stage before a command acts"
+    );
+    let dropped = world.engine.drop_place(&other, true);
+    ensure!(
+        dropped.refusal().is_none(),
+        "the drop was refused: {dropped:?}"
+    );
+    ensure_eq!(
+        world.status(&id)?.stages[0].state,
+        StageState::Lost,
+        "the stage once a command acted"
+    );
     Ok(())
 }
 

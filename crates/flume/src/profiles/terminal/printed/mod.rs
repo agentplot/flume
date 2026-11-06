@@ -8,7 +8,8 @@
 //! agent stopped once its own record says the session ended (134);
 //! screen is nothing (136); tidy and show do nothing, as it makes
 //! nothing and shows no clue (138, 139); there is no watch, so flume runs attended
-//! (119); and it names no session (7). A command printed once for an
+//! (119); it names no session (7), and attach refuses, since it holds
+//! no session a person can be shown (187). A command printed once for an
 //! identity is printed for it never again, kept as a mark in the place's
 //! own folder (98, 128). The command's environment is kept beside the
 //! mark in a file the host's user alone may read, which the line names,
@@ -16,8 +17,8 @@
 
 use crate::shell;
 use flume_seams::{
-    AgentCommand, AgentState, Closed, Clues, Identity, Opened, PlaceRef, Sent, Shown, ShownAt,
-    Terminal, TerminalTidy, ToSession, Watch,
+    AgentCommand, AgentState, Attached, Closed, Clues, Identity, OpenIn, Opened, PlaceRef, Sent,
+    Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, Watch,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -100,7 +101,7 @@ impl Terminal for Printed {
         folder: &str,
         command: &AgentCommand,
         identity: &Identity,
-        _beside: Option<&str>,
+        _at: &OpenIn,
         _session: Option<&str>,
     ) -> Opened {
         let env = environment(folder, identity);
@@ -191,5 +192,13 @@ impl Terminal for Printed {
 
     fn session(&self) -> Option<String> {
         None
+    }
+
+    /// Its agents run in the commands it printed, so it holds no session
+    /// a person can be shown in either view (187).
+    fn attach(&self, _session: Option<&str>, _view: View) -> Attached {
+        Attached::Refused {
+            reason: "the printed command holds no session a person can be shown; its agents run in the commands it printed".into(),
+        }
     }
 }

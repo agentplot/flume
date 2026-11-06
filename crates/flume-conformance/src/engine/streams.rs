@@ -11,7 +11,10 @@
 use super::settling::{construct_begun, write_change};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::{Answer, TitleFrom, TitleHeld};
+use flume_fakes::FakeWindow;
 use flume_seams::*;
+use std::sync::Arc;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
@@ -54,6 +57,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "streams: a later place of an intent naming no stream runs in its affinity's stream, from the intent, over the host's word for its repository",
             cites: &["143", "147"],
             run: a_later_place_of_an_intent,
+        },
+        Scenario {
+            name: "streams: the host's facts give a stream's session and its labels' shares, a kind's label in any repository with where it came from, and each value of the configuration with its layer, as the core reads them",
+            cites: &["143", "180", "181"],
+            run: the_hosts_sessions_labels_and_layers,
+        },
+        Scenario {
+            name: "streams: status gives each stream's multiplexer, view, terminal app and title with where each came from, in the JSON form",
+            cites: &["56", "143", "186", "190"],
+            run: the_display_in_status,
+        },
+        Scenario {
+            name: "streams: the fake host's work scripted with the title Work Agents has status give that title from stream",
+            cites: &["106", "143"],
+            run: a_scripted_title,
         },
     ]
 }
@@ -282,6 +300,7 @@ fn a_streams_part_of_status(_: &()) -> Outcome {
             agents: Some(4),
             priority: 10,
             pool: None,
+            ..Stream::default()
         }),
     );
     let mut places = vec![];
@@ -352,6 +371,168 @@ fn a_later_place_of_an_intent(_: &()) -> Outcome {
         other.stream,
         stream("work", StreamFrom::HostRepository),
         "another intent's place's stream"
+    );
+    Ok(())
+}
+
+fn the_hosts_sessions_labels_and_layers(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream_session("work", Some("office"));
+    let operation = Share {
+        reserve: 2,
+        keep_free: 1,
+        unknown: vec![],
+    };
+    world
+        .host
+        .set_share("work", "operation", Some(operation.clone()));
+    world.host.name_label(None, "research", Some("inception"));
+    world
+        .host
+        .set_value("streams.work.agents", "3", ConfigLayer::Local);
+    let host: &dyn Host = world.host.as_ref();
+    let streams = host.streams();
+    let work = streams
+        .get("work")
+        .ok_or("the host's streams give no work")?;
+    ensure_eq!(work.session.as_deref(), Some("office"), "work's session");
+    ensure_eq!(
+        work.labels.get("operation"),
+        Some(&operation),
+        "operation's share of work"
+    );
+    for repository in [REPOSITORY, "/another"] {
+        ensure_eq!(
+            host.label_for(repository, "research"),
+            Some(LabelHeld {
+                name: "inception".into(),
+                from: LabelFrom::HostKind,
+            }),
+            "research's label in {repository}"
+        );
+    }
+    let configuration = host.configuration();
+    ensure_eq!(
+        configuration
+            .values
+            .iter()
+            .find(|value| value.key == "streams.work.agents")
+            .map(|value| (value.value.as_str(), value.layer)),
+        Some(("3", ConfigLayer::Local)),
+        "streams.work.agents and its layer"
+    );
+    Ok(())
+}
+
+/// The seam-fakes spec's scripted title: the fake host's `work` titled
+/// `Work Agents`, and status asked (106, 143).
+fn a_scripted_title(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_title("work", Some("Work Agents"));
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let work = host
+        .streams
+        .iter()
+        .find(|stream| stream.name == "work")
+        .ok_or("the host's streams give no work")?;
+    ensure_eq!(
+        work.title,
+        TitleHeld {
+            title: "Work Agents".into(),
+            from: TitleFrom::Stream,
+        },
+        "work's title"
+    );
+    Ok(())
+}
+
+fn the_display_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    world
+        .resolver
+        .with_window("office-window", Arc::new(FakeWindow::default()));
+    world
+        .host
+        .set_host_display(Some("fake"), None, Some("fake-window"));
+    world
+        .host
+        .set_display("office", None, None, Some("office-window"));
+    world.host.set_title("office", Some("Office Agents"));
+    world.host.set_stream("personal", Some(Stream::default()));
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let stream = |name: &str| {
+        host.streams
+            .iter()
+            .find(|stream| stream.name == name)
+            .cloned()
+            .ok_or_else(|| format!("the host's streams give no {name}"))
+    };
+    let (office, personal) = (stream("office")?, stream("personal")?);
+    let profile = |name: &str, from| ProfileHeld {
+        profile: name.into(),
+        from,
+    };
+    ensure_eq!(
+        (office.terminal_app.clone(), office.title.clone()),
+        (
+            profile("office-window", NamedBy::Stream),
+            TitleHeld {
+                title: "Office Agents".into(),
+                from: TitleFrom::Stream,
+            }
+        ),
+        "office's terminal app and title"
+    );
+    ensure_eq!(
+        (
+            personal.multiplexer.clone(),
+            personal.terminal_app.clone(),
+            personal.view.clone(),
+            personal.title.clone()
+        ),
+        (
+            profile("fake", NamedBy::Host),
+            profile("fake-window", NamedBy::Host),
+            ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Neither,
+            },
+            TitleHeld {
+                title: "personal".into(),
+                from: TitleFrom::StreamName,
+            }
+        ),
+        "personal's display and title"
+    );
+    ensure!(
+        office.refused.is_none() && personal.refused.is_none(),
+        "a stream refused: {:?}, {:?}",
+        office.refused,
+        personal.refused
+    );
+    let json = serde_json::to_value(&personal).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        (
+            json["multiplexer"]["from"].as_str(),
+            json["view"]["view"].as_str(),
+            json["view"]["from"].as_str(),
+            json["terminal_app"]["profile"].as_str(),
+            json["title"]["title"].as_str(),
+            json["title"]["from"].as_str()
+        ),
+        (
+            Some("host"),
+            Some("terminal"),
+            Some("neither"),
+            Some("fake-window"),
+            Some("personal"),
+            Some("stream-name")
+        ),
+        "personal's display in the JSON form"
     );
     Ok(())
 }

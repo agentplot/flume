@@ -37,7 +37,7 @@ impl Engine {
         let identity = start.identity.clone();
         let reading = self.read_agent(id, &start);
         if held.stages[index].state == StageState::Lost {
-            return self.end_foreign(id, &identity, &reading);
+            return self.end_foreign(id, &start, &reading);
         }
         let foreign = reading.started == Reading::No || reading.own_record == Reading::No;
         let gone = reading.state == AgentState::Stopped || foreign;
@@ -68,7 +68,7 @@ impl Engine {
                 Some(end),
             );
             if !stopped {
-                self.end_foreign(id, &identity, &reading);
+                self.end_foreign(id, &start, &reading);
             }
             return true;
         }
@@ -77,7 +77,7 @@ impl Engine {
         }
         let facts = self.facts(&held, &bound, Some(index));
         if facts.delivered && reading.quiet() {
-            if let Closed::Refused { reason } = self.terminal.close(&identity) {
+            if let Closed::Refused { reason } = self.agent_on(&start).close() {
                 self.failed_end(id, &identity, &reason);
                 return false;
             }
@@ -147,12 +147,13 @@ impl Engine {
     /// The agent of a lost stage that is no agent of the stage's, a
     /// session the terminal brought back with no word that it started
     /// among them, ended once quiet (77, 31); true when it was ended.
-    fn end_foreign(&self, id: &PlaceId, identity: &Identity, reading: &AgentReading) -> bool {
+    fn end_foreign(&self, id: &PlaceId, start: &StartHeld, reading: &AgentReading) -> bool {
+        let identity = &start.identity;
         if reading.state != AgentState::Stopped {
             if !reading.quiet() {
                 return false;
             }
-            if let Closed::Refused { reason } = self.terminal.close(identity) {
+            if let Closed::Refused { reason } = self.agent_on(start).close() {
                 self.failed_end(id, identity, &reason);
                 return false;
             }

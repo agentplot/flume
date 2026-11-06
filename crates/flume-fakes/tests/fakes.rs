@@ -153,7 +153,7 @@ fn the_agents_answers_are_settable_unknowns_among_them() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     agent.set_own_work(&who, Reading::Unknown);
@@ -229,7 +229,7 @@ fn the_agents_record_is_read_in_its_folder_alone() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     agent.keep_record_in(&who, "/state/fix--one");
@@ -288,6 +288,7 @@ fn the_agents_modes_are_scripted() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, mode: Option<&str>| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             mode,
             None,
@@ -297,7 +298,7 @@ fn the_agents_modes_are_scripted() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
         command
     };
     let who = identity("code", 1);
@@ -385,6 +386,7 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             Some("all"),
             None,
@@ -394,7 +396,7 @@ fn the_agent_names_its_mode_at_its_first_prompt() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let who = identity("code", 1);
     opened(&who);
@@ -518,6 +520,7 @@ fn the_agents_command_resumes_the_session_it_is_given() {
     let agent = FakeAgent::new(Arc::new(FakeTerminal::new(host)));
     let command = |who: &Identity, resume: Option<&str>| {
         agent.command(
+            "/state/fix--one",
             &Settings::default(),
             None,
             resume,
@@ -558,6 +561,7 @@ fn the_agents_word_names_the_session_it_resumes() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, resume: Option<&str>| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             None,
             resume,
@@ -567,7 +571,7 @@ fn the_agents_word_names_the_session_it_resumes() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let carried = identity("code", 2);
     opened(&carried, Some("s-1"));
@@ -609,6 +613,7 @@ fn a_carried_start_scripted_to_end_before_its_word() {
     let folder = "/state/fix--one";
     let opened = |who: &Identity, resume: Option<&str>| {
         let command = agent.command(
+            "/state/fix--one",
             &Settings::default(),
             None,
             resume,
@@ -618,7 +623,7 @@ fn a_carried_start_scripted_to_end_before_its_word() {
             &Secret("s".into()),
             "go",
         );
-        terminal.open(&place_ref(), folder, &command, who, None, None);
+        terminal.open(&place_ref(), folder, &command, who, &OpenIn::Own, None);
     };
     let carried = identity("code", 2);
     opened(&carried, Some("s-1"));
@@ -654,7 +659,7 @@ fn the_terminals_states_follow_the_fake_clock() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         None,
     );
     terminal.schedule(&who, host.now() + 240, AgentState::Waiting);
@@ -1083,7 +1088,7 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         "/state/fix--one",
         &AgentCommand::default(),
         &who,
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(matches!(opened, Opened::Opened { .. }));
@@ -1098,7 +1103,7 @@ fn the_terminal_holds_recipients_sessions_by_name() {
         "/state/fix--one",
         &AgentCommand::default(),
         &identity("code", 2),
-        None,
+        &OpenIn::Own,
         Some("madswan/planner"),
     );
     assert!(matches!(second, Opened::Refused { .. }), "{second:?}");
@@ -1117,6 +1122,227 @@ fn the_terminal_holds_recipients_sessions_by_name() {
     assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
 }
 
+fn attach_command(part: &str) -> Attached {
+    Attached::Command {
+        command: ViewCommand {
+            program: "fake-terminal".into(),
+            arguments: vec!["attach".into(), part.into()],
+            environment: BTreeMap::new(),
+        },
+    }
+}
+
+/// The seam-fakes spec's scripted attach: the app's view scripted to
+/// refuse, a window's command for `work` and then the refusal, each
+/// asking logged with its view; and a command of the fake's own for its
+/// own session, shown for its app once the script is gone, and either
+/// view scripted apart from the other (187).
+#[test]
+fn a_scripted_attach() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let no_app = Attached::Refused {
+        reason: "no app".into(),
+    };
+    terminal.attaches_as(View::App, Some(no_app.clone()));
+    assert_eq!(
+        terminal.attach(Some("work"), View::Terminal),
+        attach_command("work")
+    );
+    assert_eq!(terminal.attach(Some("work"), View::App), no_app);
+    assert_eq!(
+        terminal.log.of("attach"),
+        vec!["attach work for terminal", "attach work for app"]
+    );
+
+    assert_eq!(terminal.attach(None, View::Terminal), attach_command("own"));
+    terminal.attaches_as(View::App, None);
+    assert_eq!(terminal.attach(Some("work"), View::App), Attached::Shown);
+    let no_session = Attached::Refused {
+        reason: "the terminal holds no session".into(),
+    };
+    terminal.attaches_as(View::Terminal, Some(no_session.clone()));
+    assert_eq!(terminal.attach(Some("work"), View::Terminal), no_session);
+    assert_eq!(terminal.attach(None, View::App), Attached::Shown);
+    assert_eq!(
+        terminal.log.of("attach")[2..],
+        [
+            "attach own for terminal",
+            "attach work for app",
+            "attach work for terminal",
+            "attach own for app",
+        ]
+    );
+}
+
+/// The seam-fakes spec's scripted window, the fakes' part of it: the
+/// window scripted to print `attach work` answers that line for the
+/// terminal's command under the title the host declares for `work`, its
+/// log naming one show under that title and no window opened; then it
+/// opens one and refuses as scripted. The scenario through the core's
+/// open is conformance's `open: the fake window scripted to print attach
+/// work …` (188).
+#[test]
+fn a_scripted_window() {
+    let host = Arc::new(FakeHost::default());
+    host.set_title("work", Some("Work Agents"));
+    let title = host.streams()["work"].title.clone().expect("work's title");
+    let terminal = FakeTerminal::new(host);
+    let Attached::Command { command } = terminal.attach(Some("work"), View::Terminal) else {
+        panic!("the fake terminal answers a command");
+    };
+    let window = FakeWindow::default();
+    let printed = WindowShown::Printed {
+        line: "attach work".into(),
+    };
+    window.answers(Some(printed.clone()));
+    assert_eq!(window.show(&command, &title), printed);
+    assert_eq!(
+        window.log.calls(),
+        vec!["show fake-terminal attach work titled Work Agents"]
+    );
+    assert!(window.windows().is_empty());
+
+    window.answers(None);
+    assert_eq!(window.show(&command, &title), WindowShown::Opened);
+    assert_eq!(window.windows(), vec![(command.clone(), title.clone())]);
+    let refused = WindowShown::Refused {
+        reason: "no display".into(),
+    };
+    window.answers(Some(refused.clone()));
+    assert_eq!(window.show(&command, &title), refused);
+    assert_eq!(window.windows().len(), 1);
+    assert_eq!(window.log.count("show"), 3);
+}
+
+/// The seam-fakes spec's scripted title, the fakes' part of it: the fake
+/// host's `work` titled as scripted and every other stream with none.
+/// The scenario through status is conformance's `streams: the fake
+/// host's work scripted with the title Work Agents …` (143).
+#[test]
+fn a_scripted_title() {
+    let host = FakeHost::default();
+    host.set_stream(
+        "personal",
+        Some(Stream {
+            agents: Some(3),
+            ..Stream::default()
+        }),
+    );
+    host.set_title("work", Some("Work Agents"));
+    host.set_title("personal", Some("Personal"));
+    host.set_title("personal", None);
+    let streams = host.streams();
+    assert_eq!(streams["work"].title.as_deref(), Some("Work Agents"));
+    assert_eq!(streams["personal"].title, None);
+    assert_eq!(streams["personal"].agents, Some(3));
+    assert_eq!(streams[DEFAULT_STREAM].title, None);
+}
+
+/// The seam-fakes spec's scripted display: the host's own view `app` and
+/// `trial`'s multiplexer `other`, `trial` giving `other` from `stream`,
+/// every stream the view `app` from `host`, and every other key the
+/// fakes' own from `neither`, each asking logged; then a stream's key
+/// over the host's, and the host's over the fakes' own (143, 190).
+#[test]
+fn a_scripted_display() {
+    let host = FakeHost::default();
+    host.set_host_display(None, Some(View::App), None);
+    host.set_display("trial", Some("other"), None, None);
+    host.set_stream("work", Some(Stream::default()));
+    let held = |profile: &str, from| ProfileHeld {
+        profile: profile.into(),
+        from,
+    };
+    for name in host.streams().keys() {
+        let multiplexer = match name.as_str() {
+            "trial" => held("other", NamedBy::Stream),
+            _ => held("fake", NamedBy::Neither),
+        };
+        assert_eq!(
+            host.display_for(name),
+            StreamDisplay {
+                multiplexer,
+                view: ViewHeld {
+                    view: View::App,
+                    from: NamedBy::Host,
+                },
+                terminal_app: held("fake-window", NamedBy::Neither),
+            },
+            "{name}'s display"
+        );
+    }
+    assert_eq!(
+        host.log.of("display_for"),
+        vec![
+            "display_for default",
+            "display_for trial",
+            "display_for work"
+        ]
+    );
+
+    host.set_host_display(Some("host-terminal"), None, Some("host-window"));
+    host.set_display("trial", None, Some(View::Terminal), Some("trial-window"));
+    assert_eq!(
+        host.display_for("trial"),
+        StreamDisplay {
+            multiplexer: held("host-terminal", NamedBy::Host),
+            view: ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Stream,
+            },
+            terminal_app: held("trial-window", NamedBy::Stream),
+        }
+    );
+    assert_eq!(
+        host.display_for("work").view,
+        ViewHeld {
+            view: View::Terminal,
+            from: NamedBy::Neither,
+        }
+    );
+    assert_eq!(
+        host.display_for("work").terminal_app,
+        held("host-window", NamedBy::Host)
+    );
+}
+
+/// The fake resolver's terminals and windows by name: none until a test
+/// names one, each the very fake it was given, with a log of its own,
+/// and a name it holds none for none (105, 188, 190).
+#[test]
+fn the_resolver_holds_terminals_and_windows_by_name() {
+    let resolver = FakeResolver::new(Arc::new(FakeKinds::default()));
+    assert!(resolver.terminal("fake").is_none());
+    assert!(resolver.window("fake-window").is_none());
+    let host = Arc::new(FakeHost::default());
+    let own = Arc::new(FakeTerminal::new(host.clone()));
+    let other = Arc::new(FakeTerminal::new(host));
+    let window = Arc::new(FakeWindow::default());
+    resolver.with_terminal("fake", own.clone());
+    resolver.with_terminal("other", other.clone());
+    resolver.with_window("fake-window", window.clone());
+
+    let Attached::Command { command } = resolver
+        .terminal("other")
+        .expect("the terminal other")
+        .attach(Some("work"), View::Terminal)
+    else {
+        panic!("the fake terminal answers a command");
+    };
+    let shown = resolver
+        .window("fake-window")
+        .expect("the window fake-window")
+        .show(&command, "Work Agents");
+    assert_eq!(shown, WindowShown::Opened);
+    assert_eq!(other.log.of("attach"), vec!["attach work for terminal"]);
+    assert!(own.log.calls().is_empty());
+    assert_eq!(window.windows(), vec![(command, "Work Agents".to_string())]);
+    assert_eq!(resolver.terminal_profiles(), vec!["fake", "other"]);
+    assert_eq!(resolver.window_profiles(), vec!["fake-window"]);
+    assert!(resolver.terminal("rex").is_none());
+    assert!(resolver.window("kitty").is_none());
+}
+
 /// The history-and-host spec's host's streams and pools: a stream's pool
 /// and the host's, each with where it came from, and the streams
 /// declared, `default` among them, as the configuration stands when
@@ -1131,11 +1357,13 @@ fn a_streams_pool_and_the_hosts() {
     );
     let pool = Pool {
         strategy: Strategy::FillFirst,
+        threshold: None,
         accounts: vec![Account {
             name: "work-1".into(),
             program: "agent".into(),
             env: BTreeMap::from([("AGENT_HOME".into(), "/scratch/work-1".into())]),
             agents: Some(4),
+            usage: None,
         }],
     };
     host.set_pool("work", Some(pool.clone()));
@@ -1145,6 +1373,7 @@ fn a_streams_pool_and_the_hosts() {
             agents: Some(5),
             priority: 10,
             pool: Some("work".into()),
+            ..Stream::default()
         }),
     );
     host.set_stream("personal", Some(Stream::default()));
@@ -1217,6 +1446,7 @@ fn kind_at(name: &str, version: u32) -> Kind {
         lands: true,
         agents: KindSettings::default(),
         stages: vec![],
+        label: None,
     }
 }
 
@@ -1531,4 +1761,299 @@ fn a_declarations_identity_and_the_repositorys_files() {
             Some(".config/flume.lock".to_string())
         )
     );
+}
+
+/// A one-stage kind of the name given, which declares no label.
+fn kind_named(name: &str) -> Kind {
+    Kind {
+        name: name.into(),
+        version: 1,
+        branch_prefix: name.into(),
+        starts_unready: false,
+        lands: true,
+        agents: KindSettings::default(),
+        stages: vec![],
+        label: None,
+    }
+}
+
+/// The seam-contracts spec's scenario of where an agent opens: the fake
+/// terminal asked to open one agent beside the pane `operator`, one in
+/// the session `work` and one in its own logs each where it was asked,
+/// and answers each the same (94, 107).
+#[test]
+fn the_terminal_logs_where_each_agent_opens() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let at = [
+        OpenIn::Beside {
+            pane: "operator".into(),
+        },
+        OpenIn::Session {
+            name: "work".into(),
+        },
+        OpenIn::Own,
+    ];
+    let mut answers = vec![];
+    for (n, at) in at.iter().enumerate() {
+        let who = identity("code", n as u32 + 1);
+        answers.push(terminal.open(
+            &place_ref(),
+            "/state/fix--one",
+            &AgentCommand::default(),
+            &who,
+            at,
+            None,
+        ));
+        assert_eq!(terminal.opened_at(&who).as_ref(), Some(at));
+    }
+    assert_eq!(
+        terminal.log.of("at"),
+        vec![
+            format!("at {} beside operator", identity("code", 1)),
+            format!("at {} in session work", identity("code", 2)),
+            format!("at {} in own", identity("code", 3)),
+        ],
+        "where each open was asked"
+    );
+    assert_eq!(
+        terminal.log.of("open"),
+        (1..=3)
+            .map(|n| format!("open {} /r/places/fix--one", identity("code", n)))
+            .collect::<Vec<_>>(),
+        "each open logged as before"
+    );
+    assert!(
+        answers.iter().all(|answer| *answer == answers[0]),
+        "{answers:?}"
+    );
+    assert_eq!(
+        terminal.beside(&identity("code", 1)).as_deref(),
+        Some("operator")
+    );
+    assert_eq!(terminal.beside(&identity("code", 2)), None);
+}
+
+/// A workspace per session and base: an agent opened in a session makes
+/// its place's tab in its base's workspace there; `shown_at` names the
+/// tab and workspace of the live agent's session and each of the base's
+/// workspaces in `bases`; a tidy closes the place's tab in each session,
+/// and each workspace it leaves empty, keeping one a person's pane holds
+/// (107, 137, 138, 139).
+#[test]
+fn a_workspace_per_session_and_base() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let open = |start, at: OpenIn| {
+        terminal.open(
+            &place_ref(),
+            "/state/fix--one",
+            &AgentCommand::default(),
+            &identity("code", start),
+            &at,
+            None,
+        )
+    };
+    open(1, OpenIn::Own);
+    terminal.kill(&identity("code", 1));
+    open(
+        2,
+        OpenIn::Session {
+            name: "work".into(),
+        },
+    );
+    assert_eq!(
+        terminal.made(),
+        (
+            vec!["/r/places/fix--one".to_string(); 2],
+            vec!["r main".to_string(), "r main in work".to_string()],
+        )
+    );
+    assert_eq!(
+        terminal.tabs_of(&place_ref()),
+        vec![None, Some("work".to_string())]
+    );
+    let live = identity("code", 2);
+    assert_eq!(
+        terminal.shown_at(&place_ref(), Some(&live)),
+        ShownAt {
+            place: Some("tab fix--one in work".into()),
+            agent: Some(format!("pane {live}")),
+            base: Some("workspace r main in work".into()),
+            bases: vec!["workspace r main".into(), "workspace r main in work".into()],
+        }
+    );
+    assert_eq!(
+        terminal.shown_at(&place_ref(), None).place.as_deref(),
+        Some("tab fix--one in work"),
+        "the newest tab where no agent is named"
+    );
+    terminal.person_pane_in(Some("work"), &place_ref(), "w4:p1");
+    let tidy = terminal.tidy(&place_ref());
+    assert_eq!(
+        tidy,
+        TerminalTidy {
+            closed: vec![
+                "the tab fix--one".into(),
+                "the tab fix--one in work".into(),
+                "the workspace r main".into(),
+            ],
+            kept: vec!["the workspace r main in work, held by the pane w4:p1".into()],
+        }
+    );
+    assert_eq!(
+        terminal.kept(),
+        vec!["the workspace r main in work, held by the pane w4:p1".to_string()]
+    );
+    assert_eq!(
+        terminal.made(),
+        (vec![], vec!["r main in work".to_string()])
+    );
+}
+
+/// The seam-fakes spec's scripted session: the fake host gives `work`
+/// the session `office`, and a fix's agent of `work` opened in the
+/// session its stream names is logged opened in `office` (107).
+#[test]
+fn a_scripted_session() {
+    let host = Arc::new(FakeHost::default());
+    host.set_stream_session("work", Some("office"));
+    let terminal = FakeTerminal::new(host.clone());
+    let session = host
+        .streams()
+        .get("work")
+        .and_then(|stream| stream.session.clone())
+        .expect("work's session");
+    let who = identity("code", 1);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        &OpenIn::Session { name: session },
+        None,
+    );
+    assert_eq!(
+        terminal.log.of("at"),
+        vec![format!("at {who} in session office")]
+    );
+    assert_eq!(terminal.tabs_of(&place_ref()), vec![Some("office".into())]);
+    host.set_stream_session("work", None);
+    assert_eq!(
+        host.streams()["work"].session,
+        None,
+        "read as it stands now"
+    );
+}
+
+/// The seam-fakes spec's scripted label: the fake kinds give `deploy` the
+/// label `operation` wherever it is read, and with the fake host giving
+/// none, a deploy place's label is `operation` from `kind` (180).
+#[test]
+fn a_scripted_label() {
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let kinds = FakeKinds::default();
+    kinds.set_kinds("/r", vec![kind_named("deploy"), kind_named("fix")]);
+    kinds.set_own(vec![kind_named("deploy")]);
+    kinds.set_label("deploy", Some("operation"));
+    let KindsRead::Read { kinds: read, .. } = kinds.read_kinds("/r", &base) else {
+        panic!("the kinds were not read");
+    };
+    let labels: Vec<Option<&str>> = read.iter().map(|kind| kind.label.as_deref()).collect();
+    assert_eq!(labels, vec![Some("operation"), None]);
+    assert_eq!(
+        kinds.flumes_own()[0].kind.label.as_deref(),
+        Some("operation")
+    );
+    let host = FakeHost::default();
+    assert_eq!(host.label_for("/r", "deploy"), None);
+    let label = host.label_for("/r", "deploy").or_else(|| {
+        read[0].label.clone().map(|name| LabelHeld {
+            name,
+            from: LabelFrom::Kind,
+        })
+    });
+    assert_eq!(
+        label,
+        Some(LabelHeld {
+            name: "operation".into(),
+            from: LabelFrom::Kind,
+        })
+    );
+    kinds.set_label("deploy", None);
+    assert_eq!(kinds.flumes_own()[0].kind.label, None, "as it was set");
+}
+
+/// The fake host's labels for a repository and kind, else for a kind,
+/// each with where it came from; its streams' shares; and its
+/// configuration's values with their layers, its local layer's state and
+/// the keys passed over, each as scripted when asked (143, 180, 181,
+/// C.7).
+#[test]
+fn the_hosts_labels_shares_and_layers_are_scripted() {
+    let host = FakeHost::default();
+    host.name_label(None, "research", Some("inception"));
+    host.name_label(Some("/r"), "research", Some("operation"));
+    assert_eq!(
+        host.label_for("/r", "research"),
+        Some(LabelHeld {
+            name: "operation".into(),
+            from: LabelFrom::HostRepositoryKind,
+        })
+    );
+    assert_eq!(
+        host.label_for("/s", "research"),
+        Some(LabelHeld {
+            name: "inception".into(),
+            from: LabelFrom::HostKind,
+        })
+    );
+    assert_eq!(host.label_for("/s", "fix"), None);
+    host.name_label(Some("/r"), "research", None);
+    assert_eq!(
+        host.label_for("/r", "research").map(|label| label.from),
+        Some(LabelFrom::HostKind)
+    );
+
+    let share = Share {
+        reserve: 2,
+        keep_free: 1,
+        unknown: vec![],
+    };
+    host.set_share("work", "operation", Some(share.clone()));
+    host.set_share("work", "construction", Some(Share::default()));
+    host.set_share("work", "construction", None);
+    assert_eq!(
+        host.streams()["work"].labels,
+        BTreeMap::from([("operation".to_string(), share)])
+    );
+
+    assert_eq!(host.configuration(), HostConfiguration::default());
+    host.set_value("streams.work.agents", "6", ConfigLayer::Managed);
+    host.set_value("streams.work.agents", "3", ConfigLayer::Local);
+    host.set_value("streams.work.pool", "\"work\"", ConfigLayer::Managed);
+    let values = host.configuration().values;
+    assert_eq!(
+        values
+            .iter()
+            .map(|value| (value.key.as_str(), value.value.as_str(), value.layer))
+            .collect::<Vec<_>>(),
+        vec![
+            ("streams.work.agents", "3", ConfigLayer::Local),
+            ("streams.work.pool", "\"work\"", ConfigLayer::Managed),
+        ]
+    );
+    let configuration = HostConfiguration {
+        local: LocalLayer::NotTaken {
+            keys: vec!["pools.work".into()],
+            fault: None,
+        },
+        values,
+        passed_over: vec![PinnedKey {
+            key: "streams.work.agents".into(),
+            pin: "streams.work.agents".into(),
+        }],
+    };
+    host.set_configuration(configuration.clone());
+    assert_eq!(host.configuration(), configuration);
+    assert_eq!(host.log.count("configuration"), 3);
 }

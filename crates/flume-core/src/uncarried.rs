@@ -94,7 +94,7 @@ impl Engine {
         }
         let identity = &start.identity;
         if reading.state != AgentState::Stopped {
-            if let Closed::Refused { reason } = self.terminal.close(identity) {
+            if let Closed::Refused { reason } = self.agent_on(start).close() {
                 self.failed_end(id, identity, &reason);
                 return false;
             }

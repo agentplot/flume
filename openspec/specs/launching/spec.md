@@ -50,12 +50,24 @@ which nothing after the launch changes (7, 8, 43, 70).
 When a place's readiness fails, its first stage SHALL wait and status
 SHALL name the failed step and its words, unless the kind starts its
 first stage in a place that could not be made ready, when the stage
-SHALL start with the step and its words in its prompt (12).
+SHALL start with the step and its words in its prompt; a retry of that
+first stage SHALL ready the place again at the revision its launch
+read (12, 20).
 
 #### Scenario: A change's place waits, a fix's starts
 
 - **WHEN** the fake place's readiness fails at its first step for a change's launch and for a fix's launch
 - **THEN** the change's construct stage waits on readiness with the step and words in status, and the fix's code stage starts with them in its prompt (S16)
+
+#### Scenario: A retry readies at the launch's revision
+
+- **WHEN** a change's readiness failed at its launch from main at R, main's revision moves on, the fake place's readiness is mended, and construct is retried
+- **THEN** the fake place is readied at R, and construct starts (12, 20)
+
+#### Scenario: Each step named as it passed
+
+- **WHEN** the fake place's readiness passes `toolchain`, `proto install`, `moon --version` and `moon setup` for a change's launch
+- **THEN** construct starts, and status names each step passed, in that order (S89, 12)
 
 ### Requirement: A launch is refused whole
 
@@ -99,12 +111,13 @@ is bound, or when a stage asks for a brief the launch lacks (4, 9, C.2).
 
 ### Requirement: A launch whose binding or settings flume cannot run is refused whole
 
-A launch SHALL be refused, naming the program, field or stage and its
-layer, and SHALL leave nothing made, when the binding names a place
-profile flume does not hold, when a stage's agent resolves to a program
-no agent profile binds or the host's terminal cannot run, when a
-declaration gives an agent an `env`, or when settings name a stage the
-kind does not hold (4, 32, 158, C.1, C.2).
+A launch SHALL be refused, naming the program, field, stage or stream
+and its layer, and SHALL leave nothing made, when the binding names a
+place profile flume does not hold, when a stage's agent resolves to a
+program no agent profile binds or its stream's terminal cannot run,
+when its stream's multiplexer names a terminal profile flume does not
+carry, when a declaration gives an agent an `env`, or when settings
+name a stage the kind does not hold (4, 32, 158, 190, C.1, C.2).
 
 #### Scenario: A program no agent profile binds
 
@@ -120,6 +133,11 @@ kind does not hold (4, 32, 158, C.1, C.2).
 
 - **WHEN** a repository's binding names a place profile the resolver does not hold
 - **THEN** the launch is refused naming the place profiles the resolver holds, and nothing is made (C.1, core.3)
+
+#### Scenario: A stream's multiplexer flume does not carry
+
+- **WHEN** the host's `[streams.trial]` gives `multiplexer = "rex"` and a fix is launched on `trial`
+- **THEN** the launch is refused naming `trial`, `rex` and the terminal profiles the resolver carries, and nothing is made (4, 190; core.8)
 
 ### Requirement: A place keeps what its launch resolved
 
@@ -230,3 +248,33 @@ login environment, never the caller's session (29, 32, 144).
 
 - **WHEN** a stage's account gives `env = { CLAUDE_CONFIG_DIR = "~/.claude-work-1", TOOL_HOME = "$HOME/tool" }`
 - **THEN** the agent starts with both read against the host user's home, status naming each from `account`, and no other variable of its settings (29, 32)
+
+### Requirement: A place is cut where its base's current revision lives
+
+A launch SHALL cut its place at the base's current revision: where a
+merge queue lands the base, where the merge queue's profile says it
+lives; otherwise at `origin/<base>` after flume's own fetch; and at the
+host's own branch only where the repository has no `origin` or origin
+holds no such branch. A fetch that fails otherwise SHALL refuse the
+launch, nothing made. The place SHALL keep where its base was read (9,
+56, 126, C.1, S92).
+
+#### Scenario: A base no merge queue lands, its local copy lagging origin
+
+- **WHEN** a fix is launched in a clone bound to no merge queue whose own `main` lags origin's by two commits, or under a merge queue that lands no `main`
+- **THEN** the place is cut at origin's `main` after flume's fetch, the clone's own `main` is left where it was, and status gives `base_from` `origin` (9, 126, C.1)
+
+#### Scenario: A base origin lacks
+
+- **WHEN** a fix is launched on `trial`, a branch the clone holds and origin does not, or in a repository with no `origin`
+- **THEN** the place is cut at the host's own branch, and status gives `base_from` `origin-lacks` or `no-origin` (9, 56, C.1)
+
+#### Scenario: A fetch from origin that fails
+
+- **WHEN** a fix is launched on `main` with origin out of reach
+- **THEN** the launch is refused naming the fetch of `main` from origin, and nothing is made (2, 9)
+
+#### Scenario: A base the merge queue lands
+
+- **WHEN** a fix is launched in a clone whose merge queue lands `main` at a revision other than origin's
+- **THEN** the place is cut where the merge queue says, origin's `main` never read for it, and status gives `base_from` `merge-queue` (9, 126)

@@ -9,10 +9,12 @@
 //! code stage whose agent ends its turn to wait on a suite it started, its
 //! pane quiet with no deliverable, is not ended until it delivers (39,
 //! S3); and a fix whose host gives the mode `ask` begins in it over the
-//! repository's own default, its started ack taken (162, S66); and a
-//! fix whose code agent stops at its account's usage limit goes on in its
-//! own conversation under the pool's other account, whose `projects` is a
-//! link to the first's, and lands (S78).
+//! repository's own default, its started ack taken (162, S66); a fix
+//! whose code agent stops at its account's usage limit goes on in its own
+//! conversation under the pool's other account, whose `projects` is a
+//! link to the first's, and lands (S78); and a fix whose code agent's pane
+//! holds the place's line, pinned under the prompt by flume's plugin's
+//! module, while it works, and lands (56, 60, C.4).
 //!
 //! Run by hand, outside the gate, required by no branch, in the devenv
 //! shell, so the pinned Claude Code and herdr lead `PATH`:
@@ -203,31 +205,38 @@ impl Live {
         }
     }
 
-    /// herdr's answer on flume's own session's server, as JSON.
-    pub fn herdr(&self, args: &[&str]) -> Value {
-        let dir = &self.walk.repository.dir;
+    /// The socket of flume's own herdr session's server.
+    fn socket(&self) -> String {
         let listing = self
             .walk
-            .command("herdr", dir)
+            .command("herdr", &self.walk.repository.dir)
             .args(["session", "list", "--json"])
             .output()
             .expect("herdr runs");
         let sessions: Value = serde_json::from_slice(&listing.stdout).unwrap_or(Value::Null);
-        let socket = sessions["sessions"]
+        sessions["sessions"]
             .as_array()
             .into_iter()
             .flatten()
             .find(|session| session["name"] == "flume")
             .and_then(|session| session["socket_path"].as_str())
             .unwrap_or_else(|| panic!("no herdr session flume: {sessions}"))
-            .to_string();
-        let output = self
-            .walk
-            .command("herdr", dir)
+            .to_string()
+    }
+
+    /// herdr run with `args` on flume's own session's server.
+    fn on_server(&self, args: &[&str]) -> std::process::Output {
+        self.walk
+            .command("herdr", &self.walk.repository.dir)
             .args(args)
-            .env("HERDR_SOCKET_PATH", socket)
+            .env("HERDR_SOCKET_PATH", self.socket())
             .output()
-            .expect("herdr runs");
+            .expect("herdr runs")
+    }
+
+    /// herdr's answer on flume's own session's server, as JSON.
+    pub fn herdr(&self, args: &[&str]) -> Value {
+        let output = self.on_server(args);
         serde_json::from_slice::<Value>(&output.stdout)
             .map(|answer| answer["result"].clone())
             .unwrap_or_else(|_| {
@@ -238,6 +247,21 @@ impl Live {
                     String::from_utf8_lossy(&output.stderr)
                 )
             })
+    }
+
+    /// The text the pane shows, as `pane read <pane> --source visible
+    /// --format text` gives it on flume's own session's server.
+    pub fn screen(&self, pane: &str) -> String {
+        let output = self.on_server(&[
+            "pane", "read", pane, "--source", "visible", "--format", "text",
+        ]);
+        assert!(
+            output.status.success(),
+            "herdr pane read {pane}: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
     /// The labels of the workspaces flume's herdr session holds.

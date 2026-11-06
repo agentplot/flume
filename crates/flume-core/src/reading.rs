@@ -249,7 +249,7 @@ impl Engine {
     pub(crate) fn read_agent(&self, place: &PlaceId, start: &StartHeld) -> AgentReading {
         let agent = self.agent(&start.program);
         let folder = self.store.folder(place);
-        let state = self.state_of(agent.as_deref(), &folder, &start.identity);
+        let state = self.state_of(agent.as_deref(), &folder, start);
         let own_record = own_record(agent.as_deref(), &folder, start);
         match agent {
             Some(agent) => AgentReading {
@@ -269,18 +269,20 @@ impl Engine {
         }
     }
 
-    /// The agent's state: the terminal's reading, but asking only where
-    /// the agent profile's mark says it asks, and unknown otherwise, never
-    /// waiting, so nothing is typed into a dialog flume cannot name (90,
-    /// core.2); and stopped where the terminal cannot read the agent and
-    /// its own record says its session ended (134).
+    /// The agent's state: the reading of the terminal its start opened
+    /// it in, but asking only where the agent profile's mark says it
+    /// asks, and unknown otherwise, never waiting, so nothing is typed
+    /// into a dialog flume cannot name (90, 190, core.2); and stopped
+    /// where the terminal cannot read the agent and its own record says
+    /// its session ended (134).
     pub(crate) fn state_of(
         &self,
         agent: Option<&dyn Agent>,
         folder: &str,
-        identity: &Identity,
+        start: &StartHeld,
     ) -> AgentState {
-        match (self.terminal.state(identity), agent) {
+        let identity = &start.identity;
+        match (self.agent_on(start).state(), agent) {
             (AgentState::Asking, Some(agent)) if agent.asking(folder, identity) == Reading::Yes => {
                 AgentState::Asking
             }
@@ -317,9 +319,7 @@ impl Engine {
             last_words: self
                 .agent(&start.program)
                 .and_then(|agent| agent.last_words(&folder, &start.identity)),
-            screen: never_begun
-                .then(|| self.terminal.screen(&start.identity))
-                .flatten(),
+            screen: never_begun.then(|| self.agent_on(start).screen()).flatten(),
             made: self.made_since(&place.id, start),
             group: start.group.clone().map(Box::new),
             ..StageEnd::default()

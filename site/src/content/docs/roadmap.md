@@ -24,13 +24,27 @@ the same answers you do.
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
 | Agent settings in six layers | ✓ | ✓ |
 | Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
+| Each stream's agents in a herdr session of its own, or the one a launch names | ✓ | ✓ |
+| The host's configuration in a managed layer and a local one over it, the managed one pinning keys | ✓ | ✓ |
+| Labels sharing a stream's agents, each with a reserve and slots kept free for it | ✓ | ✓ |
 | Pools of accounts, a spent account paused and its agent's conversation carried to another where the host shares it, else its stage started afresh | ✓ | ✓ |
 | An intent's agents kept to one account while it is usable | ✓ | ✓ |
+| A pool choosing the account with the most of its allowance left by the host's reading, and starting nothing on an account past its threshold | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
+| Each stream's agents under a multiplexer of its own, the host's where it names none | ✓ | ✓ |
+| `flume open`: a stream's agents in a window titled as the stream declares, or the line to run | Ghostty, Terminal.app | Ghostty |
 | The herdr plugin's watch, sidebar rows and popup | ✓ | ✓ |
 | The Claude Code plugin's `/launch` and status over MCP | ✓ | ✓ |
 | Release binaries | Apple silicon | x86-64, ARM64 |
+
+A stream's multiplexer is herdr or the printed command. No profile is
+written yet for herdr-core, Rex, cmux or TUIOS. Each is a change of its
+own, checked against its release, and offers the views its multiplexer
+has: a window running its terminal client, its own app, or both
+([record 0037](https://github.com/agentplot/flume/blob/main/docs/adr/0037-a-stream-names-its-multiplexer-its-view-and-its-terminal-app-the-hosts-where-it-names-none-and-a-person-opens-its-agents-in-that-view.md)).
+Until then a stream naming one refuses its launches and starts, naming
+the profiles there are.
 
 ## Decided, not built
 
@@ -91,3 +105,14 @@ the rest of this site says.
   queued and in flight for the host and each stream, what each stream
   started in its span and when the next charge leaves it, and each
   stream's tokens.
+
+- **A kind's own label.** A kind's declaration may give its places a
+  label, `label` in its table, which the host's configuration can
+  override. It waits on the kind format's reader taking the field.
+  Until then only the host's configuration gives a place a label.
+
+- **An MCP server's labels.** The host's configuration declares each
+  MCP server its agents may have, under `[mcp.<server>]`, with the
+  labels whose places may have it. At each agent's start flume hands
+  the agent the servers its place's label may have. The servers an
+  account or a repository lists still load beside them.

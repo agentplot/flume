@@ -10,11 +10,13 @@ use crate::seams::{
     place::{Pinned, PlaceHarness},
     store::StoreHarness,
     terminal::TerminalHarness,
+    window::WindowHarness,
 };
 use flume_fakes::*;
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 const REPOSITORY: &str = "/repository";
 
@@ -55,6 +57,7 @@ pub fn flumes_own() -> Vec<Kind> {
         starts_unready: false,
         lands: true,
         agents: KindSettings::default(),
+        label: None,
         stages: vec![
             stage(
                 "construct",
@@ -81,6 +84,7 @@ pub fn flumes_own() -> Vec<Kind> {
             starts_unready: true,
             lands: true,
             agents: KindSettings::default(),
+            label: None,
             stages: vec![code.clone()],
         },
         Kind {
@@ -90,6 +94,7 @@ pub fn flumes_own() -> Vec<Kind> {
             starts_unready: true,
             lands: true,
             agents: KindSettings::default(),
+            label: None,
             stages: vec![code],
         },
         change,
@@ -426,7 +431,7 @@ impl AgentHarness for FakeAgentHarness {
 
     fn start(&self, command: &AgentCommand, identity: &Identity, folder: &str) {
         self.terminal
-            .open(&a_place(), folder, command, identity, None, None);
+            .open(&a_place(), folder, command, identity, &OpenIn::Own, None);
         self.agent.keep_record_in(identity, folder);
     }
 
@@ -635,7 +640,85 @@ impl TerminalHarness for FakeTerminalHarness {
     fn no_session(&self) -> String {
         "nobody".into()
     }
+
+    fn views(&self) -> Vec<View> {
+        vec![View::Terminal, View::App]
+    }
+
+    fn parts(&self) -> Vec<Option<String>> {
+        vec![Some("work".into()), None]
+    }
+
+    fn refuse_attach(&self, view: View) -> bool {
+        self.terminal.attaches_as(
+            view,
+            Some(Attached::Refused {
+                reason: format!("no {}", view.name()),
+            }),
+        );
+        true
+    }
+
+    fn setup(&self) -> Vec<String> {
+        self.terminal.set_setup(&[SETUP]);
+        vec![SETUP.to_string()]
+    }
 }
+
+/// The fake window, its shows answered as each scenario scripts them.
+#[derive(Default)]
+pub struct FakeWindowHarness {
+    pub window: FakeWindow,
+}
+
+impl WindowHarness for FakeWindowHarness {
+    type Seam = FakeWindow;
+
+    fn seam(&self) -> &FakeWindow {
+        &self.window
+    }
+
+    fn command(&self) -> ViewCommand {
+        ViewCommand {
+            program: "/bin/fake-terminal".into(),
+            arguments: vec!["attach".into(), "work".into()],
+            environment: BTreeMap::from([("XDG_CONFIG_HOME".into(), "/scratch/home".into())]),
+        }
+    }
+
+    fn opens(&self) -> bool {
+        true
+    }
+
+    fn opened(&self) -> Vec<(ViewCommand, String)> {
+        self.window.windows()
+    }
+
+    fn will_print(&self) -> bool {
+        self.window.answers(Some(WindowShown::Printed {
+            line: "XDG_CONFIG_HOME=<set> /bin/fake-terminal attach work".into(),
+        }));
+        true
+    }
+
+    fn will_refuse(&self) -> Option<String> {
+        let words = "no display";
+        self.window.answers(Some(WindowShown::Refused {
+            reason: words.into(),
+        }));
+        Some(words.into())
+    }
+
+    /// The fake answers at once, and has no program to hold.
+    fn will_hang(&self) -> Option<Duration> {
+        None
+    }
+}
+
+/// What the fake terminal's configuration is scripted to lack for
+/// flume's plugin (122).
+pub const SETUP: &str =
+    "no key opens flume's places: bind one to the plugin's places in the terminal's configuration";
 
 pub struct FakeMergeQueueHarness {
     pub git: Arc<FakeGit>,
@@ -733,6 +816,12 @@ impl MergeQueueHarness for FakeMergeQueueHarness {
         );
     }
 
+    fn base_unlanded(&self, repository: &str) -> String {
+        self.queue
+            .set_base(repository, "trial", BaseRevision::Unlanded);
+        "trial".into()
+    }
+
     fn unreadable(&self) {
         self.queue.unreadable("the merge queue is down");
     }
@@ -819,5 +908,22 @@ impl HistoryHarness for FakeHistoryHarness {
 
     fn made_default(&self) -> String {
         "fix/one".into()
+    }
+
+    fn origin_ahead(&self, repository: &str, branch: &str) -> Revision {
+        let own = self
+            .git
+            .branch_head(repository, branch)
+            .expect("the branch");
+        self.git.set_branch(repository, "origin-copy", &own);
+        self.git.commit(repository, "origin-copy", &["one.rs"]);
+        let ahead = self.git.commit(repository, "origin-copy", &["two.rs"]);
+        self.git.set_origin(repository, branch, &ahead);
+        ahead
+    }
+
+    fn origin_gone(&self, repository: &str) {
+        self.git
+            .origin_fails(repository, "origin does not appear to be a git repository");
     }
 }

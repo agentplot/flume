@@ -83,33 +83,11 @@ pub const PROFILES: &str = "record 0026's change, every program the terminal sta
 pub const STATECHART: &str =
     "records 0028 and 0029's change, statechart kinds on the family's engine, after crew's rewrite";
 
-/// The change that builds records 0031 to 0033: each stream's own
-/// session, a kind's label and a stream's reserves and slots, and the
-/// host's local layer. It and the three below landed on main after this
-/// branch last took main, so the merge that brings them takes main's
-/// list for their clauses.
-pub const SESSIONS: &str =
-    "records 0031 to 0033's change, each stream's own session and labels and the host's local layer";
-
 /// What builds clause 183, an MCP server naming the labels whose places
 /// may have it: the answer to section 10's question on how a host's
 /// servers reach an agent.
 pub const MCP_SERVERS: &str =
     "the answer to section 10's question on how a host's MCP servers reach an agent";
-
-/// The change that builds record 0035: a pool choosing the account with
-/// the most of its allowance left by the host's reading, and a pool's
-/// threshold past which an account takes no new start.
-pub const MOST_LEFT: &str = "record 0035's change, a pool choosing by the allowance left";
-
-/// The change that builds record 0036: a place made ready by its merge
-/// queue's equipping of it.
-pub const READINESS: &str = "record 0036's change, a place equipped by its merge queue";
-
-/// The change that builds record 0037: each stream's multiplexer, view
-/// and terminal app, and the window a person opens its agents in.
-pub const MULTIPLEXER: &str =
-    "record 0037's change, each stream's multiplexer, view and terminal app";
 
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
@@ -137,31 +115,13 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| clause.to_string())
         .chain((76..=77).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STATECHART));
-    let sessions = (180..=182)
-        .map(|clause| clause.to_string())
-        .chain((82..=85).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, SESSIONS));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
-    let most_left = [184, 185]
-        .map(|clause| clause.to_string())
-        .into_iter()
-        .chain((86..=88).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, MOST_LEFT));
-    let readiness = std::iter::once(("S89".to_string(), READINESS));
-    let multiplexer = (186..=190)
-        .map(|clause| clause.to_string())
-        .chain((90..=91).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, MULTIPLEXER));
     standing
         .chain(plan)
         .chain(points)
         .chain(profiles)
         .chain(statechart)
-        .chain(sessions)
         .chain(mcp_servers)
-        .chain(most_left)
-        .chain(readiness)
-        .chain(multiplexer)
         .collect()
 }
 
@@ -201,29 +161,30 @@ mod tests {
         assert_eq!(REVISION, "ff616eb");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 155, 156, 157, 158, 159, 161, 162,
-            163, 165, 168, 169, 173, 175, 176, 177, 180, 183, 186, 190, 191,
+            163, 165, 168, 169, 173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [
             126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179, 187,
-            189, 192,
+            188, 189, 192,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0024s_plan_0025_0026_0028_0029_0031_to_0033_0035_to_0037s_and_183(
-    ) {
+    fn the_clauses_unbuilt_are_records_0021_0024s_plan_0025_0026_0028_and_0029s_and_183() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 7 + 1 + 5 + 1 + 7);
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
-            "S65", "S66", "S67", "S78", "S79", "S80", "S81", "155", "156", "158", "159", "160",
-            "191", "192", "S59", "S60", "S61", "S62", "S63", "S95", "S96", "S97",
+            "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
+            "S84", "S85", "184", "185", "186", "187", "188", "189", "190", "S86", "S87", "S88",
+            "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
+            "S61", "S62", "S63", "S95", "S96", "S97",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

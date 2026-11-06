@@ -3,10 +3,11 @@
 //! the source it names, flume's own, the repository's, the launch's or one
 //! the host declares, and checked against the locks where it is flume's
 //! own or a host's source's, with where it came from kept on the place;
-//! the binding read, the base's revision where the
-//! merge queue says it lives, every refusal made before anything is
-//! made, then one place made, readied, and its first stage started, held
-//! or left waiting on readiness. The repository's settings for the kind
+//! the binding read, the base's revision where the merge queue says it
+//! lives, else at origin after a fetch, and where it was read kept for
+//! status (9, 56, C.1), every refusal made before anything is made, then
+//! one place made, readied, and its first stage started, held or left
+//! waiting on readiness. The repository's settings for the kind
 //! are read with its kinds and kept, and every stage's agent is resolved
 //! with the host's configuration as it stands, so a program no agent
 //! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
@@ -19,8 +20,9 @@
 //! is created undoes what was made, so nothing is left (2, 76). The
 //! place's stream is chosen once, the launch's, else the one the host's
 //! configuration names for its repository and kind, its repository or
-//! its kind, else `default`, and one the host does not declare refuses
-//! the launch (4, 8, 143); its intent is the launch's name, else its
+//! its kind, else `default`, and one the host does not declare, or whose
+//! multiplexer names a terminal profile flume does not carry, refuses
+//! the launch (4, 8, 143, 190); its intent is the launch's name, else its
 //! repository and base (147).
 
 use crate::reading::reads_change;
@@ -476,6 +478,40 @@ impl Engine {
         )
     }
 
+    /// The base's current revision and where it was read (9, 126, C.1):
+    /// where the merge queue's profile says the base lives, where the
+    /// merge queue lands it; else `origin/<base>` after git's fetch, so no
+    /// copy the host holds is read while origin holds the base; else the
+    /// host's own branch, where the repository has no `origin` or `origin`
+    /// holds no such branch. A fetch that fails refuses the launch.
+    fn base_now(
+        &self,
+        repository: &str,
+        base: &str,
+        queue: Option<&dyn MergeQueue>,
+    ) -> Result<(Revision, BaseFrom), String> {
+        let unread = |reason: String| {
+            format!("the base {base}'s current revision could not be read: {reason}")
+        };
+        if let Some(queue) = queue {
+            match queue.base_revision(repository, base) {
+                BaseRevision::At { revision } => return Ok((revision, BaseFrom::MergeQueue)),
+                BaseRevision::Refused { reason } => return Err(unread(reason)),
+                BaseRevision::Unlanded => {}
+            }
+        }
+        let from = match self.history.origin_branch(repository, base) {
+            OriginBranch::At { revision } => return Ok((revision, BaseFrom::Origin)),
+            OriginBranch::Refused { reason } => return Err(unread(reason)),
+            OriginBranch::NoOrigin => BaseFrom::NoOrigin,
+            OriginBranch::Lacks => BaseFrom::OriginLacks,
+        };
+        self.history
+            .head(repository, base)
+            .map(|revision| (revision, from))
+            .ok_or_else(|| format!("{repository} has no base {base}"))
+    }
+
     /// Refuses a kind that asks for more than flume runs (4, 23).
     fn runs(kind: &Kind, identity: &KindIdentity) -> Result<(), String> {
         let named = format!("the kind {identity}");
@@ -533,21 +569,8 @@ impl Engine {
         } = self
             .bind(repository, &binding)
             .map_err(|reason| format!("{repository}'s binding: {reason}"))?;
-        let base_revision = match &merge_queue {
-            Some(queue) => match queue.base_revision(repository, &launch.base) {
-                BaseRevision::At { revision } => revision,
-                BaseRevision::Refused { reason } => {
-                    return Err(format!(
-                        "the base {}'s current revision could not be read: {reason}",
-                        launch.base
-                    ))
-                }
-            },
-            None => self
-                .history
-                .head(repository, &launch.base)
-                .ok_or_else(|| format!("{repository} has no base {}", launch.base))?,
-        };
+        let (base_revision, base_from) =
+            self.base_now(repository, &launch.base, merge_queue.as_deref())?;
         let Resolved {
             kind,
             declared,
@@ -558,6 +581,10 @@ impl Engine {
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
         let intent = self.intent_of(launch);
         let stream = self.stream_of(launch, &kind.name, &intent)?;
+        // A stream whose multiplexer names a terminal profile the resolver
+        // does not carry runs no agent: the launch is refused before
+        // anything is made (4, 190; core.8).
+        self.stream_terminal(&stream.name)?;
         let named = format!("the kind {}", from.identity);
         if kind.lands && merge_queue.is_none() {
             return Err(format!(
@@ -635,7 +662,7 @@ impl Engine {
         } else if launch.recipients.is_empty() {
             self.host
                 .recipient()
-                .or_else(|| self.terminal.session())
+                .or_else(|| self.caller_session())
                 .into_iter()
                 .collect()
         } else {
@@ -652,6 +679,7 @@ impl Engine {
                 branch: branch.clone(),
                 base: launch.base.clone(),
                 base_revision: base_revision.clone(),
+                base_from: Some(base_from),
                 location: location.clone(),
                 binding,
                 brief: launch.brief.clone(),
@@ -700,6 +728,7 @@ impl Engine {
             moves: vec![],
             unsettled: vec![],
             uncarried: vec![],
+            terminals: vec![],
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),

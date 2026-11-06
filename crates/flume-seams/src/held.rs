@@ -4,9 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, PassedOver, PlaceId,
-    PlaceRef, Prompt, Readiness, Revision, Seconds, Secret, Settings, StopKind, StreamHeld,
-    Unsettled, Verdict,
+    Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, LabelHeld, PassedOver,
+    PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld,
+    Settings, StopKind, StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -75,6 +75,12 @@ pub struct HeldState {
     /// afresh after it (56, 146, S79).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub uncarried: Vec<UncarriedStart>,
+    /// Each terminal a start of the place's opened its agent in, each
+    /// once, as it was first opened in, so the place is tidied in each
+    /// whatever later starts of its stages record; none in a place
+    /// written before, whose stages' starts say theirs (137, 190).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub terminals: Vec<ProfileHeld>,
 }
 
 /// A start whose agent began without the settings its start recorded:
@@ -370,6 +376,21 @@ pub enum DeliveredBy {
     Inbox,
 }
 
+/// Where a launch read its base's revision (9, 56, 126, C.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BaseFrom {
+    /// Where the merge queue's profile says the base lives, the merge
+    /// queue landing it.
+    MergeQueue,
+    /// `origin/<base>`, after flume's own fetch.
+    Origin,
+    /// The host's own branch, the repository having no remote `origin`.
+    NoOrigin,
+    /// The host's own branch, `origin` holding no such branch.
+    OriginLacks,
+}
+
 /// What a launch fixed of a place (8, 21).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaceRecord {
@@ -387,6 +408,10 @@ pub struct PlaceRecord {
     pub base: String,
     /// The base's revision the place was cut from (9).
     pub base_revision: Revision,
+    /// Where the launch read the base's revision; none for a place
+    /// launched before flume said (56, C.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_from: Option<BaseFrom>,
     pub location: String,
     /// The repository's binding as it resolved at the launch (21).
     pub binding: Binding,
@@ -759,6 +784,20 @@ pub struct StartHeld {
     /// none for any other start (56, 146, 179).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
+    /// The session its agent opened in, with where it came from; none
+    /// for an agent opened beside a pane, and in a start written before
+    /// (56, 107, 143).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<SessionHeld>,
+    /// The label its place started under, with where it came from, which
+    /// its agent counts toward until it ends; none where it had none, and
+    /// in a start written before (56, 180, 181).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<LabelHeld>,
+    /// The terminal its agent opened in, with where it came from; none in
+    /// a start written before, which is the host's (56, 190).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<ProfileHeld>,
 }
 
 /// Whether a start carries the conversation of its stage's start before
@@ -829,7 +868,9 @@ pub enum AccountFrom {
 /// why, and when. The agents after it start without the earlier
 /// account's cache (56, 145 to 147). A stage's move after its agent
 /// stopped at its account's usage limit says whether its conversation
-/// went with it, none for any other (56, 179).
+/// went with it, none for any other (56, 179). A move off an account past
+/// its threshold names the window that held it and when that window
+/// resets, none for any other and on a move recorded before (185).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountMove {
     #[serde(flatten)]
@@ -840,6 +881,10 @@ pub struct AccountMove {
     pub at: Seconds,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub carried: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<Seconds>,
 }
 
 /// What moved between accounts: a stage, or the intent's affinity for
@@ -857,12 +902,13 @@ pub enum MoveOn {
     },
 }
 
-/// Why a start went to another account: the one before was spent, or at
-/// its own bound (145, 146).
+/// Why a start went to another account: the one before was spent, past
+/// its threshold, or at its own bound (145, 146, 185).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MoveWhy {
     Spent,
+    Threshold,
     Full,
 }
 
@@ -870,6 +916,7 @@ impl MoveWhy {
     pub fn name(self) -> &'static str {
         match self {
             MoveWhy::Spent => "spent",
+            MoveWhy::Threshold => "threshold",
             MoveWhy::Full => "full",
         }
     }

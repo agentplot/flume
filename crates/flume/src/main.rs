@@ -38,6 +38,7 @@ mod tests {
             "terminal",
             "merge queue",
             "store",
+            "window",
         ] {
             let marker = format!("// ---- the {seam} seam's profiles: a profile unit appends its module line below ----");
             assert_eq!(

@@ -231,10 +231,13 @@ pub trait Agent: Send + Sync {
     /// setting, and nothing is passed where it is none (162, 169);
     /// `resume` is the session the start resumes, which [`Agent::carry`]
     /// answered yes with, so a profile that answers no yes is never given
-    /// one (88, 179).
+    /// one (88, 179); what the start carries by a file, such as a standing
+    /// prompt no terminal can type as an argument, is written beside its
+    /// record in the place's own `folder` (148, C.4, C.5).
     #[allow(clippy::too_many_arguments)]
     fn command(
         &self,
+        folder: &str,
         settings: &crate::Settings,
         mode: Option<&str>,
         resume: Option<&str>,

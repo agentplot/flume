@@ -2,22 +2,25 @@
 //! history-and-host spec): the system clock, a sleep, a secret of 32
 //! random bytes, a file's write time, a command of flume's named by its
 //! process and that process's start, the bound and the agents' settings
-//! the host's configuration states, the role runs, streams and pools it
-//! names, the sources of kinds it declares and its lock of kinds beside
-//! them, the recipient the calling command's environment names, the host
-//! user's login environment, the room lock at
-//! `$XDG_STATE_HOME/flume/room.lock`, and the lock `flume kinds lock`
+//! the host's configuration states, the role runs, streams, pools and
+//! labels it names, its values with their layers, an account's reading
+//! from the file its `usage` names, the sources of kinds it declares and
+//! its lock of kinds beside them, the recipient the calling command's
+//! environment names, the host user's login environment, the room lock
+//! at `$XDG_STATE_HOME/flume/room.lock`, and the lock `flume kinds lock`
 //! holds while it writes a lock of kinds, at
-//! `$XDG_STATE_HOME/flume/kinds-lock.lock` (41, 70, 75, 155, 191; design 6, 10). No tool is named here (core.1).
+//! `$XDG_STATE_HOME/flume/kinds-lock.lock` (41, 70, 75, 155, 184, 191;
+//! design 6, 10). No tool is named here (core.1).
 
 pub mod config;
 pub mod history;
 pub mod process;
+pub mod usage;
 
 use config::HostConfig;
 use flume_seams::{
-    Host, HostSettings, HostSource, Pool, PoolNamed, RoleRun, RoomGuard, Seconds, Secret, Stream,
-    StreamHeld,
+    Host, HostConfiguration, HostSettings, HostSource, LabelHeld, Pool, PoolNamed, RoleRun,
+    RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, Usage,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -26,6 +29,25 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// The system a profile is built for: macOS, or any other, so a profile
+/// whose program differs between them holds both paths on any host (C.8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum System {
+    MacOs,
+    Other,
+}
+
+impl System {
+    /// The system this host runs.
+    pub fn of_host() -> System {
+        if cfg!(target_os = "macos") {
+            System::MacOs
+        } else {
+            System::Other
+        }
+    }
+}
 
 /// The host this command runs on.
 #[derive(Clone, Debug)]
@@ -77,8 +99,8 @@ impl RealHost {
     }
 
     /// The host as this command finds it: `$XDG_STATE_HOME/flume`, the
-    /// configuration in `$XDG_CONFIG_HOME/flume/config.toml`, and
-    /// `$FLUME_RECIPIENT`.
+    /// configuration in `$XDG_CONFIG_HOME/flume/config.toml` and
+    /// `config.local.toml` over it, and `$FLUME_RECIPIENT`.
     pub fn of_host() -> Result<RealHost, String> {
         Ok(RealHost::new(
             config::flume_state()?,
@@ -290,12 +312,32 @@ impl Host for RealHost {
         self.config.stream_for(repository, kind)
     }
 
+    fn label_for(&self, repository: &str, kind: &str) -> Option<LabelHeld> {
+        self.config.label_for(repository, kind)
+    }
+
+    /// The configuration as this command read it, its managed layer and
+    /// its local one over it, every value with its layer (56, C.7).
+    fn configuration(&self) -> HostConfiguration {
+        self.config.configuration.clone()
+    }
+
     fn pool_for(&self, stream: &str) -> Option<PoolNamed> {
         self.config.pool_for(stream)
     }
 
+    fn display_for(&self, stream: &str) -> StreamDisplay {
+        self.config.display_for(stream)
+    }
+
     fn pool(&self, name: &str) -> Option<Pool> {
         self.config.pools.get(name).cloned()
+    }
+
+    /// The reading in the file at `path` as it stands now, read and never
+    /// written (184, C.7).
+    fn usage(&self, path: &str) -> Result<Usage, String> {
+        usage::read(Path::new(path))
     }
 
     fn login(&self, name: &str) -> Option<String> {

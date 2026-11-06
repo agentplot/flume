@@ -15,7 +15,8 @@
 
 use super::record::{self, Asking, Failure, Record, Started};
 use super::{
-    as_received, collapsed, digest, guard, mode, transcript, wrapper, AGENT, PLACE, SECRET, STAGE,
+    as_received, collapsed, digest, guard, mode, status_line, transcript, wrapper, AGENT, PLACE,
+    SECRET, STAGE,
 };
 use crate::host::process::{parent_executable, program_path};
 use flume_core::{variable_digest, Answer, Engine};
@@ -319,6 +320,9 @@ pub fn hook(
     build: &dyn Fn() -> Result<Engine, String>,
     binary: &Path,
 ) -> String {
+    if event == status_line::EVENT {
+        return status_line::line(start.place.as_deref(), start.agent.as_deref(), build);
+    }
     if start.agent.is_none() || start.secret.is_none() {
         return String::new();
     }

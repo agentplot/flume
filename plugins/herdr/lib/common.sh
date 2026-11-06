@@ -1,4 +1,4 @@
-# shellcheck shell=sh disable=SC2034 # root, status and rows_jq are read by the scripts that source this.
+# shellcheck shell=sh disable=SC2034 # root and status are read by the scripts that source this.
 # What every script of the plugin shares: where its state is, how it calls
 # herdr and flume under a bound, and the clock. Sourced, never run.
 
@@ -72,27 +72,40 @@ on_this_server() {
   esac
 }
 
-# A place's row, as the sidebar and the popup show it, from its status
-# alone: kind, stage, the stage's state, the change's tasks ticked, the
-# submission, and whether it waits on its caller, on a person to answer
-# its agent's dialog, or is stalled (34, 35, 56, 60; core.14). A jq
-# function, defined for every program that includes it.
-rows_jq='
-def phase_word: if type == "string" then . else keys[0] end;
-def submission_word:
-  if . == null then empty
-  elif .verdict != null then (.verdict | if type == "string" then . else keys[0] end)
-  elif (.read | type) == "object" and .read.found != null then "submitted"
-  else empty end;
-def row:
-  [ .kind,
-    (.clues.stage // .current // "-"),
-    (.clues.state // (.phase | phase_word)),
-    (if .tasks then "\([.tasks[] | select(.ticked)] | length)/\(.tasks | length)" else empty end),
-    (.submission | submission_word),
-    (if .stalled then "stalled"
-     elif .waiting_on.act == "answer" then "waits on a person"
-     elif .waiting_on then "waits on caller"
-     else empty end)
-  ] | join(" · ");
-'
+# The popup's key, which herdr 0.9.5's manifest cannot declare: the
+# entry a host adds to herdr's configuration, as the README gives it and
+# tests/manifest.sh holds it (122, C.5; design 8).
+entry='[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "agentplot.flume.places"
+description = "flume: places in flight"'
+
+# herdr's configuration file, as herdr finds it from its server's
+# environment.
+herdr_config() {
+  if [ -n "${HERDR_CONFIG_PATH:-}" ]; then
+    echo "$HERDR_CONFIG_PATH"
+  elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    echo "$XDG_CONFIG_HOME/herdr/config.toml"
+  else
+    echo "$HOME/.config/herdr/config.toml"
+  fi
+}
+
+# What herdr's configuration file $1 lacks for the plugin, one line each,
+# in words a person acts on, naming the file: a line that is not a
+# comment giving the popup's command, and one naming "$flume" in the
+# sidebar's rows. An absent file holds neither. Read by lines for display
+# alone, so it parses no TOML and nothing decides on it (72, 122; design
+# 8).
+lacking() {
+  _read=$(grep -v '^[[:space:]]*#' "$1" 2>/dev/null)
+  # The entry's keys on one line: `key = "prefix+f", type = ...`.
+  _keys=$(printf '%s\n' "$entry" | sed 1d | awk '{ printf "%s%s", sep, $0; sep = ", " }')
+  printf '%s\n' "$_read" | grep -q 'command[[:space:]]*=[[:space:]]*"agentplot\.flume\.places"' ||
+    echo "herdr's configuration, $1, binds no key to flume's places: add a [[keys.command]] entry with $_keys, as the README of flume's herdr plugin gives it"
+  # shellcheck disable=SC2016 # the token herdr's rows name, as written.
+  printf '%s\n' "$_read" | grep -qF '"$flume"' ||
+    echo "herdr's configuration, $1, shows no row of flume's in the sidebar: add \"\$flume\" to the rows of [ui.sidebar.agents] and of [ui.sidebar.spaces], as the README of flume's herdr plugin gives them"
+}

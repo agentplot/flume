@@ -201,6 +201,7 @@ fn the_hosts_own_documents<H: StoreHarness>(harness: &H) -> Outcome {
             until,
             words: Some("You've hit your session limit".into()),
             recorded_at: 100,
+            unread: false,
         })
     };
     let first = written(harness.seam().write_host(&account, None, Some(&spent(500))))?;

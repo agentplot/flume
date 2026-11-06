@@ -1,4 +1,4 @@
-//! The seven seams of Part B of flume's statement, one trait each, the
+//! The eight seams of Part B of flume's statement, one trait each, the
 //! types they pass, and git's history and the host's facts beside them
 //! (section 9). A profile depends on this crate alone, so it implements
 //! its interface and nothing of the core (core.2), and no type or trait
@@ -17,6 +17,7 @@ mod prompt;
 mod resolver;
 mod store;
 mod terminal;
+mod window;
 
 pub use agent::*;
 pub use change::*;
@@ -31,6 +32,7 @@ pub use prompt::*;
 pub use resolver::*;
 pub use store::*;
 pub use terminal::*;
+pub use window::*;
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
