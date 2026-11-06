@@ -25,10 +25,12 @@
 //! the launch (4, 8, 143, 190); its intent is the launch's name, else its
 //! repository and base (147).
 
+use crate::own::Table;
 use crate::reading::reads_change;
 use crate::settings::no_stage_lacking;
 use crate::{Answer, Bound, Engine, Step};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 impl Engine {
     /// Launches one place, or refuses naming why (2).
@@ -45,7 +47,8 @@ impl Engine {
     /// The kind a launch names, as the kinds seam reads its text (154;
     /// core.4), with the settings the repository gives a kind of its name
     /// it does not declare, which join whichever source the name resolves
-    /// to (32, 158, C.2), and where it came from (19, 21). A source named
+    /// to (32, 158, C.2), those it gives every kind (195), and where it
+    /// came from (19, 21). A source named
     /// is the only one searched: `flume` flume's own, `repo` the
     /// repository's declaration at the base's revision, `launch` the
     /// launch's declaration, and any other a source the host declares,
@@ -79,8 +82,13 @@ impl Engine {
             Some(LAUNCH_SOURCE) => Search::Launch,
             Some(source) => Search::Host(self.host_source(source, &named)?),
         };
-        let (declared, mut given) = match kinds.read_kinds(&launch.repository, revision) {
-            KindsRead::Read { kinds, settings } => (kinds, settings),
+        let (declared, mut given, every_kind) = match kinds.read_kinds(&launch.repository, revision)
+        {
+            KindsRead::Read {
+                kinds,
+                settings,
+                agents,
+            } => (kinds, settings, agents),
             KindsRead::CouldNotRead { reason } => {
                 return Err(format!(
                     "the kinds {} declares at {revision} could not be read: {reason}",
@@ -93,6 +101,7 @@ impl Engine {
             kind,
             declared,
             settings: settings.clone(),
+            every_kind: every_kind.clone(),
             from,
         };
         let repository = || {
@@ -575,10 +584,30 @@ impl Engine {
             kind,
             declared,
             settings: repository_settings,
+            every_kind: repository_agents,
             from,
         } = self.resolve_kind(launch, &base_revision)?;
         Self::runs(&kind, &from.identity)?;
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
+        // Every layer's own settings the launch read are checked before
+        // anything is made or held, and kept as checked; the host's are
+        // checked as each stage's agent is resolved below (195, core.8).
+        let settings = launch
+            .settings
+            .iter()
+            .map(|(stage, own)| {
+                self.own_checked(own, &Table::stage(Layer::Launch, stage))
+                    .map(|own| (stage.clone(), own))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let every_stage =
+            self.own_checked(&launch.every_stage, &Table::every_stage(Layer::Launch))?;
+        let repository_settings = self.own_checked_kind(&repository_settings, Layer::Repository)?;
+        let repository_agents = self.own_checked(
+            &repository_agents,
+            &Table::new(Layer::Repository, "for every kind"),
+        )?;
+        let kind = self.own_checked_declaration(&kind)?;
         let intent = self.intent_of(launch);
         let stream = self.stream_of(launch, &kind.name, &intent)?;
         // A stream whose multiplexer names a terminal profile the resolver
@@ -684,9 +713,10 @@ impl Engine {
                 binding,
                 brief: launch.brief.clone(),
                 mark: launch.mark.clone(),
-                settings: launch.settings.clone(),
-                every_stage: launch.every_stage.clone(),
+                settings,
+                every_stage,
                 repository_settings,
+                repository_agents,
                 hold: launch.hold.clone(),
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),
@@ -902,6 +932,7 @@ struct Resolved {
     kind: Kind,
     declared: Declared,
     settings: KindSettings,
+    every_kind: Settings,
     from: KindFrom,
 }
 

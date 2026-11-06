@@ -45,11 +45,22 @@
 //! line, asked by `flume hook status-line` in its environment as the
 //! plugin's module asks it, is status's line asked alone and in full, and
 //! the fix lands, while a change@2 code agent's names its group, its run
-//! and the change's tasks (56, 60, 142; S14); and a host's source's kind,
-//! locked by `flume kinds lock --host --hash`, runs and lands, a second
-//! version added and its source's file renamed over, the next launch
-//! running it and the place launched before landing on its own version
-//! (design 13; 21, 154, 155, 159, 191).
+//! and the change's tasks (56, 60, 142; S14); a host's people's file, the
+//! host's own status line over it, a stream's and a repository's file reach
+//! a fix's agent in `work` and in `default` by a `--settings` file of its
+//! start's own, which the stand-in reads over its account's settings, the
+//! keys another setting owns left out and named in status, and a fix no
+//! layer gives own settings passes none, each landing (S100; 32, 143, 195,
+//! 196); seven launches whose own settings give a reserved key, hold a
+//! credential or name a file that cannot be read are refused naming the
+//! key, the layer and the file, never the value, making nothing (S101; 4,
+//! 157, 195); a fork's attribution is the host's for every stage of a
+//! fix and a chore, a repository's its own `[agents]`' and a third's its
+//! account's, each landing (S102; 32, 195, C.2, C.7); and a host's
+//! source's kind, locked by `flume kinds lock --host --hash`, runs and
+//! lands, a second version added and its source's file renamed over, the
+//! next launch running it and the place launched before landing on its own
+//! version (design 13; 21, 154, 155, 159, 191).
 
 use super::walk::*;
 use flume::profiles::agent::claude::carry::UNREACHED;
@@ -1984,6 +1995,494 @@ fn an_agent_run_after_its_start_was_read_never_begun_is_begun_and_a_retry_leaves
         stage(status, "code")["state"] == "delivered"
     });
     assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
+}
+
+/// The printed command run to its end, the stand-in committing `file`:
+/// the settings the stand-in read, as it merged them, its account's, the
+/// place's and those `--settings` passed (195; design 14).
+fn read_settings(walk: &Walk, place: &str, file: &str) -> Value {
+    let read = walk.signal(&format!("read-{file}.json"));
+    walk.agent_with(
+        place,
+        commits(file, "fixed\n"),
+        &[("STAND_IN_SETTINGS", &read.to_string_lossy())],
+    );
+    let text = std::fs::read_to_string(&read).expect("the settings the stand-in read");
+    serde_json::from_str(&text).expect("the settings as JSON")
+}
+
+/// The own settings' file the place's printed command names, as JSON.
+fn passed(walk: &Walk, place: &str) -> Value {
+    let file = walk
+        .own_settings(place)
+        .unwrap_or_else(|| panic!("no --settings in {}", walk.printed(place)));
+    let text = std::fs::read_to_string(&file).expect("the own settings' file");
+    serde_json::from_str(&text).expect("the own settings as JSON")
+}
+
+/// Every file named `own-settings.json` under `dir`.
+fn own_files(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            found.extend(own_files(&path));
+        } else if path
+            .file_name()
+            .is_some_and(|name| name == "own-settings.json")
+        {
+            found.push(path);
+        }
+    }
+    found
+}
+
+/// The keys of a JSON object, in order.
+fn keys(value: &Value) -> Vec<&str> {
+    value
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(key, _)| key.as_str())
+        .collect()
+}
+
+/// The settings file a host's launcher gives its people's sessions: what
+/// they see, and the keys flume's other settings, the account and a person
+/// own.
+const PEOPLE: &str = r#"{
+  "tui": "fullscreen",
+  "statusLine": { "type": "command", "command": "people-line" },
+  "env": { "PEOPLE": "1" },
+  "permissions": { "allow": ["Bash(git log:*)"], "defaultMode": "bypassPermissions" },
+  "skipDangerousModePermissionPrompt": true
+}
+"#;
+
+#[test]
+fn a_hosts_people_file_its_lines_and_a_repositorys_file_reach_each_streams_agents() {
+    // S100, 32, 143, 195, 196: the host names its people's file for every
+    // agent with a status line of its own over it, and another for
+    // `work`; the repository names a file of its own for fix. A fix in
+    // `work` is started with `--settings` naming a file of its start's own
+    // under the place's folder, never the people's file, and the stand-in
+    // read work's line, the file's `tui` and `permissions` without
+    // `defaultMode` joined with its account's own, the repository's
+    // `alwaysThinkingEnabled` and its account's `cleanupPeriodDays`, with
+    // no `env` and no acceptance; status names each key with its layer and
+    // file and the three keys left out with their owners. A fix in
+    // `default` read the host's line.
+    // A host and a repository that give no entry start a fix with nothing
+    // passed and no file written. Each lands.
+    let walk = Walk::new("walk-own");
+    let people = walk.repository.scratch.path("people-settings.json");
+    std::fs::write(&people, PEOPLE).expect("the people's file");
+    std::fs::write(
+        walk.account().join("settings.json"),
+        "{ \"cleanupPeriodDays\": 30, \"permissions\": { \"allow\": [\"Bash(git log:*)\", \"Read\"] } }\n",
+    )
+    .expect("the account's settings");
+    walk.configure(&format!(
+        "[streams.work]\npool = \"stand-in\"\n\n[agents.programs.claude]\nfile = {:?}\nsettings = {{ statusLine = {{ type = \"command\", command = \"host-line\" }} }}\n\n[agents.streams.work.programs.claude.settings]\nstatusLine = {{ type = \"command\", command = \"work-line\" }}\n",
+        people.display().to_string()
+    ));
+    walk.repository.write(
+        ".config/claude-fix.json",
+        "{ \"alwaysThinkingEnabled\": false }\n",
+    );
+    the_repository_gives(
+        &walk,
+        "[kinds.fix.agents.programs.claude]\nfile = \"claude-fix.json\"\n",
+    );
+
+    let place = walk.launch(
+        "fix",
+        "work",
+        &["--brief", "fix the parser", "--stream", "work"],
+    );
+    let printed = walk.printed(&place);
+    assert!(!printed.contains("people-settings"), "{printed}");
+    let file = walk.own_settings(&place).expect("--settings");
+    assert!(
+        file.starts_with(walk.home().join("state")) && file.ends_with("own-settings.json"),
+        "the file is not the start's own: {printed}"
+    );
+    let given = passed(&walk, &place);
+    assert_eq!(
+        keys(&given),
+        vec!["alwaysThinkingEnabled", "permissions", "statusLine", "tui"],
+        "{given}"
+    );
+    let status = walk.status(&place);
+    let from = &status["agent"]["settings"]["from"];
+    let people = people.to_string_lossy().into_owned();
+    assert_eq!(
+        (
+            &from["programs.claude.settings.statusLine"],
+            &from["programs.claude.settings.tui"],
+            &from["programs.claude.settings.permissions"],
+            &from["programs.claude.settings.alwaysThinkingEnabled"],
+        ),
+        (
+            &json!({ "layer": "host-stream", "value": "{\"command\":\"work-line\",\"type\":\"command\"}" }),
+            &json!({ "layer": "host", "value": "\"fullscreen\"", "file": people }),
+            &json!({ "layer": "host", "value": "{\"allow\":[\"Bash(git log:*)\"]}", "file": people }),
+            &json!({ "layer": "repository", "value": "false", "file": ".config/claude-fix.json" }),
+        ),
+        "{status}"
+    );
+    let own = &status["agent"]["own"];
+    assert_eq!(
+        own["passed"],
+        format!("--settings {}", file.display()),
+        "{status}"
+    );
+    assert_eq!(own["read_back"], false, "{status}");
+    let host_file = own["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|file| file["layer"] == "host")
+        .unwrap_or_else(|| panic!("no host file in {status}"));
+    assert_eq!(
+        host_file["left_out"],
+        json!([
+            { "key": "env", "owner": "the account's `env`" },
+            { "key": "permissions.defaultMode", "owner": "flume's `mode`" },
+            { "key": "skipDangerousModePermissionPrompt", "owner": "a person, who alone accepts the warning it records" },
+        ]),
+        "{status}"
+    );
+
+    let read = read_settings(&walk, &place, "in-work.rs");
+    assert_eq!(read["statusLine"]["command"], "work-line", "{read}");
+    assert_eq!(read["tui"], "fullscreen", "{read}");
+    // The account's list joined with the file's, the rule both give kept
+    // once, as the release joins two sources' lists.
+    assert_eq!(
+        read["permissions"],
+        json!({ "allow": ["Bash(git log:*)", "Read"] }),
+        "{read}"
+    );
+    assert_eq!(read["alwaysThinkingEnabled"], false, "{read}");
+    assert_eq!(read["cleanupPeriodDays"], 30, "{read}");
+    assert!(
+        read.get("env").is_none() && read.get("skipDangerousModePermissionPrompt").is_none(),
+        "{read}"
+    );
+    until_landed(&walk, &place);
+    assert_eq!(walk.on_remote("in-work.rs").as_deref(), Some("fixed\n"));
+
+    // A launch names `default`, since the intent's stream is `work` now.
+    let place = walk.launch(
+        "fix",
+        "default",
+        &["--brief", "fix the reader", "--stream", "default"],
+    );
+    assert_eq!(
+        walk.status(&place)["agent"]["settings"]["from"]["programs.claude.settings.statusLine"]
+            ["layer"],
+        "host"
+    );
+    let read = read_settings(&walk, &place, "default.rs");
+    assert_eq!(read["statusLine"]["command"], "host-line", "{read}");
+    assert_eq!(read["tui"], "fullscreen", "{read}");
+    until_landed(&walk, &place);
+    assert_eq!(walk.on_remote("default.rs").as_deref(), Some("fixed\n"));
+
+    let walk = Walk::new("walk-own-none");
+    std::fs::write(
+        walk.account().join("settings.json"),
+        "{ \"cleanupPeriodDays\": 30 }\n",
+    )
+    .expect("the account's settings");
+    let place = walk.launch("fix", "one", &["--brief", "fix the parser"]);
+    let printed = walk.printed(&place);
+    assert!(!printed.contains("--settings"), "{printed}");
+    let status = walk.status(&place);
+    assert!(status["agent"]["own"].is_null(), "{status}");
+    assert_eq!(own_files(walk.home()), Vec::<PathBuf>::new());
+    let read = read_settings(&walk, &place, "parser.rs");
+    assert_eq!(read, json!({ "cleanupPeriodDays": 30 }));
+    until_landed(&walk, &place);
+    assert_eq!(walk.on_remote("parser.rs").as_deref(), Some("fixed\n"));
+}
+
+/// A launch of a fix `name` with `words` beside, which flume refuses
+/// having made nothing: its words.
+fn refused_whole(walk: &Walk, name: &str, words: &[&str]) -> String {
+    let mut launch = vec![
+        "launch",
+        "--kind",
+        "fix",
+        "--name",
+        name,
+        "--brief",
+        "fix the parser",
+    ];
+    launch.extend(words);
+    let (answer, refused) = walk.flume_ran(&launch);
+    assert!(refused, "the launch was taken: {answer}");
+    assert!(
+        !walk.has_branch(&format!("fix/{name}")),
+        "the fix's branch was made"
+    );
+    assert_eq!(
+        walk.repository.git(&["worktree", "list"]).lines().count(),
+        1,
+        "a worktree was made"
+    );
+    answer.to_string()
+}
+
+/// The repository's binding with `more` beside it in place of whatever it
+/// gave before, committed and pushed to the remote.
+fn the_repository_gives_only(walk: &Walk, binding: &str, more: &str) {
+    walk.repository
+        .write(".config/flume.toml", &format!("{binding}\n{more}"));
+    walk.repository.commit("the repository's settings");
+    walk.repository.git(&["push", "--quiet", "origin", "main"]);
+}
+
+/// A value shaped as a token an issuer gives, which no layer may hold
+/// (design 7).
+const TOKEN: &str = "ghp_StandInWordShapedAsAToken0123456789";
+
+#[test]
+fn own_settings_that_are_reserved_or_hold_a_credential_or_cannot_be_read_refuse_the_launch() {
+    // S101, 4, 157, 195: seven launches, each refused naming its key, its
+    // layer and its file where it came from one, never a value, and each
+    // making nothing.
+    let walk = Walk::new("walk-own-refused");
+    let binding = std::fs::read_to_string(walk.repository.dir.join(".config/flume.toml"))
+        .expect("the binding");
+    let scratch = |name: &str| walk.repository.scratch.path(name);
+    let says = |words: &str, parts: &[&str], value: &str| {
+        for part in parts {
+            assert!(
+                words.contains(part),
+                "the refusal names not {part}: {words}"
+            );
+        }
+        assert!(
+            !words.contains(value),
+            "the refusal gives the value: {words}"
+        );
+        let status = walk.everything().to_string();
+        assert!(!status.contains(value), "status gives the value: {status}");
+        assert_eq!(walk.everything()["places"], json!([]), "a place was made");
+    };
+
+    // The launch gives Claude Code an `env`, which is the account's.
+    let words = refused_whole(
+        &walk,
+        "env",
+        &[
+            "--agent",
+            "programs.claude.settings.env={\"STAND_IN_WORD\":\"never-given\"}",
+        ],
+    );
+    says(
+        &words,
+        &[
+            "programs.claude.settings.env",
+            "launch",
+            "the account's `env`",
+        ],
+        "never-given",
+    );
+
+    // A token in a status line the launch gives.
+    let line = format!(
+        "programs.claude.settings.statusLine={{\"type\":\"command\",\"command\":\"line {TOKEN}\"}}"
+    );
+    let words = refused_whole(&walk, "launch-token", &["--agent", &line]);
+    says(
+        &words,
+        &["programs.claude.settings.statusLine.command", "launch"],
+        TOKEN,
+    );
+
+    // The host's own settings give `apiKeyHelper`, the account's sign-in.
+    // The refusal gives no value; status's configuration values give the
+    // host's own words as written, a script's name being no credential
+    // (core.45; design 12), so only the refusal is read for it.
+    walk.configure("[agents.programs.claude.settings]\napiKeyHelper = \"key-helper-script\"\n");
+    let words = refused_whole(&walk, "helper", &[]);
+    assert!(
+        [
+            "programs.claude.settings.apiKeyHelper",
+            "host",
+            "the account's sign-in"
+        ]
+        .iter()
+        .all(|part| words.contains(part))
+            && !words.contains("key-helper-script"),
+        "{words}"
+    );
+
+    // A token in the status line of the host's named file.
+    let tokened = scratch("tokened.json");
+    std::fs::write(
+        &tokened,
+        format!(
+            "{{ \"statusLine\": {{ \"type\": \"command\", \"command\": \"line {TOKEN}\" }} }}\n"
+        ),
+    )
+    .expect("the host's file");
+    walk.configure(&format!(
+        "[agents.programs.claude]\nfile = {:?}\n",
+        tokened.display().to_string()
+    ));
+    let words = refused_whole(&walk, "host-token", &[]);
+    says(
+        &words,
+        &[
+            "programs.claude.settings.statusLine.command",
+            "host",
+            &tokened.to_string_lossy(),
+        ],
+        TOKEN,
+    );
+
+    // The host names a file that does not exist.
+    let missing = scratch("missing.json");
+    walk.configure(&format!(
+        "[agents.programs.claude]\nfile = {:?}\n",
+        missing.display().to_string()
+    ));
+    let words = refused_whole(&walk, "missing", &[]);
+    assert!(
+        [
+            "config.toml",
+            "agents.programs.claude.file",
+            "could not be read"
+        ]
+        .iter()
+        .all(|part| words.contains(part))
+            && words.contains(&*missing.to_string_lossy()),
+        "{words}"
+    );
+    walk.configure("");
+
+    // The repository's kind table gives `permissions.defaultMode`, flume's
+    // mode's.
+    the_repository_gives_only(
+        &walk,
+        &binding,
+        "[kinds.fix.agents.programs.claude.settings]\npermissions = { defaultMode = \"bypassPermissions\" }\n",
+    );
+    let words = refused_whole(&walk, "mode", &[]);
+    says(
+        &words,
+        &[
+            "programs.claude.settings.permissions.defaultMode",
+            "repository",
+            "flume's `mode`",
+        ],
+        "bypassPermissions",
+    );
+
+    // The repository names a file past its root, which stands.
+    std::fs::write(
+        walk.repository.scratch.path("claude.json"),
+        "{ \"tui\": \"fullscreen\" }\n",
+    )
+    .expect("a file outside the repository");
+    the_repository_gives_only(
+        &walk,
+        &binding,
+        "[kinds.fix.agents.programs.claude]\nfile = \"../../claude.json\"\n",
+    );
+    let words = refused_whole(&walk, "outside", &[]);
+    says(
+        &words,
+        &[
+            "kinds.fix.agents.programs.claude.file",
+            "../../claude.json",
+            "lies outside the repository",
+        ],
+        "fullscreen",
+    );
+}
+
+/// Claude Code's attribution with no text and no session link, as a host
+/// writes it for a fork whose upstream refuses a tagline (design 16).
+const NO_TAGLINE: &str = "attribution = { commit = \"\", pr = \"\", sessionUrl = false }\n";
+
+#[test]
+fn a_forks_attribution_is_the_hosts_a_repositorys_its_own_and_another_its_accounts() {
+    // S102, 32, 143, 195, C.2, C.7: three repositories on one host. The
+    // host's `[repos."<fork>".agents]` gives Claude Code's attribution with
+    // no text and no session link; `ours` commits its own words in its
+    // `.config/flume.toml`'s `[agents]`; `plain` gives none, and the
+    // account's own settings give one. Every stage of a fix and a chore in
+    // the fork is started with the attribution as the host wrote it, from
+    // `host-repository`, and the stand-in read it over its account's; a fix
+    // in `ours` with its own words, from `repository`; a fix in `plain`
+    // with nothing passed, the stand-in reading its account's. Each lands.
+    let fork = Walk::new("walk-fork");
+    let ours = Walk::new("walk-ours").with_home(fork.home().to_path_buf());
+    let plain = Walk::new("walk-plain").with_home(fork.home().to_path_buf());
+    std::fs::write(
+        fork.account().join("settings.json"),
+        "{ \"attribution\": { \"commit\": \"Co-Authored-By: the account\" } }\n",
+    )
+    .expect("the account's settings");
+    fork.configure(&format!(
+        "[repos.{:?}.agents.programs.claude.settings]\n{NO_TAGLINE}",
+        fork.repository.name()
+    ));
+    the_repository_gives(
+        &ours,
+        "[agents.programs.claude.settings]\nattribution = { commit = \"Assisted-by: Claude Code\", pr = \"\" }\n",
+    );
+
+    let none = json!({ "commit": "", "pr": "", "sessionUrl": false });
+    for kind in ["fix", "chore"] {
+        let place = fork.launch(kind, "fork", &["--brief", "mend the parser"]);
+        let given = passed(&fork, &place);
+        assert_eq!(given, json!({ "attribution": none }), "{kind}");
+        let status = fork.status(&place);
+        assert_eq!(
+            status["agent"]["settings"]["from"]["programs.claude.settings.attribution"],
+            json!({ "layer": "host-repository", "value": "{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}" }),
+            "{status}"
+        );
+        let read = read_settings(&fork, &place, &format!("{kind}.rs"));
+        assert_eq!(read["attribution"], none, "{kind}: {read}");
+        until_landed(&fork, &place);
+        assert_eq!(
+            fork.on_remote(&format!("{kind}.rs")).as_deref(),
+            Some("fixed\n")
+        );
+    }
+
+    let place = ours.launch("fix", "ours", &["--brief", "mend the parser"]);
+    let words = json!({ "commit": "Assisted-by: Claude Code", "pr": "" });
+    assert_eq!(passed(&ours, &place), json!({ "attribution": words }));
+    let status = ours.status(&place);
+    assert_eq!(
+        status["agent"]["settings"]["from"]["programs.claude.settings.attribution"]["layer"],
+        "repository",
+        "{status}"
+    );
+    let read = read_settings(&ours, &place, "ours.rs");
+    assert_eq!(read["attribution"], words, "{read}");
+    until_landed(&ours, &place);
+    assert_eq!(ours.on_remote("ours.rs").as_deref(), Some("fixed\n"));
+
+    let place = plain.launch("fix", "plain", &["--brief", "mend the parser"]);
+    let printed = plain.printed(&place);
+    assert!(!printed.contains("--settings"), "{printed}");
+    let read = read_settings(&plain, &place, "plain.rs");
+    assert_eq!(
+        read["attribution"],
+        json!({ "commit": "Co-Authored-By: the account" }),
+        "{read}"
+    );
+    until_landed(&plain, &place);
+    assert_eq!(plain.on_remote("plain.rs").as_deref(), Some("fixed\n"));
 }
 
 /// Writes acme's `review@<version>` in `kinds_dir`: one code stage whose

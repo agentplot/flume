@@ -4,14 +4,14 @@
 //! spells it.
 
 use flume_core::{
-    group_name, percentage, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued,
-    ReadingStatus, Reserves, SourceStatus, StageStatus, StreamOpened, StreamStatus, Tidied,
+    group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
+    Queued, ReadingStatus, Reserves, SourceStatus, StageStatus, StreamOpened, StreamStatus, Tidied,
     TitleFrom, WindowOutcome, Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration,
-    IntentKey, KindFrom, LabelHeld, LocalLayer, Made, NamedBy, NamedSession, ProfileHeld,
-    Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart,
+    AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
+    HostConfiguration, IntentKey, KindFrom, LabelHeld, LocalLayer, Made, NamedBy, NamedSession,
+    ProfileHeld, Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart,
     UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
@@ -283,28 +283,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         lines.extend(stage_lines(stage));
     }
     if let Some(agent) = &place.agent {
-        lines.push(agent_line(agent));
-        lines.extend(where_line(agent, &place.stream.name, &place.kind));
-        lines.push(terminal_line(agent));
-        for (setting, given) in &agent.settings.from {
-            lines.push(format!(
-                "    {setting} = {} (from {})",
-                given.value,
-                word(json!(given.layer))
-            ));
-        }
-        if let Some(conversation) = &agent.conversation {
-            lines.push(conversation_line(conversation));
-        }
-        if let Some(printed) = &agent.printed {
-            lines.push(format!("    run: {printed}"));
-        }
-        if let Some(words) = &agent.last_words {
-            lines.push(format!("    last words: {words}"));
-        }
-        for note in &agent.notes {
-            lines.push(format!("    note: {note}"));
-        }
+        lines.extend(agent_lines(agent, &place.stream.name, &place.kind));
     }
     for moved in &place.moves {
         lines.push(format!("  moved: {}", moved.words()));
@@ -606,6 +585,88 @@ fn intent_words(intent: &IntentKey) -> String {
             repository, base, ..
         } => format!("intent of {repository} on {base}"),
     }
+}
+
+/// The current agent of a place of `kind` in `stream`: its line, where
+/// it opened, its terminal, each setting with its layer, its own
+/// settings' files and how they were passed, and what its record says
+/// (56, 190, 195, 199).
+fn agent_lines(agent: &AgentStatus, stream: &str, kind: &str) -> Vec<String> {
+    let mut lines = vec![agent_line(agent)];
+    lines.extend(where_line(agent, stream, kind));
+    lines.push(terminal_line(agent));
+    for (setting, given) in &agent.settings.from {
+        lines.push(setting_line(setting, given));
+    }
+    if let Some(own) = &agent.own {
+        lines.extend(own_lines(own));
+    }
+    if let Some(conversation) = &agent.conversation {
+        lines.push(conversation_line(conversation));
+    }
+    if let Some(printed) = &agent.printed {
+        lines.push(format!("    run: {printed}"));
+    }
+    if let Some(words) = &agent.last_words {
+        lines.push(format!("    last words: {words}"));
+    }
+    for note in &agent.notes {
+        lines.push(format!("    note: {note}"));
+    }
+    lines
+}
+
+/// The widest line an own setting's value is printed whole on in the
+/// person's form; past it a table prints as `{…}` and a list as `[…]`,
+/// and the JSON form gives every value whole (56, 195).
+const SETTING_LINE: usize = 100;
+
+/// A setting with its value as written, its layer, and the file it came
+/// from where it came from one, an own setting's table or list that runs
+/// past [`SETTING_LINE`] printed as `{…}` or `[…]` (56, 195).
+fn setting_line(setting: &str, given: &Given) -> String {
+    let layer = word(json!(given.layer));
+    let from = match &given.file {
+        Some(file) => format!("from {layer}, the file {file}"),
+        None => format!("from {layer}"),
+    };
+    let line = format!("    {setting} = {} ({from})", given.value);
+    let elided = match given.value.chars().next() {
+        Some('{') => "{…}",
+        Some('[') => "[…]",
+        _ => return line,
+    };
+    if !setting.starts_with("programs.") || line.chars().count() <= SETTING_LINE {
+        return line;
+    }
+    format!("    {setting} = {elided} ({from})")
+}
+
+/// An agent's own settings beyond their keys: each file a layer named for
+/// its program with the keys left out of it and their owners, how they
+/// were passed, and that they were not read back (56, 195).
+fn own_lines(own: &OwnStatus) -> Vec<String> {
+    let mut lines = vec![];
+    for file in &own.files {
+        lines.push(format!(
+            "    the file {} (from {})",
+            file.read,
+            word(json!(file.layer))
+        ));
+        for left in &file.left_out {
+            lines.push(format!(
+                "      {} left out, owned by {}",
+                left.key, left.owner
+            ));
+        }
+    }
+    if let Some(passed) = &own.passed {
+        lines.push(format!("    own settings passed as {passed}"));
+    }
+    if !own.read_back {
+        lines.push("    own settings not read back".to_string());
+    }
+    lines
 }
 
 /// The current agent's line: its identity, program, account and state,
@@ -1177,13 +1238,14 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 mod tests {
     use super::*;
     use flume_core::{
-        AccountStatus, AgentSettings, Listed, ModeStatus, MoveStatus, Past, PlaceLine, RoomWanted,
-        StreamListed, StreamStatus, TitleFrom, TitleHeld, WindowStatus,
+        AccountStatus, AgentSettings, Listed, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus,
+        Past, PlaceLine, RoomWanted, StreamListed, StreamStatus, TitleFrom, TitleHeld,
+        WindowStatus,
     };
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, Declared, Given, Layer, ModeBegan,
-        MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, SessionRuns,
-        Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
+        MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, Reserved,
+        SessionRuns, Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -1213,6 +1275,7 @@ mod tests {
             conversation: None,
             session: None,
             terminal: None,
+            own: None,
         };
         assert_eq!(
             agent_line(&agent),
@@ -1677,6 +1740,7 @@ mod tests {
                     Given {
                         layer,
                         value: written.into(),
+                        file: None,
                     },
                 )]),
                 ..AgentSettings::default()
@@ -1696,7 +1760,152 @@ mod tests {
             conversation: None,
             session: None,
             terminal: None,
+            own: None,
         }
+    }
+
+    /// An agent whose settings give `from`, each own setting's among them,
+    /// and its own settings beyond their keys as `own` gives them: its
+    /// lines are its agent's line, its terminal's, then its settings'.
+    fn with_own(from: &[(&str, Layer, &str, Option<&str>)], own: Option<OwnStatus>) -> AgentStatus {
+        AgentStatus {
+            settings: AgentSettings {
+                from: from
+                    .iter()
+                    .map(|(setting, layer, value, file)| {
+                        (
+                            setting.to_string(),
+                            Given {
+                                layer: *layer,
+                                value: value.to_string(),
+                                file: file.map(str::to_string),
+                            },
+                        )
+                    })
+                    .collect(),
+                ..AgentSettings::default()
+            },
+            mode: None,
+            own,
+            ..in_mode(
+                "edits",
+                Layer::Launch,
+                ModeStatus {
+                    passed: "edits".into(),
+                    entry: None,
+                    read_back: true,
+                },
+            )
+        }
+    }
+
+    #[test]
+    fn an_agent_with_own_settings_from_a_file_and_inline() {
+        let agent = with_own(
+            &[
+                (
+                    "programs.agent.settings.line",
+                    Layer::HostStream,
+                    r#""work""#,
+                    None,
+                ),
+                (
+                    "programs.agent.settings.tui",
+                    Layer::Host,
+                    r#""fullscreen""#,
+                    Some("/home/user/agent.json"),
+                ),
+            ],
+            Some(OwnStatus {
+                passed: Some("--own /state/fix--one/agent/own.json".into()),
+                read_back: false,
+                files: vec![OwnFileStatus {
+                    layer: Layer::Host,
+                    written: "agent.json".into(),
+                    read: "/home/user/agent.json".into(),
+                    left_out: vec![
+                        Reserved {
+                            key: "env".into(),
+                            owner: "the account".into(),
+                        },
+                        Reserved {
+                            key: "perms.mode".into(),
+                            owner: "flume's mode".into(),
+                        },
+                    ],
+                }],
+            }),
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            [
+                r#"    programs.agent.settings.line = "work" (from host-stream)"#,
+                r#"    programs.agent.settings.tui = "fullscreen" (from host, the file /home/user/agent.json)"#,
+                "    the file /home/user/agent.json (from host)",
+                "      env left out, owned by the account",
+                "      perms.mode left out, owned by flume's mode",
+                "    own settings passed as --own /state/fix--one/agent/own.json",
+                "    own settings not read back",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_long_own_setting_is_elided() {
+        let hooks = format!(r#"{{"Stop":[{{"command":"{}"}}]}}"#, "x".repeat(80));
+        let list = format!(r#"["{}"]"#, "y".repeat(90));
+        let short = r#"{"command":"line"}"#;
+        let agent = with_own(
+            &[
+                ("programs.agent.settings.allow", Layer::Kind, &list, None),
+                (
+                    "programs.agent.settings.hooks",
+                    Layer::Host,
+                    &hooks,
+                    Some("/home/user/agent.json"),
+                ),
+                ("programs.agent.settings.status", Layer::Host, short, None),
+            ],
+            None,
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            [
+                "    programs.agent.settings.allow = […] (from kind)".to_string(),
+                "    programs.agent.settings.hooks = {…} (from host, the file /home/user/agent.json)"
+                    .to_string(),
+                format!("    programs.agent.settings.status = {short} (from host)"),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_agent_with_no_own_settings() {
+        let agent = with_own(&[("model", Layer::Launch, "large", None)], None);
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            ["    model = large (from launch)"]
+        );
+        let none_passed = with_own(
+            &[],
+            Some(OwnStatus {
+                passed: None,
+                read_back: false,
+                files: vec![OwnFileStatus {
+                    layer: Layer::Host,
+                    written: "agent.json".into(),
+                    read: "/home/user/agent.json".into(),
+                    left_out: vec![],
+                }],
+            }),
+        );
+        assert_eq!(
+            agent_lines(&none_passed, "work", "fix")[2..],
+            [
+                "    the file /home/user/agent.json (from host)",
+                "    own settings not read back",
+            ]
+        );
     }
 
     #[test]

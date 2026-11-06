@@ -22,7 +22,7 @@ the same answers you do.
 | Ends delivered once to each recipient, or kept pending for `flume wait` and `flume inbox` | ✓ | ✓ |
 | Role addresses, woken by a pending end or `flume wake` | ✓ | ✓ |
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
-| Agent settings in six layers | ✓ | ✓ |
+| Agent settings in eight layers, each program's own settings among them, given inline or by a settings file | ✓ | ✓ |
 | Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
 | Each stream's agents in a herdr session of its own, or the one a launch names | ✓ | ✓ |
 | The host's configuration in a managed layer and a local one over it, the managed one pinning keys | ✓ | ✓ |

@@ -1,19 +1,19 @@
 use crate::{lock, Log};
 use flume_seams::{
     Binding, BindingRead, Kind, KindIdentity, KindNamed, KindSettings, Kinds, KindsRead, LockEntry,
-    LockRead, PackageRead, Packaged, Revision, SourceRead,
+    LockRead, PackageRead, Packaged, Revision, Settings, SourceRead,
 };
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-/// The kinds seam: each repository's kinds and the settings it gives
-/// kinds it does not declare, at a revision or at every revision, the
-/// declarations launches carry, flume's own as packages with their
-/// hashes, each repository's binding, the names it reads, each source's
-/// directory with its packages by name and version, the repository's
-/// lock at a revision or at every revision, each lock on disk, which a
-/// lock written replaces, and the label a kind of a name declares
-/// wherever it is read (180).
+/// The kinds seam: each repository's kinds, the settings it gives kinds
+/// it does not declare and every kind, at a revision or at every
+/// revision, the declarations launches carry, flume's own as packages
+/// with their hashes, each repository's binding, the names it reads,
+/// each source's directory with its packages by name and version, the
+/// repository's lock at a revision or at every revision, each lock on
+/// disk, which a lock written replaces, and the label a kind of a name
+/// declares wherever it is read (180).
 #[derive(Default)]
 pub struct FakeKinds {
     state: Mutex<KindsState>,
@@ -37,6 +37,10 @@ struct KindsState {
     /// Settings by repository, the revision they are set apart at or
     /// none for every other, and the kind's name.
     settings: BTreeMap<(String, Option<Revision>), BTreeMap<String, KindSettings>>,
+    /// The settings a repository gives every kind run in it, its
+    /// `[agents]`, by repository and the revision they are set apart at
+    /// or none for every other (195).
+    every_kind: BTreeMap<(String, Option<Revision>), Settings>,
     own: Vec<Packaged>,
     bindings: BTreeMap<String, BindingRead>,
     /// The texts read-named refuses, with why.
@@ -59,9 +63,14 @@ impl KindsState {
     /// `read` with each kind given the label its name is scripted with.
     fn labelled(&self, read: KindsRead) -> KindsRead {
         match read {
-            KindsRead::Read { kinds, settings } => KindsRead::Read {
+            KindsRead::Read {
+                kinds,
+                settings,
+                agents,
+            } => KindsRead::Read {
                 kinds: kinds.into_iter().map(|kind| self.label(kind)).collect(),
                 settings,
+                agents,
             },
             refused => refused,
         }
@@ -139,6 +148,21 @@ impl FakeKinds {
             .entry((repository.into(), Some(revision.clone())))
             .or_default()
             .insert(kind.into(), settings);
+    }
+
+    /// The settings `repository` gives every kind run in it, at every
+    /// revision not set apart (32, 195).
+    pub fn set_every_kind(&self, repository: &str, settings: Settings) {
+        lock(&self.state)
+            .every_kind
+            .insert((repository.into(), None), settings);
+    }
+
+    /// The settings `repository` gives every kind at `revision`.
+    pub fn set_every_kind_at(&self, repository: &str, revision: &Revision, settings: Settings) {
+        lock(&self.state)
+            .every_kind
+            .insert((repository.into(), Some(revision.clone())), settings);
     }
 
     /// The label every kind named `kind` declares, wherever it is read,
@@ -300,10 +324,16 @@ impl Kinds for FakeKinds {
             .or_else(|| state.settings.get(&(repository.to_string(), None)))
             .cloned()
             .unwrap_or_default();
+        let every_kind = state
+            .every_kind
+            .get(&(repository.to_string(), Some(revision.clone())))
+            .or_else(|| state.every_kind.get(&(repository.to_string(), None)))
+            .cloned();
         state.labelled(match read {
-            KindsRead::Read { kinds, .. } => KindsRead::Read {
+            KindsRead::Read { kinds, agents, .. } => KindsRead::Read {
                 kinds,
                 settings: given,
+                agents: every_kind.unwrap_or(agents),
             },
             refused => refused,
         })
@@ -513,10 +543,12 @@ fn stand_in_hash(kind: &Kind) -> String {
     format!("sha256:{:064x}", hasher.finish())
 }
 
-/// A declaration read holding `kinds` and no settings for others.
+/// A declaration read holding `kinds` and no settings for others or for
+/// every kind.
 fn read(kinds: Vec<Kind>) -> KindsRead {
     KindsRead::Read {
         kinds,
         settings: BTreeMap::new(),
+        agents: Settings::default(),
     }
 }

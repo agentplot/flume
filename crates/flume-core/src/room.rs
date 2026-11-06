@@ -940,7 +940,8 @@ impl Engine {
                         let room = stage.room.clone().unwrap_or_default();
                         let settings = self
                             .resolve(&held.place, &held.place.kind.stages[index])
-                            .settings;
+                            .map(|resolved| resolved.settings)
+                            .unwrap_or_default();
                         let session_refused = as_read
                             .session_of(&stream, &held.place.kind.name, &stage.name, &settings)
                             .is_err();
