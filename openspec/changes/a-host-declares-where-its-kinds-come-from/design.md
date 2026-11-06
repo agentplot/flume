@@ -825,7 +825,15 @@ details come with it in one commit (task 1.1).
    lands.
 2. **The statement as the user ruled** (*The statement as the user
    ruled*), on blueprints' main at ff616eb, which task 8.1's clause
-   list reads.
+   list reads. That revision holds no S92 to S94, so the list skips
+   them. It holds 180 to 190 and S82 to S91, built by changes that
+   landed on flume's main after this branch last took main; the list
+   names each unbuilt by its change, as main's own list named them
+   before they landed, and the merge that brings them takes main's
+   list for them. blueprints' main at 2287669 adds 195 to 197, S92 and
+   S100 to S103, which no change has built; reading it would name
+   more unbuilt and build nothing of this change's, so 8.1 reads
+   ff616eb.
 3. **Records 0021, 0024's plan stage, 0025 and 0026** are not needed.
    See *Risks* for 0021.
 

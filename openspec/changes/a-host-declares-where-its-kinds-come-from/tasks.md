@@ -126,7 +126,7 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 8. Coverage and the gate
 
-- [ ] 8.1 Have the suite's clause list in `crates/flume-conformance/src/clauses.rs` hold the following, as the clause-coverage spec says (clause-coverage spec; 154 to 160, S59 to S63):
+- [x] 8.1 Have the suite's clause list in `crates/flume-conformance/src/clauses.rs` hold the following, as the clause-coverage spec says (clause-coverage spec; 154 to 160, S59 to S63):
   - Part A, Part B, I1 to I8 and the scenarios at the statement's revision that states the user's ruling on this change, or the later one on blueprints' main when the group is built;
   - `REVISION` and `SCENARIOS` moved to it;
   - `PACKAGES` and its entries gone from `unbuilt`;
