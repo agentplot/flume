@@ -411,6 +411,13 @@ session (herdr's `session attach`), and a stream holds several.
   session from `stream-kind` or `stream-stage` and the kinds and stages
   it is named for. Where it is the stream's own session too, it is shown
   as the stream's own.
+- **The answer** gives the kinds and stages the stream names the session
+  for, each with its layer, as `named`, wherever it names it for any,
+  its own session among them, and a session's window title comes from
+  `session`. A session the stream names for a kind and for another
+  kind's stage comes from `stream-kind`, the word that opens more of its
+  agents there; the other way, both origins, is more than the one `from`
+  a start records holds.
 - **No name**: the host's default stream's own session, as today.
 - **Any other name** is refused naming each stream's sessions, before
   the terminal or a window is asked anything, so a mistyped name starts
@@ -523,7 +530,8 @@ every session (task 6.2).
   `Engine::open_stream` becomes `Engine::open_session(name)`: the
   session of that name among every stream's own and named sessions,
   else the default stream's own where none is named, shown in its
-  stream's view.
+  stream's view. `StreamOpened` gains `named: Option<NamedSession>`,
+  written only where set, and `TitleFrom` gains `session`.
 - `flume`: `host/config.rs`'s `streams_declared` reads `kinds` beside
   `labels`, its keys in `LOCAL_KEYS`; `commands/open`'s argument is a
   session's name, its help saying so; `print.rs` gives the new origins
