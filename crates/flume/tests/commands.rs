@@ -47,7 +47,8 @@ const UNSTARTED: &str = "stand-in-unstarted";
 /// received its prompt at once, never asks or keeps own work, and reads
 /// its session ended once the test writes the mark
 /// `stand-in/<stage>-<start>` in the place's folder. It maps each mode to
-/// its own word and reads none back.
+/// its own word and reads none back, and takes its program's own
+/// settings, passing them nowhere (195).
 struct StandInAgent {
     says_started: bool,
 }
@@ -64,6 +65,7 @@ impl Agent for StandInAgent {
         _folder: &str,
         settings: &Settings,
         _mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         _resume: Option<&str>,
         env: &BTreeMap<String, String>,
         _place: &PlaceRef,
@@ -85,6 +87,7 @@ impl Agent for StandInAgent {
             prompt_args: vec![prompt.to_string()],
             folder_trust: None,
             kind: None,
+            files: BTreeMap::new(),
         }
     }
     fn started(&self, _folder: &str, _agent: &Identity) -> Reading {
@@ -121,6 +124,9 @@ impl Agent for StandInAgent {
     /// Each of flume's four as its word, and an own value as written.
     fn mode(&self, entry: &ModeEntry) -> Result<String, String> {
         Ok(entry.to_string())
+    }
+    fn own(&self, _given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
+        Ok(())
     }
     fn send_back(&self) -> Offered {
         Offered::NotOffered
@@ -1191,6 +1197,103 @@ fn a_mode_and_a_table_at_the_launch() {
         assert!(refused.text.contains(named), "{}", refused.text);
         assert!(!Path::new(&host.place_of(&repository, &format!("change--{name}"))).exists());
     }
+}
+
+#[test]
+fn own_settings_and_a_file_at_the_launch() {
+    // 7, 21, 32, 195: a program's own settings for every stage and for
+    // one, and its settings file named relative to the working directory,
+    // read at the launch and kept in the place's held settings as
+    // Settings writes them, the file by its absolute path; the file
+    // changed after the launch, and the held keys stand. A key given
+    // twice is refused naming it, nothing made.
+    let host = Host::new("own-settings");
+    let repository = repository("own-settings", None);
+    let kinds = kinds_file(&host, false);
+    let working = host.scratch.path("working");
+    std::fs::create_dir_all(&working).unwrap();
+    let file = working.join("agent.json");
+    std::fs::write(&file, r#"{ "tui": "fullscreen" }"#).unwrap();
+    let launched = host.stand_in(
+        &working,
+        &[
+            "--repository",
+            &repository.name(),
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            &format!("programs.{STAND_IN}.file=agent.json"),
+            "--agent",
+            &format!(
+                r#"programs.{STAND_IN}.settings.statusLine={{"type":"command","command":"line"}}"#
+            ),
+            "--agent",
+            &format!("code.programs.{STAND_IN}.settings.tui=default"),
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    std::fs::write(&file, r#"{ "tui": "changed" }"#).unwrap();
+    let place = host.place_of(&repository, "change--one");
+    let state = host.state().join("places").join(format!(
+        "{}.json",
+        place.trim_start_matches('/').replace('/', "%")
+    ));
+    let written: Value =
+        serde_json::from_slice(&std::fs::read(&state).expect("the held state")).unwrap();
+    let absolute = file.display().to_string();
+    assert_eq!(
+        written["state"]["place"]["every_stage"]["programs"][STAND_IN],
+        json!({
+            "file": { "written": absolute, "read": absolute, "keys": { "tui": "fullscreen" } },
+            "settings": { "statusLine": { "type": "command", "command": "line" } },
+        }),
+        "as Settings writes it"
+    );
+    let held = held_of(&host, &place).state.place;
+    let every = &held.every_stage.programs[STAND_IN];
+    assert_eq!(
+        every.file.as_ref().unwrap().keys["tui"],
+        json!("fullscreen"),
+        "as the launch read it"
+    );
+    assert_eq!(
+        held.settings["code"].programs[STAND_IN].settings["tui"],
+        json!("default")
+    );
+    let refused = host.stand_in(
+        &working,
+        &[
+            "--repository",
+            &repository.name(),
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "two",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "programs.other.settings.tui=fullscreen",
+            "--agent",
+            "programs.other.settings.tui=default",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(refused.code, 1, "{}", refused.text);
+    assert!(
+        refused.text.contains("programs.other.settings.tui"),
+        "{}",
+        refused.text
+    );
+    assert!(!Path::new(&host.place_of(&repository, "change--two")).exists());
 }
 
 #[test]

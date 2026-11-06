@@ -443,6 +443,7 @@ impl TestServer {
                 confirm: "enter".into(),
             }),
             kind: Some("claude".into()),
+            files: BTreeMap::new(),
         }
     }
 
@@ -1213,6 +1214,7 @@ fn a_nix_wrapped_claude_starts_under_herdr_from_the_agent_profile() {
         &server.folder(),
         &settings,
         None,
+        &BTreeMap::new(),
         None,
         &env,
         &place,
@@ -1292,6 +1294,7 @@ fn instructions_of_many_lines_start_under_herdr_by_the_agent_profiles_file() {
         &server.folder(),
         &settings,
         None,
+        &BTreeMap::new(),
         None,
         &stand_in.env,
         &server.place("fix--one"),
@@ -2087,6 +2090,7 @@ impl Agent for StandIn {
         _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
@@ -2109,6 +2113,7 @@ impl Agent for StandIn {
             prompt_args: vec![prompt.into()],
             folder_trust: None,
             kind: Some("claude".into()),
+            files: BTreeMap::new(),
         }
     }
 

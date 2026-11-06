@@ -34,6 +34,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_mode_beside_a_model,
         },
         Scenario {
+            name: "settings: the host gives every agent a model and a stream's agents theirs, from host-stream and host, its table for a kind before both and both before the repository's",
+            cites: &["32", "143", "56"],
+            run: a_model_for_a_stream_and_for_every_agent,
+        },
+        Scenario {
+            name: "settings: the host gives every kind of a repository a model from host-repository, before its table for a kind, and a repository's [agents] gives its every kind theirs from repository",
+            cites: &["32", "56"],
+            run: a_model_for_every_kind_of_a_repository,
+        },
+        Scenario {
             name: "settings: an agent starts with its account's variables read against the host user's home and login environment, status naming each from the account and no other",
             cites: &["29", "32", "144", "56"],
             run: the_accounts_variables,
@@ -188,7 +198,8 @@ fn s44_settings_from_four_layers(_: &()) -> Outcome {
         from.get("model"),
         Some(&Given {
             layer: Layer::Repository,
-            value: "opus".into()
+            value: "opus".into(),
+            file: None,
         }),
         "the model's layer"
     );
@@ -196,7 +207,8 @@ fn s44_settings_from_four_layers(_: &()) -> Outcome {
         from.get("env.AGENT_HOME"),
         Some(&Given {
             layer: Layer::Account,
-            value: SET.into()
+            value: SET.into(),
+            file: None,
         }),
         "the variable's source, its value unsaid"
     );
@@ -268,6 +280,7 @@ fn a_model_for_each_kind(_: &()) -> Outcome {
         Some(Given {
             layer,
             value: value.into(),
+            file: None,
         })
     };
     ensure_eq!(
@@ -285,6 +298,88 @@ fn a_model_for_each_kind(_: &()) -> Outcome {
         given(Layer::HostRepository, "haiku"),
         "the fix's model the host names for its repository"
     );
+    Ok(())
+}
+
+/// Where the current agent of the place `kind--name` took its model.
+fn model_from(world: &World, kind: &str, name: &str) -> Result<Option<Given>, String> {
+    Ok(world
+        .status(&World::id(kind, name))?
+        .agent
+        .ok_or("no agent")?
+        .settings
+        .from
+        .get("model")
+        .cloned())
+}
+
+fn layer_gave(layer: Layer, value: &str) -> Option<Given> {
+    Some(Given {
+        layer,
+        value: value.into(),
+        file: None,
+    })
+}
+
+fn a_model_for_a_stream_and_for_every_agent(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream("work", Some(Stream::default()));
+    world.host.set_every_agent(model("sonnet"));
+    world.host.set_stream_settings("work", model("opus"));
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(model("haiku")));
+    world
+        .kinds
+        .set_settings(REPOSITORY, "change", for_every_stage(model("other")));
+    let in_stream = |kind: &str, name: &str, stream: Option<&str>| Launch {
+        stream: stream.map(str::to_string),
+        ..launch(kind, name, Some("do it"))
+    };
+    for (kind, name, stream, layer, value) in [
+        ("change", "work", Some("work"), Layer::HostStream, "opus"),
+        ("change", "plain", None, Layer::Host, "sonnet"),
+        ("fix", "work", Some("work"), Layer::HostKind, "haiku"),
+        ("fix", "plain", None, Layer::HostKind, "haiku"),
+    ] {
+        launched(&world.engine.launch(&in_stream(kind, name, stream)))?;
+        ensure_eq!(
+            model_from(&world, kind, name)?,
+            layer_gave(layer, value),
+            format!("the {kind} in {}'s model", stream.unwrap_or("default"))
+        );
+    }
+    Ok(())
+}
+
+fn a_model_for_every_kind_of_a_repository(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_every_kind("/elsewhere", model("opus"));
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(model("haiku")));
+    world.kinds.set_every_kind(REPOSITORY, model("sonnet"));
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    launched(&world.engine.launch(&launch("chore", "one", Some("x"))))?;
+    ensure_eq!(
+        model_from(&world, "fix", "one")?,
+        layer_gave(Layer::HostKind, "haiku"),
+        "a fix's model where the host names another repository"
+    );
+    ensure_eq!(
+        model_from(&world, "chore", "one")?,
+        layer_gave(Layer::Repository, "sonnet"),
+        "a chore's model from the repository's [agents]"
+    );
+    world.host.set_every_kind(REPOSITORY, model("opus"));
+    for kind in ["fix", "chore"] {
+        launched(&world.engine.launch(&launch(kind, "two", Some("x"))))?;
+        ensure_eq!(
+            model_from(&world, kind, "two")?,
+            layer_gave(Layer::HostRepository, "opus"),
+            format!("a {kind}'s model the host names for every kind of its repository")
+        );
+    }
     Ok(())
 }
 
@@ -316,6 +411,7 @@ fn a_mode_beside_a_model(_: &()) -> Outcome {
         Some(Given {
             layer,
             value: value.into(),
+            file: None,
         })
     };
     for (name, mode, value) in [

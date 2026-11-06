@@ -1,7 +1,7 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
     Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Mode, ModeBegan, ModeEntry,
-    Offered, PlaceRef, Reading, Received, Secret, Settings, Spent, Unsettled,
+    Offered, PlaceRef, Reading, Received, Reserved, Secret, Settings, Spent, Unsettled, NO_OWN,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -20,7 +20,12 @@ use std::sync::{Arc, Mutex};
 /// [`FakeAgent::HOME`]; its command passes the session a start resumes as
 /// `--resume <session>`, and a start's word that it started names the
 /// session it resumes unless scripted otherwise (179). Its agents open in
-/// the terminal it is made over, or in any other it is told of (190).
+/// the terminal it is made over, or in any other it is told of (190). It
+/// reserves no key of its settings and takes no own settings until
+/// scripted to; once it takes them, its command lists them as one JSON
+/// object in a file under the place's own folder, [`FakeAgent::own_file`],
+/// and names it by `--own <file>`, and every command given own settings
+/// logs their keys (195, 196).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     /// The other terminals its agents may open in, a stream's (190).
@@ -50,6 +55,15 @@ struct AgentModel {
     /// Each start whose command resumes a session ends before its word
     /// that it started (S79).
     carried_starts_end: bool,
+    /// The program takes its own settings, by a file its command names
+    /// (195, 196).
+    takes_own: bool,
+    /// The keys of its settings the program reserves, each with its
+    /// owner, a nested key by its path (195, 196).
+    reserved: Vec<Reserved>,
+    /// The file its command lists its own settings in where scripted
+    /// apart from its own under the place's folder (196).
+    own_at: Option<String>,
 }
 
 #[derive(Clone)]
@@ -268,6 +282,39 @@ impl FakeAgent {
         state.mode_at_prompt = true;
     }
 
+    /// The program takes its own settings, by a file under the place's
+    /// own folder its command lists and names by `--own <file>` (195,
+    /// 196).
+    pub fn take_own(&self) {
+        lock(&self.state).takes_own = true;
+    }
+
+    /// The program's setting `key`, a nested key by its path as
+    /// `permissions.default`, is `owner`'s, so the fake reserves it (195,
+    /// 196).
+    pub fn reserve(&self, key: &str, owner: &str) {
+        lock(&self.state).reserved.push(Reserved {
+            key: key.to_string(),
+            owner: owner.to_string(),
+        });
+    }
+
+    /// The program's own settings go to the file at `path`, wherever it
+    /// lies, as a profile that lists a file outside the place's folder
+    /// would (196).
+    pub fn own_file_at(&self, path: &str) {
+        lock(&self.state).own_at = Some(path.to_string());
+    }
+
+    /// The file under the place's own `folder` that a command for `agent`
+    /// lists its own settings in (196).
+    pub fn own_file(folder: &str, agent: &Identity) -> String {
+        format!(
+            "{folder}/agent/{}/own.json",
+            agent.to_string().replace('/', "%")
+        )
+    }
+
     /// The program keeps `names` from every process it starts (161).
     pub fn withhold(&self, names: &[&str]) {
         lock(&self.state).withheld = names.iter().map(|name| name.to_string()).collect();
@@ -399,9 +446,10 @@ impl FakeAgent {
 impl Agent for FakeAgent {
     fn command(
         &self,
-        _folder: &str,
+        folder: &str,
         settings: &Settings,
         mode: Option<&str>,
+        own: &BTreeMap<String, serde_json::Value>,
         resume: Option<&str>,
         env: &BTreeMap<String, String>,
         place: &PlaceRef,
@@ -419,6 +467,24 @@ impl Agent for FakeAgent {
         }
         if let Some(mode) = mode {
             args.extend(["--mode".to_string(), mode.to_string()]);
+        }
+        let mut files = BTreeMap::new();
+        if !own.is_empty() {
+            let keys: Vec<&str> = own.keys().map(String::as_str).collect();
+            self.log
+                .push(format!("own {identity}: {}", keys.join(", ")));
+            let (takes, at) = {
+                let state = lock(&self.state);
+                (state.takes_own, state.own_at.clone())
+            };
+            if takes {
+                let file = at.unwrap_or_else(|| Self::own_file(folder, identity));
+                args.extend(["--own".to_string(), file.clone()]);
+                files.insert(
+                    file,
+                    serde_json::to_string(own).expect("JSON values are written as JSON"),
+                );
+            }
         }
         if let Some(session) = resume {
             args.extend(["--resume".to_string(), session.to_string()]);
@@ -443,6 +509,7 @@ impl Agent for FakeAgent {
                 confirm: "enter".into(),
             }),
             kind: Some("agent".into()),
+            files,
         }
     }
 
@@ -611,6 +678,21 @@ impl Agent for FakeAgent {
 
     fn withheld(&self) -> Vec<String> {
         lock(&self.state).withheld.clone()
+    }
+
+    fn reserved(&self) -> Vec<Reserved> {
+        lock(&self.state).reserved.clone()
+    }
+
+    /// Every entry where the fake is scripted to take own settings; a
+    /// non-empty one refused in the seam's default words otherwise (170,
+    /// 195).
+    fn own(&self, given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
+        if given.is_empty() || lock(&self.state).takes_own {
+            Ok(())
+        } else {
+            Err(NO_OWN.into())
+        }
     }
 
     fn stop_short(&self, _agent: &Identity) -> String {

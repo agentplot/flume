@@ -34,6 +34,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s66_the_hosts_table_over_the_repositorys,
         },
         Scenario {
+            name: "agent modes: the host's table for a stream gives its places' agents their mode from host-stream, over the kind's, and a place in another stream the kind's",
+            cites: &["32", "143", "162"],
+            run: a_streams_mode_over_the_kinds,
+        },
+        Scenario {
             name: "agent modes: the launch's mode for every stage comes before the kind's for a stage, and the kind's for a stage before its own for every stage",
             cites: &["32", "162"],
             run: a_stages_own_before_every_stages,
@@ -158,6 +163,7 @@ fn given(layer: Layer, value: &str) -> Option<Given> {
     Some(Given {
         layer,
         value: value.into(),
+        file: None,
     })
 }
 
@@ -269,6 +275,49 @@ fn s66_the_hosts_table_over_the_repositorys(_: &()) -> Outcome {
         given(Layer::HostKind, "edits"),
         "where the mode came from"
     );
+    Ok(())
+}
+
+fn a_streams_mode_over_the_kinds(_: &()) -> Outcome {
+    let world = World::new();
+    the_fakes_map(&world);
+    world.host.set_stream("watched", Some(Stream::default()));
+    world
+        .host
+        .set_stream_settings("watched", in_mode(Mode::Edits));
+    world.kinds.set_declaration(
+        "modes.toml",
+        vec![fix_kind(for_every_stage(in_mode(Mode::Full)))?],
+    );
+    for (name, stream, value, from) in [
+        (
+            "one",
+            Some("watched"),
+            "edit-files",
+            given(Layer::HostStream, "edits"),
+        ),
+        ("two", None, "all", given(Layer::Kind, "full")),
+    ] {
+        let mut fix = launch("fix", name, Some("mend it"));
+        fix.declaration = Some("modes.toml".into());
+        fix.stream = stream.map(str::to_string);
+        launched(&world.engine.launch(&fix))?;
+        let id = World::id("fix", name);
+        world.settle(&id);
+        ensure_eq!(
+            passed(&world, &World::identity("fix", name, "code", 1))?,
+            Some(value.to_string()),
+            format!("the value passed in {}", stream.unwrap_or("default"))
+        );
+        ensure_eq!(
+            mode_from(&world, &id)?,
+            from,
+            format!(
+                "where the mode came from in {}",
+                stream.unwrap_or("default")
+            )
+        );
+    }
     Ok(())
 }
 
