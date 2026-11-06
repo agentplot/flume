@@ -1302,27 +1302,54 @@ fn a_scripted_runs() {
         },
     );
     assert_eq!(
-        terminal.runs(Some("work")),
-        SessionRuns::Runs {
+        terminal.runs(&[Some("work")]),
+        vec![SessionRuns::Runs {
             name: "work".into()
-        }
+        }]
     );
     assert_eq!(
-        terminal.runs(Some("office")),
-        SessionRuns::NotRunning {
+        terminal.runs(&[Some("office")]),
+        vec![SessionRuns::NotRunning {
             name: "office".into()
-        }
+        }]
     );
     assert_eq!(terminal.log.of("runs"), vec!["runs work", "runs office"]);
     assert_eq!(terminal.log.count("open"), 0);
     assert_eq!(
-        terminal.runs(None),
-        SessionRuns::NotRunning { name: "own".into() }
+        terminal.runs(&[None]),
+        vec![SessionRuns::NotRunning { name: "own".into() }]
     );
     assert_eq!(
         terminal.log.calls(),
         vec!["runs work", "runs office", "runs own"]
     );
+}
+
+/// The seam-fakes spec's several parts in one runs: `work`, `office` and
+/// its own part asked in one call answer as each does alone, in that
+/// order, and the call is logged once (106, 201).
+#[test]
+fn several_parts_in_one_runs() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    terminal.runs_as(
+        "work",
+        SessionRuns::Runs {
+            name: "work".into(),
+        },
+    );
+    assert_eq!(
+        terminal.runs(&[Some("work"), Some("office"), None]),
+        vec![
+            SessionRuns::Runs {
+                name: "work".into()
+            },
+            SessionRuns::NotRunning {
+                name: "office".into()
+            },
+            SessionRuns::NotRunning { name: "own".into() },
+        ]
+    );
+    assert_eq!(terminal.log.calls(), vec!["runs work office own"]);
 }
 
 /// The seam-fakes spec's scripted window, the fakes' part of it: the
@@ -2091,6 +2118,50 @@ fn a_scripted_session() {
     assert_eq!(
         host.streams()["work"].session,
         None,
+        "read as it stands now"
+    );
+}
+
+/// The fake host's sessions for a stream's kinds and their stages, each
+/// table's other keys kept, as the test scripts them and as they stand
+/// when asked (199).
+#[test]
+fn a_streams_sessions_for_its_kinds_and_stages_are_scripted() {
+    let host = FakeHost::default();
+    let research = KindSessions {
+        session: Some("work-design".into()),
+        ..KindSessions::default()
+    };
+    let release = KindSessions {
+        stages: BTreeMap::from([(
+            "review".to_string(),
+            StageSession {
+                session: Some("work-design".into()),
+                unknown: vec![],
+            },
+        )]),
+        ..KindSessions::default()
+    };
+    let plan = KindSessions {
+        session: Some("work-plan".into()),
+        unknown: vec!["label".into()],
+        ..KindSessions::default()
+    };
+    host.set_kind_sessions("work", "research", Some(research.clone()));
+    host.set_kind_sessions("work", "release", Some(release.clone()));
+    host.set_kind_sessions("work", "plan", Some(plan.clone()));
+    assert_eq!(
+        host.streams()["work"].kinds,
+        BTreeMap::from([
+            ("plan".to_string(), plan),
+            ("release".to_string(), release),
+            ("research".to_string(), research),
+        ])
+    );
+    assert_eq!(host.streams()["work"].session, None, "work's own unnamed");
+    host.set_kind_sessions("work", "plan", None);
+    assert!(
+        !host.streams()["work"].kinds.contains_key("plan"),
         "read as it stands now"
     );
 }

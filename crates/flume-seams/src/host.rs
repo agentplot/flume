@@ -18,13 +18,14 @@ pub const DEFAULT_STREAM: &str = "default";
 /// it; its priority among streams, zero where it gives none; the pool
 /// its agents' accounts come from, none where the host's own pool stands;
 /// the terminal session its agents open in, none where it names none and
-/// its name, or the terminal's own for the default stream, stands; its
-/// labels' shares of its agents, by label, none where it states none; the
-/// terminal profile its agents run in, the view a person is shown them in
-/// and the window's profile, each none where it names none and the host's
-/// stands (`Host::display_for`); and the title a window on its part of
-/// the terminal carries, none where it gives none and its name stands
-/// (107, 143, 144, 181, 186, 190, C.7).
+/// its name, or the terminal's own for the default stream, stands; the
+/// sessions it names for kinds and their stages, by the kind's name, none
+/// where it names none; its labels' shares of its agents, by label, none
+/// where it states none; the terminal profile its agents run in, the view
+/// a person is shown them in and the window's profile, each none where it
+/// names none and the host's stands (`Host::display_for`); and the title
+/// a window on its part of the terminal carries, none where it gives none
+/// and its name stands (107, 143, 144, 181, 186, 190, 199, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -36,6 +37,8 @@ pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub kinds: BTreeMap<String, KindSessions>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub labels: BTreeMap<String, Share>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub multiplexer: Option<String>,
@@ -45,6 +48,64 @@ pub struct Stream {
     pub terminal_app: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+}
+
+/// A stream's table for a kind, `[streams.<stream>.kinds.<kind>]`: the
+/// session the kind's agents open in, none where it names none; its
+/// stages' tables, by the stage's name in the kind, none where it gives
+/// none; and each other key it holds, which refuses every start that
+/// reads it rather than the configuration (199, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KindSessions {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub stages: BTreeMap<String, StageSession>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unknown: Vec<String>,
+}
+
+/// A stream's table for one stage of a kind,
+/// `[streams.<stream>.kinds.<kind>.stages.<stage>]`: the session that
+/// stage's agents open in, none where it names none, and each other key
+/// it holds, which refuses every start that reads it (199, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StageSession {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unknown: Vec<String>,
+}
+
+/// A session a stream names for its kinds and their stages, by its name:
+/// each kind it names it for, and each stage as `<kind>.<stage>`, with
+/// the layer its `session` came from, none of either where it names it
+/// for none (56, 199, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedSession {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kinds: Vec<NamedFor>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stages: Vec<NamedFor>,
+}
+
+/// A kind, or a kind's stage as `<kind>.<stage>`, a session is named
+/// for, and the layer of the configuration that names it (56, 199, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedFor {
+    pub name: String,
+    pub layer: ConfigLayer,
+}
+
+/// A fault of a stream's table for a kind or a stage, by the table's
+/// dotted key, `streams.work.kinds.research`, and the refusal it causes
+/// every start that reads it: another key it holds, or a session that is
+/// another stream's (4, 56, 199).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableFault {
+    pub table: String,
+    pub refused: String,
 }
 
 /// How a person is shown a stream's agents: in a window a terminal app

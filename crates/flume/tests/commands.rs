@@ -1844,7 +1844,51 @@ fn the_list_through_the_command_line_and_the_core() {
         BuiltIn::with_login(&[("HOME", &host.home().to_string_lossy())]),
     )
     .expect("the core over the same state");
-    assert_eq!(ran.answer(), core.list());
+    assert_eq!(ran.answer(), core.list(false));
+    let ran = host.flume(&repository.dir, &["list", "--all", "--json"], &[]);
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    assert_eq!(ran.answer(), core.list(true));
+}
+
+#[test]
+fn a_dropped_place_is_listed_only_with_all() {
+    // 63, 200: a place that landed or was dropped has nothing left to
+    // open, so `flume list` leaves it out and `flume list --all` gives
+    // it, the live fix in both.
+    let (host, _, place) = one_unstarted_fix("list-all");
+    let mut dropped = held_of(&host, &place).state;
+    dropped.place.name = "gone".into();
+    dropped.place.branch = "fix/gone".into();
+    dropped.place.location = format!("{}/places/fix--gone", dropped.place.repository);
+    dropped.place.id = PlaceId::new(dropped.place.location.clone());
+    dropped.phase = Phase::Over {
+        over: Over::Dropped,
+        kept: None,
+    };
+    let written = StateDir::at(host.state()).write(&dropped.place.id, None, Some(&dropped));
+    assert!(
+        matches!(written, Written::Written { .. }),
+        "fix--gone written: {written:?}"
+    );
+    let names = |args: &[&str]| -> Vec<String> {
+        let ran = host.flume(&outside(&host, "elsewhere"), args, &[]);
+        assert_eq!(ran.code, 0, "{}", ran.text);
+        let Answer::List { places, .. } = ran.answer() else {
+            panic!("the list's answer: {}", ran.text);
+        };
+        places.into_iter().map(|place| place.line).collect()
+    };
+    assert_eq!(
+        names(&["list", "--json"]),
+        vec!["fix--one · code · starting".to_string()]
+    );
+    assert_eq!(
+        names(&["list", "--all", "--json"]),
+        vec![
+            "fix--gone · dropped".to_string(),
+            "fix--one · code · starting".to_string(),
+        ]
+    );
 }
 
 #[test]
@@ -1953,7 +1997,9 @@ fn the_lists_help_names_status_for_a_places_every_fact() {
     for said in [
         "A line for each place on the host and each stream it declares",
         "reading only what flume keeps",
+        "a place that landed or was dropped left out unless `--all` is given",
         "`flume status <place>` gives a place's every fact",
+        "--all Every place, those that landed or were dropped among them",
     ] {
         assert!(
             words.contains(said),
@@ -3102,6 +3148,50 @@ fn open_of_an_undeclared_stream() {
         ran.text.starts_with("refused: ") && ran.text.contains("nightly"),
         "{}",
         ran.text
+    );
+}
+
+#[test]
+fn a_name_no_streams_word_gives() {
+    // 186, 199: a name that is no session a stream's word gives is
+    // refused naming it and each stream's sessions, its own and the one
+    // it names for a kind, before the terminal is asked anything.
+    let host = Host::new("open-no-session");
+    host.configure(
+        "[host]\nmultiplexer = \"printed\"\n\
+         [streams.work]\nagents = 1\n\
+         [streams.work.kinds.research]\nsession = \"work-design\"\n",
+    );
+    let ran = host.flume(&host.home(), &["open", "nightly", "--json"], &[]);
+    assert_ne!(ran.code, 0, "{}", ran.text);
+    let reason = ran
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .unwrap_or_else(|| panic!("open answered {}", ran.text));
+    assert!(
+        reason.contains("no stream's word gives a session nightly")
+            && reason.contains("the stream work gives work and work-design"),
+        "{reason}"
+    );
+    let person = host.flume(&host.home(), &["open", "nightly"], &[]);
+    assert_ne!(person.code, 0, "{}", person.text);
+    assert!(
+        person.text.starts_with("refused: ")
+            && person.text.contains("nightly")
+            && person.text.contains("work-design"),
+        "{}",
+        person.text
+    );
+    let help = host.flume(&host.home(), &["open", "--help"], &[]);
+    assert_eq!(help.code, 0, "{}", help.text);
+    assert!(
+        help.text.contains("A session's name")
+            && help
+                .text
+                .contains("one a stream names for a kind or a stage"),
+        "{}",
+        help.text
     );
 }
 

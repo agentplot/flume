@@ -63,10 +63,15 @@ enum Command {
         line: bool,
     },
     /// A line for each place on the host and each stream it declares,
-    /// reading only what flume keeps; `flume status <place>` gives a
+    /// reading only what flume keeps, a place that landed or was dropped
+    /// left out unless `--all` is given; `flume status <place>` gives a
     /// place's every fact. Needs no repository and settles nothing (57,
     /// 200).
-    List,
+    List {
+        /// Every place, those that landed or were dropped among them.
+        #[arg(long)]
+        all: bool,
+    },
     /// The exact prompt a stage would be sent at its next start (29).
     Prompt { place: String, stage: String },
     /// Hand the place's agent words as a prompt (53 to 55).
@@ -200,14 +205,20 @@ enum Command {
         /// The role's address, `<partition>/<role>`.
         address: String,
     },
-    /// Show a stream's agents in its view: a window of its terminal app
-    /// running its multiplexer's attach for its session, titled as the
-    /// stream declares, else its name; or the multiplexer's own app; or
-    /// the line to run where no terminal app opens a window. Needs no
-    /// repository; each asking opens a window of its own (186).
+    /// Show a session of a stream's terminal in the stream's view, by the
+    /// session's name, never a stream's: a window of the stream's
+    /// terminal app running its multiplexer's attach for the session,
+    /// titled as the stream declares, else the stream's name, for the
+    /// stream's own session, and by the session's name for one the stream
+    /// names for a kind or a stage; or the multiplexer's own app; or the
+    /// line to run where no terminal app opens a window. Needs no
+    /// repository; each asking opens a window of its own (186, 199).
     Open {
-        /// A stream the host declares; `default` where none is named.
-        stream: Option<String>,
+        /// A session's name: a stream's own, the one the stream's
+        /// `session` names, else the stream's name, or one a stream names
+        /// for a kind or a stage; the default stream's own where none is
+        /// named.
+        session: Option<String>,
     },
     /// flume's status over MCP on standard input and output, one tool,
     /// `status`, settling nothing (57, 60).
@@ -475,7 +486,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 core.status(place.as_ref())
             }
         }
-        Command::List => build()?.list(),
+        Command::List { all } => build()?.list(*all),
         Command::Prompt { place, stage } => {
             let place = named(place)?;
             build()?.prompt(&place, stage)
@@ -590,7 +601,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 hash: hash.clone(),
             })
         }
-        Command::Open { stream } => build()?.open_stream(stream.as_deref()),
+        Command::Open { session } => build()?.open_session(session.as_deref()),
         Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
             unreachable!("answered before the core's acts")
         }

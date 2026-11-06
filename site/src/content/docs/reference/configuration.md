@@ -21,11 +21,11 @@ start ([two layers](/flume/guides/agent-settings/#two-layers)):
   read makes every command refuse, naming its fault.
 - `config.local.toml`, the local layer, read over the managed one key
   by key. It sets only a stream's `agents`, `priority`, `session` and
-  `multiplexer`, a label's `reserve` and `keep_free`, the `stream` and
-  `label` of a repository's kind, a repository or a kind, and every
-  agents table. Each of a program's own settings and each program's
-  `file` is a key of its own there. A local file that sets any other
-  key, or that
+  `multiplexer`, the `session` it names for a kind or a kind's stage, a
+  label's `reserve` and `keep_free`, the `stream` and `label` of a
+  repository's kind, a repository or a kind, and every agents table.
+  Each of a program's own settings and each program's `file` is a key
+  of its own there. A local file that sets any other key, or that
   flume cannot read, is not taken at all, and status names each key or
   the fault.
 
@@ -40,6 +40,9 @@ pool = "work"
 
 [streams.work]
 title = "Work Agents"
+
+[streams.work.kinds.research]
+session = "work-design"
 
 [streams.personal]
 agents = 3
@@ -109,14 +112,15 @@ for; a `[streams.default]` table gives it keys of its own.
 | `agents` | a whole number above 0 | the bound on the stream's agents running at once, within the host's | the host's bound alone |
 | `priority` | a whole number, negative allowed | the stream's priority: waiting stages start by it first, then by their place's | `0` |
 | `pool` | a pool's name | the pool its places' agents take accounts from | `[host] pool` |
-| `session` | a string herdr takes as a session's name | the herdr session its agents open in ([a stream's session](/flume/guides/agent-settings/#a-streams-session)) | the stream's own name, and flume's own session for `default` |
+| `session` | a string herdr takes as a session's name | the herdr session its agents open in, but those of a kind or a stage it names another for ([a stream's sessions](/flume/guides/agent-settings/#a-streams-sessions)) | the stream's own name, and flume's own session for `default` |
 | `multiplexer` | `"herdr"`, `"printed"` | the multiplexer its agents run in, read at each start; an agent stays in the one it opened in ([a stream's multiplexer](/flume/guides/agent-settings/#a-streams-multiplexer-and-view)) | `[host] multiplexer` |
 | `view` | `"terminal"`, `"app"` | how `flume open` shows its agents | `[host] view` |
 | `terminal_app` | `"ghostty"`, `"terminal"`, `"printed"` | the program that opens its window | `[host] terminal_app` |
 | `title` | a string | its window's title, which a window manager can file the window by | the stream's name |
 
 The local layer may set a stream's `agents`, `priority`, `session` and
-`multiplexer`, so you can try a multiplexer on one stream of your host.
+`multiplexer`, and the `session` of its tables for its kinds and their
+stages, so you can try a multiplexer on one stream of your host.
 Its `pool`, `view`, `terminal_app` and `title` are the managed layer's.
 A stream whose `multiplexer` names no terminal profile flume carries
 refuses each launch and each start on it, naming the stream, the name
@@ -133,6 +137,39 @@ only where it states `agents`.
 |---|---|---|---|
 | `reserve` | a whole number from 0 | the stream's agents owed to the label: while it runs fewer, its stages start before the stream's others | `0` |
 | `keep_free` | a whole number from 0, no more than `reserve` | the stream's slots kept free for the label while it runs fewer agents than that | `0` |
+
+### `[streams.<stream>.kinds.<kind>]`
+
+The session the stream opens one kind's agents in, beside its own
+([a stream's sessions](/flume/guides/agent-settings/#a-streams-sessions)).
+The kind is named as `[kinds.<kind>]` names it, whatever source and
+version it resolves to.
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `session` | a string herdr takes as a session's name | the session the kind's agents open in, every stage of the kind but one its own table names | the stream's own |
+| `stages` | a table of tables, one for each stage by its name in the kind | the sessions of the kind's stages | none |
+
+### `[streams.<stream>.kinds.<kind>.stages.<stage>]`
+
+| Key | Values | Meaning | Left out |
+|---|---|---|---|
+| `session` | a string herdr takes as a session's name | the session that stage's agents open in | the kind's, else the stream's own |
+
+```toml
+[streams.work.kinds.research]
+session = "work-design"
+
+[streams.work.kinds.release.stages.review]
+session = "work-review"
+```
+
+Each table is read at each start of its kind's or its stage's agents,
+and a table for a kind or a stage the place does not run is ignored. A
+session a stream names here is that stream's alone. The local layer
+may set each `session`, as `streams.work.kinds.research.session` and
+`streams.work.kinds.release.stages.review.session`. The managed layer
+may pin either, or a table holding them, as `"streams.work.kinds"`.
 
 ### `[pools.<pool>]`
 
@@ -301,7 +338,9 @@ flume refuses the file, naming the key, for:
   such keys;
 - a `[host]` giving both `terminal` and `multiplexer`;
 - a `view` other than `terminal` and `app`;
-- a `multiplexer`, `terminal_app` or `title` that is not a string.
+- a `multiplexer`, `terminal_app` or `title` that is not a string;
+- a `session` in a stream's table for a kind or a stage that is not a
+  string, or a kind's `stages` that is not a table of tables.
 
 A managed file that refuses leaves every launch and every start
 refused, naming its fault, until it is mended. A local file that would
@@ -321,6 +360,14 @@ why. They refuse where their reserves together pass the stream's
 `agents`, where a label keeps more free than its reserve, and where a
 label's table holds another key, such as a `pool`. A stage so refused
 waits for a retry once the file is mended.
+
+A stream's table for a kind or a stage refuses each start that reads
+it, and no other, where it holds any key but `session` and a kind's
+`stages`, naming the key, and where the session it names is one another
+stream's agents open in by that stream's word, its own or one it names
+for a kind or a stage, naming both streams. A stage so refused waits
+for a retry once the file is mended, and status gives each such table
+with its refusal.
 
 ### `[roles."<group>/<role>"]`
 
