@@ -49,12 +49,13 @@
 //! tab in every session it made one in, and its base's workspace in each
 //! once no tab of a live place and no pane flume did not open is in it,
 //! keeping and naming either where a pane flume did not open stands
-//! (137, 138). show titles the agent's pane with its stage and state and
-//! gives each of the base's workspaces, in every session, its count as
-//! the token `flume` (139), and says where it shows them, the place's
-//! tab and its base's workspace on its live agent's server, its agent's
-//! pane, and each of the base's workspaces, each as `herdr:<id>@<socket>`
-//! from its records, for flume's herdr plugin to refresh them (C.5).
+//! (137, 138). show titles the agent's pane with its stage and state,
+//! gives it the short form of its place's line as the token `flume`, the
+//! row herdr's sidebar shows, and gives each of the base's workspaces, in
+//! every session, its count as the token `flume` (139); it says where it
+//! shows them, the place's tab and its base's workspace on its live
+//! agent's server, its agent's pane, and each of the base's workspaces,
+//! each as `herdr:<id>@<socket>` from its records, for status (C.5).
 //! attach gives a window `<herdr> session attach <name>`, the session's
 //! server found or started headless first, `<herdr>` the full path of the
 //! herdr the profile's calls run, and `XDG_CONFIG_HOME` where they run
@@ -2147,6 +2148,7 @@ impl Terminal for Herdr {
         if let Some(agent) = &clues.agent {
             if let Found::At(pane) = self.found(agent) {
                 let title = format!("{} · {}", clues.stage, clues.state);
+                let row = format!("flume={}", clues.line);
                 match self.answered(
                     &pane.socket,
                     &[
@@ -2159,6 +2161,8 @@ impl Terminal for Herdr {
                         &title,
                         "--display-agent",
                         &agent.place,
+                        "--token",
+                        &row,
                     ],
                 ) {
                     Ok(_) => shown = true,

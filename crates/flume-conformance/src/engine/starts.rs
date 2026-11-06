@@ -51,6 +51,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s49_clues_follow_the_stage,
         },
         Scenario {
+            name: "clues: a change place's code stage working while its change's ticked tasks go from 2 of 5 to 3 is shown once more, its line's short form ending `tasks 3/5 · working`, and not again at a settle that changes nothing",
+            cites: &["139", "142", "56", "57"],
+            run: the_line_alone_changes,
+        },
+        Scenario {
             name: "identity: an agent's identity names its repository by the id of its common git directory",
             cites: &["33", "29"],
             run: the_identity_names_the_repository_by_its_id,
@@ -766,6 +771,60 @@ fn s49_clues_follow_the_stage(_: &()) -> Outcome {
         world.stage_state(&id, "code"),
         Some(StageState::Begun),
         "the stage after a clue failed"
+    );
+    Ok(())
+}
+
+/// The stage-runs spec's "The line alone changes": a change place's code
+/// stage keeps working while the change at its head goes from 2 tasks
+/// ticked of 5 to 3, a settle at each; show is called once more, its
+/// title the same and its line's short form ending `tasks 3/5 ·
+/// working`, and not again at a settle that changes nothing (139).
+fn the_line_alone_changes(_: &()) -> Outcome {
+    const FIVE: &[(&str, &str, usize)] = &[("1", "One", 4), ("2", "Two", 1)];
+    let world = World::new();
+    let id = super::place_line::code_of_change(&world, "parser", FIVE)?;
+    let code = World::identity("change", "parser", "code", 1);
+    world.terminal.set_state(&code, AgentState::Working);
+    world.tick_groups("change/parser", "parser", FIVE, 2);
+    world.settle(&id);
+    let (_, two) = world.terminal.shown().pop().ok_or("nothing shown")?;
+    ensure_eq!(
+        (two.stage.as_str(), two.state.as_str(), two.line.as_str()),
+        (
+            "code 1/2",
+            "working",
+            "code 1/2 · run 1 · tasks 2/5 · working"
+        ),
+        "the clues at 2 of 5"
+    );
+    let shown = world.terminal.shown().len();
+    world.tick_groups("change/parser", "parser", FIVE, 3);
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.shown().len(),
+        shown + 1,
+        "shows once the line changed"
+    );
+    let (_, three) = world.terminal.shown().pop().ok_or("nothing shown")?;
+    ensure_eq!(
+        (
+            three.stage.as_str(),
+            three.state.as_str(),
+            three.line.as_str()
+        ),
+        (
+            "code 1/2",
+            "working",
+            "code 1/2 · run 1 · tasks 3/5 · working"
+        ),
+        "the clues at 3 of 5"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        world.terminal.shown().len(),
+        shown + 1,
+        "shows after a settle that changed nothing"
     );
     Ok(())
 }

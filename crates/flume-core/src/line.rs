@@ -64,7 +64,7 @@ impl Engine {
     /// and the place is live, and the live agent's asking mark from its
     /// profile; no terminal operation, no merge-queue operation and no
     /// host reading (57, 58, 90).
-    fn line_of(&self, held: &HeldState, identity: Option<&Identity>) -> PlaceLine {
+    pub(crate) fn line_of(&self, held: &HeldState, identity: Option<&Identity>) -> PlaceLine {
         let change = match held.phase {
             Phase::Live => self.change_at_head(held),
             _ => None,

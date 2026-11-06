@@ -3315,7 +3315,19 @@ fn the_terminal_seams_answers() {
             waiting_on_caller: 1,
             stalled: 0,
         },
+        line: "code 1/2 · run 1 · tasks 2/5 · working".into(),
     });
+    assert_eq!(
+        serde_json::from_value::<Clues>(serde_json::json!({
+            "stage": "code",
+            "state": "working",
+            "base": BaseCount::default(),
+        }))
+        .unwrap()
+        .line,
+        "",
+        "clues written before the line"
+    );
     assert_eq!(
         BaseCount {
             running: 3,

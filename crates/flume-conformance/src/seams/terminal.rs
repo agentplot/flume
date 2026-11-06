@@ -544,6 +544,7 @@ fn show_gives_clues<H: TerminalHarness>(harness: &H) -> Outcome {
             running: 1,
             ..BaseCount::default()
         },
+        line: "code · run 1 · tasks 2/5 · working".into(),
     };
     let shown = harness.seam().show(&harness.place(), &clues);
     if harness.shows_clues() {

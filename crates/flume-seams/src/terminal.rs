@@ -155,8 +155,10 @@ impl std::fmt::Display for BaseCount {
 }
 
 /// The clues show gives a terminal for a place: its current stage, that
-/// stage's state as a word, the agent the stage runs if one is live, and
-/// the count of the places on its base (139).
+/// stage's state as a word, the agent the stage runs if one is live, the
+/// count of the places on its base, and the short form of the place's
+/// line, `code 1/2 · run 1 · tasks 2/5 · working`, which a terminal shows
+/// beside the agent; none in clues written before (139).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Clues {
     pub stage: String,
@@ -164,6 +166,8 @@ pub struct Clues {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<crate::Identity>,
     pub base: BaseCount,
+    #[serde(default)]
+    pub line: String,
 }
 
 /// show: the clues shown, the terminal showing none, or a failure, which
@@ -182,8 +186,8 @@ pub enum Shown {
 /// none where it holds none; and each thing that holds the places of its
 /// repository on its base, one for each of the terminal's sessions that
 /// has one, none where it holds none and in an answer written before.
-/// Status gives them so a plugin of the terminal's refreshes the clues
-/// show gives, copying status (107, 139, C.5).
+/// Status gives them; the settle alone shows the clues, and a plugin of
+/// the terminal's copies none (107, 139, C.5).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShownAt {
     #[serde(default)]

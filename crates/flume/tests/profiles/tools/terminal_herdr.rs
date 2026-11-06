@@ -1579,6 +1579,7 @@ fn s49_titles_follow_the_stage_and_a_clue_that_fails_fails_nothing() {
             running: 1,
             ..BaseCount::default()
         },
+        line: format!("code · run 1 · {state}"),
     };
     for state in ["starting", "waiting", "working", "asking"] {
         assert_eq!(profile.show(&place, &clues(state)), Shown::Shown, "{state}");
@@ -1589,6 +1590,11 @@ fn s49_titles_follow_the_stage_and_a_clue_that_fails_fails_nothing() {
             "the pane's title"
         );
         assert_eq!(got["pane"]["display_agent"].as_str(), Some("fix--one"));
+        assert_eq!(
+            got["pane"]["tokens"]["flume"].as_str(),
+            Some(format!("code · run 1 · {state}").as_str()),
+            "the pane's row, {got}"
+        );
     }
     let (workspace, _) = profile.workspace(&place).expect("the workspace");
     let got = server.herdr(&["workspace", "get", &workspace]);

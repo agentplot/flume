@@ -723,7 +723,10 @@ impl Terminal for FakeTerminal {
     }
 
     fn show(&self, place: &PlaceRef, clues: &Clues) -> Shown {
-        self.log.push(format!("show {}", place.location));
+        self.log.push(format!(
+            "show {} {} · {}; {}; {}",
+            place.location, clues.stage, clues.state, clues.line, clues.base
+        ));
         let mut state = lock(&self.state);
         if state.shows_fail {
             return Shown::Failed {

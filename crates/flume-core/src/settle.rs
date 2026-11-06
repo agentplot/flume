@@ -176,11 +176,12 @@ impl Engine {
 
     /// Shows the place's clues where they changed since last shown: its
     /// current stage, a repeating one with its group's place, and that
-    /// stage's state, and the count of the places
-    /// of its repository on its base, in the place's terminal (190). A
-    /// clue is display only: one that
-    /// fails is logged and fails nothing, and nothing reads one back
-    /// (139).
+    /// stage's state, the short form of the place's line, read from its
+    /// held state, the change at its head and its agent's asking mark as
+    /// `flume status --line` reads them (57, 142), and the count of the
+    /// places of its repository on its base, in the place's terminal
+    /// (190). A clue is display only: one that fails is logged and fails
+    /// nothing, and nothing reads one back (139).
     fn show(&self, id: &PlaceId) {
         let Some(read) = self.store.read(id) else {
             return;
@@ -191,8 +192,12 @@ impl Engine {
             return;
         };
         clues.base = self.base_count(&held.place);
+        clues.line = self.line_of(&held, None).short;
         let place = &held.place;
-        let key = format!("{} · {}; {}", clues.stage, clues.state, clues.base);
+        let key = format!(
+            "{} · {}; {}; {}",
+            clues.stage, clues.state, clues.line, clues.base
+        );
         if held.shown.as_ref() == Some(&key) {
             return;
         }

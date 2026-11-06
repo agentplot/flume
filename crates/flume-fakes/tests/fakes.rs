@@ -2446,3 +2446,34 @@ fn the_hosts_labels_shares_and_layers_are_scripted() {
     assert_eq!(host.configuration(), configuration);
     assert_eq!(host.log.count("configuration"), 3);
 }
+
+#[test]
+fn shows_clues_in_the_log() {
+    // The seam-fakes spec's "Show's clues in the log": the fake terminal
+    // logs the place, its stage and state, its line's short form and its
+    // base's count, and keeps the clues as given (139).
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let clues = Clues {
+        stage: "code 1/2".into(),
+        state: "working".into(),
+        agent: Some(identity("code", 1)),
+        base: BaseCount {
+            running: 1,
+            ..BaseCount::default()
+        },
+        line: "code 1/2 · run 1 · tasks 2/5 · working".into(),
+    };
+    assert_eq!(terminal.show(&place_ref(), &clues), Shown::Shown);
+    assert_eq!(
+        terminal.log.of("show"),
+        vec![
+            "show /r/places/fix--one code 1/2 · working; code 1/2 · run 1 · tasks 2/5 · working; \
+             1 running · 0 asking · 0 waiting on caller · 0 stalled"
+                .to_string()
+        ]
+    );
+    assert_eq!(
+        terminal.shown(),
+        vec![("/r/places/fix--one".to_string(), clues)]
+    );
+}
