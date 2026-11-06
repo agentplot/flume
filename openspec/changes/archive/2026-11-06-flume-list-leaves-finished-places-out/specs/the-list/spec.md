@@ -48,9 +48,8 @@ still stands, `kept by <step>` for the step its teardown failed at,
 lock` for what it holds, `kept while its agent runs`, or `kept unread`;
 `being tidied` for a place removed whose branch and document are still
 to go; `tidied` for a tidied place's document kept for its ends; and
-nothing for a place whose tidy has not yet run; a place that landed or
-was dropped giving its line only where every place is asked (62, 63, 64
-to 66, 68, 200).
+nothing for a place whose tidy has not yet run (62, 63, 64 to 66, 68,
+200).
 
 #### Scenario: A teardown that failed
 
