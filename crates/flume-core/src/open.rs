@@ -42,7 +42,7 @@ impl Engine {
             session: declared.session.clone(),
             ..StreamRoom::default()
         }
-        .session(name);
+        .own_session(name);
         let opened = |title, terminal_app, command, window| {
             Answer::Opened(StreamOpened {
                 stream: name.to_string(),

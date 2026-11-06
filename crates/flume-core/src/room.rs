@@ -62,16 +62,18 @@ pub(crate) struct Queue {
 }
 
 /// A stream's agents running, its bound, its priority among streams, the
-/// session it names, its labels' shares, whether their reserves are held,
-/// and why its labels refuse its starts (107, 143, 181, 182); a stream a
-/// live place runs in that the host's configuration no longer declares
-/// states no bound, ranks at zero, names no session and has no labels.
+/// session it names, the sessions it names for kinds and their stages,
+/// its labels' shares, whether their reserves are held, and why its
+/// labels refuse its starts (107, 143, 181, 182, 199); a stream a live
+/// place runs in that the host's configuration no longer declares states
+/// no bound, ranks at zero, names no session and has no labels.
 #[derive(Clone, Default)]
 pub(crate) struct StreamRoom {
     pub running: u32,
     pub bound: Option<u32>,
     pub priority: i64,
     pub session: Option<String>,
+    pub kinds: BTreeMap<String, KindSessions>,
     pub labels: BTreeMap<String, LabelRoom>,
     /// Its labels' reserves and the slots they keep free are held: it
     /// states a bound and its labels are at no fault (70, 181).
@@ -114,6 +116,7 @@ impl StreamRoom {
             bound: stream.agents,
             priority: stream.priority,
             session: stream.session,
+            kinds: stream.kinds,
             labels: stream
                 .labels
                 .into_iter()
@@ -176,11 +179,10 @@ impl StreamRoom {
         }
     }
 
-    /// The session the agents of the stream `name` open in where their
-    /// launch names none: the one it names, else the one named by its
-    /// name, and, for the host's default stream naming none, the
-    /// terminal's own (107, 143).
-    pub fn session(&self, name: &str) -> SessionHeld {
+    /// The stream `name`'s own session: the one it names, else the one
+    /// named by its name, and, for the host's default stream naming none,
+    /// the terminal's own (107, 143).
+    pub fn own_session(&self, name: &str) -> SessionHeld {
         match (&self.session, name) {
             (Some(session), _) => SessionHeld {
                 name: Some(session.clone()),
@@ -195,6 +197,114 @@ impl StreamRoom {
                 from: SessionFrom::StreamName,
             },
         }
+    }
+
+    /// The session a stage `stage` of the kind `kind` opens in, in the
+    /// stream `name`, where its launch names none: the one the stream
+    /// names for the kind's stage, else for the kind, else its own (107,
+    /// 199). Refused naming the table and the key where the stream's table
+    /// for the kind, or for the stage, holds another key, and naming both
+    /// streams where the session it names is one another stream of
+    /// `others` gives by its word (4, 182, 199). A table for a kind or a
+    /// stage the place does not run is never read.
+    pub fn session_for(
+        &self,
+        name: &str,
+        kind: &str,
+        stage: &str,
+        others: &BTreeMap<String, StreamRoom>,
+    ) -> Result<SessionHeld, String> {
+        let Some(table) = self.kinds.get(kind) else {
+            return Ok(self.own_session(name));
+        };
+        let kind_at = format!("streams.{name}.kinds.{kind}");
+        if let Some(key) = table.unknown.first() {
+            return Err(format!(
+                "{kind_at}.{key}: a stream's table for a kind holds the session its agents open \
+                 in and its stages' tables alone"
+            ));
+        }
+        let staged = table.stages.get(stage);
+        let stage_at = format!("{kind_at}.stages.{stage}");
+        if let Some(key) = staged.and_then(|staged| staged.unknown.first()) {
+            return Err(format!(
+                "{stage_at}.{key}: a stream's table for a kind's stage holds the session its \
+                 agents open in alone"
+            ));
+        }
+        let (session, from, at, named_for) = match (
+            staged.and_then(|staged| staged.session.as_ref()),
+            &table.session,
+        ) {
+            (Some(session), _) => (
+                session,
+                SessionFrom::StreamStage,
+                stage_at,
+                format!("the stage {kind}.{stage}"),
+            ),
+            (None, Some(session)) => (
+                session,
+                SessionFrom::StreamKind,
+                kind_at,
+                format!("the kind {kind}"),
+            ),
+            (None, None) => return Ok(self.own_session(name)),
+        };
+        let theirs = others
+            .iter()
+            .filter(|(other, _)| other.as_str() != name)
+            .find_map(|(other, room)| {
+                room.words(other)
+                    .into_iter()
+                    .find(|(named, _)| named == session)
+                    .map(|(_, word)| (other, word))
+            });
+        if let Some((other, word)) = theirs {
+            return Err(format!(
+                "{at}.session: the session {session} the stream {name} names for {named_for} is \
+                 the stream {other}'s, {word}, and a session a stream names for a kind or a stage \
+                 is that stream's alone"
+            ));
+        }
+        Ok(SessionHeld {
+            name: Some(session.clone()),
+            from,
+        })
+    }
+
+    /// Each session the stream `name`'s agents open in by its word, with
+    /// how it gives it: its own, by its name where it names none, and
+    /// each it names for a kind or a kind's stage (107, 199).
+    fn words(&self, name: &str) -> Vec<(String, String)> {
+        let own = self.own_session(name);
+        let mut words: Vec<(String, String)> = own
+            .name
+            .map(|session| {
+                let word = match own.from {
+                    SessionFrom::Stream => "its own session",
+                    _ => "its own session, by its name",
+                };
+                (session, word.to_string())
+            })
+            .into_iter()
+            .collect();
+        for (kind, table) in &self.kinds {
+            if let Some(session) = &table.session {
+                words.push((
+                    session.clone(),
+                    format!("the session it names for the kind {kind}"),
+                ));
+            }
+            for (stage, staged) in &table.stages {
+                if let Some(session) = &staged.session {
+                    words.push((
+                        session.clone(),
+                        format!("the session it names for the stage {kind}.{stage}"),
+                    ));
+                }
+            }
+        }
+        words
     }
 }
 
@@ -301,6 +411,9 @@ pub(crate) struct Waiting {
     pub order: u64,
     pub since: Option<Seconds>,
     pub words: Option<String>,
+    /// Whether its stream's word for where its kind or its stage opens
+    /// refuses it (4, 199).
+    pub session_refused: bool,
 }
 
 impl Waiting {
@@ -311,12 +424,13 @@ impl Waiting {
 
     /// Whether the room its claim would refuse it for has no bearing: its
     /// pool holds an account of its program, its stream's labels are at
-    /// no fault and its stream's multiplexer runs agents (4, 145, 182,
-    /// 190).
+    /// no fault, its stream's word for where it opens refuses it not and
+    /// its stream's multiplexer runs agents (4, 145, 182, 190, 199).
     fn runs(&self, queue: &Queue) -> bool {
         let stream = queue.stream(&self.stream);
         queue.runs(&self.stream, self.program.as_deref())
             && stream.fault.is_none()
+            && !self.session_refused
             && stream.uncarried.is_none()
     }
 
@@ -338,21 +452,33 @@ impl Queue {
         self.streams.get(name).cloned().unwrap_or_default()
     }
 
-    /// Where a stage of `stream` with `settings` opens: none beside the
-    /// pane its settings name, else the session its launch names, else
-    /// its stream's as the host's configuration stands now (32, 107,
-    /// 143).
-    pub fn session_of(&self, stream: &str, settings: &Settings) -> Option<SessionHeld> {
+    /// Where the stage `stage` of the kind `kind` in `stream` with
+    /// `settings` opens: none beside the pane its settings name, else the
+    /// session its launch names, else the one its stream names for the
+    /// kind's stage, else for the kind, else the stream's own, as the
+    /// host's configuration stands now (32, 107, 143, 199); refused where
+    /// the stream's word for the kind or the stage that it reads is at
+    /// fault (4, 199).
+    pub fn session_of(
+        &self,
+        stream: &str,
+        kind: &str,
+        stage: &str,
+        settings: &Settings,
+    ) -> Result<Option<SessionHeld>, String> {
         if settings.beside.is_some() {
-            return None;
+            return Ok(None);
         }
-        Some(match &settings.session {
-            Some(name) => SessionHeld {
+        match &settings.session {
+            Some(name) => Ok(Some(SessionHeld {
                 name: Some(name.clone()),
                 from: SessionFrom::Launch,
-            },
-            None => self.stream(stream).session(stream),
-        })
+            })),
+            None => self
+                .stream(stream)
+                .session_for(stream, kind, stage, &self.streams)
+                .map(Some),
+        }
     }
 
     /// The pool a stage of `stream` takes its account from, none where
@@ -634,39 +760,6 @@ impl Engine {
                 },
             );
         }
-        let waiting: Vec<Waiting> = every
-            .iter()
-            .map(|read| &read.state)
-            .filter(|held| matches!(held.phase, Phase::Live | Phase::Making { .. }))
-            .flat_map(|held| {
-                let stream = held.place.stream.name.clone();
-                let stream_priority = streams.get(&stream).map_or(0, |of| of.priority);
-                held.stages
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, stage)| stage.state == StageState::WaitingForRoom)
-                    .map(move |(index, stage)| {
-                        let room = stage.room.clone().unwrap_or_default();
-                        let program = self
-                            .resolve(&held.place, &held.place.kind.stages[index])
-                            .settings
-                            .program;
-                        Waiting {
-                            place: held.place.id.clone(),
-                            index,
-                            stage: stage.name.clone(),
-                            stream: stream.clone(),
-                            stream_priority,
-                            label: self.label_of(&held.place).map(|label| label.name),
-                            program,
-                            priority: held.priority,
-                            order: room.order,
-                            since: stage.since,
-                            words: room.words,
-                        }
-                    })
-            })
-            .collect();
         let mut queue = Queue {
             running,
             bound: self.host.bound(),
@@ -675,6 +768,43 @@ impl Engine {
             pools,
             waiting: vec![],
         };
+        let as_read = &queue;
+        let waiting: Vec<Waiting> = every
+            .iter()
+            .map(|read| &read.state)
+            .filter(|held| matches!(held.phase, Phase::Live | Phase::Making { .. }))
+            .flat_map(|held| {
+                let stream = held.place.stream.name.clone();
+                let stream_priority = as_read.streams.get(&stream).map_or(0, |of| of.priority);
+                held.stages
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, stage)| stage.state == StageState::WaitingForRoom)
+                    .map(move |(index, stage)| {
+                        let room = stage.room.clone().unwrap_or_default();
+                        let settings = self
+                            .resolve(&held.place, &held.place.kind.stages[index])
+                            .settings;
+                        let session_refused = as_read
+                            .session_of(&stream, &held.place.kind.name, &stage.name, &settings)
+                            .is_err();
+                        Waiting {
+                            place: held.place.id.clone(),
+                            index,
+                            stage: stage.name.clone(),
+                            stream: stream.clone(),
+                            stream_priority,
+                            label: self.label_of(&held.place).map(|label| label.name),
+                            program: settings.program,
+                            priority: held.priority,
+                            order: room.order,
+                            since: stage.since,
+                            words: room.words,
+                            session_refused,
+                        }
+                    })
+            })
+            .collect();
         queue.waiting = queue.ordered(waiting);
         queue
     }
@@ -689,9 +819,10 @@ impl Engine {
     /// again, so a label that reaches its reserve goes back among its
     /// stream's others (181). Ahead of the host's room, each stage waiting
     /// whose pool holds no account of its program, whose stream's labels
-    /// are at fault, or whose stream's multiplexer names a terminal
+    /// are at fault, whose stream's word for where its kind or its stage
+    /// opens is at fault, or whose stream's multiplexer names a terminal
     /// profile the resolver does not carry, is claimed, which refuses it,
-    /// whatever room the host has (4, 32, 145, 182, 190).
+    /// whatever room the host has (4, 32, 145, 182, 190, 199).
     pub(crate) fn start_waiting(&self) {
         let any = self.store.read_every().iter().any(|read| {
             read.state
@@ -783,7 +914,7 @@ impl Engine {
             })
             .map(|(name, stream, display, title)| StreamStatus {
                 name: name.clone(),
-                session: stream.session(name),
+                session: stream.own_session(name),
                 refused: self.stream_refused(name, stream.fault.as_ref(), &display),
                 view_refused: self.view_refused(name, &display),
                 multiplexer: display.multiplexer,
