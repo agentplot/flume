@@ -99,9 +99,8 @@ Deciders: the construct stage of `a-roles-address-may-be-held-by-a-standing-agen
 Sources: the amendment above; `herdr --session madswan agent list` under
 herdr 0.9.5 on deneb, read 2026-11-06, answering `result.agents[]` with
 `name`, `pane_id` and `agent_status`; the statement's amendment on
-agentplot/blueprints' branch `design/flume-a-standing-agent-is-found-by-its-name`
-at b8abde8, cut from main at 51b6316, for the orchestrator to push (C.5,
-C.7); rules core.11, core.15, core.28, core.44 and core.49; the change
+agentplot/blueprints main at 1c89abc, its C.5 approved by the user on
+2026-11-06 (C.5, C.7); rules core.11, core.15, core.28, core.44 and core.49; the change
 `every-question-a-place-asks-reaches-someone-who-answers-it`, held for
 the user's read.
 

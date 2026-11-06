@@ -17,9 +17,8 @@ Record 0013's amendment of 2026-11-06 decides it, and rule core.28 takes
 it. The statement says it in the vocabulary's recipient, 43, 132 and
 C.7, on agentplot/blueprints main at 6d322be. This change's own reading
 of herdr, C.5's standing row, and the terminal C.7's entry finds its
-agent in, are on blueprints' branch
-`design/flume-a-standing-agent-is-found-by-its-name` at b8abde8, cut
-from main at 51b6316 (core.19).
+agent in, are on agentplot/blueprints main at 1c89abc, its C.5 approved by the
+user on 2026-11-06 (core.19).
 
 ## What Changes
 

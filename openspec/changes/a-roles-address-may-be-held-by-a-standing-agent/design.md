@@ -41,9 +41,8 @@ herdr refuses a second agent of one name on a server as
 `agent_name_taken` (C.5's open row), and each session is a server of its
 own, so herdr lists at most one agent of a name in a session.
 
-The amendment is on blueprints' branch
-`design/flume-a-standing-agent-is-found-by-its-name` at b8abde8, cut
-from main at 51b6316, for the orchestrator to push:
+The amendment is on agentplot/blueprints main at 1c89abc, its C.5
+approved by the user on 2026-11-06:
 
 - **C.5's herdr table gains a standing row.** One `herdr session list
   --json` finds the session's socket by `name` and `running`, flume's
@@ -454,7 +453,7 @@ and no launch changes.
   stage on 2026-11-06, each cheap to change: decision 1's refusals,
   decision 2's terminal, decision 3's operation, decision 5's wake,
   decision 6's precedence and decision 7's status, each with the path
-  not taken, and the statement's amendment at b8abde8.
+  not taken, and the statement's amendment at 1c89abc.
 - **Rule core.28's details** rule out a standing agent's pane kept
   between deliveries, and the agent sought in a terminal other than its
   stream's. They name C.5 and 190 among their sources. The rule's

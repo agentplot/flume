@@ -11,7 +11,7 @@ host configuration a test names is a scratch file of the test's own.
 
 ## 1. Before the code
 
-- [ ] 1.1 Check that agentplot/blueprints main holds the amendment of b8abde8 on `design/flume-a-standing-agent-is-found-by-its-name`, C.5's standing row and C.7's terminal, and cite main's commit for it in record 0013's construct section and in the design, in place of b8abde8. Merge main into the branch, and fit every delta and task that names `Host::role`, `RoleRun`, `role_runs`, `deliver_ends`, `wake_roles`, `AddressStatus`, `Answer::Woken` or `SessionFrom` to the code as main then holds it. Where `every-question-a-place-asks-reaches-someone-who-answers-it` has landed first, read the standing entry where that change reads a role's entry (design 11; core.19). True when the merge is committed and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
+- [x] 1.1 Check that agentplot/blueprints main holds the amendment of b8abde8 on `design/flume-a-standing-agent-is-found-by-its-name`, C.5's standing row and C.7's terminal, and cite main's commit for it in record 0013's construct section and in the design, in place of b8abde8. Merge main into the branch, and fit every delta and task that names `Host::role`, `RoleRun`, `role_runs`, `deliver_ends`, `wake_roles`, `AddressStatus`, `Answer::Woken` or `SessionFrom` to the code as main then holds it. Where `every-question-a-place-asks-reaches-someone-who-answers-it` has landed first, read the standing entry where that change reads a role's entry (design 11; core.19). True when the merge is committed and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
 
 ## 2. The seams and the fakes
 
