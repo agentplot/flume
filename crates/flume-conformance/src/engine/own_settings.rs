@@ -28,27 +28,27 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
             name: "own settings: only the agent's program's entry reaches its profile, status naming its keys with their layer and nothing of another program's",
-            cites: &["32", "56", "88"],
+            cites: &["195", "32", "56", "88"],
             run: two_programs_entries,
         },
         Scenario {
             name: "own settings: a table's file lies beneath its own keys, status naming the file's key with the file and the table's key with none",
-            cites: &["32", "56"],
+            cites: &["S100", "195", "32", "56"],
             run: a_file_beneath_its_layers_own_keys,
         },
         Scenario {
             name: "own settings: a stage's table, its file among it, comes before the kind's table for every stage",
-            cites: &["32"],
+            cites: &["195", "32"],
             run: a_stages_file_before_every_stages_own_keys,
         },
         Scenario {
             name: "own settings: the host's file changing while code works leaves code's agent its keys and gives verify the new ones",
-            cites: &["8", "32"],
+            cites: &["195", "8", "32"],
             run: a_hosts_file_read_at_each_start,
         },
         Scenario {
             name: "own settings: a launch's file is kept as the launch read it, every stage given its keys and status naming it by its absolute path",
-            cites: &["21", "32"],
+            cites: &["195", "21", "32"],
             run: a_launchs_file_read_at_the_launch,
         },
         Scenario {
@@ -63,17 +63,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: keys from the host's table for the place's stream, for every agent and the repository's, each with its layer, and the host's own key in another stream",
-            cites: &["32", "143", "56"],
+            cites: &["S100", "195", "32", "143", "56"],
             run: keys_from_three_layers,
         },
         Scenario {
             name: "own settings: a key is taken whole from the first layer that gives it, never merged with another's value of it",
-            cites: &["32"],
+            cites: &["195", "32"],
             run: a_key_taken_whole,
         },
         Scenario {
             name: "own settings: a table's empty table replaces its file's whole",
-            cites: &["32"],
+            cites: &["195", "32"],
             run: a_files_table_replaced_by_an_empty_one,
         },
         Scenario {
@@ -83,7 +83,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: the host's table for every kind of a repository gives a fix and a chore there its keys from host-repository, and a repository it does not name the host's for the kind",
-            cites: &["32", "56"],
+            cites: &["S102", "195", "32", "56"],
             run: the_hosts_word_for_every_kind_of_a_repository,
         },
         Scenario {
@@ -93,7 +93,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: a repository's [agents] gives every kind run in it its keys, beneath its table for the kind, each from repository",
-            cites: &["32", "56"],
+            cites: &["S102", "195", "32", "56"],
             run: the_repositorys_own_file_for_every_kind,
         },
         Scenario {
@@ -108,17 +108,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: where no layer gives an entry the command passes none and lists no file, and the start holds none",
-            cites: &["32", "88", "162"],
+            cites: &["S100", "195", "32", "88", "162"],
             run: nothing_where_no_layer_gives_own_settings,
         },
         Scenario {
             name: "own settings: a named file that gives no key passes nothing and lists no file, the start naming the file",
-            cites: &["32", "88"],
+            cites: &["195", "32", "88"],
             run: a_file_that_gives_no_key,
         },
         Scenario {
             name: "own settings: a reserved key the launch gives refuses it naming the key, the program, every stage, the launch and its owner, and nothing is made",
-            cites: &["4", "32"],
+            cites: &["S101", "4", "32"],
             run: a_reserved_key_at_the_launch,
         },
         Scenario {
@@ -128,32 +128,32 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: a people's file's reserved keys are left out, a nested one out of the table holding it, the rest kept and the launch going on",
-            cites: &["29", "32", "162"],
+            cites: &["S100", "195", "29", "32", "162"],
             run: a_peoples_file_with_keys_another_setting_owns,
         },
         Scenario {
             name: "own settings: a credential under a key left out of a file is never read, and nothing of it is in status, a log line or held state",
-            cites: &["29", "56"],
+            cites: &["195", "29", "56"],
             run: a_credential_under_a_key_left_out,
         },
         Scenario {
             name: "own settings: keys for a profile that keeps the seam's default refuse the launch naming the program, the key and the layer",
-            cites: &["4", "88"],
+            cites: &["195", "4", "88"],
             run: a_profile_that_keeps_the_seams_default,
         },
         Scenario {
             name: "own settings: an entry for a program no stage runs reaches nothing, and the place launches",
-            cites: &["32", "88"],
+            cites: &["195", "32", "88"],
             run: an_entry_for_a_program_no_stage_runs,
         },
         Scenario {
             name: "own settings: a token in a launch refuses it naming the key and launch, saying a credential goes in the account's env, its words holding nothing of it, and nothing is made",
-            cites: &["4", "29"],
+            cites: &["S101", "4", "29"],
             run: a_token_in_a_launch,
         },
         Scenario {
             name: "own settings: a token in the host's file refuses every launch and every later start, naming its key's path, host and the file, and never the token",
-            cites: &["4", "27", "29"],
+            cites: &["S101", "4", "27", "29"],
             run: a_token_in_a_hosts_file,
         },
         Scenario {
@@ -163,7 +163,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: a secret-named key naming a variable rather than a value is taken as written",
-            cites: &["29", "32"],
+            cites: &["195", "29", "32"],
             run: a_variable_named_rather_than_a_value,
         },
         Scenario {
@@ -173,17 +173,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "own settings: a home and a variable in a value reach the profile as written",
-            cites: &["29", "32"],
+            cites: &["195", "29", "32"],
             run: a_home_and_a_variable_in_a_command,
         },
         Scenario {
             name: "own settings: a named file is never passed as it stands, the command listing its own file under the start's folder",
-            cites: &["32", "88", "128"],
+            cites: &["195", "32", "88", "128"],
             run: a_named_file_not_passed,
         },
         Scenario {
             name: "own settings: the fake scripted to take them by a file and reserve env is given the inline keys and not a file's env, its file written before the open, and env given inline refused naming its owner",
-            cites: &["88", "106", "128"],
+            cites: &["195", "196", "88", "106", "128"],
             run: a_scripted_way_and_a_reserved_key,
         },
     ]

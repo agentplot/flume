@@ -52,7 +52,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "streams: a place in a stream takes the host's settings for its stream over its settings for every agent, one in another stream the host's for every agent, each key with its layer",
-            cites: &["143", "32", "56"],
+            cites: &["S100", "143", "32", "56"],
             run: two_streams_status_lines,
         },
         Scenario {

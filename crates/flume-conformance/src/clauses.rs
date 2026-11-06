@@ -110,10 +110,6 @@ pub const SOURCES: &str = "a-host-declares-where-its-kinds-come-from, record 004
 pub const ORIGIN: &str =
     "a-place-is-cut-from-origins-copy-of-its-base, record 0041, landed before the list held S92";
 
-/// The change that builds record 0043: an agent's program settings from
-/// flume's layers, until its scenarios cite them.
-pub const OWN_SETTINGS: &str = "an-agents-program-settings-come-from-flumes-layers, record 0043";
-
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
 /// asks none to be cited. 154 and 157 are built as far as flume's own
@@ -158,11 +154,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain((95..=97).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, SOURCES));
     let origin = std::iter::once(("S92".to_string(), ORIGIN));
-    let own_settings = [195, 196]
-        .map(|clause| clause.to_string())
-        .into_iter()
-        .chain((100..=102).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, OWN_SETTINGS));
     standing
         .chain(packages)
         .chain(plan)
@@ -173,7 +164,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(multiplexer)
         .chain(sources)
         .chain(origin)
-        .chain(own_settings)
         .collect()
 }
 
@@ -221,19 +211,20 @@ mod tests {
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0037_0040_0041_and_0043s_and_183(
+    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_0029_0037_0040_and_0041s_and_183(
     ) {
         let unbuilt = unbuilt();
         assert_eq!(
             unbuilt.len(),
-            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 7 + 5 + 1 + 5
+            3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1 + 7 + 5 + 1
         );
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
-            "S84", "S85", "184", "185", "S86", "S87", "S88", "S89",
+            "S84", "S85", "184", "185", "S86", "S87", "S88", "S89", "195", "196", "S100", "S101",
+            "S102",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),
@@ -247,8 +238,6 @@ mod tests {
             ("191", SOURCES),
             ("S97", SOURCES),
             ("S92", ORIGIN),
-            ("195", OWN_SETTINGS),
-            ("S102", OWN_SETTINGS),
         ] {
             assert!(
                 unbuilt.contains(&(clause.to_string(), change)),

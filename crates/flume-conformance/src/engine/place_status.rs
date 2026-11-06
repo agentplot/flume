@@ -161,17 +161,17 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "status: an agent's own settings give each key with its layer and its file, how its profile passed them and that they were not read back, in the JSON form",
-            cites: &["56", "32", "143"],
+            cites: &["S100", "56", "32", "143"],
             run: own_settings_from_three_layers,
         },
         Scenario {
             name: "status: an agent's own settings name each file with the keys left out of it and their owners, and no value of either",
-            cites: &["56", "29"],
+            cites: &["S100", "195", "56", "29"],
             run: own_settings_left_out_of_a_file,
         },
         Scenario {
             name: "status: an agent's own settings name nothing of another program's entry",
-            cites: &["56", "32"],
+            cites: &["195", "56", "32"],
             run: own_settings_of_another_program,
         },
     ]

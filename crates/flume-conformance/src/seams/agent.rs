@@ -230,17 +230,17 @@ pub fn scenarios<H: AgentHarness>() -> Vec<Scenario<H>> {
         },
         Scenario {
             name: "agent: reserved names each key of its program's settings another setting or the account owns, by its path, with its owner, and none where its profile reserves none",
-            cites: &["88", "32", "162"],
+            cites: &["196", "88", "32", "162"],
             run: reserved_keys_with_their_owners::<H>,
         },
         Scenario {
             name: "agent: own takes an empty entry, and its program's keys only where its profile passes them, refusing them otherwise in words",
-            cites: &["88", "32"],
+            cites: &["195", "196", "88", "32"],
             run: own_takes_as_its_profile_passes::<H>,
         },
         Scenario {
             name: "agent: the command passes own settings as its program takes them, each file it lists under the place's folder, and passes none where it is given none",
-            cites: &["88", "32", "128"],
+            cites: &["195", "196", "88", "32", "128"],
             run: the_command_passes_own_settings::<H>,
         },
     ]

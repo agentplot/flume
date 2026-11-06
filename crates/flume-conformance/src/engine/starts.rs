@@ -97,12 +97,12 @@ pub fn scenarios() -> Vec<Scenario<()>> {
         },
         Scenario {
             name: "start: each file a command lists under its start's folder is written before the terminal opens the agent, readable by the host's user alone",
-            cites: &["16", "17", "88", "128"],
+            cites: &["196", "16", "17", "88", "128"],
             run: a_file_written_before_the_open,
         },
         Scenario {
             name: "start: a command listing a file outside its start's folder is not opened, naming the file, and nothing is written",
-            cites: &["16", "88", "128"],
+            cites: &["196", "16", "88", "128"],
             run: a_file_outside_the_folder,
         },
     ]
