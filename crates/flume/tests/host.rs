@@ -531,6 +531,36 @@ fn a_sources_directory_that_cannot_be_listed_fails_the_configuration() {
     assert!(reason.contains("config/flume/sources"), "{reason}");
 }
 
+#[test]
+fn the_local_layer_declares_no_source() {
+    // 159, 191, C.7; core.45: the sources are the managed layer's, read
+    // from `sources/` beside `config.toml` whether the local layer is
+    // taken or not, and a local file naming a source is not taken.
+    let scratch = Scratch::new("local-sources");
+    let (managed, dir) = configuration(&scratch);
+    let local = scratch.path("config/flume/config.local.toml");
+    std::fs::write(&managed, "[host]\nagents = 8\n").unwrap();
+    std::fs::write(dir.join("acme.toml"), "kinds_dir = \"/srv/kinds/acme\"\n").unwrap();
+    let declared = |config: &HostConfig| config.sources.keys().cloned().collect::<Vec<_>>();
+
+    std::fs::write(&local, "[streams.work]\nagents = 3\n").unwrap();
+    let taken = HostConfig::read_layers(&managed, &local).expect("the configuration read");
+    assert_eq!(taken.configuration.local, LocalLayer::Taken);
+    assert_eq!(declared(&taken), ["acme"]);
+
+    std::fs::write(&local, "[sources.beta]\nkinds_dir = \"/srv/kinds/beta\"\n").unwrap();
+    let refused = HostConfig::read_layers(&managed, &local).expect("the configuration read");
+    assert!(
+        matches!(
+            &refused.configuration.local,
+            LocalLayer::NotTaken { keys, .. } if keys.iter().any(|key| key.starts_with("sources"))
+        ),
+        "{:?}",
+        refused.configuration.local
+    );
+    assert_eq!(declared(&refused), ["acme"]);
+}
+
 const CHILD_ANSWER: &str = "FLUME_TEST_LAYERS_ANSWER";
 const READER: &str = "a_child_process_reads_the_hosts_layers";
 
