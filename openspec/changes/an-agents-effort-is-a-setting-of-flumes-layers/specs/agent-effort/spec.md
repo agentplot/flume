@@ -45,6 +45,11 @@ each start (21, 32, 197).
 - **WHEN** the host gives `[kinds.fix.agents] effort = "medium"` and the repository's own file gives `[kinds.fix.agents] effort = "xhigh"`
 - **THEN** a fix's agent starts with `medium` from `host-kind` (32, 197)
 
+#### Scenario: An effort for a repository, a stream and every agent
+
+- **WHEN** the host gives `[agents] effort = "medium"`, `[agents.streams.work] effort = "high"` and `[repos."/r".agents] effort = "xhigh"`, and the repository `/s`'s file gives `[agents] effort = "low"`
+- **THEN** a fix's agent in `/r` starts with `xhigh` from `host-repository`, one in `/s` in `work` with `high` from `host-stream`, and one in `/s` in `default` with `medium` from `host`, the host's layers coming before the repository's (32, 143, 197)
+
 #### Scenario: The host's table changed after the launch
 
 - **WHEN** the host's `[kinds.change.agents]` gives `effort = "high"` at a change's launch and `effort = "xhigh"` before its verify starts

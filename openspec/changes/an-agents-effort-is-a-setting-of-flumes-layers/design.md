@@ -46,11 +46,11 @@ releases hold the same four things, read from each binary's program:
   for the selected model", absent for session-lifecycle hooks.
 
 **The program-settings change**, `an-agents-program-settings-come-from-flumes-layers`,
-in code in its place. It hands Claude Code the keys the layers resolve
+on main since #128. It hands Claude Code the keys the layers resolve
 as `--settings <file>`, a source above the user's, the project's and
 the local settings. Its profile reserves `model` for flume's model and
 `permissions.defaultMode` for flume's mode, and leaves `effortLevel`
-open. Once it lands, a layer can give
+open, so a layer can give
 `programs.claude.settings.effortLevel = "xhigh"` with nothing of this
 change.
 
@@ -186,12 +186,11 @@ Every agents table reads `effort` beside `model`:
 
 - a kind's declaration, `[kinds.<kind>.agents]`, a stage's `agents`
   entry, and a repository's `.config/flume.toml` for a kind it does not
-  declare, through the table weir's crate returns as written (weir 52,
-  C.4; core.4);
+  declare and its `[agents]` for every kind, through the table weir's
+  crate returns as written (weir 52, C.4; core.4);
 - the host's `[kinds.<kind>.agents]`,
   `[repos."<repository>".kinds.<kind>.agents]` and their `.stages.<stage>`
-  tables, and, once the program-settings change has landed, its
-  `[agents]`, `[agents.streams.<stream>]` and
+  tables, its `[agents]`, `[agents.streams.<stream>]` and
   `[repos."<repository>".agents]`, each a key the local layer may set
   over the managed one (C.7; record 0032);
 - the launch, `flume launch --agent [<stage>.]effort=<word>`.
@@ -255,10 +254,10 @@ settings give one.
 
 `--effort` is the session's own level, which the release reads before
 any settings file's, the account's and the layers' own among them.
-`effortLevel` becomes the effort's: once the program-settings change has
-landed, `claude/settings.rs` reserves it with the owner "flume's
-`effort`", beside `model`, its declaration in the release's schema
-among the fragments that change's `check-tools` test reads. A layer's
+`effortLevel` becomes the effort's: `claude/settings.rs` reserves it
+with the owner "flume's `effort`", beside `model`, its declaration in
+the release's schema among the fragments the program-settings change's
+`check-tools` test reads. A layer's
 `settings` that writes it is refused naming the key and its owner, and
 a named file's is left out and named in status (195). So the effort has
 one owner, as the model has.
@@ -333,13 +332,14 @@ launch refused naming the program.
 
 ### 12. What this change needs and what it hands on
 
-- **The program-settings change lands first.** This change builds on
-  its eight layers, its host tables for every agent, a stream and a
-  repository, and its list of Claude Code's reserved keys. Its code
-  stage merges main once that change has landed, and every delta here
-  that names those layers is fitted to the specs as they then stand.
-  Should that change be dropped, the effort is read in clause 32's
-  layers as main holds them and design 6's reserved key goes.
+- **The program-settings change.** This change builds on its eight
+  layers, its host tables for every agent, a stream and a repository,
+  and its list of Claude Code's reserved keys, on main since #128.
+  Every delta here that names those layers, its tables or its reserved
+  keys is fitted to the specs main holds: the launching spec's eight
+  layers, the store profile's tables for every agent, a stream and a
+  repository, the kinds profile's repository table for every kind, and
+  the agent profile's reserved keys each gain the effort.
 - **crew's runner.** It gives a role's run `--agent effort=<Effort>`
   from the role's `roles.rec` record beside `--agent model=<Model>`, and
   crew's README and its run's record lose "until then the pool
@@ -352,12 +352,9 @@ launch refused naming the program.
 ### 13. The statement, the record and the rules
 
 Clause 197 and S103 are new, after the program-settings change's 195,
-196 and S100 to S102, since the designs in flight hold 193, 194 and S93
-to S99. The statement's amendment is on the blueprints branch
-`design/flume-an-agents-effort`, cut from
-`design/flume-an-agents-program-settings` at 94b4edb, since clause 32
-and C.4 there hold the program-settings change's layers and reserved
-keys, at `17a9116`, committed and not pushed:
+196 and S100 to S102. The statement's amendment is on blueprints main
+at `cd8fd73`, and flume main's clause list, read at `c94c496`, holds
+197 and S103 and names them unbuilt by this change:
 
 - **197** (A.4, after 172), an agent's effort: its program's own word
   for how hard its model works on each turn, given in every layer of 32
@@ -394,23 +391,19 @@ keys, at `17a9116`, committed and not pushed:
   flume's pin of weir-kinds stays (core.4).
 
 Record 0044, `an-agents-effort-is-a-setting-layered-as-its-model-is`,
-is proposed with this change, amending records 0026 and 0043. Rules
+accepted by the user on 2026-11-06, comes with this change, amending
+records 0026 and 0043. Rules
 core.30 and core.39 are amended with it: core.30's model sentence gains
 the effort, and core.39's refusal names an effort its profile cannot
 honour.
 
-## Questions for the user's ruling
+## The user's ruling
 
-1. **Is the effort a setting of flume's, or Claude Code's own
-   `effortLevel`?** Recommended: flume's, beside the model, as this
-   design has it. It carries `max`, holds for every program, and sits
-   with the model it follows. The other answer is the program-settings
-   change with nothing added: a layer gives
-   `programs.claude.settings.effortLevel`, `max` cannot be given, and
-   this change becomes one paragraph of that change's docs and a
-   scenario of S102's kind. If the user rules so, this change is
-   withdrawn, record 0044 is rejected, and the blueprints branch is
-   dropped.
+The user approved this design on 2026-11-06, on agentplot-planner's
+card (22:42Z), and sent it into code: the effort is a setting of
+flume's, beside the model, carrying `max`, holding for every program
+and sitting with the model it follows, and not Claude Code's own
+`effortLevel` given through the program-settings change.
 
 ## Risks / Trade-offs
 
@@ -424,18 +417,14 @@ honour.
   The Stop hook's `effort.level` could read the level run, a later
   change's if status should give it.
 - **`effortLevel` refused where a table writes it.** A host that gives
-  `programs.claude.settings.effortLevel` after the program-settings
-  change lands has its next start refused, naming the key and
+  `programs.claude.settings.effortLevel` has its next start refused
+  once this lands, naming the key and
   `effort`, until it moves the word to `effort`. A named file's is left
   out, and status names it.
 - **A kind's `effort` is read where it was ignored.** A declaration
   that writes `effort` today, sounding's among them, is read once this
   lands, and a word its program does not take refuses its launch. No
   kind of flume's own names one.
-- **Numbers.** Clause 197, S103 and record 0044 are free on every branch
-  and in every place's draft on this host on 2026-11-05, and the
-  program-settings change was renumbered once already that day. Task
-  1.1 checks them again before the code builds on them.
-- **The order of landing.** Built before the program-settings change,
-  the effort would miss its new layers. Group 1's first task merges
-  main once that change has landed, and not before.
+- **Numbers.** Clause 197 and S103 are this change's on blueprints
+  main, and record 0044 was free on every branch and in every place on
+  this host on 2026-11-06, the records in flight holding 0046 and 0051.

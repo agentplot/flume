@@ -59,3 +59,31 @@ schema (core.22, C.4).
 
 - **WHEN** the test reads the program devenv.nix pins, the file its `claude` wrapper runs
 - **THEN** each fragment the efforts rest on is found in it, and the test names any that is not (197, C.4)
+
+## MODIFIED Requirements
+
+### Requirement: Claude Code's reserved keys named
+
+The agent profile SHALL name as reserved, each with what owns it,
+Claude Code's `env`, `model`, `effortLevel` and
+`permissions.defaultMode`, its credential helpers `apiKeyHelper`, `awsAuthRefresh`,
+`awsCredentialExport`, `gcpAuthRefresh` and `otelHeadersHelper`, its
+sign-in keys `forceLoginMethod` and `forceLoginOrgUUID`,
+`disableAllHooks`, and `skipDangerousModePermissionPrompt` and
+`skipAutoPermissionPrompt`; and take every other key as written (34,
+144, 162, 172, 195, 197; core.12, core.30).
+
+#### Scenario: Each reserved key
+
+- **WHEN** the profile's reserved keys are read
+- **THEN** they hold each of those keys, `permissions.defaultMode` by its path, each with its owner, the account, the model, the effort, the mode, the account's sign-in, flume's plugin or a person (195, 197)
+
+#### Scenario: A people's settings file
+
+- **WHEN** a host's named file gives `tui = "fullscreen"`, `statusLine`, `hooks`, `env`, `permissions = { allow = ["Bash(git log:*)"], defaultMode = "bypassPermissions" }` and `skipDangerousModePermissionPrompt = true`
+- **THEN** the command's file holds `tui`, `statusLine`, `hooks` and `permissions = { allow = ["Bash(git log:*)"] }`, and no `env`, `defaultMode` or `skipDangerousModePermissionPrompt` (S100, 195)
+
+#### Scenario: Keys taken as written
+
+- **WHEN** the profile is asked to take `statusLine`, `tui`, `hooks`, `permissions = { allow = ["Bash(git log:*)"] }` and `enableAllProjectMcpServers = true`
+- **THEN** it takes them, and its command's file holds each as written (195)

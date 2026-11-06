@@ -52,11 +52,11 @@ effort becomes one beside it (design 1).
   `--effort <word>` and takes the pinned release's five words, `low`,
   `medium`, `high`, `xhigh` and `max`. A `check-tools` test finds the
   option and the five words in the pinned release (C.4; core.22).
-- **`effortLevel` is the effort's.** Once the program-settings change
-  has landed, Claude Code's profile reserves its settings' `effortLevel`
-  for flume's effort, as it reserves `model` for flume's model. A layer
-  that writes it is refused, and a named file's is left out and named
-  in status (195, C.4).
+- **`effortLevel` is the effort's.** Claude Code's profile reserves its
+  settings' `effortLevel` for flume's effort, beside `model` among the
+  reserved keys the program-settings change named. A layer that writes
+  it is refused, and a named file's is left out and named in status
+  (195, C.4).
 - **Status.** Each agent's effort, with its layer and the value passed,
   says it is not read back. Where the account's environment names
   Claude Code's `CLAUDE_CODE_EFFORT_LEVEL`, which the program reads
@@ -87,24 +87,26 @@ effort becomes one beside it (design 1).
 - `place-status`: an agent's effort, its layer, the value passed, and
   the account's variable that outranks it.
 - `command-line`: `--agent [<stage>.]effort=<word>`.
-- `kinds-profile`: a declaration's agents tables give `effort`.
-- `store-profile`: the host's agents tables give `effort`.
+- `kinds-profile`: a declaration's agents tables, and a repository's
+  for every kind, give `effort`.
+- `store-profile`: the host's agents tables, for every agent, a stream
+  and a repository among them, give `effort`.
+- `launching`: the effort among the settings the eight layers resolve
+  at each start.
 - `seam-contracts`: the agent seam takes an effort or refuses it, and
   names the variable its program reads over it.
 - `seam-fakes`: the fake agent scripts the efforts it takes.
 - `clause-coverage`: the list at the statement's revision holding 197
-  and S103.
+  and S103, with neither named unbuilt.
 
 ## Impact
 
 - agentplot/blueprints: the statement gains clause 197 and S103 and
   amends section 3's settings, 4, 32, 88, 158, 170, 173, 195, C.2, C.4
   and C.7. weir's C.4 example gives `effort` in an agents table, the
-  reader's to check. They are at blueprints `17a9116` on the branch
-  `design/flume-an-agents-effort`, cut from
-  `design/flume-an-agents-program-settings` at 94b4edb, committed and
-  not pushed (design 13).
-- `docs/adr`: record 0044, proposed; rules core.30 and core.39
+  reader's to check. They are on blueprints main at `cd8fd73`
+  (design 13).
+- `docs/adr`: record 0044, accepted; rules core.30 and core.39
   amended with it.
 - `crates/flume-seams`: `Settings::effort`, taken whole by
   `Settings::under`; `Agent::effort` and `Agent::effort_variable`, each
@@ -122,7 +124,7 @@ effort becomes one beside it (design 1).
   efforts, a new `engine/agent_effort.rs`, and the clause list.
 - `site/`: the agent-settings, kinds and Claude Code guides, and the
   configuration, commands and state references.
-- Built after `an-agents-program-settings-come-from-flumes-layers`
-  lands, on its eight layers and its reserved keys (design 12).
+- Built on `an-agents-program-settings-come-from-flumes-layers`, on
+  main since #128: its eight layers and its reserved keys (design 12).
 - No new crate, plugin or site part, so no new moon project; no new
   dependency.
