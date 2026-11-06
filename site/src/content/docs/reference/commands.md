@@ -170,14 +170,12 @@ terminal app and title, each with where it came from, and its labels.
 Then come each pool's part, each source of kinds the host declares with
 the kinds it holds or why it cannot be read, each base's count and the
 role addresses with ends pending. Each multiplexer the host binds gives
-what a tidy kept there and whether it nudges, settling every place when
-an agent's state changes. Then comes the host's configuration: whether
+what a tidy kept there. Then comes the host's configuration: whether
 its local layer was taken, each value it set and each key passed over
 with its pin. Last comes the host's watch: a caller keeping it, with
 the bound it stated and when its newest settle began, or no caller
 keeping it, and since when where one did. With none, places move on at
-flume's commands, at a multiplexer's nudge and when their agents go
-quiet. Under that line it gives what the terminal's own configuration
+flume's commands and when their agents go quiet. Under that line it gives what the terminal's own configuration
 lacks for flume's plugin there, such as herdr's key for the popup, in
 words you can act on.
 
@@ -293,8 +291,7 @@ submission, asks no merge queue, and starts no session. None of a
 place's long words, a stop-short's, a hold's, a failure's or a
 teardown's, is in its lines or its JSON. It says what the last settle
 left: where no caller keeps watch over the host, places move on only
-at flume's commands, a multiplexer's nudge and their agents' quiet. It
-settles, starts, sends and writes nothing.
+at flume's commands and their agents' quiet. It settles, starts, sends and writes nothing.
 
 With `--json` the answer is `{"list":{"places":[…],"streams":[…]}}`,
 the same lines and their parts. The [state
@@ -427,8 +424,7 @@ starts the next stage or the waiting ones there is room for, and
 submits. It collects the merge queue's outcomes, delivers pending
 ends, wakes roles and tidies. Safe to repeat. `--on-quiet` first reads the place's
 agent until it is quiet, for up to sixty seconds; the Stop hook runs it.
-herdr's plugin runs `flume settle` whenever an agent changes state,
-comes up or goes: a nudge, which keeps no bound.
+No multiplexer and no plugin of one runs it.
 
 `--every <time>` settles every place as a watch over the host. `<time>`
 is the bound its runs come within, as `flume wait --timeout` takes one:

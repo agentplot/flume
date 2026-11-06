@@ -74,23 +74,30 @@ herdr plugin install agentplot/flume/plugins/herdr --ref v<version>
 ```
 
 It needs `flume` and `jq` on the `PATH` herdr's server runs with, and
-`terminal = "herdr"` under `[host]`. It brings:
+`terminal = "herdr"` under `[host]`. It keeps no process and runs no
+settle. It brings:
 
-- **the watch**, one per herdr server, which runs `flume settle` when
-  one of flume's agents changes state, or an agent comes up or goes in
-  one of the server's panes. That nudge reads an agent that crashed or
-  was killed within seconds. It keeps no bound; a caller keeps
-  watch over the host with `flume settle --every`, as
-  [keeping watch over the host](/flume/guides/places-and-herdr/#keeping-watch-over-the-host)
-  says;
-- **a row on each agent's sidebar entry**, its place's line less the
-  place's name and kind, such as `code 1/2 · run 1 · tasks 2/5 · working`.
-  Each workspace's row counts its places running, asking, waiting on
-  their caller and stalled;
+- **a startup**, run by herdr once as each server starts, which writes
+  down what herdr's configuration lacks for the plugin, for
+  `flume status` to give, and exits;
+- **a row on each agent's sidebar entry**, the short form of its
+  place's line, such as `code 1/2 · run 1 · tasks 2/5 · working`, one
+  of the clues flume shows at the settles that change it. Each
+  workspace's row counts its places running, asking, waiting on their
+  caller and stalled;
 - **a popup** of every place in flight, each by its line, such as
-  `fix--the-parser-reads-tabs · fix@1 · code · run 1 · working`. A key
-  there opens a place's tab, tells its agent, stops it or retries its
-  stage, each through flume's own commands.
+  `fix--the-parser-reads-tabs · fix@1 · code · run 1 · working`, read
+  from `flume status --json` when you open it and after each key that
+  acts. A key there opens a place's tab, tells its agent, stops it or
+  retries its stage, each through flume's own commands.
+
+Places move when their agents go quiet and at each command of flume's
+that acts. A caller keeps watch over the host with
+`flume settle --every`, so every place, one whose submission waits on
+the merge queue among them, moves within its bound; while none does,
+flume runs attended, as
+[keeping watch over the host](/flume/guides/places-and-herdr/#keeping-watch-over-the-host)
+says.
 
 The plugin changes none of herdr's configuration, and herdr's plugins
 declare no keys. The popup opens only from a key you bind, with an

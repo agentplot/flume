@@ -73,12 +73,13 @@ what lands.
 
 ## Under herdr
 
-flume's herdr plugin settles flume's places as their agents change and
-shows the places in herdr. Each agent's sidebar entry gets its place's
-line less the place's name and kind, such as
-`code 1/2 · run 1 · tasks 2/5 · working`, and each workspace's row a
-count of its places. A popup lists every place in flight by its line,
-with keys that open, tell, stop or retry it.
+flume's herdr plugin shows the places in herdr, and keeps no process
+and runs no settle. Each agent's sidebar entry gets the short form of
+its place's line, such as `code 1/2 · run 1 · tasks 2/5 · working`, and
+each workspace's row a count of its places, clues flume shows at the
+settles that change them. A popup lists every place in flight by its
+line, read from `flume status` when it opens and after each key that
+acts, with keys that open, tell, stop or retry it.
 
 The plugin changes none of herdr's configuration, and herdr's plugins
 declare no keys. Until herdr's own `config.toml` holds what the plugin
