@@ -18,7 +18,7 @@ scratch file of the test's own.
 ## 2. The seams
 
 - [x] 2.1 Add to `flume-seams`: `Stream::kinds`, a map of `KindSessions { session, stages, unknown }` by the kind's name, `StageSession { session, unknown }`, `SessionFrom::StreamKind` and `SessionFrom::StreamStage`, serialized `stream-kind` and `stream-stage`, and the stream status's `sessions`, each `NamedSession { name, kinds, stages }` with each value's layer and each fault of its tables; read every new field with none where written before and write it only where set (design 9, 10; 56, 107, 143, 199; core.14). True when `sluice exec main -- moon run seams:test` passes with the seam-contracts spec's "A start's session from its stream's word for its stage" in `round_trip.rs`, and every existing round trip passing unchanged.
-- [ ] 2.2 Have the fake host give a stream's `kinds` as a test scripts them (design 10; 199). True when `sluice exec main -- moon run fakes:test conformance:test` passes with the seam-contracts spec's "The fake host's sessions for its kinds and stages" beside "The fake host's sessions, labels and layers", citing its clauses.
+- [x] 2.2 Have the fake host give a stream's `kinds` as a test scripts them (design 10; 199). True when `sluice exec main -- moon run fakes:test conformance:test` passes with the seam-contracts spec's "The fake host's sessions for its kinds and stages" beside "The fake host's sessions, labels and layers", citing its clauses.
 - [ ] 2.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test conformance:format conformance:lint conformance:test` passes.
 
 ## 3. The host's configuration

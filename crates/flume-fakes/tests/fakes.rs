@@ -1617,6 +1617,50 @@ fn a_scripted_session() {
     );
 }
 
+/// The fake host's sessions for a stream's kinds and their stages, each
+/// table's other keys kept, as the test scripts them and as they stand
+/// when asked (199).
+#[test]
+fn a_streams_sessions_for_its_kinds_and_stages_are_scripted() {
+    let host = FakeHost::default();
+    let research = KindSessions {
+        session: Some("work-design".into()),
+        ..KindSessions::default()
+    };
+    let release = KindSessions {
+        stages: BTreeMap::from([(
+            "review".to_string(),
+            StageSession {
+                session: Some("work-design".into()),
+                unknown: vec![],
+            },
+        )]),
+        ..KindSessions::default()
+    };
+    let plan = KindSessions {
+        session: Some("work-plan".into()),
+        unknown: vec!["label".into()],
+        ..KindSessions::default()
+    };
+    host.set_kind_sessions("work", "research", Some(research.clone()));
+    host.set_kind_sessions("work", "release", Some(release.clone()));
+    host.set_kind_sessions("work", "plan", Some(plan.clone()));
+    assert_eq!(
+        host.streams()["work"].kinds,
+        BTreeMap::from([
+            ("plan".to_string(), plan),
+            ("release".to_string(), release),
+            ("research".to_string(), research),
+        ])
+    );
+    assert_eq!(host.streams()["work"].session, None, "work's own unnamed");
+    host.set_kind_sessions("work", "plan", None);
+    assert!(
+        !host.streams()["work"].kinds.contains_key("plan"),
+        "read as it stands now"
+    );
+}
+
 /// The seam-fakes spec's scripted label: the fake kinds give `deploy` the
 /// label `operation` wherever it is read, and with the fake host giving
 /// none, a deploy place's label is `operation` from `kind` (180).
