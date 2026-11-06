@@ -1174,6 +1174,43 @@ fn a_scripted_attach() {
     );
 }
 
+/// The seam-fakes spec's scripted runs: the fake terminal scripted to
+/// read `work` running answers it so, and `office`, never scripted, not
+/// running, each asking logged and nothing opened; its own part not
+/// running as `own` (106, 201).
+#[test]
+fn a_scripted_runs() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    terminal.runs_as(
+        "work",
+        SessionRuns::Runs {
+            name: "work".into(),
+        },
+    );
+    assert_eq!(
+        terminal.runs(Some("work")),
+        SessionRuns::Runs {
+            name: "work".into()
+        }
+    );
+    assert_eq!(
+        terminal.runs(Some("office")),
+        SessionRuns::NotRunning {
+            name: "office".into()
+        }
+    );
+    assert_eq!(terminal.log.of("runs"), vec!["runs work", "runs office"]);
+    assert_eq!(terminal.log.count("open"), 0);
+    assert_eq!(
+        terminal.runs(None),
+        SessionRuns::NotRunning { name: "own".into() }
+    );
+    assert_eq!(
+        terminal.log.calls(),
+        vec!["runs work", "runs office", "runs own"]
+    );
+}
+
 /// The seam-fakes spec's scripted window, the fakes' part of it: the
 /// window scripted to print `attach work` answers that line for the
 /// terminal's command under the title the host declares for `work`, its
