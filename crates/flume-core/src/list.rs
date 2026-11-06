@@ -1,6 +1,7 @@
-//! flume's list (200; core.52): a line for each place on the host, a
-//! tidied place whose document stays among them, under its repository,
-//! and a line for each stream the host declares. A place's line is read
+//! flume's list (200; core.52): a line for each place on the host under
+//! its repository, a place that landed or was dropped only where every
+//! place is asked, a tidied one whose document stays among them then, and
+//! a line for each stream the host declares. A place's line is read
 //! from its held state and its live agent's asking mark alone, in the
 //! words its own line gives it (56, 139; core.14); a stream's from the
 //! host's configuration and its terminal's runs, asked once for every
@@ -17,15 +18,18 @@ use flume_seams::*;
 use std::collections::BTreeSet;
 
 impl Engine {
-    /// Every place's line, by repository, then by `<kind>--<name>`, then
-    /// in the order the store gives their documents; and every declared
-    /// stream's line, `default` among them, by priority and then by name,
-    /// as status gives the streams (70, 143, 200).
-    pub fn list(&self) -> Answer {
+    /// Each place's line, by repository, then by `<kind>--<name>`, then
+    /// in the order the store gives their documents, a place that landed
+    /// or was dropped left out unless `every` place is asked (63, 200);
+    /// and every declared stream's line, `default` among them, by
+    /// priority and then by name, as status gives the streams (70, 143,
+    /// 200).
+    pub fn list(&self, every: bool) -> Answer {
         let mut places: Vec<Listed> = self
             .store
             .read_every()
             .iter()
+            .filter(|read| every || !landed_or_dropped(&read.state.phase))
             .map(|read| self.listed(&read.state))
             .collect();
         order(&mut places);
@@ -148,6 +152,19 @@ fn order(places: &mut [Listed]) {
             .cmp(&b.repository)
             .then_with(|| a.name.cmp(&b.name))
     });
+}
+
+/// Whether the place landed or was dropped, kept, being tidied or tidied
+/// alike: it has nothing left to open, and the list gives it only where
+/// every place is asked. A place its caller declared done is not one
+/// (63, 200).
+fn landed_or_dropped(phase: &Phase) -> bool {
+    match phase {
+        Phase::Over { over, .. } | Phase::Gone { over, .. } | Phase::Tidied { over, .. } => {
+            matches!(over, Over::Landed { .. } | Over::Dropped)
+        }
+        Phase::Making { .. } | Phase::Live => false,
+    }
 }
 
 /// Whom a live place waits on, from its held state alone: its caller
@@ -352,6 +369,64 @@ mod tests {
         ];
         for (phase, words) in rows {
             assert_eq!(kept_words(&phase).as_deref(), words, "{phase:?}");
+        }
+    }
+
+    #[test]
+    fn a_place_that_landed_or_was_dropped_is_left_out_whatever_keeps_it() {
+        let landed = || Over::Landed {
+            commit: Revision::new("c1"),
+        };
+        let rows = [
+            (over(None), true),
+            (holds(true, false), true),
+            (
+                Phase::Over {
+                    over: Over::Dropped,
+                    kept: None,
+                },
+                true,
+            ),
+            (
+                Phase::Gone {
+                    over: Over::Dropped,
+                    at: None,
+                },
+                true,
+            ),
+            (
+                Phase::Tidied {
+                    over: landed(),
+                    at: 1,
+                    pending_for: vec!["operator".into()],
+                },
+                true,
+            ),
+            (
+                Phase::Over {
+                    over: Over::Done,
+                    kept: None,
+                },
+                false,
+            ),
+            (
+                Phase::Tidied {
+                    over: Over::Done,
+                    at: 1,
+                    pending_for: vec!["operator".into()],
+                },
+                false,
+            ),
+            (Phase::Live, false),
+            (
+                Phase::Making {
+                    by: "launch".into(),
+                },
+                false,
+            ),
+        ];
+        for (phase, left_out) in rows {
+            assert_eq!(landed_or_dropped(&phase), left_out, "{phase:?}");
         }
     }
 

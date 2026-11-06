@@ -222,7 +222,7 @@ Read from each place's held state, a live agent's asking mark, and each
 stream's multiplexer once, as [`flume
 list`](/flume/reference/commands/#flume-list) says. A field the place or
 the stream has none of is left out. Each place, by repository, then by
-`<kind>--<name>`:
+`<kind>--<name>`, one that landed or was dropped only under `--all`:
 
 | Field | |
 |---|---|

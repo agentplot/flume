@@ -9,9 +9,9 @@ decision-makers:
 
 # flume's list gives a line for each place and each stream, read from what flume keeps
 
-Status: accepted by the user on 2026-11-05, on their yes in the Plannotator Inbox. Its statement amendment is on agentplot/blueprints main at 7bd1891 (57, 62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, section 9, S108). Proposed earlier that day by the construct stage of the change `flume-list-shows-each-place-and-stream-on-one-line`, from the user's words of the same day, quoted below. The command, what it reads and what it leaves out are the user's. How each line is worded, the terminal's new operation and its bound are the stage's.
+Status: accepted by the user on 2026-11-05, on their yes in the Plannotator Inbox. Its statement amendment is on agentplot/blueprints main at 7bd1891 (57, 62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, section 9, S108). Proposed earlier that day by the construct stage of the change `flume-list-shows-each-place-and-stream-on-one-line`, from the user's words of the same day, quoted below. The command, what it reads and what it leaves out are the user's. How each line is worded, the terminal's new operation and its bound are the stage's. Amended 2026-11-06, the last section below, accepted on the user's yes the same day: the list leaves out a place that landed or was dropped, and gives it only when every place is asked, `flume list --all`.
 
-Amended 2026-11-06, below, accepted on the user's Pending You card of 2026-11-06, its statement amendment on agentplot/blueprints main at 12866a8: runs reads one or more parts of the terminal together, in one reading, so each stream's line gives each of its sessions, its own and each it names for a kind or a stage, its terminal still read once.
+Amended 2026-11-06, the first section below, accepted on the user's Pending You card of 2026-11-06, its statement amendment on agentplot/blueprints main at 12866a8: runs reads one or more parts of the terminal together, in one reading, so each stream's line gives each of its sessions, its own and each it names for a kind or a stage, its terminal still read once.
 
 Deciders: the user, who ran `flume status` with no place on deneb, under flume 0.9.1 and 53 places, and said: "It was extremely slow and returns a bunch of errors too. It's completely unusable." Then: "We need a short name because I need a short list because I don't know what's available to open." The brief that carried their words asked for one short line per place, with its kind and name, its stage and its state, and one line per stream with its session and whether it runs. It asked that the list read what flume keeps, settle nothing, answer within a second on a host with fifty places, and leave a place's long words to `flume status <place>`. "list" is the user's word. The construct stage chose each line's words, the grouping by repository, the terminal seam's `runs` and its bound of one second.
 Sources: `agentplot/blueprints:design/flume/requirements.md` on main at 7bd1891, clauses 56, 57, 58, 60 to 62, 64 to 66, 68, 70, 107, 111, 130, 139, 186, 200 and 201, B.5, C.5 and section 9, and S108; records 0005, 0006, 0031 and 0037; rules core.1, core.13 to core.17, core.29, core.35 and core.48; `crates/flume-core/src/status.rs` (`Engine::status`), `crates/flume-core/src/line.rs` (`Engine::lines`, `state_words`), `crates/flume-core/src/open.rs` (`Engine::open_stream`), `crates/flume-seams/src/terminal.rs` (`Terminal`), `crates/flume-seams/src/held.rs` (`Phase`, `Kept`) and `crates/flume/src/profiles/terminal/herdr/mod.rs` (`running`); flume 0.9.1's status and `status --line` timed on deneb on 2026-11-05.
@@ -95,3 +95,36 @@ Option 2 asks a stream's terminal once for each of its sessions, which reads 200
 - Bad: every terminal profile's runs answers a list of parts, the fake and the printed command among them.
 - Clause 201 and C.5's runs are amended on agentplot/blueprints main at 12866a8 (core.19). Rule core.52's details say a runs for each session is ruled out.
 
+
+## Amendment, 2026-11-06: the list leaves out a place that landed or was dropped unless every place is asked
+
+Status: accepted by the user on 2026-11-06, on their yes to the question below, which the fix `flume-list-leaves-finished-places-out` builds. Its statement amendment is on agentplot/blueprints at e4fab7b, on the branch `design/flume-the-list-leaves-finished-places-out` (62, 63, 200, S108).
+
+Deciders: the user, who answered "Should flume list leave finished places out?" on 2026-11-06, once `flume list` had landed (flume 78ea62ea, released in v0.13.0): "Yes: leave out landed and dropped places unless --all, as a follow-up fix after this lands." Which places are left out and the flag's name are theirs. That a place its caller declared done stays listed, that a left-out place is left out whatever keeps it, and that the answer gains no field for what it left out are the fix's code stage's.
+Sources: `agentplot/blueprints:design/flume/requirements.md` at e4fab7b, clauses 62, 63 and 200 and S108; rule core.52; `crates/flume-core/src/list.rs` (`Engine::list`, `landed_or_dropped`), `crates/flume/src/commands/mod.rs` (`Command::List`); `flume list` on deneb on 2026-11-06, 16 of its 67 lines places that landed and were tidied or were dropped.
+
+### Context and problem statement
+
+The decision above gives a line for each place flume keeps, a tidied place whose document stays among them. The user asked for the list so they could see what is there to open. A place that landed or was dropped has nothing left to open: its work is over (63), and its agent is gone or going. On deneb on 2026-11-06, 16 of the list's 67 lines were such places, `landed · tidied` and `dropped` among them, between the places the user could open.
+
+### Considered options
+
+1. **Leave out a place that landed or was dropped, whatever keeps it, and give every place under `--all`.**
+2. **As 1, and leave out a place its caller declared done too,** every place whose work is over.
+3. **As 1, but keep a place that still stands,** one kept by its teardown, its holds, its live agent or its unread state.
+4. **As 1, and say how many places were left out,** in a line of the print and a field of the JSON.
+
+### Decision outcome
+
+Option 1.
+
+The list gives a line for each place on the host that has not landed and was not dropped (63, 200). A place whose phase says it landed or was dropped, kept, being tidied or tidied, is left out. `flume list --all` gives every place's line, a tidied place whose document stays among them (62), as the decision above gives them, its words unchanged. A place its caller declared done stays listed, as do a place being made and a live one. The JSON's form is unchanged: `--all` decides which places it holds, and no field says how many were left out (61).
+
+Option 2 reads past the user's words, which name landed and dropped places. A done place's kind does not land, and its agent may be the one its caller still reads: `done · kept while its agent runs` names an agent a person can open. Option 3 keeps the four landed places of deneb's whose `sluice release` failed in the list. Those are a host's operator's to clear, and `flume status` and `--all` give them. Option 4 adds a line to a list the user asked to be short, and `--help` names `--all` beside it.
+
+### Consequences
+
+- Good: the list holds what is there to open, and `--all` gives the rest at the same cost.
+- Bad: a place kept by a failed teardown, its holds or its live agent after it landed or was dropped is seen only under `--all` or in `flume status`.
+- Bad: a program that read every place from `flume list --json` must now pass `--all`.
+- Clause 200 and S108 of the statement are amended at blueprints e4fab7b (core.19). Rule core.52 is amended with it, its rule and its details.

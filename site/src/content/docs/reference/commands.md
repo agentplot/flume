@@ -9,7 +9,7 @@ sidebar:
 |---|---|
 | `flume launch` | Make one place and start, hold or queue its first stage. |
 | `flume status [<place>]` | Every fact of a place, or of every place, and of the host; with `--line`, each place's one line. |
-| `flume list` | A line for each place on the host, under its repository, and each stream, reading only what flume keeps. |
+| `flume list` | A line for each place on the host, under its repository, and each stream, reading only what flume keeps; `--all` adds the places that landed or were dropped. |
 | `flume prompt <place> <stage>` | The exact prompt a stage would be sent at its next start, starting nothing. |
 | `flume tell <place> <words>` | Hand the place's agent words as a prompt, once it waits. |
 | `flume hold <place> <words>` | Hold the place's next stage, `--stage`, or its submission, `--submission`, with words saying what for. |
@@ -200,13 +200,15 @@ JSON fields.
 ## `flume list`
 
 ```sh
-flume list
+flume list [--all]
 ```
 
 A line for each place on the host and each stream its configuration
 declares, for a person to see at a glance what flume holds and what
-`flume open` can show. It needs no repository, takes no argument, and
-always exits `0`. `flume status <place>` gives a place's every fact.
+`flume open` can show. A place that landed or was dropped has nothing
+left to open, so the list leaves it out; `--all` lists every place,
+those among them. It needs no repository and always exits `0`. `flume
+status <place>` gives a place's every fact.
 
 Each repository's path stands on a line of its own, its places' lines
 under it. A place's line is `<kind>--<name> · <stage> · <state>`, the
@@ -222,7 +224,9 @@ stage. Then come the parts that hold:
   holding work`, `kept holding a lock` or `kept holding work and a
   lock`; `kept while its agent runs`; or `kept unread`. A place removed
   whose branch and document are still to go reads `being tidied`, and a
-  tidied place's document kept for an end pending reads `tidied`.
+  tidied place's document kept for an end pending reads `tidied`. A
+  place that landed or was dropped shows these only under `--all`; a
+  place its caller declared done shows them always.
 
 After the places, under `streams`, comes a line for each stream, in
 status's order, `default` among them: `<stream> · session <name> ·
@@ -237,14 +241,31 @@ once, so the line names every session a person can open for the
 stream. Where no multiplexer was asked, the sessions come first and
 `no profile for <multiplexer>` once after them. Under the printed
 command, which holds no session, a stream's line reads `<stream> · no
-session`. A host with no places prints `no places` before `streams`.
+session`. A host with no places to list prints `no places` before `streams`.
 
 ```console
 $ flume list
 /home/you/src/parser
   change--tabs-are-read-as-spaces · design · working
+  fix--a-long-line-wraps · code · waiting for room · waits on the host
+/home/you/src/site
+  change--the-search-is-rebuilt · construct · held · waits on its caller
+streams
+  work · session work · runs
+  personal · session personal · not running
+  default · session flume · runs
+```
+
+With `--all`, the places that landed or were dropped are listed among
+the others, in the same order:
+
+```console
+$ flume list --all
+/home/you/src/parser
+  change--tabs-are-read-as-spaces · design · working
   chore--the-docs-are-moved · landed · kept by sluice release
   fix--a-long-line-wraps · code · waiting for room · waits on the host
+  fix--the-old-parser-is-removed · dropped · tidied
 /home/you/src/site
   change--the-search-is-rebuilt · construct · held · waits on its caller
 streams

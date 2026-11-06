@@ -63,10 +63,15 @@ enum Command {
         line: bool,
     },
     /// A line for each place on the host and each stream it declares,
-    /// reading only what flume keeps; `flume status <place>` gives a
+    /// reading only what flume keeps, a place that landed or was dropped
+    /// left out unless `--all` is given; `flume status <place>` gives a
     /// place's every fact. Needs no repository and settles nothing (57,
     /// 200).
-    List,
+    List {
+        /// Every place, those that landed or were dropped among them.
+        #[arg(long)]
+        all: bool,
+    },
     /// The exact prompt a stage would be sent at its next start (29).
     Prompt { place: String, stage: String },
     /// Hand the place's agent words as a prompt (53 to 55).
@@ -481,7 +486,7 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 core.status(place.as_ref())
             }
         }
-        Command::List => build()?.list(),
+        Command::List { all } => build()?.list(*all),
         Command::Prompt { place, stage } => {
             let place = named(place)?;
             build()?.prompt(&place, stage)
