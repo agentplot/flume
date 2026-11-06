@@ -1,3 +1,5 @@
 # convco: what a conventional commit is here. A scope may name several
-# parts of the tree, "docs(adr, architecture): ...".
+# parts of the tree, "docs(adr, architecture): ...". A commit `git revert`
+# wrote, its message starting `Revert "`, is taken as it is: CI checks with
+# `--ignore-reverts`, and the commit-msg hook skips one alike (devenv.nix).
 scopeRegex: "^[[:alnum:]]+(?:[-_/][[:alnum:]]+)*(?:, ?[[:alnum:]]+(?:[-_/][[:alnum:]]+)*)*$"
