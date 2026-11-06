@@ -141,18 +141,22 @@ answer's words name no path (core.30).
 
 Claude Code's profile, in a new `crates/flume/src/profiles/agent/claude/live.rs`:
 
-- reads the session from the start's started ack; none, and no session
-  is live;
+- reads the session from the start's started ack, else from its word
+  that it began otherwise than recorded, which names its session too;
+  none, and no session is live;
 - for each environment's home (`carry::home`), lists `sessions/*.json`,
   takes each whose `sessionId` is the session, and counts it where the
   host runs a process with its `pid` started at its `procStart`, within
   a second. A record whose process is gone, or another process under a
-  reused id, counts nothing;
+  reused id, counts nothing. A record with no `procStart`, or one that
+  reads otherwise, counts where its process runs, as 2.1.296 reads its
+  own: a stage left waiting is named in status, where a second talk
+  would not be;
 - reads the host's process table once, each process's id, start and
   arguments, and counts each whose program is `claude`, by the last
   name of its first argument or its wrapped program's as `wrapper.rs`
   reads one, and whose arguments hold the session after `--resume` or
-  `-r`. The table is read by `host::process::listed`, through libproc
+  `-r`, or as `--resume=<session>`. The table is read by `host::process::listed`, through libproc
   and `KERN_PROCARGS2` on macOS and `/proc` on Linux, rather than by
   running `ps`: macOS installs `ps` setuid, and a sandbox refuses to run
   it, the merge queue's checks among them, where it lets a process read
