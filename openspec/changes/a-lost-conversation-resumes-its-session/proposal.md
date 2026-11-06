@@ -28,12 +28,11 @@ another account with no `FLUME_*` and no flume plugin, and one herdr's
 restore brought back bare. The user may be typing in any of them. A
 retry must never start a second agent on a session a process runs.
 
-The user wants the six back with their history. Record 0052, proposed,
-decides how; the statement's amendment is on agentplot/blueprints'
-branch `design/flume-a-lost-conversation-resumes-its-session` at
-6b7d3fc, unpushed (30, 43, 45, 49, 56, 64, 77, 145, 147, 161, 179, 207,
-C.4, C.5, S113 to S117). The change is built once the user accepts the
-record and the amendment lands on blueprints main.
+The user wants the six back with their history. Record 0052, accepted
+by the user on 2026-11-06 on their card in Pending You, decides how;
+the statement's amendment is on agentplot/blueprints main at d378220
+and c94c496 (30, 43, 45, 49, 56, 64, 77, 145, 147, 161, 179, 207, C.4,
+C.5, S113 to S117).
 
 ## What Changes
 

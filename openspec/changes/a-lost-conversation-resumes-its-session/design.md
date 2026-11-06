@@ -61,10 +61,9 @@ configuration sets `resume_agents_on_restore`, by the `agent_session_id`
 and `resume_argv` its Claude Code integration reported, without the
 pane's environment (record 0018).
 
-Record 0052, proposed, decides this change; its statement amendment is
-on agentplot/blueprints' branch
-`design/flume-a-lost-conversation-resumes-its-session` at 6b7d3fc
-(30, 43, 45, 49, 56, 64, 77, 145, 147, 161, 179, 207, C.4, C.5, S113 to
+Record 0052, accepted by the user on 2026-11-06 on their card in
+Pending You, decides this change; its statement amendment is on
+agentplot/blueprints main at d378220 and c94c496 (30, 43, 45, 49, 56, 64, 77, 145, 147, 161, 179, 207, C.4, C.5, S113 to
 S117). The rules this design relies on are core.1 and core.2 (the core
 names no tool; carry and live are the agent seam's), core.10 (one fresh
 agent per start, taken on its own word; no carried start beside a
@@ -391,5 +390,4 @@ user ends it.
 
 ## Open Questions
 
-None. The user's acceptance of record 0052 and the amendment's landing
-on blueprints main gate the build.
+None.

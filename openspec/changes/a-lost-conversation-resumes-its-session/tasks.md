@@ -2,10 +2,9 @@
 
 Each group is one session's work for an agent that reads this change
 (proposal, design, specs) and its group, and builds on main and on the
-groups before it. The change is built once the user accepts record 0052
-and the statement's amendment, on agentplot/blueprints' branch
-`design/flume-a-lost-conversation-resumes-its-session` at 6b7d3fc,
-lands on blueprints main; the build reads the statement there. A
+groups before it. The user accepted record 0052 on 2026-11-06, and the
+statement's amendment is on agentplot/blueprints main at d378220 and
+c94c496; the build reads the statement there. A
 group's last task runs the checks it touched through sluice. Every
 conformance scenario a group adds cites its clauses as data (106). The
 engine's scenarios name no tool (core.1). Tests use fixtures only: no
@@ -17,7 +16,7 @@ a herdr session a test starts is named by one letter of the test's own.
 
 ## 1. The decision recorded
 
-- [x] 1.1 Add record 0052, proposed, "A conversation lost with its terminal or its host goes on in its own session at its caller's retry", quoting the brief's and the orchestrator's words of 2026-11-06 and the user's want they carry, with its deciders, sources (the statement on blueprints' branch at 6b7d3fc; records 0016, 0018 and 0020), context, ten considered options, outcome, why not the others and consequences (30, 43, 45, 49, 56, 64, 77, 145, 147, 161, 179, 207, C.4, C.5, S113 to S117; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
+- [x] 1.1 Add record 0052, proposed, "A conversation lost with its terminal or its host goes on in its own session at its caller's retry", quoting the brief's and the orchestrator's words of 2026-11-06 and the user's want they carry, with its deciders, sources (the statement on blueprints main at d378220 and c94c496; records 0016, 0018 and 0020), context, ten considered options, outcome, why not the others and consequences (30, 43, 45, 49, 56, 64, 77, 145, 147, 161, 179, 207, C.4, C.5, S113 to S117; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
 - [x] 1.2 Amend core.10 (a bare agent in a conversation's pane ended only by its caller's stop, drop or done; no carried start while a process runs its conversation, which flume adopts, ends and sends nothing to), core.18 (no place removed while a process runs its conversation) and core.32 (the account a lost conversation's start ran under first; no retry but a lost conversation's carries) in `docs/architecture/core.md`, each with its details citing record 0052, and have `site/src/content/docs/architecture/rules.md` mirror the three rules (core.19, core.35). True when `sluice exec main -- moon run root:format site:prose site:build` passes.
 - [x] 1.3 Run the checks of the projects this group touched. True when `openspec validate a-lost-conversation-resumes-its-session --strict` and `sluice exec main -- moon run root:format root:adrs root:changes site:prose site:build` pass.
 
