@@ -15,7 +15,11 @@ that holds at every depth and knows no bolt and no unit:
 Reading the design the same day, they answered two things: a bolt's
 place has "No worktree: a branch and a record", and of the terminal's
 watch settling every place, "I do not like relying on the Herder plugin
-to make this work. I'd rather it be the Boomdrive process."
+to make this work. I'd rather it be the Boomdrive process." Asked
+whether a herdr server's nudge should settle only its own server's
+places, they ruled: "I thought we agreed that only the runner was doing
+the settling. I don't know what this nudge by the Herdr server is all
+about. I don't think we want it."
 
 Two things stand in the way.
 
@@ -27,7 +31,11 @@ Two things stand in the way.
   00:54Z and 02:34Z on 2026-11-06 with no agent in them. flume decides
   whether it runs attended by asking each terminal whether it keeps
   watch. So under any other terminal, or with the plugin's lease stale,
-  a submitted place moves only when a caller acts.
+  a submitted place moves only when a caller acts. The same watch writes
+  `flume status --json` after each settle for the sidebar, a read of
+  every place: on deneb on 2026-11-06 twelve herdr servers each ran it
+  every 30 seconds, the host sat at 57% kernel time, and a crew gate
+  timed out.
 - **The outer branch has no place.** A crew bolt's branch is made by the
   runner's branch command or `crew bolt give` (`sluice branch create`),
   submitted to main by ops through `crew bolt submit` from a worktree
@@ -57,16 +65,23 @@ it after. Those are sluice's and the host's, named below.
   with no agent among them, is settled and its base stepped within the
   runner's interval. Status gives the watch, its bound and when it last
   settled, or that none is kept and since when.
-- **A terminal's watch becomes its nudge (122, C.5, S28).** The herdr
-  plugin's watch still settles when an agent's state changes, a quicker
-  settle nothing waits on, and drops its bound. The terminal seam's
-  `watch` becomes `nudge`, and no terminal decides whether flume runs
-  attended (190, S91).
+- **No terminal settles (122, C.5, S27, S28).** The terminal seam
+  offers no operation that settles, keeps watch or nudges, and no
+  terminal decides whether flume runs attended (190, S91). flume's herdr
+  plugin keeps no process and runs no settle: its popup reads `flume
+  status --json` when a person opens it and after each key that acts,
+  its keys act through flume's commands, and its startup writes what
+  herdr's configuration lacks, ending a watch an earlier release left
+  running.
+- **A pane's row is one of flume's clues (139, C.5).** show's clues
+  carry the short form of the place's line, and herdr's show reports it
+  as the pane's `flume` token, the sidebar's row, at each settle that
+  changes it, beside the title and the base's count it shows today.
 - **A host with no runner runs attended.** Its places move at their
-  agents' quiet, at a nudge, and at each command a caller runs, which
-  settles every place first; its queues by those settles' steps, or by
-  `sluice run` where the host runs it. A timer running `flume settle
-  --every` keeps watch as the runner does.
+  agents' quiet and at each command a caller runs, which settles every
+  place first; its queues by those settles' steps, or by `sluice run`
+  where the host runs it. A timer running `flume settle --every` keeps
+  watch as the runner does.
 - **A branch that lands and is landed on is a base place's (9, 10, 18,
   202 to 206).** A base place is a place whose kind lands and has no
   stages, `stages = []` in weir's format. It has no worktree: it is its
@@ -132,14 +147,19 @@ it after. Those are sluice's and the host's, named below.
 - `place-status`: status gives the host's watch.
 - `end-delivery`: a wait drives no settle while a caller keeps watch.
 - `stream-terminals`: no terminal decides whether flume runs attended.
-- `herdr-plugin`: the watch nudges at each agent's change and keeps no
-  bound; it decides nothing of attended.
-- `terminal-profiles`: herdr answers its nudge from the plugin's lease;
-  the printed command keeps none.
+- `herdr-plugin`: the plugin keeps no process and runs no settle; its
+  popup reads status at a person's asking, its startup writes what
+  herdr's configuration lacks, and a pane's row is flume's clue.
+- `terminal-profiles`: herdr and the printed command settle nothing;
+  herdr shows the row with the clues and reads its setup for each
+  running server, with no lease.
+- `stage-runs`: the clues follow the place's line as well as its stage.
 - `seam-contracts`: the merge queue's open, close and a submit by name;
-  the terminal's nudge; the host's watch held by the store.
+  a terminal seam that starts no settle; show's clues with the line;
+  the host's watch held by the store.
 - `seam-fakes`: the fakes script open, close and a submit by name, the
-  fake terminal's nudge, and the host's watch.
+  host's watch, and a fake terminal that settles nothing and logs the
+  line it is shown.
 - `merge-queue-profile`: sluice's branch create and delete, a submit
   naming its head from the repository, and a submitted place landing by
   a watch's settles.
@@ -153,34 +173,43 @@ it after. Those are sluice's and the host's, named below.
 ## Impact
 
 - `crates/flume-seams`: `MergeQueue::open` and `close`, `SubmitHead`
-  for `submit`, `Opened` and `Closed`; `Terminal::nudge` and `Nudge` in
-  place of `watch` and `Watch`; `HostKey::Watch` and `Watched`;
-  `BranchRemoved::Refused`; `WaitsOn::Places`; round trips.
+  for `submit`, `Opened` and `Closed`; no `Terminal::watch` and nothing
+  in its place, `Watch` kept as status's form; `Clues::line`;
+  `HostKey::Watch` and `Watched`; `BranchRemoved::Refused`;
+  `WaitsOn::Places`; round trips.
 - `crates/flume-core`: `settle_every` and the host's `attended`; status's
-  watch; the launch of a base place and the launches it refuses, the
+  watch; show's line; the launch of a base place and the launches it refuses, the
   retry and drop it refuses, its submission and outcome from the record,
   its failure, its tidy and its undo, its wait and status.
-- `crates/flume-fakes`: open, close, a submit by name, the nudge and the
-  watch.
+- `crates/flume-fakes`: open, close, a submit by name, the watch, and
+  show's line in the fake terminal's log.
 - `crates/flume-conformance`: the watch's and attended's scenarios,
   every scenario that set a terminal's watch moved to the host's,
   settling's S109 and S118, base places' S110 to S112, the seam
   scenarios, and the clause list.
 - `crates/flume`: `flume settle --every`; status's watch in the person's
   form; sluice's `branch create`, `branch delete` and `submit --head`
-  from the repository; the herdr profile's nudge; weir-kinds' pin;
+  from the repository; the herdr profile's row and its setup with no
+  lease; weir-kinds' pin;
   tests over scratch repositories and against the pinned sluice.
-- `plugins/herdr`: the watch drops its bound; its tests and README.
+- `plugins/herdr`: no watch: a startup that writes `setup.json` and
+  ends an earlier watch, a popup that reads status at its opening and
+  after each act; its manifest, tests and README.
 - `site/`: the merge-queue guide's base places and who moves a submitted
-  place, the places-and-herdr guide's watch and nudge, the commands and
-  state references.
+  place; the places-and-herdr guide, the install page and the
+  architecture overview on a plugin that settles nothing; the commands
+  and state references.
 - `docs/`: record 0051, accepted; rule core.53, core.13's rule, and
   core.5's, core.6's, core.13's, core.25's and core.49's details.
 - agentplot/blueprints: flume's vocabulary, preamble, 9, 10, 14, 18, 46,
-  47, 67, 78, 80, 82, 111, 112, 117, 119, 120, 122, 133, 165, 176, 202
-  to 206, 208, C.1, C.5, C.6, C.7, section 9, I8, section 12, S27, S28, S91 and
-  S109 to S112 and S118; weir 51, 52 and 57; sluice 124; on main at
-  51b6316 (core.19).
+  47, 67, 78, 80, 82, 111, 112, 117, 119, 120, 133, 165, 176, 202 to
+  206, 208, C.1, C.6, C.7, section 9, I8, section 12, S27, S28, S91 and
+  S109 to S112 and S118, weir 51, 52 and 57 and sluice 124, on main at
+  51b6316; and flume's vocabulary, 46, 119, 120, 122, 139, 176, the
+  common profile's list, C.4's row, C.5, section 9, I8, S27, S28, S109
+  and S118 on the branch `design/flume-only-the-hosts-watch-settles` at
+  6dc9399, cut from main at 84c7a01 and unpushed, on the user's ruling
+  that no terminal settles (core.19).
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool. weir-kinds' pin moves, and the pinned sluice moves
   to the release that submits a named head from no worktree.

@@ -31,17 +31,18 @@ submission by name's outcome with its words (99, 117, 203; core.2).
 - **WHEN** a base place submits the branch `train/a`, named, at its revision, to `main`
 - **THEN** the seam answers the submission it made with `train/a` as its branch, held with no wait, and read-submission of `train/a` gives it (99, 117, 203)
 
-### Requirement: The terminal's nudge
+### Requirement: The terminal seam starts no settle
 
-The terminal seam SHALL answer whether the terminal settles when an
-agent's state changes, or nudges nothing, in place of a watch with a
-bound; no operation of the seam SHALL answer a bound on which the
-terminal settles (122, 208).
+The terminal seam SHALL offer no operation that settles, keeps watch
+over the host, nudges a settle at an agent's change, or answers a
+bound on which the terminal settles; whether flume runs attended SHALL
+be read from the host's watch alone, whatever terminal is bound (119,
+122, 208; core.2, core.13).
 
-#### Scenario: A nudge or none
+#### Scenario: The same reading under every terminal
 
-- **WHEN** the seam's scenarios ask a profile its nudge
-- **THEN** it answers that it nudges at each change or that it nudges nothing, and gives no bound (122)
+- **WHEN** the engine is asked whether it runs attended under the fake terminal, then under each terminal profile the tree carries, with the same host's watch held
+- **THEN** it answers the same under each, and no terminal operation was called to answer it (122, 208)
 
 ### Requirement: The store holds the host's watch
 
@@ -59,11 +60,36 @@ document is, a host state written before reading as holding none (73,
 ### Requirement: The types of a base place and the watch
 
 `flume-seams` SHALL hold `SubmitHead`, `Opened`, `Closed`,
-`BranchRemoved::Refused`, `Nudge`, `HostKey::Watch` and `Watched`, each
-written and read back by its round trip, a document written before
-reading as it did (61, 202 to 206 and 208).
+`BranchRemoved::Refused`, `HostKey::Watch`, `Watched` and the line
+`Clues` carries, each written and read back by its round trip, a
+document written before reading as it did (61, 139, 202 to 206 and
+208).
 
 #### Scenario: Round trips
 
 - **WHEN** `round_trip.rs` writes each new type and each new variant and reads it back
 - **THEN** each reads as written, and a held state and a host's state written before this change read unchanged (61)
+
+## MODIFIED Requirements
+
+### Requirement: The terminal seam's open, tidy and show
+
+The terminal seam's open SHALL take where the agent runs, beside a
+pane, in a session by its name or in the terminal's own, and SHALL
+answer, beside opened and refused, a start held at a question
+its program asks before it starts and a program that did not come up
+within its bound, each with the screen (94, 107); it SHALL tidy what it
+made for a place gone (138) and show a place's clues, its current
+stage and that stage's state, the short form of its line and the count
+of the places of its repository on its base (139); and every terminal
+operation SHALL answer within a bound the profile states (98).
+
+#### Scenario: Held, tidied and shown
+
+- **WHEN** the fake terminal holds a start at a question, makes a place's tab in its base's workspace, and has a person's pane in that workspace
+- **THEN** open answers held with the screen, tidy closes the place's tab and keeps the workspace naming the person's pane, and show takes the place's clues with its line's short form (94, 138, 139)
+
+#### Scenario: Where an agent opens
+
+- **WHEN** the fake terminal is asked to open one agent beside the pane `operator`, one in the session `work` and one in its own
+- **THEN** its log names each where it was asked, and the open's answer is the same for each (94, 107)

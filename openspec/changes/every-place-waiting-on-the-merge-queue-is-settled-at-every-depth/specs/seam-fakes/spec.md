@@ -20,14 +20,20 @@ submission in its record alone, its inbox giving nothing for it (106,
 - **WHEN** a test submits `train/z` by name and scripts the fake merge queue to land it
 - **THEN** read-submission of `train/z` gives it landed, and the inbox gives nothing for any place (133, 203)
 
-### Requirement: The fakes nudge and keep the host's watch
+### Requirement: The fakes keep the host's watch and settle nothing
 
-The fake terminal SHALL answer the nudge a test sets, nudging nothing by
-default, and the fake store SHALL hold the host's watch as any host
-document, so a test makes flume watched by settling with a bound and
-lets the watch lapse by the fake clock (106, 122, 208).
+The fake store SHALL hold the host's watch as any host document, so a
+test makes flume watched by settling with a bound and lets the watch
+lapse by the fake clock; the fake terminal SHALL settle nothing and
+answer nothing of a watch, and SHALL log the clues show gives it, the
+line's short form among them (106, 122, 139, 208).
 
 #### Scenario: A watch the clock lets lapse
 
 - **WHEN** a test settles every place with a bound of thirty seconds and moves the fake clock past a minute
 - **THEN** the engine reads attended, and reads unattended again after the test's next settle with a bound (119, 208)
+
+#### Scenario: Show's clues in the log
+
+- **WHEN** a settle shows a place's clues to the fake terminal
+- **THEN** its log names the place, its stage and state, its line's short form and its base's count (139)

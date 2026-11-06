@@ -7,17 +7,18 @@ host's state and before it settles, when it began and the bound it
 stated, written by compare-and-set as every host document is. A caller
 SHALL keep watch while the newest such settle began less than twice its
 bound ago, and SHALL decide nothing of what the settle does; no terminal
-SHALL keep watch (46, 119, 120, 208; core.13, core.16).
+and no plugin of one SHALL keep watch or settle (46, 119, 120, 122,
+208; core.13, core.16).
 
 #### Scenario: A watch kept, then lapsed
 
 - **WHEN** a caller settles every place with a bound of two minutes, and the fake clock then passes three minutes, then two more
 - **THEN** the host's watch holds when that settle began and two minutes; flume runs unattended at three minutes, and attended at five, with no other settle between (119, 208, S118)
 
-#### Scenario: A terminal's nudge keeps no watch
+#### Scenario: No terminal keeps watch
 
-- **WHEN** the fake terminal nudges on every agent's change and no caller has settled with a bound
-- **THEN** flume runs attended, and a caller's drop settles every place first (119, 122, 208)
+- **WHEN** no caller has settled with a bound, and agents of the fake terminal's change state
+- **THEN** flume runs attended, nothing settles at those changes, and a caller's drop settles every place first (119, 122, 208)
 
 ### Requirement: A watch's settle moves every place, an agent in it or none
 
@@ -49,28 +50,29 @@ and no other caller (46, 120, 124, 125, 208, I8, S109).
 ### Requirement: Attended and watched
 
 While a caller keeps watch over the host, its settles SHALL settle each
-place on its stated bound, and a terminal's nudge MAY settle sooner.
-While no caller keeps watch, whatever terminals the host binds, every
-command of flume's that acts on places SHALL settle every place on the
-host before it acts. Status and a prompt's rendering SHALL settle
-nothing (119, 122, 190, 208).
+place on its stated bound, and between flume's commands nothing else
+SHALL settle a place but its agent's own quiet. While no caller keeps
+watch, whatever terminals the host binds, every command of flume's
+that acts on places SHALL settle every place on the host before it
+acts. Status and a prompt's rendering SHALL settle nothing (119, 121,
+122, 190, 208).
 
 #### Scenario: Killed with nobody watching
 
-- **WHEN** no caller keeps watch, the fake terminal nudges nothing, a code stage's agent stops with nothing delivered, and later a caller drops another place
+- **WHEN** no caller keeps watch, a code stage's agent stops with nothing delivered, and later a caller drops another place
 - **THEN** nothing reads the stage until the drop, which settles every place first, and status then reports the stage lost (S27)
 
 #### Scenario: Crashed under a watch
 
-- **WHEN** a caller keeps watch, the fake terminal nudges nothing, and a code stage's agent stops with nothing delivered and its on-quiet never runs
-- **THEN** the caller's next settle reads the stage lost within its bound, with no other caller asking, and starts no agent (S28)
+- **WHEN** a caller keeps watch, and a code stage's agent stops with nothing delivered and its on-quiet never runs
+- **THEN** the caller's next settle reads the stage lost within its bound, with no other caller asking, and starts no agent; nothing settled the place before it (122, S28)
 
 #### Scenario: A watched host with one stream unwatched
 
-- **WHEN** a caller keeps watch, the host's own fake terminal nudges, its `trial` names a fake terminal that nudges nothing, and a caller drops a place on `work`
+- **WHEN** a caller keeps watch, the host's terminal is `fake`, its `trial` names the terminal `other`, and a caller drops a place on `work`
 - **THEN** the drop settles nothing first, and `trial`'s places move at the caller's settles (119, 190, 208, S91)
 
-#### Scenario: Crashed under a nudge
+#### Scenario: A host with no runner
 
-- **WHEN** a caller keeps watch, the fake terminal nudges, and a code stage's agent stops with nothing delivered and its on-quiet never runs
-- **THEN** the nudge's settle reads the stage lost before the caller's next settle, and starts no agent (122, S28)
+- **WHEN** no caller keeps watch, a chore's code stage delivers and the settle its agent's quiet runs submits the place, ten minutes of the fake clock pass with nothing asked, a caller then drops another place, and later settles every place with a bound of two minutes
+- **THEN** the fake merge queue logs no step of `main` in the ten minutes, one in the drop, which settles every place first, and one in the caller's settle, after which status gives the watch and its bound (46, 119, 121, 122, 124, 208, S118)

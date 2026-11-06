@@ -38,6 +38,14 @@ settles every waiting place between commands: "I do not like this as a
 solution. I do not like relying on the Herder plugin to make this work.
 I'd rather it be the Boomdrive process."
 
+Asked on Pending You the same day whether a herdr server's nudge should
+settle only its own server's places, they ruled: "I thought we agreed
+that only the runner was doing the settling. I don't know what this
+nudge by the Herdr server is all about. I don't think we want it." So
+no terminal settles. Only the runner does, each of its passes running
+`flume settle --every`, one watch over the host; a host with no runner
+moves at each caller's command and at an agent's own quiet hook (121).
+
 ### What moves a submitted place today
 
 A settle runs when an agent goes quiet (121), when the terminal's watch
@@ -57,6 +65,11 @@ nothing does but a caller's command. flume decides whether it runs
 attended by asking each terminal the host binds whether it keeps watch
 (`terminals.rs`, `attended`), so the whole guarantee rests on one
 terminal's plugin. The user ruled that out.
+
+The plugin's watch also writes `flume status --json` after each settle,
+for the sidebar's rows and the popup, a read of every place on the host.
+On deneb on 2026-11-06 twelve herdr servers each ran it every 30
+seconds; the host sat at 57% kernel time, and a crew gate timed out.
 
 ### Why deneb's queues stood still
 
@@ -116,8 +129,10 @@ and amends core.5's, core.6's, core.25's and core.49's details
   flume's settles where nothing else drives it (46, 111, 124).
 - The guarantee that every waiting place is settled between flume's
   commands is a caller's, kept over the host: the runner's passes where
-  the host keeps the runner. Nothing depends on a terminal or its
-  plugin (119, 208).
+  the host keeps the runner. No terminal and no plugin of one settles a
+  place or says whether flume runs attended (119, 122, 208).
+- A terminal's plugin reads flume only at a person's asking, and the
+  clues the terminal shows come from flume's own settles (139).
 - A base place: what a branch that work lands on, and that itself
   lands, is in flume's terms, a branch and a record with no worktree,
   and what flume needs for a place whose base is one (202 to 206).
@@ -190,94 +205,75 @@ person's form prints `a caller keeps watch: every place settles every
 <bound>, last at <time>` or `no caller keeps watch since <time>: every
 place settles at each command of flume's that acts`.
 
-### 2. The terminal's watch becomes its nudge
+### 2. No terminal settles, and herdr's plugin reads only at a person's asking
 
-A terminal's settle at an agent's state change stays, as a nudge
-(122): it quickens a settle a watch or a command would make, keeps no
-bound, and decides nothing of attended. The terminal seam's `watch`
-operation becomes `nudge`:
+No terminal settles a place (122). The terminal seam (B.5) offers no
+operation that settles, keeps watch over the host, nudges a settle at
+an agent's change, or answers a bound: `Terminal::watch` goes, and
+nothing takes its place. Between flume's commands a place moves at its
+agent's quiet (121) and at the settles of a caller keeping watch (208);
+where none is kept, at each command that acts (119). Status's terminal
+answers keep their `watch` field, given none for every terminal, so the
+JSON form keeps its fields (61; core.14).
 
-```rust
-/// nudge: whether the terminal settles when an agent's state changes
-/// (122). A nudge is no watch: flume runs attended or not by the
-/// host's watch alone (119, 208).
-pub enum Nudge { OnChange, None }
+What flume's herdr plugin still does:
 
-fn nudge(&self) -> Nudge;
-```
+- **The popup and its keys.** The popup reads `flume status --json`
+  once when a person opens it and again after each key that acts, and
+  redraws from that answer, reading nothing on a timer. Each key is
+  herdr's focus or one flume command, `tell`, `stop` or `retry` (53,
+  107).
+- **What herdr's configuration lacks.** The plugin's startup, herdr's
+  `[[startup]]`, reads herdr's configuration file, writes `setup.json`
+  in its server's state directory with the server's socket, logs what
+  it lacks and exits. The herdr profile gives those words in status for
+  each server whose socket is still present, reading no lease (56,
+  C.5). The startup also ends a watch an earlier release left running,
+  by the pid and identity its lease names (record 0016), and removes the
+  lease, so an upgraded server stops settling at its next start.
+- **Nothing else.** No process between herdr's startup and a person's
+  asking, no lease, no `flume settle`, no `flume status` on a tick, and
+  no `report-metadata` of its own.
 
-The herdr profile answers `OnChange` while the plugin's watch holds a
-fresh lease and `None` otherwise; the printed command answers `None`.
-Status's terminal answer keeps its `watch` field, given `none` for
-every terminal, and gains `nudge` (61).
+The sidebar's row becomes one of flume's clues. A row on an agent's
+pane is the short form of its place's line, `code 1/2 · run 1 · tasks
+2/5 · working`, and it was the one clue the plugin reported that
+flume's show did not. `Clues` gains `line: String`, the short form
+`Engine::place_line` gives from the place's held state, the change at
+its head and its agent's asking mark, as `flume status --line` reads
+them (57, 142). The key `show` keeps in the held state includes it, so a
+settle shows the clues again when the row changes and not otherwise.
+herdr's show adds `--token flume=<line>` to the pane's `report-metadata`,
+beside the title and display agent it reports today (139, C.5). So every
+clue herdr shows, a pane's title and row and a base's count, has one
+owner, flume's settle, at the moment a settle changes it: at the agent's
+quiet, at a caller's watch, or at a command.
 
-The herdr plugin's watch drops its bound. It still reads every agent's
-state in one listing per tick, runs `flume settle` naming no place
-when a flume agent's state changed or an agent came up or went, writes
-`flume status --json` for the sidebar and the popup, and reports the
-clues. It no longer settles because time passed. Nothing waits on it.
-
-#### Why the nudge stays beside the watch
-
-The watch's bound is the runner's interval: `fetch_interval`, or the
-shorter of it and `poll_interval` (B1), a minute or two as Boomdrive's
-README gives them (`2m`, `1m`). The nudge's is herdr's tick, two
-seconds (`FLUME_HERDR_TICK`). Most moves need neither. A Claude Code
-agent that goes quiet settles its own place at once by its hook (121),
-and that settle also starts what waits for room on the whole host
-(`settle_place`'s `start_waiting`; 46, 70). The nudge gives seconds,
-where the watch gives its interval, to the moves no hook reports:
-
-- **A stage of a program with no hook of its own.** The common profile
-  offers no on-quiet (171, C.4's common row), so such a stage's end is
-  read, and its next stage started, only at a settle. With the nudge
-  that is seconds after herdr reads the agent idle. With the watch
-  alone it is the next pass, and a kind of n stages run by such a
-  program waits up to n intervals between them, holding its room each
-  time.
-- **An agent that stopped with no word.** A Claude Code agent killed,
-  crashed or closed with its pane before its stop hook ran is read lost
-  (45), delivered to its recipients, and its room given to what waits,
-  at the nudge (S28).
-- **A start held at a question.** A start herdr read blocked past its
-  bound, whose screen shows the folder-trust question, is answered at
-  the next settle (34; core.12). The nudge's settle at herdr's change is
-  that settle.
-- **A lost conversation's process ending.** A retry of a conversation
-  reported lost waits while a process runs its session, and starts at
-  the first settle that reads none (49, 207). Where that process is the
-  bare agent herdr brought back in the conversation's pane, the person
-  ending it is a pane's change, and the nudge starts the retry.
-
-If the nudge goes, none of these is lost: each is read at the watch's
-next pass or the next command that acts. What is lost is time, the
-interval instead of seconds at every such move. On a host that keeps no
-runner there is no next pass: those moves wait for a person's next
-command, so a common-profile stage, an agent closed by hand or a
-question at a start sits until the person acts. That host, a person's
-plain use under herdr, is the one the nudge serves most.
-
-It is no watch, and what it costs is bounded. Each nudge settles every
-place on the host, about 80 seconds on deneb. The plugin awaits each
-settle and folds the changes it saw meanwhile into the next, so at most
-one nudge's settle runs per herdr server, beside the watch's, and both
-are safe to repeat (74; core.17). It decides nothing: flume runs
-attended or not by the host's watch alone, nothing waits on a nudge,
-and a host without herdr's plugin is as correct, only slower at those
-moves.
+A plugin that reads flume on a tick multiplies that read by the
+terminal's servers, as deneb's twelve did, while flume's own settles
+already read every fact a row holds. Settling only at the watch, an
+agent's quiet and a command costs time, never a move: what no hook
+reports is read at the next settle. That is
+a stage of a program the common profile binds, which has no on-quiet
+(171, C.4); an agent killed or crashed with no word (45, S28); a start
+held at the folder-trust question (34); and a lost conversation's
+process ending in its pane (49, 207). On a host that keeps the runner
+each is read at its next pass, within its interval, `2m` or `1m` as
+Boomdrive's README gives them. On a host with no runner each waits for
+a person's next command that acts (S27).
 
 ### 3. A host with no runner
 
 A host where no caller keeps watch runs attended (119). Its places move
-at their agents' quiet (121), at a terminal's nudge (122), and at each
-command of a caller's that acts, which settles every place first and
-so steps every open submission's base (124). A person's own use is
-that: they launch, retry, drop and wait, and each act moves every
-place. A place submitted by hand lands as before (63, S30). Where the
-host runs `sluice run`, its queues move on their own, and the next
-settle reads the outcomes (sluice 135). A host may keep its own watch
-with no runner: a timer that runs `flume settle --every <bound>` is a
-caller like any other (208).
+at their agents' quiet (121) and at each command of a caller's that
+acts, which settles every place first and so steps every open
+submission's base (124). A person's own use is that: they launch,
+retry, drop and wait, and each act moves every place. A place submitted
+by hand lands as before (63, S30). Where the host runs `sluice run`, its
+queues move on their own, and the next settle reads the outcomes
+(sluice 135). Nothing of its terminal's settles (decision 2). A host may
+keep its own watch with no runner: a timer that runs `flume settle
+--every <bound>` is a caller like any other (208).
 
 ### 4. A base place is a kind's shape: a kind that lands with no stages
 
@@ -463,7 +459,7 @@ its branch (80, 126), and nothing is read at its location.
 The place's line gives `<kind>--<name> · <n> on its branch · open`
 while places on its branch are live, `waiting on its caller` once none
 is, and then `submitted`, `landed` and the rest as any place's (56,
-139). The list gives the same words (200). The herdr plugin's sidebar
+139). The list gives the same words (200). The herdr plugin's popup
 shows a base place as status gives it; it has no pane to open.
 
 ### 11. The drop and the tidy
@@ -519,9 +515,10 @@ pub enum Opened {
 }
 ```
 
-and `submit` takes a `SubmitHead`. The terminal seam's `watch` becomes
-`nudge` (decision 2). The store seam's host documents gain the watch
-(decision 1). The place seam is unchanged.
+and `submit` takes a `SubmitHead`. The terminal seam loses `watch`,
+with nothing in its place, and its show's `Clues` gain `line` (decision
+2). The store seam's host documents gain the watch (decision 1). The
+place seam is unchanged.
 
 The sluice profile (C.6):
 
@@ -547,8 +544,9 @@ the revision weir's follow-up W1 lands, mapping it to a kind with no
 stages; a kind that does not land and declares none is refused in
 weir's words (4, 18; core.4).
 
-The herdr profile answers its nudge from the plugin's lease (decision
-2). The no-tool merge-queue profile answers `open` and `close` as
+The herdr profile shows the row with the other clues, and reads
+`setup.json` for each server whose socket is present, reading no lease
+(decision 2). The no-tool merge-queue profile answers `open` and `close` as
 refusals naming that no merge queue is bound; a launch of a base place
 under it is refused before that as any landing kind's is.
 
@@ -560,51 +558,46 @@ refuse, keep or answer gone, each logged as `open <branch> from
 as `submit <branch> named`. A branch it opened is one it lands on: a
 submission from a place on it lands there when scripted to, and a
 submission by name is decided in its record alone, its inbox giving
-nothing for it. The fake terminal's `set_watch` becomes `set_nudge`,
-and a test makes flume unattended or not by the host's watch:
+nothing for it. The fake terminal keeps no watch, settles nothing and
+logs the clues show gives it, the line among them; a test makes flume
+unattended or not by the host's watch:
 `engine.settle_every(seconds)` keeps it, and the fake clock passing
 twice its bound lets it lapse. The fake kinds hold a kind with no
 stages as any kind. The fake place logs nothing for a base place.
 
 ### 14. How it is held
 
-- **The statement**, on agentplot/blueprints main at 51b6316, the
-  branch `design/flume-every-place-on-the-queue-is-settled-at-every-depth`
-  rebased onto main's 6d322be on the user's approval of 2026-11-06.
-  flume: the
-  vocabulary's place, base place, watch, nudge and attended entries, the
-  preamble, 9, 10, 14, 18, 46, 47, 67, 78, 80, 82, 111, 112, 117, 119,
-  120, 122, 133, 165, 176, the common profile's list and row, a wait's
-  wording, the new 202 to 204 and 208 in Part A and 205 and 206 in B.6,
-  C.1, C.5's nudge column, C.6's submit, inbox, step, open and close
-  rows and its submit by name, C.7's host state, section 9's surfaces, givens, callers
-  and the runner's row, I8, section 12, S27, S28, S91 and S109 to S112 and S118.
-  Main's lost-conversation design (flume record 0052, d378220 and
-  c94c496) took 207, the agent seam's live, and S113 to S117, so the
-  watch is 208 and its host with no runner S118; S109 to S112 stay
-  after S108, where that design leaves them. sluice's 8bf02d9 on main
-  amends 71, 150 and S75, none of them 124. Of flume's clauses this
-  change amends, d378220 and c94c496 touched 43, C.4 and C.5, each in
-  words this change leaves alone: 43 gains what
-  a lost conversation's end says beside this change's wait, C.4 gains
-  Claude Code's carry and live beside the common profile's row this
-  change rewords, and C.5 gains herdr's restore below the table whose
-  column becomes the nudge. Each holds read with the other. The watch
-  serves record 0052's wait: a lost conversation's retry, with no agent
-  of flume's in its place, starts within the watch's bound once no
-  process runs its session, or at a nudge or a command that acts on a
-  host with no watch (49, 207). Main's standing agent (flume record
-  0013 as amended, 6d322be) touched the vocabulary, 43, 132 and C.7: it
-  gives a role's address to a standing agent, its ends going into that
-  agent at the settles that read them, beside this change's watch in
-  the vocabulary, its wait in 43 and its host state in C.7, each read
-  whole with both. weir: 51, 52, 57 and the format's example. sluice:
-  124's submission naming its head from anywhere in the repository,
-  with no worktree as its submitter.
-- **Record 0051**, accepted on the user's approval of 2026-11-06: "Every branch that lands is a place's, a
-  caller keeps watch over the host, and every place waiting on the
-  merge queue is settled at every depth", quoting the user's note and
-  their two answers.
+- **The statement.** agentplot/blueprints main at 51b6316 holds this
+  change's base places and watch: flume's vocabulary's place, base
+  place, watch and attended entries, the preamble, 9, 10, 14, 18, 46,
+  47, 67, 78, 80, 82, 111, 112, 117, 119, 120, 133, 165, 176, the common
+  profile's list and row, a wait's wording, the new 202 to 204 and 208
+  in Part A and 205 and 206 in B.6, C.1, C.6's submit, inbox, step,
+  open and close rows and its submit by name, C.7's host state, section
+  9's surfaces, givens, callers and the runner's row, I8, section 12,
+  S27, S28, S91 and S109 to S112 and S118; weir's 51, 52, 57 and the
+  format's example; sluice's 124, a submission naming its head from
+  anywhere in the repository with no worktree as its submitter. The
+  branch `design/flume-only-the-hosts-watch-settles` at 6dc9399, cut
+  from main at 84c7a01 and unpushed, amends flume's statement to the
+  user's ruling that no terminal settles: 122, the terminal settles
+  nothing; the vocabulary; 46, 119, 120, 176, the common
+  profile's list and C.4's row; 139, show's clues carrying the line's
+  short form; C.5's table, its show row and its prose on the clues and
+  the plugin; section 9's surfaces, the operator's row and herdr's
+  bullet; I8, S27, S28, S109 and S118. It adds and removes no clause,
+  so the suite's clause list keeps its numbers. Main's lost-conversation
+  design (flume record 0052) holds 207, the agent seam's live, and S113
+  to S117; main's standing agent (flume record 0013 as amended) touched
+  the vocabulary, 43, 132 and C.7; each reads whole with this change. A
+  lost conversation's retry, with no agent of flume's in its place,
+  starts within the watch's bound once no process runs its session, or
+  at a command that acts on a host with no watch (49, 207).
+- **Record 0051**: "Every branch that lands is a place's, a caller
+  keeps watch over the host, and every place waiting on the merge queue
+  is settled at every depth", accepted on the user's approval of
+  2026-11-06 and amended the same day on their ruling that no terminal
+  settles, quoting their note, their two answers and the ruling.
 - **core.53**, under "Branches, submissions and landings": a branch
   other places land on is a base place's, a branch and a record with no
   worktree; the merge queue alone makes and removes its branch at
@@ -612,16 +605,20 @@ stages as any kind. The fake place logs nothing for a base place.
   retry, by its branch's name from the repository, once no place on its
   branch is live; and flume names no depth and no use of one.
   **core.13**'s rule: every settle runs inside a command, started by an
-  agent going quiet, by a caller keeping watch, by a terminal's nudge or
-  by any other caller. Its details, and core.5's, core.6's, core.25's
-  and core.49's, follow the watch and the base place.
+  agent going quiet, by a caller keeping watch over the host or by any
+  other caller, and never by a terminal or a plugin of one. Its
+  details, and core.5's, core.6's, core.25's and core.49's, follow the
+  watch and the base place.
 - **The site**: the merge-queue guide gains "Branches that land on
   branches" and says who moves a submitted place; the places-and-herdr
-  guide says a caller keeps the host's watch and herdr's plugin nudges;
-  the commands reference gives `flume settle --every`; the state
-  reference gives the host's watch, the nudge, `on_branch`, `worktree`
-  and `waits_on: places`; the herdr plugin's README says the watch
-  nudges and keeps no bound (core.35).
+  guide and the herdr plugin's README say the plugin keeps no process
+  and runs no settle, that a pane's row is one of flume's clues, shown
+  at the settles that change it, that the popup reads status when a
+  person opens it, and that a caller keeps the host's watch; the
+  install page and the architecture overview say the same; the commands
+  reference gives `flume settle --every`; the state reference gives the
+  host's watch, show's line, `on_branch`, `worktree` and `waits_on:
+  places` (core.35).
 
 ## Who owns what, and what each tool stops doing
 
@@ -632,8 +629,9 @@ stages as any kind. The fake place logs nothing for a base place.
 | a queue's rounds, and the host's driver where one runs | sluice (135) | flume, the runner, crew |
 | a step of a queue where no driver lives, at every depth | flume's settle (124, 125, C.6) | the runner, crew |
 | every settle of every place between flume's commands | the caller keeping watch over the host (208): the runner's passes where the host keeps the runner (B1) | flume, crew |
-| whether flume runs attended | flume, from the host's watch alone (119, 208) | the runner, the herdr plugin |
-| a quicker settle at an agent's change | the terminal's nudge, herdr's plugin (122) | nobody: nothing waits on it |
+| whether flume runs attended | flume, from the host's watch alone (119, 208) | the runner |
+| the clues a terminal shows, a pane's title and row and a base's count | flume's settle, through the terminal's show (139) | the herdr plugin, which shows them and reads nothing for them |
+| what herdr's configuration lacks for flume's plugin | the plugin's startup, written once per server (C.5) | flume's status |
 | a branch sluice lands on, made and removed | sluice (104 to 106), asked by flume's base place (202, 204) | the runner, crew |
 | a submission of any branch that lands, and its outcome | flume (111, 133, 203) | the runner, crew |
 | a kind with no stages | weir's format (51, 57) | flume, crew |
@@ -727,15 +725,31 @@ queue, and no terminal is relied on.
 Until B1 and C1 land, crew's bolts are bases no place holds, and land
 by crew's path as today: decision 7's first case. Until B1's watch
 lands, a host that keeps the runner runs attended, its submitted places
-moved by its callers' commands and by herdr's nudge where herdr is its
-terminal.
+moved by its callers' commands and its agents' quiet.
 
 ## Alternatives Considered
 
-- **The terminal's watch keeps every place moving.** What the build
-  does today: herdr's plugin settles every place on its bound. It ties
-  the guarantee to one terminal's plugin and its lease, and leaves a
-  host under any other terminal attended. The user ruled it out.
+- **The terminal's watch keeps every place moving.** What main does
+  today: herdr's plugin settles every place on its bound. It ties the
+  guarantee to one terminal's plugin and its lease, and leaves a host
+  under any other terminal attended. The user ruled it out.
+- **A terminal's nudge beside the watch.** herdr's plugin settling
+  every place at each agent's change, keeping no bound and deciding
+  nothing of attended, for the seconds it gives the moves no hook
+  reports (decision 2). It is a second settler beside the runner, each
+  of its settles a read of every place on every herdr server, and the
+  user ruled it out: "I thought we agreed that only the runner was
+  doing the settling. I don't know what this nudge by the Herdr server
+  is all about. I don't think we want it."
+- **herdr's plugin reads its own server's places' lines.** At each
+  change herdr's listing shows in its panes, and on a long tick for a
+  row's tasks, `flume status --line --json` naming those places. It
+  needs the plugin to map panes to places with no read of status, keeps
+  a process on every server, and copies a clue flume's settle already
+  reads. Showing the row as a clue needs none of it.
+- **herdr's plugin reads every place's status on its tick.** What main
+  does for the sidebar and the popup. Twelve servers on deneb held the
+  host at 57% kernel time on 2026-11-06.
 - **The host's configuration declares a watch.** A key such as `[host]
   watch = "2m"` beside the runner's own intervals. Two settings kept in
   step on every host, and a runner that stops leaves flume believing
@@ -776,8 +790,18 @@ terminal.
   A build that finds W1 or S1 missing stops short naming it.
 - **A host that keeps the runner runs attended until B1.** Its acting
   commands settle every place first, which on a host of many places is
-  slow. herdr's nudge still settles at each agent's change. The status
-  read's sibling fix takes the cost of a settle of every place.
+  slow. The status read's sibling fix takes the cost of a settle of
+  every place.
+- **Moves no hook reports wait for the next settle.** A common-profile
+  stage's end, an agent killed with no word, a start held at a question
+  and a lost conversation's process ending are read at the runner's
+  next pass, or on a host with no runner at a person's next command
+  that acts (decision 2). That is the user's ruling's cost, in time
+  only.
+- **A pane's clues after herdr's server restarts.** A settle shows a
+  place's clues again only when one changes, so where herdr's restart
+  drops a pane's metadata, the restored pane shows its title and row
+  from the next settle that changes one of them.
 - **A watch that lapses mid-settle.** A settle of every place that runs
   past twice its bound lets the watch lapse until the next one begins,
   and commands settle every place first meanwhile. That is slower, never
@@ -797,12 +821,15 @@ terminal.
 
 Nothing held changes shape. A place document gains no field; the host
 gains one document, the watch, written by the first `flume settle
---every`. Status keeps its `watch` fields and only gains `watch_settled`,
-`watch_lapsed`, `nudge`, `on_branch` and `worktree`; a tidy only gains
-`BranchRemoved::Refused` (61). A host whose terminal is herdr runs
+--every`. A place's `shown` key gains the line, so each place's clues
+are shown once more at its first settle under this release. Status
+keeps its `watch` fields, each terminal's given none, and only gains
+`watch_settled`, `watch_lapsed`, `on_branch` and `worktree`; a tidy only
+gains `BranchRemoved::Refused` (61). A host whose terminal is herdr runs
 attended from this release until a caller keeps watch: its operator
-sees `no caller keeps watch` in status, and the herdr plugin keeps
-nudging. Bolts made before this change, by crew or the runner, are
+sees `no caller keeps watch` in status. Each herdr server's next start
+runs the plugin's new startup, which ends the watch an earlier release
+left running there and runs no process of its own. Bolts made before this change, by crew or the runner, are
 bases no place holds and keep landing by crew's path until C1. Places
 already launched on them land there as today.
 

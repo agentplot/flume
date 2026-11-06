@@ -1,20 +1,25 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: A wait drives no settle where the terminal keeps watch`
+- TO: `### Requirement: A wait drives no settle while a caller keeps watch`
+
 ## MODIFIED Requirements
 
-### Requirement: A wait drives no settle where the terminal keeps watch
+### Requirement: A wait drives no settle while a caller keeps watch
 
 While a caller keeps watch over the host, a wait SHALL settle nothing
 and read only the host's state. While none does, it SHALL settle every
-place before each reading, as every acting command does, whatever any
-terminal nudges (119, 122, 208; core.13).
+place before each reading, as every acting command does, whatever
+terminal the host binds (119, 122, 208; core.13).
 
 #### Scenario: Under a watch
 
 - **WHEN** a wait follows a place while a caller keeps watch
 - **THEN** the wait makes no call to any seam but the store, and the place moves on only by the caller's settles
 
-#### Scenario: Attended under a nudge
+#### Scenario: Attended under any terminal
 
-- **WHEN** a wait follows a place while no caller keeps watch and the fake terminal nudges
+- **WHEN** a wait follows a place while no caller keeps watch
 - **THEN** the wait settles every place before each reading (119, 208)
 
 ### Requirement: The printed command delivers nothing
@@ -25,5 +30,5 @@ collects it, and status SHALL give it (43, C.5).
 
 #### Scenario: Under the printed command
 
-- **WHEN** a stage ends under a fake terminal that nudges nothing and refuses send
+- **WHEN** a stage ends under a fake terminal that refuses send
 - **THEN** status gives the end pending for each recipient and the fake terminal records no send
