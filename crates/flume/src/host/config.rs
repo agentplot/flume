@@ -2,9 +2,12 @@
 //! state under `$XDG_STATE_HOME/flume`, and its configuration in
 //! `$XDG_CONFIG_HOME/flume/config.toml`, each beneath `$HOME` as the XDG
 //! directories default where the variable is unset. The configuration's
-//! `[host] agents` is the bound on agents running (70) and `[host]
-//! terminal` the terminal profile bound for the host (105); a file or a
-//! word left out is no bound and the printed command. Its
+//! `[host] agents` is the bound on agents running (70), `[host]
+//! multiplexer` the terminal profile bound for the host, `[host]
+//! terminal` the word written before it and read as it (105, 190), and
+//! `[host] view` and `terminal_app` how a person is shown a stream's
+//! agents (186, 188); a file or a word left out is no bound, the printed
+//! command, a terminal view and the printed window. Its
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
@@ -13,51 +16,95 @@
 //! 162, 169, C.7; records 0017, 0020, 0024); a
 //! repository's key has a leading `~` read as the home, so it names the
 //! repository by its location as a launch does. Its
+//! `[repos."<repository>".agents]` gives the same for every kind in one
+//! repository, its `[agents]` for every agent on the host and its
+//! `[agents.streams.<stream>]` for every agent in one stream the host
+//! declares, none of the three naming a program, an environment, a pane
+//! beside or a stage, and the first no stream (32, 143, 195; record
+//! 0043). Every agents table gives `programs`, each program's own
+//! settings, read by flume's one reader of them; a file an entry names is
+//! read on the host with the configuration, absolute, under `~/` read as
+//! the home as a repository's key is, or relative to the configuration's
+//! own directory, where a link leads, and never with a `$VAR` read (195,
+//! C.7; core.30). Its
 //! `[roles."<partition>/<role>"]` tables are the runs the host wakes for
 //! each role's address, with `repository`, `kind`, `priority`, `base`,
 //! `brief` and `stream`, an address it names nothing for woken by nothing
 //! (132, C.7). Its `[streams.<stream>]` tables declare the host's streams,
-//! each with `agents`, `priority`, `pool`, `session` and its labels'
-//! shares in `[streams.<stream>.labels.<label>]`, and `default` stands
+//! each with `agents`, `priority`, `pool`, `session`, `multiplexer`,
+//! `view`, `terminal_app`, `title`, its labels' shares in
+//! `[streams.<stream>.labels.<label>]`, and the session it names for a
+//! kind in `[streams.<stream>.kinds.<kind>]` and for one stage of a kind
+//! in that table's `.stages.<stage>`, and `default` stands
 //! whether or not a table declares it; its `[pools.<pool>]` tables its
 //! pools, each with `strategy` and `accounts`, each account a `name`, a
 //! `program`, an `env` kept as written and an optional `agents`; `[host]
 //! pool` is the host's own pool; and `stream` in `[repos."<repository>"]`,
 //! `[repos."<repository>".kinds.<kind>]` and `[kinds.<kind>]` names a
 //! place's stream, and `label` in the last two its label (143, 144, 180,
-//! 181, C.7).
+//! 181, 199, C.7).
 //!
 //! The configuration has two layers (C.7; design 4): `config.toml` is the
 //! managed one, and `config.local.toml` beside it the local one, read
 //! over it key by key, each key of [`LOCAL_KEYS`] it sets replacing the
 //! managed one's whole. A local file setting any other key, or at fault,
 //! is not taken at all, the managed layer read alone; a key `[host] pin`
-//! holds is passed over. The reading keeps each value with its layer. No
-//! command writes either file (core.16, core.45).
+//! holds is passed over. The reading keeps each value with its layer, an
+//! `env` table's and an own setting's shaped as a credential as `<set>`
+//! (core.30, core.50). No command writes either file (core.16, core.45).
+//!
+//! The host's sources of kinds are files of the configuration's managed
+//! layer, one each in `sources/` beside `config.toml` (159, 191, C.7;
+//! design 1); the local layer declares none. Each regular file there, or
+//! a link to one, whose name ends in `.toml` and begins with no `.`
+//! declares the source its name less `.toml` names; every other entry is
+//! ignored, so a source written beside as `.acme.toml.tmp` and renamed
+//! over `acme.toml` is never read half written. Its one key, `kinds_dir`,
+//! is the directory holding the source's packages, absolute or under `~`,
+//! read as the home. A file that is not TOML, gives no `kinds_dir`, one
+//! neither absolute nor under `~` or any other key, or takes a name the
+//! kinds profile refuses for a source, is that source's fault alone, kept
+//! with it and failing nothing else of the configuration; no `sources/`
+//! is no source, and one that cannot be listed fails the configuration as
+//! a `config.toml` that cannot be read does. flume writes nothing there.
 
+use crate::profiles::kinds::weir::source_fault;
 use flume_seams::{
-    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, KindSettings, LabelFrom,
-    LabelHeld, LocalLayer, PinnedKey, Pool, PoolFrom, PoolNamed, RoleRun, Settings, Share,
-    Strategy, Stream, StreamFrom, StreamHeld, DEFAULT_STREAM, SET,
+    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
+    KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool,
+    PoolFrom, PoolNamed, ProfileHeld, RoleRun, Settings, Share, StageSession, Strategy, Stream,
+    StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use toml::{Table, Value};
 
+/// The profile a stream and the host naming none get, for its
+/// multiplexer the printed command and for its terminal app the printed
+/// window (105, 188, 190).
+const PRINTED: &str = "printed";
+
 /// The keys the local layer may set, each a path of segments, `*` any one
-/// name: a stream's `agents`, `priority`, `points`, `pace` and `session`,
-/// a label's `reserve` and `keep_free`, the `stream` a repository, a
-/// repository's kind or a kind is given, the `label` a repository's kind
-/// or a kind is given, and a kind's agents table, every stage's and one
-/// stage's (32, 107, 143, 166, 167, 180, 181, C.7). Each is one unit, its
-/// value taken whole. A change that gives the local layer another key
-/// adds it here.
+/// name: a stream's `agents`, `priority`, `points`, `pace`, `session` and
+/// `multiplexer`, the `session` it names for a kind and for a kind's
+/// stage, a label's `reserve` and `keep_free`, the `stream` a
+/// repository, a repository's kind or a kind is given, the `label` a
+/// repository's kind or a kind is given, and every agents table, a kind's
+/// every stage's and one stage's, a repository's for every kind, a
+/// stream's and every agent's, each of its settings and in its `programs`
+/// each program's `file` and each of its own settings a key of its own
+/// (32, 107, 143, 166, 167, 180, 181, 190, 195, 199, C.7; record 0043).
+/// Each is one unit, its value taken whole. A change that gives the local
+/// layer another key adds it here.
 pub const LOCAL_KEYS: &[&[&str]] = &[
     &["streams", "*", "agents"],
     &["streams", "*", "priority"],
     &["streams", "*", "points"],
     &["streams", "*", "pace"],
     &["streams", "*", "session"],
+    &["streams", "*", "multiplexer"],
+    &["streams", "*", "kinds", "*", "session"],
+    &["streams", "*", "kinds", "*", "stages", "*", "session"],
     &["streams", "*", "labels", "*", "reserve"],
     &["streams", "*", "labels", "*", "keep_free"],
     &["repos", "*", "stream"],
@@ -66,9 +113,38 @@ pub const LOCAL_KEYS: &[&[&str]] = &[
     &["repos", "*", "kinds", "*", "label"],
     &["kinds", "*", "label"],
     &["kinds", "*", "agents", "*"],
+    &["kinds", "*", "agents", "programs", "*", "file"],
+    &["kinds", "*", "agents", "programs", "*", "settings", "*"],
     &["kinds", "*", "agents", "stages", "*", "*"],
+    &[
+        "kinds", "*", "agents", "stages", "*", "programs", "*", "file",
+    ],
+    &[
+        "kinds", "*", "agents", "stages", "*", "programs", "*", "settings", "*",
+    ],
     &["repos", "*", "kinds", "*", "agents", "*"],
+    &[
+        "repos", "*", "kinds", "*", "agents", "programs", "*", "file",
+    ],
+    &[
+        "repos", "*", "kinds", "*", "agents", "programs", "*", "settings", "*",
+    ],
     &["repos", "*", "kinds", "*", "agents", "stages", "*", "*"],
+    &[
+        "repos", "*", "kinds", "*", "agents", "stages", "*", "programs", "*", "file",
+    ],
+    &[
+        "repos", "*", "kinds", "*", "agents", "stages", "*", "programs", "*", "settings", "*",
+    ],
+    &["repos", "*", "agents", "*"],
+    &["repos", "*", "agents", "programs", "*", "file"],
+    &["repos", "*", "agents", "programs", "*", "settings", "*"],
+    &["agents", "*"],
+    &["agents", "programs", "*", "file"],
+    &["agents", "programs", "*", "settings", "*"],
+    &["agents", "streams", "*", "*"],
+    &["agents", "streams", "*", "programs", "*", "file"],
+    &["agents", "streams", "*", "programs", "*", "settings", "*"],
 ];
 
 /// The host's configuration as its layers state it.
@@ -77,15 +153,30 @@ pub struct HostConfig {
     /// The bound on agents running, every caller's counted together;
     /// none where the file states none (70).
     pub agents: Option<u32>,
-    /// The terminal profile the host binds, none for the printed command
-    /// (105).
+    /// The terminal profile the host binds, `[host] multiplexer` or the
+    /// word written before it, `[host] terminal`; none for the printed
+    /// command (105, 190).
     pub terminal: Option<String>,
+    /// How the host's streams are shown to a person, `[host] view`; none
+    /// for a terminal view (186).
+    pub view: Option<View>,
+    /// The window profile the host binds, `[host] terminal_app`; none for
+    /// the printed window (188).
+    pub terminal_app: Option<String>,
     /// The settings given each kind's agents in every repository, by the
     /// kind's name (32).
     pub kinds: BTreeMap<String, KindSettings>,
     /// The settings given each kind's agents in one repository, by its
     /// location and the kind's name (32).
     pub repos: BTreeMap<String, BTreeMap<String, KindSettings>>,
+    /// The settings given every kind's agents in one repository, by its
+    /// location, its `[repos."<repository>".agents]` (32, 195).
+    pub repos_agents: BTreeMap<String, Settings>,
+    /// The settings given every agent in one stream, by the stream's
+    /// name, its `[agents.streams.<stream>]` (32, 143).
+    pub streams_agents: BTreeMap<String, Settings>,
+    /// The settings given every agent on the host, its `[agents]` (32).
+    pub every_agent: Settings,
     /// The run woken for each role's address, by the address (132, C.7).
     pub roles: BTreeMap<String, RoleRun>,
     /// The streams declared, by name, `default` among them always (143).
@@ -103,6 +194,13 @@ pub struct HostConfig {
     /// each local key passed over with its pin; none of it where only one
     /// table was read (C.7).
     pub configuration: HostConfiguration,
+    /// The sources of kinds declared in `sources/` beside the file, by
+    /// name, each with its fault where it has one (159, 191, C.7).
+    pub sources: BTreeMap<String, HostSource>,
+    /// The directory the file was read in, which holds `sources/` and the
+    /// host's lock of kinds; none for a configuration read from text
+    /// (155, 191, C.7).
+    pub dir: Option<PathBuf>,
 }
 
 /// The streams the configuration names for places: `stream` in
@@ -134,8 +232,13 @@ impl Default for HostConfig {
         HostConfig {
             agents: None,
             terminal: None,
+            view: None,
+            terminal_app: None,
             kinds: BTreeMap::new(),
             repos: BTreeMap::new(),
+            repos_agents: BTreeMap::new(),
+            streams_agents: BTreeMap::new(),
+            every_agent: Settings::default(),
             roles: BTreeMap::new(),
             streams: BTreeMap::from([(DEFAULT_STREAM.to_string(), Stream::default())]),
             streams_named: StreamsNamed::default(),
@@ -143,33 +246,51 @@ impl Default for HostConfig {
             pool: None,
             pools: BTreeMap::new(),
             configuration: HostConfiguration::default(),
+            sources: BTreeMap::new(),
+            dir: None,
         }
     }
 }
 
 impl HostConfig {
-    /// The configuration in `path`, the managed layer with no local one:
-    /// none of it where there is no file, and the file's fault named where
-    /// it is not one.
+    /// The configuration in `path`, the managed layer with no local one,
+    /// and the sources in `sources/` beside it: none of the file where
+    /// there is none, and the file's fault named where it is not one
+    /// (159, 191, C.7).
     pub fn read(path: &Path) -> Result<HostConfig, String> {
         let managed = text_in(path).map_err(|error| format!("{}: {error}", path.display()))?;
-        HostConfig::layers(&managed.unwrap_or_default(), None)
-            .map_err(|fault| format!("{}: {fault}", path.display()))
+        HostConfig::layers_in(&managed.unwrap_or_default(), None, &directory_of(path))
+            .map_err(|fault| format!("{}: {fault}", path.display()))?
+            .with_sources(path)
     }
 
     /// The configuration of the managed layer in `managed` and the local
-    /// layer in `local` beside it: a managed file's fault refuses it,
-    /// naming the file, and a local file that cannot be read is not taken
-    /// (C.7; design 4).
+    /// layer in `local` beside it, and the sources in `sources/` beside
+    /// the managed one: a managed file's fault refuses it, naming the
+    /// file, and a local file that cannot be read is not taken (159, 191,
+    /// C.7; design 4).
     pub fn read_layers(managed: &Path, local: &Path) -> Result<HostConfig, String> {
         let text = text_in(managed).map_err(|error| format!("{}: {error}", managed.display()))?;
         let managed_text = text.unwrap_or_default();
+        let directory = directory_of(managed);
         let config = match text_in(local) {
-            Ok(local) => HostConfig::layers(&managed_text, local.as_deref()),
-            Err(fault) => HostConfig::layers(&managed_text, None)
+            Ok(local) => HostConfig::layers_in(&managed_text, local.as_deref(), &directory),
+            Err(fault) => HostConfig::layers_in(&managed_text, None, &directory)
                 .map(|config| config.local_not_taken(vec![], Some(fault))),
         };
-        config.map_err(|fault| format!("{}: {fault}", managed.display()))
+        config
+            .map_err(|fault| format!("{}: {fault}", managed.display()))?
+            .with_sources(managed)
+    }
+
+    /// This configuration with the sources in `sources/` beside the
+    /// managed layer's `path`, and the directory `path` lies in, which
+    /// holds the host's lock of kinds: the sources are the managed
+    /// layer's, the local layer declaring none (155, 159, 191, C.7).
+    fn with_sources(mut self, path: &Path) -> Result<HostConfig, String> {
+        self.sources = read_sources(&path.with_file_name(SOURCES))?;
+        self.dir = path.parent().map(Path::to_path_buf);
+        Ok(self)
     }
 
     /// The configuration the managed layer's `managed` and the local
@@ -181,10 +302,22 @@ impl HostConfig {
     /// any other key, is no TOML, or whose units the reader refuses where
     /// the managed layer alone reads, is not taken at all. A fault of the
     /// managed layer, a pin of nothing the local layer may set among it,
-    /// refuses the configuration.
+    /// refuses the configuration. A settings file is read relative to the
+    /// host's configuration directory.
     pub fn layers(managed: &str, local: Option<&str>) -> Result<HostConfig, String> {
+        HostConfig::layers_in(managed, local, &host_directory())
+    }
+
+    /// The configuration `managed` and `local` state, as [`HostConfig::layers`]
+    /// reads them, a settings file read relative to `directory`, the one
+    /// both files share (195, C.7).
+    pub fn layers_in(
+        managed: &str,
+        local: Option<&str>,
+        directory: &Path,
+    ) -> Result<HostConfig, String> {
         let managed: Table = managed.parse().map_err(|error| format!("{error}"))?;
-        let alone = HostConfig::from_table(&managed)?.with_layers(
+        let alone = HostConfig::from_table(&managed, directory)?.with_layers(
             &managed,
             LocalLayer::NoFile,
             &[],
@@ -218,7 +351,7 @@ impl HostConfig {
                 }
             }
         }
-        match HostConfig::from_table(&merged) {
+        match HostConfig::from_table(&merged, directory) {
             Ok(config) => Ok(config.with_layers(&merged, LocalLayer::Taken, &taken, passed_over)),
             Err(fault) => Ok(alone.local_not_taken(vec![], Some(fault))),
         }
@@ -262,19 +395,26 @@ impl HostConfig {
     }
 
     /// The configuration `text` states, read as one table, with no layer
-    /// kept.
+    /// kept, a settings file read relative to the host's configuration
+    /// directory.
     pub fn parse(text: &str) -> Result<HostConfig, String> {
+        HostConfig::parse_in(text, &host_directory())
+    }
+
+    /// The configuration `text` states, as [`HostConfig::parse`] reads it,
+    /// a settings file read relative to `directory`.
+    pub fn parse_in(text: &str, directory: &Path) -> Result<HostConfig, String> {
         let table: toml::Table = text.parse().map_err(|error| format!("{error}"))?;
-        HostConfig::from_table(&table)
+        HostConfig::from_table(&table, directory)
     }
 
     /// The configuration `table` states, its pins checked and no layer
-    /// kept.
-    fn from_table(table: &Table) -> Result<HostConfig, String> {
+    /// kept, a settings file read relative to `directory`.
+    fn from_table(table: &Table, directory: &Path) -> Result<HostConfig, String> {
         pins_of(table)?;
         let mut config = HostConfig::default();
         if let Some(kinds) = table.get("kinds") {
-            config.kinds = kinds_settings(kinds, "kinds")?;
+            config.kinds = kinds_settings(kinds, "kinds", directory)?;
             config.streams_named.kind = kinds_streams(kinds, "kinds")?;
             config.labels_named.kind = kinds_labels(kinds, "kinds")?;
         }
@@ -286,6 +426,10 @@ impl HostConfig {
                 let at = format!("repos.{}", quoted(repository));
                 let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
                 let location = home(repository);
+                if let Some(agents) = table.get("agents") {
+                    let settings = every_kind(agents, &format!("{at}.agents"), directory)?;
+                    config.repos_agents.insert(location.clone(), settings);
+                }
                 if let Some(stream) = text_of(table, "stream", &at)? {
                     config
                         .streams_named
@@ -309,7 +453,9 @@ impl HostConfig {
                         .repository_kind
                         .insert((location.clone(), kind), label);
                 }
-                config.repos.insert(location, kinds_settings(kinds, &at)?);
+                config
+                    .repos
+                    .insert(location, kinds_settings(kinds, &at, directory)?);
             }
         }
         if let Some(roles) = table.get("roles") {
@@ -320,6 +466,10 @@ impl HostConfig {
         }
         if let Some(streams) = table.get("streams") {
             config.streams.extend(streams_declared(streams)?);
+        }
+        if let Some(agents) = table.get("agents") {
+            (config.every_agent, config.streams_agents) =
+                every_agent(agents, &config.streams, directory)?;
         }
         if let Some(host) = table.get("host") {
             let host = host.as_table().ok_or("[host] is not a table".to_string())?;
@@ -334,8 +484,10 @@ impl HostConfig {
                     })?)
                 }
             };
-            config.terminal = text_of(host, "terminal", "host")
-                .map_err(|_| "[host] terminal is not a name".to_string())?;
+            config.terminal = host_multiplexer(host)?;
+            config.view = view_of(host, "host")?;
+            config.terminal_app = text_of(host, "terminal_app", "host")
+                .map_err(|_| "[host] terminal_app is not a name".to_string())?;
             config.pool = text_of(host, "pool", "host")?;
         }
         let declared = |pool: &str| config.pools.contains_key(pool);
@@ -400,6 +552,51 @@ impl HostConfig {
                     .get(kind)
                     .map(|name| held(name, LabelFrom::HostKind))
             })
+    }
+
+    /// The multiplexer, view and terminal app of a place in `stream`:
+    /// each the stream's own, else the host's, else the printed command,
+    /// a terminal view and the printed window (186, 188, 190, C.7).
+    pub fn display_for(&self, stream: &str) -> StreamDisplay {
+        let stream = self.streams.get(stream);
+        let named = |own: Option<&String>, host: Option<&String>| match (own, host) {
+            (Some(name), _) => ProfileHeld {
+                profile: name.clone(),
+                from: NamedBy::Stream,
+            },
+            (None, Some(name)) => ProfileHeld {
+                profile: name.clone(),
+                from: NamedBy::Host,
+            },
+            (None, None) => ProfileHeld {
+                profile: PRINTED.into(),
+                from: NamedBy::Neither,
+            },
+        };
+        StreamDisplay {
+            multiplexer: named(
+                stream.and_then(|stream| stream.multiplexer.as_ref()),
+                self.terminal.as_ref(),
+            ),
+            view: match (stream.and_then(|stream| stream.view), self.view) {
+                (Some(view), _) => ViewHeld {
+                    view,
+                    from: NamedBy::Stream,
+                },
+                (None, Some(view)) => ViewHeld {
+                    view,
+                    from: NamedBy::Host,
+                },
+                (None, None) => ViewHeld {
+                    view: View::Terminal,
+                    from: NamedBy::Neither,
+                },
+            },
+            terminal_app: named(
+                stream.and_then(|stream| stream.terminal_app.as_ref()),
+                self.terminal_app.as_ref(),
+            ),
+        }
     }
 
     /// The pool of a place in `stream`: the stream's own, else the
@@ -686,7 +883,9 @@ fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<Co
                 values_of(inner, inner_at, taken, values);
             }
         }
-        _ if at.secret || env || reading => push(SET.to_string()),
+        _ if at.secret || env || reading || own_credential(&at.path, value) => {
+            push(SET.to_string())
+        }
         Value::Array(items)
             if !items.is_empty()
                 && items.iter().all(Value::is_table)
@@ -703,6 +902,122 @@ fn values_of(value: &Value, at: Leaf, taken: &[Vec<String>], values: &mut Vec<Co
             }
         }
         _ => push(value.to_string()),
+    }
+}
+
+/// Whether `value`, at `path`, is a program's own setting given inline,
+/// `…programs.<program>.settings.<key>…`, holding a string shaped as a
+/// credential, which status never gives as written: the launch and the
+/// start refuse it, and the configuration's values give it as `<set>`
+/// (195; design 7; core.50).
+fn own_credential(path: &[String], value: &Value) -> bool {
+    let own = path
+        .windows(3)
+        .any(|run| run[0] == "programs" && run[2] == "settings")
+        && path.len() > 3;
+    fn shaped(name: &str, value: &Value) -> bool {
+        match value {
+            Value::String(text) => flume_core::shaped_as_credential(name, text),
+            Value::Array(items) => items.iter().any(|item| shaped(name, item)),
+            Value::Table(table) => table.iter().any(|(key, inner)| shaped(key, inner)),
+            _ => false,
+        }
+    }
+    own && shaped(path.last().map_or("", String::as_str), value)
+}
+
+/// The directory beside `config.toml` holding a file for each source of
+/// kinds the host declares (191, C.7).
+pub const SOURCES: &str = "sources";
+
+/// The host's lock of kinds, beside `config.toml` (155, C.7).
+pub const KINDS_LOCK: &str = "flume.lock";
+
+/// What ends the name of a source's file.
+const SOURCE_FILE: &str = ".toml";
+
+/// Every source the sources directory `dir` declares, by name: none where
+/// there is no directory, and why it cannot be listed where it cannot.
+/// Each file's fault is its own source's (191, C.7; design 1).
+pub fn read_sources(dir: &Path) -> Result<BTreeMap<String, HostSource>, String> {
+    let listed = |error: std::io::Error| format!("{}: {error}", dir.display());
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
+        Err(error) => return Err(listed(error)),
+    };
+    let mut sources = BTreeMap::new();
+    for entry in entries {
+        let entry = entry.map_err(listed)?;
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        let path = entry.path();
+        let Some(name) = file_name.strip_suffix(SOURCE_FILE) else {
+            continue;
+        };
+        if file_name.starts_with('.') || !path.is_file() {
+            continue;
+        }
+        let read = match source_of(name, &path) {
+            Ok(kinds_dir) => HostSourceRead::Read { kinds_dir },
+            Err(reason) => HostSourceRead::CouldNotRead { reason },
+        };
+        sources.insert(
+            name.to_string(),
+            HostSource {
+                file: path.to_string_lossy().into_owned(),
+                read,
+            },
+        );
+    }
+    Ok(sources)
+}
+
+/// The directory a source's file at `path` declares the source `name`'s
+/// packages in, or every fault of the file (154, 191, C.7).
+fn source_of(name: &str, path: &Path) -> Result<String, String> {
+    let mut faults: Vec<String> = source_fault(name).into_iter().collect();
+    let read = std::fs::read_to_string(path)
+        .map_err(|error| format!("could not be read: {error}"))
+        .and_then(|text| {
+            text.parse::<Table>()
+                .map_err(|error| format!("is not TOML: {}", error.message().trim()))
+        });
+    let table = match read {
+        Ok(table) => table,
+        Err(fault) => {
+            faults.push(fault);
+            return Err(faults.join("; "));
+        }
+    };
+    for key in table.keys().filter(|key| *key != "kinds_dir") {
+        faults.push(format!(
+            "`{key}` is no key of a source's file, which gives `kinds_dir` alone"
+        ));
+    }
+    let kinds_dir = match table.get("kinds_dir") {
+        None => {
+            faults.push("gives no `kinds_dir`, the directory holding the source's packages".into());
+            None
+        }
+        Some(Value::String(given)) => {
+            let read = home(given);
+            if Path::new(&read).is_absolute() {
+                Some(read)
+            } else {
+                faults.push(format!(
+                    "`kinds_dir` is `{given}`, which is neither absolute nor under `~`"
+                ));
+                None
+            }
+        }
+        Some(_) => {
+            faults.push("`kinds_dir` is not a path".into());
+            None
+        }
+    };
+    match kinds_dir {
+        Some(kinds_dir) if faults.is_empty() => Ok(kinds_dir),
+        _ => Err(faults.join("; ")),
     }
 }
 
@@ -731,7 +1046,11 @@ fn home(location: &str) -> String {
 
 /// A `kinds` table of the configuration: each kind's `agents` table, by
 /// the kind's name; a kind's table holding no `agents` gives nothing.
-fn kinds_settings(kinds: &Value, at: &str) -> Result<BTreeMap<String, KindSettings>, String> {
+fn kinds_settings(
+    kinds: &Value,
+    at: &str,
+    directory: &Path,
+) -> Result<BTreeMap<String, KindSettings>, String> {
     let kinds = kinds
         .as_table()
         .ok_or(format!("[{at}] is not a table of kinds"))?;
@@ -754,13 +1073,13 @@ fn kinds_settings(kinds: &Value, at: &str) -> Result<BTreeMap<String, KindSettin
             for (stage, own) in named {
                 let at = format!("{at}.stages.{}", quoted(stage));
                 let own = own.as_table().ok_or(format!("[{at}] is not a table"))?;
-                stages.insert(stage.clone(), agent_settings(own, &at)?);
+                stages.insert(stage.clone(), agent_settings(own, &at, directory)?);
             }
         }
         settings.insert(
             kind.clone(),
             KindSettings {
-                every_stage: agent_settings(agents, &at)?,
+                every_stage: agent_settings(agents, &at, directory)?,
                 stages,
             },
         );
@@ -775,6 +1094,36 @@ fn text_of(table: &Table, name: &str, at: &str) -> Result<Option<String>, String
         None => Ok(None),
         Some(Value::String(value)) => Ok(Some(value.clone())),
         Some(_) => Err(format!("[{at}] {name} is not a string")),
+    }
+}
+
+/// The host's multiplexer: `[host] multiplexer`, or `[host] terminal`,
+/// the word written before it and read as it; a `[host]` giving both
+/// refused naming both, and a value that is no name refused naming its
+/// key (105, 190, C.7).
+fn host_multiplexer(host: &Table) -> Result<Option<String>, String> {
+    let named =
+        |key: &str| text_of(host, key, "host").map_err(|_| format!("[host] {key} is not a name"));
+    match (named("multiplexer")?, named("terminal")?) {
+        (Some(_), Some(_)) => Err(
+            "[host] gives both terminal and multiplexer; terminal is the \
+             word written before multiplexer, so give one"
+                .to_string(),
+        ),
+        (multiplexer, terminal) => Ok(multiplexer.or(terminal)),
+    }
+}
+
+/// The `view` of `table`, `terminal` or `app`, none where it is left out,
+/// any other value refused naming its key and the two values (186, C.7).
+fn view_of(table: &Table, at: &str) -> Result<Option<View>, String> {
+    match table.get("view") {
+        None => Ok(None),
+        Some(Value::String(word)) if word == View::Terminal.name() => Ok(Some(View::Terminal)),
+        Some(Value::String(word)) if word == View::App.name() => Ok(Some(View::App)),
+        Some(value) => Err(format!(
+            "[{at}] view is {value}, where a view is terminal or app"
+        )),
     }
 }
 
@@ -889,9 +1238,64 @@ fn shares_of(table: &Table, at: &str) -> Result<BTreeMap<String, Share>, String>
     Ok(shares)
 }
 
+/// A stream's `kinds` table: the session each kind's table names, and each
+/// of its stages' tables, by the kind's name and the stage's; each other
+/// key of either table kept unknown, which refuses the starts that read
+/// it rather than the configuration; and a `session` that is no string,
+/// or a `stages` that is no table of tables, refused naming its table and
+/// the key (199, C.7).
+fn kinds_sessions(table: &Table, at: &str) -> Result<BTreeMap<String, KindSessions>, String> {
+    let Some(kinds) = table.get("kinds") else {
+        return Ok(BTreeMap::new());
+    };
+    let kinds = kinds
+        .as_table()
+        .ok_or(format!("[{at}.kinds] is not a table of kinds"))?;
+    let unknown = |table: &Table, words: &[&str]| -> Vec<String> {
+        table
+            .keys()
+            .filter(|key| !words.contains(&key.as_str()))
+            .cloned()
+            .collect()
+    };
+    let mut sessions = BTreeMap::new();
+    for (kind, own) in kinds {
+        let at = format!("{at}.kinds.{}", quoted(kind));
+        let own = own.as_table().ok_or(format!("[{at}] is not a table"))?;
+        let mut stages = BTreeMap::new();
+        if let Some(named) = own.get("stages") {
+            let named = named
+                .as_table()
+                .ok_or(format!("[{at}.stages] is not a table of stages"))?;
+            for (stage, table) in named {
+                let at = format!("{at}.stages.{}", quoted(stage));
+                let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
+                stages.insert(
+                    stage.clone(),
+                    StageSession {
+                        session: text_of(table, "session", &at)?,
+                        unknown: unknown(table, &["session"]),
+                    },
+                );
+            }
+        }
+        sessions.insert(
+            kind.clone(),
+            KindSessions {
+                session: text_of(own, "session", &at)?,
+                stages,
+                unknown: unknown(own, &["session", "stages"]),
+            },
+        );
+    }
+    Ok(sessions)
+}
+
 /// The `streams` table: each stream with its bound, its priority, zero
-/// where it gives none, its pool, its session and its labels' shares; a
-/// key a stream does not know refused naming it (107, 143, 181, C.7).
+/// where it gives none, its pool, its session, the sessions it names for
+/// its kinds and their stages, its multiplexer, its view, its terminal
+/// app, its title and its labels' shares; a key a stream does not know
+/// refused naming it (107, 143, 181, 186, 190, 199, C.7).
 fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String> {
     let streams = streams
         .as_table()
@@ -902,7 +1306,18 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
         let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
         only(
             table,
-            &["agents", "priority", "pool", "session", "labels"],
+            &[
+                "agents",
+                "priority",
+                "pool",
+                "session",
+                "multiplexer",
+                "view",
+                "terminal_app",
+                "title",
+                "labels",
+                "kinds",
+            ],
             &at,
             "a stream",
         )?;
@@ -919,7 +1334,12 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 priority,
                 pool: text_of(table, "pool", &at)?,
                 session: text_of(table, "session", &at)?,
+                kinds: kinds_sessions(table, &at)?,
                 labels: shares_of(table, &at)?,
+                multiplexer: text_of(table, "multiplexer", &at)?,
+                view: view_of(table, &at)?,
+                terminal_app: text_of(table, "terminal_app", &at)?,
+                title: text_of(table, "title", &at)?,
             },
         );
     }
@@ -1093,11 +1513,85 @@ fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
     Ok(runs)
 }
 
-/// One agents table's `model`, `instructions` and `mode`, each as
-/// written, the mode read as a declaration's is (162, 169); any other
-/// key, `stages` among them, is not a setting of the host's (32, C.7;
-/// record 0020).
-fn agent_settings(table: &Table, at: &str) -> Result<Settings, String> {
+/// The host's `[agents]`, its settings for every agent, and each of its
+/// `[agents.streams.<stream>]`, every agent's in a stream `streams`
+/// declares, by the stream's name; a `program`, an `env`, a `beside` or a
+/// `stages` in either, or a stream no `[streams]` table declares, refused
+/// naming the table and the key (32, 143, 195, C.7; record 0043).
+fn every_agent(
+    agents: &Value,
+    streams: &BTreeMap<String, Stream>,
+    directory: &Path,
+) -> Result<(Settings, BTreeMap<String, Settings>), String> {
+    const NAMES: &[&str] = &["program", "env", "beside", "stages"];
+    let agents = agents
+        .as_table()
+        .ok_or("[agents] is not a table of settings".to_string())?;
+    refuse(agents, "agents", "for every agent", NAMES)?;
+    let mut by_stream = BTreeMap::new();
+    if let Some(named) = agents.get("streams") {
+        let named = named
+            .as_table()
+            .ok_or("[agents.streams] is not a table of streams".to_string())?;
+        for (stream, table) in named {
+            let at = format!("agents.streams.{}", quoted(stream));
+            if !streams.contains_key(stream) {
+                return Err(format!(
+                    "[{at}] names the stream {stream}, which no [streams] table declares"
+                ));
+            }
+            let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
+            refuse(table, &at, "for every agent in a stream", NAMES)?;
+            by_stream.insert(stream.clone(), agent_settings(table, &at, directory)?);
+        }
+    }
+    Ok((agent_settings(agents, "agents", directory)?, by_stream))
+}
+
+/// A repository's `[repos."<repository>".agents]` at `at`, the host's
+/// settings for every kind in it; a `program`, an `env`, a `beside`, a
+/// `stages` or a `streams` refused naming the table and the key (32, 195,
+/// C.7; record 0043).
+fn every_kind(agents: &Value, at: &str, directory: &Path) -> Result<Settings, String> {
+    let agents = agents
+        .as_table()
+        .ok_or(format!("[{at}] is not a table of settings"))?;
+    refuse(
+        agents,
+        at,
+        "for every kind of a repository",
+        &["program", "env", "beside", "stages", "streams"],
+    )?;
+    agent_settings(agents, at, directory)
+}
+
+/// Refuses the first of `names` that the agents table `table` at `at`
+/// holds, naming the table, the key and where its word goes instead (32,
+/// 107, 143, 144, C.7).
+fn refuse(table: &Table, at: &str, whose: &str, names: &[&str]) -> Result<(), String> {
+    let Some(name) = names.iter().find(|name| table.contains_key(**name)) else {
+        return Ok(());
+    };
+    let instead = match *name {
+        "program" => "the host chooses a program by the accounts it pools",
+        "env" => "an agent's environment is its account's alone",
+        "beside" => "the pane an agent opens beside is the launch's to name",
+        "stages" => {
+            "a stage's name is its kind's, so a stage's settings go in [kinds.<kind>.agents.stages.<stage>]"
+        }
+        _ => "a stream's settings go in [agents.streams.<stream>]",
+    };
+    Err(format!(
+        "[{at}] {name} is no setting of the host's {whose}: {instead}"
+    ))
+}
+
+/// One agents table's `model`, `instructions`, `mode` and `programs`,
+/// each as written, the mode read as a declaration's is (162, 169), and
+/// `programs` by flume's one reader of them, a file read by
+/// [`host_file`] (195); any other key, `stages` among them, is not a
+/// setting of the host's (32, C.7; record 0020).
+fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings, String> {
     let text = |name: &str| match table.get(name) {
         None => Ok(None),
         Some(Value::String(value)) => Ok(Some(value.clone())),
@@ -1108,12 +1602,47 @@ fn agent_settings(table: &Table, at: &str) -> Result<Settings, String> {
         .map(crate::mode::read)
         .transpose()
         .map_err(|reason| format!("[{at}] mode: {reason}"))?;
+    let programs = table
+        .get("programs")
+        .map(|programs| crate::own::read(programs, at, &|written| host_file(directory, written)))
+        .transpose()?
+        .unwrap_or_default();
     Ok(Settings {
         model: text("model")?,
         instructions: text("instructions")?,
         mode,
+        programs,
         ..Settings::default()
     })
+}
+
+/// A settings file a host's agents table names at `written`, read on the
+/// host now: absolute, beginning `~/` read against the home as a
+/// repository's key is, or relative to `directory`, the configuration's,
+/// read where it leads when it is a link, and with no `$VAR` read (195,
+/// C.7; core.30). Its path read and its text, or why it cannot be read,
+/// naming it.
+fn host_file(directory: &Path, written: &str) -> Result<(String, String), String> {
+    let path = directory.join(home(written));
+    let read = path.display().to_string();
+    std::fs::read_to_string(&path)
+        .map(|text| (read.clone(), text))
+        .map_err(|error| format!("{read} could not be read: {error}"))
+}
+
+/// The directory a configuration file lies in, where its settings files
+/// are read relative to.
+fn directory_of(file: &Path) -> PathBuf {
+    file.parent().map(Path::to_path_buf).unwrap_or_default()
+}
+
+/// The host's configuration directory, `$XDG_CONFIG_HOME/flume`; none
+/// where neither it nor `$HOME` is set, so a relative file is read
+/// against the working directory.
+fn host_directory() -> PathBuf {
+    config_file()
+        .map(|file| directory_of(&file))
+        .unwrap_or_default()
 }
 
 /// An XDG directory: the variable `name` where it names an absolute
@@ -1325,7 +1854,7 @@ mod tests {
         }
     }
 
-    /// C.7's example, as the statement writes it at 6188a10, its program
+    /// C.7's example, as the statement writes it at fa40c94, its program
     /// `agent` (core.1), and `personal`'s `points` and `pace` left out,
     /// which record 0025's change reads.
     const C7: &str = r#"
@@ -1343,6 +1872,9 @@ keep_free = 1
 
 [streams.work.labels.construction]
 reserve = 2
+
+[streams.work.kinds.research]
+session = "work-design"
 
 [streams.personal]
 agents = 3
@@ -1457,6 +1989,19 @@ label = "inception"
             config.streams["work"].session, None,
             "work's agents in the session of its name"
         );
+        // 199: a research place's agents opening in `work-design`, every
+        // other agent of work's in `work`.
+        assert_eq!(
+            config.streams["work"].kinds,
+            BTreeMap::from([(
+                "research".to_string(),
+                KindSessions {
+                    session: Some("work-design".into()),
+                    ..KindSessions::default()
+                }
+            )])
+        );
+        assert_eq!(config.streams["personal"].kinds, BTreeMap::new());
         let with_points = C7.replace(
             "pool = \"personal\"\n",
             "pool = \"personal\"\npoints = 8\npace = { points = 13, per = \"day\" }\n",
@@ -1595,6 +2140,86 @@ label = "inception"
     }
 
     #[test]
+    fn a_kinds_session_and_a_stages_read_with_each_other_key_unknown() {
+        // 182, 199: the sessions read, each other key kept for the start
+        // that reads its table to refuse.
+        let config = HostConfig::parse(
+            "[streams.work.kinds.research]\nsession = \"work-design\"\nlabel = \"inception\"\n\
+             [streams.work.kinds.release.stages.review]\nsession = \"work-review\"\npool = \"work\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.streams["work"].kinds,
+            BTreeMap::from([
+                (
+                    "release".to_string(),
+                    KindSessions {
+                        session: None,
+                        stages: BTreeMap::from([(
+                            "review".to_string(),
+                            StageSession {
+                                session: Some("work-review".into()),
+                                unknown: vec!["pool".into()],
+                            }
+                        )]),
+                        unknown: vec![],
+                    }
+                ),
+                (
+                    "research".to_string(),
+                    KindSessions {
+                        session: Some("work-design".into()),
+                        stages: BTreeMap::new(),
+                        unknown: vec!["label".into()],
+                    }
+                ),
+            ])
+        );
+        assert_eq!(config.streams["default"].kinds, BTreeMap::new());
+    }
+
+    #[test]
+    fn a_session_that_is_no_word() {
+        // C.7: a kind's or a stage's `session` no string, or its tables no
+        // tables, refused naming the table and the key.
+        let refused =
+            HostConfig::parse("[streams.work.kinds.research]\nsession = 3\n").unwrap_err();
+        assert_eq!(
+            refused,
+            "[streams.work.kinds.research] session is not a string"
+        );
+        for (text, table, key) in [
+            (
+                "[streams.work.kinds.release.stages.review]\nsession = true\n",
+                "streams.work.kinds.release.stages.review",
+                "session",
+            ),
+            (
+                "[streams.work.kinds.release]\nstages = 3\n",
+                "streams.work.kinds.release",
+                "stages",
+            ),
+            (
+                "[streams.work.kinds.release.stages]\nreview = \"work-review\"\n",
+                "streams.work.kinds.release.stages",
+                "review",
+            ),
+            (
+                "[streams.work.kinds]\nresearch = \"work-design\"\n",
+                "streams.work.kinds",
+                "research",
+            ),
+            ("[streams.work]\nkinds = 3\n", "streams.work", "kinds"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains(table) && refused.contains(key),
+                "{text}: {refused}"
+            );
+        }
+    }
+
+    #[test]
     fn labels_sessions_and_a_kinds_label_set_locally() {
         // 107, 180, 181, C.7, S85: each a key the local layer may set, and
         // a label's pool one it may not.
@@ -1648,6 +2273,66 @@ label = "inception"
                 .is_some_and(|fault| fault.contains("kinds.fix.label")),
             "{fault:?}"
         );
+    }
+
+    #[test]
+    fn a_kinds_session_and_a_stages_set_locally() {
+        // 199, C.7, S107: each a key the local layer may set, kept with
+        // its layer.
+        let config = HostConfig::layers(
+            &format!("{WORK}[streams.work.kinds.research]\nsession = \"work-design\"\n"),
+            Some(
+                "[streams.work.kinds.research]\nsession = \"work-research\"\n\
+                 [streams.work.kinds.release.stages.review]\nsession = \"work-review\"\n",
+            ),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let work = &config.streams["work"];
+        assert_eq!(
+            work.kinds["research"].session.as_deref(),
+            Some("work-research")
+        );
+        assert_eq!(
+            work.kinds["release"].stages["review"].session.as_deref(),
+            Some("work-review")
+        );
+        assert_eq!(work.agents, Some(6));
+        assert_eq!(
+            value_at(&config, "streams.work.kinds.research.session"),
+            Some(("\"work-research\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.kinds.release.stages.review.session"),
+            Some(("\"work-review\"".into(), ConfigLayer::Local))
+        );
+    }
+
+    #[test]
+    fn a_kinds_table_key_the_local_layer_cannot_set() {
+        // C.7: a kind's or a stage's table holding any key but its
+        // session, set locally, is a key the local layer may not set.
+        for (local, key) in [
+            (
+                "[streams.work.kinds.research]\nlabel = \"inception\"\n",
+                "streams.work.kinds.research.label",
+            ),
+            (
+                "[streams.work.kinds.release.stages.review]\npool = \"work\"\n",
+                "streams.work.kinds.release.stages.review.pool",
+            ),
+        ] {
+            let config = HostConfig::layers(WORK, Some(local)).unwrap();
+            assert_eq!(
+                config.configuration.local,
+                LocalLayer::NotTaken {
+                    keys: vec![key.into()],
+                    fault: None,
+                },
+                "{local}"
+            );
+            assert_eq!(config.streams["work"].kinds, BTreeMap::new(), "{local}");
+        }
     }
 
     #[test]
@@ -2112,6 +2797,46 @@ label = "inception"
     }
 
     #[test]
+    fn an_own_setting_shaped_as_a_credential_is_given_as_set() {
+        // 195, core.50: an own setting's value is given as written where
+        // it passes design 7's check, and as `<set>` where it does not,
+        // at any depth and under any agents table.
+        let config = HostConfig::layers(
+            "[agents.programs.agent.settings]
+             line = \"~/bin/line $HOME\"
+             status = { command = \"run --key sk-a1B2c3D4e5F6g7H8i9J0\" }
+             [kinds.fix.agents.programs.agent.settings]
+             headers = { Authorization = \"Bearer abc\" }
+",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            value_at(&config, "agents.programs.agent.settings.line"),
+            Some(("\"~/bin/line $HOME\"".into(), ConfigLayer::Managed))
+        );
+        for key in [
+            "agents.programs.agent.settings.status",
+            "kinds.fix.agents.programs.agent.settings.headers",
+        ] {
+            assert_eq!(
+                value_at(&config, key).map(|(value, _)| value),
+                Some(SET.to_string()),
+                "{key}"
+            );
+        }
+        assert!(
+            !config
+                .configuration
+                .values
+                .iter()
+                .any(|value| value.value.contains("a1B2") || value.value.contains("abc")),
+            "a credential among {:?}",
+            config.configuration.values
+        );
+    }
+
+    #[test]
     fn a_local_file_that_sets_a_pool() {
         // C.7, S83: no key of it taken, its pool named.
         let config = HostConfig::layers(
@@ -2152,6 +2877,211 @@ label = "inception"
             }
         );
         assert_eq!(config.streams["work"].pool.as_deref(), Some("work"));
+    }
+
+    #[test]
+    fn the_keys_and_none() {
+        // 143, 186, 190: a stream's multiplexer, view and terminal app its
+        // own, else the host's, else the default; its title its own, the
+        // core naming it by its name where none, which status gives
+        // through the binary in commands.rs's the_keys_and_none_in_status.
+        let config = HostConfig::parse(
+            "[host]\nmultiplexer = \"mux\"\nterminal_app = \"app-window\"\n\
+             [streams.office]\nterminal_app = \"terminal\"\ntitle = \"Office Agents\"\n\
+             [streams.personal]\n",
+        )
+        .unwrap();
+        let held = |profile: &str, from| ProfileHeld {
+            profile: profile.into(),
+            from,
+        };
+        let neither = ViewHeld {
+            view: View::Terminal,
+            from: NamedBy::Neither,
+        };
+        assert_eq!(
+            config.display_for("office"),
+            StreamDisplay {
+                multiplexer: held("mux", NamedBy::Host),
+                view: neither.clone(),
+                terminal_app: held("terminal", NamedBy::Stream),
+            }
+        );
+        assert_eq!(
+            config.streams["office"].title.as_deref(),
+            Some("Office Agents")
+        );
+        assert_eq!(
+            config.display_for("personal"),
+            StreamDisplay {
+                multiplexer: held("mux", NamedBy::Host),
+                view: neither,
+                terminal_app: held("app-window", NamedBy::Host),
+            }
+        );
+        assert_eq!(config.streams["personal"].title, None);
+        let config = HostConfig::parse(
+            "[host]\nview = \"app\"\n[streams.work]\nmultiplexer = \"mux\"\nview = \"terminal\"\n",
+        )
+        .unwrap();
+        let work = config.display_for("work");
+        assert_eq!(work.multiplexer, held("mux", NamedBy::Stream));
+        assert_eq!(
+            work.view,
+            ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Stream,
+            }
+        );
+        assert_eq!(
+            config.display_for("default"),
+            StreamDisplay {
+                multiplexer: held(PRINTED, NamedBy::Neither),
+                view: ViewHeld {
+                    view: View::App,
+                    from: NamedBy::Host,
+                },
+                terminal_app: held(PRINTED, NamedBy::Neither),
+            }
+        );
+    }
+
+    #[test]
+    fn the_word_written_before() {
+        // C.7: `[host] terminal` read as `[host] multiplexer`, and both
+        // refused naming both.
+        let config = HostConfig::parse("[host]\nterminal = \"mux\"\n").unwrap();
+        assert_eq!(config.display_for("default").multiplexer.profile, "mux");
+        assert_eq!(
+            config.display_for("default").multiplexer.from,
+            NamedBy::Host
+        );
+        let config = HostConfig::parse("[host]\nmultiplexer = \"mux\"\n").unwrap();
+        assert_eq!(config.terminal.as_deref(), Some("mux"));
+        let refused = HostConfig::parse("[host]\nterminal = \"mux\"\nmultiplexer = \"printed\"\n")
+            .unwrap_err();
+        assert!(
+            refused.contains("terminal") && refused.contains("multiplexer"),
+            "{refused}"
+        );
+        let refused = HostConfig::parse("[host]\nmultiplexer = 3\n").unwrap_err();
+        assert!(refused.contains("[host] multiplexer"), "{refused}");
+    }
+
+    #[test]
+    fn a_view_no_word_names() {
+        // C.7: a view is terminal or app, the key and both values named.
+        let refused = HostConfig::parse("[streams.work]\nview = \"tab\"\n").unwrap_err();
+        assert!(
+            refused.contains("[streams.work] view")
+                && refused.contains("\"tab\"")
+                && refused.contains("terminal or app"),
+            "{refused}"
+        );
+        let refused = HostConfig::parse("[host]\nview = 1\n").unwrap_err();
+        assert!(refused.contains("[host] view"), "{refused}");
+    }
+
+    #[test]
+    fn a_title_that_is_no_text() {
+        // C.7: a stream's title is a text, and its terminal app and
+        // multiplexer names.
+        for text in [
+            "[streams.work]\ntitle = 3\n",
+            "[streams.work]\nterminal_app = 3\n",
+            "[streams.work]\nmultiplexer = true\n",
+            "[host]\nterminal_app = []\n",
+        ] {
+            let key = text.lines().nth(1).unwrap().split(' ').next().unwrap();
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(refused.contains(key), "{text}: {refused}");
+        }
+        let refused = HostConfig::parse("[streams.work]\ntitle = 3\n").unwrap_err();
+        assert!(refused.contains("[streams.work] title"), "{refused}");
+    }
+
+    #[test]
+    fn a_streams_multiplexer_set_locally() {
+        // 190, C.7, S91: a stream's multiplexer a key the local layer may
+        // set, kept with its layer.
+        let config = HostConfig::layers(
+            "[host]\nmultiplexer = \"mux\"\n[streams.trial]\nmultiplexer = \"printed\"\n",
+            Some("[streams.trial]\nmultiplexer = \"mux\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        assert_eq!(
+            config.display_for("trial").multiplexer,
+            ProfileHeld {
+                profile: "mux".into(),
+                from: NamedBy::Stream,
+            }
+        );
+        assert_eq!(
+            value_at(&config, "streams.trial.multiplexer"),
+            Some(("\"mux\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            value_at(&config, "host.multiplexer"),
+            Some(("\"mux\"".into(), ConfigLayer::Managed))
+        );
+    }
+
+    #[test]
+    fn a_streams_view_set_locally() {
+        // 186, C.7: a stream's view the managed layer's alone.
+        let config = HostConfig::layers(WORK, Some("[streams.work]\nview = \"app\"\n")).unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["streams.work.view".into()],
+                fault: None,
+            }
+        );
+        assert_eq!(config.display_for("work").view.view, View::Terminal);
+    }
+
+    #[test]
+    fn a_terminal_app_set_by_the_local_layer() {
+        // C.7; record 0032: a stream's terminal app and title, and every
+        // key of `[host]`, the managed layer's alone; open uses the
+        // managed layer's terminal app.
+        let managed = format!("{WORK}[host]\nterminal_app = \"app-window\"\n");
+        let config = HostConfig::layers(
+            &managed,
+            Some("[streams.work]\nterminal_app = \"terminal\"\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            config.configuration.local,
+            LocalLayer::NotTaken {
+                keys: vec!["streams.work.terminal_app".into()],
+                fault: None,
+            }
+        );
+        assert_eq!(
+            config.display_for("work").terminal_app,
+            ProfileHeld {
+                profile: "app-window".into(),
+                from: NamedBy::Host,
+            }
+        );
+        for (local, key) in [
+            ("[streams.work]\ntitle = \"Mine\"\n", "streams.work.title"),
+            ("[host]\nmultiplexer = \"mux\"\n", "host.multiplexer"),
+            ("[host]\nview = \"app\"\n", "host.view"),
+            ("[host]\nterminal_app = \"terminal\"\n", "host.terminal_app"),
+        ] {
+            let config = HostConfig::layers(&managed, Some(local)).unwrap();
+            assert_eq!(
+                config.configuration.local,
+                LocalLayer::NotTaken {
+                    keys: vec![key.into()],
+                    fault: None,
+                },
+                "{local}"
+            );
+        }
     }
 
     #[test]
@@ -2307,6 +3237,80 @@ label = "inception"
     }
 
     #[test]
+    fn a_kinds_session_pinned() {
+        // 199, C.7: work's agents taken, research's session passed over
+        // and named with its pin, by the table holding it or by the key.
+        let managed = format!(
+            "{WORK}[streams.work.kinds.research]\nsession = \"work-design\"\n\
+             [streams.work.kinds.release.stages.review]\nsession = \"work-review\"\n"
+        );
+        let local = "[streams.work]\nagents = 3\n\
+             [streams.work.kinds.research]\nsession = \"work-research\"\n\
+             [streams.work.kinds.release.stages.review]\nsession = \"work-local\"\n";
+        let config = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work.kinds\"]\n{managed}"),
+            Some(local),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let work = &config.streams["work"];
+        assert_eq!(work.agents, Some(3));
+        assert_eq!(
+            work.kinds["research"].session.as_deref(),
+            Some("work-design")
+        );
+        assert_eq!(
+            work.kinds["release"].stages["review"].session.as_deref(),
+            Some("work-review")
+        );
+        assert_eq!(
+            config.configuration.passed_over,
+            vec![
+                PinnedKey {
+                    key: "streams.work.kinds.release.stages.review.session".into(),
+                    pin: "streams.work.kinds".into(),
+                },
+                PinnedKey {
+                    key: "streams.work.kinds.research.session".into(),
+                    pin: "streams.work.kinds".into(),
+                },
+            ]
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.kinds.research.session"),
+            Some(("\"work-design\"".into(), ConfigLayer::Managed))
+        );
+        assert_eq!(
+            value_at(&config, "streams.work.agents"),
+            Some(("3".into(), ConfigLayer::Local))
+        );
+        let config = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work.kinds.research.session\"]\n{managed}"),
+            Some(local),
+        )
+        .unwrap();
+        let work = &config.streams["work"];
+        assert_eq!(
+            work.kinds["research"].session.as_deref(),
+            Some("work-design")
+        );
+        assert_eq!(
+            work.kinds["release"].stages["review"].session.as_deref(),
+            Some("work-local"),
+            "the stage's session no pin holds"
+        );
+        let refused = HostConfig::layers(
+            &format!("[host]\npin = [\"streams.work.kinds.research.label\"]\n{managed}"),
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            refused.contains("[host] pin") && refused.contains("streams.work.kinds.research.label"),
+            "{refused}"
+        );
+    }
+
+    #[test]
     fn a_pin_of_nothing_the_local_layer_sets() {
         // C.7: refused naming the pin, as any fault of the managed layer
         // is, whether or not there is a local file.
@@ -2383,5 +3387,379 @@ label = "inception"
                 Some(("\"nightly\"".into(), ConfigLayer::Local))
             );
         }
+    }
+
+    /// A scratch directory of the test's own, removed when dropped.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(label: &str) -> Scratch {
+            let dir =
+                std::env::temp_dir().join(format!("flume-config-{label}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("the scratch directory");
+            Scratch(dir)
+        }
+
+        /// Writes `text` at `name` in the directory, and gives its path.
+        fn write(&self, name: &str, text: &str) -> PathBuf {
+            let path = self.0.join(name);
+            std::fs::write(&path, text).expect("the file");
+            path
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// `path` as a key beginning `~/` reads it: up from the home to the
+    /// root and down to `path`, so a scratch file is named under the home
+    /// with nothing written there.
+    fn under_home(path: &Path) -> String {
+        let home = std::env::var("HOME").expect("$HOME is set");
+        let up = Path::new(&home).components().count() - 1;
+        format!(
+            "~/{}{}",
+            "../".repeat(up),
+            path.to_string_lossy().trim_start_matches('/')
+        )
+    }
+
+    #[test]
+    fn settings_for_every_agent_and_for_a_stream() {
+        // 32, 143, 195, C.7: `[agents]` and `[agents.streams.<stream>]`
+        // give `model`, `mode`, `instructions` and `programs`, a file
+        // under the home read on the host; the host's settings for a
+        // place's repository, stream and every agent as the caller names
+        // the stream.
+        let scratch = Scratch::new("every-agent");
+        let people = scratch.write(
+            "agent-settings.json",
+            r#"{ "tui": "fullscreen", "outputStyle": "plain" }"#,
+        );
+        let written = under_home(&people);
+        let config = scratch.write(
+            "config.toml",
+            &format!(
+                "[agents]\nmodel = \"sonnet\"\nmode = \"edits\"\ninstructions = \"Be brief.\"\n\
+                 [agents.programs.agent]\nfile = {written:?}\n\
+                 settings = {{ statusLine = {{ type = \"command\", command = \"line\" }} }}\n\
+                 [streams.work]\n\
+                 [agents.streams.work]\nmodel = \"opus\"\n\
+                 [agents.streams.work.programs.agent.settings]\ntui = \"default\"\n\
+                 [repos.\"/r\".agents]\ninstructions = \"Mind the tagline.\"\n"
+            ),
+        );
+        let config = HostConfig::read(&config).unwrap();
+        let every = &config.every_agent;
+        assert_eq!(every.model.as_deref(), Some("sonnet"));
+        assert_eq!(every.mode, Some(ModeSetting::Flume(Mode::Edits)));
+        assert_eq!(every.instructions.as_deref(), Some("Be brief."));
+        let agent = &every.programs["agent"];
+        assert_eq!(
+            agent.settings["statusLine"],
+            serde_json::json!({ "type": "command", "command": "line" })
+        );
+        let file = agent.file.as_ref().expect("the file");
+        assert_eq!(file.written, written);
+        assert_eq!(file.read, home(&written), "the home read for ~/");
+        assert_eq!(file.keys["tui"], serde_json::json!("fullscreen"));
+        let work = &config.streams_agents["work"];
+        assert_eq!(work.model.as_deref(), Some("opus"));
+        assert_eq!(
+            work.programs["agent"].settings["tui"],
+            serde_json::json!("default")
+        );
+        let every = every.clone();
+        let host = super::super::RealHost::new(scratch.0.join("state"), config, None);
+        let in_work = flume_seams::Host::settings(&host, "/r", "fix", "work");
+        assert_eq!(in_work.every_agent, every);
+        assert_eq!(in_work.stream.model.as_deref(), Some("opus"));
+        assert_eq!(
+            in_work.every_kind.instructions.as_deref(),
+            Some("Mind the tagline.")
+        );
+        let in_default = flume_seams::Host::settings(&host, "/s", "fix", "default");
+        assert_eq!(in_default.stream, Settings::default());
+        assert_eq!(in_default.every_kind, Settings::default());
+        assert_eq!(in_default.every_agent.model.as_deref(), Some("sonnet"));
+    }
+
+    #[test]
+    fn a_table_for_every_agent_or_a_stream_cannot_hold() {
+        // C.7: a program, an environment, a pane beside or a stage in
+        // `[agents]` or a stream's, and a stream the host does not
+        // declare, refused naming the table and the key.
+        for (text, named) in [
+            ("[agents]\nprogram = \"agent\"\n", "[agents] program"),
+            ("[agents]\nenv = { X = \"1\" }\n", "[agents] env"),
+            ("[agents]\nbeside = \"pane\"\n", "[agents] beside"),
+            (
+                "[agents.stages.code]\nmodel = \"opus\"\n",
+                "[agents] stages is no setting of the host's for every agent: a stage's name is its kind's, so a stage's settings go in [kinds.<kind>.agents.stages.<stage>]",
+            ),
+            (
+                "[streams.work]\n[agents.streams.work]\nprogram = \"agent\"\n",
+                "[agents.streams.work] program",
+            ),
+            (
+                "[streams.work]\n[agents.streams.work.stages.code]\nmodel = \"opus\"\n",
+                "[agents.streams.work] stages",
+            ),
+            (
+                "[agents.streams.missing]\nmodel = \"opus\"\n",
+                "[agents.streams.missing] names the stream missing, which no [streams] table declares",
+            ),
+            ("[agents]\nstreams = 3\n", "[agents.streams] is not a table"),
+            ("agents = 3\n", "[agents] is not a table"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(refused.contains(named), "{text}: {refused}");
+        }
+        let config = HostConfig::parse("[agents.streams.default]\nmodel = \"opus\"\n").unwrap();
+        assert_eq!(
+            config.streams_agents["default"].model.as_deref(),
+            Some("opus"),
+            "default always stands"
+        );
+    }
+
+    #[test]
+    fn own_settings_for_a_kind_and_for_a_repositorys_stage() {
+        // 32, 195, C.7: every agents table of the host's gives
+        // `programs`, a file relative to the configuration's directory.
+        let scratch = Scratch::new("kind-own");
+        scratch.write(
+            "fix-code.json",
+            r#"{ "statusLine": { "type": "command", "command": "fix-line" } }"#,
+        );
+        let config = scratch.write(
+            "config.toml",
+            "[kinds.fix.agents.programs.agent.settings]\ntui = \"fullscreen\"\n\
+             [repos.\"/r\".kinds.fix.agents.stages.code.programs.agent]\nfile = \"fix-code.json\"\n",
+        );
+        let config = HostConfig::read(&config).unwrap();
+        assert_eq!(
+            config.kinds["fix"].every_stage.programs["agent"].settings["tui"],
+            serde_json::json!("fullscreen")
+        );
+        let file = config.repos["/r"]["fix"].stages["code"].programs["agent"]
+            .file
+            .clone()
+            .expect("the file");
+        assert_eq!(file.written, "fix-code.json");
+        assert_eq!(
+            file.read,
+            scratch.0.join("fix-code.json").display().to_string()
+        );
+        assert_eq!(
+            file.keys["statusLine"],
+            serde_json::json!({ "type": "command", "command": "fix-line" })
+        );
+    }
+
+    #[test]
+    fn a_programs_that_is_no_table_of_entries() {
+        // 195, C.7: refused naming the table and `programs`; a program's
+        // key beside its file, and a date, refused naming the key.
+        for (text, named) in [
+            ("[agents]\nprograms = \"agent\"\n", "agents.programs:"),
+            ("[agents.programs]\nagent = 3\n", "agents.programs.agent:"),
+            (
+                "[agents.programs.agent]\nline = \"a\"\n",
+                "agents.programs.agent.line: is no word of a program's entry, which gives file and settings: a program's own settings go under settings",
+            ),
+            (
+                "[agents.programs.agent.settings]\nsince = 2026-11-01\n",
+                "agents.programs.agent.settings.since: is a date or time, which flume cannot pass on: give it as a string",
+            ),
+            (
+                "[kinds.fix.agents.stages.code.programs]\nagent = \"x\"\n",
+                "kinds.fix.agents.stages.code.programs.agent:",
+            ),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(refused.contains(named), "{text}: {refused}");
+        }
+    }
+
+    #[test]
+    fn a_hosts_file_flume_cannot_read() {
+        // 195, C.7: a name neither `.json` nor `.toml`, a file that does
+        // not exist or does not parse, refused naming the field and the
+        // file; no `$VAR` read in a path (core.30).
+        let scratch = Scratch::new("bad-file");
+        scratch.write("broken.json", "{ not json");
+        for (file, words) in [
+            (
+                "settings.yaml",
+                "settings.yaml is named neither .json nor .toml",
+            ),
+            ("missing.json", "missing.json could not be read"),
+            ("broken.json", "broken.json does not parse as JSON"),
+            ("$HOME/x.json", "$HOME/x.json could not be read"),
+        ] {
+            let config = scratch.write(
+                "config.toml",
+                &format!("[agents.programs.agent]\nfile = {file:?}\n"),
+            );
+            let refused = HostConfig::read(&config).unwrap_err();
+            assert!(
+                refused.contains("agents.programs.agent.file: ") && refused.contains(words),
+                "{file}: {refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_hosts_file_read_where_its_link_leads() {
+        // 195, C.7: a link its configurer keeps, read where it leads, at
+        // each reading of the configuration.
+        let scratch = Scratch::new("linked");
+        let first = scratch.write("first.json", r#"{ "tui": "fullscreen" }"#);
+        let second = scratch.write("second.json", r#"{ "tui": "default" }"#);
+        let link = scratch.0.join("agent-settings.json");
+        std::os::unix::fs::symlink(&first, &link).unwrap();
+        let config = scratch.write(
+            "config.toml",
+            "[agents.programs.agent]\nfile = \"agent-settings.json\"\n",
+        );
+        let keys = || {
+            HostConfig::read(&config).unwrap().every_agent.programs["agent"]
+                .file
+                .clone()
+                .unwrap()
+                .keys
+        };
+        assert_eq!(keys()["tui"], serde_json::json!("fullscreen"));
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&second, &link).unwrap();
+        assert_eq!(keys()["tui"], serde_json::json!("default"), "read again");
+    }
+
+    #[test]
+    fn a_forks_table_for_every_kind() {
+        // S102, 32, 195, C.7: `[repos."<repository>".agents]` by the
+        // repository's location, `~` the home.
+        let config = HostConfig::parse(
+            "[repos.\"~/Code/upstream-fork\".agents.programs.agent.settings]\n\
+             attribution = { commit = \"\", pr = \"\", sessionUrl = false }\n\
+             [repos.\"~/Code/upstream-fork\".kinds.fix.agents]\nmodel = \"opus\"\n",
+        )
+        .unwrap();
+        let fork = home("~/Code/upstream-fork");
+        assert_eq!(
+            config.repos_agents[&fork].programs["agent"].settings["attribution"],
+            serde_json::json!({ "commit": "", "pr": "", "sessionUrl": false })
+        );
+        assert_eq!(
+            config.repos[&fork]["fix"].every_stage.model.as_deref(),
+            Some("opus"),
+            "beside its kinds' tables"
+        );
+    }
+
+    #[test]
+    fn a_repositorys_table_that_names_a_stage() {
+        // C.7: a stage, a program, an environment, a pane beside or a
+        // stream in `[repos."<repository>".agents]`, refused naming the
+        // table and the key.
+        for key in ["stages.code", "program", "env", "beside", "streams.work"] {
+            let (table, value) = match key.split_once('.') {
+                Some((table, name)) => (format!(".{table}.{name}"), "model = \"opus\""),
+                None => (String::new(), ""),
+            };
+            let text = match value {
+                "" => format!("[repos.\"/r\".agents]\n{key} = \"agent\"\n"),
+                value => format!("[repos.\"/r\".agents{table}]\n{value}\n"),
+            };
+            let refused = HostConfig::parse(&text).unwrap_err();
+            let name = key.split('.').next().unwrap();
+            assert!(
+                refused.contains(&format!("[repos.\"/r\".agents] {name} is no setting")),
+                "{text}: {refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn own_settings_set_locally_key_by_key() {
+        // C.7; record 0032: each own setting and each file of every
+        // agents table one key of the local layer's, a file read beside
+        // the configuration, and a pin holding one.
+        let scratch = Scratch::new("own-local");
+        scratch.write("local.json", r#"{ "outputStyle": "plain" }"#);
+        let managed = scratch.write(
+            "config.toml",
+            "[host]\npin = [\"agents.programs.agent.settings.line\"]\n\
+             [streams.work]\n\
+             [agents.programs.agent.settings]\ntui = \"fullscreen\"\nline = \"managed\"\n\
+             [repos.\"/r\".agents]\nmodel = \"opus\"\n",
+        );
+        let local = scratch.write(
+            "config.local.toml",
+            "[agents.programs.agent]\nfile = \"local.json\"\n\
+             [agents.programs.agent.settings]\ntui = \"default\"\nline = \"local\"\n\
+             [agents.streams.work]\nmodel = \"haiku\"\n\
+             [repos.\"/r\".agents.programs.agent.settings]\nattribution = { commit = \"\" }\n\
+             [kinds.fix.agents.stages.code.programs.agent.settings]\ntui = \"code\"\n",
+        );
+        let config = HostConfig::read_layers(&managed, &local).unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let agent = &config.every_agent.programs["agent"];
+        assert_eq!(agent.settings["tui"], serde_json::json!("default"));
+        assert_eq!(
+            agent.settings["line"],
+            serde_json::json!("managed"),
+            "pinned"
+        );
+        assert_eq!(
+            agent.file.as_ref().unwrap().keys["outputStyle"],
+            serde_json::json!("plain")
+        );
+        assert_eq!(
+            config.streams_agents["work"].model.as_deref(),
+            Some("haiku")
+        );
+        let r = &config.repos_agents["/r"];
+        assert_eq!(r.model.as_deref(), Some("opus"), "the managed key kept");
+        assert_eq!(
+            r.programs["agent"].settings["attribution"],
+            serde_json::json!({ "commit": "" })
+        );
+        assert_eq!(
+            config.kinds["fix"].stages["code"].programs["agent"].settings["tui"],
+            serde_json::json!("code")
+        );
+        assert_eq!(
+            value_at(&config, "agents.programs.agent.settings.tui"),
+            Some(("\"default\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(
+            config.configuration.passed_over,
+            vec![PinnedKey {
+                key: "agents.programs.agent.settings.line".into(),
+                pin: "agents.programs.agent.settings.line".into(),
+            }]
+        );
+        let bad = scratch.write(
+            "config.local.toml",
+            "[agents.programs.agent]\nfile = \"gone.json\"\n",
+        );
+        let config = HostConfig::read_layers(&managed, &bad).unwrap();
+        let LocalLayer::NotTaken { keys, fault } = &config.configuration.local else {
+            panic!("a local file naming no file taken");
+        };
+        assert!(keys.is_empty(), "{keys:?}");
+        assert!(
+            fault
+                .as_deref()
+                .is_some_and(|fault| fault.contains("gone.json")),
+            "{fault:?}"
+        );
+        assert!(config.every_agent.programs["agent"].file.is_none());
     }
 }

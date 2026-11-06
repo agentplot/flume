@@ -3,17 +3,18 @@
 //! started.
 
 use super::account_pools::{
-    account, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in, fix_of, home,
-    host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent, stops_at_limit,
-    two_programs, window, UNREACHED,
+    account, account_at_home, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in,
+    fix_of, home, host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent,
+    stops_at_limit, two_programs, window, UNREACHED,
 };
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::for_every_stage;
+use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
-    AccountStatus, Act, Answer, Cache, ModeStatus, MoveStatus, PlaceStatus, PoolStatus, Retry,
-    WaitingOn, Waits,
+    AccountStatus, Act, AgentStatus, Answer, Cache, ModeStatus, MoveStatus, PlaceStatus,
+    PoolStatus, Retry, WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -33,6 +34,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: every fact of clause 56 for every place, side by side",
             cites: &["56", "43", "7", "19", "48"],
             run: every_fact_of_every_place,
+        },
+        Scenario {
+            name: "status: three places of one repository each give their own submission from one read of the merge queue naming all three branches, and each live agent's state is read once for its place and its base's count",
+            cites: &["58", "99", "139"],
+            run: one_read_for_every_place,
         },
         Scenario {
             name: "status: a fake terminal scripted to lack one entry for flume's plugin gives it as the host's terminal setup, and status opens, sends to and closes nothing",
@@ -159,7 +165,382 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["56", "161", "162", "S67"],
             run: a_start_in_another_mode,
         },
+        Scenario {
+            name: "status: an agent's own settings give each key with its layer and its file, how its profile passed them and that they were not read back, in the JSON form",
+            cites: &["S100", "56", "32", "143"],
+            run: own_settings_from_three_layers,
+        },
+        Scenario {
+            name: "status: an agent's own settings name each file with the keys left out of it and their owners, and no value of either",
+            cites: &["S100", "195", "56", "29"],
+            run: own_settings_left_out_of_a_file,
+        },
+        Scenario {
+            name: "status: an agent's own settings name nothing of another program's entry",
+            cites: &["195", "56", "32"],
+            run: own_settings_of_another_program,
+        },
+        Scenario {
+            name: "status: a place of a host's source's kind gives its identity, declared host, and where it came from: the source, its file, the kind's directory, its hash and the host's lock",
+            cites: &["19", "56", "191"],
+            run: a_kind_of_a_hosts_source,
+        },
+        Scenario {
+            name: "status: places of the repository's, a launch's and flume's own kinds give each identity and where it came from, the repository's file and revision, the launch's file, and flume's own hash with no lock",
+            cites: &["19", "56"],
+            run: the_repositorys_a_launchs_and_flumes_own,
+        },
+        Scenario {
+            name: "status: a place whose held state keeps no kind_from gives no identity or hash, its declared the source, and settles as before",
+            cites: &["21", "56"],
+            run: a_place_launched_before,
+        },
+        Scenario {
+            name: "status: the host's part gives each source with its file, its kinds_dir and every identity it holds, and a faulty one with its fault, read when asked",
+            cites: &["S96", "56", "159", "191"],
+            run: a_source_and_a_fault,
+        },
+        Scenario {
+            name: "status: a place whose talk start 2 carries the conversation of start 1, lost, under work-1 gives its agent's conversation from start 1, lost and carried",
+            cites: &["S113", "49", "56"],
+            run: a_lost_talk_carried,
+        },
+        Scenario {
+            name: "status: a place whose talk start 2 took work-2, the account its lost start 1 ran under, while the intent keeps work-1 gives its agent's account work-2 from the conversation",
+            cites: &["S113", "56", "145"],
+            run: the_conversations_account,
+        },
+        Scenario {
+            name: "status: a place whose lost talk waits while the fake agent reads its session live as process 4242 gives the process with when it started and since when talk waits",
+            cites: &["S117", "49", "56", "207"],
+            run: a_talk_waiting_on_its_session,
+        },
+        Scenario {
+            name: "status: a place whose talk reads lost while the fake terminal holds its agent brought back bare gives that agent left in its pane",
+            cites: &["S113", "56", "77"],
+            run: a_bare_agent_left,
+        },
     ]
+}
+
+/// A fix in the stream `work`, its agent given own settings from the
+/// host's table for `work`, the host's file for every agent and the
+/// repository, the fake taking them by a file and reserving `env` and
+/// `perms.mode`; its agent's status and the same in the JSON form.
+fn own_settings_in_work(world: &World) -> Result<(AgentStatus, serde_json::Value), String> {
+    use super::own_settings::{by_file, inline, HOST_FILE};
+    use serde_json::json;
+    world.agent.take_own();
+    world.agent.reserve("env", "the account");
+    world.agent.reserve("perms.mode", "flume's mode");
+    world.host.set_stream("work", Some(Stream::default()));
+    let mut every = by_file(
+        "agent",
+        HOST_FILE,
+        json!({
+            "tips": true,
+            "env": { "PEOPLE": "people-only" },
+            "perms": { "mode": "full-for-people", "allow": ["a"] },
+        }),
+        json!({}),
+    );
+    every
+        .programs
+        .extend(inline("other", json!({ "line": "b" })).programs);
+    world.host.set_every_agent(every);
+    world
+        .host
+        .set_stream_settings("work", inline("agent", json!({ "line": "work" })));
+    world.kinds.set_settings(
+        REPOSITORY,
+        "fix",
+        for_every_stage(inline("agent", json!({ "style": "plain" }))),
+    );
+    launched(&world.engine.launch(&Launch {
+        stream: Some("work".into()),
+        ..launch("fix", "one", Some("mend it"))
+    }))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    Ok((status.agent.ok_or("no agent")?, json["agent"].clone()))
+}
+
+fn own_settings_from_three_layers(_: &()) -> Outcome {
+    use super::own_settings::HOST_FILE;
+    use serde_json::json;
+    let world = World::new();
+    let (agent, json) = own_settings_in_work(&world)?;
+    let from =
+        |key: &str| json["settings"]["from"][format!("programs.agent.settings.{key}")].clone();
+    ensure_eq!(
+        from("line"),
+        json!({ "layer": "host-stream", "value": r#""work""# }),
+        "line"
+    );
+    ensure_eq!(
+        from("tips"),
+        json!({ "layer": "host", "value": "true", "file": HOST_FILE }),
+        "tips"
+    );
+    ensure_eq!(
+        from("style"),
+        json!({ "layer": "repository", "value": r#""plain""# }),
+        "style"
+    );
+    let own = agent.own.ok_or("no own settings")?;
+    let file = flume_fakes::FakeAgent::own_file(
+        &world.store.folder(&World::id("fix", "one")),
+        &World::identity("fix", "one", "code", 1),
+    );
+    ensure_eq!(
+        own.passed,
+        Some(format!("--own {file}")),
+        "how they were passed"
+    );
+    ensure!(!own.read_back, "own settings read back");
+    ensure_eq!(json["own"]["read_back"], json!(false), "read_back as JSON");
+    ensure_eq!(
+        json["settings"]["programs"]["agent"]["settings"],
+        json!({ "line": "work", "tips": true, "style": "plain", "perms": { "allow": ["a"] } }),
+        "the keys the agent's settings give"
+    );
+    Ok(())
+}
+
+fn own_settings_left_out_of_a_file(_: &()) -> Outcome {
+    use super::own_settings::HOST_FILE;
+    use serde_json::json;
+    let world = World::new();
+    let (agent, json) = own_settings_in_work(&world)?;
+    let own = agent.own.ok_or("no own settings")?;
+    ensure_eq!(
+        own.files
+            .iter()
+            .map(|file| (file.layer, file.read.as_str(), file.left_out.clone()))
+            .collect::<Vec<_>>(),
+        vec![(
+            Layer::Host,
+            HOST_FILE,
+            vec![
+                Reserved {
+                    key: "env".into(),
+                    owner: "the account".into(),
+                },
+                Reserved {
+                    key: "perms.mode".into(),
+                    owner: "flume's mode".into(),
+                },
+            ],
+        )],
+        "the file and the keys left out of it"
+    );
+    ensure_eq!(
+        json["own"]["files"][0]["left_out"][1],
+        json!({ "key": "perms.mode", "owner": "flume's mode" }),
+        "a key left out as JSON"
+    );
+    let text = json.to_string();
+    ensure!(
+        !text.contains("people-only") && !text.contains("full-for-people"),
+        "a value left out in status: {text}"
+    );
+    Ok(())
+}
+
+fn own_settings_of_another_program(_: &()) -> Outcome {
+    let world = World::new();
+    let (_, json) = own_settings_in_work(&world)?;
+    let text = json.to_string();
+    ensure!(
+        !text.contains("programs.other") && json["settings"]["programs"].get("other").is_none(),
+        "another program's entry in status: {text}"
+    );
+    Ok(())
+}
+
+fn a_kind_of_a_hosts_source(_: &()) -> Outcome {
+    use super::kind_sources::{holds, host_locks};
+    use crate::seams::kinds::{entry, hash_of};
+    let world = World::new();
+    holds(&world, "acme", "/kinds/acme", &[("review", 1, '1')]);
+    host_locks(&world, vec![entry("acme", "review", 1, &hash_of('1'))]);
+    launched(
+        &world
+            .engine
+            .launch(&launch("acme/review@1", "one", Some("x"))),
+    )?;
+    let status = world.status(&World::id("review", "one"))?;
+    ensure_eq!(
+        (status.identity.as_deref(), status.declared),
+        (Some("acme/review@1"), Declared::Host),
+        "the identity and declared"
+    );
+    let from = status.kind_from.ok_or("no kind_from")?;
+    ensure_eq!(
+        (
+            from.source.as_str(),
+            from.source_file,
+            from.kind_dir,
+            from.hash,
+            from.lock_file.as_deref()
+        ),
+        (
+            "acme",
+            Some(flume_fakes::source_file("acme")),
+            Some(flume_fakes::package_dir("/kinds/acme", "review", 1)),
+            Some(hash_of('1')),
+            Some(flume_fakes::HOST_LOCK)
+        ),
+        "where the kind came from"
+    );
+    ensure!(
+        from.declaration_file.is_none() && from.revision.is_none(),
+        "a host's source's kind names a declaration: {:?}",
+        (from.declaration_file, from.revision)
+    );
+    Ok(())
+}
+
+fn the_repositorys_a_launchs_and_flumes_own(_: &()) -> Outcome {
+    let world = World::new();
+    let mut bump = kind(
+        "bump",
+        false,
+        vec![stage("code", Some(Deliverable::Commits), "{{brief}}")],
+    );
+    bump.version = 2;
+    world.kinds.set_kinds(REPOSITORY, vec![bump]);
+    let declaration = "/caller/kinds.toml";
+    world.kinds.set_declaration(
+        declaration,
+        vec![kind(
+            "spike",
+            false,
+            vec![stage("try", Some(Deliverable::Commits), "{{brief}}")],
+        )],
+    );
+    let base = world.git.branch_head(REPOSITORY, "main").ok_or("main")?;
+    launched(&world.engine.launch(&launch("bump", "one", Some("x"))))?;
+    let mut carried = launch("spike", "one", Some("x"));
+    carried.declaration = Some(declaration.into());
+    launched(&world.engine.launch(&carried))?;
+    launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    let of = |kind: &str, name: &str| -> Result<(Option<String>, KindFrom), String> {
+        let status = world.status(&World::id(kind, name))?;
+        Ok((status.identity, status.kind_from.ok_or("no kind_from")?))
+    };
+    let (identity, from) = of("bump", "one")?;
+    ensure_eq!(identity.as_deref(), Some("repo/bump@2"), "the repository's");
+    ensure_eq!(
+        (
+            from.source.as_str(),
+            from.declaration_file.as_deref(),
+            from.revision
+        ),
+        ("repo", Some(".config/flume.toml"), Some(base)),
+        "where the repository's came from"
+    );
+    let (identity, from) = of("spike", "one")?;
+    ensure_eq!(identity.as_deref(), Some("launch/spike@1"), "the launch's");
+    ensure_eq!(
+        (from.source.as_str(), from.declaration_file.as_deref()),
+        ("launch", Some(declaration)),
+        "where the launch's came from"
+    );
+    ensure!(
+        from.hash.is_none() && from.lock_file.is_none(),
+        "a declaration's kind names a hash or a lock: {from:?}"
+    );
+    let (identity, from) = of("change", "plan")?;
+    ensure_eq!(identity.as_deref(), Some("flume/change@2"), "flume's own");
+    let own = world
+        .kinds
+        .flumes_own()
+        .into_iter()
+        .find(|own| own.identity.spelled == "flume/change@2")
+        .ok_or("flume holds no change@2")?;
+    ensure_eq!(
+        (from.source.as_str(), from.hash, from.lock_file),
+        ("flume", Some(own.hash), None),
+        "where flume's own came from"
+    );
+    Ok(())
+}
+
+fn a_place_launched_before(_: &()) -> Outcome {
+    let world = World::new();
+    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
+    let id = World::id("fix", "one");
+    let mut held = world.held(&id).ok_or("no place")?;
+    held.place.kind_from = None;
+    world.store.put(&id, held);
+    let status = world.status(&id)?;
+    ensure_eq!(
+        (status.identity, status.kind_from, status.declared),
+        (None, None, Declared::Flume),
+        "the kind's identity, where it came from, and declared"
+    );
+    world.settle(&id);
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    Ok(())
+}
+
+fn a_source_and_a_fault(_: &()) -> Outcome {
+    use super::kind_sources::holds;
+    let world = World::new();
+    holds(
+        &world,
+        "acme",
+        "/kinds/acme",
+        &[("review", 1, '1'), ("review", 2, '2')],
+    );
+    world.host.faulty_source(
+        "bad",
+        "it gives no kinds_dir, the directory of its packages",
+    );
+    let sources = match world.engine.status(None) {
+        Answer::Status { host, .. } => host.sources,
+        other => return Err(format!("status answered {other:?}")),
+    };
+    ensure_eq!(
+        sources,
+        vec![
+            flume_core::SourceStatus {
+                name: "acme".into(),
+                source_file: flume_fakes::source_file("acme"),
+                kinds_dir: Some("/kinds/acme".into()),
+                kinds: vec!["acme/review@1".into(), "acme/review@2".into()],
+                cannot_read: None,
+            },
+            flume_core::SourceStatus {
+                name: "bad".into(),
+                source_file: flume_fakes::source_file("bad"),
+                kinds_dir: None,
+                kinds: vec![],
+                cannot_read: Some("it gives no kinds_dir, the directory of its packages".into()),
+            },
+        ],
+        "the host's sources"
+    );
+    world.kinds.set_package(
+        "/kinds/acme",
+        super::kind_sources::packaged("lint", 1),
+        "sha256:0",
+    );
+    let again = match world.engine.status(None) {
+        Answer::Status { host, .. } => host.sources,
+        other => return Err(format!("status answered {other:?}")),
+    };
+    ensure_eq!(
+        again[0].kinds.len(),
+        3,
+        "the source's identities, read again when asked"
+    );
+    Ok(())
 }
 
 /// The fix `given` launches, settled once: its agent's status, and the
@@ -221,6 +602,7 @@ fn a_tables_entry(_: &()) -> Outcome {
         Some(&Given {
             layer: Layer::Launch,
             value: r#"{ agent = "careful", other = "edits" }"#.into(),
+            file: None,
         }),
         "the mode as written and its layer"
     );
@@ -563,6 +945,49 @@ fn every_fact_of_every_place(_: &()) -> Outcome {
         .find(|place| place.kind == "change")
         .ok_or("no change")?;
     ensure!(plan.tasks.is_some(), "no tasks for a change's place");
+    Ok(())
+}
+
+fn one_read_for_every_place(_: &()) -> Outcome {
+    let world = World::new();
+    for name in ["one", "two", "three"] {
+        launched(&world.engine.launch(&launch("fix", name, Some("x"))))?;
+    }
+    world.engine().settle(None);
+    let handed =
+        world
+            .queue
+            .hand_submission(REPOSITORY, "fix/two", "main", SubmissionState::Waiting);
+    world.queue.log.clear();
+    world.terminal.log.clear();
+    let all = places(world.engine.status(None))?;
+    ensure_eq!(
+        world.queue.log.of("read_submission"),
+        vec![format!(
+            "read_submission {REPOSITORY} fix/one fix/three fix/two"
+        )],
+        "the merge queue's reads"
+    );
+    for place in &all {
+        let submission = place.submission.as_ref().ok_or("no submission")?;
+        let expected = match place.name.as_str() {
+            "two" => SubmissionRead::Found {
+                submission: handed.clone(),
+            },
+            _ => SubmissionRead::None,
+        };
+        ensure_eq!(
+            submission.read,
+            expected,
+            format!("{}'s submission", place.name)
+        );
+        ensure!(place.agent.is_some(), "{} has no agent", place.name);
+    }
+    ensure_eq!(
+        world.terminal.log.count("state"),
+        3,
+        "the agents' states read"
+    );
     Ok(())
 }
 
@@ -921,6 +1346,7 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 2,
                     bound: Some(4),
                     spent_until: None,
+                    spent_unread: None,
                     reading: None,
                     past: None,
                 },
@@ -930,6 +1356,7 @@ fn a_pool_with_a_spent_account(_: &()) -> Outcome {
                     running: 0,
                     bound: None,
                     spent_until: Some(until),
+                    spent_unread: None,
                     reading: None,
                     past: None,
                 },
@@ -1276,6 +1703,120 @@ fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
         json["uncarried"][0]["words"],
         serde_json::json!(ended),
         "the place's carried start that did not begin in the JSON form"
+    );
+    Ok(())
+}
+
+/// The fake agent carries a lost start's conversation to the account at
+/// `name`'s home with the session `s-1`.
+fn carries_lost_to(world: &World, name: &str) {
+    world.agent.carry_to(
+        &home(name),
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    );
+}
+
+/// The place's status as its JSON form gives it.
+fn status_json(world: &World, id: &PlaceId) -> Result<serde_json::Value, String> {
+    serde_json::to_value(world.status(id)?).map_err(|error| error.to_string())
+}
+
+fn a_lost_talk_carried(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_lost_to(&world, "work-1");
+    let id = talking(&world)?;
+    lost_with_host(&world, &id)?;
+    retry_talk(&world, &id, None, false)?;
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["agent"]["conversation"],
+        serde_json::json!({"from": 1, "cause": "lost", "carried": true}),
+        "the agent's conversation in the JSON form"
+    );
+    Ok(())
+}
+
+fn the_conversations_account(_: &()) -> Outcome {
+    let world = World::new();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account_at_home("work-2"), account_at_home("work-1")],
+    );
+    world.host.set_host_pool(Some("work"));
+    carries_lost_to(&world, "work-2");
+    let id = talking(&world)?;
+    let intent = world.held(&id).ok_or("no held state")?.place.intent;
+    let key = HostKey::Intent {
+        digest: intent.digest().to_string(),
+    };
+    let Some(HostDocument::Intent(mut affinity)) = world.store.host_document(&key) else {
+        return Err("the intent keeps no affinity".into());
+    };
+    affinity.accounts.insert(
+        "agent".into(),
+        AffinityAccount {
+            pool: "work".into(),
+            account: "work-1".into(),
+        },
+    );
+    world.store.put_host(&key, HostDocument::Intent(affinity));
+    lost_with_host(&world, &id)?;
+    retry_talk(&world, &id, None, false)?;
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["agent"]["account"],
+        serde_json::json!({"pool": "work", "name": "work-2", "from": "conversation"}),
+        "the agent's account in the JSON form"
+    );
+    Ok(())
+}
+
+fn a_talk_waiting_on_its_session(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.terminal.kill(&talk(1));
+    world.settle(&id);
+    world.agent.live_runs("s-1", &[by_hand()]);
+    let since = world.host.now();
+    retry_talk(&world, &id, None, false)?;
+    world.host.advance(600);
+    world.settle(&id);
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["waits_on_session"],
+        serde_json::json!({
+            "stage": "talk",
+            "processes": [{"pid": 4242, "started": 9000}],
+            "since": since,
+        }),
+        "what the JSON form says talk waits on"
+    );
+    Ok(())
+}
+
+fn a_bare_agent_left(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.host.restart();
+    world.terminal.forget_all();
+    world.agent.bring_back_bare(&talk(1));
+    world.engine().settle(None);
+    let agent = world.status(&id)?.agent.ok_or("status gives no agent")?;
+    ensure_eq!(
+        (agent.identity, agent.left_in_pane),
+        (talk(1).to_string(), true),
+        "the agent status gives and whether flume left it in its pane"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["agent"]["left_in_pane"],
+        serde_json::json!(true),
+        "left_in_pane in the JSON form"
     );
     Ok(())
 }

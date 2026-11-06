@@ -2,19 +2,21 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::{AgentHarness, CarryAccounts, Modes},
+    agent::{AgentHarness, CarryAccounts, LiveSessions, Modes, OwnWay},
     change::ChangeHarness,
     history::HistoryHarness,
-    kinds::KindsHarness,
+    kinds::{KindsHarness, SourceDir},
     merge_queue::MergeQueueHarness,
     place::{Pinned, PlaceHarness},
     store::StoreHarness,
     terminal::TerminalHarness,
+    window::WindowHarness,
 };
 use flume_fakes::*;
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 const REPOSITORY: &str = "/repository";
 
@@ -237,6 +239,80 @@ impl KindsHarness for FakeKindsHarness {
         self.kinds.set_binding(REPOSITORY, binding.clone());
         REPOSITORY.into()
     }
+
+    fn source(&self, kinds: &[Kind]) -> Option<SourceDir> {
+        let dir = acme();
+        for kind in kinds {
+            let hash = packaged(&dir.source, kind.clone(), None).hash;
+            self.kinds.set_package(&dir.kinds_dir, kind.clone(), &hash);
+        }
+        Some(dir)
+    }
+
+    fn unreadable_source(&self) -> Option<SourceDir> {
+        let dir = SourceDir {
+            source: "broken".into(),
+            kinds_dir: "/kinds/broken".into(),
+        };
+        self.kinds
+            .unreadable_source(&dir.kinds_dir, "the directory cannot be listed");
+        Some(dir)
+    }
+
+    fn refused_package(&self) -> Option<(SourceDir, String, u32)> {
+        let dir = acme();
+        self.kinds.refuse_package(
+            &dir.kinds_dir,
+            "review",
+            3,
+            "kinds.review.version: makes the package acme/review@2, but it is held at acme/review@3",
+        );
+        Some((dir, "review".into(), 3))
+    }
+
+    fn lock_at(&self, entries: &[LockEntry]) -> Option<(String, Revision)> {
+        let revision = self.git.init("/locked", "main");
+        self.kinds
+            .set_lock_at("/locked", &revision, entries.to_vec());
+        Some(("/locked".into(), revision))
+    }
+
+    fn no_lock_at(&self) -> Option<(String, Revision)> {
+        Some(("/unlocked".into(), self.git.init("/unlocked", "main")))
+    }
+
+    fn lock_file(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = "/config/flume/flume.lock";
+        self.kinds.set_lock_file(path, entries.to_vec());
+        Some(path.into())
+    }
+
+    fn no_lock_file(&self) -> Option<String> {
+        Some("/work/.config/flume.lock".into())
+    }
+
+    fn unreadable_lock_file(&self) -> Option<String> {
+        let path = "/broken/flume.lock";
+        self.kinds
+            .unreadable_lock_file(path, "kinds[0].hash: is no content hash");
+        Some(path.into())
+    }
+
+    fn unwritable_lock(&self, entries: &[LockEntry]) -> Option<String> {
+        let path = "/read-only/flume.lock";
+        self.kinds.set_lock_file(path, entries.to_vec());
+        self.kinds
+            .unwritable_lock(path, "/read-only is not writable");
+        Some(path.into())
+    }
+}
+
+/// The source `acme`, its packages in `/kinds/acme`.
+fn acme() -> SourceDir {
+    SourceDir {
+        source: "acme".into(),
+        kinds_dir: "/kinds/acme".into(),
+    }
 }
 
 pub struct FakeChangeHarness {
@@ -274,20 +350,79 @@ pub struct FakeAgentHarness {
     pub host: Arc<FakeHost>,
     pub terminal: Arc<FakeTerminal>,
     pub agent: FakeAgent,
-    /// Whether the harness scripts the fake to carry a conversation, or
-    /// leaves it carrying none, as a profile that offers no carry (179).
+    /// Whether the harness scripts the fake to carry a conversation and
+    /// read a running session, or leaves it carrying none and reading none,
+    /// as a profile that keeps the seam's defaults (179, 207).
     carries: bool,
+    /// How the harness scripted the fake to take own settings, by
+    /// [`fake_own`], or left it keeping the seam's defaults (195, 196).
+    own: OwnWay,
 }
 
 impl FakeAgentHarness {
-    /// The fake left carrying no conversation, as a profile that keeps the
-    /// seam's default (179).
+    /// The fake left carrying no conversation and reading no running
+    /// session, as a profile that keeps the seam's defaults (179, 207).
     pub fn carrying_none() -> Self {
-        FakeAgentHarness {
+        let harness = FakeAgentHarness {
             carries: false,
             ..FakeAgentHarness::default()
+        };
+        harness.agent.live_not_read();
+        harness
+    }
+
+    /// The fake left taking no own settings and reserving no key, as a
+    /// profile that keeps the seam's defaults (195, 196).
+    pub fn taking_no_own() -> Self {
+        let host = Arc::new(FakeHost::default());
+        let terminal = Arc::new(FakeTerminal::new(host.clone()));
+        FakeAgentHarness {
+            agent: scripted(FakeAgent::new(terminal.clone()), &OwnWay::default()),
+            terminal,
+            host,
+            carries: true,
+            own: OwnWay::default(),
         }
     }
+}
+
+/// The fake agent's own settings the seam's scenarios run with: taken by
+/// a file, `env` reserved for the account and `permissions.default`, by
+/// its path, for flume's mode (195, 196).
+pub fn fake_own() -> OwnWay {
+    OwnWay {
+        takes: true,
+        reserved: vec![
+            Reserved {
+                key: "env".into(),
+                owner: "the account, whose env is an agent's whole environment".into(),
+            },
+            Reserved {
+                key: "permissions.default".into(),
+                owner: "flume's mode".into(),
+            },
+        ],
+    }
+}
+
+/// `agent` scripted with [`fake_modes`], reading the mode back, and
+/// taking own settings as `own` says (161, 169, 195).
+fn scripted(agent: FakeAgent, own: &OwnWay) -> FakeAgent {
+    let modes = fake_modes();
+    for (mode, value) in &modes.four {
+        agent.map_mode(*mode, value);
+    }
+    for value in &modes.own {
+        agent.own_mode(value);
+    }
+    agent.read_mode_back();
+    if own.takes {
+        agent.take_own();
+    }
+    for Reserved { key, owner } in &own.reserved {
+        agent.reserve(key, owner);
+    }
+    agent
 }
 
 /// The fake agent's map of modes the seam's scenarios run with: each of
@@ -307,24 +442,17 @@ pub fn fake_modes() -> Modes {
 
 impl Default for FakeAgentHarness {
     /// The fake agent scripted with [`fake_modes`], reading the mode
-    /// back (161, 169).
+    /// back, and with [`fake_own`] (161, 169, 195).
     fn default() -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
-        let agent = FakeAgent::new(terminal.clone());
-        let modes = fake_modes();
-        for (mode, value) in &modes.four {
-            agent.map_mode(*mode, value);
-        }
-        for value in &modes.own {
-            agent.own_mode(value);
-        }
-        agent.read_mode_back();
+        let own = fake_own();
         FakeAgentHarness {
-            agent,
+            agent: scripted(FakeAgent::new(terminal.clone()), &own),
             terminal,
             host,
             carries: true,
+            own,
         }
     }
 }
@@ -420,6 +548,39 @@ impl AgentHarness for FakeAgentHarness {
         self.agent.set_began_in(identity, began);
     }
 
+    /// The fake scripted to read `runs`'s conversation run by process
+    /// 4242 and `unknown`'s as one it cannot read, by the sessions their
+    /// words name; none where the harness leaves it reading no running
+    /// session (207).
+    fn live_sessions(&self, runs: &Identity, unknown: &Identity) -> Option<LiveSessions> {
+        if !self.carries {
+            return None;
+        }
+        let processes = vec![LiveProcess {
+            pid: 4242,
+            started: self.host.now(),
+        }];
+        self.agent.set_session(runs, "s-live");
+        self.agent.live_runs("s-live", &processes);
+        self.agent.set_session(unknown, "s-unread");
+        self.agent.live_unknown(
+            "s-unread",
+            &format!(
+                "the sessions under the account's {} cannot be read",
+                FakeAgent::HOME
+            ),
+        );
+        let home = BTreeMap::from([(
+            FakeAgent::HOME.to_string(),
+            "/scratch/agent-work-2".to_string(),
+        )]);
+        Some(LiveSessions {
+            envs: vec![BTreeMap::new(), home.clone()],
+            processes,
+            unreadable: vec![home],
+        })
+    }
+
     /// The fake scripted to carry to one account's home with the session
     /// `s-1`, and to answer no to another's with words naming its
     /// variable; none where the harness leaves it carrying none (179).
@@ -448,6 +609,28 @@ impl AgentHarness for FakeAgentHarness {
             session: "s-1".into(),
             reaches_none: home("/scratch/agent-work-3"),
         })
+    }
+
+    fn own_way(&self) -> OwnWay {
+        self.own.clone()
+    }
+
+    /// The JSON object of the file the command names by `--own`, read
+    /// from the files it lists; an empty one where it lists no such file,
+    /// and none where it names none (196).
+    fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>> {
+        let file = command
+            .args
+            .iter()
+            .skip_while(|arg| *arg != "--own")
+            .nth(1)?;
+        Some(
+            command
+                .files
+                .get(file)
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default(),
+        )
     }
 }
 
@@ -565,9 +748,106 @@ impl TerminalHarness for FakeTerminalHarness {
         "nobody".into()
     }
 
+    fn views(&self) -> Vec<View> {
+        vec![View::Terminal, View::App]
+    }
+
+    fn parts(&self) -> Vec<Option<String>> {
+        vec![Some("work".into()), None]
+    }
+
+    fn refuse_attach(&self, view: View) -> bool {
+        self.terminal.attaches_as(
+            view,
+            Some(Attached::Refused {
+                reason: format!("no {}", view.name()),
+            }),
+        );
+        true
+    }
+
     fn setup(&self) -> Vec<String> {
         self.terminal.set_setup(&[SETUP]);
         vec![SETUP.to_string()]
+    }
+
+    /// `work` scripted running and `desk` unread with `no listing`;
+    /// `office`, never scripted, and its own part not running, the own as
+    /// `own` (201).
+    fn runs_parts(&self) -> Vec<(Option<String>, SessionRuns)> {
+        let work = SessionRuns::Runs {
+            name: "work".into(),
+        };
+        let desk = SessionRuns::Unread {
+            reason: "no listing".into(),
+        };
+        self.terminal.runs_as("work", work.clone());
+        self.terminal.runs_as("desk", desk.clone());
+        vec![
+            (Some("work".into()), work),
+            (Some("desk".into()), desk),
+            (
+                Some("office".into()),
+                SessionRuns::NotRunning {
+                    name: "office".into(),
+                },
+            ),
+            (None, SessionRuns::NotRunning { name: "own".into() }),
+        ]
+    }
+
+    fn logged(&self) -> Option<Vec<String>> {
+        Some(self.terminal.log.calls())
+    }
+}
+
+/// The fake window, its shows answered as each scenario scripts them.
+#[derive(Default)]
+pub struct FakeWindowHarness {
+    pub window: FakeWindow,
+}
+
+impl WindowHarness for FakeWindowHarness {
+    type Seam = FakeWindow;
+
+    fn seam(&self) -> &FakeWindow {
+        &self.window
+    }
+
+    fn command(&self) -> ViewCommand {
+        ViewCommand {
+            program: "/bin/fake-terminal".into(),
+            arguments: vec!["attach".into(), "work".into()],
+            environment: BTreeMap::from([("XDG_CONFIG_HOME".into(), "/scratch/home".into())]),
+        }
+    }
+
+    fn opens(&self) -> bool {
+        true
+    }
+
+    fn opened(&self) -> Vec<(ViewCommand, String)> {
+        self.window.windows()
+    }
+
+    fn will_print(&self) -> bool {
+        self.window.answers(Some(WindowShown::Printed {
+            line: "XDG_CONFIG_HOME=<set> /bin/fake-terminal attach work".into(),
+        }));
+        true
+    }
+
+    fn will_refuse(&self) -> Option<String> {
+        let words = "no display";
+        self.window.answers(Some(WindowShown::Refused {
+            reason: words.into(),
+        }));
+        Some(words.into())
+    }
+
+    /// The fake answers at once, and has no program to hold.
+    fn will_hang(&self) -> Option<Duration> {
+        None
     }
 }
 

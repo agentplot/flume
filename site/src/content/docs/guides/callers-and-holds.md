@@ -36,7 +36,7 @@ happens:
 | `<stage> needs an answer` | the agent stopped short with a question, in its words |
 | `<stage> found work` | the agent stopped short with work it cannot deliver past, in its words |
 | `<stage> never begun` | the agent never said it started, or never took its prompt; one that says so later goes on, its stage begun |
-| `<stage> lost` | the agent stopped with nothing delivered |
+| `<stage> lost` | the agent stopped with nothing delivered; a conversation's goes on in its session at a retry ([a lost conversation](#a-lost-conversation)) |
 | `<stage> stuck` | the agent stayed quiet past the stage's limit with nothing delivered |
 | `submission landed <commit>` | the merge queue landed the place's work |
 | `submission failed` | the merge queue's checks failed, or the work conflicts with its base, with the merge queue's words and any contested files |
@@ -196,6 +196,39 @@ it is refused, forced or not, naming the agent, and
 `flume stop <place>` ends it first. `flume retry <place> --submission`
 submits the place's head again and starts no agent. A tell is never an answer: only a retry
 restarts a stage that ended.
+
+### A lost conversation
+
+A conversation's stage reads `<stage> lost` when its agent stops with
+nothing delivered, as when the host or the terminal restarts. Its
+retry goes on in the lost agent's session, with its conversation as it
+stood ([the conversation
+carried](/flume/guides/agent-settings/#the-conversation-carried)):
+
+```console
+$ flume retry ask--the-parsers-history --stage talk --words "Carry on where we stopped."
+```
+
+The terminal may have brought the lost agent back in its pane as it
+restarted, or a person may have resumed the session in a pane of their
+own. flume leaves either as it is: it sends that process nothing, and
+ends none of it. The lost end says so: `talk lost, and flume left the
+agent the terminal brought back in its pane`. Only your `flume stop`,
+`drop` or `done` ends an agent left so.
+
+While a process runs the session, the retry is taken at once, ends
+nothing, and its stage waits, as for room and never stalled:
+
+```text
+  talk waits for its conversation to end since 1793290000: process 4242, started 1793289400
+```
+
+Once that process ends, the next settle starts the stage in the same
+session, so what a person said there goes on with the retry. Nothing
+they sent is lost. A drop or a done of the place keeps its worktree
+while a process runs its conversation, `kept while its session runs`,
+naming the process. A retry of a lost stage that is not a conversation
+starts afresh from what its place holds.
 
 ## Stalls
 

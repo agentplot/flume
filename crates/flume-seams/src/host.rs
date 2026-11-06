@@ -1,11 +1,11 @@
 //! The host's own facts the core reads: its clock, a new secret, a
 //! file's write time, whether a command of flume's still lives, the bound
-//! on agents its configuration states, its streams with their sessions
-//! and labels, its pools of accounts, the labels it gives kinds, its
-//! configuration's values with their layers, and a lock over the room
-//! (design 3, 6). No seam of Part B.
+//! on agents its configuration states, its streams with their sessions,
+//! labels and displays, its pools of accounts, the labels it gives kinds,
+//! its configuration's values with their layers, the sources of its
+//! kinds, and a lock over the room (design 3, 6). No seam of Part B.
 
-use crate::{KindSettings, Seconds, Secret};
+use crate::{KindSettings, Seconds, Secret, Settings};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -18,9 +18,14 @@ pub const DEFAULT_STREAM: &str = "default";
 /// it; its priority among streams, zero where it gives none; the pool
 /// its agents' accounts come from, none where the host's own pool stands;
 /// the terminal session its agents open in, none where it names none and
-/// its name, or the terminal's own for the default stream, stands; and
-/// its labels' shares of its agents, by label, none where it states none
-/// (107, 143, 144, 181, C.7).
+/// its name, or the terminal's own for the default stream, stands; the
+/// sessions it names for kinds and their stages, by the kind's name, none
+/// where it names none; its labels' shares of its agents, by label, none
+/// where it states none; the terminal profile its agents run in, the view
+/// a person is shown them in and the window's profile, each none where it
+/// names none and the host's stands (`Host::display_for`); and the title
+/// a window on its part of the terminal carries, none where it gives none
+/// and its name stands (107, 143, 144, 181, 186, 190, 199, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -32,7 +37,131 @@ pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub kinds: BTreeMap<String, KindSessions>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub labels: BTreeMap<String, Share>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiplexer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<View>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_app: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+/// A stream's table for a kind, `[streams.<stream>.kinds.<kind>]`: the
+/// session the kind's agents open in, none where it names none; its
+/// stages' tables, by the stage's name in the kind, none where it gives
+/// none; and each other key it holds, which refuses every start that
+/// reads it rather than the configuration (199, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KindSessions {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub stages: BTreeMap<String, StageSession>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unknown: Vec<String>,
+}
+
+/// A stream's table for one stage of a kind,
+/// `[streams.<stream>.kinds.<kind>.stages.<stage>]`: the session that
+/// stage's agents open in, none where it names none, and each other key
+/// it holds, which refuses every start that reads it (199, C.7).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StageSession {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unknown: Vec<String>,
+}
+
+/// A session a stream names for its kinds and their stages, by its name:
+/// each kind it names it for, and each stage as `<kind>.<stage>`, with
+/// the layer its `session` came from, none of either where it names it
+/// for none (56, 199, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedSession {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kinds: Vec<NamedFor>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stages: Vec<NamedFor>,
+}
+
+/// A kind, or a kind's stage as `<kind>.<stage>`, a session is named
+/// for, and the layer of the configuration that names it (56, 199, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedFor {
+    pub name: String,
+    pub layer: ConfigLayer,
+}
+
+/// A fault of a stream's table for a kind or a stage, by the table's
+/// dotted key, `streams.work.kinds.research`, and the refusal it causes
+/// every start that reads it: another key it holds, or a session that is
+/// another stream's (4, 56, 199).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableFault {
+    pub table: String,
+    pub refused: String,
+}
+
+/// How a person is shown a stream's agents: in a window a terminal app
+/// opens on the terminal's command, or in the terminal's own app (186).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum View {
+    Terminal,
+    App,
+}
+
+impl View {
+    /// The view as the host's configuration and status spell it.
+    pub fn name(self) -> &'static str {
+        match self {
+            View::Terminal => "terminal",
+            View::App => "app",
+        }
+    }
+}
+
+/// Where a stream's multiplexer, view or terminal app came from: its
+/// stream's key, the host's, or neither, the default standing (186, 190,
+/// C.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NamedBy {
+    Stream,
+    Host,
+    Neither,
+}
+
+/// A profile by its name and where it came from; the default the host's
+/// reader names where neither the stream nor the host names one (105,
+/// 190).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileHeld {
+    pub profile: String,
+    pub from: NamedBy,
+}
+
+/// A stream's view and where it came from (186).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewHeld {
+    pub view: View,
+    pub from: NamedBy,
+}
+
+/// A stream's terminal and how a person views it: the terminal profile
+/// its agents run in, the view, and the window profile a terminal view
+/// opens in (143, 186, 190).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamDisplay {
+    pub multiplexer: ProfileHeld,
+    pub view: ViewHeld,
+    pub terminal_app: ProfileHeld,
 }
 
 /// A label's share of its stream's agents: the reserve its places start
@@ -181,14 +310,14 @@ pub struct Pool {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
     pub read_at: Seconds,
-    pub windows: Vec<Window>,
+    pub windows: Vec<UsageWindow>,
 }
 
 /// One usage window of an account's allowance: its name as the host gives
 /// it, how much of it is used in hundredths of a percent, 0 to 10000, and
 /// when it resets, none where the reading gives none (184, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Window {
+pub struct UsageWindow {
     pub name: String,
     pub used: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -253,14 +382,26 @@ impl std::fmt::Debug for RoomGuard {
     }
 }
 
-/// The settings the host's configuration gives a kind's agents, each value
-/// as the configuration wrote it (32, C.7).
+/// The settings the host's configuration gives a kind's agents in one
+/// repository and one stream, each value as the configuration wrote it,
+/// each table none where the configuration gives none, and in settings
+/// written before (32, 143, 195, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostSettings {
     /// For the kind in one repository.
     pub repository: KindSettings,
+    /// For every kind in the repository, its
+    /// `[repos."<repository>".agents]`, beneath its table for the kind.
+    #[serde(default)]
+    pub every_kind: Settings,
     /// For the kind in every repository.
     pub kind: KindSettings,
+    /// For every agent in the stream, its `[agents.streams.<stream>]`.
+    #[serde(default)]
+    pub stream: Settings,
+    /// For every agent on the host, its `[agents]`.
+    #[serde(default)]
+    pub every_agent: Settings,
 }
 
 /// The run a host wakes for a role's address, as its configuration's
@@ -280,6 +421,27 @@ pub struct RoleRun {
     pub brief: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
+}
+
+/// A source the host's configuration declares by a file of its own in its
+/// sources directory, the file's name less `.toml` being the source's
+/// (191, C.7): the file, and the directory its packages lie in or why
+/// the file cannot be read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSource {
+    pub file: String,
+    pub read: HostSourceRead,
+}
+
+/// A source's file read: the directory holding its packages, its leading
+/// `~` read as the host user's home; or why the file cannot be read, a
+/// name that is flume's own source's, the repository's or a launch's
+/// among the reasons (154, 191, C.7).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostSourceRead {
+    Read { kinds_dir: String },
+    CouldNotRead { reason: String },
 }
 
 /// Whether a recipient's name is a role's address, `<partition>/<role>`,
@@ -334,9 +496,10 @@ pub trait Host: Send + Sync {
     fn recipient(&self) -> Option<String>;
 
     /// The settings the host's configuration gives `kind`'s agents in
-    /// `repository`, as it stands now: read at every start, never kept
-    /// in held state (32, C.7).
-    fn settings(&self, repository: &str, kind: &str) -> HostSettings;
+    /// `repository` and in `stream`, the place's, and every agent's, as
+    /// it stands now: read at every start, never kept in held state (32,
+    /// 143, C.7).
+    fn settings(&self, repository: &str, kind: &str, stream: &str) -> HostSettings;
 
     /// The run the host's configuration names for a role's address, as
     /// it stands now; none where it names nothing for it (132, C.7).
@@ -371,6 +534,12 @@ pub trait Host: Send + Sync {
     /// under no account (144, C.7).
     fn pool_for(&self, stream: &str) -> Option<PoolNamed>;
 
+    /// The multiplexer, view and terminal app of a place in `stream`, as
+    /// the host's configuration stands now: each the stream's own, else
+    /// the host's, else the default the host's reader names, with where
+    /// it came from (143, 186, 190, C.7).
+    fn display_for(&self, stream: &str) -> StreamDisplay;
+
     /// The pool the host's configuration declares under `name`, as it
     /// stands now (144, C.7).
     fn pool(&self, name: &str) -> Option<Pool>;
@@ -391,4 +560,24 @@ pub trait Host: Send + Sync {
     /// The host-wide lock over the room, held until the guard is dropped,
     /// so two starts at once never pass the bound (70, 75).
     fn room(&self) -> RoomGuard;
+
+    /// The sources the host's configuration declares, by name, as they
+    /// stand now, each source's fault its own (159, 191, C.7); none by
+    /// default, a host with no sources directory.
+    fn sources(&self) -> BTreeMap<String, HostSource> {
+        BTreeMap::new()
+    }
+
+    /// The directory the host's configuration keeps its sources' files in,
+    /// a source named by `<source>.toml` there (191, C.7); none by
+    /// default.
+    fn sources_dir(&self) -> Option<String> {
+        None
+    }
+
+    /// The host's lock of kinds, `$XDG_CONFIG_HOME/flume/flume.lock`, read
+    /// as it stands (155, C.7); none by default, a host that keeps no lock.
+    fn kinds_lock(&self) -> Option<String> {
+        None
+    }
 }

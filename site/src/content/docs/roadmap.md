@@ -22,7 +22,7 @@ the same answers you do.
 | Ends delivered once to each recipient, or kept pending for `flume wait` and `flume inbox` | ✓ | ✓ |
 | Role addresses, woken by a pending end or `flume wake` | ✓ | ✓ |
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
-| Agent settings in six layers | ✓ | ✓ |
+| Agent settings in eight layers, each program's own settings among them, given inline or by a settings file | ✓ | ✓ |
 | Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
 | Each stream's agents in a herdr session of its own, or the one a launch names | ✓ | ✓ |
 | The host's configuration in a managed layer and a local one over it, the managed one pinning keys | ✓ | ✓ |
@@ -32,9 +32,19 @@ the same answers you do.
 | A pool choosing the account with the most of its allowance left by the host's reading, and starting nothing on an account past its threshold | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
+| Each stream's agents under a multiplexer of its own, the host's where it names none | ✓ | ✓ |
+| `flume open`: a stream's agents in a window titled as the stream declares, or the line to run | Ghostty, Terminal.app | Ghostty |
 | The herdr plugin's watch, sidebar rows and popup | ✓ | ✓ |
 | The Claude Code plugin's `/launch` and status over MCP | ✓ | ✓ |
 | Release binaries | Apple silicon | x86-64, ARM64 |
+
+A stream's multiplexer is herdr or the printed command. No profile is
+written yet for herdr-core, Rex, cmux or TUIOS. Each is a change of its
+own, checked against its release, and offers the views its multiplexer
+has: a window running its terminal client, its own app, or both
+([record 0037](https://github.com/agentplot/flume/blob/main/docs/adr/0037-a-stream-names-its-multiplexer-its-view-and-its-terminal-app-the-hosts-where-it-names-none-and-a-person-opens-its-agents-in-that-view.md)).
+Until then a stream naming one refuses its launches and starts, naming
+the profiles there are.
 
 ## Decided, not built
 
@@ -100,6 +110,16 @@ the rest of this site says.
   label, `label` in its table, which the host's configuration can
   override. It waits on the kind format's reader taking the field.
   Until then only the host's configuration gives a place a label.
+
+- **A standing agent holds a role's address**
+  ([record 0013](https://github.com/agentplot/flume/blob/main/docs/adr/0013-a-waiter-may-be-a-roles-address-and-an-end-untold-to-it-wakes-the-role.md),
+  as amended 2026-11-06). The host's configuration may give a role's
+  address an agent that already runs, `[roles."<partition>/<role>"]`
+  with `agent`, the name the terminal knows it by, and an optional
+  `session`. Each end for the address then goes into that agent as a
+  notice and wakes no run, and status says where the address lives.
+  Until then an end for an address with no run stays pending, and the
+  agent collects it with `flume inbox --recipient <address>`.
 
 - **An MCP server's labels.** The host's configuration declares each
   MCP server its agents may have, under `[mcp.<server>]`, with the

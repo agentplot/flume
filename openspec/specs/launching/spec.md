@@ -111,12 +111,13 @@ is bound, or when a stage asks for a brief the launch lacks (4, 9, C.2).
 
 ### Requirement: A launch whose binding or settings flume cannot run is refused whole
 
-A launch SHALL be refused, naming the program, field or stage and its
-layer, and SHALL leave nothing made, when the binding names a place
-profile flume does not hold, when a stage's agent resolves to a program
-no agent profile binds or the host's terminal cannot run, when a
-declaration gives an agent an `env`, or when settings name a stage the
-kind does not hold (4, 32, 158, C.1, C.2).
+A launch SHALL be refused, naming the program, field, stage or stream
+and its layer, and SHALL leave nothing made, when the binding names a
+place profile flume does not hold, when a stage's agent resolves to a
+program no agent profile binds or its stream's terminal cannot run,
+when its stream's multiplexer names a terminal profile flume does not
+carry, when a declaration gives an agent an `env`, or when settings
+name a stage the kind does not hold (4, 32, 158, 190, C.1, C.2).
 
 #### Scenario: A program no agent profile binds
 
@@ -132,6 +133,11 @@ kind does not hold (4, 32, 158, C.1, C.2).
 
 - **WHEN** a repository's binding names a place profile the resolver does not hold
 - **THEN** the launch is refused naming the place profiles the resolver holds, and nothing is made (C.1, core.3)
+
+#### Scenario: A stream's multiplexer flume does not carry
+
+- **WHEN** the host's `[streams.trial]` gives `multiplexer = "rex"` and a fix is launched on `trial`
+- **THEN** the launch is refused naming `trial`, `rex` and the terminal profiles the resolver carries, and nothing is made (4, 190; core.8)
 
 ### Requirement: A place keeps what its launch resolved
 
@@ -152,15 +158,16 @@ each start (8, 21, 32).
 - **WHEN** a change is launched with the repository giving change@1's agents `model = "opus"`, and the base's next revision gives `model = "sonnet"`
 - **THEN** the place's later stages start with `opus`, read from its held state (21, 32)
 
-### Requirement: An agent's settings are resolved from six layers at each start
+### Requirement: An agent's settings are resolved from eight layers at each start
 
-At each start an agent's program, model, mode and instructions SHALL
-each come from the first that gives it of: the launch's settings; the
-host's for the repository and kind; the host's for the kind; the
-repository's for a kind it does not declare; the kind's declaration;
-flume's default. The host's two SHALL give the model, the mode and the
-instructions alone. Within each, a stage's own SHALL come first, and
-each setting SHALL be taken whole (32, 162; records 0017, 0020, 0024).
+At each start an agent's program, model, mode, instructions and own
+settings SHALL each come from the first of eight layers that gives it:
+the launch's; the host's for the repository, for its kind then for
+every kind; the host's for the kind, for the stream, for every agent;
+the repository's, for a kind it does not declare then for every kind;
+the kind's; flume's default. The host's four SHALL give no program.
+Within each, a stage's own SHALL come first, each setting taken whole
+(32, 195).
 
 #### Scenario: Settings from four layers
 
@@ -176,6 +183,16 @@ each setting SHALL be taken whole (32, 162; records 0017, 0020, 0024).
 
 - **WHEN** the host gives `[repos."/r".kinds.fix.agents] mode = "edits"` and `[kinds.fix.agents] model = "sonnet"`, and the repositories `/r` and `/s` each give `[kinds.fix.agents] mode = "ask"` in their own file
 - **THEN** a fix place's agent of `/r` starts in `edits` from `host-repository` with `sonnet` from `host-kind`, and one of `/s` in `ask` from `repository` (32, 162)
+
+#### Scenario: A model for a stream and for every agent
+
+- **WHEN** the host gives `[agents] model = "sonnet"`, `[agents.streams.work] model = "opus"` and `[kinds.fix.agents] model = "haiku"`, and the repository's file gives `[kinds.change.agents] model = "other"`
+- **THEN** a change place's agents start with `opus` from `host-stream` in `work` and with `sonnet` from `host` in `default`, and a fix place's with `haiku` from `host-kind` in either (32, 143)
+
+#### Scenario: A model for every kind of a repository
+
+- **WHEN** the host gives `[repos."/r".agents] model = "opus"` and `[kinds.fix.agents] model = "haiku"`, and the repository `/s`'s file gives `[agents] model = "sonnet"`
+- **THEN** a fix's and a chore's agents in `/r` start with `opus` from `host-repository`, a fix's in `/s` with `haiku` from `host-kind`, and a chore's in `/s` with `sonnet` from `repository` (32)
 
 ### Requirement: The host's configuration is read at each start
 
@@ -202,23 +219,23 @@ account, starting no agent, until a retry (8, 27, 32).
 
 ### Requirement: A launch may name its kind's version
 
-A launch's kind SHALL be a name, or a name and a version written
-`<name>@<version>`; the name SHALL resolve as before, the launch's
-declaration over the repository's over flume's own, and the version
-SHALL be the one named, else, among flume's own, the newest flume
-holds; a launch naming a version its resolved declaration does not hold
-SHALL be refused naming the version and the versions held, and leave
-nothing made (4, 19, 22, 154).
+A launch's kind SHALL be a name, a name and a version, or an identity,
+`<source>/<name>` with or without `@<version>`, resolved as the
+kind-sources capability says: a name over the launch's declaration, the
+repository's and flume's own, and a version the one named, else the
+newest the locks record, else the newest its source holds; a version its
+source does not hold SHALL refuse the launch naming it and the versions
+held, and leave nothing made (4, 19, 22, 154).
 
 #### Scenario: No version named
 
-- **WHEN** a repository that declares no `change` launches `change`
-- **THEN** the place runs change@2 and status names change@2 (22, 154)
+- **WHEN** a repository that declares no `change` and locks nothing launches `change`
+- **THEN** the place runs change@2 and status names `flume/change@2` (22, 154)
 
 #### Scenario: change@1 named
 
 - **WHEN** the same repository launches `change@1`
-- **THEN** the place runs change@1, its code stage one agent for the whole change, and status names change@1 (22, 154)
+- **THEN** the place runs change@1, its code stage one agent for the whole change, and status names `flume/change@1` (22, 154)
 
 #### Scenario: A version flume does not hold
 
@@ -229,6 +246,11 @@ nothing made (4, 19, 22, 154).
 
 - **WHEN** a repository declares `change` at version 1 and a launch names `change@2`
 - **THEN** the launch is refused naming the version, since the repository's declaration resolves the name, and nothing is made (4, 19, 154)
+
+#### Scenario: A kind of a host's source named whole
+
+- **WHEN** the host's source acme holds `review@2`, locked by the host, and a launch names `acme/review@2`
+- **THEN** the place runs acme's review@2, and status names `acme/review@2` (154, 155)
 
 ### Requirement: The environment is the account's, its values read against the login environment
 

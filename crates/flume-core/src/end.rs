@@ -6,8 +6,10 @@
 //! one that stopped with nothing delivered is reported lost; flume ends
 //! none of them. A conversation is read only for lost. After a restart,
 //! an agent that did not survive reads lost, and one the terminal resumed
-//! is taken only when its own record is its start's (77); one whose record
-//! cannot be read is neither taken nor lost, and is not quiet (31, 93).
+//! is taken only when its own record is its start's (77), one that is not
+//! ended once quiet, but in a conversation's pane, where it is left, sent
+//! nothing, for a person (core.10); one whose record cannot be read is
+//! neither taken nor lost, and is not quiet (31, 93).
 //! An agent its own record shows stopped at its account's usage limit is
 //! ended once quiet and its stage started afresh, unless it delivered
 //! (146).
@@ -37,7 +39,10 @@ impl Engine {
         let identity = start.identity.clone();
         let reading = self.read_agent(id, &start);
         if held.stages[index].state == StageState::Lost {
-            return self.end_foreign(id, &identity, &reading);
+            if declared.conversation {
+                return self.left_stopped(id, &start, &reading);
+            }
+            return self.end_foreign(id, &start, &reading);
         }
         let foreign = reading.started == Reading::No || reading.own_record == Reading::No;
         let gone = reading.state == AgentState::Stopped || foreign;
@@ -56,8 +61,14 @@ impl Engine {
             return true;
         }
         if gone {
-            let end = self.read_out(&held, &start, false);
             let stopped = reading.state == AgentState::Stopped;
+            // An agent the terminal brought back in a conversation's pane is
+            // left there, sent nothing: a person may be at it (77; core.10).
+            let left = !stopped && declared.conversation;
+            let end = StageEnd {
+                left_in_pane: left,
+                ..self.read_out(&held, &start, false)
+            };
             self.end_start(
                 id,
                 &identity,
@@ -67,8 +78,8 @@ impl Engine {
                 },
                 Some(end),
             );
-            if !stopped {
-                self.end_foreign(id, &identity, &reading);
+            if !stopped && !left {
+                self.end_foreign(id, &start, &reading);
             }
             return true;
         }
@@ -77,7 +88,7 @@ impl Engine {
         }
         let facts = self.facts(&held, &bound, Some(index));
         if facts.delivered && reading.quiet() {
-            if let Closed::Refused { reason } = self.terminal.close(&identity) {
+            if let Closed::Refused { reason } = self.agent_on(&start).close() {
                 self.failed_end(id, &identity, &reason);
                 return false;
             }
@@ -147,17 +158,32 @@ impl Engine {
     /// The agent of a lost stage that is no agent of the stage's, a
     /// session the terminal brought back with no word that it started
     /// among them, ended once quiet (77, 31); true when it was ended.
-    fn end_foreign(&self, id: &PlaceId, identity: &Identity, reading: &AgentReading) -> bool {
+    fn end_foreign(&self, id: &PlaceId, start: &StartHeld, reading: &AgentReading) -> bool {
+        let identity = &start.identity;
         if reading.state != AgentState::Stopped {
             if !reading.quiet() {
                 return false;
             }
-            if let Closed::Refused { reason } = self.terminal.close(identity) {
+            if let Closed::Refused { reason } = self.agent_on(start).close() {
                 self.failed_end(id, identity, &reason);
                 return false;
             }
         }
         self.with_start(id, identity, |start, _| start.live = false);
+        true
+    }
+
+    /// The agent a conversation's lost stage left in its pane, one the
+    /// terminal brought back that is no agent of the stage's: sent
+    /// nothing and never ended by flume, its start going not live once the
+    /// terminal reads it stopped, as when a person ends it; true when it
+    /// went not live (31, 77; core.10). Its caller's stop, drop or done
+    /// ends it as the place's agent (51, 52, 114).
+    fn left_stopped(&self, id: &PlaceId, start: &StartHeld, reading: &AgentReading) -> bool {
+        if reading.state != AgentState::Stopped {
+            return false;
+        }
+        self.with_start(id, &start.identity, |start, _| start.live = false);
         true
     }
 

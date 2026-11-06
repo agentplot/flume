@@ -33,7 +33,9 @@
 //! record the profile cannot read is passed over the same way, by its
 //! branch, rather than dropped unsaid (133). read-submission reads
 //! `sluice status <base> --all --json` for each branch `sluice overview
-//! --json` names, the newest entry submitted from the branch, by a
+//! --json` names, once for every branch of the repository asked at once,
+//! so a status of every place runs them once for each repository (58,
+//! C.6); for each branch asked, the newest entry submitted from it, by a
 //! worktree on it or from a pull request opened from it, a conflict's
 //! base revision its `tested.on` where it holds one; a branch whose
 //! status sluice refuses, as it refuses one whose policy it no longer
@@ -202,6 +204,28 @@ impl Sluice {
             .filter_map(|branch| branch.get("branch").and_then(Value::as_str))
             .map(str::to_string)
             .collect())
+    }
+}
+
+/// The branch's newest submission as sluice records it, or none.
+fn newest_read(branch: &str, newest: Option<Value>) -> SubmissionRead {
+    let Some(record) = newest else {
+        return SubmissionRead::None;
+    };
+    match (id(&record), state(&record)) {
+        (Some(id), Ok(state)) => SubmissionRead::Found {
+            submission: Submission {
+                id,
+                branch: branch.into(),
+                target: text(&record, "branch").unwrap_or_default(),
+                state,
+                request: request(&record),
+            },
+        },
+        (None, _) => SubmissionRead::CouldNotRead {
+            reason: format!("sluice gave a submission with no id: {record}"),
+        },
+        (_, Err(reason)) => SubmissionRead::CouldNotRead { reason },
     }
 }
 
@@ -657,14 +681,24 @@ impl MergeQueue for Sluice {
         }
     }
 
-    fn read_submission(&self, repository: &str, branch: &str) -> ReadAcross {
+    fn read_submissions(&self, repository: &str, branches: &[&str]) -> Vec<ReadAcross> {
         let git = Git::at(repository);
         let dir = git.path();
         let bases = match self.branches(dir) {
             Ok(bases) => bases,
-            Err(reason) => return SubmissionRead::CouldNotRead { reason }.into(),
+            Err(reason) => {
+                return branches
+                    .iter()
+                    .map(|_| {
+                        SubmissionRead::CouldNotRead {
+                            reason: reason.clone(),
+                        }
+                        .into()
+                    })
+                    .collect()
+            }
         };
-        let mut newest: Option<(u64, Value)> = None;
+        let mut newest: Vec<Option<(u64, Value)>> = vec![None; branches.len()];
         let mut passed_over = vec![];
         for base in bases {
             let status = match self.json(dir, &["status", &base, "--all", "--json"]) {
@@ -684,32 +718,23 @@ impl MergeQueue for Sluice {
                 .flatten()
             {
                 let number = record.get("id").and_then(Value::as_u64).unwrap_or_default();
-                if submitted_from(record, branch)
-                    && newest.as_ref().is_none_or(|(id, _)| number > *id)
-                {
-                    newest = Some((number, record.clone()));
+                for (branch, newest) in branches.iter().zip(newest.iter_mut()) {
+                    if submitted_from(record, branch)
+                        && newest.as_ref().is_none_or(|(id, _)| number > *id)
+                    {
+                        *newest = Some((number, record.clone()));
+                    }
                 }
             }
         }
-        let read = match newest.map(|(_, record)| record) {
-            None => SubmissionRead::None,
-            Some(record) => match (id(&record), state(&record)) {
-                (Some(id), Ok(state)) => SubmissionRead::Found {
-                    submission: Submission {
-                        id,
-                        branch: branch.into(),
-                        target: text(&record, "branch").unwrap_or_default(),
-                        state,
-                        request: request(&record),
-                    },
-                },
-                (None, _) => SubmissionRead::CouldNotRead {
-                    reason: format!("sluice gave a submission with no id: {record}"),
-                },
-                (_, Err(reason)) => SubmissionRead::CouldNotRead { reason },
-            },
-        };
-        ReadAcross { read, passed_over }
+        branches
+            .iter()
+            .zip(newest)
+            .map(|(branch, newest)| ReadAcross {
+                read: newest_read(branch, newest.map(|(_, record)| record)),
+                passed_over: passed_over.clone(),
+            })
+            .collect()
     }
 
     fn step(&self, repository: &str, base: &str) -> Stepped {

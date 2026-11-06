@@ -1,9 +1,13 @@
-//! A launch (1 to 12, 19 to 23): the kind resolved over the three
-//! declarations and the binding read, the base's revision where the
-//! merge queue says it lives, else at origin after a fetch, and where it
-//! was read kept for status (9, 56, C.1), every refusal made before
-//! anything is made, then one place made, readied, and its first stage
-//! started, held or left waiting on readiness. The repository's settings for the kind
+//! A launch (1 to 12, 19 to 23, 154 to 160): the kind its text names,
+//! read by the kinds seam, resolved over the three declarations or from
+//! the source it names, flume's own, the repository's, the launch's or one
+//! the host declares, and checked against the locks where it is flume's
+//! own or a host's source's, with where it came from kept on the place;
+//! the binding read, the base's revision where the merge queue says it
+//! lives, else at origin after a fetch, and where it was read kept for
+//! status (9, 56, C.1), every refusal made before anything is made, then
+//! one place made, readied, and its first stage started, held or left
+//! waiting on readiness. The repository's settings for the kind
 //! are read with its kinds and kept, and every stage's agent is resolved
 //! with the host's configuration as it stands, so a program no agent
 //! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
@@ -16,14 +20,17 @@
 //! is created undoes what was made, so nothing is left (2, 76). The
 //! place's stream is chosen once, the launch's, else the one the host's
 //! configuration names for its repository and kind, its repository or
-//! its kind, else `default`, and one the host does not declare refuses
-//! the launch (4, 8, 143); its intent is the launch's name, else its
+//! its kind, else `default`, and one the host does not declare, or whose
+//! multiplexer names a terminal profile flume does not carry, refuses
+//! the launch (4, 8, 143, 190); its intent is the launch's name, else its
 //! repository and base (147).
 
+use crate::own::Table;
 use crate::reading::reads_change;
 use crate::settings::no_stage_lacking;
 use crate::{Answer, Bound, Engine, Step};
 use flume_seams::*;
+use std::collections::BTreeMap;
 
 impl Engine {
     /// Launches one place, or refuses naming why (2).
@@ -37,35 +44,51 @@ impl Engine {
         }
     }
 
-    /// The kind a launch names, `<name>` or `<name>@<version>`, from the
-    /// launch's declaration over the repository's at the base's revision
-    /// over flume's own (19, 20), and the settings the repository gives a
-    /// kind of that name it does not declare, which join whichever
-    /// declaration the name resolves to (32, C.2). The launch's and the
-    /// repository's declarations hold one version of a name, and a version
-    /// named that the resolved one does not hold refuses the launch; among
-    /// flume's own the version named is taken, else the newest, and a
-    /// version flume does not hold refuses the launch naming the versions
-    /// it holds (4, 22, 154).
-    fn resolve_kind(
-        &self,
-        launch: &Launch,
-        revision: &Revision,
-    ) -> Result<(Kind, Declared, KindSettings), String> {
-        let (name, version) = named_version(&launch.kind)?;
+    /// The kind a launch names, as the kinds seam reads its text (154;
+    /// core.4), with the settings the repository gives a kind of its name
+    /// it does not declare, which join whichever source the name resolves
+    /// to (32, 158, C.2), those it gives every kind (195), and where it
+    /// came from (19, 21). A source named
+    /// is the only one searched: `flume` flume's own, `repo` the
+    /// repository's declaration at the base's revision, `launch` the
+    /// launch's declaration, and any other a source the host declares,
+    /// whose fault refuses the launch before its packages are read (191).
+    /// A name with no source resolves over the launch's declaration, the
+    /// repository's and flume's own alone, never a host's source (154).
+    /// The launch's and the repository's declarations hold one version of
+    /// a name, and a version named that the one resolved does not hold
+    /// refuses the launch; among flume's own and a host's source, the
+    /// version named is taken, else the newest the repository's lock
+    /// records, else the newest the host's lock records, else the newest
+    /// held, and one not held refuses the launch naming those held (4, 22,
+    /// 154). A kind of flume's own or of a host's source reads both locks,
+    /// and is checked against each that records it; one of a host's
+    /// source runs only where one does (155, 156; core.34). A host's
+    /// source's package is read before its locks are checked, so a package
+    /// weir refuses is named with its field whether or not a lock records
+    /// it, and the hash checked is the one just read (156, 157).
+    fn resolve_kind(&self, launch: &Launch, revision: &Revision) -> Result<Resolved, String> {
         let kinds = self.resolver.kinds();
-        let named = |all: Vec<Kind>| all.into_iter().find(|kind| kind.name == name);
-        let held = |kind: Kind, declared: Declared, by: &str| {
-            match version {
-            Some(version) if version != kind.version => Err(format!(
-                "the kind {name}@{version} is not held: {by} declares {name} at version {}, and resolves the name (19, 154)",
-                kind.version
-            )),
-            _ => Ok((kind, declared)),
-        }
+        let named = kinds.read_named(&launch.kind).map_err(|reason| {
+            format!(
+                "the kind {} names no kind flume reads: {reason} (154)",
+                launch.kind
+            )
+        })?;
+        let source = match named.source.as_deref() {
+            None => Search::Bare,
+            Some(OWN_SOURCE) => Search::Own,
+            Some(REPO_SOURCE) => Search::Repository,
+            Some(LAUNCH_SOURCE) => Search::Launch,
+            Some(source) => Search::Host(self.host_source(source, &named)?),
         };
-        let (declared, mut given) = match kinds.read_kinds(&launch.repository, revision) {
-            KindsRead::Read { kinds, settings } => (kinds, settings),
+        let (declared, mut given, every_kind) = match kinds.read_kinds(&launch.repository, revision)
+        {
+            KindsRead::Read {
+                kinds,
+                settings,
+                agents,
+            } => (kinds, settings, agents),
             KindsRead::CouldNotRead { reason } => {
                 return Err(format!(
                     "the kinds {} declares at {revision} could not be read: {reason}",
@@ -73,59 +96,395 @@ impl Engine {
                 ))
             }
         };
-        let given = given.remove(name).unwrap_or_default();
-        if let Some(declaration) = &launch.declaration {
-            match kinds.read_declaration(declaration) {
-                KindsRead::Read { kinds, .. } => {
-                    if let Some(kind) = named(kinds) {
-                        let by = format!("the launch's declaration {declaration}");
-                        let (kind, declared) = held(kind, Declared::Launch, &by)?;
-                        return Ok((kind, declared, given));
-                    }
-                }
+        let settings = given.remove(&named.name).unwrap_or_default();
+        let resolved = |(kind, declared, from)| Resolved {
+            kind,
+            declared,
+            settings: settings.clone(),
+            every_kind: every_kind.clone(),
+            from,
+        };
+        let repository = || {
+            let by = format!("{} at {revision}", launch.repository);
+            let from = self
+                .declaration_from(REPO_SOURCE, &named, &declared)?
+                .map(|from| KindFrom {
+                    declaration_file: kinds.declaration_path(),
+                    revision: Some(revision.clone()),
+                    ..from
+                });
+            self.declared_kind(&named, &declared, &by, Declared::Repository, from)
+        };
+        let declaration = || -> Result<Option<_>, String> {
+            let Some(file) = &launch.declaration else {
+                return Ok(None);
+            };
+            let held = match kinds.read_declaration(file) {
+                KindsRead::Read { kinds, .. } => kinds,
                 KindsRead::CouldNotRead { reason } => {
                     return Err(format!(
-                        "the launch's declaration {declaration} could not be read: {reason}"
+                        "the launch's declaration {file} could not be read: {reason}"
                     ))
                 }
+            };
+            let by = format!("the launch's declaration {file}");
+            let from = self
+                .declaration_from(LAUNCH_SOURCE, &named, &held)?
+                .map(|from| KindFrom {
+                    declaration_file: Some(file.clone()),
+                    ..from
+                });
+            self.declared_kind(&named, &held, &by, Declared::Launch, from)
+        };
+        let found = match source {
+            Search::Host(at) => {
+                let (kind, from) = self.host_kind(&named, &at, &launch.repository, revision)?;
+                (kind, Declared::Host, from)
             }
+            Search::Own => self
+                .own_kind(&named, &launch.repository, revision)?
+                .ok_or_else(|| {
+                    format!(
+                        "the kind {} is not held: flume holds no {} (22, 154)",
+                        named.spelled, named.name
+                    )
+                })?,
+            Search::Repository => repository()?.ok_or_else(|| {
+                format!(
+                    "the kind {} is not held: {} declares no {} at {revision} (19, 154)",
+                    named.spelled, launch.repository, named.name
+                )
+            })?,
+            Search::Launch => match &launch.declaration {
+                None => {
+                    return Err(format!(
+                        "the kind {} names the launch's declaration, and the launch carries none (19, 154)",
+                        named.spelled
+                    ))
+                }
+                Some(file) => declaration()?.ok_or_else(|| {
+                    format!(
+                        "the kind {} is not held: the launch's declaration {file} holds no {} (19, 154)",
+                        named.spelled, named.name
+                    )
+                })?,
+            },
+            Search::Bare => match declaration()? {
+                Some(found) => found,
+                None => match repository()? {
+                    Some(found) => found,
+                    None => self
+                        .own_kind(&named, &launch.repository, revision)?
+                        .ok_or_else(|| self.resolves_to_none(launch, &named, revision))?,
+                },
+            },
+        };
+        Ok(resolved(found))
+    }
+
+    /// The kind of `named`'s name a declaration holds, at the version
+    /// named where one is, with where it came from; none where it holds
+    /// none of that name (19, 154).
+    fn declared_kind(
+        &self,
+        named: &KindNamed,
+        kinds: &[Kind],
+        by: &str,
+        declared: Declared,
+        from: Option<KindFrom>,
+    ) -> Result<Option<(Kind, Declared, KindFrom)>, String> {
+        let (Some(kind), Some(from)) = (kinds.iter().find(|kind| kind.name == named.name), from)
+        else {
+            return Ok(None);
+        };
+        let resolves = if named.source.is_none() {
+            ", and resolves the name"
+        } else {
+            ""
+        };
+        match named.version {
+            Some(version) if version != kind.version => Err(format!(
+                "the kind {} is not held: {by} declares {} at version {}{resolves} (19, 154)",
+                named.spelled, kind.name, kind.version
+            )),
+            _ => Ok(Some((kind.clone(), declared, from))),
         }
-        if let Some(kind) = named(declared) {
-            let by = format!("{} at {revision}", launch.repository);
-            let (kind, declared) = held(kind, Declared::Repository, &by)?;
-            return Ok((kind, declared, given));
-        }
-        let mut own: Vec<Kind> = kinds
+    }
+
+    /// Where a kind of a declaration of `source`'s came from, its identity
+    /// spelled by the kinds seam (19; core.4); none where the declaration
+    /// holds no kind of `named`'s name.
+    fn declaration_from(
+        &self,
+        source: &str,
+        named: &KindNamed,
+        kinds: &[Kind],
+    ) -> Result<Option<KindFrom>, String> {
+        let Some(kind) = kinds.iter().find(|kind| kind.name == named.name) else {
+            return Ok(None);
+        };
+        let identity = self
+            .resolver
+            .kinds()
+            .identity_of(source, &kind.name, kind.version)
+            .map_err(|reason| {
+                format!(
+                    "the kind {} has no identity flume reads: {reason} (154)",
+                    named.spelled
+                )
+            })?;
+        Ok(Some(KindFrom {
+            identity,
+            source: source.into(),
+            source_file: None,
+            kind_dir: None,
+            declaration_file: None,
+            revision: None,
+            hash: None,
+            lock_file: None,
+        }))
+    }
+
+    /// flume's own kind of `named`'s name, at the version named, else the
+    /// newest a lock records, else the newest flume holds, checked against
+    /// each lock that records it (22, 154 to 156); none where flume holds
+    /// none of that name.
+    fn own_kind(
+        &self,
+        named: &KindNamed,
+        repository: &str,
+        revision: &Revision,
+    ) -> Result<Option<(Kind, Declared, KindFrom)>, String> {
+        let mut own: Vec<Packaged> = self
+            .resolver
+            .kinds()
             .flumes_own()
             .into_iter()
-            .filter(|kind| kind.name == name)
+            .filter(|own| own.kind.name == named.name)
             .collect();
-        if own.is_empty() {
-            return Err(format!(
-                "the kind {} resolves to no declaration",
-                launch.kind
-            ));
-        }
-        own.sort_by_key(|kind| kind.version);
+        own.sort_by_key(|own| own.identity.version);
+        let Some(newest) = own.last() else {
+            return Ok(None);
+        };
+        let source = newest.identity.source.clone();
+        let locks = self.locks(repository, revision)?;
+        let (version, wanted) = locks.version(named, &source, newest.identity.version);
         let versions = format!(
             "version{} {}",
             if own.len() > 1 { "s" } else { "" },
             own.iter()
-                .map(|kind| kind.version.to_string())
+                .map(|own| own.identity.version.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        let kind = match version {
-            None => own.pop(),
-            Some(version) => own.into_iter().find(|kind| kind.version == version),
+        let Some(package) = own.into_iter().find(|own| own.identity.version == version) else {
+            return Err(format!(
+                "the kind {wanted} is not held: flume holds {} at {versions} (22, 154)",
+                named.name
+            ));
         };
-        kind.map(|kind| (kind, Declared::Flume, given))
-            .ok_or_else(|| {
-                format!(
-                    "the kind {} is not held: flume holds {name} at {versions} (22, 154)",
-                    launch.kind
-                )
-            })
+        let lock_file = locks.check(&package.identity, &package.hash, false)?;
+        Ok(Some((
+            package.kind,
+            Declared::Flume,
+            KindFrom {
+                identity: package.identity,
+                source,
+                source_file: None,
+                kind_dir: package.dir,
+                declaration_file: None,
+                revision: None,
+                hash: Some(package.hash),
+                lock_file,
+            },
+        )))
+    }
+
+    /// The source the host declares under `source`, with its file and its
+    /// packages' directory; the launch refused where the host declares
+    /// none of that name, or its file cannot be read, naming the file and
+    /// why (4, 191).
+    pub(crate) fn host_source(&self, source: &str, named: &KindNamed) -> Result<SourceAt, String> {
+        let sources = self.host.sources();
+        match sources.get(source).map(|declared| &declared.read) {
+            None => {
+                let file = match self.host.sources_dir() {
+                    Some(dir) => format!("no file {dir}/{source}.toml"),
+                    None => format!("no file {source}.toml among its sources"),
+                };
+                let declares = if sources.is_empty() {
+                    "the host declares no source".to_string()
+                } else {
+                    format!(
+                        "the host declares {}",
+                        and_list(sources.keys().cloned().collect())
+                    )
+                };
+                Err(format!(
+                    "the kind {} names the source {source}, which the host does not declare: {file}; {declares} (4, 154, 191)",
+                    named.spelled
+                ))
+            }
+            Some(HostSourceRead::CouldNotRead { reason }) => Err(format!(
+                "the kind {} names the source {source}, whose file {} cannot be read: {reason} (4, 191)",
+                named.spelled, sources[source].file
+            )),
+            Some(HostSourceRead::Read { kinds_dir }) => Ok(SourceAt {
+                name: source.into(),
+                file: sources[source].file.clone(),
+                kinds_dir: kinds_dir.clone(),
+            }),
+        }
+    }
+
+    /// The kind of `named`'s name the host's source `at` holds as a
+    /// package, at the version named, else the newest a lock records, else
+    /// the newest the source holds; refused naming what the source holds
+    /// where it holds no such version, naming the package and its fields
+    /// where its package cannot be read, and where no lock records it or
+    /// its content is not the lock's (4, 154 to 159).
+    pub(crate) fn host_kind(
+        &self,
+        named: &KindNamed,
+        at: &SourceAt,
+        repository: &str,
+        revision: &Revision,
+    ) -> Result<(Kind, KindFrom), String> {
+        let (package, locks) = self.package_of(named, at, || self.locks(repository, revision))?;
+        let lock_file = locks.check(&package.identity, &package.hash, true)?;
+        Ok((
+            package.kind,
+            KindFrom {
+                identity: package.identity,
+                source: at.name.clone(),
+                source_file: Some(at.file.clone()),
+                kind_dir: package.dir,
+                declaration_file: None,
+                revision: None,
+                hash: Some(package.hash),
+                lock_file,
+            },
+        ))
+    }
+
+    /// The package of `named`'s name the host's source `at` holds, at the
+    /// version named or the one `locks` picks, with the locks it read
+    /// (154, 157, 159).
+    pub(crate) fn package_of(
+        &self,
+        named: &KindNamed,
+        at: &SourceAt,
+        locks: impl FnOnce() -> Result<Locks, String>,
+    ) -> Result<(Packaged, Locks), String> {
+        let kinds = self.resolver.kinds();
+        let every = match kinds.read_source(&at.name, &at.kinds_dir) {
+            SourceRead::Read { kinds } => kinds,
+            SourceRead::CouldNotRead { reason } => {
+                return Err(format!(
+                "the kind {} names the source {}, whose packages cannot be read: {reason} (4, 159)",
+                named.spelled, at.name
+            ))
+            }
+        };
+        let holds = |what: &str| {
+            let every: Vec<String> = every.iter().map(|kind| kind.spelled.clone()).collect();
+            let holds = if every.is_empty() {
+                "nothing".to_string()
+            } else {
+                and_list(every)
+            };
+            format!(
+                "the source {} holds no {what}: it holds {holds} in {} (4, 154, 159)",
+                at.name, at.kinds_dir
+            )
+        };
+        let mut held: Vec<&KindIdentity> = every
+            .iter()
+            .filter(|kind| kind.name == named.name)
+            .collect();
+        held.sort_by_key(|kind| kind.version);
+        let Some(newest) = held.last() else {
+            return Err(holds(&named.name));
+        };
+        let locks = locks()?;
+        let (version, wanted) = locks.version(named, &at.name, newest.version);
+        if !held.iter().any(|kind| kind.version == version) {
+            return Err(holds(&wanted));
+        }
+        match kinds.read_package(&at.name, &at.kinds_dir, &named.name, version) {
+            PackageRead::Read { package } => Ok((*package, locks)),
+            PackageRead::CouldNotRead { reason } => Err(format!(
+                "the kind {wanted} could not be read: {reason} (4, 157, 158)"
+            )),
+        }
+    }
+
+    /// The two locks a launch whose kind is flume's own or a host's source
+    /// reads: the repository's at the base's revision and the host's as it
+    /// stands; a lock that cannot be read refuses the launch naming it and
+    /// why (155).
+    pub(crate) fn locks(&self, repository: &str, revision: &Revision) -> Result<Locks, String> {
+        let kinds = self.resolver.kinds();
+        let repository_file = kinds
+            .lock_path()
+            .unwrap_or_else(|| "the repository's lock".into());
+        let at = match kinds.read_lock_at(repository, revision) {
+            LockRead::None => vec![],
+            LockRead::Read { entries } => entries,
+            LockRead::CouldNotRead { reason } => {
+                return Err(format!(
+                    "the repository's lock {repository_file} at {revision} could not be read: {reason} (155)"
+                ))
+            }
+        };
+        let host_file = self.host.kinds_lock();
+        let host = match &host_file {
+            None => vec![],
+            Some(file) => entries_of(kinds.read_lock_file(file), file)?,
+        };
+        Ok(Locks {
+            repository: at,
+            repository_file,
+            revision: revision.clone(),
+            host,
+            host_file,
+        })
+    }
+
+    /// Why a name no declaration holds resolves to nothing: what each of
+    /// the three holds, and each identity of that name the host's sources
+    /// hold, which a launch names by its source (19, 154).
+    fn resolves_to_none(&self, launch: &Launch, named: &KindNamed, revision: &Revision) -> String {
+        let carried = match &launch.declaration {
+            Some(file) => format!("the launch's declaration {file} holds none"),
+            None => "the launch carries none".into(),
+        };
+        let kinds = self.resolver.kinds();
+        let mut hosted = vec![];
+        for (source, declared) in self.host.sources() {
+            if let HostSourceRead::Read { kinds_dir } = declared.read {
+                if let SourceRead::Read { kinds } = kinds.read_source(&source, &kinds_dir) {
+                    hosted.extend(
+                        kinds
+                            .into_iter()
+                            .filter(|kind| kind.name == named.name)
+                            .map(|kind| kind.spelled),
+                    );
+                }
+            }
+        }
+        let hosted = if hosted.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; the host's sources hold {}, which a launch names by its source",
+                and_list(hosted)
+            )
+        };
+        format!(
+            "the kind {} resolves to no declaration: {carried}, {} declares no {} at {revision}, flume holds none{hosted} (19, 154)",
+            launch.kind, launch.repository, named.name
+        )
     }
 
     /// The base's current revision and where it was read (9, 126, C.1):
@@ -163,8 +522,8 @@ impl Engine {
     }
 
     /// Refuses a kind that asks for more than flume runs (4, 23).
-    fn runs(kind: &Kind) -> Result<(), String> {
-        let named = format!("the kind {}@{}", kind.name, kind.version);
+    fn runs(kind: &Kind, identity: &KindIdentity) -> Result<(), String> {
+        let named = format!("the kind {identity}");
         if kind.stages.is_empty() {
             return Err(format!("{named} has no stage"));
         }
@@ -221,12 +580,41 @@ impl Engine {
             .map_err(|reason| format!("{repository}'s binding: {reason}"))?;
         let (base_revision, base_from) =
             self.base_now(repository, &launch.base, merge_queue.as_deref())?;
-        let (kind, declared, repository_settings) = self.resolve_kind(launch, &base_revision)?;
-        Self::runs(&kind)?;
+        let Resolved {
+            kind,
+            declared,
+            settings: repository_settings,
+            every_kind: repository_agents,
+            from,
+        } = self.resolve_kind(launch, &base_revision)?;
+        Self::runs(&kind, &from.identity)?;
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
+        // Every layer's own settings the launch read are checked before
+        // anything is made or held, and kept as checked; the host's are
+        // checked as each stage's agent is resolved below (195, core.8).
+        let settings = launch
+            .settings
+            .iter()
+            .map(|(stage, own)| {
+                self.own_checked(own, &Table::stage(Layer::Launch, stage))
+                    .map(|own| (stage.clone(), own))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let every_stage =
+            self.own_checked(&launch.every_stage, &Table::every_stage(Layer::Launch))?;
+        let repository_settings = self.own_checked_kind(&repository_settings, Layer::Repository)?;
+        let repository_agents = self.own_checked(
+            &repository_agents,
+            &Table::new(Layer::Repository, "for every kind"),
+        )?;
+        let kind = self.own_checked_declaration(&kind)?;
         let intent = self.intent_of(launch);
         let stream = self.stream_of(launch, &kind.name, &intent)?;
-        let named = format!("the kind {}@{}", kind.name, kind.version);
+        // A stream whose multiplexer names a terminal profile the resolver
+        // does not carry runs no agent: the launch is refused before
+        // anything is made (4, 190; core.8).
+        self.stream_terminal(&stream.name)?;
+        let named = format!("the kind {}", from.identity);
         if kind.lands && merge_queue.is_none() {
             return Err(format!(
                 "{named} lands, and {repository} binds no merge queue for it to land through"
@@ -303,7 +691,7 @@ impl Engine {
         } else if launch.recipients.is_empty() {
             self.host
                 .recipient()
-                .or_else(|| self.terminal.session())
+                .or_else(|| self.caller_session())
                 .into_iter()
                 .collect()
         } else {
@@ -315,6 +703,7 @@ impl Engine {
                 repository: repository.clone(),
                 kind: kind.clone(),
                 declared,
+                kind_from: Some(from),
                 name: launch.name.clone(),
                 branch: branch.clone(),
                 base: launch.base.clone(),
@@ -324,9 +713,10 @@ impl Engine {
                 binding,
                 brief: launch.brief.clone(),
                 mark: launch.mark.clone(),
-                settings: launch.settings.clone(),
-                every_stage: launch.every_stage.clone(),
+                settings,
+                every_stage,
                 repository_settings,
+                repository_agents,
                 hold: launch.hold.clone(),
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),
@@ -368,6 +758,7 @@ impl Engine {
             moves: vec![],
             unsettled: vec![],
             uncarried: vec![],
+            terminals: vec![],
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
@@ -534,16 +925,171 @@ fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
     holds
 }
 
-/// A launch's kind as its name and the version it names, if any:
-/// `<name>` or `<name>@<version>`, the version a whole number (154, C.2).
-fn named_version(kind: &str) -> Result<(&str, Option<u32>), String> {
-    match kind.split_once('@') {
-        None => Ok((kind, None)),
-        Some((name, version)) => version
-            .parse()
-            .map(|version| (name, Some(version)))
-            .map_err(|_| {
-                format!("the kind {kind} names no version flume reads: {version} is not a whole number (154)")
-            }),
+/// A launch's kind resolved: the kind, the declaration it came from, the
+/// settings the repository gives a kind of its name it does not declare,
+/// and where it came from (19, 21, 32).
+struct Resolved {
+    kind: Kind,
+    declared: Declared,
+    settings: KindSettings,
+    every_kind: Settings,
+    from: KindFrom,
+}
+
+/// Where a kind named with its source, or with none, is searched (154).
+enum Search {
+    Bare,
+    Own,
+    Repository,
+    Launch,
+    Host(SourceAt),
+}
+
+/// A source the host declares, its file read: its name, its file and its
+/// packages' directory (191, C.7).
+pub(crate) struct SourceAt {
+    pub name: String,
+    pub file: String,
+    pub kinds_dir: String,
+}
+
+/// The repository's lock at a revision and the host's, each with its file
+/// and every entry it records, none where no lock lies (155).
+pub(crate) struct Locks {
+    repository: Vec<LockEntry>,
+    repository_file: String,
+    revision: Revision,
+    host: Vec<LockEntry>,
+    host_file: Option<String>,
+}
+
+impl Locks {
+    /// No lock read, for an act that names its version whole and checks
+    /// no lock (155).
+    pub(crate) fn none() -> Locks {
+        Locks {
+            repository: vec![],
+            repository_file: String::new(),
+            revision: Revision::new(""),
+            host: vec![],
+            host_file: None,
+        }
+    }
+
+    /// The version a launch of `named`, of `source`, takes, with the
+    /// identity it is named by: the version named, else the newest the
+    /// repository's lock records, else the newest the host's records, else
+    /// `newest`, the newest held (154).
+    fn version(&self, named: &KindNamed, source: &str, newest: u32) -> (u32, String) {
+        if let Some(version) = named.version {
+            return (version, named.spelled.clone());
+        }
+        let recorded = |entries: &[LockEntry], file: &str| {
+            entries
+                .iter()
+                .filter(|entry| entry.kind.source == source && entry.kind.name == named.name)
+                .max_by_key(|entry| entry.kind.version)
+                .map(|entry| {
+                    (
+                        entry.kind.version,
+                        format!("{}, the newest {file} records", entry.kind),
+                    )
+                })
+        };
+        let host_file = self.host_file.clone().unwrap_or_default();
+        recorded(&self.repository, &self.repository_named())
+            .or_else(|| recorded(&self.host, &format!("the host's lock {host_file}")))
+            .unwrap_or_else(|| (newest, named.spelled.clone()))
+    }
+
+    /// The lock that records `identity` at `hash`, the repository's where
+    /// it does, else the host's, none where neither does; refused where
+    /// the two give it two hashes, where the one that records it gives
+    /// another hash, and, for a kind from outside flume, where neither
+    /// records it (155, 156; core.34).
+    fn check(
+        &self,
+        identity: &KindIdentity,
+        hash: &str,
+        outside: bool,
+    ) -> Result<Option<String>, String> {
+        let at = |entries: &[LockEntry]| {
+            entries
+                .iter()
+                .find(|entry| same(&entry.kind, identity))
+                .map(|entry| entry.hash.clone())
+        };
+        let host_file = self.host_file.clone().unwrap_or_default();
+        let repository = at(&self.repository);
+        let host = at(&self.host);
+        if let (Some(theirs), Some(hosts)) = (&repository, &host) {
+            if theirs != hosts {
+                return Err(format!(
+                    "the locks give the kind {identity} two hashes: {} records {theirs}, and the host's lock {host_file} records {hosts} (155)",
+                    self.repository_named()
+                ));
+            }
+        }
+        let recorded = repository
+            .map(|recorded| {
+                (
+                    recorded,
+                    self.repository_named(),
+                    self.repository_file.clone(),
+                )
+            })
+            .or_else(|| {
+                host.map(|recorded| {
+                    (
+                        recorded,
+                        format!("the host's lock {host_file}"),
+                        host_file.clone(),
+                    )
+                })
+            });
+        match recorded {
+            Some((recorded, named, _)) if recorded != hash => Err(format!(
+                "the kind {identity}'s content is not what {named} records: it hashes to {hash}, and the lock records {recorded}; a change to a kind's content is a new version (156)"
+            )),
+            Some((_, _, file)) => Ok(Some(file)),
+            None if outside => Err(format!(
+                "the kind {identity} is recorded in no lock: record it by `flume kinds lock {identity}` in the repository, committed on its base, or by `flume kinds lock --host {identity}` (155; core.34)"
+            )),
+            None => Ok(None),
+        }
+    }
+
+    /// The repository's lock as a refusal names it, at its revision.
+    fn repository_named(&self) -> String {
+        format!("{} at {}", self.repository_file, self.revision)
+    }
+}
+
+/// Whether two identities name one kind at one version (154).
+pub(crate) fn same(a: &KindIdentity, b: &KindIdentity) -> bool {
+    a.source == b.source && a.name == b.name && a.version == b.version
+}
+
+/// The entries of the host's lock at `file`, none where none lies; why it
+/// cannot be read where it cannot (155).
+pub(crate) fn entries_of(read: LockRead, file: &str) -> Result<Vec<LockEntry>, String> {
+    match read {
+        LockRead::None => Ok(vec![]),
+        LockRead::Read { entries } => Ok(entries),
+        LockRead::CouldNotRead { reason } => Err(format!(
+            "the host's lock {file} could not be read: {reason} (155)"
+        )),
+    }
+}
+
+/// `items` as a sentence lists them: `a`, `a and b`, `a, b and c`.
+pub(crate) fn and_list(mut items: Vec<String>) -> String {
+    match items.len() {
+        0 => String::new(),
+        1 => items.remove(0),
+        _ => {
+            let last = items.pop().unwrap_or_default();
+            format!("{} and {last}", items.join(", "))
+        }
     }
 }

@@ -63,7 +63,8 @@ program (145, 147, 184, 185).
 
 Where an agent's own record says its account reached a usage limit,
 flume SHALL record the account spent in the host's own documents until
-the reset the record names, or for an hour where it names none, and no
+the reset the record names, or for an hour where it names none its
+profile reads, marking that hour so status gives the words, and no
 start of any flume process on the host SHALL take it before then;
 flume SHALL ask no agent program or its maker whether a limit has reset
 (146, 151, 153).
@@ -71,12 +72,12 @@ flume SHALL ask no agent program or its maker whether a limit has reset
 #### Scenario: A reset at 15:00
 
 - **WHEN** an agent's turn fails with its account's usage limit, the record naming a reset at 15:00, and another flume process starts a stage of another place on the same pool before then
-- **THEN** that start passes the account over, and a start after 15:00 may take it again (146, S55)
+- **THEN** that start passes the account over, a start after 15:00 may take it again, and status gives no words for the pause (146, S55)
 
 #### Scenario: No reset named
 
-- **WHEN** the record names a usage limit and no reset
-- **THEN** the account is spent for an hour from the reading (146)
+- **WHEN** the record names a usage limit and no reset its profile reads
+- **THEN** the account is spent for an hour from the reading, its document marks the hour, and status gives the agent's words with the account while the hour stands (56, 146)
 
 ### Requirement: A spent agent's stage starts again on another account
 
@@ -313,3 +314,33 @@ says, and flume SHALL record no account spent from a reading (146, 185).
 
 - **WHEN** work-1's reading gives a window 100% used, and no agent's own record said its account reached a usage limit
 - **THEN** no spent time is written for work-1, and work-1 takes no start by its threshold (146, 153, 185)
+
+### Requirement: A lost conversation's start takes the account that holds it first
+
+A start that carries a conversation lost with its terminal or its host
+SHALL take the account its lost start ran under, while that account is
+declared in the pool its stream takes, is of the stage's program and is
+usable, before the intent's affinity and the strategy, and SHALL move no
+intent's affinity by it. Otherwise it SHALL take the account 145
+chooses, waiting for one as 145 says, and a move of the stage from the
+lost start's account SHALL be recorded as any stage's is (49, 145, 147).
+
+#### Scenario: The lost start's account while the intent keeps another
+
+- **WHEN** a lost talk's start ran under work-2, the intent's affinity for its program is work-1, both usable, and the caller retries talk
+- **THEN** talk starts under work-2 from its conversation, the intent's affinity stays work-1, and no move is recorded (145, 147, S113)
+
+#### Scenario: The lost start's account spent
+
+- **WHEN** a lost talk's start ran under work-1, work-1 is spent until 15:00 when the caller retries talk, and work-2 is usable
+- **THEN** talk starts under work-2 by the strategy, and the place's moves give talk from work-1 to work-2, spent, with whether its conversation went with it (145, 146, S114)
+
+#### Scenario: The lost start's account gone from the pool
+
+- **WHEN** a lost talk's start ran under work-1, and the host's configuration no longer declares work-1 in the stream's pool when the caller retries talk
+- **THEN** talk starts on the account 145 chooses, and the carry is asked of that account (145, 179)
+
+#### Scenario: Every account spent
+
+- **WHEN** a lost talk is retried while every account of its pool is spent, the soonest until 15:00
+- **THEN** talk waits for room, and the start that takes work-1 once its reset passes carries the conversation from work-1 (145, 179)

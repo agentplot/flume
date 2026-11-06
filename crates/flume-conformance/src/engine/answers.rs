@@ -87,6 +87,7 @@ fn settings() -> Settings {
             ("other".into(), "edits".into()),
         ]))),
         session: Some("review".into()),
+        programs: BTreeMap::new(),
     }
 }
 
@@ -101,6 +102,26 @@ fn made() -> Vec<Made> {
     ]
 }
 
+/// Where a kind came from, every field present, as no one source gives
+/// them all (19, 56).
+fn kind_from() -> KindFrom {
+    KindFrom {
+        identity: KindIdentity {
+            source: "flume".into(),
+            name: "fix".into(),
+            version: 1,
+            spelled: "flume/fix@1".into(),
+        },
+        source: "flume".into(),
+        source_file: Some("/config/flume/sources/acme.toml".into()),
+        kind_dir: Some("/kinds/acme/fix@1".into()),
+        declaration_file: Some(".config/flume.toml".into()),
+        revision: Some(Revision::new("c1")),
+        hash: Some(format!("sha256:{}", "0".repeat(64))),
+        lock_file: Some(".config/flume.lock".into()),
+    }
+}
+
 fn place_status() -> PlaceStatus {
     PlaceStatus {
         place: PlaceId::new("/r/places/fix--one"),
@@ -108,6 +129,8 @@ fn place_status() -> PlaceStatus {
         kind: "fix".into(),
         version: 1,
         declared: Declared::Flume,
+        identity: Some("flume/fix@1".into()),
+        kind_from: Some(kind_from()),
         name: "one".into(),
         branch: "fix/one".into(),
         base: "main".into(),
@@ -138,6 +161,7 @@ fn place_status() -> PlaceStatus {
             state: StageState::EndedShort,
             starts: 2,
             end: Some(StageEnd {
+                left_in_pane: true,
                 head: Some(Revision::new("c3")),
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
@@ -166,6 +190,7 @@ fn place_status() -> PlaceStatus {
         }],
         current: Some("code".into()),
         agent: Some(AgentStatus {
+            left_in_pane: true,
             identity: "flume:/r:fix--one:code:2".into(),
             stage: "code".into(),
             program: "agent".into(),
@@ -177,6 +202,7 @@ fn place_status() -> PlaceStatus {
                     Given {
                         layer: Layer::Launch,
                         value: "large".into(),
+                        file: None,
                     },
                 )]),
             },
@@ -202,12 +228,30 @@ fn place_status() -> PlaceStatus {
             }),
             conversation: Some(Conversation {
                 from: 1,
+                cause: CarryCause::Lost,
                 carried: false,
                 why: Some("its agent profile carries no conversation".into()),
             }),
             session: Some(SessionHeld {
                 name: Some("review".into()),
                 from: SessionFrom::Launch,
+            }),
+            terminal: Some(ProfileHeld {
+                profile: "other".into(),
+                from: NamedBy::Stream,
+            }),
+            own: Some(OwnStatus {
+                passed: Some("--own /state/fix--one/agent/own.json".into()),
+                read_back: false,
+                files: vec![OwnFileStatus {
+                    layer: Layer::Host,
+                    written: "~/.config/agent.json".into(),
+                    read: "/home/user/.config/agent.json".into(),
+                    left_out: vec![Reserved {
+                        key: "env".into(),
+                        owner: "the account".into(),
+                    }],
+                }],
             }),
         }),
         head: Some(Revision::new("c3")),
@@ -251,6 +295,18 @@ fn place_status() -> PlaceStatus {
             words: Some("which design?".into()),
         }),
         stalled: true,
+        waits_on_session: Some(SessionWait {
+            stage: "code".into(),
+            processes: vec![LiveProcess {
+                pid: 4242,
+                started: 90,
+            }],
+            unread: Some(
+                "the sessions of the configuration home `CLAUDE_CONFIG_DIR` names could not be read"
+                    .into(),
+            ),
+            since: Some(95),
+        }),
         holds: vec![
             Hold {
                 on: HoldOn::Stage {
@@ -435,6 +491,21 @@ fn host_status() -> HostStatus {
                 name: Some("work".into()),
                 from: SessionFrom::StreamName,
             },
+            sessions: vec![NamedSession {
+                name: "work-design".into(),
+                kinds: vec![NamedFor {
+                    name: "research".into(),
+                    layer: ConfigLayer::Managed,
+                }],
+                stages: vec![NamedFor {
+                    name: "release.review".into(),
+                    layer: ConfigLayer::Local,
+                }],
+            }],
+            faults: vec![TableFault {
+                table: "streams.work.kinds.inquiry".into(),
+                refused: "streams.work.kinds.inquiry.pool: a stream's table for a kind holds the session its agents open in and its stages' tables alone".into(),
+            }],
             priority: 10,
             running: 2,
             bound: Some(2),
@@ -449,6 +520,23 @@ fn host_status() -> HostStatus {
             }],
             reserves: Reserves::Held,
             refused: Some("the stream work's reserves, operation 3 and construction 3, 6 in all, pass its bound of 5".into()),
+            view_refused: None,
+            multiplexer: ProfileHeld {
+                profile: "fake".into(),
+                from: NamedBy::Host,
+            },
+            view: ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Neither,
+            },
+            terminal_app: ProfileHeld {
+                profile: "fake-window".into(),
+                from: NamedBy::Stream,
+            },
+            title: TitleHeld {
+                title: "Work Agents".into(),
+                from: TitleFrom::Stream,
+            },
         }],
         pools: vec![PoolStatus {
             name: "work".into(),
@@ -461,6 +549,7 @@ fn host_status() -> HostStatus {
                     running: 0,
                     bound: None,
                     spent_until: None,
+                    spent_unread: None,
                     reading: Some(ReadingStatus::Unread {
                         unread: "the file is missing".into(),
                     }),
@@ -472,6 +561,7 @@ fn host_status() -> HostStatus {
                     running: 2,
                     bound: Some(4),
                     spent_until: Some(54_000),
+                    spent_unread: Some("You've hit your limit".into()),
                     reading: Some(ReadingStatus::Read {
                         read_at: 53_880,
                         fresh: true,
@@ -509,6 +599,11 @@ fn host_status() -> HostStatus {
             unwoken: Some("the run of madswan/planner was not launched: the kind planner resolves to no declaration".into()),
         }],
         watch: Watch::Bound { seconds: 30 },
+        terminals: vec![TerminalStatus {
+            profile: Some("fake".into()),
+            kept: vec!["the workspace r main, held by the pane w1:p3".into()],
+            watch: Watch::Bound { seconds: 30 },
+        }],
         bases: vec![BaseClues {
             repository: "/r".into(),
             base: "main".into(),
@@ -520,6 +615,13 @@ fn host_status() -> HostStatus {
             },
             line: "1 running · 0 asking · 1 waiting on caller · 0 stalled".into(),
             shown_at: Some("workspace w1".into()),
+        }],
+        sources: vec![SourceStatus {
+            name: "acme".into(),
+            source_file: "/config/flume/sources/acme.toml".into(),
+            kinds_dir: Some("/kinds/acme".into()),
+            kinds: vec!["acme/review@1".into()],
+            cannot_read: Some("/kinds/acme/lint@1 could not be read".into()),
         }],
         terminal_setup: vec![crate::fake_harness::SETUP.into()],
         configuration: HostConfiguration {
@@ -541,13 +643,25 @@ fn tidied() -> Tidied {
     let place = PlaceId::new("/r/places/fix--one");
     Tidied {
         removed: vec![place.clone()],
-        kept: vec![KeptPlace {
-            place: place.clone(),
-            why: Kept::Teardown {
-                step: "pre-remove".into(),
-                words: "busy".into(),
+        kept: vec![
+            KeptPlace {
+                place: place.clone(),
+                why: Kept::Teardown {
+                    step: "pre-remove".into(),
+                    words: "busy".into(),
+                },
             },
-        }],
+            KeptPlace {
+                place: place.clone(),
+                why: Kept::SessionRuns {
+                    processes: vec![LiveProcess {
+                        pid: 4242,
+                        started: 90,
+                    }],
+                    unread: Some("the host's processes could not be listed".into()),
+                },
+            },
+        ],
         branches_kept: vec![BranchKept {
             place: place.clone(),
             branch: "fix/one".into(),
@@ -556,6 +670,7 @@ fn tidied() -> Tidied {
         not_over: vec![place.clone()],
         terminal: vec![TerminalTidied {
             place,
+            profile: Some("mux".into()),
             closed: vec!["the tab fix--one".into()],
             kept: vec!["the workspace r main, held by the pane w1:p3".into()],
         }],
@@ -648,12 +763,98 @@ pub fn full() -> Vec<(&'static str, Answer)> {
             },
         ),
         (
+            "locked",
+            Answer::Locked {
+                lock_file: "/config/flume/flume.lock".into(),
+                recorded: vec![LockedKind {
+                    kind: "acme/review@1".into(),
+                    hash: format!("sha256:{}", "1".repeat(64)),
+                }],
+                removed: vec!["acme/lint@1".into()],
+            },
+        ),
+        (
             "lines",
             Answer::Lines {
                 lines: vec![line()],
             },
         ),
+        ("list", list()),
     ]
+}
+
+/// A list of a place waiting on the host and a place kept by its
+/// teardown, and of a stream that runs naming a session for a kind that
+/// does not run and one whose multiplexer names no profile flume carries
+/// (199, 200).
+pub fn list() -> Answer {
+    Answer::List {
+        places: vec![
+            Listed {
+                place: PlaceId::new("/r/places/fix--one"),
+                repository: "/r".into(),
+                name: "fix--one".into(),
+                kind: "fix@1".into(),
+                stage: Some("code".into()),
+                state: "waiting for room".into(),
+                waits_on: Some(WaitsOn::Host),
+                kept: None,
+                line: "fix--one · code · waiting for room · waits on the host".into(),
+            },
+            Listed {
+                place: PlaceId::new("/r/places/chore--one"),
+                repository: "/r".into(),
+                name: "chore--one".into(),
+                kind: "chore@1".into(),
+                stage: None,
+                state: "landed".into(),
+                waits_on: None,
+                kept: Some("kept by release".into()),
+                line: "chore--one · landed · kept by release".into(),
+            },
+        ],
+        streams: vec![
+            StreamListed {
+                stream: "work".into(),
+                session: SessionHeld {
+                    name: Some("work".into()),
+                    from: SessionFrom::StreamName,
+                },
+                multiplexer: ProfileHeld {
+                    profile: "fake".into(),
+                    from: NamedBy::Neither,
+                },
+                runs: Some(SessionRuns::Runs {
+                    name: "work".into(),
+                }),
+                uncarried: None,
+                sessions: vec![SessionListed {
+                    name: "work-design".into(),
+                    runs: Some(SessionRuns::NotRunning {
+                        name: "work-design".into(),
+                    }),
+                }],
+                line: "work · session work · runs · session work-design · not running".into(),
+            },
+            StreamListed {
+                stream: "trial".into(),
+                session: SessionHeld {
+                    name: Some("trial".into()),
+                    from: SessionFrom::StreamName,
+                },
+                multiplexer: ProfileHeld {
+                    profile: "rex".into(),
+                    from: NamedBy::Stream,
+                },
+                runs: None,
+                uncarried: Some(
+                    "the stream trial names the multiplexer rex, and no terminal profile is named rex; the terminal profiles there are: fake".into(),
+                ),
+                sessions: vec![],
+                line: "trial · session trial · no profile for rex".into(),
+            },
+        ],
+    }
 }
 
 fn every_field_listed(_: &()) -> Outcome {
@@ -777,6 +978,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.queue[].wants.stream",
             "status.host.room",
             "status.host.running",
+            "status.host.sources",
+            "status.host.sources[].cannot_read",
+            "status.host.sources[].kinds",
+            "status.host.sources[].kinds_dir",
+            "status.host.sources[].name",
+            "status.host.sources[].source_file",
             "status.host.streams",
             "status.host.streams[].bound",
             "status.host.streams[].labels",
@@ -805,6 +1012,18 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.streams[].session",
             "status.host.streams[].session.from",
             "status.host.streams[].session.name",
+            "status.host.streams[].multiplexer",
+            "status.host.streams[].multiplexer.from",
+            "status.host.streams[].multiplexer.profile",
+            "status.host.streams[].terminal_app",
+            "status.host.streams[].terminal_app.from",
+            "status.host.streams[].terminal_app.profile",
+            "status.host.streams[].title",
+            "status.host.streams[].title.from",
+            "status.host.streams[].title.title",
+            "status.host.streams[].view",
+            "status.host.streams[].view.from",
+            "status.host.streams[].view.view",
             "status.host.pools",
             "status.host.pools[].accounts",
             "status.host.pools[].accounts[].bound",
@@ -812,6 +1031,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.pools[].accounts[].program",
             "status.host.pools[].accounts[].running",
             "status.host.pools[].accounts[].spent_until",
+            "status.host.pools[].accounts[].spent_unread",
             "status.host.pools[].accounts[].reading",
             "status.host.pools[].accounts[].reading.read_at",
             "status.host.pools[].accounts[].reading.fresh",
@@ -831,6 +1051,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",
+            "status.host.terminals",
+            "status.host.terminals[].kept",
+            "status.host.terminals[].profile",
+            "status.host.terminals[].watch",
+            "status.host.terminals[].watch.bound",
+            "status.host.terminals[].watch.bound.seconds",
             "status.places",
             "status.places[].agent",
             "status.places[].agent.account",
@@ -853,6 +1079,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].agent.session",
             "status.places[].agent.session.from",
             "status.places[].agent.session.name",
+            "status.places[].agent.terminal",
+            "status.places[].agent.terminal.from",
+            "status.places[].agent.terminal.profile",
             "status.places[].agent.settings",
             "status.places[].agent.settings.beside",
             "status.places[].agent.settings.env",
@@ -921,7 +1150,21 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].holds[].since",
             "status.places[].holds[].stage",
             "status.places[].holds[].words",
+            "status.places[].identity",
             "status.places[].kind",
+            "status.places[].kind_from",
+            "status.places[].kind_from.declaration_file",
+            "status.places[].kind_from.hash",
+            "status.places[].kind_from.identity",
+            "status.places[].kind_from.identity.name",
+            "status.places[].kind_from.identity.source",
+            "status.places[].kind_from.identity.spelled",
+            "status.places[].kind_from.identity.version",
+            "status.places[].kind_from.kind_dir",
+            "status.places[].kind_from.lock_file",
+            "status.places[].kind_from.revision",
+            "status.places[].kind_from.source",
+            "status.places[].kind_from.source_file",
             "status.places[].label",
             "status.places[].label.from",
             "status.places[].label.name",
@@ -1037,6 +1280,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].waiting_on.stage",
             "status.places[].waiting_on.why",
             "status.places[].waiting_on.words",
+            "status.places[].agent.conversation.cause",
+            "status.places[].agent.left_in_pane",
+            "status.places[].stages[].end.left_in_pane",
+            "status.places[].waits_on_session",
+            "status.places[].waits_on_session.processes",
+            "status.places[].waits_on_session.processes[].pid",
+            "status.places[].waits_on_session.processes[].started",
+            "status.places[].waits_on_session.since",
+            "status.places[].waits_on_session.stage",
+            "status.places[].waits_on_session.unread",
         ],
     ),
     (
@@ -1065,6 +1318,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.agent.session",
             "launched.place.agent.session.from",
             "launched.place.agent.session.name",
+            "launched.place.agent.terminal",
+            "launched.place.agent.terminal.from",
+            "launched.place.agent.terminal.profile",
             "launched.place.agent.settings",
             "launched.place.agent.settings.beside",
             "launched.place.agent.settings.env",
@@ -1247,6 +1503,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.waiting_on.stage",
             "launched.place.waiting_on.why",
             "launched.place.waiting_on.words",
+            "launched.place.agent.conversation.cause",
+            "launched.place.agent.left_in_pane",
+            "launched.place.stages[].end.left_in_pane",
+            "launched.place.waits_on_session",
+            "launched.place.waits_on_session.processes",
+            "launched.place.waits_on_session.processes[].pid",
+            "launched.place.waits_on_session.processes[].started",
+            "launched.place.waits_on_session.since",
+            "launched.place.waits_on_session.stage",
+            "launched.place.waits_on_session.unread",
         ],
     ),
     (
@@ -1277,6 +1543,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.agent.session",
             "acted.status.agent.session.from",
             "acted.status.agent.session.name",
+            "acted.status.agent.terminal",
+            "acted.status.agent.terminal.from",
+            "acted.status.agent.terminal.profile",
             "acted.status.agent.settings",
             "acted.status.agent.settings.beside",
             "acted.status.agent.settings.env",
@@ -1465,6 +1734,26 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.tidy.kept[].why.teardown.words",
             "acted.tidy.not_over",
             "acted.tidy.removed",
+            "acted.tidy.terminal",
+            "acted.tidy.terminal[].closed",
+            "acted.tidy.terminal[].kept",
+            "acted.tidy.terminal[].place",
+            "acted.tidy.terminal[].profile",
+            "acted.status.agent.conversation.cause",
+            "acted.status.agent.left_in_pane",
+            "acted.status.stages[].end.left_in_pane",
+            "acted.status.waits_on_session",
+            "acted.status.waits_on_session.processes",
+            "acted.status.waits_on_session.processes[].pid",
+            "acted.status.waits_on_session.processes[].started",
+            "acted.status.waits_on_session.since",
+            "acted.status.waits_on_session.stage",
+            "acted.status.waits_on_session.unread",
+            "acted.tidy.kept[].why.session_runs",
+            "acted.tidy.kept[].why.session_runs.processes",
+            "acted.tidy.kept[].why.session_runs.processes[].pid",
+            "acted.tidy.kept[].why.session_runs.processes[].started",
+            "acted.tidy.kept[].why.session_runs.unread",
         ],
     ),
     (
@@ -1485,6 +1774,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "settled.tidy.kept[].why.teardown.words",
             "settled.tidy.not_over",
             "settled.tidy.removed",
+            "settled.tidy.terminal",
+            "settled.tidy.terminal[].closed",
+            "settled.tidy.terminal[].kept",
+            "settled.tidy.terminal[].place",
+            "settled.tidy.terminal[].profile",
+            "settled.tidy.kept[].why.session_runs",
+            "settled.tidy.kept[].why.session_runs.processes",
+            "settled.tidy.kept[].why.session_runs.processes[].pid",
+            "settled.tidy.kept[].why.session_runs.processes[].started",
+            "settled.tidy.kept[].why.session_runs.unread",
         ],
     ),
     (
@@ -1504,6 +1803,16 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "tidied.tidy.kept[].why.teardown.words",
             "tidied.tidy.not_over",
             "tidied.tidy.removed",
+            "tidied.tidy.terminal",
+            "tidied.tidy.terminal[].closed",
+            "tidied.tidy.terminal[].kept",
+            "tidied.tidy.terminal[].place",
+            "tidied.tidy.terminal[].profile",
+            "tidied.tidy.kept[].why.session_runs",
+            "tidied.tidy.kept[].why.session_runs.processes",
+            "tidied.tidy.kept[].why.session_runs.processes[].pid",
+            "tidied.tidy.kept[].why.session_runs.processes[].started",
+            "tidied.tidy.kept[].why.session_runs.unread",
         ],
     ),
     ("stop_check", &["stop_check", "stop_check.words"]),
@@ -1594,6 +1903,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.agent.session",
             "woken.place.agent.session.from",
             "woken.place.agent.session.name",
+            "woken.place.agent.terminal",
+            "woken.place.agent.terminal.from",
+            "woken.place.agent.terminal.profile",
             "woken.place.agent.settings",
             "woken.place.agent.settings.beside",
             "woken.place.agent.settings.env",
@@ -1770,6 +2082,27 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waiting_on.why",
             "woken.place.waiting_on.words",
             "woken.woke",
+            "woken.place.agent.conversation.cause",
+            "woken.place.agent.left_in_pane",
+            "woken.place.stages[].end.left_in_pane",
+            "woken.place.waits_on_session",
+            "woken.place.waits_on_session.processes",
+            "woken.place.waits_on_session.processes[].pid",
+            "woken.place.waits_on_session.processes[].started",
+            "woken.place.waits_on_session.since",
+            "woken.place.waits_on_session.stage",
+            "woken.place.waits_on_session.unread",
+        ],
+    ),
+    (
+        "locked",
+        &[
+            "locked",
+            "locked.lock_file",
+            "locked.recorded",
+            "locked.recorded[].hash",
+            "locked.recorded[].kind",
+            "locked.removed",
         ],
     ),
     (
@@ -1785,6 +2118,40 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "lines.lines[].stage",
             "lines.lines[].state",
             "lines.lines[].tasks",
+        ],
+    ),
+    (
+        "list",
+        &[
+            "list",
+            "list.places",
+            "list.places[].kept",
+            "list.places[].kind",
+            "list.places[].line",
+            "list.places[].name",
+            "list.places[].place",
+            "list.places[].repository",
+            "list.places[].stage",
+            "list.places[].state",
+            "list.places[].waits_on",
+            "list.streams",
+            "list.streams[].line",
+            "list.streams[].multiplexer",
+            "list.streams[].multiplexer.from",
+            "list.streams[].multiplexer.profile",
+            "list.streams[].runs",
+            "list.streams[].runs.runs",
+            "list.streams[].runs.runs.name",
+            "list.streams[].session",
+            "list.streams[].session.from",
+            "list.streams[].session.name",
+            "list.streams[].sessions",
+            "list.streams[].sessions[].name",
+            "list.streams[].sessions[].runs",
+            "list.streams[].sessions[].runs.not_running",
+            "list.streams[].sessions[].runs.not_running.name",
+            "list.streams[].stream",
+            "list.streams[].uncarried",
         ],
     ),
 ];

@@ -13,3 +13,4 @@ pub mod merge_queue;
 pub mod place;
 pub mod store;
 pub mod terminal;
+pub mod window;

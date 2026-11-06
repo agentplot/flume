@@ -159,8 +159,9 @@ variables alone (56, 143, 145 to 147, 161).
 
 Status SHALL give, for the host, each pool with its strategy and its
 threshold, and each account with its agents running, its bound, the
-time it stops being spent, its reading, and, while it is past its
-threshold, the window that holds it and until when; and never an
+time it stops being spent, the words in which no reset was read while
+it is spent for the hour 146 gives, its reading, and, while it is past
+its threshold, the window that holds it and until when; and never an
 account's environment's value or a reading's path (56, 144 to 146,
 185).
 
@@ -168,6 +169,11 @@ account's environment's value or a reading's path (56, 144 to 146,
 
 - **WHEN** status is asked while work-1 runs two agents under a bound of four and work-2 is spent until 15:00
 - **THEN** the pool `work` gives fill-first, work-1 with two running and a bound of four, and work-2 spent until 15:00 (56, 146)
+
+#### Scenario: An account spent for an hour
+
+- **WHEN** status is asked while work-3 is spent for an hour because no reset was read in "You've hit your weekly limit · resets Nov 8, 12am (UTC)"
+- **THEN** work-3 gives its spent time and `spent_unread` with those words, and the person's form gives them under its line (56, 146)
 
 #### Scenario: A pool with readings
 
@@ -211,17 +217,18 @@ form and the person's (56, 161, 162, 169).
 
 ### Requirement: Status gives a start's conversation
 
-Status SHALL give, with the current agent of a start after a spent one,
-the stopped start's number and whether the agent carries its
-conversation or, where it does not, why; with a stage's move, whether
-its conversation went with it; and each carried start that did not
-begin, with why; and never a configuration home's path (56, 146, 179;
-core.30).
+Status SHALL give, with the current agent of a start after a spent one
+or of a lost conversation's retry, the start whose conversation it
+carries with whether that start stopped at its account's limit or was
+lost, and whether the agent carries its conversation or, where it does
+not, why; with a stage's move, whether its conversation went with it;
+and each carried start that did not begin, with why; and never a
+configuration home's path (49, 56, 146, 179; core.30).
 
 #### Scenario: A carried agent
 
 - **WHEN** status is asked of a place whose code start 2 carries the conversation of start 1 under work-2
-- **THEN** the agent's conversation gives start 1 and carried, and the move of code from work-1 to work-2 gives carried, in the JSON and the person's form (56, 146, S78)
+- **THEN** the agent's conversation gives start 1, spent, and carried, and the move of code from work-1 to work-2 gives carried, in the JSON and the person's form (56, 146, S78)
 
 #### Scenario: A conversation that stayed
 
@@ -232,6 +239,11 @@ core.30).
 
 - **WHEN** status is asked of a place whose carried start 2 ended before it said it started and whose start 3 started afresh
 - **THEN** the place lists start 2 as carried and not begun with why, and the agent of start 3 gives start 1, not carried, and why (56, S79)
+
+#### Scenario: A lost talk carried
+
+- **WHEN** status is asked of a place whose talk start 2 carries the conversation of start 1, lost, under work-1
+- **THEN** the agent's conversation gives start 1, lost, and carried, and the person's form reads that it carries the conversation of start 1, lost (49, 56, S113)
 
 ### Requirement: Status gives where a place's base was read
 
@@ -284,3 +296,96 @@ that window resets; a move recorded before SHALL read with neither (56,
 
 - **WHEN** a held state holds a move with `why` `spent` and no `window` or `until`, as an earlier release wrote it
 - **THEN** status gives it as written, with no window and no end (56; core.14)
+
+### Requirement: Status gives where a place's kind came from
+
+Status SHALL give a place's kind's `identity` and `kind_from`: its
+source, and for a host's source the source's file and the kind's
+directory, for the repository's the declaration's file and the base's
+revision, for a launch's the declaration's file, and for a package its
+hash and the lock that recorded it; `declared` SHALL take `host` for a
+host's source, each as the launch read it (19, 21, 56).
+
+#### Scenario: A kind of a host's source
+
+- **WHEN** status is asked of a place of acme/review@1, locked in the host's lock
+- **THEN** it gives the identity `acme/review@1`, `declared` `host`, and `kind_from` with the source `acme`, the source's file, the kind's directory, its hash and the host's lock's file, and the person's form gives them on the kind's line (19, 56)
+
+#### Scenario: The repository's, a launch's and flume's own
+
+- **WHEN** status is asked of places of the repository's bump@2, a launch's `--kinds` kind and flume's own change@2
+- **THEN** the first gives `repo/bump@2` with `.config/flume.toml` and the base's revision, the second `launch/<name>@<version>` with the file's path, and the third `flume/change@2` with its hash and no lock (19, 56)
+
+#### Scenario: A place launched before this change
+
+- **WHEN** status is asked of a place whose held state was written with no `kind_from`
+- **THEN** it gives the source from `declared`, and no identity or hash, and the place settles as before (21, core.14)
+
+### Requirement: Status gives the host's sources
+
+The host's part of status SHALL give each source the host declares, its
+file, its `kinds_dir`, the identity of every package that directory
+holds, and why the file or the directory cannot be read where either
+cannot, each read when asked (56, 159, 191; core.15).
+
+#### Scenario: A source and a fault
+
+- **WHEN** the host's sources directory holds `acme.toml`, whose `kinds_dir` holds `review@1/` and `review@2/`, and `bad.toml` with no `kinds_dir`
+- **THEN** status's host part gives `acme` with its file, its `kinds_dir`, acme/review@1 and acme/review@2, and `bad` with the fault naming `kinds_dir` (S96, 56, 159, 191)
+
+### Requirement: Status gives an agent's own settings
+
+Status SHALL give the current agent's own settings, its program's entry
+alone, each key with its value as its layer or its file gave it, its
+layer and its file where it came from one, as
+`programs.<program>.settings.<key>`; each file a layer named for the
+program, with the keys left out of it and their owners; how its profile
+passed them; and that they were not read back. An agent given none
+SHALL be given no own settings, in the JSON form and the person's (56,
+195).
+
+#### Scenario: Keys from three layers
+
+- **WHEN** status is asked of a fix in `work` whose agent took `line` from the host's `[agents.streams.work.programs.agent.settings]`, `tips` from the file `[agents.programs.agent]` names and `style` from the repository
+- **THEN** its own settings give `programs.agent.settings.line` from `host-stream`, `programs.agent.settings.tips` from `host` with the file, and `programs.agent.settings.style` from `repository`, how they were passed, and that they were not read back (S100, 56)
+
+#### Scenario: Keys left out of a file
+
+- **WHEN** the host's file gave `env` and `perms.mode`, which the fake agent's profile reserves
+- **THEN** the agent's own settings name the file with `env` and `perms.mode` left out and their owners, and no value of either (S100, 195)
+
+#### Scenario: Another program's entry
+
+- **WHEN** the host also gives `[agents.programs.other.settings] line = "b"`
+- **THEN** the agent's own settings name nothing of `other` (195)
+
+### Requirement: Status gives an account taken for its conversation
+
+Status SHALL give the account of a start that took its lost start's
+account for the conversation it carries as from the conversation,
+beside the affinity and the strategy, in the JSON and the person's form
+(56, 145).
+
+#### Scenario: The conversation's account
+
+- **WHEN** status is asked of a place whose talk start 2 took work-2, the account its lost start 1 ran under, while the intent keeps work-1
+- **THEN** the agent's account reads work-2 from the conversation, and the person's form says it is its conversation's (56, 145, S113)
+
+### Requirement: Status names each process running a waiting conversation
+
+Status SHALL give, with a place whose stage waits to carry a
+conversation a process runs, each process as live last read it, by its
+id and when it started, or what could not be read, and since when the
+stage waits; and, with a conversation's stage reported lost whose last
+start's pane holds an agent the terminal brought back, that flume left
+it there (49, 56, 77, 207; core.30).
+
+#### Scenario: A talk waiting on its session
+
+- **WHEN** status is asked of a place whose lost talk waits while the fake agent reads its session live as process 4242
+- **THEN** it gives process 4242 with when it started and since when talk waits, in the JSON and the person's form (49, 56, 207, S117)
+
+#### Scenario: A bare agent left
+
+- **WHEN** status is asked of a place whose talk reads lost while the fake terminal holds its agent brought back bare
+- **THEN** the agent gives `left_in_pane`, and the person's form says the terminal brought it back and flume left it in its pane (56, 77, S113)

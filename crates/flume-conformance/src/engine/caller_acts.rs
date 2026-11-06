@@ -1,6 +1,7 @@
 //! The caller's acts (47 to 55, 109, 114): retry, stop, drop, done,
 //! finish and tell, none ending an agent that is not quiet unless forced.
 
+use super::carried_conversations::{by_hand, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{Act, Answer, Retry};
@@ -93,6 +94,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "start: each start's identity names its start and is shared by none",
             cites: &["33", "48"],
             run: identities_never_shared,
+        },
+        Scenario {
+            name: "retry: a lost talk's retry, unforced, while the agent the terminal brought back bare works in its pane and its session runs, is taken, says talk waits for its conversation to end naming the process, and closes and sends nothing",
+            cites: &["49", "50", "77", "207"],
+            run: a_bare_agent_at_work_in_a_lost_talks_pane,
+        },
+        Scenario {
+            name: "retry: a lost talk's retry, forced, while its session runs in a pane of the caller's own, is taken and talk waits, flume closing nothing",
+            cites: &["49", "207"],
+            run: a_session_run_in_a_pane_flume_did_not_make,
         },
     ]
 }
@@ -654,5 +665,67 @@ fn identities_never_shared(_: &()) -> Outcome {
     }
     let held = world.held(&id).ok_or("no place")?;
     ensure_eq!(held.stages[0].starts, 3, "the stage's starts");
+    Ok(())
+}
+
+fn a_bare_agent_at_work_in_a_lost_talks_pane(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.host.restart();
+    world.terminal.forget_all();
+    world.agent.bring_back_bare(&talk(1));
+    world.terminal.set_state(&talk(1), AgentState::Working);
+    world.engine().settle(None);
+    ensure_eq!(
+        world.stage_state(&id, "talk"),
+        Some(StageState::Lost),
+        "talk with its agent brought back bare"
+    );
+    world.agent.live_runs("s-1", &[by_hand()]);
+    let sent = world.terminal.log.count("send");
+    let status = retry_talk(&world, &id, None, false)?;
+    let waiting = status
+        .waits_on_session
+        .ok_or("the retry's answer says talk waits on nothing")?;
+    ensure_eq!(
+        (waiting.stage.as_str(), waiting.processes),
+        ("talk", vec![by_hand()]),
+        "what the retry's answer says talk waits on"
+    );
+    ensure_eq!(
+        (
+            world.terminal.log.count("close"),
+            world.terminal.log.count("send"),
+            world.stage_state(&id, "talk")
+        ),
+        (0, sent, Some(StageState::WaitingForRoom)),
+        "the agents closed, the sendings and talk after the retry"
+    );
+    Ok(())
+}
+
+fn a_session_run_in_a_pane_flume_did_not_make(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.terminal.kill(&talk(1));
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "talk"),
+        Some(StageState::Lost),
+        "talk once its agent was killed"
+    );
+    let place = world.held(&id).ok_or("no held state")?.place.place_ref();
+    world.terminal.person_pane(&place, "w1:p9");
+    world.agent.live_runs("s-1", &[by_hand()]);
+    retry_talk(&world, &id, None, true)?;
+    world.settle(&id);
+    ensure_eq!(
+        (
+            world.terminal.log.count("close"),
+            world.stage_state(&id, "talk")
+        ),
+        (0, Some(StageState::WaitingForRoom)),
+        "the agents closed and talk after a forced retry"
+    );
     Ok(())
 }
