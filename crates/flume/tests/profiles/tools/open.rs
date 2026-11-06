@@ -8,9 +8,12 @@
 //! stream's view is opened before its places run and again once a fix's
 //! agent runs in its session, another stream's under Terminal.app on
 //! macOS and refused elsewhere, and the line printed where no terminal app
-//! is named, nothing run (S90); and a stream under the printed command
+//! is named, nothing run (S90); a stream under the printed command
 //! beside one under herdr, status giving each agent's terminal and each
-//! stream's multiplexer (S91).
+//! stream's multiplexer (S91); and a stream naming a session for a kind,
+//! a research place's agent opening there and a fix's in the stream's
+//! own, each session opened by its name and each place tidied in its
+//! session (S106, S107).
 
 use super::walk::*;
 use crate::common::window::{shell_words, Run, StandIn};
@@ -30,9 +33,11 @@ env -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_ENV \
 while :; do sleep 1; done
 "#;
 
-/// The longest socket the pinned herdr binds for a session `w`, beneath
-/// the configuration home.
-const SESSION_SOCKET: &str = "config/herdr/sessions/w/herdr-client.sock";
+/// The longest socket the pinned herdr binds for a session `{}`,
+/// beneath the configuration home.
+fn session_socket(session: &str) -> String {
+    format!("config/herdr/sessions/{session}/herdr-client.sock")
+}
 
 /// How many short links this run has made, which names the next.
 static LINKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -73,15 +78,21 @@ struct Host {
 
 impl Host {
     fn new(label: &str) -> Host {
+        Host::for_session(label, "w")
+    }
+
+    /// A host whose sessions' sockets fit beneath its home's short link
+    /// for the session `longest`, the longest name it opens.
+    fn for_session(label: &str, longest: &str) -> Host {
         let walk = Walk::without_stand_in(label);
+        let socket = session_socket(longest);
         let named = format!(
             "o{}-{}",
             std::process::id(),
             LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         );
         let limit = socket_path_limit();
-        let fits =
-            |folder: &Path| folder.join(&named).join(SESSION_SOCKET).as_os_str().len() <= limit;
+        let fits = |folder: &Path| folder.join(&named).join(&socket).as_os_str().len() <= limit;
         // The temporary folder where the session's sockets fit under it,
         // else `/tmp` where the run may write there.
         let linked = |folder: &Path| {
@@ -96,10 +107,10 @@ impl Host {
             .filter(|folder| fits(folder))
             .find_map(|folder| linked(folder).ok())
             .unwrap_or_else(|| {
-                let socket = temporary.join(&named).join(SESSION_SOCKET);
+                let socket = temporary.join(&named).join(&socket);
                 crate::could_not_run(&format!(
-                    "herdr's session w would bind {}, {} bytes, past the {limit} a socket's path \
-                     holds on this host, and /tmp cannot be written",
+                    "herdr's session {longest} would bind {}, {} bytes, past the {limit} a \
+                     socket's path holds on this host, and /tmp cannot be written",
                     socket.display(),
                     socket.as_os_str().len()
                 ))
@@ -152,6 +163,27 @@ impl Host {
                     session["socket_path"].as_str()?.to_string(),
                 ))
             })
+            .collect()
+    }
+
+    /// The socket of the session `name` herdr lists running under the
+    /// host's configuration home.
+    fn socket_of(&self, name: &str) -> String {
+        self.running()
+            .into_iter()
+            .find(|(running, _)| running == name)
+            .map(|(_, socket)| socket)
+            .unwrap_or_else(|| panic!("no session {name}: {:?}", self.running()))
+    }
+
+    /// The labels of what herdr lists of `what`, `tab` or `workspace`, on
+    /// the server at `socket`.
+    fn labels(&self, socket: &str, what: &str) -> Vec<String> {
+        self.herdr(Some(socket), &[what, "list"])[format!("{what}s")]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|listed| listed["label"].as_str().map(str::to_string))
             .collect()
     }
 
@@ -408,4 +440,160 @@ fn s91_a_stream_under_the_printed_command_beside_one_under_herdr() {
         stream("t")["multiplexer"],
         json!({"profile": "printed", "from": "stream"})
     );
+}
+
+/// A kind of the repository's own for research, whose one stage's agent
+/// is the host's `claude`, the stand-in, and which does not land.
+const RESEARCH: &str = r#"[kinds.research]
+version = 1
+branch = "research"
+starts_unready = true
+lands = false
+
+[[kinds.research.stages]]
+name = "explore"
+prompt = "prompts/work.md"
+deliverables = ["commits"]
+agents = [{}]
+"#;
+
+#[test]
+fn s107_a_design_session_through_the_binary() {
+    // 107, 137, 138, 186, 190, 199, S106, S107: `w` names `w-design` for
+    // research; a research place's agent opens in herdr's session
+    // `w-design` and a fix's in `w`, each on its own server in its place's
+    // tab; `flume open w-design` attaches `w-design` under that title and
+    // `flume open w` attaches `w` under the stream's; status gives each
+    // agent's session with where it came from; and each place is tidied
+    // in its session, no server keeping a tab or a workspace of flume's.
+    let host = Host::for_session("s107", "w-design");
+    host.walk.configure_whole(
+        "[host]\nmultiplexer = \"herdr\"\nterminal_app = \"ghostty\"\n\
+         [streams.w]\ntitle = \"Work Herdr\"\n\
+         [streams.w.kinds.research]\nsession = \"w-design\"\n",
+    );
+    let kinds = host.walk.repository.scratch.path("kinds/kinds.toml");
+    std::fs::create_dir_all(kinds.parent().expect("a folder").join("prompts"))
+        .expect("the kinds' folder");
+    std::fs::write(&kinds, RESEARCH).expect("the kinds");
+    std::fs::write(
+        host.walk.repository.scratch.path("kinds/prompts/work.md"),
+        "Do the work of {{name}}: {{brief}}. To stop short: {{needs}}\n",
+    )
+    .expect("the prompt");
+    let research = host.walk.launch(
+        "research",
+        "one",
+        &[
+            "--brief",
+            "read the parser",
+            "--stream",
+            "w",
+            "--kinds",
+            &kinds.to_string_lossy(),
+        ],
+    );
+    let fix = host.walk.launch(
+        "fix",
+        "one",
+        &["--brief", "fix the parser", "--stream", "w"],
+    );
+    let running: Vec<String> = host.running().into_iter().map(|(name, _)| name).collect();
+    for session in ["w-design", "w"] {
+        assert!(
+            running.iter().any(|name| name == session),
+            "{session}'s server: {running:?}"
+        );
+    }
+    let (design, work) = (host.socket_of("w-design"), host.socket_of("w"));
+    assert_eq!(
+        host.labels(&design, "tab"),
+        ["research--one"],
+        "w-design's tabs"
+    );
+    assert_eq!(host.labels(&work, "tab"), ["fix--one"], "w's tabs");
+    let research_status = place_status(&host, &research);
+    assert_eq!(
+        research_status["agent"]["session"],
+        json!({"name": "w-design", "from": "stream-kind"}),
+        "{research_status}"
+    );
+    let fix_status = place_status(&host, &fix);
+    assert_eq!(
+        fix_status["agent"]["session"],
+        json!({"name": "w", "from": "stream-name"}),
+        "{fix_status}"
+    );
+
+    let (opened, refused) = host.walk.flume_ran(&["open", "w-design"]);
+    assert!(!refused, "w-design's open: {opened}");
+    let opened = &opened["opened"];
+    assert_eq!(opened["stream"], json!("w"), "{opened}");
+    assert_eq!(
+        opened["session"],
+        json!({"name": "w-design", "from": "stream-kind"}),
+        "{opened}"
+    );
+    assert_eq!(
+        opened["named"],
+        json!({"name": "w-design", "kinds": [{"name": "research", "layer": "managed"}]}),
+        "{opened}"
+    );
+    assert_eq!(
+        opened["title"],
+        json!({"title": "w-design", "from": "session"}),
+        "{opened}"
+    );
+    let (own, refused) = host.walk.flume_ran(&["open", "w"]);
+    assert!(!refused, "w's open: {own}");
+    let windows: Vec<(Vec<String>, String)> = host
+        .ghostty_runs(2)
+        .iter()
+        .map(|run| {
+            let (program, arguments, home, title) = host.ghostty_window(run);
+            assert!(
+                is_pinned_herdr(&program),
+                "{program} is not the pinned herdr"
+            );
+            assert_eq!(home.as_deref(), Some(host.config_home().as_str()));
+            (arguments, title)
+        })
+        .collect();
+    assert_eq!(
+        windows,
+        [
+            (
+                vec!["session".into(), "attach".into(), "w-design".into()],
+                "w-design".to_string()
+            ),
+            (
+                vec!["session".into(), "attach".into(), "w".into()],
+                "Work Herdr".to_string()
+            ),
+        ],
+        "the windows"
+    );
+
+    for (kind, place) in [("research", &research), ("fix", &fix)] {
+        host.walk
+            .flume(&["drop", &format!("{kind}--one"), "--force"]);
+        host.walk.flume(&["tidy"]);
+        assert!(
+            place_status(&host, place).is_null(),
+            "{place} stands after its tidy"
+        );
+    }
+    for (session, socket) in [("w-design", &design), ("w", &work)] {
+        for what in ["tab", "workspace"] {
+            let flumes: Vec<String> = host
+                .labels(socket, what)
+                .into_iter()
+                .filter(|label| label.contains("--one") || label.ends_with(" main"))
+                .collect();
+            assert!(
+                flumes.is_empty(),
+                "{session} keeps flume's {what}s: {flumes:?}"
+            );
+        }
+    }
 }
