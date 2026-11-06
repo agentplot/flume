@@ -1529,7 +1529,8 @@ mod tests {
     }
 
     /// An agent whose settings give `from`, each own setting's among them,
-    /// and its own settings beyond their keys as `own` gives them.
+    /// and its own settings beyond their keys as `own` gives them: its
+    /// lines are its agent's line, its terminal's, then its settings'.
     fn with_own(from: &[(&str, Layer, &str, Option<&str>)], own: Option<OwnStatus>) -> AgentStatus {
         AgentStatus {
             settings: AgentSettings {
@@ -1600,7 +1601,7 @@ mod tests {
             }),
         );
         assert_eq!(
-            agent_lines(&agent)[1..],
+            agent_lines(&agent)[2..],
             [
                 r#"    programs.agent.settings.line = "work" (from host-stream)"#,
                 r#"    programs.agent.settings.tui = "fullscreen" (from host, the file /home/user/agent.json)"#,
@@ -1632,7 +1633,7 @@ mod tests {
             None,
         );
         assert_eq!(
-            agent_lines(&agent)[1..],
+            agent_lines(&agent)[2..],
             [
                 "    programs.agent.settings.allow = […] (from kind)".to_string(),
                 "    programs.agent.settings.hooks = {…} (from host, the file /home/user/agent.json)"
@@ -1646,7 +1647,7 @@ mod tests {
     fn an_agent_with_no_own_settings() {
         let agent = with_own(&[("model", Layer::Launch, "large", None)], None);
         assert_eq!(
-            agent_lines(&agent)[1..],
+            agent_lines(&agent)[2..],
             ["    model = large (from launch)"]
         );
         let none_passed = with_own(
@@ -1663,7 +1664,7 @@ mod tests {
             }),
         );
         assert_eq!(
-            agent_lines(&none_passed)[1..],
+            agent_lines(&none_passed)[2..],
             [
                 "    the file /home/user/agent.json (from host)",
                 "    own settings not read back",
