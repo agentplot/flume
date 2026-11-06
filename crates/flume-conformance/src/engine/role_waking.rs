@@ -8,7 +8,8 @@
 //! address the configuration names nothing for is woken by nothing and
 //! status names its pending ends; and a run's inbox collects for its
 //! address. A place launched again under a name whose earlier place
-//! landed never reads that landing as its own (3, 99).
+//! landed never reads that landing as its own (3, 99). The host gives an
+//! address a standing agent holds apart from a run (132, C.7).
 
 use super::settling::deliver_fix;
 use super::world::*;
@@ -16,6 +17,7 @@ use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{AddressStatus, Answer, Engine, PlaceStatus, Woke};
 use flume_fakes::{FakeHistory, FakeStore};
 use flume_seams::*;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -80,7 +82,42 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["4", "132", "155"],
             run: a_roles_kind_unlocked,
         },
+        Scenario {
+            name: "role waking: the host gives the standing agent it names for one address apart from the run it names for another, and no run for the standing address",
+            cites: &["132", "3"],
+            run: standing_and_run_apart,
+        },
     ]
+}
+
+/// The seam-contracts spec's "Standing and run apart": the fake host
+/// given a standing agent for the planner and a run for `madswan/ops`
+/// holds the planner alone among its standing entries, gives no run for
+/// it, and gives ops's run (3, 132, C.7).
+fn standing_and_run_apart(_: &()) -> Outcome {
+    let world = World::new();
+    let planner = StandingAgent {
+        agent: "madswan-planner".into(),
+        session: Some("madswan".into()),
+        stream: None,
+    };
+    world.host.set_standing(PLANNER, Some(planner.clone()));
+    world
+        .host
+        .set_role("madswan/ops", Some(planner_run(None, None)));
+    let host: &dyn Host = world.host.as_ref();
+    ensure_eq!(
+        host.standing(),
+        BTreeMap::from([(PLANNER.to_string(), planner)]),
+        "the standing entries"
+    );
+    ensure_eq!(host.role(PLANNER), None, "the planner's run");
+    ensure_eq!(
+        host.role("madswan/ops"),
+        Some(planner_run(None, None)),
+        "ops's run"
+    );
+    Ok(())
 }
 
 const PLANNER: &str = "madswan/planner";
