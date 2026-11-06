@@ -1027,6 +1027,7 @@ fn streams_declared(streams: &Value) -> Result<BTreeMap<String, Stream>, String>
                 priority,
                 pool: text_of(table, "pool", &at)?,
                 session: text_of(table, "session", &at)?,
+                kinds: BTreeMap::new(),
                 labels: shares_of(table, &at)?,
                 multiplexer: text_of(table, "multiplexer", &at)?,
                 view: view_of(table, &at)?,

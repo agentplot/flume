@@ -486,8 +486,13 @@ every session (task 6.2).
   none where written before and written only where set. `SessionFrom`
   gains `StreamKind` and `StreamStage`, serialized `stream-kind` and
   `stream-stage`. The stream status gains `sessions:
-  Vec<NamedSession>`, `NamedSession { name, kinds, stages }`, each with
-  its layer.
+  Vec<NamedSession>`, `NamedSession { name, kinds, stages }`, each kind
+  and each `<kind>.<stage>` a `NamedFor { name, layer }`, and `faults:
+  Vec<TableFault>`, `TableFault { table, refused }`, each fault of a
+  table by its dotted key with the refusal it causes. A fault is given
+  once, by its table, so a table that names no session but holds
+  another key is given too; the path not taken, a refusal on each
+  `NamedFor`, has nowhere to give that table.
 - `flume-core`: `StreamRoom` keeps the stream's `kinds`.
   `StreamRoom::session` becomes `session_for(stream, kind, stage,
   others)`, answering the session with its origin, or the refusal naming

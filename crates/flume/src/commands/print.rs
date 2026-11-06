@@ -618,10 +618,12 @@ fn session_words(session: &SessionHeld) -> String {
     format!("the session {name}, {}", session_from(session.from))
 }
 
-/// Where a session's name came from (56, 107, 143).
+/// Where a session's name came from (56, 107, 143, 199).
 fn session_from(from: SessionFrom) -> &'static str {
     match from {
         SessionFrom::Launch => "the launch's",
+        SessionFrom::StreamStage => "the stream's for its stage",
+        SessionFrom::StreamKind => "the stream's for its kind",
         SessionFrom::Stream => "the stream's",
         SessionFrom::StreamName => "the stream's name",
         SessionFrom::Own => "the terminal's own",

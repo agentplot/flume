@@ -63,12 +63,16 @@ pub enum OpenIn {
 }
 
 /// Where the session an agent opens in came from: the launch's
-/// settings, its stream's `session`, its stream's name, or, for the
-/// host's default stream naming none, the terminal's own (32, 107, 143).
+/// settings, its stream's word for its kind's stage, its stream's word
+/// for its kind, its stream's `session`, its stream's name, or, for the
+/// host's default stream naming none, the terminal's own (32, 107, 143,
+/// 199).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionFrom {
     Launch,
+    StreamStage,
+    StreamKind,
     Stream,
     StreamName,
     Own,

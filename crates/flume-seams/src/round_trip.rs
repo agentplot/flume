@@ -1081,6 +1081,8 @@ fn where_an_agent_opens_and_its_session() {
     );
     for (from, spelled) in [
         (SessionFrom::Launch, "launch"),
+        (SessionFrom::StreamStage, "stream-stage"),
+        (SessionFrom::StreamKind, "stream-kind"),
         (SessionFrom::Stream, "stream"),
         (SessionFrom::StreamName, "stream-name"),
         (SessionFrom::Own, "own"),
@@ -1102,6 +1104,118 @@ fn where_an_agent_opens_and_its_session() {
         serde_json::json!({"from": "own"}),
         "no name for the terminal's own"
     );
+}
+
+#[test]
+fn a_starts_session_from_its_streams_word_for_its_stage() {
+    // A held state whose live start holds `work-review` from
+    // `stream-stage`, and a stream naming `work-design` for research and
+    // `work-review` for release's review, each read back unchanged; a
+    // stream written before reads with no session for any kind or stage,
+    // and writes none back (199).
+    let mut state = held();
+    state.stages[0].start.as_mut().expect("a start").session = Some(SessionHeld {
+        name: Some("work-review".into()),
+        from: SessionFrom::StreamStage,
+    });
+    round_trips(state.clone());
+    assert_eq!(
+        serde_json::to_value(&state).expect("held state as JSON")["stages"][0]["start"]["session"],
+        serde_json::json!({"name": "work-review", "from": "stream-stage"})
+    );
+    let stream = Stream {
+        kinds: BTreeMap::from([
+            (
+                "research".into(),
+                KindSessions {
+                    session: Some("work-design".into()),
+                    ..KindSessions::default()
+                },
+            ),
+            (
+                "release".into(),
+                KindSessions {
+                    stages: BTreeMap::from([(
+                        "review".into(),
+                        StageSession {
+                            session: Some("work-review".into()),
+                            unknown: vec![],
+                        },
+                    )]),
+                    ..KindSessions::default()
+                },
+            ),
+        ]),
+        ..Stream::default()
+    };
+    round_trips(stream.clone());
+    assert_eq!(
+        serde_json::to_value(&stream).unwrap(),
+        serde_json::json!({
+            "priority": 0,
+            "kinds": {
+                "release": {"stages": {"review": {"session": "work-review"}}},
+                "research": {"session": "work-design"},
+            },
+        })
+    );
+    let before: Stream = serde_json::from_str(r#"{"agents":4,"priority":10,"session":"office"}"#)
+        .expect("a stream written before");
+    assert!(before.kinds.is_empty(), "no session for any kind or stage");
+    let written = serde_json::to_string(&before).unwrap();
+    assert!(!written.contains("kinds"), "{written} gives no kinds");
+
+    // A table's other keys are kept, by the kind's table and the stage's
+    // (199, C.7).
+    round_trips(KindSessions {
+        session: Some("work-plan".into()),
+        stages: BTreeMap::from([(
+            "review".into(),
+            StageSession {
+                session: None,
+                unknown: vec!["pool".into()],
+            },
+        )]),
+        unknown: vec!["label".into()],
+    });
+    round_trips(KindSessions::default());
+    assert_eq!(
+        serde_json::to_value(KindSessions::default()).unwrap(),
+        serde_json::json!({})
+    );
+
+    // Status gives each session a stream names, with its kinds and
+    // stages and each one's layer, and each fault of its tables (56, 199,
+    // C.7).
+    let named = NamedSession {
+        name: "work-design".into(),
+        kinds: vec![NamedFor {
+            name: "research".into(),
+            layer: ConfigLayer::Managed,
+        }],
+        stages: vec![NamedFor {
+            name: "release.review".into(),
+            layer: ConfigLayer::Local,
+        }],
+    };
+    round_trips(named.clone());
+    assert_eq!(
+        serde_json::to_value(&named).unwrap(),
+        serde_json::json!({
+            "name": "work-design",
+            "kinds": [{"name": "research", "layer": "managed"}],
+            "stages": [{"name": "release.review", "layer": "local"}],
+        })
+    );
+    round_trips(NamedSession {
+        name: "work-review".into(),
+        kinds: vec![],
+        stages: vec![],
+    });
+    round_trips(TableFault {
+        table: "streams.work.kinds.research".into(),
+        refused: "streams.work.kinds.research holds label".into(),
+    });
 }
 
 #[test]
