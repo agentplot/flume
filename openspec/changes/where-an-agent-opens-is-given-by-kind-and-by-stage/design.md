@@ -486,7 +486,15 @@ every session (task 6.2).
   `sessions`: each session it names for its kinds and stages, with the
   kinds and the `<kind>.<stage>`s it names it for and the layer of each,
   `managed` or `local` (56, C.7). A table's other key, and a session
-  that is another stream's, are given with the refusal each causes.
+  that is another stream's, are given with the refusal each causes. The
+  person's form gives one line for each session under the stream's own,
+  `it names the session work-design for the kind research (from
+  managed) and the stage release.review (from local)`, and one for each
+  table at fault, `it starts no stage that reads
+  streams.work.kinds.research: <refusal>`, the way a label's fault
+  reads. The other way was a line for each kind and stage, which names a
+  session as often as it is named, when a person looks for a session by
+  its name to open it.
 - The JSON form only gains a field and two values (core.14). A start
   written before reads with its `from` as written.
 
