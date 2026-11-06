@@ -127,6 +127,7 @@ The state is the first that holds of these:
 | `lost`, `never begun`, `not ready`, `refused`, `stopped` | the stage's agent stopped with nothing delivered, its prompt never began, the place's readiness failed, the stage was refused, or its caller stopped the agent |
 | `past its bound`, `submission refused` | the place went back more times than its kind allows, or the merge queue refused its submission |
 | `waiting on done` | the last stage of a kind that does not land delivered |
+| `waiting on its session` | a lost conversation's retry, or a start that carries a conversation, waits while a process runs that conversation, or while flume cannot read whether one does |
 | `waiting for room` | the stage waits for room on the host, its stream or its pool |
 | `starting` | the agent is opened and has not said it started |
 | `stuck` | the agent is quiet past its stage's limit with nothing delivered |
