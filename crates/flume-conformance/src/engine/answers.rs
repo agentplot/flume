@@ -439,6 +439,21 @@ fn host_status() -> HostStatus {
                 name: Some("work".into()),
                 from: SessionFrom::StreamName,
             },
+            sessions: vec![NamedSession {
+                name: "work-design".into(),
+                kinds: vec![NamedFor {
+                    name: "research".into(),
+                    layer: ConfigLayer::Managed,
+                }],
+                stages: vec![NamedFor {
+                    name: "release.review".into(),
+                    layer: ConfigLayer::Local,
+                }],
+            }],
+            faults: vec![TableFault {
+                table: "streams.work.kinds.inquiry".into(),
+                refused: "streams.work.kinds.inquiry.pool: a stream's table for a kind holds the session its agents open in and its stages' tables alone".into(),
+            }],
             priority: 10,
             running: 2,
             bound: Some(2),

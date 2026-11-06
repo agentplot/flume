@@ -576,10 +576,14 @@ impl RoomWanted {
     }
 }
 
-/// A stream of the host (143): the session its agents open in where
-/// their launch names none, with where it came from, its multiplexer,
-/// view and terminal app, each with where it came from, and the title a
-/// window on it carries, its priority among streams, its agents running,
+/// A stream of the host (143): its own session, the one its agents open
+/// in where neither their launch nor its word for their kind or stage
+/// names one, with where it came from; each session it names for its
+/// kinds and their stages, with the kinds and stages it names it for and
+/// each one's layer; each fault of those tables, with the refusal it
+/// causes the starts that read it; its multiplexer, view and terminal
+/// app, each with where it came from, and the title a window on it
+/// carries, its priority among streams, its agents running,
 /// the bound it states, none where the host's alone holds it, its room,
 /// none where it states no bound, its stages waiting for room in the
 /// order they would start, its labels' shares, whether their reserves
@@ -587,12 +591,16 @@ impl RoomWanted {
 /// naming a terminal profile flume does not carry, or, for a terminal
 /// view, its terminal app naming a window profile flume does not carry,
 /// that last also given alone, since it refuses the stream's open and
-/// none of its stages; none where none holds (56, 70, 107, 181, 182, 186,
-/// 188, 190; core.14).
+/// none of its stages; none where none holds (4, 56, 70, 107, 181, 182,
+/// 186, 188, 190, 199, C.7; core.14).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamStatus {
     pub name: String,
     pub session: SessionHeld,
+    #[serde(default)]
+    pub sessions: Vec<NamedSession>,
+    #[serde(default)]
+    pub faults: Vec<TableFault>,
     pub multiplexer: ProfileHeld,
     pub view: ViewHeld,
     pub terminal_app: ProfileHeld,

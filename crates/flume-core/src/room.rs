@@ -217,59 +217,90 @@ impl StreamRoom {
         let Some(table) = self.kinds.get(kind) else {
             return Ok(self.own_session(name));
         };
-        let kind_at = format!("streams.{name}.kinds.{kind}");
-        if let Some(key) = table.unknown.first() {
-            return Err(format!(
-                "{kind_at}.{key}: a stream's table for a kind holds the session its agents open \
-                 in and its stages' tables alone"
-            ));
+        if let Some(refused) = kind_other_key(name, kind, table) {
+            return Err(refused);
         }
-        let staged = table.stages.get(stage);
-        let stage_at = format!("{kind_at}.stages.{stage}");
-        if let Some(key) = staged.and_then(|staged| staged.unknown.first()) {
-            return Err(format!(
-                "{stage_at}.{key}: a stream's table for a kind's stage holds the session its \
-                 agents open in alone"
-            ));
+        if let Some(staged) = table.stages.get(stage) {
+            if let Some(refused) = stage_fault(name, kind, stage, staged, others) {
+                return Err(refused);
+            }
+            if let Some(session) = &staged.session {
+                return Ok(SessionHeld {
+                    name: Some(session.clone()),
+                    from: SessionFrom::StreamStage,
+                });
+            }
         }
-        let (session, from, at, named_for) = match (
-            staged.and_then(|staged| staged.session.as_ref()),
-            &table.session,
-        ) {
-            (Some(session), _) => (
-                session,
-                SessionFrom::StreamStage,
-                stage_at,
-                format!("the stage {kind}.{stage}"),
-            ),
-            (None, Some(session)) => (
-                session,
-                SessionFrom::StreamKind,
-                kind_at,
-                format!("the kind {kind}"),
-            ),
-            (None, None) => return Ok(self.own_session(name)),
-        };
-        let theirs = others
-            .iter()
-            .filter(|(other, _)| other.as_str() != name)
-            .find_map(|(other, room)| {
-                room.words(other)
-                    .into_iter()
-                    .find(|(named, _)| named == session)
-                    .map(|(_, word)| (other, word))
+        match &table.session {
+            Some(session) => match kind_theirs(name, kind, session, others) {
+                Some(refused) => Err(refused),
+                None => Ok(SessionHeld {
+                    name: Some(session.clone()),
+                    from: SessionFrom::StreamKind,
+                }),
+            },
+            None => Ok(self.own_session(name)),
+        }
+    }
+
+    /// Each session the stream names for its kinds and their stages, by
+    /// its name, with each kind and each `<kind>.<stage>` it names it for
+    /// and the layer of `configuration` that names it (56, 199, C.7).
+    pub fn named_sessions(
+        &self,
+        name: &str,
+        configuration: &HostConfiguration,
+    ) -> Vec<NamedSession> {
+        let mut sessions: BTreeMap<String, NamedSession> = BTreeMap::new();
+        for (kind, table) in &self.kinds {
+            if let Some(session) = &table.session {
+                named_session(&mut sessions, session).kinds.push(NamedFor {
+                    name: kind.clone(),
+                    layer: layer_at(configuration, &["streams", name, "kinds", kind, "session"]),
+                });
+            }
+            for (stage, staged) in &table.stages {
+                if let Some(session) = &staged.session {
+                    named_session(&mut sessions, session).stages.push(NamedFor {
+                        name: format!("{kind}.{stage}"),
+                        layer: layer_at(
+                            configuration,
+                            &["streams", name, "kinds", kind, "stages", stage, "session"],
+                        ),
+                    });
+                }
+            }
+        }
+        sessions.into_values().collect()
+    }
+
+    /// Each fault of the stream's tables for its kinds and their stages,
+    /// once by its table, with the refusal it causes every start that
+    /// reads it: another key it holds, else a session it names that
+    /// another stream of `others` gives by its word (4, 56, 199).
+    pub fn faults(&self, name: &str, others: &BTreeMap<String, StreamRoom>) -> Vec<TableFault> {
+        let mut faults = vec![];
+        for (kind, table) in &self.kinds {
+            let refused = kind_other_key(name, kind, table).or_else(|| {
+                let session = table.session.as_ref()?;
+                kind_theirs(name, kind, session, others)
             });
-        if let Some((other, word)) = theirs {
-            return Err(format!(
-                "{at}.session: the session {session} the stream {name} names for {named_for} is \
-                 the stream {other}'s, {word}, and a session a stream names for a kind or a stage \
-                 is that stream's alone"
-            ));
+            if let Some(refused) = refused {
+                faults.push(TableFault {
+                    table: format!("streams.{name}.kinds.{kind}"),
+                    refused,
+                });
+            }
+            for (stage, staged) in &table.stages {
+                if let Some(refused) = stage_fault(name, kind, stage, staged, others) {
+                    faults.push(TableFault {
+                        table: format!("streams.{name}.kinds.{kind}.stages.{stage}"),
+                        refused,
+                    });
+                }
+            }
         }
-        Ok(SessionHeld {
-            name: Some(session.clone()),
-            from,
-        })
+        faults
     }
 
     /// Each session the stream `name`'s agents open in by its word, with
@@ -306,6 +337,131 @@ impl StreamRoom {
         }
         words
     }
+}
+
+/// Why the stream `name`'s table for the stage `stage` of `kind`
+/// refuses the stage's starts: another key it holds, else a session
+/// it names that another stream of `others` gives by its word (4,
+/// 182, 199).
+fn stage_fault(
+    name: &str,
+    kind: &str,
+    stage: &str,
+    staged: &StageSession,
+    others: &BTreeMap<String, StreamRoom>,
+) -> Option<String> {
+    let at = format!("streams.{name}.kinds.{kind}.stages.{stage}");
+    if let Some(key) = staged.unknown.first() {
+        return Some(format!(
+            "{at}.{key}: a stream's table for a kind's stage holds the session its agents \
+             open in alone"
+        ));
+    }
+    let session = staged.session.as_ref()?;
+    theirs(
+        name,
+        session,
+        &at,
+        &format!("the stage {kind}.{stage}"),
+        others,
+    )
+}
+
+/// Why the session `session` the stream `name` names for `kind`
+/// refuses the starts that open there: it is one another stream of
+/// `others` gives by its word (4, 199).
+fn kind_theirs(
+    name: &str,
+    kind: &str,
+    session: &str,
+    others: &BTreeMap<String, StreamRoom>,
+) -> Option<String> {
+    theirs(
+        name,
+        session,
+        &format!("streams.{name}.kinds.{kind}"),
+        &format!("the kind {kind}"),
+        others,
+    )
+}
+
+/// Why the stream `name`'s table for `kind` refuses every start of the
+/// kind: another key it holds (4, 182, 199).
+fn kind_other_key(name: &str, kind: &str, table: &KindSessions) -> Option<String> {
+    table.unknown.first().map(|key| {
+        format!(
+            "streams.{name}.kinds.{kind}.{key}: a stream's table for a kind holds the session \
+             its agents open in and its stages' tables alone"
+        )
+    })
+}
+
+/// Why the session `session` the stream `name` names for `named_for` in
+/// its table at `at` refuses the starts that open there: it is one
+/// another stream of `others` gives by its word, which names both
+/// streams; none where no other stream gives it (4, 199).
+fn theirs(
+    name: &str,
+    session: &str,
+    at: &str,
+    named_for: &str,
+    others: &BTreeMap<String, StreamRoom>,
+) -> Option<String> {
+    let (other, word) = others
+        .iter()
+        .filter(|(other, _)| other.as_str() != name)
+        .find_map(|(other, room)| {
+            room.words(other)
+                .into_iter()
+                .find(|(named, _)| named == session)
+                .map(|(_, word)| (other, word))
+        })?;
+    Some(format!(
+        "{at}.session: the session {session} the stream {name} names for {named_for} is the \
+         stream {other}'s, {word}, and a session a stream names for a kind or a stage is that \
+         stream's alone"
+    ))
+}
+
+/// The session `session` among `sessions`, added naming no kind or stage
+/// yet where it is not there.
+fn named_session<'a>(
+    sessions: &'a mut BTreeMap<String, NamedSession>,
+    session: &str,
+) -> &'a mut NamedSession {
+    sessions
+        .entry(session.to_string())
+        .or_insert_with(|| NamedSession {
+            name: session.to_string(),
+            kinds: vec![],
+            stages: vec![],
+        })
+}
+
+/// The layer `configuration` gives the value at `path`, its dotted key
+/// as the host's configuration writes it, each part bare where TOML
+/// allows and quoted otherwise; managed where it gives none (56, C.7).
+fn layer_at(configuration: &HostConfiguration, path: &[&str]) -> ConfigLayer {
+    let key = path
+        .iter()
+        .map(|part| {
+            if !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
+                (*part).to_string()
+            } else {
+                format!("{part:?}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(".");
+    configuration
+        .values
+        .iter()
+        .find(|value| value.key == key)
+        .map_or(ConfigLayer::Managed, |value| value.layer)
 }
 
 /// Why the labels of the stream `name` refuse its starts: a label's table
@@ -882,6 +1038,7 @@ impl Engine {
     pub(crate) fn host_status(&self) -> HostStatus {
         let queue = self.queue();
         let declared = self.host.streams();
+        let configuration = self.host.configuration();
         let queued: Vec<Queued> = queue
             .waiting
             .iter()
@@ -915,6 +1072,8 @@ impl Engine {
             .map(|(name, stream, display, title)| StreamStatus {
                 name: name.clone(),
                 session: stream.own_session(name),
+                sessions: stream.named_sessions(name, &configuration),
+                faults: stream.faults(name, &queue.streams),
                 refused: self.stream_refused(name, stream.fault.as_ref(), &display),
                 view_refused: self.view_refused(name, &display),
                 multiplexer: display.multiplexer,
@@ -992,7 +1151,7 @@ impl Engine {
             terminals: self.terminals_status(),
             bases: self.bases(),
             terminal_setup: self.terminal.setup(),
-            configuration: self.host.configuration(),
+            configuration,
         }
     }
 

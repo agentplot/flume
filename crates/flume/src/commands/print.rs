@@ -243,7 +243,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     }
     if let Some(agent) = &place.agent {
         lines.push(agent_line(agent));
-        lines.extend(where_line(agent));
+        lines.extend(where_line(agent, &place.stream.name, &place.kind));
         lines.push(terminal_line(agent));
         for (setting, given) in &agent.settings.from {
             lines.push(format!(
@@ -549,11 +549,26 @@ fn agent_line(agent: &AgentStatus) -> String {
     line
 }
 
-/// Where the agent opened: the session with where it came from, or the
-/// pane it opened beside; none for a start written before (56, 107).
-fn where_line(agent: &AgentStatus) -> Option<String> {
+/// Where the agent of a place of `kind` in `stream` opened: the session
+/// with where it came from, its stream's word for its kind or its stage
+/// naming the stream and the kind or the `<kind>.<stage>`, or the pane it
+/// opened beside; none for a start written before (56, 107, 199).
+fn where_line(agent: &AgentStatus, stream: &str, kind: &str) -> Option<String> {
+    let named_for = |session: &SessionHeld| {
+        let name = session.name.as_deref()?;
+        let named_for = match session.from {
+            SessionFrom::StreamKind => format!("kind {kind}"),
+            SessionFrom::StreamStage => format!("stage {kind}.{}", agent.stage),
+            _ => return None,
+        };
+        Some(format!(
+            "    in the session {name} (stream {stream}, {named_for})"
+        ))
+    };
     match (&agent.session, &agent.settings.settings.beside) {
-        (Some(session), _) => Some(format!("    in {}", session_words(session))),
+        (Some(session), _) => {
+            named_for(session).or_else(|| Some(format!("    in {}", session_words(session))))
+        }
         (None, Some(pane)) => Some(format!("    beside the pane {pane}")),
         (None, None) => None,
     }
@@ -616,6 +631,52 @@ fn session_words(session: &SessionHeld) -> String {
         return "the terminal's own session".into();
     };
     format!("the session {name}, {}", session_from(session.from))
+}
+
+/// Each session a stream names for its kinds and their stages, with each
+/// kind and `<kind>.<stage>` it names it for and the layer naming it, then
+/// each fault of those tables with the refusal it causes the starts that
+/// read it (56, 199, C.7).
+fn named_lines(stream: &StreamStatus) -> Vec<String> {
+    let mut lines: Vec<String> = stream
+        .sessions
+        .iter()
+        .map(|session| {
+            let kinds = session
+                .kinds
+                .iter()
+                .map(|kind| format!("the kind {} (from {})", kind.name, word(json!(kind.layer))));
+            let stages = session.stages.iter().map(|stage| {
+                format!(
+                    "the stage {} (from {})",
+                    stage.name,
+                    word(json!(stage.layer))
+                )
+            });
+            let named: Vec<String> = kinds.chain(stages).collect();
+            format!(
+                "    it names the session {} for {}",
+                session.name,
+                and_list(&named)
+            )
+        })
+        .collect();
+    for fault in &stream.faults {
+        lines.push(format!(
+            "    it starts no stage that reads {}: {}",
+            fault.table, fault.refused
+        ));
+    }
+    lines
+}
+
+/// `items` as a person reads a list: `a`, `a and b`, `a, b and c`.
+fn and_list(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
 }
 
 /// Where a session's name came from (56, 107, 143, 199).
@@ -774,6 +835,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
             "    its agents open in {}",
             session_words(&stream.session)
         ));
+        lines.extend(named_lines(stream));
         lines.push(display_line(stream));
         lines.extend(label_lines(stream));
         for queued in &stream.queue {
@@ -1073,7 +1135,11 @@ mod tests {
 
     #[test]
     fn each_agents_session() {
+        // 56, 107, 199: where each agent opened, a session its stream
+        // names for its kind or its stage naming the stream and the kind
+        // or the stage, as design 9 words it.
         let agent = |session: Option<SessionHeld>, beside: Option<&str>| AgentStatus {
+            stage: "review".into(),
             settings: AgentSettings {
                 settings: flume_seams::Settings {
                     beside: beside.map(str::to_string),
@@ -1118,12 +1184,22 @@ mod tests {
                 None,
                 Some("    in the session work, the stream's name"),
             ),
+            (
+                named("work-design", SessionFrom::StreamKind),
+                None,
+                Some("    in the session work-design (stream work, kind release)"),
+            ),
+            (
+                named("work-design", SessionFrom::StreamStage),
+                None,
+                Some("    in the session work-design (stream work, stage release.review)"),
+            ),
             (own, None, Some("    in the terminal's own session")),
             (None, Some("operator"), Some("    beside the pane operator")),
             (None, None, None),
         ] {
             assert_eq!(
-                where_line(&agent(session, beside)).as_deref(),
+                where_line(&agent(session, beside), "work", "release").as_deref(),
                 line,
                 "{line:?}"
             );
@@ -1227,6 +1303,8 @@ mod tests {
                 title: "Office Agents".into(),
                 from: TitleFrom::Stream,
             },
+            sessions: vec![],
+            faults: vec![],
             priority: 0,
             running: 0,
             bound: None,
@@ -1258,6 +1336,108 @@ mod tests {
             label_lines(&stream(Some(fault), None)),
             [format!("    it starts no stage: {fault}")]
         );
+    }
+
+    #[test]
+    fn a_streams_named_sessions_and_its_tables_at_fault() {
+        // 56, 199, C.7: each session a stream names for its kinds and
+        // stages, under its own, with each kind and stage it names it
+        // for and the layer naming it; then each table at fault with the
+        // refusal it causes the starts that read it.
+        let named_for = |name: &str, layer| flume_seams::NamedFor {
+            name: name.into(),
+            layer,
+        };
+        let stream = |sessions, faults| StreamStatus {
+            name: "work".into(),
+            session: SessionHeld {
+                name: Some("work".into()),
+                from: SessionFrom::StreamName,
+            },
+            sessions,
+            faults,
+            multiplexer: held("mux", NamedBy::Host),
+            view: ViewHeld {
+                view: View::Terminal,
+                from: NamedBy::Neither,
+            },
+            terminal_app: held("printed", NamedBy::Neither),
+            title: TitleHeld {
+                title: "work".into(),
+                from: TitleFrom::StreamName,
+            },
+            priority: 0,
+            running: 0,
+            bound: None,
+            room: None,
+            queue: vec![],
+            labels: vec![],
+            reserves: Reserves::None,
+            refused: None,
+            view_refused: None,
+        };
+        let two = stream(
+            vec![
+                flume_seams::NamedSession {
+                    name: "work-design".into(),
+                    kinds: vec![
+                        named_for("inquiry", ConfigLayer::Managed),
+                        named_for("research", ConfigLayer::Managed),
+                    ],
+                    stages: vec![named_for("release.review", ConfigLayer::Local)],
+                },
+                flume_seams::NamedSession {
+                    name: "work-review".into(),
+                    kinds: vec![],
+                    stages: vec![named_for("change.verify", ConfigLayer::Managed)],
+                },
+            ],
+            vec![],
+        );
+        let lines = host_lines(&HostStatus {
+            streams: vec![two],
+            ..HostStatus::default()
+        });
+        assert_eq!(
+            lines[1..5],
+            [
+                "  stream work, priority 0: 0 agents running, no bound of its own",
+                "    its agents open in the session work, the stream's name",
+                "    it names the session work-design for the kind inquiry (from managed), the kind research (from managed) and the stage release.review (from local)",
+                "    it names the session work-review for the stage change.verify (from managed)",
+            ]
+        );
+        let other = "streams.work.kinds.research.pool: a stream's table for a kind holds the session its agents open in and its stages' tables alone";
+        let theirs = "streams.work.kinds.release.stages.review.session: the session office the stream work names for the stage release.review is the stream personal's, its own session, and a session a stream names for a kind or a stage is that stream's alone";
+        let at_fault = stream(
+            vec![flume_seams::NamedSession {
+                name: "office".into(),
+                kinds: vec![],
+                stages: vec![named_for("release.review", ConfigLayer::Managed)],
+            }],
+            vec![
+                flume_seams::TableFault {
+                    table: "streams.work.kinds.research".into(),
+                    refused: other.into(),
+                },
+                flume_seams::TableFault {
+                    table: "streams.work.kinds.release.stages.review".into(),
+                    refused: theirs.into(),
+                },
+            ],
+        );
+        assert_eq!(
+            named_lines(&at_fault),
+            [
+                "    it names the session office for the stage release.review (from managed)"
+                    .to_string(),
+                format!("    it starts no stage that reads streams.work.kinds.research: {other}"),
+                format!(
+                    "    it starts no stage that reads streams.work.kinds.release.stages.review: {theirs}"
+                ),
+            ]
+        );
+        assert!(named_lines(&stream(vec![], vec![])).is_empty());
     }
 
     #[test]
@@ -2002,6 +2182,8 @@ mod tests {
                         name: Some("office".into()),
                         from: SessionFrom::Stream,
                     },
+                    sessions: vec![],
+                    faults: vec![],
                     priority: 10,
                     running: 4,
                     bound: Some(4),
@@ -2034,6 +2216,8 @@ mod tests {
                         name: Some("personal".into()),
                         from: SessionFrom::StreamName,
                     },
+                    sessions: vec![],
+                    faults: vec![],
                     priority: 0,
                     running: 2,
                     bound: Some(3),
@@ -2066,6 +2250,8 @@ mod tests {
                         name: None,
                         from: SessionFrom::Own,
                     },
+                    sessions: vec![],
+                    faults: vec![],
                     priority: 0,
                     running: 0,
                     bound: None,
@@ -2198,6 +2384,8 @@ mod tests {
                 name: Some(name.into()),
                 from: SessionFrom::StreamName,
             },
+            sessions: vec![],
+            faults: vec![],
             priority: 0,
             running: 5,
             bound,
