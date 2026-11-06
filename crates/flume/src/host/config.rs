@@ -1634,7 +1634,7 @@ mod tests {
         }
     }
 
-    /// C.7's example, as the statement writes it at 6188a10, its program
+    /// C.7's example, as the statement writes it at fa40c94, its program
     /// `agent` (core.1), and `personal`'s `points` and `pace` left out,
     /// which record 0025's change reads.
     const C7: &str = r#"
@@ -1652,6 +1652,9 @@ keep_free = 1
 
 [streams.work.labels.construction]
 reserve = 2
+
+[streams.work.kinds.research]
+session = "work-design"
 
 [streams.personal]
 agents = 3
@@ -1766,6 +1769,19 @@ label = "inception"
             config.streams["work"].session, None,
             "work's agents in the session of its name"
         );
+        // 199: a research place's agents opening in `work-design`, every
+        // other agent of work's in `work`.
+        assert_eq!(
+            config.streams["work"].kinds,
+            BTreeMap::from([(
+                "research".to_string(),
+                KindSessions {
+                    session: Some("work-design".into()),
+                    ..KindSessions::default()
+                }
+            )])
+        );
+        assert_eq!(config.streams["personal"].kinds, BTreeMap::new());
         let with_points = C7.replace(
             "pool = \"personal\"\n",
             "pool = \"personal\"\npoints = 8\npace = { points = 13, per = \"day\" }\n",
