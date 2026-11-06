@@ -1,7 +1,7 @@
 ---
 number: 48
 title: A stream names a session of its own for a kind's agents, which a person opens by its name
-status: proposed
+status: accepted
 date: 2026-11-06
 decision-makers:
 - Chuck Swanberg
@@ -9,10 +9,10 @@ decision-makers:
 
 # A stream names a session of its own for a kind's agents, which a person opens by its name
 
-Status: proposed. The need is the user's, on 2026-11-05: "I'm realizing that mixing construction sessions from Flume with research and design sessions makes it hard to find and keep track of the research and design sessions. We probably want to put those into different Herdr sessions. I don't know if that is possible, whether that has to be explicit at the stream level (so we need different streams), or whether we can do it below the stream level". The user ruled on 2026-11-06, in the Plannotator Inbox thread msg_01M6Q2N04BS0RPG16TA76W67W6 (their reply msg_01M6Q4DZM9GFJJFVDX9JE7G1N9), which part of the terminal, where the host says it, what opens there and how a person opens it; their words are quoted below as the decision. Three questions their words leave open are asked in that thread, the record standing on the recommended answers until they rule. It stands proposed until the user has seen it as a record and said yes.
+Status: accepted on the user's word of 2026-11-06, who approved the design of `where-an-agent-opens-is-given-by-kind-and-by-stage`, this record's decision among it, and named each partition's research-and-design session `<partition>-design`. The need is the user's, on 2026-11-05: "I'm realizing that mixing construction sessions from Flume with research and design sessions makes it hard to find and keep track of the research and design sessions. We probably want to put those into different Herdr sessions. I don't know if that is possible, whether that has to be explicit at the stream level (so we need different streams), or whether we can do it below the stream level". The user ruled on 2026-11-06, in the Plannotator Inbox thread msg_01M6Q2N04BS0RPG16TA76W67W6 (their reply msg_01M6Q4DZM9GFJJFVDX9JE7G1N9), which part of the terminal, where the host says it, what opens there and how a person opens it; their words are quoted below as the decision.
 
-Deciders: the user, on the need and on the rulings below; the construct stage of `where-an-agent-opens-is-given-by-kind-and-by-stage`, on 2026-11-06, on the rest.
-Sources: `agentplot/blueprints:design/flume/requirements.md` at 7bd1891, clauses 32, 70, 107, 143, 180 to 182, 186, 187, 190, 200, 201, C.5's herdr row and C.7, and its amendment at dc4abac on the branch `design/flume-where-an-agent-opens`, which adds 199, S106 and S107; `design/weir/requirements.md` at 7bd1891, clause 55 and S11, the elaboration kind; records 0018, 0020, 0031, 0032, 0033 and 0037; rules core.1, core.4, core.29, core.44, core.46, core.48 and core.49; the changes `an-agents-program-settings-come-from-flumes-layers`, `an-agents-effort-is-a-setting-of-flumes-layers`, `an-answer-reaches-the-open-session-within-an-hour` (`keep_open`), `every-question-a-place-asks-reaches-someone-who-answers-it`, `flume-list-shows-each-place-and-stream-on-one-line` (record 0049) and `flume-opens-a-streams-multiplexer` (landed as #109); afterthought/swancloud's change `each-stream-opens-in-a-session-the-host-chooses-and-gets-its-labels` (its record 0053); `crates/flume-core/src/room.rs` (`StreamRoom::session`, `Queue::session_of`), `crates/flume-core/src/open.rs` (`Engine::open_stream`), `crates/flume-core/src/settings.rs` (`placeless`, `sessionless`), `crates/flume-seams/src/terminal.rs` (`OpenIn`, `SessionFrom`, `SessionHeld`), `crates/flume-seams/src/host.rs` (`Stream`), `crates/flume/src/host/config.rs` (`streams_declared`, `LOCAL_KEYS`) and `crates/flume/src/profiles/terminal/herdr/mod.rs`.
+Deciders: the user, on the need, on the rulings below, on the session's name and on the whole, approving it on 2026-11-06; the construct stage of `where-an-agent-opens-is-given-by-kind-and-by-stage`, on 2026-11-06, on the rest.
+Sources: `agentplot/blueprints:design/flume/requirements.md` at 7bd1891, clauses 32, 70, 107, 143, 180 to 182, 186, 187, 190, 200, 201, C.5's herdr row and C.7, and its amendment, on main at f676e8f, which adds 199, S106 and S107; `design/weir/requirements.md` at 7bd1891, clause 55 and S11, the elaboration kind; records 0018, 0020, 0031, 0032, 0033 and 0037; rules core.1, core.4, core.29, core.44, core.46, core.48 and core.49; the changes `an-agents-program-settings-come-from-flumes-layers`, `an-agents-effort-is-a-setting-of-flumes-layers`, `an-answer-reaches-the-open-session-within-an-hour` (`keep_open`), `every-question-a-place-asks-reaches-someone-who-answers-it`, `flume-list-shows-each-place-and-stream-on-one-line` (record 0049) and `flume-opens-a-streams-multiplexer` (landed as #109); afterthought/swancloud's change `each-stream-opens-in-a-session-the-host-chooses-and-gets-its-labels` (its record 0053); `crates/flume-core/src/room.rs` (`StreamRoom::session`, `Queue::session_of`), `crates/flume-core/src/open.rs` (`Engine::open_stream`), `crates/flume-core/src/settings.rs` (`placeless`, `sessionless`), `crates/flume-seams/src/terminal.rs` (`OpenIn`, `SessionFrom`, `SessionHeld`), `crates/flume-seams/src/host.rs` (`Stream`), `crates/flume/src/host/config.rs` (`streams_declared`, `LOCAL_KEYS`) and `crates/flume/src/profiles/terminal/herdr/mod.rs`.
 
 ## Context and problem statement
 
@@ -46,7 +46,7 @@ For how a person opens it:
 
 ## Decision outcome
 
-Options 1, 5 and 10, on the user's rulings.
+Options 1, 5 and 10, on the user's rulings and their approval.
 
 1. **A session of its own (190, 199).** The user: "A session of its own beside the stream's, e.g. `madswan-design`". A stream may name, for a kind, the session of its terminal that kind's agents open in. Under herdr that is herdr's session of that name, started headless where it does not run, laid out as every session is (record 0018): one workspace per repository and base, one tab per place.
 2. **The stream's table for a kind (143, 199, C.7).** The user: "The stream's own table, `[streams.<stream>.kinds.<kind>]`", and, of `[streams.madswan.kinds.change.stages.construct]`: "not this one. just any elaboration types". `session` in `[streams.<stream>.kinds.<kind>]`, every stage of the kind opening there; the table holds nothing else. A kind is named as `[kinds.<kind>]` names it, by its name whatever source and version it resolves to. The elaboration kinds are the kinds whose whole work is research and design, `research` on this host today and crew's design roles once they run as kinds, each named by the host in a table of its own. It is not one of clause 32's layered settings, and no agents table, kind or repository gives a session.
@@ -67,23 +67,23 @@ Option 3 splits the partition's stream, which the user ruled out for planning.
 
 Option 4 gives a session for a kind in every stream at once: the host's agents tables for a kind and for a repository and kind name no stream, so two partitions' research would open in one session, or the host would write a session for every repository. The user chose option 5.
 
-Option 6's one use was a change's construct stage, which the user ruled "not this one"; nothing else asks for it. A change's design stays in the change's own tab beside its code. A stage's table adds later without breaking a host, since `stages` in a kind's table is refused today. Whether it stays at all is asked of the user.
+Option 6's one use was a change's construct stage, which the user ruled "not this one"; nothing else asks for it. A change's design stays in the change's own tab beside its code. A stage's table adds later without breaking a host, since `stages` in a kind's table is refused today. The user approved the kind's table alone.
 
-Option 7 opens a new elaboration kind apart without the host's word, but flume would read whether a kind has weir's elaboration section, which weir 55 gives to whoever runs elaborations ("Whoever runs places reads the kind's stages and nothing of the section") and core.4 keeps from flume; weir's statement would change first. Whether the user's "any elaboration types" means it is asked of them.
+Option 7 opens a new elaboration kind apart without the host's word, but flume would read whether a kind has weir's elaboration section, which weir 55 gives to whoever runs elaborations ("Whoever runs places reads the kind's stages and nothing of the section") and core.4 keeps from flume; weir's statement would change first. The user approved the kinds the host names, one table each.
 
 Option 8 gives a label a meaning beyond its share, which clause 180 and core.46 rule out.
 
 Two streams naming one session for their kinds is not taken: a session two streams' agents open in has two views, two terminal apps and two titles to choose from, a person could not open it by its name, and two partitions' research would share it.
 
-Option 9 names one session twice and asks the person which stream owns it; the user asked why it needs the flag, and it does not. Option 11 reads the same table a second way on the command line, when the person thinks of the session they want. Whether the user meant `flume open madswan design`, two words, is asked of them.
+Option 9 names one session twice and asks the person which stream owns it; the user asked why it needs the flag, and it does not. Option 11 reads the same table a second way on the command line, when the person thinks of the session they want. The user approved `flume open <session>` and named each partition's session `<partition>-design`, one word, so `flume open madswan-design`.
 
 ### Consequences
 
-- Clauses 32, 107, 143, 186, 190 and 200, C.5's herdr row and C.7 are amended, and 199, S106 and S107 added, at dc4abac on blueprints' branch `design/flume-where-an-agent-opens`, for the user's word (core.19). Clause 200's list names each stream's sessions for its kinds, built by whichever of this change and record 0049's lands on flume's main second.
+- Clauses 32, 107, 143, 186, 190 and 200, C.5's herdr row and C.7 are amended, and 199, S106 and S107 added, on blueprints main at f676e8f (core.19). Clause 200's list names each stream's sessions for its kinds, built by whichever of this change and record 0049's lands on flume's main second.
 - Rules core.44 and core.48 are amended with this record.
 - `SessionFrom` gains `stream-kind`; a start written before reads as it did.
 - `flume open`'s one argument is a stream's name or a session's a stream names for a kind; every `flume open <stream>` opens as before.
 - A host that names no session for a kind runs as before. One that names `work-design` for research in `work` finds research's next starts there, and every agent running stays where it opened.
 - Each session's server runs the herdr plugin's watch, as each stream's does (record 0031), and settles are safe to repeat (core.17).
-- The fleet would write `[streams.<partition>.kinds.research] session = "<partition>-design"` for each partition stream, and the same for each elaboration kind it runs; that is its own change.
+- The fleet would write `[streams.<partition>.kinds.research] session = "<partition>-design"` for each partition stream, the name the user gave, and the same for each elaboration kind it runs; that is its own change.
 - The change `where-an-agent-opens-is-given-by-kind-and-by-stage` builds it.

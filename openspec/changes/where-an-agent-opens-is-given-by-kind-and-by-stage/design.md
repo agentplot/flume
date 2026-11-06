@@ -27,6 +27,10 @@ where the host says it:
   madswan-design`: "This confuses me. Why wouldn't it just be madswan
   design? Why do you need the flag? Why wouldn't you just open madswan
   design?"
+- **Approval**, 2026-11-06: the user approved this design, the kind's
+  table alone, the kinds the host names by name and `flume open
+  <session>` among it, and named each partition's research-and-design
+  session `<partition>-design`.
 
 This design carries those rulings: what the host writes, what a person
 opens and how, what the terminal profile does, what status says, and the
@@ -34,7 +38,8 @@ statement's amendment.
 
 ### What stands now
 
-On agentplot/blueprints main at 7bd1891:
+On agentplot/blueprints main at 7bd1891, before this change's
+amendment:
 
 - **107.** Where in the terminal a stage's agent runs is one of its
   settings. A launch may put it beside a pane it names; otherwise it
@@ -98,10 +103,8 @@ it does not know (core.4). The user's "elaboration types" are the kinds
 whose whole work is research and design, as against a change, a fix or
 a chore, which build. On this host today that is `research`; crew's
 design and planning roles join it once they run as kinds, and any
-elaboration kind sounding hands flume. This design names them as the
-user ruled, one table per kind by its name (decision 2); question 2
-asks whether they meant weir's term, every kind with an elaboration
-section at once.
+elaboration kind sounding hands flume. The host names each, one table
+per kind by its name (decision 2).
 
 ### Across the family and the changes in flight
 
@@ -138,9 +141,9 @@ section at once.
 
 ### What rules what
 
-Record 0048, proposed, decides it, carrying the user's rulings, and the
-statement's amendment is on blueprints' branch
-`design/flume-where-an-agent-opens` for the user's word (decision 13).
+Record 0048, accepted on the user's word of 2026-11-06, decides it,
+carrying their rulings, and the statement's amendment is on blueprints
+main at f676e8f (decision 13).
 The rules this design relies on:
 
 - core.1 and core.2: the core names no terminal; it hands the terminal
@@ -189,7 +192,7 @@ no area another page would own.
 
 - A session for one stage of a kind. Of a change's construct stage the
   user said "not this one. just any elaboration types", and nothing else
-  asks for one (decision 2; question 1).
+  asks for one (decision 2).
 - A terminal or a view per kind. A stream's terminal, view, terminal
   app and title stay the stream's (186, 190).
 - A session for a repository, or a repository and kind, within a
@@ -245,8 +248,7 @@ change's design stays with its code in the change's own
 tab, which is where a person follows one change from its design to its
 landing. A stage's table adds later without breaking a host: `stages` in
 a kind's table is today another key, refused (decision 4), so no host
-can come to rely on it meaning something else. Question 1 asks whether a
-stage's form stays at all.
+can come to rely on it meaning something else.
 
 Why the stream's own word:
 
@@ -274,8 +276,7 @@ Alternatives considered:
   kind there. A new elaboration kind would join without the host's
   word, but flume would read whether a kind has weir's elaboration
   section, which weir 55 gives to whoever runs elaborations and core.4
-  keeps from flume, so weir's statement would change first. Question 2
-  offers it.
+  keeps from flume, so weir's statement would change first.
 - **A session per label.** A label is the kind's share of its stream
   and nothing else (180; core.46, the user's ruling).
 
@@ -384,9 +385,8 @@ base, every tab a research or design place. `flume open madswan` opens
 madswan's own session as before.
 
 The session's name is the host's whole word, `madswan-design`, as the
-user gave it: flume builds no name from a stream and a part (core.44).
-Question 3 asks whether the user meant that name, or two words,
-`flume open madswan design`.
+user named it, `<partition>-design`: flume builds no name from a stream
+and a part (core.44).
 
 Alternatives considered: `flume open madswan --session madswan-design`,
 naming the stream and then the session. It names one session twice and
@@ -466,10 +466,10 @@ agent read and closed on its own server, and each tab closed at its tidy
 
 ### 11. Agreement with the changes in flight
 
-- **Order.** This change's code starts once the user has read this
-  design and answered its questions, and blueprints main holds decision
-  13's amendment. The multiplexer change it extends has landed and is
-  merged; group 1 merges main again then.
+- **Order.** The user approved this design on 2026-11-06, and
+  blueprints main holds decision 13's amendment at f676e8f, so the code
+  starts now. The multiplexer change it extends has landed and is
+  merged; group 1 merges main again.
 - **Program settings, effort, `keep_open`.** None of them reads or
   writes a session: `session` stays out of `Settings::under`'s fold
   but the launch's, and out of every agents table. Should any of them
@@ -499,7 +499,8 @@ session = "madswan-design"
 ```
 
 and the same for `swancloud` and `agentplot`, each in
-`<partition>-design`, the name the user's answer gives. A crew role
+`<partition>-design`, the name the user gave each partition's
+research-and-design session on 2026-11-06. A crew role
 whose run is design work, the design agent and the planner, adds its
 kind's table once crew's roles run as kinds, named as the fleet's
 `[kinds.<kind>] label` tables name them; so would an elaboration kind
@@ -513,13 +514,12 @@ nothing to the fleet; its orchestrator is told.
 
 ### 13. The statement's amendment
 
-On agentplot/blueprints, branch `design/flume-where-an-agent-opens`, cut
-from main at 7bd1891, one commit, dc4abac, not pushed, for the user's
-word (core.19). Clause 199 and scenarios S106 and S107 are new: on main
-186 to 192, 195 to 197, 200, 201, S90 to S92, S95 to S97, S100 to S103
-and S108 are taken, and the designs in flight hold 193, 194, 198, S93
-to S99, S104 and S105. Each item gives the words a clause gains or its
-new text.
+On agentplot/blueprints main at f676e8f, on the user's word of
+2026-11-06 (core.19). Clause 199 and scenarios S106 and S107 are new,
+beside 186 to 192, 195 to 197, 200, 201, S90 to S92, S95 to S97, S100 to
+S103 and S108, and the designs in flight hold 193, 194, 198, S93 to S99,
+S104 and S105. Each item gives the words a clause gains or its new
+text.
 
 - **32**: "Where in the terminal an agent runs (107) is read from the
   launch's settings and the stage's declaration, else from its place's
@@ -625,7 +625,7 @@ Written to any host's operator, naming no host, team or word of ours
 - **[A new elaboration kind opens in the stream's own session]** → A
   kind joins the design session only once the host names it. Status
   gives each stream's sessions with their kinds, so a missing kind
-  shows; question 2 offers every elaboration kind at once.
+  shows.
 - **[More herdr servers]** → Each named session is a server with the
   herdr plugin's watch. Settles are safe to repeat; a few servers per
   host cost a few more settles.
@@ -649,18 +649,4 @@ removing the tables: the next starts open in the stream's own session.
 
 ## Open Questions
 
-Asked of the user in the Plannotator Inbox thread
-msg_01M6Q2N04BS0RPG16TA76W67W6, the design standing on the recommended
-answers until they rule:
-
-1. **A stage's form.** Whether a stream names a session for one stage
-   of a kind at all: no, the kind's table alone (recommended), or keep
-   `[streams.<stream>.kinds.<kind>.stages.<stage>]` for a host that
-   wants one (decision 2).
-2. **Which kinds.** Whether "elaboration types" means each kind the
-   host names by its name (recommended), or every kind weir calls an
-   elaboration kind at once, which weir's statement would change for
-   first (decision 2).
-3. **The name a person opens.** `flume open madswan-design`, the
-   session's own name (recommended), or `flume open madswan design`,
-   the stream and then a short name it gives the session (decision 7).
+None: the user approved this design on 2026-11-06.

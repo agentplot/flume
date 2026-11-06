@@ -28,11 +28,11 @@ for "just any elaboration types", a change's construct stage "not this
 one"; and of `flume open madswan --session madswan-design`: "Why do you
 need the flag? Why wouldn't you just open madswan design?"
 
-Record 0048, proposed, decides it. The statement's amendment is on
-agentplot/blueprints' branch `design/flume-where-an-agent-opens`,
-committed for the user's word (32, 107, 143, 186, 190, 199, 200, C.5,
-C.7, S106, S107; core.19). The code waits for the user's answers to the
-design's three questions.
+The user approved the design on 2026-11-06 and named each partition's
+research-and-design session `<partition>-design`. Record 0048, accepted
+on their word, decides it. The statement's amendment is on
+agentplot/blueprints main at f676e8f (32, 107, 143, 186, 190, 199, 200,
+C.5, C.7, S106, S107; core.19).
 
 ## What Changes
 
@@ -104,11 +104,10 @@ None.
 ## Impact
 
 - agentplot/blueprints: clauses 32, 107, 143, 186, 190 and 200, C.5's
-  herdr row and C.7 amended, and 199, S106 and S107 added, on the branch
-  `design/flume-where-an-agent-opens` at dc4abac, cut from main at
-  7bd1891, committed and not pushed, which also gives clause 200's list
-  each stream's sessions for its kinds (design 13).
-- `docs/adr`: record 0048, proposed; rules core.44 and core.48 amended
+  herdr row and C.7 amended, and 199, S106 and S107 added, on main at
+  f676e8f, which also gives clause 200's list each stream's sessions for
+  its kinds (design 13).
+- `docs/adr`: record 0048, accepted; rules core.44 and core.48 amended
   with it, the site's rules page mirroring them.
 - `crates/flume-seams`: `Stream::kinds` and `KindSession`,
   `SessionFrom::StreamKind`, and the stream status's sessions, each
