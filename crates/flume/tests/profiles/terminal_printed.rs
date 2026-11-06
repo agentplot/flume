@@ -265,7 +265,7 @@ fn runs_under_the_printed_command_holds_no_part_and_runs_nothing() {
         .set_host_display(Some("printed"), None, Some("terminal"));
     let state = scratch.path("state");
     let before = files_under(&state);
-    let Answer::List { streams, .. } = engine.list() else {
+    let Answer::List { streams, .. } = engine.list(false) else {
         panic!("the list answered otherwise");
     };
     let lines: Vec<(&str, &str, Option<&SessionRuns>)> = streams
