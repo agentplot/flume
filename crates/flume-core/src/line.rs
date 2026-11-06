@@ -12,7 +12,7 @@ use crate::clues::word;
 use crate::reading::reads_change;
 use crate::start::Starts;
 use crate::status::group_status;
-use crate::{label, Answer, Engine, PlaceLine};
+use crate::{label, side_by_side, Answer, Engine, PlaceLine};
 use flume_seams::*;
 
 /// What a full line ends with, asked for a session that is not the
@@ -20,15 +20,16 @@ use flume_seams::*;
 /// shows a later start's stage as its own (35, 140).
 pub const NOT_ITS_AGENT: &str = "this session is not its agent";
 
-/// What joins a line's parts.
-const SEPARATOR: &str = " · ";
+/// What joins a line's parts, the list's among them (200).
+pub(crate) const SEPARATOR: &str = " · ";
 
 impl Engine {
     /// The line of each place, of the place named or of every place on
     /// the host, a place tidied whose document stays for its pending ends
-    /// among them, each asked alone with no session's identity; refused
-    /// for a place no document of the host holds (43, 62). It settles
-    /// nothing, since it acts on no place (119).
+    /// among them, each asked alone with no session's identity, the
+    /// places read side by side; refused for a place no document of the
+    /// host holds (43, 58, 62). It settles nothing, since it acts on no
+    /// place (119).
     pub fn lines(&self, place: Option<&PlaceId>) -> Answer {
         let held = match place {
             Some(id) => {
@@ -46,7 +47,7 @@ impl Engine {
                 .collect(),
         };
         Answer::Lines {
-            lines: held.iter().map(|held| self.line_of(held, None)).collect(),
+            lines: side_by_side(&held, |held| self.line_of(held, None)),
         }
     }
 
@@ -68,12 +69,17 @@ impl Engine {
             Phase::Live => self.change_at_head(held),
             _ => None,
         };
-        let asking = held.live_start().is_some_and(|(_, start)| {
+        Engine::place_line(held, change.as_ref(), self.asking(held), identity)
+    }
+
+    /// Whether the live agent's profile reads it asking a person, from
+    /// its own record and the transcript it names alone (90).
+    pub(crate) fn asking(&self, held: &HeldState) -> bool {
+        held.live_start().is_some_and(|(_, start)| {
             self.agent(&start.program).is_some_and(|agent| {
                 agent.asking(&self.store.folder(&held.place.id), &start.identity) == Reading::Yes
             })
-        });
-        Engine::place_line(held, change.as_ref(), asking, identity)
+        })
     }
 
     /// The place's documents as status reads them: its own, else each
@@ -168,8 +174,8 @@ impl Engine {
 
 /// The stage a live place's line names: the stage it most recently
 /// started, else the first it reached without a start, held, waiting on
-/// its readiness or refused (47, 12, 27).
-fn stage_at(held: &HeldState) -> Option<usize> {
+/// its readiness or refused (47, 12, 27); the list's too (200).
+pub(crate) fn stage_at(held: &HeldState) -> Option<usize> {
     held.current.or_else(|| {
         held.stages
             .iter()
@@ -188,8 +194,9 @@ fn its_agent(held: &HeldState, identity: &Identity) -> bool {
 /// merge queue: `submitted` is flume's own count of its submits and
 /// `landed` its own record of the work over, which the merge queue's
 /// record moves at the next settle (12, 27, 34, 35, 38, 42, 45, 47, 48,
-/// 51, 63, 70, 90, 112, 114, 118, 130).
-fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> String {
+/// 51, 63, 70, 90, 112, 114, 118, 130); the list gives a place the same
+/// words (200; core.14).
+pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> String {
     match &held.phase {
         Phase::Making { .. } => return "being made".into(),
         Phase::Over { over, .. } | Phase::Gone { over, .. } | Phase::Tidied { over, .. } => {

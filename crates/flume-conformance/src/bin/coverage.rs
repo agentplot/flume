@@ -24,8 +24,11 @@ fn main() -> ExitCode {
             .map(|(change, left)| format!("{} to {change}", left.join(", ")))
             .collect();
         println!(
-            "every clause of Parts A and B, I1 to I8 and S1 to S{} at {} is cited by the suite's {} scenarios{}",
+            "every clause of Parts A and B, I1 to I8 and S1 to S{} but {}, which it does not hold, at {} is cited by the suite's {} scenarios{}",
             clauses::SCENARIOS,
+            clauses::SKIPPED
+                .map(|scenario| format!("S{scenario}"))
+                .join(", "),
             clauses::REVISION,
             scenarios.len(),
             if left.is_empty() {

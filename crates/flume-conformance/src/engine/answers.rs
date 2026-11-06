@@ -101,6 +101,26 @@ fn made() -> Vec<Made> {
     ]
 }
 
+/// Where a kind came from, every field present, as no one source gives
+/// them all (19, 56).
+fn kind_from() -> KindFrom {
+    KindFrom {
+        identity: KindIdentity {
+            source: "flume".into(),
+            name: "fix".into(),
+            version: 1,
+            spelled: "flume/fix@1".into(),
+        },
+        source: "flume".into(),
+        source_file: Some("/config/flume/sources/acme.toml".into()),
+        kind_dir: Some("/kinds/acme/fix@1".into()),
+        declaration_file: Some(".config/flume.toml".into()),
+        revision: Some(Revision::new("c1")),
+        hash: Some(format!("sha256:{}", "0".repeat(64))),
+        lock_file: Some(".config/flume.lock".into()),
+    }
+}
+
 fn place_status() -> PlaceStatus {
     PlaceStatus {
         place: PlaceId::new("/r/places/fix--one"),
@@ -108,6 +128,8 @@ fn place_status() -> PlaceStatus {
         kind: "fix".into(),
         version: 1,
         declared: Declared::Flume,
+        identity: Some("flume/fix@1".into()),
+        kind_from: Some(kind_from()),
         name: "one".into(),
         branch: "fix/one".into(),
         base: "main".into(),
@@ -564,6 +586,13 @@ fn host_status() -> HostStatus {
             line: "1 running · 0 asking · 1 waiting on caller · 0 stalled".into(),
             shown_at: Some("workspace w1".into()),
         }],
+        sources: vec![SourceStatus {
+            name: "acme".into(),
+            source_file: "/config/flume/sources/acme.toml".into(),
+            kinds_dir: Some("/kinds/acme".into()),
+            kinds: vec!["acme/review@1".into()],
+            cannot_read: Some("/kinds/acme/lint@1 could not be read".into()),
+        }],
         terminal_setup: vec![crate::fake_harness::SETUP.into()],
         configuration: HostConfiguration {
             local: LocalLayer::Taken,
@@ -692,12 +721,90 @@ pub fn full() -> Vec<(&'static str, Answer)> {
             },
         ),
         (
+            "locked",
+            Answer::Locked {
+                lock_file: "/config/flume/flume.lock".into(),
+                recorded: vec![LockedKind {
+                    kind: "acme/review@1".into(),
+                    hash: format!("sha256:{}", "1".repeat(64)),
+                }],
+                removed: vec!["acme/lint@1".into()],
+            },
+        ),
+        (
             "lines",
             Answer::Lines {
                 lines: vec![line()],
             },
         ),
+        ("list", list()),
     ]
+}
+
+/// A list of a place waiting on the host and a place kept by its
+/// teardown, and of a stream that runs and one whose multiplexer names
+/// no profile flume carries (200).
+pub fn list() -> Answer {
+    Answer::List {
+        places: vec![
+            Listed {
+                place: PlaceId::new("/r/places/fix--one"),
+                repository: "/r".into(),
+                name: "fix--one".into(),
+                kind: "fix@1".into(),
+                stage: Some("code".into()),
+                state: "waiting for room".into(),
+                waits_on: Some(WaitsOn::Host),
+                kept: None,
+                line: "fix--one · code · waiting for room · waits on the host".into(),
+            },
+            Listed {
+                place: PlaceId::new("/r/places/chore--one"),
+                repository: "/r".into(),
+                name: "chore--one".into(),
+                kind: "chore@1".into(),
+                stage: None,
+                state: "landed".into(),
+                waits_on: None,
+                kept: Some("kept by release".into()),
+                line: "chore--one · landed · kept by release".into(),
+            },
+        ],
+        streams: vec![
+            StreamListed {
+                stream: "work".into(),
+                session: SessionHeld {
+                    name: Some("work".into()),
+                    from: SessionFrom::StreamName,
+                },
+                multiplexer: ProfileHeld {
+                    profile: "fake".into(),
+                    from: NamedBy::Neither,
+                },
+                runs: Some(SessionRuns::Runs {
+                    name: "work".into(),
+                }),
+                uncarried: None,
+                line: "work · session work · runs".into(),
+            },
+            StreamListed {
+                stream: "trial".into(),
+                session: SessionHeld {
+                    name: Some("trial".into()),
+                    from: SessionFrom::StreamName,
+                },
+                multiplexer: ProfileHeld {
+                    profile: "rex".into(),
+                    from: NamedBy::Stream,
+                },
+                runs: None,
+                uncarried: Some(
+                    "the stream trial names the multiplexer rex, and no terminal profile is named rex; the terminal profiles there are: fake".into(),
+                ),
+                line: "trial · session trial · no profile for rex".into(),
+            },
+        ],
+    }
 }
 
 fn every_field_listed(_: &()) -> Outcome {
@@ -821,6 +928,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.queue[].wants.stream",
             "status.host.room",
             "status.host.running",
+            "status.host.sources",
+            "status.host.sources[].cannot_read",
+            "status.host.sources[].kinds",
+            "status.host.sources[].kinds_dir",
+            "status.host.sources[].name",
+            "status.host.sources[].source_file",
             "status.host.streams",
             "status.host.streams[].bound",
             "status.host.streams[].labels",
@@ -987,7 +1100,21 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].holds[].since",
             "status.places[].holds[].stage",
             "status.places[].holds[].words",
+            "status.places[].identity",
             "status.places[].kind",
+            "status.places[].kind_from",
+            "status.places[].kind_from.declaration_file",
+            "status.places[].kind_from.hash",
+            "status.places[].kind_from.identity",
+            "status.places[].kind_from.identity.name",
+            "status.places[].kind_from.identity.source",
+            "status.places[].kind_from.identity.spelled",
+            "status.places[].kind_from.identity.version",
+            "status.places[].kind_from.kind_dir",
+            "status.places[].kind_from.lock_file",
+            "status.places[].kind_from.revision",
+            "status.places[].kind_from.source",
+            "status.places[].kind_from.source_file",
             "status.places[].label",
             "status.places[].label.from",
             "status.places[].label.name",
@@ -1863,6 +1990,17 @@ pub const FIELDS: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "locked",
+        &[
+            "locked",
+            "locked.lock_file",
+            "locked.recorded",
+            "locked.recorded[].hash",
+            "locked.recorded[].kind",
+            "locked.removed",
+        ],
+    ),
+    (
         "lines",
         &[
             "lines",
@@ -1875,6 +2013,35 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "lines.lines[].stage",
             "lines.lines[].state",
             "lines.lines[].tasks",
+        ],
+    ),
+    (
+        "list",
+        &[
+            "list",
+            "list.places",
+            "list.places[].kept",
+            "list.places[].kind",
+            "list.places[].line",
+            "list.places[].name",
+            "list.places[].place",
+            "list.places[].repository",
+            "list.places[].stage",
+            "list.places[].state",
+            "list.places[].waits_on",
+            "list.streams",
+            "list.streams[].line",
+            "list.streams[].multiplexer",
+            "list.streams[].multiplexer.from",
+            "list.streams[].multiplexer.profile",
+            "list.streams[].runs",
+            "list.streams[].runs.runs",
+            "list.streams[].runs.runs.name",
+            "list.streams[].session",
+            "list.streams[].session.from",
+            "list.streams[].session.name",
+            "list.streams[].stream",
+            "list.streams[].uncarried",
         ],
     ),
 ];

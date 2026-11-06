@@ -180,3 +180,28 @@ terminals and windows by name, each with a log of its own (106, 143,
 
 - **WHEN** a test scripts the fake host's own view as `app` and its `trial` with the multiplexer `other`, and asks the fake host for each stream's display
 - **THEN** `trial` gives `other` from `stream`, every stream the view `app` from `host`, and every other stream the multiplexer `fake` and the terminal app `fake-window` from `neither` (143, 190)
+
+### Requirement: The fake kinds scripts sources, packages and locks
+
+The fake kinds SHALL script flume's own kinds as packages with hashes; a
+source's packages by identity, each with its hash, or a package's or a
+listing's refusal; the repository's lock at each revision; a lock on
+disk; and a lock written, which it records; the fake host SHALL script
+the sources declared; each passing its seam's scenarios, and none
+reaching a real configuration directory (106).
+
+#### Scenario: A scripted package edited after a launch
+
+- **WHEN** a test scripts acme's review@1 at one hash, the host's lock records it, a place is launched, and the test then scripts review@1 at another hash
+- **THEN** the next launch of `acme/review@1` is refused naming both hashes, the first place's held kind is unchanged, and the fake's log shows one `read_package` call for each launch (21, 156)
+
+### Requirement: The fake terminal scripts runs
+
+The fake terminal SHALL answer runs as scripted for each part, and
+otherwise that the part does not run, its own part named `own`, logging
+each asking as `runs <part>` and starting nothing (106, 201).
+
+#### Scenario: A scripted runs
+
+- **WHEN** a test scripts the fake terminal to read `work` running, and asks it runs of `work` and then of `office`
+- **THEN** it answers `work` running and `office` not running, its log naming `runs work` and `runs office` and no open (201)

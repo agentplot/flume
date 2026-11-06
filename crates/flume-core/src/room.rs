@@ -1034,8 +1034,9 @@ impl Engine {
     /// The host's part of status: the agents running, the bound, the room
     /// and the queue in the order it would start, each stage waiting with
     /// the room it is short of, and the same for each stream (56, 70,
-    /// 130, 143).
-    pub(crate) fn host_status(&self) -> HostStatus {
+    /// 130, 143); each base's count taking the state of each agent in
+    /// `agents` as status read it for its place (139).
+    pub(crate) fn host_status(&self, agents: &BTreeMap<PlaceId, AgentState>) -> HostStatus {
         let queue = self.queue();
         let declared = self.host.streams();
         let configuration = self.host.configuration();
@@ -1149,9 +1150,10 @@ impl Engine {
             addresses: self.addresses(),
             watch: self.terminal.watch(),
             terminals: self.terminals_status(),
-            bases: self.bases(),
+            bases: self.bases(agents),
             terminal_setup: self.terminal.setup(),
             configuration,
+            sources: self.host_sources(),
         }
     }
 

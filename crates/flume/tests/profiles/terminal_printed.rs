@@ -2,8 +2,9 @@
 //! terminal seam's scenarios against it, its refusals among them, a tell
 //! refused with nothing typed, the command status gives, the same
 //! command printed whatever session its stream names (107), an agent
-//! read stopped once its record says its session ended (134), and attach
-//! refused for either view with nothing run (187).
+//! read stopped once its record says its session ended (134), attach
+//! refused for either view with nothing run (187), and runs holding no
+//! part, in attach's words, with nothing run (201).
 
 use crate::common::window::StandIn;
 use crate::common::*;
@@ -14,7 +15,7 @@ use flume::profiles::window::terminal::TerminalApp;
 use flume_conformance::engine::world::{launch, launched, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
-use flume_core::{Answer, Engine};
+use flume_core::{Answer, Engine, StreamListed};
 use flume_seams::*;
 use std::sync::Arc;
 
@@ -127,7 +128,27 @@ impl TerminalHarness for Harness {
     fn refuse_attach(&self, _view: View) -> bool {
         false
     }
+
+    /// The printed command holds no part, `work` or its own (201).
+    fn runs_parts(&self) -> Vec<(Option<String>, SessionRuns)> {
+        [Some("work".to_string()), None]
+            .into_iter()
+            .map(|part| {
+                (
+                    part,
+                    SessionRuns::NoPart {
+                        reason: NO_SESSION.into(),
+                    },
+                )
+            })
+            .collect()
+    }
 }
+
+/// Why the printed command attaches nothing and holds no part (187, 201).
+const NO_SESSION: &str =
+    "the printed command holds no session a person can be shown; its agents run in the commands \
+     it printed";
 
 #[test]
 fn the_printed_command_passes_the_terminal_scenarios() {
@@ -145,9 +166,7 @@ fn attach_under_the_printed_command_is_refused_for_either_view() {
             assert_eq!(
                 Printed.attach(part, view),
                 Attached::Refused {
-                    reason: "the printed command holds no session a person can be shown; its \
-                             agents run in the commands it printed"
-                        .into()
+                    reason: NO_SESSION.into()
                 },
                 "attach {part:?} for {}",
                 view.name()
@@ -213,6 +232,62 @@ fn attach_under_the_printed_command_runs_nothing() {
     }
     assert!(osascript.runs_settled().is_empty(), "a window program ran");
     assert_eq!(world.window.log.count("show"), 0, "the fake window's shows");
+    assert_eq!(files_under(&state), before, "the printed command's marks");
+}
+
+#[test]
+fn runs_under_the_printed_command_holds_no_part_and_runs_nothing() {
+    // 187, 201: `work` and its own part each answered that it holds no
+    // part, in attach's words; and the list over the printed command
+    // gives each stream `no session`, its window program asked for
+    // nothing and nothing written where the printed command keeps the
+    // commands it prints.
+    for part in [Some("work"), None] {
+        assert_eq!(
+            Printed.runs(part),
+            SessionRuns::NoPart {
+                reason: NO_SESSION.into()
+            },
+            "runs of {part:?}"
+        );
+    }
+    let scratch = Scratch::new("printed-runs");
+    let world = World::new();
+    let osascript = StandIn::new(&scratch.path("stand-in"), "osascript");
+    world.resolver.with_window(
+        "terminal",
+        Arc::new(TerminalApp::for_system(System::MacOs).with_program(&osascript.path())),
+    );
+    world.host.set_stream("work", Some(Stream::default()));
+    let engine = printed(&world, &scratch);
+    world
+        .host
+        .set_host_display(Some("printed"), None, Some("terminal"));
+    let state = scratch.path("state");
+    let before = files_under(&state);
+    let Answer::List { streams, .. } = engine.list() else {
+        panic!("the list answered otherwise");
+    };
+    let lines: Vec<(&str, &str, Option<&SessionRuns>)> = streams
+        .iter()
+        .map(
+            |StreamListed {
+                 stream, line, runs, ..
+             }| { (stream.as_str(), line.as_str(), runs.as_ref()) },
+        )
+        .collect();
+    let none = SessionRuns::NoPart {
+        reason: NO_SESSION.into(),
+    };
+    assert_eq!(
+        lines,
+        vec![
+            (DEFAULT_STREAM, "default · no session", Some(&none)),
+            ("work", "work · no session", Some(&none)),
+        ],
+        "the streams' lines"
+    );
+    assert!(osascript.runs_settled().is_empty(), "a window program ran");
     assert_eq!(files_under(&state), before, "the printed command's marks");
 }
 

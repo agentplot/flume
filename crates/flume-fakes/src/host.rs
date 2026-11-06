@@ -1,9 +1,9 @@
 use crate::{lock, Log};
 use flume_seams::{
-    ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, KindSessions, KindSettings,
-    LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed, ProfileHeld, RoleRun, RoomGuard,
-    Seconds, Secret, Share, Stream, StreamDisplay, StreamFrom, StreamHeld, Usage, View, ViewHeld,
-    DEFAULT_STREAM,
+    ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, HostSource, HostSourceRead,
+    KindSessions, KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed,
+    ProfileHeld, RoleRun, RoomGuard, Seconds, Secret, Share, Stream, StreamDisplay, StreamFrom,
+    StreamHeld, Usage, View, ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -14,7 +14,8 @@ use std::sync::{Arc, Condvar, Mutex};
 /// configuration states, its streams with their sessions, their kinds'
 /// and stages' sessions, labels' shares, titles and displays, the host's own display, its pools of
 /// accounts, each account's reading by its path, the labels it gives
-/// kinds, its configuration's values with their layers, the recipient the
+/// kinds, its configuration's values with their layers, the sources of
+/// its kinds with where their files and its lock lie, the recipient the
 /// calling command's environment names, the host user's login
 /// environment, and an exclusive room lock. It reads no configuration
 /// file and no reading's file (106, 184).
@@ -86,6 +87,19 @@ struct HostState {
     /// The configuration's values with their layers, whether its local
     /// layer was taken, and the keys passed over (C.7).
     configuration: HostConfiguration,
+    /// The sources the configuration declares, by name (191).
+    sources: BTreeMap<String, HostSource>,
+}
+
+/// Where the fake host's configuration keeps its sources' files (C.7).
+pub const SOURCES: &str = "/home/user/.config/flume/sources";
+
+/// The fake host's lock of kinds (155, C.7).
+pub const HOST_LOCK: &str = "/home/user/.config/flume/flume.lock";
+
+/// The file that declares the source `name` on the fake host (191, C.7).
+pub fn source_file(name: &str) -> String {
+    format!("{SOURCES}/{name}.toml")
 }
 
 impl Default for FakeHost {
@@ -108,6 +122,7 @@ impl Default for FakeHost {
                 pool: None,
                 display: Display::default(),
                 pools: BTreeMap::new(),
+                sources: BTreeMap::new(),
                 usage: BTreeMap::new(),
                 labels_named: BTreeMap::new(),
                 configuration: HostConfiguration::default(),
@@ -353,6 +368,43 @@ impl FakeHost {
         };
     }
 
+    /// The configuration declares the source `name` by its file, its
+    /// packages in `kinds_dir`, in place of any it declared under that
+    /// name (191).
+    pub fn set_source(&self, name: &str, kinds_dir: &str) {
+        self.source(
+            name,
+            HostSourceRead::Read {
+                kinds_dir: kinds_dir.into(),
+            },
+        );
+    }
+
+    /// The file of the source `name` cannot be read, for `reason` (191).
+    pub fn faulty_source(&self, name: &str, reason: &str) {
+        self.source(
+            name,
+            HostSourceRead::CouldNotRead {
+                reason: reason.into(),
+            },
+        );
+    }
+
+    /// The configuration declares no source `name`: its file is gone.
+    pub fn remove_source(&self, name: &str) {
+        lock(&self.state).sources.remove(name);
+    }
+
+    fn source(&self, name: &str, read: HostSourceRead) {
+        lock(&self.state).sources.insert(
+            name.into(),
+            HostSource {
+                file: source_file(name),
+                read,
+            },
+        );
+    }
+
     /// The reading at `path`, or why there is none, in place of any set
     /// before; every path no test set answers that the file is missing
     /// (184).
@@ -546,6 +598,19 @@ impl Host for FakeHost {
 
     fn log(&self, line: &str) {
         self.logged.push(line);
+    }
+
+    fn sources(&self) -> BTreeMap<String, HostSource> {
+        self.log.push("sources");
+        lock(&self.state).sources.clone()
+    }
+
+    fn sources_dir(&self) -> Option<String> {
+        Some(SOURCES.into())
+    }
+
+    fn kinds_lock(&self) -> Option<String> {
+        Some(HOST_LOCK.into())
     }
 
     fn room(&self) -> RoomGuard {

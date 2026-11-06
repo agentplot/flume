@@ -5,14 +5,14 @@
 
 use flume_core::{
     group_name, percentage, AgentStatus, Answer, HostStatus, PlaceStatus, PoolStatus, Queued,
-    ReadingStatus, Reserves, StageStatus, StreamOpened, StreamStatus, Tidied, TitleFrom,
-    WindowOutcome, Woke,
+    ReadingStatus, Reserves, SourceStatus, StageStatus, StreamOpened, StreamStatus, Tidied,
+    TitleFrom, WindowOutcome, Woke,
 };
 use flume_seams::{
     AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration,
-    IntentKey, LabelHeld, LocalLayer, Made, NamedBy, NamedSession, ProfileHeld, Readiness,
-    SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart,
-    WaitingOn, Waits, Watch,
+    IntentKey, KindFrom, LabelHeld, LocalLayer, Made, NamedBy, NamedSession, ProfileHeld,
+    Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart,
+    UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
 
@@ -116,10 +116,43 @@ pub fn person(answer: &Answer) -> String {
             });
             lines.extend(place_lines(place));
         }
+        Answer::Locked {
+            lock_file,
+            recorded,
+            removed,
+        } => {
+            for locked in recorded {
+                lines.push(format!(
+                    "recorded {} at {} in {lock_file}",
+                    locked.kind, locked.hash
+                ));
+            }
+            for kind in removed {
+                lines.push(format!("removed {kind} from {lock_file}"));
+            }
+            if lines.is_empty() {
+                lines.push(format!("{lock_file} is as it was"));
+            }
+        }
         Answer::Lines { lines: places } => {
             lines.extend(places.iter().map(|line| line.full.clone()));
         }
         Answer::Opened(opened) => lines.extend(opened_lines(opened)),
+        Answer::List { places, streams } => {
+            if places.is_empty() {
+                lines.push("no places".to_string());
+            }
+            let mut repository = None;
+            for place in places {
+                if repository != Some(&place.repository) {
+                    repository = Some(&place.repository);
+                    lines.push(place.repository.clone());
+                }
+                lines.push(format!("  {}", place.line));
+            }
+            lines.push("streams".to_string());
+            lines.extend(streams.iter().map(|stream| format!("  {}", stream.line)));
+        }
     }
     lines.join("\n")
 }
@@ -229,6 +262,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         place.branch,
         base_words(&place.base, place.base_from)
     )];
+    lines.extend(kind_line(place.kind_from.as_ref()));
     if let Some(mark) = &place.mark {
         facts.push(format!("mark {mark}"));
     }
@@ -356,6 +390,62 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         }
     }
     lines
+}
+
+/// The kind's line: its identity, where it came from, its hash and the
+/// lock that recorded it, as the launch read them; none for a place whose
+/// held state keeps no `kind_from`, its first line giving the source from
+/// `declared` alone (19, 21, 56; design 9).
+fn kind_line(from: Option<&KindFrom>) -> Option<String> {
+    let from = from?;
+    let mut line = format!("  kind {}", from.identity.spelled);
+    let at = |words: &str, given: Option<&String>| {
+        given
+            .map(|given| format!("{words}{given}"))
+            .unwrap_or_default()
+    };
+    match from.source.as_str() {
+        OWN_SOURCE => line.push_str(", flume's own"),
+        REPO_SOURCE => line.push_str(&format!(
+            " from the repository{}",
+            at(" at ", from.revision.as_ref().map(|revision| &revision.0))
+        )),
+        LAUNCH_SOURCE => line.push_str(&match &from.declaration_file {
+            Some(file) => format!(" from {file}"),
+            None => " from the launch's declaration".to_string(),
+        }),
+        source => line.push_str(&format!(
+            " from the source {source}{}{}",
+            from.source_file
+                .as_ref()
+                .map(|file| format!(" ({file})"))
+                .unwrap_or_default(),
+            at(" at ", from.kind_dir.as_ref())
+        )),
+    }
+    if let Some(hash) = &from.hash {
+        line.push_str(&format!(", its hash {hash}"));
+    }
+    if let Some(lock) = &from.lock_file {
+        line.push_str(&format!(", locked in {lock}"));
+    }
+    Some(line)
+}
+
+/// A source the host declares: its file and its directory, then the
+/// kinds it holds by identity, or why the file or the directory cannot be
+/// read (56, 191; design 9).
+fn source_line(source: &SourceStatus) -> String {
+    let mut line = format!("  source {} ({})", source.name, source.source_file);
+    if let Some(kinds_dir) = &source.kinds_dir {
+        line.push_str(&format!(" at {kinds_dir}"));
+    }
+    match &source.cannot_read {
+        Some(fault) => line.push_str(&format!(": cannot be read: {fault}")),
+        None if source.kinds.is_empty() => line.push_str(": holds no kind"),
+        None => line.push_str(&format!(": {}", source.kinds.join(", "))),
+    }
+    line
 }
 
 /// What a place waits on its caller for, since when, and its words; a
@@ -860,6 +950,9 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
     for pool in &host.pools {
         lines.extend(pool_lines(pool));
     }
+    for source in &host.sources {
+        lines.push(source_line(source));
+    }
     lines.extend(configuration_lines(&host.configuration));
     for kept in &host.terminal_kept {
         lines.push(format!("  the terminal keeps {kept}"));
@@ -1084,13 +1177,13 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 mod tests {
     use super::*;
     use flume_core::{
-        AccountStatus, AgentSettings, ModeStatus, MoveStatus, Past, PlaceLine, RoomWanted,
-        StreamStatus, TitleFrom, TitleHeld, WindowStatus,
+        AccountStatus, AgentSettings, Listed, ModeStatus, MoveStatus, Past, PlaceLine, RoomWanted,
+        StreamListed, StreamStatus, TitleFrom, TitleHeld, WindowStatus,
     };
     use flume_seams::{
         AccountFrom, AccountHeld, AccountMove, AgentState, Declared, Given, Layer, ModeBegan,
-        MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, Strategy,
-        StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
+        MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, SessionRuns,
+        Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -1900,6 +1993,134 @@ mod tests {
         );
     }
 
+    /// Where a kind of `source` came from, `name@version`, with nothing
+    /// but its identity and source given.
+    fn kind_from(source: &str, name: &str, version: u32) -> KindFrom {
+        KindFrom {
+            identity: flume_seams::KindIdentity {
+                source: source.into(),
+                name: name.into(),
+                version,
+                spelled: format!("{source}/{name}@{version}"),
+            },
+            source: source.into(),
+            source_file: None,
+            kind_dir: None,
+            declaration_file: None,
+            revision: None,
+            hash: None,
+            lock_file: None,
+        }
+    }
+
+    #[test]
+    fn a_kind_of_a_hosts_source() {
+        // 19, 56: acme/review@1, locked in the host's lock, on its line
+        // with the source's file, the kind's directory, its hash and the
+        // lock.
+        let from = KindFrom {
+            source_file: Some("/c/flume/sources/acme.toml".into()),
+            kind_dir: Some("/k/acme/review@1".into()),
+            hash: Some("sha256:ab12".into()),
+            lock_file: Some("/c/flume/flume.lock".into()),
+            ..kind_from("acme", "review", 1)
+        };
+        assert_eq!(
+            kind_line(Some(&from)).as_deref(),
+            Some("  kind acme/review@1 from the source acme (/c/flume/sources/acme.toml) at /k/acme/review@1, its hash sha256:ab12, locked in /c/flume/flume.lock")
+        );
+    }
+
+    #[test]
+    fn the_repositorys_a_launchs_and_flumes_own() {
+        // 19, 56: the repository's bump@2 with the base's revision, a
+        // launch's kind with its file, and flume's own change@2 with its
+        // hash and no lock.
+        let repos = KindFrom {
+            declaration_file: Some(".config/flume.toml".into()),
+            revision: Some(flume_seams::Revision::new("c0ffee")),
+            ..kind_from("repo", "bump", 2)
+        };
+        assert_eq!(
+            kind_line(Some(&repos)).as_deref(),
+            Some("  kind repo/bump@2 from the repository at c0ffee")
+        );
+        let launchs = KindFrom {
+            declaration_file: Some("/w/kinds.toml".into()),
+            ..kind_from("launch", "fix", 1)
+        };
+        assert_eq!(
+            kind_line(Some(&launchs)).as_deref(),
+            Some("  kind launch/fix@1 from /w/kinds.toml")
+        );
+        let own = KindFrom {
+            hash: Some("sha256:cd34".into()),
+            ..kind_from("flume", "change", 2)
+        };
+        assert_eq!(
+            kind_line(Some(&own)).as_deref(),
+            Some("  kind flume/change@2, flume's own, its hash sha256:cd34")
+        );
+    }
+
+    #[test]
+    fn a_place_launched_before_this_change() {
+        // 21, core.14: held state with no `kind_from` gives no kind line,
+        // the place's first line giving the source from `declared`.
+        assert_eq!(kind_line(None), None);
+    }
+
+    #[test]
+    fn the_hosts_sources_with_a_fault() {
+        // S96, 56, 191: acme with its file, its directory and the kinds
+        // it holds, an empty source, a directory that cannot be read, and
+        // bad with the fault naming `kinds_dir`.
+        let source = |name: &str, kinds_dir: Option<&str>, kinds: &[&str], fault: Option<&str>| {
+            SourceStatus {
+                name: name.into(),
+                source_file: format!("/c/flume/sources/{name}.toml"),
+                kinds_dir: kinds_dir.map(str::to_string),
+                kinds: kinds.iter().map(|kind| kind.to_string()).collect(),
+                cannot_read: fault.map(str::to_string),
+            }
+        };
+        let host = HostStatus {
+            sources: vec![
+                source(
+                    "acme",
+                    Some("/k/acme"),
+                    &["acme/review@1", "acme/review@2"],
+                    None,
+                ),
+                source(
+                    "bad",
+                    None,
+                    &[],
+                    Some("gives no `kinds_dir`, the directory holding the source's packages"),
+                ),
+                source("beta", Some("/k/beta"), &[], None),
+                source(
+                    "gamma",
+                    Some("/k/gamma"),
+                    &[],
+                    Some("/k/gamma, the directory of the source gamma, does not exist"),
+                ),
+            ],
+            ..HostStatus::default()
+        };
+        assert_eq!(
+            host_lines(&host),
+            vec![
+                "host: 0 agents running, no bound".to_string(),
+                "  source acme (/c/flume/sources/acme.toml) at /k/acme: acme/review@1, acme/review@2".to_string(),
+                "  source bad (/c/flume/sources/bad.toml): cannot be read: gives no `kinds_dir`, the directory holding the source's packages".to_string(),
+                "  source beta (/c/flume/sources/beta.toml) at /k/beta: holds no kind".to_string(),
+                "  source gamma (/c/flume/sources/gamma.toml) at /k/gamma: cannot be read: /k/gamma, the directory of the source gamma, does not exist".to_string(),
+                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+            ]
+        );
+    }
+
     /// An unbounded account of `agent`, running none, with `reading` and
     /// `past`.
     fn read(name: &str, reading: Option<ReadingStatus>, past: Option<Past>) -> AccountStatus {
@@ -2105,7 +2326,9 @@ mod tests {
             repository: "/r".into(),
             kind: "fix".into(),
             version: 1,
+            identity: None,
             declared: Declared::Flume,
+            kind_from: None,
             name: "one".into(),
             branch: "fix/one".into(),
             base: "main".into(),
@@ -2650,6 +2873,135 @@ mod tests {
             waiting_line(&dialog, false),
             "  waits on a person to answer the dialog its agent shows in talk (dialog) since 54000:\n    New MCP server found in .mcp.json: docs\n    \u{276f} 1. Use this and all future MCP servers"
         );
+    }
+
+    fn listed(repository: &str, name: &str, stage: Option<&str>, rest: &[&str]) -> Listed {
+        let line = std::iter::once(name)
+            .chain(stage)
+            .chain(rest.iter().copied())
+            .collect::<Vec<_>>()
+            .join(" · ");
+        Listed {
+            place: PlaceId::new(format!("{repository}/places/{name}")),
+            repository: repository.into(),
+            name: name.into(),
+            kind: "fix@1".into(),
+            stage: stage.map(str::to_string),
+            state: rest[0].into(),
+            waits_on: None,
+            kept: None,
+            line,
+        }
+    }
+
+    fn stream_listed(stream: &str, runs: Option<SessionRuns>, line: &str) -> StreamListed {
+        StreamListed {
+            stream: stream.into(),
+            session: SessionHeld {
+                name: Some(stream.into()),
+                from: SessionFrom::StreamName,
+            },
+            multiplexer: ProfileHeld {
+                profile: "mux".into(),
+                from: NamedBy::Neither,
+            },
+            uncarried: runs
+                .is_none()
+                .then(|| format!("the stream {stream} names no terminal profile flume carries")),
+            runs,
+            line: line.into(),
+        }
+    }
+
+    /// A stream of each answer runs gives, and one whose multiplexer
+    /// names no profile, as the core words their lines (200, 201).
+    fn every_stream() -> Vec<StreamListed> {
+        let named = |name: &str| name.to_string();
+        vec![
+            stream_listed(
+                "madswan",
+                Some(SessionRuns::Runs {
+                    name: named("madswan"),
+                }),
+                "madswan · session madswan · runs",
+            ),
+            stream_listed(
+                "swancloud",
+                Some(SessionRuns::NotRunning {
+                    name: named("swancloud"),
+                }),
+                "swancloud · session swancloud · not running",
+            ),
+            stream_listed(
+                "work",
+                Some(SessionRuns::NoPart {
+                    reason: named("the terminal holds no session"),
+                }),
+                "work · no session",
+            ),
+            stream_listed(
+                "office",
+                Some(SessionRuns::Unread {
+                    reason: named("the terminal did not answer"),
+                }),
+                "office · session office · not read",
+            ),
+            stream_listed("trial", None, "trial · session trial · no profile for rex"),
+        ]
+    }
+
+    #[test]
+    fn the_list_by_repository_then_the_streams() {
+        // 200, design 7: each repository's path on a line of its own, its
+        // places' lines under it, then the streams', each indented by two
+        // spaces, every line the answer's own.
+        let list = Answer::List {
+            places: vec![
+                listed(
+                    "/code/flume",
+                    "change--list",
+                    Some("construct"),
+                    &["working"],
+                ),
+                listed(
+                    "/code/flume",
+                    "chore--rename",
+                    None,
+                    &["landed", "kept by release"],
+                ),
+                listed(
+                    "/code/boomdrive",
+                    "change--records",
+                    Some("construct"),
+                    &["held", "waits on its caller"],
+                ),
+            ],
+            streams: every_stream(),
+        };
+        assert_eq!(
+            person(&list),
+            "/code/flume\n  change--list · construct · working\n  chore--rename · landed · kept by \
+             release\n/code/boomdrive\n  change--records · construct · held · waits on its \
+             caller\nstreams\n  madswan · session madswan · runs\n  swancloud · session swancloud \
+             · not running\n  work · no session\n  office · session office · not read\n  trial · \
+             session trial · no profile for rex"
+        );
+    }
+
+    #[test]
+    fn a_host_with_no_places_lists_none_then_its_streams() {
+        // 200, design 7.
+        let list = Answer::List {
+            places: vec![],
+            streams: vec![stream_listed(
+                "default",
+                Some(SessionRuns::NoPart {
+                    reason: "the terminal holds no session".into(),
+                }),
+                "default · no session",
+            )],
+        };
+        assert_eq!(person(&list), "no places\nstreams\n  default · no session");
     }
 
     #[test]

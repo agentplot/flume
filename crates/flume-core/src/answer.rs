@@ -66,6 +66,13 @@ pub enum Answer {
         woke: Woke,
         place: PlaceStatus,
     },
+    /// `flume kinds lock`'s act: the lock it wrote, each kind it recorded
+    /// at its content's hash, and each it removed (155).
+    Locked {
+        lock_file: String,
+        recorded: Vec<LockedKind>,
+        removed: Vec<String>,
+    },
     /// Each place's line asked alone, of the place named or of every
     /// place on the host, read from its held state, the change at its
     /// head and its live agent's asking mark alone (56, 57, 58).
@@ -73,6 +80,76 @@ pub enum Answer {
     /// A stream's session shown in its view at a person's asking, and
     /// nothing flume holds changed (186; core.48).
     Opened(StreamOpened),
+    /// Every place on the host and every stream it declares, a line
+    /// each, read from what flume keeps and each stream's terminal once
+    /// (200; core.52).
+    List {
+        places: Vec<Listed>,
+        streams: Vec<StreamListed>,
+    },
+}
+
+/// A place's line in the list and its parts (200): `<kind>--<name>`, the
+/// stage its line names, its state in its line's words, whom it waits on
+/// and what keeps it, a part it has none of left out; `line` joins them
+/// by ` · `. None of a place's long words is among them (56, 139).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Listed {
+    pub place: PlaceId,
+    pub repository: String,
+    /// `<kind>--<name>`.
+    pub name: String,
+    /// `<kind>@<version>`.
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    pub state: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on: Option<WaitsOn>,
+    /// What keeps a place whose work is over, in a word (64 to 66, 68).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kept: Option<String>,
+    pub line: String,
+}
+
+/// Whom a waiting place waits on: its caller for a move 130 names, the
+/// host for room (70), or the merge queue for its submission's outcome
+/// (111).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitsOn {
+    Caller,
+    Host,
+    MergeQueue,
+}
+
+impl WaitsOn {
+    /// Whom the place waits on as its line says it.
+    pub fn words(self) -> &'static str {
+        match self {
+            WaitsOn::Caller => "waits on its caller",
+            WaitsOn::Host => "waits on the host",
+            WaitsOn::MergeQueue => "waits on the merge queue",
+        }
+    }
+}
+
+/// A stream's line in the list and its parts (107, 186, 190, 200): the
+/// stream, its session as an open resolves it, its multiplexer with where
+/// it came from, and whether its session runs, or why no terminal was
+/// asked; `line` joins them by ` · `.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamListed {
+    pub stream: String,
+    pub session: SessionHeld,
+    pub multiplexer: ProfileHeld,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runs: Option<SessionRuns>,
+    /// Why no runs was asked: the stream's multiplexer names no profile
+    /// flume carries (190).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uncarried: Option<String>,
+    pub line: String,
 }
 
 /// What an open showed (186): the stream whose session it is, its
@@ -123,6 +200,14 @@ pub enum WindowOutcome {
     Printed { line: String },
     /// The multiplexer's own app showed the session.
     App,
+}
+
+/// A kind `flume kinds lock` recorded: its identity and its content's
+/// hash (155).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LockedKind {
+    pub kind: String,
+    pub hash: String,
 }
 
 /// What a wake of a role's address came to (132): its run launched by
@@ -195,6 +280,13 @@ pub struct PlaceStatus {
     pub kind: String,
     pub version: u32,
     pub declared: Declared,
+    /// The kind's identity as its launch read it, `acme/review@2`; none
+    /// for a place whose held state keeps no `kind_from` (19, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<String>,
+    /// Where the kind came from, as its launch read it (19, 21, 56).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind_from: Option<KindFrom>,
     pub name: String,
     pub branch: String,
     pub base: String,
@@ -431,6 +523,26 @@ pub struct HostStatus {
     /// core.30, core.45).
     #[serde(default)]
     pub configuration: HostConfiguration,
+    /// Each source the host declares, by name, read when asked (56, 159,
+    /// 191; core.15).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<SourceStatus>,
+}
+
+/// A source the host declares as status gives it (56, 191): its name, its
+/// file, the directory its packages lie in, the identity of every package
+/// that directory holds, and why the file or the directory cannot be read
+/// where either cannot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceStatus {
+    pub name: String,
+    pub source_file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kinds_dir: Option<String>,
+    #[serde(default)]
+    pub kinds: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cannot_read: Option<String>,
 }
 
 fn no_watch() -> Watch {
@@ -453,6 +565,7 @@ impl Default for HostStatus {
             bases: vec![],
             terminal_setup: vec![],
             configuration: HostConfiguration::default(),
+            sources: vec![],
         }
     }
 }

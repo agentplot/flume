@@ -77,11 +77,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 }
 
 /// The task groups of a change of two groups and three tasks.
-const TWO_GROUPS: &[(&str, &str, usize)] = &[("1", "One", 2), ("2", "Two", 1)];
+pub const TWO_GROUPS: &[(&str, &str, usize)] = &[("1", "One", 2), ("2", "Two", 1)];
 
 /// The change place `name` of flume's own change@2, its change written
 /// as `groups` none ticked, and code's first repetition begun.
-fn code_of_change(
+pub fn code_of_change(
     world: &World,
     name: &str,
     groups: &[(&str, &str, usize)],
@@ -114,7 +114,7 @@ fn line(world: &World, id: &PlaceId) -> Result<PlaceLine, String> {
 /// A fix named `name` whose ends are pending for a role's address that
 /// no run collects, so its document stays once it is tidied, its code
 /// stage begun.
-fn fix_for_a_role(world: &World, name: &str) -> Result<PlaceId, String> {
+pub fn fix_for_a_role(world: &World, name: &str) -> Result<PlaceId, String> {
     launched(&world.engine.launch(&Launch {
         recipients: vec!["madswan/planner".into()],
         ..launch("fix", name, Some("x"))

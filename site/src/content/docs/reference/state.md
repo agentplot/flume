@@ -1,6 +1,6 @@
 ---
 title: State
-description: What flume keeps on the host and where, the host's own documents of accounts and intents among it, what it keeps in a place's own folder, made.jsonl among it, and the fields of flume status --json.
+description: What flume keeps on the host and where, the host's own documents of accounts and intents among it, what it keeps in a place's own folder, made.jsonl among it, and the fields of flume status --json and flume list --json.
 sidebar:
   order: 3
 ---
@@ -18,6 +18,7 @@ is asked, and keeps no copy between asks.
 ```
 $XDG_STATE_HOME/flume/              ~/.local/state/flume by default
   room.lock                         held while a start takes the host's room
+  kinds-lock.lock                   held while flume kinds lock reads and writes a lock of kinds
   flume.log                         a timed line per display hint or notice that did not go through
   places/
     <place>.json                    the place's held state, one document, with its version
@@ -94,11 +95,23 @@ none, and its agent is read as the host's. The place's `unsettled`
 lists each start whose agent began otherwise than its record says
 ([the start check](/flume/guides/agent-settings/#the-start-check)).
 
+### The kind a place keeps
+
+A place's held state keeps the whole kind its launch read, its prompts
+among it, as `kind`, and where it came from as `kind_from`, written
+once at the launch with the fields status gives. Nothing a source, a
+package or a lock does after the launch reaches it
+([a place keeps its kind](/flume/guides/kinds/#a-place-keeps-its-kind)).
+A place an earlier release launched keeps no `kind_from`.
+
 ## Elsewhere on the host
 
 | Path | What |
 |---|---|
 | `$XDG_CONFIG_HOME/flume/config.toml` | the host's configuration ([configuration](/flume/reference/configuration/#the-hosts-configuration)) |
+| `$XDG_CONFIG_HOME/flume/sources/<source>.toml` | a source of kinds the host declares, which flume reads and never writes ([the host's sources](/flume/reference/configuration/#the-hosts-sources)) |
+| `$XDG_CONFIG_HOME/flume/flume.lock` | the host's lock of kinds, written by `flume kinds lock --host` ([the locks of kinds](/flume/reference/configuration/#the-locks-of-kinds)) |
+| `$XDG_DATA_HOME/flume/kinds/<source>/` | where a program that fetches a source's packages may put them, each at `<name>@<version>/`; flume reads them and never writes them |
 | `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>/` | the Claude Code plugin flume hands its agents, written once per version and binary |
 | `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>/` | a place, a worktree of its repository outside the repository's own directory; `<id>` is the repository's, as its agents' identities carry it |
 | the file an account's `usage` names | the account's reading, which something of the host's writes whole and flume reads at each choice of an account and whenever status is asked, and never writes, keeps or renews ([an account's reading](/flume/guides/agent-settings/#an-accounts-reading)) |
@@ -106,7 +119,9 @@ lists each start whose agent began otherwise than its record says
 
 ## In the repository
 
-Nothing of flume's. A place is a worktree on a branch of its own,
+Nothing of flume's, but the lock of kinds `flume kinds lock` writes into
+a working copy's `.config/flume.lock` where you run it there, which you
+commit. A place is a worktree on a branch of its own,
 under flume's data directory, inside no working tree or directory of
 the repository, whether the repository is a clone or a bare repository
 beside its worktrees. It holds only what its agents commit. flume writes no record into a repository's tree or onto
@@ -142,7 +157,9 @@ Each place:
 | Field | |
 |---|---|
 | `place`, `repository` | the place's location and its repository |
-| `kind`, `version`, `declared` | the kind, its version, and where it was declared: `flume`, `repository` or `launch` |
+| `kind`, `version`, `declared` | the kind, its version, and where it was declared: `flume`, `repository`, `launch`, or `host` for a source the host declares |
+| `identity` | the kind's identity as its launch read it, as `acme/review@2`; none for a place an earlier release launched |
+| `kind_from` | where the kind came from, as its launch read it, each field given only where it applies. `identity` gives its `source`, `name`, `version` and `spelled`, and `source` the source's name. A source the host declares gives `source_file` and `kind_dir`, the package's directory. The repository's gives `declaration_file`, `.config/flume.toml`, and `revision`, the base's, and a launch's `declaration_file`, the file's path. A package gives `hash`, and `lock_file`, the lock that recorded it: the repository's where it does, else the host's |
 | `name`, `branch`, `base`, `mark` | as the launch gave them |
 | `lands` | whether the kind lands |
 | `phase` | `live`, or `tidied` with when and why: `landed` with its commit, `dropped` or `done` |
@@ -193,6 +210,41 @@ The host:
 | `terminal_kept` | what a tidy kept in the host's own multiplexer because something flume did not make holds it |
 | `terminal_setup` | what the host's own multiplexer's configuration lacks for flume's plugin there, each in words a person acts on, naming the file read: under herdr, the popup's `[[keys.command]]` entry or the sidebar rows' `$flume`, as the plugin's watch last read herdr's configuration; empty where nothing is missing, there is no watch or the terminal reads none |
 | `configuration` | the host's configuration: `local`, its local layer's `state`, `no-file`, `taken` or `not-taken` with each of its `keys` the local layer may not set or its `fault`; `values`, every value by its dotted `key`, as TOML writes it, with its `layer`, `managed` or `local`, an account's variables `<set>`; and `passed_over`, each local `key` a `pin` holds |
+| `sources` | each source of kinds the host declares, read when asked: `name`, `source_file`, `kinds_dir`, `kinds`, the identity of every package its directory holds, and `cannot_read`, the fault where the file or the directory cannot be read |
+
+## The answer of flume list --json
+
+```json
+{"list":{"places":[{…}],"streams":[{…}]}}
+```
+
+Read from each place's held state, a live agent's asking mark, and each
+stream's multiplexer once, as [`flume
+list`](/flume/reference/commands/#flume-list) says. A field the place or
+the stream has none of is left out. Each place, by repository, then by
+`<kind>--<name>`:
+
+| Field | |
+|---|---|
+| `place`, `repository` | the place's location, which a tidied place's document gives with when it was tidied, and its repository |
+| `name` | `<kind>--<name>` |
+| `kind` | `<kind>@<version>` |
+| `stage` | the stage the place's line names, without a repeating stage's group; left out for a place that is not live |
+| `state` | the place's state in its line's words |
+| `waits_on` | whom the place waits on: `caller`, `host` or `merge_queue` |
+| `kept` | what keeps a place whose work is over, in its line's words: `kept by <step>`, `kept holding work`, `kept holding a lock`, `kept holding work and a lock`, `kept while its agent runs`, `kept unread`, `being tidied` or `tidied` |
+| `line` | the parts joined by ` · `, as `flume list` prints it |
+
+Each stream, in status's order:
+
+| Field | |
+|---|---|
+| `stream` | the stream's name |
+| `session` | `name`, `null` for the multiplexer's own, and `from`: `stream`, `stream-name` or `own` |
+| `multiplexer` | `profile` and `from`: `stream`, `host` or `neither` |
+| `runs` | what the multiplexer read of the session: `{"runs":{"name":…}}`, `{"not_running":{"name":…}}`, each with the name the multiplexer knows it by; `{"no_part":{"reason":…}}`, where it holds no session; or `{"unread":{"reason":…}}`, where it could not read it, in its words |
+| `uncarried` | in place of `runs`, why no multiplexer was asked: the stream's names no profile flume carries |
+| `line` | `<stream> · session <name> · <runs>`, as `flume list` prints it |
 
 The JSON only ever gains fields, so a tool reading it keeps working
 across releases.
