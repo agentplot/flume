@@ -330,7 +330,7 @@ impl Engine {
                 if !reading.quiet() {
                     return false;
                 }
-                if let Closed::Refused { reason } = self.terminal.close(&start.identity) {
+                if let Closed::Refused { reason } = self.agent_on(&start).close() {
                     self.failed_end(id, &start.identity, &reason);
                     return false;
                 }

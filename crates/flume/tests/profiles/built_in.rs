@@ -10,6 +10,7 @@ use flume::profiles::{core_over, terminal, BuiltIn, DEFAULT_PROGRAM, SEND_BACKS}
 use flume_core::Answer;
 use flume_seams::*;
 use std::path::Path;
+use std::sync::Arc;
 
 /// The resolver, a place's steps run in a scratch home with the test's
 /// own `PATH`.
@@ -171,6 +172,41 @@ fn a_terminal_the_host_names_is_bound_or_refused() {
         ..HostConfig::default()
     };
     assert!(core_over(&state, config, None, built_in(&scratch)).is_err());
+}
+
+#[test]
+fn terminals_and_windows_are_given_by_name() {
+    // 105, 188, 190; design 2: the host's own terminal the engine's very
+    // one, each window profile by its name, and none for a name no
+    // profile holds.
+    let scratch = Scratch::new("by-name");
+    let state = scratch.path("state");
+    let resolver = built_in(&scratch).over(&state);
+    let herdr = resolver.terminal("herdr").expect("herdr by its name");
+    let again = resolver.terminal("herdr").expect("herdr again");
+    assert!(Arc::ptr_eq(&herdr, &again), "one herdr for the command");
+    assert!(resolver.terminal("rex").is_none());
+    assert_eq!(resolver.terminal_profiles(), ["printed", "herdr"]);
+    assert_eq!(
+        resolver.window_profiles(),
+        ["ghostty", "terminal", "printed"]
+    );
+    for name in ["ghostty", "terminal", "printed"] {
+        assert!(resolver.window(name).is_some(), "{name}");
+    }
+    assert!(resolver.window("kitty").is_none());
+    let printed = resolver.window("printed").expect("the printed window");
+    let command = ViewCommand {
+        program: "/bin/herdr".into(),
+        arguments: vec!["session".into(), "attach".into(), "w".into()],
+        ..ViewCommand::default()
+    };
+    assert_eq!(
+        printed.show(&command, "Work Herdr"),
+        WindowShown::Printed {
+            line: "/bin/herdr session attach w".into()
+        }
+    );
 }
 
 #[test]

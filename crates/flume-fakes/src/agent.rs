@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 /// The agent seam: each agent's own record by identity. An agent says
-/// it started once the fake terminal has opened it, unless set otherwise,
-/// and receives a prompt once the fake terminal has sent it, or opened it
-/// carried, as many times as it is set to need, and says nothing of its
+/// it started once the fake terminal it opened in has opened it, unless
+/// set otherwise, and receives a prompt once that terminal has sent it,
+/// or opened it carried, as many times as it is set to need, and says nothing of its
 /// start where it is set to have begun without its settings; every other answer is
 /// set, unknowns among them. A record kept in a place's folder is read
 /// there alone: a reading handed another folder is unknown (128). It maps
@@ -19,9 +19,12 @@ use std::sync::{Arc, Mutex};
 /// no conversation until its carry is scripted, by each account's
 /// [`FakeAgent::HOME`]; its command passes the session a start resumes as
 /// `--resume <session>`, and a start's word that it started names the
-/// session it resumes unless scripted otherwise (179).
+/// session it resumes unless scripted otherwise (179). Its agents open in
+/// the terminal it is made over, or in any other it is told of (190).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
+    /// The other terminals its agents may open in, a stream's (190).
+    others: Mutex<Vec<Arc<FakeTerminal>>>,
     state: Mutex<AgentModel>,
     pub log: Log,
 }
@@ -99,9 +102,29 @@ impl FakeAgent {
     pub fn new(terminal: Arc<FakeTerminal>) -> FakeAgent {
         FakeAgent {
             terminal,
+            others: Mutex::default(),
             state: Mutex::default(),
             log: Log::default(),
         }
+    }
+
+    /// Its agents may open in `terminal` too, each read in the terminal
+    /// that opened it (190).
+    pub fn also_on(&self, terminal: Arc<FakeTerminal>) {
+        lock(&self.others).push(terminal);
+    }
+
+    /// The terminal `agent` opened in: the one it is made over, else the
+    /// first other that opened it, else the one it is made over.
+    fn on(&self, agent: &Identity) -> Arc<FakeTerminal> {
+        if self.terminal.opened(agent).is_some() {
+            return self.terminal.clone();
+        }
+        lock(&self.others)
+            .iter()
+            .find(|terminal| terminal.opened(agent).is_some())
+            .cloned()
+            .unwrap_or_else(|| self.terminal.clone())
     }
 
     fn with(&self, agent: &Identity, change: impl FnOnce(&mut Record)) {
@@ -293,7 +316,7 @@ impl FakeAgent {
     /// The session the agent's command resumes, none where it resumes
     /// none (179).
     fn resumed(&self, agent: &Identity) -> Option<String> {
-        let (command, _) = self.terminal.opened(agent)?;
+        let (command, _) = self.on(agent).opened(agent)?;
         command
             .args
             .iter()
@@ -329,9 +352,9 @@ impl FakeAgent {
     /// Whether a prompt reached the agent: sent by the terminal, or
     /// carried by the command it was opened with.
     fn prompted(&self, agent: &Identity) -> bool {
-        !self.terminal.sent_to(agent).is_empty()
+        !self.on(agent).sent_to(agent).is_empty()
             || self
-                .terminal
+                .on(agent)
                 .opened(agent)
                 .is_some_and(|(command, carried)| carried && !command.prompt_args.is_empty())
     }
@@ -344,7 +367,7 @@ impl FakeAgent {
             return None;
         }
         let began = record.began_in.clone()?;
-        let (command, _) = self.terminal.opened(agent)?;
+        let (command, _) = self.on(agent).opened(agent)?;
         let asked = command
             .args
             .iter()
@@ -363,7 +386,7 @@ impl FakeAgent {
     fn read_in(&self, operation: &str, folder: &str, agent: &Identity) -> Option<Record> {
         self.log.push(format!("{operation} {agent} in {folder}"));
         if self.ends_unfound(agent) {
-            self.terminal.kill(agent);
+            self.on(agent).kill(agent);
         }
         let record = self.record(agent);
         match &record.folder {
@@ -435,7 +458,7 @@ impl Agent for FakeAgent {
         }
         model
             .started
-            .unwrap_or(if self.terminal.opened(agent).is_some() {
+            .unwrap_or(if self.on(agent).opened(agent).is_some() {
                 Reading::Yes
             } else {
                 Reading::No
@@ -446,7 +469,7 @@ impl Agent for FakeAgent {
         let Some(model) = self.read_in("received", folder, agent) else {
             return Received::Unknown;
         };
-        let Some((command, carried)) = self.terminal.opened(agent) else {
+        let Some((command, carried)) = self.on(agent).opened(agent) else {
             return Received::Unknown;
         };
         if model.received_unknown {
@@ -460,7 +483,7 @@ impl Agent for FakeAgent {
             return Received::NotReceived { record };
         }
         let mut sendings = self
-            .terminal
+            .on(agent)
             .sent_to(agent)
             .iter()
             .filter(|sent| *sent == text)

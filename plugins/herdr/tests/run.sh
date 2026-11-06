@@ -195,6 +195,22 @@ tick_at 1000
 [ "$(settles)" -eq 1 ] || fail "the new watch did not settle: $(cat "$FAKE/flume-calls")"
 pass
 
+fresh 'watch: ended as soon as its lease can be read, it takes the lease with it (122)'
+# herdr's configuration a pipe nothing writes yet: the watch, reading it
+# for what it lacks, is held there once its lease is written.
+mkfifo "$HERDR_CONFIG_PATH"
+sh "$plugin/bin/watch.sh" 2>>"$t/log" &
+watch=$!
+within 10 '[ -f "$S/watch.lease" ]' || fail "the watch took no lease"
+kill "$watch"
+# The configuration given, so the watch's reading ends.
+: >"$HERDR_CONFIG_PATH" &
+writer=$!
+within 10 '[ ! -f "$S/watch.lease" ]' || fail "the ended watch left its lease: $(cat "$S/watch.lease")"
+kill "$writer" 2>/dev/null
+wait "$watch"
+pass
+
 fresh 'watch: a state change settles before the bound'
 status_of p1 2 working >"$FAKE/status.json"
 panes p1:working

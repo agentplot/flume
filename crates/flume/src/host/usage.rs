@@ -8,7 +8,7 @@
 //! (core.30).
 
 use chrono::DateTime;
-use flume_seams::{Seconds, Usage, Window};
+use flume_seams::{Seconds, Usage, UsageWindow};
 use serde_json::{Map, Value};
 use std::io::ErrorKind;
 use std::path::Path;
@@ -51,7 +51,7 @@ pub fn parse(bytes: &[u8]) -> Result<Usage, String> {
 }
 
 /// One window of the list, `at` naming its place in it.
-fn window_of(window: &Map<String, Value>, at: &str) -> Result<Window, String> {
+fn window_of(window: &Map<String, Value>, at: &str) -> Result<UsageWindow, String> {
     let name = match window.get("name") {
         None => return Err(format!("{at} names no name")),
         Some(Value::String(name)) => name.clone(),
@@ -68,7 +68,7 @@ fn window_of(window: &Map<String, Value>, at: &str) -> Result<Window, String> {
         .get("resets_at")
         .map(|time| time_of(time, &format!("{at} resets_at")))
         .transpose()?;
-    Ok(Window {
+    Ok(UsageWindow {
         name,
         used: (used * 100.0).round() as u32,
         resets_at,
@@ -111,12 +111,12 @@ mod tests {
             Ok(Usage {
                 read_at: READ_AT,
                 windows: vec![
-                    Window {
+                    UsageWindow {
                         name: "5-hour".into(),
                         used: 4_200,
                         resets_at: Some(FIVE_HOUR),
                     },
-                    Window {
+                    UsageWindow {
                         name: "7-day".into(),
                         used: 7_150,
                         resets_at: None,

@@ -1747,12 +1747,12 @@ fn reading(read_at: Seconds, used: u32) -> Usage {
     Usage {
         read_at,
         windows: vec![
-            Window {
+            UsageWindow {
                 name: "5-hour".into(),
                 used,
                 resets_at: Some(read_at + 5 * 3600),
             },
-            Window {
+            UsageWindow {
                 name: "7-day".into(),
                 used: 3_000,
                 resets_at: None,
@@ -1825,8 +1825,8 @@ pub fn reading_at(account: Account) -> Account {
 }
 
 /// A window `name`, `used` hundredths used, resetting at `resets_at`.
-pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
-    Window {
+pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> UsageWindow {
+    UsageWindow {
         name: name.into(),
         used,
         resets_at,
@@ -1834,7 +1834,7 @@ pub fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
 }
 
 /// The host writes `account`'s reading, read at `read_at`, of `windows`.
-pub fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<Window>) {
+pub fn reads(world: &World, account: &str, read_at: Seconds, windows: Vec<UsageWindow>) {
     world
         .host
         .set_usage(&usage_path(account), Ok(Usage { read_at, windows }));
@@ -2427,7 +2427,7 @@ fn a_reading_at_its_limit(_: &()) -> Outcome {
 
 /// The window of a reading leaving `left` hundredths, resetting an hour
 /// after `now`.
-fn leaving(now: Seconds, left: u32) -> Vec<Window> {
+fn leaving(now: Seconds, left: u32) -> Vec<UsageWindow> {
     vec![window("5-hour", 10_000 - left, Some(now + 3600))]
 }
 

@@ -113,18 +113,18 @@ table's `mode` table is taken whole. flume writes neither file.
 
 The local layer sets only what runs the host's work from hour to hour:
 
-- a stream's `agents`, `priority` and `session`, and its labels'
-  `reserve` and `keep_free`;
+- a stream's `agents`, `priority`, `session` and `multiplexer`, and
+  its labels' `reserve` and `keep_free`;
 - the `stream` and the `label` a repository's kind, a repository or a
   kind is given;
 - a kind's agents tables, `[kinds.<kind>.agents]` and
   `[repos."<repository>".kinds.<kind>.agents]`, with their stages'.
 
-The accounts, the pools, a stream's `pool`, `[host]` and `[roles]` are
-the managed layer's alone. A local file that sets any of them, or that
-is not TOML, is not taken at all. flume then reads the managed layer
-alone, and status names each key the file may not set, or its fault,
-until you mend it. The local layer may name a stream the managed one
+The accounts, the pools, a stream's `pool`, `view`, `terminal_app` and
+`title`, `[host]` and `[roles]` are the managed layer's alone. A local
+file that sets any of them, or that is not TOML, is not taken at all.
+flume then reads the managed layer alone, and status names each key the
+file may not set, or its fault, until you mend it. The local layer may name a stream the managed one
 does not, and that stream's places take `[host] pool`.
 
 The managed layer may pin a key the local layer could set, by `pin`
@@ -355,6 +355,44 @@ one stage's. An agent whose settings name a pane to open beside opens
 beside it, in whatever session that pane is. No other layer gives a
 session. A stream's session is read at each start, and an agent stays
 where it opened.
+
+### A stream's multiplexer and view
+
+Beside its session, a stream names the multiplexer its agents run in,
+and how `flume open` shows them: its view, its terminal app and its
+window's title. Each of the first three is the stream's, else the
+host's, else the default:
+
+```toml
+[host]
+multiplexer = "herdr"
+terminal_app = "ghostty"
+
+[streams.work]
+session = "office"
+title = "Work Agents"
+
+[streams.trial]
+multiplexer = "printed"
+```
+
+| Key | Neither names one | Status names it |
+|---|---|---|
+| `multiplexer` | the printed command | `stream`, `host` or `neither` |
+| `view` | `terminal`, a window of a terminal app | `stream`, `host` or `neither` |
+| `terminal_app` | the printed line, no window | `stream`, `host` or `neither` |
+| `title`, on a stream alone | the stream's name | `stream` or `stream-name` |
+
+Here `work`'s agents open in herdr's session `office`, and `flume open
+work` opens a Ghostty window titled `Work Agents` on it. `trial`'s
+agents run as commands flume prints, while every other stream runs
+under herdr. A stream's multiplexer is read at each start, as its
+session is, and an agent stays in the one it opened in. No launch,
+kind, repository or label names a multiplexer: the stream is where you
+try one. The local layer may set a stream's `multiplexer`, as it sets
+its `session`; its `view`, `terminal_app` and `title` are the managed
+layer's. [Seeing a stream's agents](/flume/guides/places-and-herdr/#seeing-a-streams-agents)
+says what each view and terminal app does.
 
 ### Labels
 
@@ -767,6 +805,7 @@ program differed and the modes asked and begun, never a value.
   stream work (from host-repository), label construction (from host-kind), intent of /home/you/src/acme on main
   agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude) on the account work-1 of work (from the strategy): working, in the mode edits (from host-kind) passed as acceptEdits
     in the session work, the stream's name
+    its terminal herdr, the host's
     env.CLAUDE_CONFIG_DIR = <set> (from account)
     mode = edits (from host-kind)
     model = sonnet (from host-kind)
@@ -774,7 +813,8 @@ program differed and the modes asked and begun, never a value.
 ```
 
 A place gives its stream and its label, each with where it came from,
-and its intent. Its current agent gives the session it opened in. Its
+and its intent. Its current agent gives the session and the
+multiplexer it opened in, each with where it came from. Its
 current agent gives its account, with `from` saying whether the
 intent's affinity for the agent's program or the pool's strategy chose
 it, and each variable `env.<NAME>` from `account` as `<set>`, and its
@@ -815,20 +855,24 @@ did not begin is listed with what happened, `carried and not begun:
 code's start 2 at 1793291340: the start that carried its conversation
 ended before it said it started, and its stage started afresh`.
 
-The host gives its `streams`, each with its running agents, bound,
-room, queue, session and labels. It gives its `pools`, each with its
-strategy and threshold, and each account with its agents running, bound,
-spent time, reading, and what holds it past its threshold ([a pool's
-accounts](#a-pools-accounts-and-their-readings)).
-A stream gives each label's reserve, what it keeps free, its agents
-running and its stages waiting, and a stage waiting gives its label.
-Then comes the
+The host gives its `streams` and its `pools`. Each stream gives its
+running agents, bound, room, queue, session, multiplexer, view,
+terminal app, title and labels. Each pool gives its strategy and
+threshold, and each account with its agents running, bound, spent time,
+reading, and what holds it past its threshold ([a pool's
+accounts](#a-pools-accounts-and-their-readings)). A stream gives each
+label's reserve, what it keeps free, its agents running and its stages
+waiting, and a stage waiting gives its label. A stream whose labels or
+multiplexer refuse its starts says `it starts no stage:` with why, and
+one whose terminal app names no profile says `it opens no view:`, its
+stages starting as before. Then comes the
 local layer, with each value it set and each key passed over with its
 pin, or, where it was not taken, each key it may not set or its fault:
 
 ```text
   stream work, priority 30: 5 agents running of 5, room for 0
     its agents open in the session work, the stream's name
+    multiplexer herdr (the host's), view terminal (the default), terminal app ghostty (the host's), title "Work Agents" (the stream's title)
     label construction: a reserve of 2, keeping 0 free, 4 agents running, 0 waiting
     label operation: a reserve of 2, keeping 1 free, 1 agents running, 1 waiting
     waiting for room: /home/you/.local/share/flume/places/f5f5e14159a8/deploy--rollout's code in work as operation, priority 0, short of the stream work's room, at its bound of 5

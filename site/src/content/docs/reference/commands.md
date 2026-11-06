@@ -23,6 +23,7 @@ sidebar:
 | `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
 | `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
 | `flume wake <address>` | Wake a role's address: launch its run where none stands. |
+| `flume open [<stream>]` | Show a stream's agents in its view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
 | `flume mcp` | Serve flume's status over MCP on standard input and output. |
 | `flume needs <words>` | From an agent flume started: its stage cannot deliver without an answer, or found work. |
 | `flume ack started`, `flume ack received` | From an agent flume started: it started, or it received a prompt. |
@@ -58,9 +59,10 @@ error. `flume wait` has exits of its own.
 **Settling first.** Every command that acts, `launch`, `tell`,
 `hold`, `retry`, `stop`, `finish`, `drop`, `done`, `priority`, `tidy`,
 `wait`, `inbox` and `wake`, settles every place on the host first,
-unless herdr's watch keeps them moving. `flume status`, `flume prompt`
-and `flume mcp` only read, `flume status --line` and `flume hook
-status-line` among them.
+unless every multiplexer the host binds keeps a watch, as herdr's plugin
+does. `flume status`, `flume prompt` and `flume mcp` only read,
+`flume status --line` and `flume hook status-line` among them, and
+`flume open` settles nothing.
 
 ## `flume launch`
 
@@ -101,7 +103,9 @@ nothing it made, when:
   causes;
 - a declaration sets `env` in an agents table, or a setting names a
   stage the kind lacks, or a program no agent profile runs;
-- the stream is one the host's configuration does not declare.
+- the stream is one the host's configuration does not declare;
+- the stream's multiplexer names no terminal profile flume carries.
+  A launch on another stream runs.
 
 ```console
 $ flume launch --kind deploy --name x --brief x
@@ -137,18 +141,20 @@ place gives:
 - its submission;
 - what it waits on, since when and in whose words, and whether it is
   stalled;
-- its stream, its label and its intent, its current agent's account
-  and the session it opened in, each move between accounts, and each
-  start that began without its settings;
+- its stream, its label and its intent, its current agent's account,
+  the multiplexer and the session it opened in, each move between
+  accounts, and each start that began without its settings;
 - its holds, priority, recipients and ends, and what flume could not
   read.
 
-The host part gives the agents running, the bound, the room, the
-queue, each stream's part with its session and its labels, each
-pool's part, the watch, each base's count, the role addresses with
-ends pending, what a tidy kept in the terminal, and the host's
-configuration, whether its local layer was taken, each value it set
-and each key passed over with its pin. Where the terminal keeps no watch, it says so: places
+The host part gives the agents running, the bound, the room and the
+queue. Each stream's part gives its session, its multiplexer, view,
+terminal app and title, each with where it came from, and its labels.
+Then come each pool's part, each base's count and the role addresses
+with ends pending. Each multiplexer the host binds gives its watch and
+what a tidy kept there. Last comes the host's configuration: whether
+its local layer was taken, each value it set and each key passed over
+with its pin. Where a multiplexer keeps no watch, it says so: places
 then move on only at flume's commands and when their agents go quiet.
 Under the line naming the watch, it gives what the terminal's own
 configuration lacks for flume's plugin there, such as herdr's key for
@@ -277,16 +283,20 @@ or is done and whose agent stopped:
 - its worktree, through the repository's teardown and
   `git worktree remove`;
 - its branch, where the base holds every commit of it;
-- under herdr, its tab, and its base's workspace once that holds
-  nothing else of flume's or yours.
- It keeps a place
+- in each multiplexer its agents opened in, under herdr its tab, and
+  its base's workspace once that holds nothing else of flume's or
+  yours.
+
+It keeps a place
 holding uncommitted or unignored work, and a branch with commits the
-base lacks, naming each.
+base lacks, naming each. What it closed or kept in a multiplexer is
+named with that multiplexer, `profile` in the JSON form.
 
 ```console
 $ flume tidy
 removed ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme
 kept the branch chore/tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme, 1 commits not landed
+closed the tab chore--tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a8/chore--tidy-the-readme in the terminal herdr
 ```
 
 ## `flume settle`
@@ -348,6 +358,78 @@ Wakes a role's address, `<group>/<role>`: launches the run the host's
 `[roles]` table names for it where none stands, and otherwise makes
 nothing, saying the run is live or waits. Refused for a name that is no
 address, or an address the table names nothing for.
+
+## `flume open`
+
+```sh
+flume open [<stream>]
+```
+
+Shows a stream's agents, `default`'s where none is named, in the
+stream's view. It needs no repository. It shows the session the
+stream's agents open in: the stream's `session`, else its name, and,
+for `default` naming none, the multiplexer's own. Under herdr, a
+session not yet running is started first, as an agent's start would
+start it, and stays running.
+
+- **View `terminal`**, the default. The stream's multiplexer gives the
+  command that attaches to the session, and the stream's terminal app
+  opens a window running it, titled with the stream's `title`, else its
+  name. Where no terminal app is named, flume opens no window and
+  prints the command on its last line, after `run: `, for you or a
+  launcher of your own to run.
+- **View `app`.** The multiplexer's own app shows the session. No
+  title is given and no terminal app is read.
+
+[Configuration](/flume/reference/configuration/#host) gives the keys,
+and [seeing a stream's agents](/flume/guides/places-and-herdr/#seeing-a-streams-agents)
+the views and the terminal apps.
+
+```console
+$ flume open work
+opened a ghostty window titled "Work Agents" (the stream's title) on herdr's session work (the stream's name)
+  stream work, multiplexer herdr (the host's), view terminal (the default), terminal app ghostty (the host's)
+  its command /usr/local/bin/herdr session attach work
+$ flume open personal
+the terminal app printed opens no window; run this line to show herdr's session personal (the stream's name) titled "personal" (the stream's name):
+  stream personal, multiplexer herdr (the host's), view terminal (the default), terminal app printed (the default)
+  its command /usr/local/bin/herdr session attach personal
+run: /usr/local/bin/herdr session attach personal
+```
+
+The answer gives the stream, its multiplexer, session, view, title and
+terminal app, each with where it came from, the command and what the
+window did. A variable the command needs is named, never its value:
+the printed line gives it as `<name>=<set>`. With `--json` the answer
+is `{"opened":{…}}`:
+
+| Field | |
+|---|---|
+| `stream` | the stream's name |
+| `multiplexer` | `profile` and `from`: `stream`, `host` or `neither` |
+| `session` | `name`, `null` for the multiplexer's own, and `from`: `stream`, `stream-name` or `own` |
+| `view` | `view`, `terminal` or `app`, and `from` |
+| `title` | `title` and `from`: `stream` or `stream-name`; `null` for the view `app` |
+| `terminal_app` | `profile` and `from`; `null` for the view `app` |
+| `command` | `program`, by its full path, `arguments`, and `environment`, the names of the variables it needs; `null` for the view `app` |
+| `window` | `"opened"`, `{"printed":{"line":…}}` or `"app"` |
+
+Each asking opens a window of its own. flume keeps nothing of a window:
+it never finds, raises or closes one, and opens one only at your
+asking, never at a launch, a settle or a start. It takes no lock and
+writes nothing it holds. It is refused, opening nothing, when:
+
+- the stream is one the host's configuration does not declare, naming
+  the streams it does;
+- the stream's multiplexer or terminal app names no profile flume
+  carries, naming the profiles there are;
+- the multiplexer holds no session to show, as the printed command,
+  whose agents run in the commands it printed;
+- the view is `app` and the multiplexer has no app of its own, as
+  herdr;
+- the terminal app refuses, in its own words: Ghostty not installed,
+  Terminal.app not allowed to be controlled, or Terminal.app on a host
+  that is not macOS.
 
 ## `flume mcp`
 

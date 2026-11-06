@@ -38,6 +38,11 @@ pub fn every() -> Vec<Cited> {
             .map(Scenario::cited),
     );
     every.extend(
+        window::scenarios::<FakeWindowHarness>()
+            .iter()
+            .map(Scenario::cited),
+    );
+    every.extend(
         merge_queue::scenarios::<FakeMergeQueueHarness>()
             .iter()
             .map(Scenario::cited),
