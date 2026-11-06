@@ -13,7 +13,7 @@ scratch file of the test's own.
 
 ## 1. Before the code
 
-- [ ] 1.1 Start once agentplot/blueprints main holds design 13's follow-up, 28d95e8 on `design/flume-a-stage-session-and-open-by-session`, beside f676e8f, which the user said yes to pushing on 2026-11-06. Merge main into the branch. Check that record 0048 is still free on every branch and in every place on the host, renumbering here where another took it, and fit every delta that names `Stream`, `StreamStatus`, `open_stream`, `flume open`, `flume list` or the local layer's keys to the specs and code as main then holds them (design 11; core.19). True when `git log` on blueprints main shows the follow-up, the merge is committed, and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
+- [ ] 1.1 agentplot/blueprints main holds design 13's amendment at f676e8f and its follow-up at fa40c94, the user's card of 2026-11-06 accepting it. Merge main into the branch. Check that record 0048 is still free on every branch and in every place on the host, renumbering here where another took it, and fit every delta that names `Stream`, `StreamStatus`, `open_stream`, `flume open`, `flume list` or the local layer's keys to the specs and code as main then holds them (design 11; core.19). True when the merge is committed, and `sluice exec main -- moon run root:changes root:specs root:adrs` passes.
 
 ## 2. The seams
 
@@ -45,6 +45,6 @@ scratch file of the test's own.
 
 ## 7. The clause list and the site
 
-- [ ] 7.1 Read the suite's clause list at the revision of agentplot/blueprints main that holds design 13's follow-up beside f676e8f, or a later one the build reads, 199 in Part A and S106 and S107 among the scenarios, naming nothing of this change unbuilt and as unbuilt what another change has not yet built (106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes, with 199, S106 and S107 each cited by this change's scenarios.
+- [ ] 7.1 Read the suite's clause list at agentplot/blueprints main's fa40c94, or a later revision of main the build reads, 199 in Part A and S106 and S107 among the scenarios, naming nothing of this change unbuilt and as unbuilt what another change has not yet built (106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes, with 199, S106 and S107 each cited by this change's scenarios.
 - [ ] 7.2 Write a stream's sessions for its kinds and stages, and a person's open of a session by its name, into the pages design 14 names, `guides/places-and-herdr.mdx`, `guides/agent-settings.md`, `reference/configuration.md`, `reference/commands.md` and `reference/state.md`, to any host's operator, naming no host, team or word of ours (design 14; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
 - [ ] 7.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run conformance:format conformance:lint conformance:test conformance:coverage site:prose site:build root:format root:specs root:changes` passes.

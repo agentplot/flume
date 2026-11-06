@@ -31,10 +31,9 @@ we are going to be setting on the kinds in crew"; a person opens
 being opened was the session". They approved the design and named each
 partition's research-and-design session `<partition>-design`.
 
-Record 0048 decides it, accepted on the user's word. The statement's
-amendment is on agentplot/blueprints main at f676e8f, and its follow-up,
-which the user said yes to pushing, at 28d95e8 on the branch
-`design/flume-a-stage-session-and-open-by-session` (32, 107, 143, 186, 190, 199, 200, C.5,
+Record 0048 and its amendment decide it, accepted on the user's word and
+their card. The statement's amendment is on agentplot/blueprints main at
+f676e8f and its follow-up at fa40c94 (32, 107, 143, 186, 190, 199, 200, C.5,
 C.7, S106, S107; core.19).
 
 ## What Changes
@@ -116,8 +115,7 @@ None.
 - agentplot/blueprints: clauses 32, 107, 143, 186, 190 and 200, C.5's
   herdr row and C.7 amended, and 199, S106 and S107 added, on main at
   f676e8f, and amended again for a kind's stage and a session's open by
-  the follow-up at 28d95e8 on `design/flume-a-stage-session-and-open-by-session`,
-  for main on the user's yes (design 13).
+  the follow-up on main at fa40c94 (design 13).
 - `docs/adr`: record 0048, accepted; rules
   core.44 and core.48 amended with it, the site's rules page mirroring
   them.

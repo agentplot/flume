@@ -42,9 +42,11 @@ and then in their reply msg_01M6Q6MPHXPYEXK3FNW3RE2GRT:
   without thinking about it, we're going to end up with lots of bugs".
 
 The user approved the design on 2026-11-06 and named each partition's
-research-and-design session `<partition>-design`, and answered "Yes,
-push it" to the statement's follow-up carrying these answers (reply
-msg_01M6Q9HQKY95T1XW1B1TWHAVSF).
+research-and-design session `<partition>-design`, and approved on
+their Pending You card of 2026-11-06 "Push the follow-up to blueprints
+main (per-stage tables kept; flume open takes only a session's name)",
+accepting record 0048's amendment and the rule that what a person opens
+is a session.
 
 This design carries those rulings: what the host writes, what a person
 opens and how, what the terminal profile does, what status says, and the
@@ -151,11 +153,10 @@ of it (core.4).
 
 ### What rules what
 
-Record 0048, accepted on the user's word of 2026-11-06, decides it,
-carrying their rulings. The statement's amendment is on blueprints main
-at f676e8f, and its follow-up, which the user said yes to pushing, at
-28d95e8 on blueprints' branch `design/flume-a-stage-session-and-open-by-session`
-(decision 13). The rules this design relies on:
+Record 0048 and its amendment, accepted on the user's word and card of
+2026-11-06, decide it, carrying their rulings. The statement's amendment
+is on blueprints main at f676e8f and its follow-up at fa40c94 (decision
+13). The rules this design relies on:
 
 - core.1 and core.2: the core names no terminal; it hands the terminal
   `OpenIn::Session { name }` and the terminal profile makes it a herdr
@@ -507,11 +508,11 @@ every session (task 6.2).
 
 ### 11. Agreement with the changes in flight
 
-- **Order.** The user approved this design on 2026-11-06. The code
-  starts once blueprints main holds decision 13's follow-up, 28d95e8 on
-  `design/flume-a-stage-session-and-open-by-session`, beside f676e8f,
-  which it holds. The multiplexer change it builds on has landed and is
-  merged; group 1 merges main again.
+- **Order.** The user approved this design on 2026-11-06, and
+  blueprints main holds decision 13's amendment at f676e8f and its
+  follow-up at fa40c94, so the code starts now. The multiplexer change it
+  builds on has landed and is merged, as is main at 9691c5b; group 1
+  merges main again.
 - **Program settings, effort, `keep_open`.** None of them reads or
   writes a session: `session` stays out of `Settings::under`'s fold
   but the launch's, and out of every agents table. Should any of them
@@ -555,13 +556,12 @@ orchestrator is told.
 ### 13. The statement's amendment
 
 On agentplot/blueprints main at f676e8f, on the user's word of
-2026-11-06, and its follow-up on the branch
-`design/flume-a-stage-session-and-open-by-session` at 28d95e8, cut from
-main at c188bf3, which the user said yes to pushing (core.19). Clause 199
+2026-11-06, and its follow-up at fa40c94, on the user's card of that day
+(core.19). Clause 199
 and scenarios S106 and S107 are new, beside 186 to 192, 195 to 198,
 200, 201, S90 to S92, S95 to S97, S100 to S103 and S108 on main, and the
 designs in flight hold 193, 194, S93 to S99, S104 and S105. Each item
-gives the words a clause holds once both are on main.
+gives the words a clause holds at fa40c94.
 
 - **32**: "Where in the terminal an agent runs (107) is read from the
   launch's settings and the stage's declaration, else from its place's
