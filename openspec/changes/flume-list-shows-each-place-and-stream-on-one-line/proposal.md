@@ -19,11 +19,10 @@ seconds, still reading each live place's change, naming no repository
 and saying nothing of the streams, which are what `flume open` takes
 (186).
 
-Record 0049, proposed, decides it. The statement's amendment is on
-agentplot/blueprints' branch `design/flume-a-list-of-places-and-streams`
-at be85a32, committed for the user's word (57, 62, 64 to 66, 68, 70,
-107, 111, 130, 186, 200, 201, C.5, section 9, S108; core.19). The code
-waits for the user's read.
+Record 0049, accepted by the user on 2026-11-05, decides it. The
+statement's amendment is on agentplot/blueprints main at 7bd1891 (57,
+62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, section 9,
+S108; core.19).
 
 ## What Changes
 
@@ -81,8 +80,8 @@ waits for the user's read.
 
 ## Impact
 
-- agentplot/blueprints: the amendment, to land on main before this
-  change's code, which the clause list reads (core.19).
+- agentplot/blueprints: the amendment, on main at 7bd1891, which the
+  clause list reads (core.19).
 - `crates/flume-seams`: `SessionRuns` and `Terminal::runs`, only added.
 - `crates/flume-core`: a new `list.rs` with `Engine::list`;
   `Answer::List` with `Listed`, `StreamListed` and `WaitsOn`; `line.rs`

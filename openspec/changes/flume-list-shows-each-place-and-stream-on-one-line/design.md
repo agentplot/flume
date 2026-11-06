@@ -27,11 +27,11 @@ It still reads the change at each live place's head. Its lines name no
 repository, though the host's places came from fifteen. And no command
 lists the streams, which are what `flume open` takes (186).
 
-The statement's amendment, on blueprints' branch
-`design/flume-a-list-of-places-and-streams` at be85a32, adds the list
-(200), the terminal seam's runs (201), herdr's and the printed
+The statement's amendment, on blueprints main at 7bd1891, adds the
+list (200), the terminal seam's runs (201), herdr's and the printed
 command's runs (C.5), `list` among the commands (section 9) and S108.
-Record 0049, proposed, decides it, and core.52 holds it.
+Record 0049, accepted by the user on 2026-11-05, decides it, and
+core.52 holds it.
 
 This change touches the area core.md binds; docs/architecture has no
 area page. It relies on core.1 and core.2 (runs named only in a
@@ -363,11 +363,10 @@ flume integrates with (core.35).
 
 ### 13. The clause list
 
-`crates/flume-conformance/src/clauses.rs` reads the revision of
-blueprints main that lands record 0049's amendment, 200 in Part A, 201
-in Part B and S108 among the scenarios, each cited by this change's
-scenarios. Until the amendment lands on main, the list's revision is
-main's, and group 4 waits for it.
+`crates/flume-conformance/src/clauses.rs` reads blueprints main at
+7bd1891, which lands record 0049's amendment, or the later revision of
+main the build reads: 200 in Part A, 201 in Part B and S108 among the
+scenarios, each cited by this change's scenarios.
 
 ## Risks / Trade-offs
 
@@ -398,6 +397,4 @@ operator runs `flume list` once the release carrying it is installed.
 
 ## Open Questions
 
-None for the build. Record 0049 waits on the user's yes, and the
-statement's amendment on its landing on blueprints main, before groups
-2 to 5 are built.
+None for the build.

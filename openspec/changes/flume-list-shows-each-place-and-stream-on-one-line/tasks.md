@@ -2,8 +2,8 @@
 
 Each group is one session's work for an agent that reads this change
 (proposal, design, specs) and its group, and builds on main and on the
-groups before it. The change is built once the user has accepted record
-0049 and the statement's amendment stands on agentplot/blueprints main.
+groups before it. The user accepted record 0049 on 2026-11-05, and the
+statement's amendment stands on agentplot/blueprints main at 7bd1891.
 A group's last task runs the checks it touched through sluice. Every
 conformance scenario a group adds cites its clauses as data (106). The
 engine's scenarios name no tool (core.1). Tests reach no herdr session
@@ -14,7 +14,7 @@ named by one letter of the test's own, `w` for a stream's.
 
 ## 1. The decision recorded
 
-- [x] 1.1 Add record 0049, proposed, "flume's list gives a line for each place and each stream, read from what flume keeps", quoting the user's words of 2026-11-05, with its deciders, sources (the statement at be85a32 on `design/flume-a-list-of-places-and-streams`; records 0005, 0006, 0031 and 0037), context, nine considered options, outcome, why not the others and consequences (57, 62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, S108; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
+- [x] 1.1 Add record 0049, proposed, "flume's list gives a line for each place and each stream, read from what flume keeps", quoting the user's words of 2026-11-05, with its deciders, sources (the statement on agentplot/blueprints main at 7bd1891; records 0005, 0006, 0031 and 0037), context, nine considered options, outcome, why not the others and consequences (57, 62, 64 to 66, 68, 70, 107, 111, 130, 186, 200, 201, C.5, S108; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
 - [x] 1.2 Draw core.52 in `docs/architecture/core.md` under "Settling, surfaces and state", after core.15, with its details citing record 0049, and have `site/src/content/docs/architecture/rules.md` mirror it as written (core.19, core.35). True when `sluice exec main -- moon run root:format site:prose site:build` passes.
 - [x] 1.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run root:format root:adrs root:changes site:prose site:build` passes.
 
@@ -42,5 +42,5 @@ named by one letter of the test's own, `w` for a stream's.
 ## 5. The site and the clause list
 
 - [ ] 5.1 Give `site/src/content/docs/reference/commands.md` `flume list` in its table, among the commands that only read under "Settling first", and a section of its own with design 7's example; and `reference/state.md` the list's fields, to any host's operator (61, 200; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 5.2 Have `crates/flume-conformance/src/clauses.rs` read the revision of blueprints main that lands record 0049's amendment, 200 in Part A, 201 in Part B and S108 among the scenarios, as the clause-coverage spec has it (106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes, 200, 201 and S108 each cited by this change's scenarios.
+- [ ] 5.2 Have `crates/flume-conformance/src/clauses.rs` read blueprints main at 7bd1891, which lands record 0049's amendment, or the later revision of main the build reads, 200 in Part A, 201 in Part B and S108 among the scenarios, as the clause-coverage spec has it (106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes, 200, 201 and S108 each cited by this change's scenarios.
 - [ ] 5.3 Run the checks of the projects this change touched. True when `sluice exec main -- moon run root:format root:adrs root:specs root:changes seams:test fakes:test core:test conformance:test conformance:coverage flume:test flume:tools site:prose site:build` passes.
