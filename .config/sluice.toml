@@ -7,10 +7,6 @@
 [tests]
 runner = "moon"
 toolchain = ["devenv", "print-dev-env"]
-# A check that finds the host lacking what it needs of it, a socket's path
-# with no room among them, exits 77 and says why: no outcome, run again
-# (record 0047, core.51).
-not_run = [77]
 
 [executor]
 kind = "sandbox"
