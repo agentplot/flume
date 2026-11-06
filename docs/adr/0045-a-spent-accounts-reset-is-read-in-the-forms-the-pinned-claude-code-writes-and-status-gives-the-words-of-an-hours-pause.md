@@ -1,7 +1,7 @@
 ---
 number: 45
 title: A spent account's reset is read in the forms the pinned Claude Code writes, a date among them, and status gives the words of an hour's pause
-status: proposed
+status: accepted
 date: 2026-11-05
 decision-makers:
 - Chuck Swanberg
@@ -9,10 +9,10 @@ decision-makers:
 
 # A spent account's reset is read in the forms the pinned Claude Code writes, a date among them, and status gives the words of an hour's pause
 
-Status: proposed on 2026-11-05 by the code stage of the fix `a-spent-accounts-reset-is-read-with-its-date`. The direction is the orchestrator's, in its brief's words below. Reading the budget's `your <limit> resets` part, no longer reading a date joined by a comma, and where status gives the words are the stage's choices, made on the statement and these rules.
+Status: accepted by the user on 2026-11-05, at the fix's review: 'Accept and release it, and push the statement change'. Its statement amendment is on agentplot/blueprints main at 2287669 (146, C.4). Proposed earlier that day by the code stage of the fix `a-spent-accounts-reset-is-read-with-its-date`; the direction is the orchestrator's, in its brief's words below. Reading the budget's `your <limit> resets` part, no longer reading a date joined by a comma, and where status gives the words are the stage's choices, made on the statement and these rules.
 
-Deciders: the orchestrator's brief, for the direction; the code stage, for the rest.
-Sources: the orchestrator's brief of the fix `a-spent-accounts-reset-is-read-with-its-date`, 2026-11-05; `agentplot/blueprints:design/flume/requirements.md` at ebfbc0d, clauses 56, 146, 151 and C.4, as amended with this record on the branch `design/flume-a-spent-accounts-reset-is-read-with-its-date` at 83af642, and clause 185 as record 0035 wrote it on `design/flume-a-pool-chooses-by-the-allowance-left` at 6188a10; records 0020 and 0035; rules core.14, core.22 and core.32; Claude Code 2.1.296, the release `devenv.nix` pins, its darwin-arm64 and linux-arm64 programs; `crates/flume/src/profiles/agent/claude/limit.rs`, `crates/flume-core/src/spent.rs` and `crates/flume-core/src/room.rs`.
+Deciders: the orchestrator's brief, for the direction; the code stage, for the rest; the user, at the fix's review.
+Sources: the orchestrator's brief of the fix `a-spent-accounts-reset-is-read-with-its-date`, 2026-11-05; `agentplot/blueprints:design/flume/requirements.md` at ebfbc0d, clauses 56, 146, 151 and C.4, as amended with this record on agentplot/blueprints main at 2287669, and clause 185 as record 0035 wrote it on `design/flume-a-pool-chooses-by-the-allowance-left` at 6188a10; records 0020 and 0035; rules core.14, core.22 and core.32; Claude Code 2.1.296, the release `devenv.nix` pins, its darwin-arm64 and linux-arm64 programs; `crates/flume/src/profiles/agent/claude/limit.rs`, `crates/flume-core/src/spent.rs` and `crates/flume-core/src/room.rs`.
 
 ## Context and problem statement
 
@@ -60,5 +60,5 @@ Option 2 reads a form the brief says not to infer, which the release never write
 
 - `AccountSpent` gains `unread`, `AccountStatus` gains `spent_unread`, and `AccountRoom` carries the words. The spent document and the JSON form only gain fields, read with none where a document lacks them.
 - The profile's `spent` keeps its seam: a reset it cannot read is none, as before (151). No other profile reads Claude Code's words.
-- Clause 146 and C.4's spent row say so (blueprints 83af642, on the branch `design/flume-a-spent-accounts-reset-is-read-with-its-date`; core.19). 56's pool sentence is left as record 0035 amends it, since 146 names what status gives of an hour's pause. Rule core.32's details are amended with this record.
+- Clause 146 and C.4's spent row say so (agentplot/blueprints main at 2287669; core.19). 56's pool sentence is left as record 0035 amends it, since 146 names what status gives of an hour's pause. Rule core.32's details are amended with this record.
 - An account deneb paused for an hour before this release stays as recorded until its hour passes. The next agent stopped there records the reset its words name.
