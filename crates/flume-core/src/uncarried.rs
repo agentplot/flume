@@ -4,7 +4,8 @@
 //! stop, at the stage's limit or on a prompt it did not receive, it is
 //! recorded so on the place with what happened, its agent is sent nothing
 //! more, and once quiet it is ended and its stage started afresh with
-//! flume's words after the start that stopped, carrying nothing. No end
+//! flume's words after the start that stopped, or after a lost
+//! conversation with its retry's words, carrying nothing. No end
 //! is delivered of it, no caller is waited on and no bound of the kind's
 //! counted (31, 35, 112).
 
@@ -61,13 +62,30 @@ pub(crate) fn after_uncarried(start: &StartHeld, why: String) -> Option<CarryFro
     })
 }
 
+/// The words the fresh start after the carried start `start` that did not
+/// begin is given, as its cause has them: [`StartReason::Spent`]'s after a
+/// spent agent; after a lost conversation, the retry's words the carried
+/// start was given, which its claim puts after [`StartReason::Lost`]'s
+/// (49, 146, 179).
+pub(crate) fn words_after(start: &StartHeld) -> Option<String> {
+    match start
+        .conversation
+        .as_ref()
+        .map(|conversation| conversation.cause)
+    {
+        Some(CarryCause::Lost) => start.words.clone(),
+        _ => Some(StartReason::Spent.words()),
+    }
+}
+
 impl Engine {
     /// The carried start `start` of the stage at `index` read as not
     /// begun, as `words` say: recorded on the place once; once its agent
     /// is quiet, at once where it stopped, the agent ended and the stage
-    /// started afresh with [`StartReason::Spent`]'s words after the start
-    /// whose agent stopped at its account's usage limit, carrying nothing;
-    /// true when the stage moved (31, 35, 112, 146, 179).
+    /// started afresh after the start whose agent stopped at its account's
+    /// usage limit or whose conversation was lost, carrying nothing, with
+    /// the words its cause gives ([`words_after`]); true when the stage
+    /// moved (31, 35, 112, 146, 179).
     pub(crate) fn read_uncarried(
         &self,
         id: &PlaceId,
@@ -101,7 +119,7 @@ impl Engine {
                 return false;
             }
         }
-        let again = StartReason::Spent.words();
+        let again = words_after(start);
         let carry = after_uncarried(start, words);
         {
             let _room = self.host.room();
@@ -120,14 +138,14 @@ impl Engine {
                 stage.end = None;
                 stage.room = Some(RoomWait {
                     order,
-                    words: Some(again.clone()),
+                    words: again.clone(),
                     carry: carry.clone(),
                     ..RoomWait::default()
                 });
                 Step::Write(())
             });
         }
-        self.start_stage(id, index, Some(again));
+        self.start_stage(id, index, again);
         true
     }
 }

@@ -2121,6 +2121,7 @@ mod tests {
             hold_words: BTreeMap::new(),
             waiting_on: None,
             stalled: false,
+            waits_on_session: None,
             holds: vec![],
             priority: 0,
             stream: StreamHeld {

@@ -358,13 +358,19 @@ impl Engine {
     /// and its end, unless it is an account the affinity for `program`
     /// once left. A program the affinity keeps no account for moves nothing, and
     /// a pool that holds no account of `program` refuses the stage (4, 32,
-    /// 144, 145, 147; core.32).
+    /// 144, 145, 147; core.32). A start that carries a conversation lost
+    /// with its terminal or its host takes `conversation`, the account its
+    /// lost start ran under, first, where the pool declares it under the
+    /// same pool, of `program` and usable, moving no intent's affinity by
+    /// it (49, 145, 147, 179).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn choose_account(
         &self,
         place: &PlaceRecord,
         stage: &str,
         program: Option<&str>,
         affinity: Option<&Affinity>,
+        conversation: Option<&AccountHeld>,
         queue: &Queue,
         now: Seconds,
     ) -> (Choice, Option<AccountMove>) {
@@ -398,6 +404,13 @@ impl Engine {
             },
             account: chosen.account.clone(),
         };
+        let holds = conversation
+            .filter(|held| held.pool == pool)
+            .and_then(|held| room.account(&held.name))
+            .filter(|holds| holds.usable(program));
+        if let Some(holds) = holds {
+            return (chose(holds, AccountFrom::Conversation), None);
+        }
         if let Some(kept) = kept.filter(|kept| kept.usable(program)) {
             return (chose(kept, AccountFrom::Affinity), None);
         }

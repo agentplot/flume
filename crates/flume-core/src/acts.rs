@@ -128,7 +128,11 @@ impl Engine {
     /// the submission, submits the place's head again and starts no
     /// agent. The place's agent is ended first, but one whose stage
     /// started or began under it, which refuses the retry, forced or
-    /// not, naming the agent and its stop (49, 50, 12, 35).
+    /// not, naming the agent and its stop (49, 50, 12, 35). A retry of a
+    /// conversation reported lost ends no agent, forced or not: its stage
+    /// waits to carry the lost start's conversation, and its start opens
+    /// once no process runs it, its answer naming each that does (30, 49,
+    /// 77, 207).
     pub fn retry(
         &self,
         place: &PlaceId,
@@ -160,8 +164,21 @@ impl Engine {
         if let Some(reason) = self.working(place) {
             return Answer::refused(reason);
         }
-        if let Err(reason) = self.end_agent(place, force) {
-            return Answer::refused(reason);
+        // A conversation reported lost: its start carries the lost start's
+        // conversation, and no agent of the stage is ended, an agent the
+        // terminal brought back in its pane, and any process that runs its
+        // session, left as they are (30, 49, 77; core.10).
+        let lost = index
+            .filter(|&index| {
+                held.place.kind.stages[index].conversation
+                    && held.stages[index].state == StageState::Lost
+            })
+            .and_then(|index| held.stages[index].start.as_ref())
+            .map(|start| start.identity.clone());
+        if lost.is_none() {
+            if let Err(reason) = self.end_agent(place, force) {
+                return Answer::refused(reason);
+            }
         }
         let ends = match index {
             Some(index) => HoldOn::Stage {
@@ -199,12 +216,36 @@ impl Engine {
             }
         }
         let words = answered(&held.stages[index], words);
+        let room = lost.as_ref().map(|_| self.host.room());
+        let order = lost.as_ref().map(|_| self.queue().next_order());
         self.update(place, |held| {
-            // A retry's start carries no conversation, though the stage
-            // waits after an agent stopped at its account's usage limit
-            // (30, 146).
-            if let Some(room) = held.stages[index].room.as_mut() {
-                room.carry = None;
+            match (&lost, order) {
+                // A lost conversation's start waits to carry its
+                // conversation, as a spent agent's does (49, 179).
+                (Some(lost), Some(order)) => {
+                    let stage = &mut held.stages[index];
+                    stage.state = StageState::WaitingForRoom;
+                    stage.room = Some(RoomWait {
+                        order,
+                        words: words.clone(),
+                        carry: Some(CarryFrom {
+                            start: lost.clone(),
+                            cause: CarryCause::Lost,
+                            carry: true,
+                            why: None,
+                        }),
+                        ..RoomWait::default()
+                    });
+                    held.current = Some(index);
+                }
+                // Any other retry's start carries no conversation, though
+                // the stage waits after an agent stopped at its account's
+                // usage limit (30, 146).
+                _ => {
+                    if let Some(room) = held.stages[index].room.as_mut() {
+                        room.carry = None;
+                    }
+                }
             }
             for stage in held.stages.iter_mut().skip(index + 1) {
                 stage.state = StageState::NotReached;
@@ -214,6 +255,7 @@ impl Engine {
             held.submission.waiting = None;
             Step::Write(())
         });
+        drop(room);
         match self.start_stage(place, index, words) {
             Start::Opened(_) | Start::Held(_) | Start::NeverBegun(_) | Start::WaitingForRoom => {
                 self.acted(Act::Retry, place)

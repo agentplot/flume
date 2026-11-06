@@ -120,6 +120,9 @@ pub struct Listed {
 pub enum WaitsOn {
     Caller,
     Host,
+    /// A process runs the conversation its waiting stage's start would
+    /// carry, or flume could not read whether one does (49, 207).
+    Session,
     MergeQueue,
 }
 
@@ -129,6 +132,7 @@ impl WaitsOn {
         match self {
             WaitsOn::Caller => "waits on its caller",
             WaitsOn::Host => "waits on the host",
+            WaitsOn::Session => "waits on its session",
             WaitsOn::MergeQueue => "waits on the merge queue",
         }
     }
@@ -323,6 +327,13 @@ pub struct PlaceStatus {
     /// bound, read so by a settle (130).
     #[serde(default)]
     pub stalled: bool,
+    /// The stage that waits for room while a process runs the
+    /// conversation its start would carry, or flume could not read
+    /// whether one does, each process as the last settle's live read it,
+    /// and since when it waits; none where no stage waits so (49, 56,
+    /// 207; core.30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on_session: Option<SessionWait>,
     /// Each hold on a stage or the submission, with its words and since
     /// when (47, 130).
     #[serde(default)]
@@ -368,6 +379,21 @@ pub struct PlaceStatus {
     /// line asked alone (56, 60; S14).
     #[serde(default)]
     pub line: PlaceLine,
+}
+
+/// A stage waiting for room while a process runs the conversation its
+/// start would carry: the stage, each process by its id and when it
+/// started as live last read it, or what live could not read, naming a
+/// variable and never a path, and since when the stage waits (49, 56,
+/// 207; core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionWait {
+    pub stage: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub processes: Vec<LiveProcess>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unread: Option<String>,
+    pub since: Option<Seconds>,
 }
 
 /// A place's one line and its parts (56, 142): `<kind>--<name>`,

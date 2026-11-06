@@ -18,6 +18,7 @@
 //! account chosen reaches it and afresh otherwise, counted toward no
 //! bound (146, 151, 153, 179).
 
+use super::carried_conversations::{lost_with_host, retry_talk, talk, talking};
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -242,6 +243,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "account pools: an intent's next start on a most-left pool stays on its affinity's account while it is usable, though another's reading leaves more",
             cites: &["147", "145"],
             run: most_left_after_the_affinity,
+        },
+        Scenario {
+            name: "account pools: a lost talk whose start ran under work-2 starts under work-2 from its conversation at its retry, though the intent's affinity keeps work-1, which stays, no move recorded",
+            cites: &["S113", "145", "147"],
+            run: the_lost_starts_account_while_the_intent_keeps_another,
+        },
+        Scenario {
+            name: "account pools: a lost talk whose start's account work-1 is spent at its retry starts under work-2 by the strategy, its move from work-1 to work-2 saying spent and that its conversation went with it",
+            cites: &["S114", "145", "146"],
+            run: the_lost_starts_account_spent,
+        },
+        Scenario {
+            name: "account pools: a lost talk whose start's account the pool no longer declares starts on the account the strategy chooses, of which the carry is asked",
+            cites: &["145", "179"],
+            run: the_lost_starts_account_gone_from_the_pool,
+        },
+        Scenario {
+            name: "account pools: a lost talk retried while every account of its pool is spent waits for room, and the start that takes work-1 once its reset passes carries the conversation from work-1",
+            cites: &["145", "179"],
+            run: every_account_spent_at_a_lost_talks_retry,
         },
     ]
 }
@@ -2702,6 +2723,193 @@ fn a_stage_moved_off_a_threshold(_: &()) -> Outcome {
             })
         ],
         "the moves, the window that holds work-1 latest named"
+    );
+    Ok(())
+}
+
+/// The account the talk stage of the place `id` last started under, and
+/// what chose it.
+fn talk_account(world: &World, id: &PlaceId) -> Option<(String, AccountFrom)> {
+    chosen(world, id, "talk")
+}
+
+/// The fake agent carries a lost start's conversation to the account at
+/// `name`'s home with the session `s-1`.
+fn carries_to(world: &World, name: &str) {
+    world.agent.carry_to(
+        &home(name),
+        Carry::Yes {
+            session: "s-1".into(),
+        },
+    );
+}
+
+/// The session talk's start 2 resumes, from its record.
+fn talk_resumes(world: &World, id: &PlaceId) -> Option<String> {
+    world
+        .held(id)?
+        .stages
+        .into_iter()
+        .find(|stage| stage.name == "talk")?
+        .start
+        .filter(|start| start.n == 2)?
+        .start_record
+        .session
+}
+
+fn the_lost_starts_account_while_the_intent_keeps_another(_: &()) -> Outcome {
+    let world = World::new();
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account_at_home("work-2"), account_at_home("work-1")],
+    );
+    world.host.set_host_pool(Some("work"));
+    carries_to(&world, "work-2");
+    let id = talking(&world)?;
+    ensure_eq!(
+        talk_account(&world, &id),
+        by("work-2", AccountFrom::Strategy),
+        "talk's first account"
+    );
+    let intent = intent_of(&world, &id)?;
+    let mut kept_now = affinity(&world, &intent).ok_or("the intent keeps no affinity")?;
+    kept_now.accounts.insert(
+        "agent".into(),
+        AffinityAccount {
+            pool: "work".into(),
+            account: "work-1".into(),
+        },
+    );
+    world.store.put_host(
+        &HostKey::Intent {
+            digest: intent.digest().to_string(),
+        },
+        HostDocument::Intent(kept_now),
+    );
+    lost_with_host(&world, &id)?;
+    retry_talk(&world, &id, None, false)?;
+    ensure_eq!(
+        (
+            talk_account(&world, &id),
+            talk_resumes(&world, &id),
+            kept(&world, &intent, "agent")
+        ),
+        (
+            by("work-2", AccountFrom::Conversation),
+            Some("s-1".into()),
+            on("work", "work-1")
+        ),
+        "talk's account after the retry, the session it resumes and the intent's affinity"
+    );
+    ensure_eq!(
+        (
+            world.held(&id).ok_or("no held state")?.moves,
+            affinity(&world, &intent).map(|kept| kept.moves.len())
+        ),
+        (vec![], Some(0)),
+        "the place's moves and the intent's"
+    );
+    Ok(())
+}
+
+fn the_lost_starts_account_spent(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-2");
+    let id = talking(&world)?;
+    lost_with_host(&world, &id)?;
+    spent(&world, "work", "work-1", world.host.now() + 2 * 3600);
+    retry_talk(&world, &id, None, false)?;
+    ensure_eq!(
+        (talk_account(&world, &id), talk_resumes(&world, &id)),
+        (by("work-2", AccountFrom::Strategy), Some("s-1".into())),
+        "talk's account after the retry and the session it resumes"
+    );
+    let moved: Vec<(String, String, MoveWhy, Option<bool>)> = world
+        .held(&id)
+        .ok_or("no held state")?
+        .moves
+        .into_iter()
+        .filter(|moved| {
+            moved.on
+                == MoveOn::Stage {
+                    stage: "talk".into(),
+                }
+        })
+        .map(|moved| (moved.from, moved.to, moved.why, moved.carried))
+        .collect();
+    ensure_eq!(
+        moved,
+        vec![(
+            "work-1".to_string(),
+            "work-2".to_string(),
+            MoveWhy::Spent,
+            Some(true)
+        )],
+        "talk's moves"
+    );
+    Ok(())
+}
+
+fn the_lost_starts_account_gone_from_the_pool(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-2");
+    let id = talking(&world)?;
+    lost_with_host(&world, &id)?;
+    pool(
+        &world,
+        "work",
+        Strategy::FillFirst,
+        vec![account_at_home("work-2")],
+    );
+    retry_talk(&world, &id, None, false)?;
+    ensure_eq!(
+        (talk_account(&world, &id), talk_resumes(&world, &id)),
+        (by("work-2", AccountFrom::Strategy), Some("s-1".into())),
+        "talk's account after the retry and the session it resumes"
+    );
+    ensure_eq!(
+        world.agent.log.of("carry"),
+        vec![format!(
+            "carry {} in {} to {}: yes s-1",
+            talk(1),
+            world.store.folder(&id),
+            home("work-2")
+        )],
+        "the carries asked of the profile"
+    );
+    Ok(())
+}
+
+fn every_account_spent_at_a_lost_talks_retry(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-1");
+    let id = talking(&world)?;
+    lost_with_host(&world, &id)?;
+    let fifteen = world.host.now() + 2 * 3600;
+    spent(&world, "work", "work-1", fifteen);
+    spent(&world, "work", "work-2", fifteen + 3600);
+    retry_talk(&world, &id, None, false)?;
+    ensure_eq!(
+        world.stage_state(&id, "talk"),
+        Some(StageState::WaitingForRoom),
+        "talk while every account of its pool is spent"
+    );
+    ensure_eq!(
+        world.agent.log.count("carry"),
+        0,
+        "carries asked with no account chosen"
+    );
+    world.host.advance(2 * 3600);
+    world.engine().settle(None);
+    ensure_eq!(
+        (talk_account(&world, &id), talk_resumes(&world, &id)),
+        (by("work-1", AccountFrom::Conversation), Some("s-1".into())),
+        "talk's account once work-1's reset passed and the session it resumes"
     );
     Ok(())
 }

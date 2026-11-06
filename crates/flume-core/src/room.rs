@@ -19,6 +19,7 @@
 
 use crate::accounts::{AccountRoom, PoolRoom, Usable, THRESHOLD};
 use crate::answer::and_list;
+use crate::live::waits_on_session;
 use crate::{
     AccountStatus, Act, Answer, Engine, HostStatus, LabelStatus, PoolStatus, Queued, Reserves,
     RoomWanted, Step, StreamStatus, TitleFrom, TitleHeld,
@@ -301,6 +302,10 @@ pub(crate) struct Waiting {
     pub order: u64,
     pub since: Option<Seconds>,
     pub words: Option<String>,
+    /// It waits while a process runs the conversation its start would
+    /// carry, or flume could not read whether one does, as the last settle
+    /// read it: it starts only once a claim reads none (49, 207).
+    pub session: bool,
 }
 
 impl Waiting {
@@ -436,8 +441,9 @@ impl Queue {
     /// is full, the room its stream's other labels keep free is all it has
     /// left, its pool has no usable account, or a stage of another place
     /// waits that stands before it in the order stages start and could
-    /// start now, its pool holding an account of its program (70, 143,
-    /// 145, 181; core.26).
+    /// start now, its pool holding an account of its program and no
+    /// process last read running the conversation it would carry (70, 143,
+    /// 145, 181, 207; core.26).
     pub fn must_wait(
         &self,
         place: &PlaceId,
@@ -468,7 +474,10 @@ impl Queue {
         start_order(&standings)
             .into_iter()
             .take_while(|&index| index < others.len())
-            .any(|index| others[index].runs(self) && others[index].wants(self).is_none())
+            .any(|index| {
+                let other = others[index];
+                other.runs(self) && !other.session && other.wants(self).is_none()
+            })
     }
 
     /// Where `waiting` stands among the stages waiting (70, 181).
@@ -662,6 +671,7 @@ impl Engine {
                             priority: held.priority,
                             order: room.order,
                             since: stage.since,
+                            session: waits_on_session(&room),
                             words: room.words,
                         }
                     })

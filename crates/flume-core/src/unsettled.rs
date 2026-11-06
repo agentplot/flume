@@ -12,7 +12,7 @@
 //! account's usage limit, carrying nothing (146, 179).
 
 use crate::start::{StartReason, Starts};
-use crate::uncarried::{after_uncarried, carries};
+use crate::uncarried::{after_uncarried, carries, words_after};
 use crate::{Engine, Step};
 use flume_seams::*;
 
@@ -88,9 +88,9 @@ impl Engine {
                 "the start that carried its conversation began {}",
                 unsettled.words()
             );
-            (StartReason::Spent.words(), after_uncarried(start, why))
+            (words_after(start), after_uncarried(start, why))
         } else {
-            (StartReason::Unsettled.words(), None)
+            (Some(StartReason::Unsettled.words()), None)
         };
         {
             let _room = self.host.room();
@@ -108,14 +108,14 @@ impl Engine {
                 stage.end = None;
                 stage.room = Some(RoomWait {
                     order,
-                    words: Some(words.clone()),
+                    words: words.clone(),
                     carry: carry.clone(),
                     ..RoomWait::default()
                 });
                 Step::Write(())
             });
         }
-        self.start_stage(id, index, Some(words));
+        self.start_stage(id, index, words);
         true
     }
 }

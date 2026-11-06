@@ -108,6 +108,11 @@ impl FakeAgent {
     /// the account, as a program knows its configuration home (179).
     pub const HOME: &'static str = "AGENT_HOME";
 
+    /// What [`FakeAgent::carry_to`] scripts for an environment that names
+    /// no [`FakeAgent::HOME`], the login environment's under no pool, as a
+    /// program reads its own configuration home there (49, 179).
+    pub const LOGIN: &'static str = "no home";
+
     pub fn new(terminal: Arc<FakeTerminal>) -> FakeAgent {
         FakeAgent {
             terminal,
@@ -216,9 +221,11 @@ impl FakeAgent {
         self.with(agent, |record| record.session = Some(session));
     }
 
-    /// The program carries a stopped start's conversation to the account
-    /// whose [`FakeAgent::HOME`] is `home` as `carry` says: yes with the
-    /// session it resumes, or no with the words (179).
+    /// The program carries a stopped or lost start's conversation to the
+    /// account whose [`FakeAgent::HOME`] is `home`, or to the login
+    /// environment's where `home` is [`FakeAgent::LOGIN`], as `carry`
+    /// says: yes with the session it resumes, or no with the words (49,
+    /// 179).
     pub fn carry_to(&self, home: &str, carry: Carry) {
         lock(&self.state).carries.insert(home.to_string(), carry);
     }
@@ -609,7 +616,9 @@ impl Agent for FakeAgent {
                         .into(),
                 }
             } else {
-                home.and_then(|home| state.carries.get(home))
+                state
+                    .carries
+                    .get(home.map_or(Self::LOGIN, String::as_str))
                     .cloned()
                     .unwrap_or_else(|| Carry::No {
                         why: format!(
@@ -621,7 +630,7 @@ impl Agent for FakeAgent {
         };
         self.log.push(format!(
             "carry {earlier} in {folder} to {}: {}",
-            home.map_or("no home", String::as_str),
+            home.map_or(Self::LOGIN, String::as_str),
             match &answer {
                 Carry::Yes { session } => format!("yes {session}"),
                 Carry::No { .. } => "no".to_string(),
