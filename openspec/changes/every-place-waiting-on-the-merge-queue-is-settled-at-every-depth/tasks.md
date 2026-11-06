@@ -20,7 +20,7 @@ it, its other tasks done.
 ## 1. The decision recorded
 
 - [x] 1.1 Hold record 0051, accepted on the user's approval of 2026-11-06, "Every branch that lands is a place's, a caller keeps watch over the host, and every place waiting on the merge queue is settled at every depth", as this change's design stage wrote it: the user's note of 2026-11-06 and their two answers quoted whole, its sources naming the statement on main at 51b6316, and the options design's "Alternatives Considered" weighs; amend it where the statement the build reads differs (10, 18, 46, 119, 122, 202 to 206 and 208; core.19). True when `sluice exec main -- moon run root:adrs root:format` passes.
-- [ ] 1.2 Hold core.53 and core.13's rule in `docs/architecture/core.md` and their mirror in `site/src/content/docs/architecture/rules.md`, and core.5's, core.6's, core.13's, core.25's and core.49's details, as this change's design stage wrote them, citing record 0051 (core.19, core.35). True when `sluice exec main -- moon run root:format site:prose site:build` passes.
+- [x] 1.2 Hold core.53 and core.13's rule in `docs/architecture/core.md` and their mirror in `site/src/content/docs/architecture/rules.md`, and core.5's, core.6's, core.13's, core.25's and core.49's details, as this change's design stage wrote them, citing record 0051 (core.19, core.35). True when `sluice exec main -- moon run root:format site:prose site:build` passes.
 - [ ] 1.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run root:format root:adrs root:changes site:prose site:build` passes.
 
 ## 2. The host's watch
