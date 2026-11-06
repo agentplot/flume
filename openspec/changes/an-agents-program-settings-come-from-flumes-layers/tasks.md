@@ -66,7 +66,7 @@ appears in any answer, log line, held state or panic.
 ## 9. Coverage and the gate
 
 - [x] 9.1 Cite 195, 196, S100, S101 and S102 from this change's scenarios and walkthroughs, and take them off the suite's list of unbuilt clauses (clause-coverage spec). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 9.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools site:prose site:build root:format root:adrs root:changes root:specs` passes, and `openspec archive an-agents-program-settings-come-from-flumes-layers --yes` over a copy of `openspec/` leaves `openspec validate --specs --strict` passing.
+- [x] 9.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools site:prose site:build root:format root:adrs root:changes root:specs` passes, and `openspec archive an-agents-program-settings-come-from-flumes-layers --yes` over a copy of `openspec/` leaves `openspec validate --specs --strict` passing.
 
 ## 10. The live check
 
