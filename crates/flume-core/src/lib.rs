@@ -16,6 +16,7 @@ mod deliver;
 mod end;
 mod ends;
 mod held;
+mod kinds_lock;
 mod launch;
 mod line;
 mod open;
@@ -41,6 +42,7 @@ pub use acts::Retry;
 pub use answer::*;
 pub use ends::{notice, what_ended};
 pub use held::Step;
+pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
 pub use prompt::group_name;
 pub use start_record::{
@@ -216,6 +218,7 @@ mod tests {
                 label: None,
             },
             declared: Declared::Flume,
+            kind_from: None,
             name: "one".into(),
             branch: "fix/one".into(),
             base: "main".into(),

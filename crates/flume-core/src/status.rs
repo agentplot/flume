@@ -1,13 +1,16 @@
 //! Status of one place or every place (56 to 62): every fact of a
 //! deliverable, a change or a submission read where it lives when asked,
-//! at one head per place; nothing written, sent or started (57, 58).
+//! at one head per place; nothing written, sent or started (57, 58). A
+//! place's kind is named by its identity and where it came from as its
+//! launch read them, none for a place whose held state keeps neither, its
+//! `declared` then saying its source (19, 21).
 
 use crate::reading::{find_group, reads_change};
 use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
     Act, AgentSettings, AgentStatus, Answer, EndStatus, Engine, GroupStatus, ModeStatus,
-    MoveStatus, PlaceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
+    MoveStatus, PlaceStatus, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -195,6 +198,11 @@ impl Engine {
             kind: place.kind.name.clone(),
             version: place.kind.version,
             declared: place.declared,
+            identity: place
+                .kind_from
+                .as_ref()
+                .map(|from| from.identity.spelled.clone()),
+            kind_from: place.kind_from.clone(),
             name: place.name.clone(),
             branch: place.branch.clone(),
             base: place.base.clone(),
@@ -241,6 +249,42 @@ impl Engine {
 }
 
 impl Engine {
+    /// Each source the host declares as it stands when asked, by name: its
+    /// file, its packages' directory and every identity that directory
+    /// holds, or why its file or its directory cannot be read (56, 159,
+    /// 191; core.15).
+    pub(crate) fn host_sources(&self) -> Vec<SourceStatus> {
+        let kinds = self.resolver.kinds();
+        self.host
+            .sources()
+            .into_iter()
+            .map(|(name, source)| match source.read {
+                HostSourceRead::Read { kinds_dir } => {
+                    let (kinds, cannot_read) = match kinds.read_source(&name, &kinds_dir) {
+                        SourceRead::Read { kinds } => {
+                            (kinds.into_iter().map(|kind| kind.spelled).collect(), None)
+                        }
+                        SourceRead::CouldNotRead { reason } => (vec![], Some(reason)),
+                    };
+                    SourceStatus {
+                        name,
+                        source_file: source.file,
+                        kinds_dir: Some(kinds_dir),
+                        kinds,
+                        cannot_read,
+                    }
+                }
+                HostSourceRead::CouldNotRead { reason } => SourceStatus {
+                    name,
+                    source_file: source.file,
+                    kinds_dir: None,
+                    kinds: vec![],
+                    cannot_read: Some(reason),
+                },
+            })
+            .collect()
+    }
+
     /// The task group of the place's current stage where it repeats, as
     /// status gives it, read from the change at the branch's head (58,
     /// 139, 142).

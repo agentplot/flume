@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "6188a10";
+pub const REVISION: &str = "ff616eb";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -20,7 +20,7 @@ pub fn part_a() -> Vec<u32> {
         .chain(165..=173)
         .chain(175..=177)
         .chain(180..=186)
-        .chain([190])
+        .chain([190, 191])
         .collect()
 }
 
@@ -36,6 +36,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(151..=153)
         .chain([160, 164, 174, 178, 179])
         .chain(187..=189)
+        .chain([192])
         .collect()
 }
 
@@ -48,19 +49,23 @@ pub fn all() -> Vec<String> {
         .map(|clause| clause.to_string())
         .collect();
     all.extend((1..=8).map(|invariant| format!("I{invariant}")));
-    all.extend((1..=SCENARIOS).map(|scenario| format!("S{scenario}")));
+    all.extend(
+        (1..=SCENARIOS)
+            .filter(|scenario| !SCENARIO_GAP.contains(scenario))
+            .map(|scenario| format!("S{scenario}")),
+    );
     all
 }
 
-/// The last scenario of section 11, which numbers them with no gap.
-pub const SCENARIOS: u32 = 91;
+/// The last scenario of section 11.
+pub const SCENARIOS: u32 = 97;
+
+/// The numbers section 11 skips: the revision holds no S92 to S94.
+pub const SCENARIO_GAP: std::ops::RangeInclusive<u32> = 92..=94;
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
 pub const STANDING: &str = "record 0021's change, the standing prompt, once its plan is approved";
-
-/// The change that builds record 0022's locks and packages from outside.
-pub const PACKAGES: &str = "record 0022's change, locks and packages, once its plan is approved";
 
 /// The change that builds record 0024's plan stage, after its mode.
 pub const PLAN: &str = "record 0024's plan stage's change, built after the mode";
@@ -86,20 +91,13 @@ pub const MCP_SERVERS: &str =
 
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
-/// asks none to be cited. 154 and 157 are built as far as flume's own
-/// kinds go, one package per version and a launch naming a version, and
-/// their scenarios cite them.
+/// asks none to be cited.
 pub fn unbuilt() -> Vec<(String, &'static str)> {
     let standing = [148, 149, 152]
         .map(|clause| clause.to_string())
         .into_iter()
         .chain((57..=58).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, STANDING));
-    let packages = [155, 156, 158, 159, 160]
-        .map(|clause| clause.to_string())
-        .into_iter()
-        .chain((59..=63).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, PACKAGES));
     let plan = [163, 164]
         .map(|clause| clause.to_string())
         .into_iter()
@@ -119,7 +117,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
     standing
-        .chain(packages)
         .chain(plan)
         .chain(points)
         .chain(profiles)
@@ -136,8 +133,8 @@ mod tests {
     fn the_clauses_listed() {
         let a = part_a();
         let b = part_b();
-        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 1);
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3);
+        assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 2);
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 1);
         for gap in [100, 150] {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
         }
@@ -146,38 +143,48 @@ mod tests {
         every.sort();
         assert_eq!(
             every,
-            (1..=190)
+            (1..=192)
                 .filter(|clause| ![100, 150].contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 188 + 8 + 91);
+        assert_eq!(all().len(), 190 + 8 + 94);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        assert_eq!(REVISION, "6188a10");
+        for gap in ["S92", "S93", "S94"] {
+            assert!(!all().contains(&gap.to_string()), "{gap} is listed");
+        }
+        for scenario in ["S91", "S95", "S96", "S97"] {
+            assert!(
+                all().contains(&scenario.to_string()),
+                "{scenario} is not listed"
+            );
+        }
+        assert_eq!(REVISION, "ff616eb");
         for clause in [
-            129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 157, 161, 162, 163, 165, 168, 169,
-            173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190,
+            129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 155, 156, 157, 158, 159, 161, 162,
+            163, 165, 168, 169, 173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191,
         ] {
             assert!(part_a().contains(&clause), "{clause} is not in Part A");
         }
         for clause in [
             126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179, 187,
-            188, 189,
+            188, 189, 192,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
     }
 
     #[test]
-    fn the_clauses_unbuilt_are_records_0021_0022_0024s_plan_0025_0026_0028_and_0029s_and_183() {
+    fn the_clauses_unbuilt_are_records_0021_0024s_plan_0025_0026_0028_and_0029s_and_183() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 5 + 5 + 3 + 6 + 10 + 6 + 1);
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
             "S65", "S66", "S67", "S78", "S79", "S80", "S81", "180", "181", "182", "S82", "S83",
             "S84", "S85", "184", "185", "186", "187", "188", "189", "190", "S86", "S87", "S88",
-            "S89", "S90", "S91",
+            "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
+            "S61", "S62", "S63", "S95", "S96", "S97",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

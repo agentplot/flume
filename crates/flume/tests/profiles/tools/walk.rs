@@ -178,7 +178,7 @@ impl Walk {
         self
     }
 
-    /// The walkthrough's home.
+    /// The walkthrough's home, its configuration under `config/flume`.
     pub fn home(&self) -> &Path {
         &self.home
     }

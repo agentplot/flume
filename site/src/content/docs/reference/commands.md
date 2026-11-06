@@ -23,6 +23,7 @@ sidebar:
 | `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
 | `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
 | `flume wake <address>` | Wake a role's address: launch its run where none stands. |
+| `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
 | `flume open [<stream>]` | Show a stream's agents in its view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
 | `flume mcp` | Serve flume's status over MCP on standard input and output. |
 | `flume needs <words>` | From an agent flume started: its stage cannot deliver without an answer, or found work. |
@@ -61,8 +62,9 @@ error. `flume wait` has exits of its own.
 `wait`, `inbox` and `wake`, settles every place on the host first,
 unless every multiplexer the host binds keeps a watch, as herdr's plugin
 does. `flume status`, `flume prompt` and `flume mcp` only read,
-`flume status --line` and `flume hook status-line` among them, and
-`flume open` settles nothing.
+`flume status --line` and `flume hook status-line` among them.
+`flume open` settles nothing, and `flume kinds lock` writes its lock and
+settles nothing.
 
 ## `flume launch`
 
@@ -72,7 +74,7 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 
 | Flag | |
 |---|---|
-| `--kind <kind>` | The kind, resolved from the launch's `--kinds` file, then the repository's `.config/flume.toml` at the base, then flume's own. Required. |
+| `--kind <kind>` | The kind by its name, `<name>` or `<name>@<version>`, resolved from the launch's `--kinds` file, then the repository's `.config/flume.toml` at the base, then flume's own. Or by its identity, `<source>/<name>` or `<source>/<name>@<version>`, from that source alone: `flume`, `repo`, `launch` or one the host declares ([where kinds come from](/flume/guides/kinds/#where-kinds-come-from)). Required. |
 | `--name <name>` | The work's name, which names its branch, `<prefix>/<name>`, and its place, `<kind>--<name>`. Required. |
 | `--base <branch>` | The branch the place is cut from and lands on; where none is named, the repository's [default branch](/flume/reference/configuration/#the-repositorys-configflumetoml), its remote's. |
 | `--brief <text>` | What the work is, given whole to every stage whose prompt asks for `{{brief}}`. |
@@ -93,6 +95,12 @@ nothing it made, when:
 
 - the place, its branch or its directory already stands;
 - the kind resolves to no declaration, or a declaration cannot be read;
+- the kind names a source the host does not declare, or one whose file
+  cannot be read, or a version its source does not hold;
+- a kind from a source on the host is recorded in no lock, or its
+  content's hash is not its lock's;
+- the two locks give a kind two hashes, or a lock the launch needs
+  cannot be read;
 - the kind asks for more than flume runs, such as a stage with no agent
   or several;
 - the kind lands and the repository binds no merge queue, or reads a
@@ -128,6 +136,8 @@ place gives:
 
 - its line, the one `--line` prints;
 - its kind, version and origin, and its phase, live or tidied;
+- its kind's identity, where it came from, and for a package its hash
+  and the lock that recorded it;
 - its branch, base and head, and where the base's revision was read:
   where its merge queue lands it, at `origin`, or the local branch's,
   with why;
@@ -150,11 +160,12 @@ place gives:
 The host part gives the agents running, the bound, the room and the
 queue. Each stream's part gives its session, its multiplexer, view,
 terminal app and title, each with where it came from, and its labels.
-Then come each pool's part, each base's count and the role addresses
-with ends pending. Each multiplexer the host binds gives its watch and
-what a tidy kept there. Last comes the host's configuration: whether
-its local layer was taken, each value it set and each key passed over
-with its pin. Where a multiplexer keeps no watch, it says so: places
+Then come each pool's part, each source of kinds the host declares with
+the kinds it holds or why it cannot be read, each base's count and the
+role addresses with ends pending. Each multiplexer the host binds gives
+its watch and what a tidy kept there. Last comes the host's
+configuration: whether its local layer was taken, each value it set and
+each key passed over with its pin. Where a multiplexer keeps no watch, it says so: places
 then move on only at flume's commands and when their agents go quiet.
 Under the line naming the watch, it gives what the terminal's own
 configuration lacks for flume's plugin there, such as herdr's key for
@@ -358,6 +369,48 @@ Wakes a role's address, `<group>/<role>`: launches the run the host's
 `[roles]` table names for it where none stands, and otherwise makes
 nothing, saying the run is live or waits. Refused for a name that is no
 address, or an address the table names nothing for.
+
+## `flume kinds lock`
+
+```sh
+flume kinds lock [--host] [--remove | --hash <hash>] <identity>…
+```
+
+Records each kind named, whole as `<source>/<name>@<version>`, at its
+content's hash, beside any other version of the same kind the lock
+holds, and over an entry of the same identity. A source's kind is read
+as the host holds it, flume's own as flume carries it.
+
+| Flag | |
+|---|---|
+| `--host` | Write the host's lock, `$XDG_CONFIG_HOME/flume/flume.lock`. Without it, the lock is `.config/flume.lock` in the working copy the command runs in, or `--repository`'s, which you commit. |
+| `--remove` | Take each named entry out, reading no package, so a kind whose directory is gone can be taken out. |
+| `--hash <hash>` | With one kind named, record it only where its content hashes to `<hash>`. Otherwise refuse, naming both hashes, and leave the lock as it was. |
+
+It refuses, writing nothing:
+
+- outside a working copy without `--host`, naming `--host`;
+- an identity whose source is `repo` or `launch`, which no lock records;
+- a kind no source holds, naming what its source does hold;
+- a lock that cannot be read, which it never overwrites;
+- `--hash` with more than one kind named.
+
+`--remove` and `--hash` are never given together.
+
+It writes the lock whole, beside it and renamed over it, while it holds
+`$XDG_STATE_HOME/flume/kinds-lock.lock`, so two writers on the host
+never lose each other's entries. It fetches nothing and commits
+nothing, and run twice it leaves the same lock. The answer names the
+lock and each entry recorded or removed:
+
+```console
+$ flume kinds lock --host acme/review@1
+recorded acme/review@1 at sha256:ab12… in ~/.config/flume/flume.lock
+$ flume kinds lock --host --remove acme/review@1
+removed acme/review@1 from ~/.config/flume/flume.lock
+$ flume kinds lock --host --remove acme/review@1
+~/.config/flume/flume.lock is as it was
+```
 
 ## `flume open`
 

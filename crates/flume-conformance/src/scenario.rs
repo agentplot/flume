@@ -112,6 +112,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             repository: repository.into(),
             kind,
             declared: Declared::Flume,
+            kind_from: None,
             name: "one".into(),
             branch: "fix/one".into(),
             base: "main".into(),
