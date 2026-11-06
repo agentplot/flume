@@ -1,3 +1,12 @@
+## Purpose
+
+Where a host's kinds come from beyond flume's own, the repository's and
+a launch's: each source the host declares in a file of its own beside
+its configuration, holding packages side by side; a kind of one named
+by its identity and run only as a lock records its content's hash;
+`flume kinds lock` recording a kind's content; and a place keeping the
+kind its launch read (19, 21, 154 to 160, 191, 192).
+
 ## ADDED Requirements
 
 ### Requirement: The host declares each source in a file of its own
