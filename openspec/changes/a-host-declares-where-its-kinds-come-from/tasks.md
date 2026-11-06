@@ -113,7 +113,7 @@ identities, hashes and locks (design, *What this change rests on*).
 
 ## 7. The site and `/launch`
 
-- [ ] 7.1 Write what design 14 lists into the site, all to any host's operator, naming no host, team or program of ours (design 12, 14; core.35):
+- [x] 7.1 Write what design 14 lists into the site, all to any host's operator, naming no host, team or program of ours (design 12, 14; core.35):
   - `site/src/content/docs/guides/kinds.mdx`;
   - `reference/configuration.md`;
   - `reference/commands.md`;
