@@ -15,6 +15,8 @@ Amended 2026-10-28 by record 0014, accepted by the user: a waiter is a recipient
 
 Amended 2026-11-06 by madswan-design, below: an address may be held by a standing agent the host's configuration names, whose ends go into it and wake no run.
 
+Amended 2026-11-06 by record 0039, its design approved by the user the same day: an address is `<stream>/<role>`, a role of a stream the host declares, where this record wrote `<partition>/<role>`; a role is declared by a source of the host in the roles file its declaration names, never by the host's `[roles]`, and so is the standing agent the amendment below names (record 0039's own amendment); a run is named per address, by its entry's name or `<stream>-<role>`, runs in its address's stream, carries its entry's settings and intent, and is over at its delivery, flume declaring it done with no caller's word; and a stop-short may name the role it is for, of any stream.
+
 Deciders: the user, accepting recommendation R1 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
 
