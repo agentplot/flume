@@ -8,7 +8,9 @@
 //! a launch of the same name going on beside it (3, 62). A wait by place
 //! answers an end pending for its recipient and delivers it, reads one
 //! already delivered, and otherwise follows the host's state under its
-//! timeout, settling nothing under a watch (119, 122); the inbox collects
+//! timeout, settling nothing while a caller keeps watch over the host
+//! and every place before each reading while none does, whatever a
+//! terminal nudges (119, 122, 208); the inbox collects
 //! every end pending for a recipient, each delivered once (75).
 
 use super::settling::deliver_fix;
@@ -97,13 +99,13 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_wait_reads_an_end_delivered,
         },
         Scenario {
-            name: "end delivery: under a terminal that keeps watch a wait calls no seam but the store, and the place moves on only by the watch's settles",
-            cites: &["43", "119", "122", "120"],
+            name: "end delivery: while a caller keeps watch a wait calls no seam but the store, and the place moves on only by the caller's settles",
+            cites: &["43", "119", "120", "208"],
             run: a_wait_under_a_watch,
         },
         Scenario {
-            name: "end delivery: under a terminal that keeps no watch a wait settles every place before each reading",
-            cites: &["43", "119"],
+            name: "end delivery: while no caller keeps watch and the terminal nudges, a wait settles every place before each reading",
+            cites: &["43", "119", "122", "208"],
             run: a_wait_attended,
         },
         Scenario {
@@ -702,7 +704,7 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
         Some(StageState::Begun),
         "code moved without the watch"
     );
-    world.settle(&id);
+    world.engine.settle_every(30);
     clear_calls(&world);
     let second = world
         .engine()
@@ -729,6 +731,7 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
 
 fn a_wait_attended(_: &()) -> Outcome {
     let world = World::new();
+    world.terminal.set_nudge(Nudge::OnChange);
     world.queue.plan_submits(vec![Plan::Hold]);
     let id = fix_for_ops(&world, "one")?;
     deliver_fix(&world, &id);

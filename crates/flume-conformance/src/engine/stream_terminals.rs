@@ -71,6 +71,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_caller_under_a_streams_terminal,
         },
         Scenario {
+            name: "stream terminals: under a caller's watch, the host's terminal nudging and a stream's nudging nothing, a caller's act on another stream settles nothing first, and the stream's places move at the caller's settles",
+            cites: &["119", "122", "190", "208", "S91"],
+            run: one_stream_under_a_terminal_with_no_nudge,
+        },
+        Scenario {
             name: "stream terminals: with no caller keeping watch, the host's terminal and a stream's both nudging, a caller's act settles every place first, and a wait drives its settles",
             cites: &["119", "122", "190", "208"],
             run: every_terminal_nudging_and_no_watch,
@@ -775,6 +780,40 @@ fn a_stage_retried_in_another_terminal(_: &()) -> Outcome {
         other.made(),
         (vec![], vec![]),
         "what other still holds of the place"
+    );
+    Ok(())
+}
+
+/// The stream-terminals spec's "One stream under a terminal with no
+/// nudge": no terminal decides whether flume runs attended, so under a
+/// caller's watch a drop on `work` settles nothing first, and `trial`'s
+/// place, whose terminal nudges nothing, moves at the caller's next
+/// settle (119, 122, 190, 208, S91).
+fn one_stream_under_a_terminal_with_no_nudge(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.set_nudge(Nudge::OnChange);
+    let other = work_and_trial(&world);
+    let trial = fix_on(&world, "trial", "one")?;
+    fix_on(&world, "work", "two")?;
+    world.engine.settle_every(30);
+    other.kill(&trial);
+    let one = World::id("fix", "one");
+    let dropped = world.engine.drop_place(&World::id("fix", "two"), true);
+    ensure!(
+        dropped.refusal().is_none(),
+        "the drop was refused: {dropped:?}"
+    );
+    ensure_eq!(
+        world.stage_state(&one, "code"),
+        Some(StageState::Begun),
+        "the trial stage once a caller dropped a place on work under the watch"
+    );
+    world.host.advance(30);
+    world.engine.settle_every(30);
+    ensure_eq!(
+        world.stage_state(&one, "code"),
+        Some(StageState::Lost),
+        "the trial stage at the caller's settle"
     );
     Ok(())
 }

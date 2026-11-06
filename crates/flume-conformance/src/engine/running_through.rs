@@ -20,8 +20,8 @@ use std::sync::Arc;
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
-            name: "run through: under a terminal that keeps watch a fix runs from its launch to its landing on the watch's and its agent's settles alone, the landing delivered to its recipient and the place tidied",
-            cites: &["119", "122", "131", "I8", "43"],
+            name: "run through: under a caller's watch a fix runs from its launch to its landing on the watch's and its agent's settles alone, the landing delivered to its recipient and the place tidied",
+            cites: &["119", "131", "I8", "43", "208"],
             run: a_fix_runs_unattended,
         },
         Scenario {
@@ -547,8 +547,8 @@ fn released_in_conflict(world: &World, findings: u32) -> Result<PlaceId, String>
     Ok(id)
 }
 
-/// Two settles of the place at once, as the terminal's watch and an
-/// agent going quiet settle it together: the second runs whole just
+/// Two settles of the place at once, as a caller's watch and an agent
+/// going quiet settle it together: the second runs whole just
 /// before the first's first write, which then reads again.
 fn two_settles_at_once(world: &World, id: &PlaceId) -> Outcome {
     let other = world.engine();

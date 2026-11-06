@@ -982,6 +982,57 @@ fn the_kinds_and_change_are_set() {
 }
 
 #[test]
+fn the_terminal_nudges_as_set_and_the_store_keeps_the_hosts_watch() {
+    // The seam-fakes spec's "A watch the clock lets lapse": the fake
+    // terminal nudges nothing until set, and the fake store holds the
+    // host's watch as any host document, by compare-and-set, so a watch
+    // written at the fake clock's time lapses once the clock passes
+    // twice its bound and is kept again by the next one written (106,
+    // 119, 122, 208).
+    let host = Arc::new(FakeHost::default());
+    let terminal = FakeTerminal::new(host.clone());
+    assert_eq!(terminal.nudge(), Nudge::None);
+    terminal.set_nudge(Nudge::OnChange);
+    assert_eq!(terminal.nudge(), Nudge::OnChange);
+    let store = FakeStore::default();
+    assert!(store.read_host(&HostKey::Watch).is_none());
+    let first = Watched {
+        began: host.now(),
+        bound: 30,
+    };
+    let Written::Written { version } =
+        store.write_host(&HostKey::Watch, None, Some(&HostDocument::Watch(first)))
+    else {
+        panic!("the first watch was not written");
+    };
+    assert!(first.kept(host.now()));
+    host.advance(61);
+    assert!(!first.kept(host.now()), "a watch kept past twice its bound");
+    assert_eq!(
+        store.write_host(&HostKey::Watch, None, Some(&HostDocument::Watch(first))),
+        Written::Moved,
+        "a second first write"
+    );
+    let next = Watched {
+        began: host.now(),
+        bound: 30,
+    };
+    assert!(matches!(
+        store.write_host(
+            &HostKey::Watch,
+            Some(version),
+            Some(&HostDocument::Watch(next))
+        ),
+        Written::Written { .. }
+    ));
+    assert_eq!(
+        store.host_document(&HostKey::Watch),
+        Some(HostDocument::Watch(next))
+    );
+    assert!(next.kept(host.now()));
+}
+
+#[test]
 fn the_store_runs_an_interleaved_act_before_the_next_write() {
     let store = Arc::new(FakeStore::default());
     let id = PlaceId::new("/r/places/fix--one");
