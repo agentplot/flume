@@ -96,14 +96,18 @@ settles() {
   grep -c '^settle$' "$FAKE/flume-calls"
 }
 
+statuses() {
+  grep -c '^status --json$' "$FAKE/flume-calls"
+}
+
 # A status of one change place at its code stage, its agent on pane $1
 # of this server, $2 of 5 tasks ticked, its agent $3, and its line saying
 # so; and its base's workspace w1 with its count.
 status_of() {
   jq -n --arg pane "$1" --argjson ticked "$2" --arg state "$3" --arg sock "$SOCK" '
-    {status: {host: {watch: {bound: {seconds: 30}},
-        bases: [{repository: "/r", base: "main", line: "1 running · 0 asking · 0 waiting on caller · 0 stalled",
-                 count: {running: 1, asking: 0, waiting_on_caller: 0, stalled: 0}, shown_at: "herdr:w1@\($sock)"}]},
+    {status: {host: {bases: [{repository: "/r", base: "main",
+        line: "1 running · 0 asking · 0 waiting on caller · 0 stalled",
+        count: {running: 1, asking: 0, waiting_on_caller: 0, stalled: 0}, shown_at: "herdr:w1@\($sock)"}]},
       places: [{place: "/r/places/change--plan", kind: "change", name: "plan", phase: "live",
         current: "code", tasks: [range(5) | {text: "t", ticked: (. < $ticked)}],
         submission: null, waiting_on: null, stalled: false,
@@ -211,7 +215,7 @@ kill "$writer" 2>/dev/null
 wait "$watch"
 pass
 
-fresh 'watch: a state change settles before the bound'
+fresh 'watch: a state change settles at that tick (122)'
 status_of p1 2 working >"$FAKE/status.json"
 panes p1:working
 tick_at 1000
@@ -219,10 +223,10 @@ tick_at 1005
 [ "$(settles)" -eq 1 ] || fail "settled with nothing changed: $(settles)"
 panes p1:idle
 tick_at 1010
-[ "$(settles)" -eq 2 ] || fail "the agent's change from working to idle was not settled at once"
+[ "$(settles)" -eq 2 ] || fail "the agent's change from working to idle was not settled at that tick"
 pass
 
-fresh 'watch: an agent come up since status was written settles before the bound (122)'
+fresh 'watch: an agent come up since status was written settles at that tick (122)'
 status_of p1 2 working >"$FAKE/status.json"
 panes p1:working
 tick_at 1000
@@ -231,7 +235,7 @@ tick_at 1004
 # A retry's agent, started by a command of its own: no status names it.
 panes p1:working p2:idle
 tick_at 1006
-[ "$(settles)" -eq 2 ] || fail "the new agent was not settled until the bound"
+[ "$(settles)" -eq 2 ] || fail "the new agent was not settled at that tick"
 panes p1:working p2:idle p3:
 tick_at 1008
 [ "$(settles)" -eq 2 ] || fail "a pane with no agent in it was settled"
@@ -248,26 +252,37 @@ tick_at 1002
   fail "a tick asked herdr more than one listing: $(cat "$FAKE/herdr-calls")"
 pass
 
-fresh 'watch: nothing changes for three bounds'
-status_of p1 2 working >"$FAKE/status.json"
+fresh 'watch: nothing changes for ten minutes, a submitted place with no agent among the places (122, 208)'
+# Beside the agent's place, a chore submitted to its base, no agent in it.
+status_of p1 2 working | jq '.status.places += [.status.places[0] | .place = "/r/places/chore--tidy"
+  | .kind = "chore" | .name = "tidy" | .current = null | .tasks = null | .clues = null
+  | .submission = {read: {found: {}}}
+  | .line = {name: "chore--tidy", kind: "chore@1", state: "submitted",
+             full: "chore--tidy · chore@1 · submitted", short: "submitted"}]' >"$FAKE/status.json"
 panes p1:working
-at=1000
-while [ "$at" -le 1090 ]; do
+tick_at 1000
+: >"$FAKE/flume-calls"
+at=1010
+n=0
+while [ "$at" -le 1600 ]; do
   tick_at "$at"
   at=$((at + 10))
+  n=$((n + 1))
 done
-[ "$(settles)" -eq 4 ] || fail "not one settle per bound: $(settles) in 90 seconds"
+[ "$(settles)" -eq 0 ] || fail "settled $(settles) times with no agent's change in ten minutes"
+[ "$(statuses)" -eq "$n" ] || fail "status written $(statuses) times in $n ticks"
+jq -e '.status.places[1].submission != null' "$S/status.json" >/dev/null || fail "the sidebar's status was not written"
 others=$(grep -v -e '^settle$' -e '^status --json$' "$FAKE/flume-calls")
 [ -z "$others" ] || fail "ran more of flume's than settle and status: $others"
 pass
 
-fresh 'watch: a pane killed by hand is read within one bound (S28)'
+fresh 'watch: a pane killed by hand is read at the next tick (S28)'
 status_of p1 2 working >"$FAKE/status.json"
 panes p1:working
 tick_at 1000
 panes
 tick_at 1002
-[ "$(settles)" -eq 2 ] || fail "the pane closed by hand was not settled within the bound"
+[ "$(settles)" -eq 2 ] || fail "the pane closed by hand was not settled at the next tick"
 pass
 
 fresh 'watch: herdr not answering stops it'
@@ -309,8 +324,9 @@ jq -e --arg file "$HERDR_CONFIG_PATH" '.[0] | contains("binds no key to flume'"'
   "$S/setup.json" >/dev/null || fail "the key's words: $(jq -r '.[0]' "$S/setup.json")"
 jq -e --arg file "$HERDR_CONFIG_PATH" '.[1] | contains("shows no row of flume'"'"'s in the sidebar: add \"$flume\"") and contains($file)' \
   "$S/setup.json" >/dev/null || fail "the rows' words: $(jq -r '.[1]' "$S/setup.json")"
-# A settle more: the words written again, and logged at the start alone.
-echo 1100 >"$t/clock"
+# A settle more, at the agent's change: the words written again, and
+# logged at the start alone.
+panes p1:idle
 within 10 '[ "$(settles)" -ge 2 ]' || fail "the watch did not settle again"
 sleep 1
 jq -r '.[]' "$S/setup.json" >"$t/words"
@@ -326,8 +342,8 @@ FLUME_HERDR_TICK=1 sh "$plugin/bin/watch.sh" --ensure
 within 10 '[ "$(settles)" -ge 1 ] && [ "$(jq length "$S/setup.json" 2>/dev/null)" = 2 ]' ||
   fail "with no file, setup.json holds: $(cat "$S/setup.json" 2>&1)"
 readme_toml >"$HERDR_CONFIG_PATH"
-echo 1100 >"$t/clock"
-within 10 '[ "$(jq -c . "$S/setup.json" 2>/dev/null)" = "[]" ]' ||
+panes p1:working
+within 10 '[ "$(settles)" -ge 2 ] && [ "$(jq -c . "$S/setup.json" 2>/dev/null)" = "[]" ]' ||
   fail "after a settle, setup.json holds: $(cat "$S/setup.json" 2>&1)"
 no_notification
 pass
@@ -498,35 +514,27 @@ printf 't\nq' | sh "$plugin/bin/places.sh" >"$t/out" 2>&1
 no_send
 pass
 
-## unattended
+## the nudge
 
-fresh 'unattended: the watch alone drives a place from its launch to its landing (119, 122, I8)'
-flume launch --kind fix --name one >/dev/null
-panes p1:idle
-at=1000
-while [ "$at" -le 1300 ] && [ "$(cat "$FAKE/drive")" != tidied ]; do
-  tick_at "$at"
-  at=$((at + 30))
-done
-[ "$(cat "$FAKE/drive")" = tidied ] || fail "the place stands at $(cat "$FAKE/drive")"
-after=$(sed 1d "$FAKE/flume-calls" | grep -v -e '^settle$' -e '^status --json$')
-[ -z "$after" ] || fail "something but the watch's settles ran after the launch: $after"
-no_send
-pass
-
-fresh 'unattended: a stage waiting for room starts within the bound once the host has room (70, 122)'
+fresh 'nudge: a stage waiting for room starts when an agent goes, and not as time passes (70, 122, 208)'
 touch "$FAKE/no-room"
 flume launch --kind fix --name one >/dev/null
+# Another agent on the server, of no place status names.
+panes p9:working
 tick_at 1000
-tick_at 1010
 [ "$(cat "$FAKE/drive")" = waiting ] || fail "the place stands at $(cat "$FAKE/drive") with no room"
-# The host's configuration changed: there is room now.
+# The host's configuration changed: there is room now, and no agent changed.
 rm "$FAKE/no-room"
-tick_at 1020
-tick_at 1030
-[ "$(cat "$FAKE/drive")" = code-working ] || fail "the place stands at $(cat "$FAKE/drive") a bound after the host had room"
+tick_at 1010
+tick_at 1300
+[ "$(cat "$FAKE/drive")" = waiting ] || fail "the place stands at $(cat "$FAKE/drive") with no agent's change"
+# That agent ends and its pane goes: the room it held is the host's.
+panes
+tick_at 1302
+[ "$(cat "$FAKE/drive")" = code-working ] || fail "the place stands at $(cat "$FAKE/drive") after an agent went"
 after=$(sed 1d "$FAKE/flume-calls" | grep -v -e '^settle$' -e '^status --json$')
-[ -z "$after" ] || fail "something but the watch's settles ran after the launch: $after"
+[ -z "$after" ] || fail "something but the watch's settles and status ran after the launch: $after"
+[ "$(settles)" -eq 2 ] || fail "settled $(settles) times for two changes"
 no_send
 pass
 

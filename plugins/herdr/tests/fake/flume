@@ -28,7 +28,7 @@ settle)
 status)
   if [ -f "$FAKE/drive" ]; then
     jq -n --arg at "$(cat "$FAKE/drive")" --arg sock "${HERDR_SOCKET_PATH:-}" '
-      {status: {host: {watch: {bound: {seconds: 30}}, bases: []},
+      {status: {host: {bases: []},
         places: (if $at == "tidied" then [] else [{
           place: "/r/places/fix--one", kind: "fix", name: "one",
           phase: (if $at == "landed" then {over: {over: "landed"}} else "live" end),

@@ -4,17 +4,20 @@
 # herdr's startup hook, starts it unless a watch holds a fresh lease.
 # Running, on each short tick it reads every pane's agent state in one
 # herdr listing, and when a flume agent's state changed since the last
-# tick, an agent came up or went in one of the server's panes, as a new
-# stage's does before any status names it, or the bound passed since its
-# last settle, it runs `flume settle`,
-# writes `flume status --json` for the sidebar and the popup, and reports
-# the display clues and the sidebar rows status gives (46, 119, 120, 139;
-# core.13, core.14). At its start and after each settle it writes what
-# herdr's configuration lacks for the plugin, for flume's status to give,
-# and logs it once at its start, telling no person (72, 122). It runs
-# nothing else of flume's. What it holds between ticks is in its state
-# directory, so `--ticks N`, which stops it after N ticks (the tests),
-# goes on where the last left off.
+# tick, or an agent came up or went in one of the server's panes, as a
+# new stage's does before any status names it, it runs `flume settle`:
+# the terminal's nudge, which keeps no bound and decides nothing of
+# whether flume runs attended, the host's watch being a caller's (119,
+# 208). At every tick it writes `flume status --json` for the sidebar and
+# the popup, and reports the display clues and the sidebar rows status
+# gives where they differ from those it last reported (46, 120, 139;
+# core.13, core.14). At every tick, its start's and each settle's among
+# them, it writes what herdr's configuration lacks for the plugin, for
+# flume's status to give, and logs it once at its start, telling no
+# person (72, 122). It runs nothing else of flume's. What it holds
+# between ticks is in its state directory, so `--ticks N`, which stops it
+# after N ticks (the tests), goes on where the last left off: its first
+# tick, having seen nothing, reads every agent as come up.
 set -u
 . "$(dirname "$0")/../lib/common.sh"
 . "$root/lib/lease.sh"
@@ -165,32 +168,45 @@ states() {
 # terminal shows it on this server: a pane's title, the agent's name and
 # its row, the short form of its place's line; a base's workspace's count
 # line. Copied from status and computed by nothing here (56, 60, 139;
-# core.14). A report that fails is logged and the tick goes on.
+# core.14). Where they are those the last tick reported, herdr already
+# shows them and nothing is asked of it, so a tick where nothing changed
+# makes no call per pane (core.29). A report that fails is logged and the
+# tick goes on, and the next tick reports them all again.
 report() {
   jq -r '
     (.status.places[]? | select(.clues != null and .clues.shown_at.agent != null)
       | ["pane", .clues.shown_at.agent, .clues.title, .clues.display_agent, .line.short]),
     (.status.host.bases[]? | select(.shown_at != null) | ["workspace", .shown_at, .line])
     | @tsv' "$status" 2>/dev/null >"$state/reports"
+  cmp -s "$state/reports" "$state/reported" 2>/dev/null && return 0
+  rm -f "$state/reported"
+  failed=0
   while IFS='	' read -r what at a b c; do
     id=$(on_this_server "$at")
     [ -n "$id" ] || continue
     if [ "$what" = pane ]; then
-      said=$(hd pane report-metadata "$id" --source flume --title "$a" --display-agent "$b" --token "flume=$c" 2>&1 >/dev/null) ||
+      said=$(hd pane report-metadata "$id" --source flume --title "$a" --display-agent "$b" --token "flume=$c" 2>&1 >/dev/null) || {
+        failed=1
         say "the clues of the pane $id were not reported: ${said:-no answer within ${bound}s}"
+      }
     else
-      said=$(hd workspace report-metadata "$id" --source flume --token "flume=$a" 2>&1 >/dev/null) ||
+      said=$(hd workspace report-metadata "$id" --source flume --token "flume=$a" 2>&1 >/dev/null) || {
+        failed=1
         say "the count of the workspace $id was not reported: ${said:-no answer within ${bound}s}"
+      }
     fi
   done <"$state/reports"
+  [ "$failed" -eq 0 ] && cp "$state/reports" "$state/reported"
 }
 
-# flume settle, then status written for the sidebar, then the clues, then
-# what herdr's configuration lacks.
+# flume settle, the terminal's nudge.
 settle() {
   flume settle >/dev/null 2>"$state/settle.err" ||
     say "flume settle failed: $(tail -1 "$state/settle.err")"
-  now >"$state/settled"
+}
+
+# Status written for the sidebar and the popup, then the clues.
+write_status() {
   if flume status --json 2>"$state/status.err" | put "$status.new"; then
     if jq -e .status "$status.new" >/dev/null 2>&1; then
       mv -f "$status.new" "$status"
@@ -202,7 +218,6 @@ settle() {
   else
     say "flume status failed: $(tail -1 "$state/status.err")"
   fi
-  setup
 }
 
 gone=0
@@ -221,15 +236,14 @@ while [ "$ticks" -ne 0 ]; do
     fi
   fi
   seen=$(states "$listing")
-  # The bound the herdr terminal profile states, as status gives it.
-  every_settle=$(jq -r '.status.host.watch.bound.seconds // 30' "$status" 2>/dev/null || echo 30)
-  last=$(cat "$state/settled" 2>/dev/null || echo 0)
-  if [ "$seen" != "$(cat "$state/seen" 2>/dev/null)" ] || [ $(($(now) - last)) -ge "${every_settle:-30}" ]; then
-    settle
-    # The panes the new status names, read in the same listing, so only
-    # a change herdr reads after this settle moves the next tick.
-    seen=$(states "$listing")
-  fi
+  # A nudge at an agent's change, and at nothing else: no time passing
+  # settles here (122, 208).
+  [ "$seen" != "$(cat "$state/seen" 2>/dev/null)" ] && settle
+  write_status
+  setup
+  # The panes the new status names, read in the same listing, so only a
+  # change herdr reads after this tick moves the next.
+  seen=$(states "$listing")
   printf '%s\n' "$seen" >"$state/seen"
   [ "$ticks" -gt 0 ] && ticks=$((ticks - 1))
   [ "$ticks" -eq 0 ] && break
