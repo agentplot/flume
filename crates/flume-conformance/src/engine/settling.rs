@@ -23,24 +23,19 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s7_two_held_places,
         },
         Scenario {
-            name: "settle: with no caller keeping watch and nothing nudging, a killed agent is read only when a command acts",
+            name: "settle: with no caller keeping watch, a killed agent is read only when a command acts",
             cites: &["S27", "119", "I8", "57"],
             run: s27_killed_with_nobody_watching,
         },
         Scenario {
-            name: "settle: under a caller's watch, with nothing nudging, a crashed agent reads lost at the caller's next settle, within its bound",
+            name: "settle: under a caller's watch, a crashed agent whose on-quiet never runs reads lost at the caller's next settle, within its bound, nothing settling it before",
             cites: &["S28", "46", "120", "208"],
             run: s28_crashed_under_a_watch,
         },
         Scenario {
-            name: "settle: under a caller's watch, the host's own terminal nudging and a stream under a terminal that nudges nothing, a caller's act settles nothing first, and the stream's places move at the caller's settles",
+            name: "settle: under a caller's watch, the host's terminal one and a stream's another, a caller's act settles nothing first, and the stream's places move at the caller's settles",
             cites: &["119", "122", "190", "208", "S91"],
             run: a_watched_host_with_one_stream_unwatched,
-        },
-        Scenario {
-            name: "settle: under a caller's watch, the host's own terminal nudging, a crashed agent reads lost at the nudge's settle before the caller's next, and the nudge writes no watch",
-            cites: &["S28", "122", "46", "208"],
-            run: crashed_under_a_nudge,
         },
         Scenario {
             name: "settle: a caller's settle with a bound of two minutes holds the host's watch, flume unattended three minutes on and attended at five with no other settle between",
@@ -48,9 +43,9 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_watch_kept_then_lapsed,
         },
         Scenario {
-            name: "settle: a terminal's nudge keeps no watch: with no caller's settle with a bound, a caller's drop settles every place first",
+            name: "settle: no terminal keeps watch: with no caller's settle with a bound, nothing settles at an agent's change and a caller's drop settles every place first",
             cites: &["119", "122", "208"],
-            run: a_nudge_keeps_no_watch,
+            run: no_terminal_keeps_watch,
         },
         Scenario {
             name: "settle: S109, under a caller's watch a submitted chore with no agent is settled at each of the caller's settles, each stepping its base once, and once it lands the next delivers the landing and tidies it",
@@ -68,7 +63,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: two_depths_in_one_settle,
         },
         Scenario {
-            name: "settle: S118, a host with no watch runs attended, a nudge and each act settling every place, until a caller keeps watch and lands a chore with no act, and four minutes after its last settle began it runs attended again",
+            name: "settle: S118, a host with no watch runs attended, its chore submitted at its agent's quiet and its base stepped only by an act settling every place, until a caller keeps watch and lands it with no act, and four minutes after its last settle began it runs attended again",
             cites: &["S118", "46", "119", "122", "124", "208"],
             run: s118_a_host_with_no_watch_runs_attended,
         },
@@ -395,7 +390,6 @@ fn s28_crashed_under_a_watch(_: &()) -> Outcome {
 fn a_watched_host_with_one_stream_unwatched(_: &()) -> Outcome {
     let world = World::new();
     world.engine.settle_every(30);
-    world.terminal.set_nudge(Nudge::OnChange);
     let trial = world.other_terminal("other");
     world.host.set_stream("work", Some(Stream::default()));
     world.host.set_display("trial", Some("other"), None, None);
@@ -1016,31 +1010,6 @@ fn no_agent_live(world: &World, id: &PlaceId) -> bool {
     })
 }
 
-fn crashed_under_a_nudge(_: &()) -> Outcome {
-    let world = World::new();
-    world.engine.settle_every(30);
-    let watched = host_watch(&world).ok_or("no watch held")?;
-    world.terminal.set_nudge(Nudge::OnChange);
-    world.agent.no_on_quiet();
-    let id = World::id("fix", "one");
-    launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
-    world.settle(&id);
-    world
-        .terminal
-        .kill(&World::identity("fix", "one", "code", 1));
-    world.host.advance(2);
-    // The terminal's nudge at the agent's change: a settle naming no place.
-    world.engine().settle(None);
-    ensure_eq!(
-        world.stage_state(&id, "code"),
-        Some(StageState::Lost),
-        "the stage at the nudge's settle"
-    );
-    ensure_eq!(host_watch(&world), Some(watched), "the watch after a nudge");
-    ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
-    Ok(())
-}
-
 fn a_watch_kept_then_lapsed(_: &()) -> Outcome {
     let world = World::new();
     let id = World::id("fix", "one");
@@ -1087,16 +1056,29 @@ fn a_watch_kept_then_lapsed(_: &()) -> Outcome {
     Ok(())
 }
 
-fn a_nudge_keeps_no_watch(_: &()) -> Outcome {
+/// The settling spec's "No terminal keeps watch": no caller has settled
+/// with a bound, and the fake terminal's agents change state, one killed
+/// and one working; nothing settles at those changes, and a caller's drop
+/// settles every place first (119, 122, 208).
+fn no_terminal_keeps_watch(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_nudge(Nudge::OnChange);
     let id = World::id("fix", "one");
-    for name in ["one", "two"] {
+    for name in ["one", "two", "three"] {
         launched(&world.engine.launch(&launch("fix", name, Some("x"))))?;
     }
     world
         .terminal
         .kill(&World::identity("fix", "one", "code", 1));
+    world.terminal.set_state(
+        &World::identity("fix", "three", "code", 1),
+        AgentState::Working,
+    );
+    world.host.advance(10 * 60);
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "the stage after the agents changed, nothing settling"
+    );
     let dropped = world.engine.drop_place(&World::id("fix", "two"), true);
     ensure!(
         dropped.refusal().is_none(),
@@ -1194,9 +1176,16 @@ fn a_queue_that_moves_on_its_own(_: &()) -> Outcome {
     Ok(())
 }
 
+/// The settling spec's "A host with no runner", S118 as amended: no
+/// caller keeps watch, a chore's code stage delivers and the settle its
+/// agent's quiet runs submits the place; nothing settles for ten minutes,
+/// the terminal settling nothing; a caller's drop settles every place
+/// first, stepping the chore's base; a caller then keeps watch, and the
+/// chore lands at a later settle of its with no act; four minutes after
+/// its last settle began none keeps watch, and a drop settles every place
+/// first again (46, 119, 121, 122, 124, 208).
 fn s118_a_host_with_no_watch_runs_attended(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_nudge(Nudge::OnChange);
     world.terminal.add_session("ops", AgentState::Waiting);
     world.queue.plan_submits(vec![Plan::Hold]);
     let host = host_status(&world)?;
@@ -1212,18 +1201,22 @@ fn s118_a_host_with_no_watch_runs_attended(_: &()) -> Outcome {
     launched(&world.engine.launch(&chore))?;
     world.settle(&id);
     world.commit("chore/one", &["chore.rs"]);
-    world.queue.log.clear();
-    // The terminal's nudge at the agent's end settles every place.
-    world.engine().settle(None);
+    // The settle the agent's quiet runs, naming its place.
+    world.settle(&id);
     ensure_eq!(world.queue.log.count("submit"), 1, "the chore submitted");
-    ensure_eq!(
-        world.queue.log.of("step"),
-        vec![format!("step {REPOSITORY} main")],
-        "the nudge's steps"
-    );
+    ensure!(no_agent_live(&world, &id), "an agent of the chore is live");
     world.queue.log.clear();
     world.host.advance(10 * 60);
-    ensure_eq!(world.queue.log.count("step"), 0, "steps with no act");
+    ensure_eq!(
+        world.queue.log.count("step"),
+        0,
+        "steps in ten minutes with no act"
+    );
+    ensure_eq!(
+        world.held(&id).map(|held| held.phase),
+        Some(Phase::Live),
+        "the chore after ten minutes with no act"
+    );
     let dropped = world.engine.drop_place(&World::id("fix", "other"), true);
     ensure!(
         dropped.refusal().is_none(),
@@ -1235,8 +1228,14 @@ fn s118_a_host_with_no_watch_runs_attended(_: &()) -> Outcome {
         "the drop's steps, settling every place first"
     );
     // The runner starts, each pass settling every place with a bound.
+    world.queue.log.clear();
     let first = world.host.now();
     world.engine().settle_every(120);
+    ensure_eq!(
+        world.queue.log.of("step"),
+        vec![format!("step {REPOSITORY} main")],
+        "the caller's settle's steps"
+    );
     let host = host_status(&world)?;
     ensure_eq!(
         (host.watch, host.watch_settled, host.watch_lapsed),

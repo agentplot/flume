@@ -337,52 +337,6 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
     );
 }
 
-/// The nudge of the herdr terminal over a scratch state directory, with
-/// flume's herdr plugin's watch on one server having renewed its lease
-/// `renewed` seconds ago, or with no lease where none is given.
-fn herdr_nudge(name: &str, renewed: Option<u64>) -> Nudge {
-    let scratch = Scratch::new(name);
-    let state = scratch.path("state/flume");
-    std::fs::create_dir_all(&state).expect("flume's state");
-    if let Some(ago) = renewed {
-        let server = scratch.path("state/herdr/plugins/agentplot.flume/servers/1234");
-        std::fs::create_dir_all(&server).expect("the plugin's server state");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("the clock")
-            .as_secs();
-        std::fs::write(
-            server.join("watch.lease"),
-            format!("4242 {}\n/plugin\n0.0.0\n77\n", now - ago),
-        )
-        .expect("the lease");
-    }
-    terminal(Some("herdr"), &state, None)
-        .expect("the herdr terminal")
-        .nudge()
-}
-
-#[test]
-fn the_herdr_terminal_nudges_while_the_plugins_lease_is_fresh() {
-    // 122, C.5, design 2: the plugin's watch renewed its lease a moment
-    // ago, so the terminal answers that it settles at each agent's
-    // change, starting nothing and stating no bound.
-    assert_eq!(herdr_nudge("nudge-fresh", Some(5)), Nudge::OnChange);
-}
-
-#[test]
-fn the_herdr_terminal_nudges_nothing_on_a_stale_lease() {
-    // 122, C.5: a lease last renewed two minutes ago is a watch that
-    // stopped, so nothing nudges.
-    assert_eq!(herdr_nudge("nudge-stale", Some(120)), Nudge::None);
-}
-
-#[test]
-fn the_herdr_terminal_nudges_nothing_without_the_plugin() {
-    // 122, C.5: no lease, the plugin not installed or never started.
-    assert_eq!(herdr_nudge("nudge-none", None), Nudge::None);
-}
-
 /// The content hash of each version of flume's own kinds as this release
 /// records it, the first that reads locks. A version keeps its content in
 /// every later release, so a change to what one holds is a version of its

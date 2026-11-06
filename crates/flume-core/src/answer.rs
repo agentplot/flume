@@ -556,8 +556,8 @@ pub struct HostStatus {
     pub watch_lapsed: Option<Seconds>,
     /// Each terminal the host binds, its own first, then each stream's
     /// by the stream's name, each once: its profile, what it made and
-    /// keeps for what it did not make, its watch, none, and its nudge
-    /// (56, 122, 190).
+    /// keeps for what it did not make, and its watch, none (56, 122,
+    /// 190).
     #[serde(default)]
     pub terminals: Vec<TerminalStatus>,
     /// Each repository's base a live place stands on, with the count of
@@ -817,19 +817,14 @@ pub enum TitleFrom {
 /// A terminal the host binds (119, 190): the profile a stream takes it
 /// by, none for the host's own where no profile flume carries is it,
 /// what it made and keeps for what it did not make, each named with what
-/// holds it, its watch, none since no terminal keeps one, and its nudge,
-/// which decides nothing of the host's watch (61, 122, 208).
+/// holds it, and its watch, none since no terminal keeps one or
+/// settles; nothing of a terminal decides the host's watch (61, 122,
+/// 208).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalStatus {
     pub profile: Option<String>,
     pub kept: Vec<String>,
     pub watch: Watch,
-    #[serde(default = "no_nudge")]
-    pub nudge: Nudge,
-}
-
-fn no_nudge() -> Nudge {
-    Nudge::None
 }
 
 /// A label of a stream (181): its reserve, the slots of the stream it

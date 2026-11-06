@@ -38,9 +38,9 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_watched_host_and_an_unwatched_one,
         },
         Scenario {
-            name: "answers: each terminal's answer in status gives its watch none and its nudge, which decides nothing of the host's watch",
-            cites: &["61", "122"],
-            run: the_terminals_nudge_in_status,
+            name: "answers: under a caller's watch, each terminal's answer in status gives its watch none, the host's own and a stream's, and the host's watch gives the caller's bound",
+            cites: &["61", "122", "208"],
+            run: the_terminals_answers_in_status,
         },
     ]
 }
@@ -615,7 +615,6 @@ fn host_status() -> HostStatus {
             profile: Some("fake".into()),
             kept: vec!["the workspace r main, held by the pane w1:p3".into()],
             watch: Watch::None,
-            nudge: Nudge::OnChange,
         }],
         bases: vec![BaseClues {
             repository: "/r".into(),
@@ -1068,7 +1067,6 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.watch_settled",
             "status.host.terminals",
             "status.host.terminals[].kept",
-            "status.host.terminals[].nudge",
             "status.host.terminals[].profile",
             "status.host.terminals[].watch",
             "status.places",
@@ -2218,31 +2216,44 @@ fn a_watched_host_and_an_unwatched_one(_: &()) -> Outcome {
     Ok(())
 }
 
-/// The place-status spec's "The terminal's nudge in status": the host's
-/// fake terminal nudges, and no caller keeps watch (61, 122).
-fn the_terminals_nudge_in_status(_: &()) -> Outcome {
+/// The place-status spec's "The terminals' answers in status": a caller
+/// keeps watch, the host binds the fake terminal and `trial` names
+/// `other`; each terminal's answer gives its watch none, and the host's
+/// watch gives the caller's bound (61, 122, 208).
+fn the_terminals_answers_in_status(_: &()) -> Outcome {
     let world = super::world::World::new();
-    world.terminal.set_nudge(Nudge::OnChange);
+    world.other_terminal("other");
+    world.host.set_host_display(Some("fake"), None, None);
+    world.host.set_display("trial", Some("other"), None, None);
+    world.engine.settle_every(120);
     let host = host_now(&world)?;
-    let own = host.terminals.first().ok_or("no terminal in status")?;
     ensure_eq!(
-        (own.watch, own.nudge),
-        (Watch::None, Nudge::OnChange),
-        "the host's own terminal's watch and nudge"
+        host.terminals
+            .iter()
+            .map(|terminal| (terminal.profile.clone(), terminal.watch))
+            .collect::<Vec<_>>(),
+        vec![
+            (Some("fake".to_string()), Watch::None),
+            (Some("other".to_string()), Watch::None),
+        ],
+        "each terminal's answer"
     );
     ensure_eq!(
-        (host.watch, host.watch_settled),
-        (Watch::None, None),
-        "the host's watch beside a terminal that nudges"
+        host.watch,
+        Watch::Bound { seconds: 120 },
+        "the host's watch beside the terminals"
     );
     let json = serde_json::to_value(&host).map_err(|error| error.to_string())?;
-    ensure_eq!(
-        (
-            json["terminals"][0]["watch"].as_str(),
-            json["terminals"][0]["nudge"].as_str()
-        ),
-        (Some("none"), Some("on_change")),
-        "the terminal's answer in the JSON form"
-    );
+    for at in 0..2 {
+        let keys: Vec<&str> = json["terminals"][at]
+            .as_object()
+            .map(|answer| answer.keys().map(String::as_str).collect())
+            .unwrap_or_default();
+        ensure_eq!(
+            (json["terminals"][at]["watch"].as_str(), keys),
+            (Some("none"), vec!["kept", "profile", "watch"]),
+            format!("the terminal {at}'s answer in the JSON form")
+        );
+    }
     Ok(())
 }

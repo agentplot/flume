@@ -2,8 +2,9 @@
 //! a place again and takes each step Part A then allows, collecting its
 //! submission's outcomes first, safe to repeat (74, 133). It runs inside
 //! a command of flume's, started by an agent going quiet, by a caller
-//! keeping watch over the host, by a terminal's nudge, or by any other
-//! caller, and waits on no merge queue (120, 208, core.13). Each end it or an act reads is recorded once as it is
+//! keeping watch over the host, or by any other caller, never by a
+//! terminal or a plugin of one, and waits on no merge queue (120, 122,
+//! 208, core.13). Each end it or an act reads is recorded once as it is
 //! written, and the settle delivers each end pending for a recipient,
 //! then wakes each role's address one stands pending for with no run
 //! (43, 132, core.25).
@@ -116,7 +117,7 @@ impl Engine {
     /// Whether flume runs attended: no caller keeps watch over the host,
     /// none being held or the newest lapsed, twice its bound having
     /// passed since it began. No terminal is read (119, 208).
-    pub(crate) fn attended(&self) -> bool {
+    pub fn attended(&self) -> bool {
         !self
             .watched()
             .is_some_and(|watched| watched.kept(self.host.now()))
@@ -133,8 +134,8 @@ impl Engine {
 
     /// Where no caller keeps watch over the host, every command of
     /// flume's that acts on places settles every place first, whatever
-    /// the terminals it binds nudge (119, 190, 208, I8); where one keeps
-    /// watch its settles settle them.
+    /// terminals it binds (119, 190, 208, I8); where one keeps watch its
+    /// settles settle them.
     pub(crate) fn settle_attended(&self) -> Tidied {
         if self.attended() {
             return self.settle_all();

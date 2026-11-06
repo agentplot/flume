@@ -71,14 +71,14 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_caller_under_a_streams_terminal,
         },
         Scenario {
-            name: "stream terminals: under a caller's watch, the host's terminal nudging and a stream's nudging nothing, a caller's act on another stream settles nothing first, and the stream's places move at the caller's settles",
+            name: "stream terminals: under a caller's watch, the host's terminal fake and a stream's other, a caller's act on another stream settles nothing first, and the stream's places move at the caller's settles",
             cites: &["119", "122", "190", "208", "S91"],
-            run: one_stream_under_a_terminal_with_no_nudge,
+            run: one_stream_under_another_terminal,
         },
         Scenario {
-            name: "stream terminals: with no caller keeping watch, the host's terminal and a stream's both nudging, a caller's act settles every place first, and a wait drives its settles",
+            name: "stream terminals: with no caller keeping watch, the host's terminal fake and a stream's other, a caller's act settles every place first under either, and a wait drives its settles",
             cites: &["119", "122", "190", "208"],
-            run: every_terminal_nudging_and_no_watch,
+            run: two_terminals_and_no_watch,
         },
         Scenario {
             name: "stream terminals: S91, a stream under a terminal of its own beside the host's, which decides nothing of whether flume runs attended, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
@@ -86,7 +86,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s91_a_stream_under_its_own_terminal,
         },
         Scenario {
-            name: "stream terminals: status gives each stream's multiplexer with where it came from, each agent's terminal, and each terminal the host binds with what it keeps, its watch none and its nudge, in the JSON form",
+            name: "stream terminals: status gives each stream's multiplexer with where it came from, each agent's terminal, and each terminal the host binds with what it keeps and its watch none, in the JSON form",
             cites: &["56", "122", "190", "S91"],
             run: the_terminals_in_status,
         },
@@ -523,10 +523,13 @@ fn a_caller_under_a_streams_terminal(_: &()) -> Outcome {
     Ok(())
 }
 
-fn every_terminal_nudging_and_no_watch(_: &()) -> Outcome {
+/// The stream-terminals spec's "Two terminals and no watch": no caller
+/// keeps watch, the host's terminal is `fake` and `trial`'s `other`; a
+/// caller's act settles every place first under either, and a wait drives
+/// its settles (119, 122, 190, 208).
+fn two_terminals_and_no_watch(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_nudge(Nudge::OnChange);
-    work_and_trial(&world).set_nudge(Nudge::OnChange);
+    let other = work_and_trial(&world);
     world.terminal.add_session("ops", AgentState::Working);
     let id = World::id("fix", "one");
     launched(&world.engine.launch(&Launch {
@@ -534,7 +537,7 @@ fn every_terminal_nudging_and_no_watch(_: &()) -> Outcome {
         recipients: vec!["ops".into()],
         ..launch("fix", "one", Some("x"))
     }))?;
-    fix_on(&world, "work", "two")?;
+    let trial = fix_on(&world, "trial", "two")?;
     world
         .terminal
         .kill(&World::identity("fix", "one", "code", 1));
@@ -553,14 +556,12 @@ fn every_terminal_nudging_and_no_watch(_: &()) -> Outcome {
         Some(StageState::Lost),
         "the stage once the wait settled it"
     );
-    world
-        .terminal
-        .kill(&World::identity("fix", "two", "code", 1));
+    other.kill(&trial);
     let two = World::id("fix", "two");
     ensure_eq!(
         world.status(&two)?.stages[0].state,
         StageState::Begun,
-        "the second stage before a command acts"
+        "the trial stage, under other, before a command acts"
     );
     let dropped = world.engine.drop_place(&id, true);
     ensure!(
@@ -570,7 +571,7 @@ fn every_terminal_nudging_and_no_watch(_: &()) -> Outcome {
     ensure_eq!(
         world.status(&two)?.stages[0].state,
         StageState::Lost,
-        "the second stage once a command acted"
+        "the trial stage, under other, once a command acted"
     );
     Ok(())
 }
@@ -674,7 +675,6 @@ fn host_stream(world: &World, name: &str) -> Result<flume_core::StreamStatus, St
 
 fn the_terminals_in_status(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_nudge(Nudge::OnChange);
     work_and_trial(&world);
     fix_on(&world, "work", "one")?;
     fix_on(&world, "trial", "two")?;
@@ -713,13 +713,11 @@ fn the_terminals_in_status(_: &()) -> Outcome {
                 profile: Some("fake".into()),
                 kept: vec![],
                 watch: Watch::None,
-                nudge: Nudge::OnChange,
             },
             flume_core::TerminalStatus {
                 profile: Some("other".into()),
                 kept: vec![],
                 watch: Watch::None,
-                nudge: Nudge::None,
             },
         ],
         "the host's terminals"
@@ -729,9 +727,9 @@ fn the_terminals_in_status(_: &()) -> Outcome {
         (
             json["terminals"][1]["profile"].as_str(),
             json["terminals"][0]["watch"].as_str(),
-            json["terminals"][0]["nudge"].as_str()
+            json["terminals"][0].as_object().map(|answer| answer.len())
         ),
-        (Some("other"), Some("none"), Some("on_change")),
+        (Some("other"), Some("none"), Some(3)),
         "the host's terminals in the JSON form"
     );
     Ok(())
@@ -784,14 +782,13 @@ fn a_stage_retried_in_another_terminal(_: &()) -> Outcome {
     Ok(())
 }
 
-/// The stream-terminals spec's "One stream under a terminal with no
-/// nudge": no terminal decides whether flume runs attended, so under a
-/// caller's watch a drop on `work` settles nothing first, and `trial`'s
-/// place, whose terminal nudges nothing, moves at the caller's next
-/// settle (119, 122, 190, 208, S91).
-fn one_stream_under_a_terminal_with_no_nudge(_: &()) -> Outcome {
+/// The stream-terminals spec's "One stream under another terminal": no
+/// terminal decides whether flume runs attended, so under a caller's
+/// watch a drop on `work` settles nothing first, and `trial`'s place,
+/// under `other`, moves at the caller's next settle (119, 122, 190, 208,
+/// S91).
+fn one_stream_under_another_terminal(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_nudge(Nudge::OnChange);
     let other = work_and_trial(&world);
     let trial = fix_on(&world, "trial", "one")?;
     fix_on(&world, "work", "two")?;

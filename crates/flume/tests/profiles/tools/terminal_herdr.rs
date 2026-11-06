@@ -31,8 +31,9 @@
 //! address after a move, and a recipient on another server reached
 //! through its own socket; what flume's herdr plugin's own watch writes
 //! herdr's configuration lacks, given by status while its lease is
-//! fresh; and the nudge answered from that lease, fresh or stale, flume
-//! unattended either way while a caller keeps watch. Under a scratch home of herdr's named sessions: two
+//! fresh; and flume unattended by the host's watch alone, whatever the
+//! plugin's state, no herdr command run to decide it. Under a scratch
+//! home of herdr's named sessions: two
 //! streams' sessions (S82), a session name herdr refuses, a place tidied
 //! in two sessions, records written before they were kept by server, and
 //! attach: a stream's session started for a window's command, a client
@@ -47,7 +48,7 @@ use flume::host::config::HostConfig;
 use flume::host::RealHost;
 use flume::profiles::store::state_dir::StateDir;
 use flume::profiles::terminal::herdr::{
-    herdr_name, Herdr, Pane, Server, LEASE_TERM, NAME, SESSION, SESSION_HOME, START_TIMEOUT,
+    herdr_name, Herdr, Pane, Server, NAME, SESSION, SESSION_HOME, START_TIMEOUT,
 };
 use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
@@ -608,6 +609,10 @@ impl TerminalHarness for Harness {
 
     fn seam(&self) -> &Herdr {
         &self.seam
+    }
+
+    fn shared(&self) -> Arc<dyn Terminal> {
+        Arc::new(self.seam.clone())
     }
 
     fn place(&self) -> PlaceRef {
@@ -2803,70 +2808,76 @@ fn lease_renewed(plugin: &Path, ago: u64) {
     .expect("the lease");
 }
 
-/// The host's watch and the host's terminal's nudge, as status gives
-/// them.
-fn watch_and_nudge(engine: &Engine) -> (Watch, Option<Nudge>) {
+/// The host's watch and when it lapsed, as status gives them.
+fn watch_and_lapse(engine: &Engine) -> (Watch, Option<Seconds>) {
     match engine.status(None) {
-        Answer::Status { host, .. } => (
-            host.watch,
-            host.terminals.first().map(|terminal| terminal.nudge),
-        ),
+        Answer::Status { host, .. } => (host.watch, host.watch_lapsed),
         other => panic!("status answered {other:?}"),
     }
 }
 
 #[test]
-fn the_nudge_is_the_plugins_lease_and_decides_nothing_of_attended() {
-    // 119, 122, 208, C.5: the herdr terminal answers that it nudges while
-    // the plugin's watch holds a fresh lease and nothing once it is
-    // stale; a caller keeping watch over the host keeps flume unattended
-    // either way, and no lease makes it so.
-    let server = TestServer::start("nudge");
+fn unattended_by_the_hosts_watch_alone() {
+    // The terminal-profiles spec's "Unattended by the host's watch
+    // alone" (119, 122, 208, C.5): the herdr profile bound against the
+    // pinned herdr's server, the plugin's state holding an earlier
+    // release's fresh lease beside it, every herdr command it runs
+    // logged; a caller keeping watch with a bound of a minute keeps flume
+    // unattended, three minutes with no such settle let it run attended,
+    // and no herdr command was run to decide either.
+    let server = TestServer::start("watch");
     let world = World::new();
     let plugin = server.scratch.path("plugin");
-    let herdr = server.profile().with_plugin(Some(plugin.clone()));
-    let terminal: Arc<dyn Terminal> = Arc::new(herdr.clone());
+    lease_renewed(&plugin, 0);
+    let calls = server.scratch.path("calls");
+    let logging = server.scratch.path("logging-herdr");
+    fs::write(
+        &logging,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec herdr \"$@\"\n",
+            calls.display()
+        ),
+    )
+    .expect("the logging herdr");
+    fs::set_permissions(&logging, fs::Permissions::from_mode(0o755))
+        .expect("the logging herdr made executable");
+    let herdr = server
+        .profile()
+        .with_plugin(Some(plugin))
+        .with_program(&logging);
+    let terminal: Arc<dyn Terminal> = Arc::new(herdr);
     world.resolver.with_terminal(NAME, terminal.clone());
-    let state = server.scratch.path("state/flume");
     let engine = Engine::new(
         world.resolver.clone(),
         terminal,
-        Arc::new(StateDir::at(&state)),
+        Arc::new(StateDir::at(server.scratch.path("state/flume"))),
         world.history.clone(),
-        Arc::new(RealHost::new(
-            &state,
-            HostConfig {
-                terminal: Some(NAME.into()),
-                ..HostConfig::default()
-            },
-            None,
-        )),
+        world.host.clone(),
         world.defaults.clone(),
     );
-    assert_eq!(herdr.nudge(), Nudge::None, "with no lease");
-
-    lease_renewed(&plugin, 0);
-    assert_eq!(herdr.nudge(), Nudge::OnChange, "with a fresh lease");
     assert_eq!(
-        watch_and_nudge(&engine),
-        (Watch::None, Some(Nudge::OnChange)),
-        "a fresh lease and no caller keeping watch: flume runs attended"
+        watch_and_lapse(&engine),
+        (Watch::None, None),
+        "no caller keeping watch beside a fresh lease: flume runs attended"
     );
-
     let settled = engine.settle_every(60);
     assert!(settled.refusal().is_none(), "{settled:?}");
+    let began = world.host.now();
     assert_eq!(
-        watch_and_nudge(&engine),
-        (Watch::Bound { seconds: 60 }, Some(Nudge::OnChange)),
-        "a caller keeping watch beside a fresh lease"
+        watch_and_lapse(&engine),
+        (Watch::Bound { seconds: 60 }, None),
+        "a caller keeping watch: flume runs unattended"
     );
-
-    lease_renewed(&plugin, 2 * LEASE_TERM.as_secs());
-    assert_eq!(herdr.nudge(), Nudge::None, "with a stale lease");
+    world.host.advance(180);
     assert_eq!(
-        watch_and_nudge(&engine),
-        (Watch::Bound { seconds: 60 }, Some(Nudge::None)),
-        "a caller keeping watch beside a stale lease: flume still runs unattended"
+        watch_and_lapse(&engine),
+        (Watch::None, Some(began + 120)),
+        "three minutes with no settle of the watch's: flume runs attended"
+    );
+    assert_eq!(
+        fs::read_to_string(&calls).unwrap_or_default(),
+        "",
+        "herdr's calls"
     );
 }
 

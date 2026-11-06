@@ -270,8 +270,8 @@ impl Engine {
 
     /// The terminals the host binds as status gives them, the host's own
     /// named by the profile the resolver gives it by where no stream
-    /// takes it, each with its nudge and its watch none, since no
-    /// terminal keeps one (56, 122, 190, 208).
+    /// takes it, each with its watch none, since no terminal keeps one
+    /// or settles (56, 122, 190, 208).
     pub(crate) fn terminals_status(&self) -> Vec<crate::TerminalStatus> {
         self.host_terminals()
             .into_iter()
@@ -279,7 +279,6 @@ impl Engine {
                 profile: bound.profile.or_else(|| self.profile_of(&bound.terminal)),
                 kept: bound.terminal.kept(),
                 watch: Watch::None,
-                nudge: bound.terminal.nudge(),
             })
             .collect()
     }

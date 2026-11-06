@@ -116,23 +116,12 @@ pub enum Closed {
 }
 
 /// A watch as status gives it: a caller settling every place on a bound
-/// it states, or none (61, 208). No terminal keeps one: a terminal
-/// nudges at most, and a terminal's answer in status gives its watch
-/// none (122).
+/// it states, or none (61, 208). No terminal keeps one or settles: a
+/// terminal's answer in status gives its watch none (122).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Watch {
     Bound { seconds: Seconds },
-    None,
-}
-
-/// nudge: whether the terminal settles when an agent's state changes
-/// (122). A nudge is no watch: flume runs attended or not by the host's
-/// watch alone (119, 208).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Nudge {
-    OnChange,
     None,
 }
 
@@ -245,7 +234,10 @@ pub enum SessionRuns {
 
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
-/// never reports an end that did not happen (98).
+/// never reports an end that did not happen (98). It offers no operation
+/// that settles, keeps watch over the host or answers a bound: whether
+/// flume runs attended is read from the host's watch alone (119, 122,
+/// 208).
 pub trait Terminal: Send + Sync {
     /// An agent running `command` in the place under `identity`, where
     /// `at` says, and carrying the session name `session`, a role run's
@@ -318,11 +310,6 @@ pub trait Terminal: Send + Sync {
     /// nothing of the terminal's program; none of each where it shows
     /// none (139).
     fn shown_at(&self, place: &crate::PlaceRef, agent: Option<&crate::Identity>) -> ShownAt;
-
-    /// Whether the terminal settles when an agent's state changes, or
-    /// nudges nothing; it states no bound and decides nothing of whether
-    /// flume runs attended (122, 208).
-    fn nudge(&self) -> Nudge;
 
     /// What the terminal's own configuration lacks for flume's plugin
     /// there, each in words a person acts on, which status gives when

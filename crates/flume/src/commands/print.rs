@@ -11,7 +11,7 @@ use flume_core::{
 use flume_seams::{
     AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
     HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer, Made,
-    NamedBy, NamedSession, Nudge, Phase, ProfileHeld, Readiness, Seconds, SessionFrom, SessionHeld,
+    NamedBy, NamedSession, Phase, ProfileHeld, Readiness, Seconds, SessionFrom, SessionHeld,
     StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch,
     LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
@@ -1081,12 +1081,6 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         for kept in &terminal.kept {
             lines.push(format!("  the terminal {name} keeps {kept}"));
         }
-        lines.push(match terminal.nudge {
-            Nudge::OnChange => {
-                format!("  the terminal {name} settles every place when an agent's state changes")
-            }
-            Nudge::None => format!("  the terminal {name} nudges nothing"),
-        });
     }
     for address in &host.addresses {
         let run = match (&address.run, &address.role) {

@@ -3358,12 +3358,6 @@ fn the_terminal_seams_answers() {
     });
     round_trips(Watch::Bound { seconds: 30 });
     round_trips(Watch::None);
-    round_trips(Nudge::OnChange);
-    round_trips(Nudge::None);
-    assert_eq!(
-        serde_json::to_value(Nudge::OnChange).unwrap(),
-        serde_json::json!("on_change")
-    );
     round_trips(Some("pane-3".to_string()));
     round_trips(Some("Do you trust the files in this folder?".to_string()));
 }

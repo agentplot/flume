@@ -64,12 +64,9 @@
 //! `herdr session list --json`, bounded at a second, and finds the part
 //! by its name, the own session `flume`, or an own server held by its
 //! socket alone by the session listed at that socket, and starts no
-//! server, where attach starts one (201). The nudge is flume's herdr plugin's: while a
-//! watch of it has renewed its lease within the lease's term, a minute,
-//! the profile answers that it settles at each agent's change, and that
-//! it nudges nothing otherwise, reading the lease and starting nothing;
-//! it keeps no watch, and decides nothing of whether flume runs attended
-//! (119, 122, 208; design 2, 10). setup is what the watch wrote herdr's configuration lacks for the
+//! server, where attach starts one (201). The profile settles nothing,
+//! keeps no watch and decides nothing of whether flume runs attended
+//! (119, 122, 208). setup is what the watch wrote herdr's configuration lacks for the
 //! plugin, `setup.json` beside each fresh lease, its words in order and
 //! once each, read from the files alone (122; design 8). The session a
 //! command runs in is `herdr:<pane>@<socket>`, its pane on its server
@@ -94,8 +91,8 @@
 
 use crate::host::process::{executable, program_path};
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, Nudge, OpenIn,
-    Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
+    PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
     ViewCommand,
 };
 use serde_json::{json, Value};
@@ -361,17 +358,12 @@ impl Herdr {
         self
     }
 
-    /// The state directory of flume's herdr plugin, whose watch's lease
-    /// says the terminal nudges; none, no nudge.
+    /// The state directory of flume's herdr plugin, where each server's
+    /// startup writes what herdr's configuration lacks; none, nothing
+    /// lacking.
     pub fn with_plugin(mut self, plugin: Option<PathBuf>) -> Herdr {
         self.plugin = plugin;
         self
-    }
-
-    /// Whether a watch of flume's herdr plugin, on any herdr server, has
-    /// renewed its lease within the lease's term (design 10).
-    pub fn watch_kept(&self) -> bool {
-        !self.watched_servers().is_empty()
     }
 
     /// The state directory of each herdr server whose watch of flume's
@@ -2226,14 +2218,6 @@ impl Terminal for Herdr {
             agent: pane.map(|pane| pane.session()),
             base: base.map(Record::named),
             bases: bases.iter().map(Record::named).collect(),
-        }
-    }
-
-    fn nudge(&self) -> Nudge {
-        if self.watch_kept() {
-            Nudge::OnChange
-        } else {
-            Nudge::None
         }
     }
 

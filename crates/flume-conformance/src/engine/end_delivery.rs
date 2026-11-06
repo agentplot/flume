@@ -9,8 +9,8 @@
 //! answers an end pending for its recipient and delivers it, reads one
 //! already delivered, and otherwise follows the host's state under its
 //! timeout, settling nothing while a caller keeps watch over the host
-//! and every place before each reading while none does, whatever a
-//! terminal nudges (119, 122, 208); the inbox collects
+//! and every place before each reading while none does, whatever
+//! terminal the host binds (119, 122, 208); the inbox collects
 //! every end pending for a recipient, each delivered once (75).
 
 use super::carried_conversations::{talk, talking};
@@ -105,7 +105,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_wait_under_a_watch,
         },
         Scenario {
-            name: "end delivery: while no caller keeps watch and the terminal nudges, a wait settles every place before each reading",
+            name: "end delivery: while no caller keeps watch, under any terminal, a wait settles every place before each reading",
             cites: &["43", "119", "122", "208"],
             run: a_wait_attended,
         },
@@ -740,9 +740,11 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
     Ok(())
 }
 
+/// The end-delivery spec's "Attended under any terminal": no caller
+/// keeps watch, so a wait settles every place before each reading (119,
+/// 208).
 fn a_wait_attended(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_nudge(Nudge::OnChange);
     world.queue.plan_submits(vec![Plan::Hold]);
     let id = fix_for_ops(&world, "one")?;
     deliver_fix(&world, &id);

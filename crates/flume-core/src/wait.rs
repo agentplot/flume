@@ -7,8 +7,8 @@
 //! the host's state until such an end comes or its timeout passes. While
 //! a caller keeps watch over the host it reads the store alone, and the
 //! caller's settles move the place; while none does it settles every
-//! place before each reading after its first, whatever any terminal
-//! nudges, as every acting command does,
+//! place before each reading after its first, whatever terminal the
+//! host binds, as every acting command does,
 //! the first reading answering at once an end that stands pending
 //! before a settle could deliver it by notice and tidy its place away. The inbox gives
 //! every end pending for a recipient, of every place on the host, a

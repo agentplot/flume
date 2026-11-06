@@ -1,7 +1,7 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, Host, Identity, Nudge, OpenIn, Opened,
-    PlaceRef, Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    AgentCommand, AgentState, Attached, Closed, Clues, Host, Identity, OpenIn, Opened, PlaceRef,
+    Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
     ViewCommand,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 
 /// The terminal seam: the agents it runs by identity, each one's state
 /// as set or as scheduled by the fake clock, what each shows and holds
-/// typed, what was sent to each, and whether it sends, closes and
-/// nudges. A send clears what the agent holds typed before it types.
+/// typed, what was sent to each, and whether it sends and closes; it
+/// settles nothing and keeps no watch (122). A send clears what the agent holds typed before it types.
 /// Each open is logged with where it was asked to open, beside a pane,
 /// in a session or in the terminal's own. An open not beside a pane
 /// makes a tab for its place in a workspace for its repository and base,
@@ -42,7 +42,6 @@ struct TerminalState {
     sends: bool,
     open_refusal: Option<String>,
     close_refused: BTreeSet<String>,
-    nudge: Nudge,
     sent: Vec<(String, String)>,
     session: Option<String>,
     opens_as: OpensAs,
@@ -188,7 +187,6 @@ impl FakeTerminal {
                 sends: true,
                 open_refusal: None,
                 close_refused: BTreeSet::new(),
-                nudge: Nudge::None,
                 sent: vec![],
                 session: None,
                 opens_as: OpensAs::Running,
@@ -389,12 +387,6 @@ impl FakeTerminal {
 
     pub fn allow_close(&self, agent: &Identity) {
         lock(&self.state).close_refused.remove(&agent.to_string());
-    }
-
-    /// Whether the terminal settles at each agent's change, nudging
-    /// nothing until set otherwise (122).
-    pub fn set_nudge(&self, nudge: Nudge) {
-        lock(&self.state).nudge = nudge;
     }
 
     /// What the terminal's configuration lacks for flume's plugin, each
@@ -787,10 +779,6 @@ impl Terminal for FakeTerminal {
                 .map(|made| format!("workspace {}", made.named()))
                 .collect(),
         }
-    }
-
-    fn nudge(&self) -> Nudge {
-        lock(&self.state).nudge
     }
 
     /// What was scripted, logged so a reading that asks none is seen to.

@@ -1192,18 +1192,14 @@ fn the_kinds_and_change_are_set() {
 }
 
 #[test]
-fn the_terminal_nudges_as_set_and_the_store_keeps_the_hosts_watch() {
+fn the_store_keeps_the_hosts_watch_and_the_clock_lets_it_lapse() {
     // The seam-fakes spec's "A watch the clock lets lapse": the fake
-    // terminal nudges nothing until set, and the fake store holds the
-    // host's watch as any host document, by compare-and-set, so a watch
-    // written at the fake clock's time lapses once the clock passes
-    // twice its bound and is kept again by the next one written (106,
+    // store holds the host's watch as any host document, by
+    // compare-and-set, so a watch written at the fake clock's time lapses
+    // once the clock passes twice its bound and is kept again by the next
+    // one written; the fake terminal answers nothing of a watch (106,
     // 119, 122, 208).
     let host = Arc::new(FakeHost::default());
-    let terminal = FakeTerminal::new(host.clone());
-    assert_eq!(terminal.nudge(), Nudge::None);
-    terminal.set_nudge(Nudge::OnChange);
-    assert_eq!(terminal.nudge(), Nudge::OnChange);
     let store = FakeStore::default();
     assert!(store.read_host(&HostKey::Watch).is_none());
     let first = Watched {
