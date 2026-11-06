@@ -30,7 +30,7 @@ same as past it. Status says which.
 
 - **`keep_open`, one of clause 32's settings.** How long an asking
   agent is kept open, `<n>`, `<n>s`, `<n>m` or `<n>h`, resolved at its
-  start as the effort is: taken whole from the first layer that gives
+  start as the model is: taken whole from the first layer that gives
   it, a stage's own first within each. The launch's settings and the
   host's four layers give it, for a repository and kind, a kind, a
   stream and every agent; flume's own is one hour; `0` keeps no agent
@@ -61,7 +61,10 @@ same as past it. Status says which.
   room and its account (31, 70). The stage keeps waiting on its answer.
   A later answer is a retry with a fresh agent whose prompt carries the
   question and the answer, and a tell is refused, naming that retry
-  (42, 49, 53).
+  (42, 49, 53). A bare agent the terminal brought back after a restart
+  is left in a conversation's pane and ended once quiet elsewhere (77),
+  and a conversation's agent so lost is carried at its answer's retry,
+  as a lost conversation's retry carries it (49, 179, 207).
 - **What carries on.** A stage carried on after its answer runs as any
   running stage does. Its stop check holds, and its limits run from the
   answer's receipt (44, 118). Its next stop-short is an end of its own,
@@ -84,9 +87,11 @@ same as past it. Status says which.
   account spent.
 - **The statement.** Clause 198 and scenarios S104 and S105, with
   section 3 and clauses 4, 32, 42, 49, 50, 53 to 56, 95, 118, 130, 146,
-  158, 161, C.2, C.4, C.5, C.7 and S4 amended, on the blueprints branch
-  `design/flume-an-answer-reaches-the-open-session` from main at
-  cd8fd73, for the user's word (core.19). The code waits for that word.
+  158, 161, C.2, C.4, C.5, C.7 and S4 amended, on blueprints main from
+  c188bf3 (core.19). Clauses 49, 179 and 198 carry a conversation's
+  asking agent lost with its host at its answer's retry, on the
+  blueprints branch `design/flume-an-asking-conversation-lost-is-carried`
+  for the user's word (design 14).
 - **Docs.** The site's callers guide, agent-settings guide,
   places-and-herdr guide, and the configuration, commands and state
   references, in the site's neutral voice (core.35).
@@ -127,15 +132,19 @@ None: every part of this change belongs to a capability that stands.
 
 ## Impact
 
-- **Order.** The code starts once
-  `an-agents-effort-is-a-setting-of-flumes-layers` has landed, after
-  `an-agents-program-settings-come-from-flumes-layers`, and folds
-  `keep_open` in the same resolution and host tables as the effort.
+- **Order.** The code builds on flume's main once
+  `an-agents-program-settings-come-from-flumes-layers` landed, and folds
+  `keep_open` in the same resolution and host tables as the model.
+  `an-agents-effort-is-a-setting-of-flumes-layers`, in code beside it,
+  folds the effort there too, and whichever lands second takes the
+  other's field in. A conversation's asking agent lost with its host is
+  carried at its answer's retry by the lost-conversation retry on main
+  (record 0052), and no terminal settles an agent kept open (122, 208).
   `every-question-a-place-asks-reaches-someone-who-answers-it` reads
   the answer this change records on a stop-short's end, and keys a
-  stop-short after an answer apart (design 12).
-- agentplot/blueprints: the statement at cd8fd73 has every answer a
-  retry; design 13 words its amendment. weir is untouched: `keep_open`
+  stop-short after an answer apart (design 12, 14).
+- agentplot/blueprints: main from c188bf3 holds design 13's
+  amendment, and design 14's waits on its branch. weir is untouched: `keep_open`
   is no field of the kind format, and a declaration that writes it is
   refused by flume as one that writes `env` is (core.4).
 - `crates/flume-seams`: `read_span`, `Settings::keep_open`,

@@ -4,22 +4,41 @@
 
 ### What flume does today
 
-On flume's main at c9d58df (Flume v0.9.1):
+On flume's main at 376c17c:
 
 - `Engine::needs` (`crates/flume-core/src/agent_acts.rs`) takes a
-  stop-short, ends the stage short with the agent's words and whether
-  it needs an answer or found work, and leaves the agent live.
+  stop-short from any stage, a conversation's among them, ends the
+  stage short with the agent's words and whether it needs an answer or
+  found work, and leaves the agent live.
 - The settle's step for a stage ended short (`settle.rs`) is
   `found_work` alone. It ends the agent once quiet and starts the fix
   round for found work from the kind's last stage. A stage that needs
   an answer takes no step, so its agent stays live, holding the host's,
   its stream's and its account's room, until a retry.
-- `Engine::retry` (`acts.rs`) refuses where the place's agent is live
-  and its stage started or began (`working`). Otherwise it ends the
-  place's agent with `end_agent`, one not quiet only when forced, and
-  starts the stage afresh. The fresh start's words are `answered`'s,
-  "The question: <q>" then "The answer: <a>", kept as
+- `Engine::retry` (`acts.rs`) settles every place first where no
+  caller keeps watch (`settle_attended`), and refuses where the place's
+  agent is live and its stage started or began (`working`). Otherwise
+  it ends the place's agent with `end_agent`, one not quiet only when
+  forced, and starts the stage afresh. The fresh start's words are
+  `answered`'s, "The question: <q>" then "The answer: <a>", kept as
   `StartHeld::words`.
+- A retry of a conversation's stage reported lost (`StageState::Lost`)
+  ends no agent and carries the lost agent's conversation (49, 179):
+  its start waits for room with `CarryCause::Lost` while a process runs
+  the conversation or `live` cannot read whether one does (207), takes
+  the account the lost start ran under first, and is
+  `StartReason::Resumed`, flume's words then the retry's. Where it
+  cannot carry, it is `StartReason::Lost`, flume's words before the
+  retry's. A carried start that does not begin (`uncarried.rs`) is
+  ended once quiet and its stage started afresh with flume's words
+  after the start that stopped, or with a lost conversation's retry's
+  words.
+- `read_end` (`end.rs`) reads a begun stage lost where its agent
+  stopped, or where the agent in its pane is not the start's, one the
+  terminal brought back bare with no started ack (77). Such an agent
+  is left in a conversation's pane (`StageEnd::left_in_pane`), sent
+  nothing and ended only by a caller's stop, drop or done (core.10),
+  and in any other stage ended once quiet (`end_foreign`).
 - `Engine::tell` delivers to any live agent that waits, is not asking
   and said it started, whatever its stage's state. A tell to a stage
   ended short reaches its agent and leaves the stage ended short, and
@@ -38,11 +57,23 @@ On flume's main at c9d58df (Flume v0.9.1):
   account its program cannot carry a conversation from (146, 179), or
   after an unsettled start (161), flume's own words alone, and drops
   the earlier start's.
+- `Settings` holds `program`, `model`, `instructions`, `beside`,
+  `mode`, `session` and `programs`, each taken whole by
+  `Settings::under`, and `Engine::resolve` folds them over `Layer`'s
+  eight layers, `launch`, `host-repository`, `host-kind`,
+  `host-stream`, `host`, `repository`, `kind` and `default`. `--agent`'s
+  fields are those seven (`FIELDS` in `commands/launch.rs`).
 - The herdr profile types into a pane by `agent send-keys <pane>
   ctrl+c` and `agent prompt <pane> <text>`. The printed command's
   `send` refuses, so a tell is refused under it (C.5).
 - The launch's stall bound is read by `seconds` in
   `crates/flume/src/commands/mod.rs`: `<n>`, `<n>s`, `<n>m` or `<n>h`.
+- The herdr plugin keeps a watch that settles the host. The statement
+  on blueprints main no longer has any terminal settle (122): a place
+  moves between flume's commands at its agent's quiet (121) and at the
+  settles of a caller keeping watch over the host (208), and
+  `every-place-waiting-on-the-merge-queue-is-settled-at-every-depth`,
+  in code, takes the plugin's watch out.
 - The walkthroughs (`crates/flume/tests/profiles/tools/walk.rs`) run
   flume's binary under the printed command, each agent the stand-in for
   Claude Code (`stand-in/claude.rs`), which takes its one prompt and
@@ -53,28 +84,37 @@ On flume's main at c9d58df (Flume v0.9.1):
 
 ### What the family does
 
-flume's statement on agentplot/blueprints main at cd8fd73 resolves an
-agent's program, model, effort (197), mode, instructions and own
-settings (195) from the eight layers of clause 32: the launch's
-settings; the host's for the place's repository, by kind and then for
-every kind; the host's for the kind; the host's for the place's stream
-(143); the host's for every agent; the repository's; the kind's
-declaration; and flume's own default. The host's four give everything
-but a program, and each setting is taken whole from the first layer
-that gives it, a stage's own first within each.
+flume's statement on agentplot/blueprints main resolves an agent's
+program, model, effort (197), mode, instructions, own settings (195)
+and time kept open (198) from the eight layers of clause 32: the
+launch's settings; the host's for the place's repository, by kind and
+then for every kind; the host's for the kind; the host's for the
+place's stream (143); the host's for every agent; the repository's;
+the kind's declaration; and flume's own default. The host's four give
+everything but a program, and each setting is taken whole from the
+first layer that gives it, a stage's own first within each.
+`an-agents-program-settings-come-from-flumes-layers` (record 0043,
+#128) built those layers on flume's main.
 
-Three changes in flight touch the same code:
+`a-lost-conversation-resumes-its-session` (record 0052, #130) is on
+flume's main too: a retry of a conversation reported lost carries its
+conversation, and an agent the terminal brought back bare in a
+conversation's pane is left for a person (49, 77, 207). Record 0052
+leaves a conversation let go after its stop-short's time to this
+change (its option 3).
 
-- **`an-agents-program-settings-come-from-flumes-layers`** (record
-  0043; its amendment on blueprints main at 033d887), in code. It
-  builds the eight layers: `Layer::HostStream` and `Layer::Host`, the
-  host's `[repos."<repository>".agents]`, `[agents.streams.<stream>]`
-  and `[agents]`, and a repository's own `[agents]`.
+The changes in flight that touch the same code:
+
 - **`an-agents-effort-is-a-setting-of-flumes-layers`** (record 0044;
-  amendment cd8fd73), its code waiting on program settings. It adds
+  clause 197 on blueprints main), in code beside this one. It adds
   `Settings::effort`, read in every agents table and by `--agent
   [<stage>.]effort=<word>`, folded by `Engine::resolve` as the model
   is, with `from["effort"]` naming its layer.
+- **`every-place-waiting-on-the-merge-queue-is-settled-at-every-depth`**
+  (record 0051; 122, 202 to 206 and 208 on blueprints main),
+  in code. No terminal settles: the herdr plugin keeps no watch, and a
+  caller keeping watch over the host settles every place on its bound
+  (208). It touches `settle.rs`.
 - **`every-question-a-place-asks-reaches-someone-who-answers-it`**
   (record 0039), designing. It gives each end a key for callers,
   `stage/<stage>/<start>/<state>` from `EndOf::key`, takes a retry's
@@ -91,10 +131,11 @@ agent words.
 ### What rules what
 
 Record 0046 (accepted by the user on 2026-11-01) rules what this
-change builds. The statement at cd8fd73 does not yet say it: decision
-13 words its amendment, committed on the blueprints branch
-`design/flume-an-answer-reaches-the-open-session` at 6bdd075 for the
-user's word (core.19). No code of this change is written before that word.
+change builds, and the user approved this design on 2026-11-06. The
+statement says it on agentplot/blueprints main from c188bf3, as
+decision 13 words it (core.19). Decision 14's amendment of clauses 49,
+179 and 198, for a conversation's asking agent lost with its terminal
+or its host, waits on blueprints for the user's word.
 
 The rules this design relies on are:
 
@@ -173,7 +214,7 @@ standard's code profile binds (kit:specs.3, kit:testing.5).
 
 `Settings` gains `keep_open: Option<String>`, the value as its layer
 wrote it, read with none from a held state written before, written only
-where set, and taken whole by `Settings::under`, beside the effort.
+where set, and taken whole by `Settings::under`, beside the model.
 `Engine::resolve` folds it with every other setting: taken whole from
 the first layer that gives it, a stage's own first within each, and
 `from["keep_open"]` names its layer and value as written (32, 56). The
@@ -202,7 +243,8 @@ flume-core beside `QUIET_LIMIT`, in the default layer (8):
 | 7 | a kind's declaration, its agents tables and a stage's | refuses the launch |
 | 8 | flume's own | `1h` |
 
-It differs from the effort in two ways, and only those:
+It differs from the model and the effort (197) in two ways, and only
+those:
 
 - **Which layers.** An effort is about the stage's work, which a kind's
   author knows. `keep_open` is about what an asking agent holds while
@@ -334,8 +376,8 @@ Two acts carry an answer:
 
 A caller that wants a fresh agent to take the answer while its agent is
 kept open stops the agent first (51). `flume stop` ends it once quiet,
-its stage still ended short, and the next settle reads it let go with
-its agent ended.
+its stage still ended short, and the next settle reads it let go,
+`ClosedBy::Stopped`.
 
 ### 5. The agent let go and ended
 
@@ -347,11 +389,14 @@ needing an answer, beside `found_work` (`settle.rs`), and
 let go by the first of these that holds:
 
 - `ClosedBy::Time`: now is at or past `open_until`.
-- `ClosedBy::AgentEnded`: the start is no longer live, as a stop leaves
-  it (51); or the agent is read stopped, its pane gone or no agent
-  listed in it with the shell foremost (96); or its own record says its
-  session ended (134), as a restart of the host or its terminal leaves
-  it.
+- `ClosedBy::Stopped`: the start is no longer live, as a caller's stop
+  leaves it (51).
+- `ClosedBy::AgentEnded`: the agent is read stopped, its pane gone or
+  no agent listed in it with the shell foremost (96); or its own record
+  says its session ended (134); or the agent in its pane is not the
+  start's, one the terminal brought back bare with no started ack under
+  the start's identity (77). Each is what a restart of the host or its
+  terminal leaves.
 - `ClosedBy::AccountSpent`: the start's account is spent. Either the
   agent's own record says so, which `record_spent` then writes to the
   host's documents as `read_spent` does, or the host's documents hold
@@ -359,12 +404,17 @@ let go by the first of these that holds:
   account past its pool's threshold is not spent, and lets no agent go
   (185).
 
-It records `StageEnd::closed`, a `SessionClosed { at, by, ended_at }`,
-in one write. Then, while the start is live:
+It records `StageEnd::closed`, a `SessionClosed { at, by, ended_at,
+left_in_pane }`, in one write. Then, while the start is live:
 
 - an agent read stopped is read ended at once;
-- a quiet one is ended through the terminal's `close`, never forced
-  (31);
+- an agent brought back bare is never the stage's (35, 161). In a
+  conversation's pane it is left there, sent nothing and ended by no
+  settle, a caller's stop, drop or done ending it (77; core.10), and
+  the close records `left_in_pane`. In any other stage it is ended once
+  quiet, as `end_foreign` ends one (77, S116);
+- the start's own agent, quiet, is ended through the terminal's
+  `close`, never forced (31);
 - one that is not quiet is left, and a later settle ends it once it is
   quiet.
 
@@ -375,12 +425,16 @@ room (70), so the freed room and account go to the next stage waiting.
 The step is safe to repeat: a close recorded is never read again, and
 an agent once ended is never ended again (74; core.17).
 
-No process of flume's waits for the time (120; core.13). Under a
-terminal that keeps watch, the watch settles every place with an agent
-in it on its bound (122). Under one that keeps none, the next command
-of flume's settles it (119). A `keep_open` of `0` lets the agent go at
-the first settle after its stop-short, which the plugin's on-quiet hook
-runs as the agent goes quiet (C.4).
+No process of flume's waits for the time (120; core.13), and no
+terminal settles (122). An agent kept open is quiet, so its own quiet
+brings no later settle (121). Where a caller keeps watch over the host
+(208), its settles read the time passed within the watch's bound.
+Where none does, flume runs attended, and the next command of flume's
+that acts settles every place first (119); status settles nothing, so
+until then status gives the agent kept open with its time past. A
+`keep_open` of `0` lets the agent go at the first settle after its
+stop-short, which the plugin's on-quiet hook runs as the agent goes
+quiet (121, C.4).
 
 ### 6. A later answer is a retry
 
@@ -389,6 +443,21 @@ before. `working` passes, since the stage is not running. `end_agent`
 ends an agent not yet ended, once quiet or forced. The fresh start's
 prompt carries the question then the answer as `StartHeld::words` (42,
 49, 50). A tell is refused as decision 4 says.
+
+A conversation's stage (109) whose agent was let go
+`ClosedBy::AgentEnded`, lost with its terminal or its host, is the one
+other case. Its retry goes on with the lost agent's conversation, as a
+retry of a conversation reported lost does (49, 179; decision 14).
+`Engine::retry` takes it as it takes a conversation's `Lost` stage: it
+ends no agent, and one brought back bare in the pane is left as it is.
+The start waits for room with `CarryCause::Lost` while a process runs
+the conversation (207), takes the account the lost start ran under
+first, and is `StartReason::Resumed`, flume's words then the retry's
+words, the question and the answer. Where it cannot carry, it is
+`StartReason::Lost`, flume's words before the question and the answer.
+A conversation's agent let go by its time, by its account spent or by
+its caller's stop carries nothing, and its retry is the fresh agent of
+this decision's first paragraph.
 
 The place waits on the same move throughout: a retry of the stage,
 `Waits::Answer`, since the stop-short. `same_move` reads the act, the
@@ -450,8 +519,10 @@ The person's form of status prints the move's line as now, then one of:
 - "its agent kept open for the answer until <time>: retry with
   --words, or tell it";
 - "its agent let go at <time>, its time passed" (or "its agent ended",
-  or "its account spent"), then "and ended at <time>" or "and ended
-  once quiet: retry with --words".
+  "its account spent" or "its caller stopped it"), then "and ended at
+  <time>", "and ended once quiet" or, for a conversation's agent
+  brought back bare, "and left in its pane", then ": retry with
+  --words".
 
 Each answer prints on a line of its own, with the act it came by, when
 it was received, and the question and the answer. A stop-short's notice
@@ -465,8 +536,8 @@ held state written before reads with no agent kept open, no answers and
 no close (75, 103): `Settings::keep_open`; `StageEnd::open_until` and
 `closed`; `StartHeld::answered`; `EndHeld::answer`; `EndOf::Stage`'s
 `answered`; and `WaitingOn::open_until` and `closed`. `SessionClosed`
-serializes `at`, `by` as `time`, `agent_ended` or `account_spent`, and
-`ended_at`. `AnswerHeld` serializes `words`, `act` as the `Act` it came
+serializes `at`, `by` as `time`, `stopped`, `agent_ended` or
+`account_spent`, `ended_at`, and `left_in_pane` only where it is true. `AnswerHeld` serializes `words`, `act` as the `Act` it came
 by, `at`, and `session` with `sent_at` and `received_at`.
 
 ### 10. The stand-in under herdr and the walkthroughs
@@ -567,21 +638,35 @@ ours (core.35).
 
 ### 12. Agreement with the changes in flight
 
-- **Order.** This change's code starts once
-  `an-agents-effort-is-a-setting-of-flumes-layers` has landed, which
-  lands after `an-agents-program-settings-come-from-flumes-layers`.
-  Group 1's first task merges main then. `keep_open` is folded in the
-  same `Engine::resolve`, read in the same host tables, and named in the
-  same `--agent` refusals as the effort, so the setting has one
-  resolution. Should either change be dropped, `keep_open` is read in
-  the layers main then holds, and decision 1's table names those.
+- **Order.** This change's code builds on main as it stands once
+  `an-agents-program-settings-come-from-flumes-layers` landed, which
+  built the layers decision 1's table names, as the user's go-ahead of
+  2026-11-06 has it. `an-agents-effort-is-a-setting-of-flumes-layers`
+  is in code beside it. Each folds its setting in the same
+  `Engine::resolve`, reads it in the same host tables and names it in
+  the same `--agent` refusals, so whichever lands second merges the
+  other's field beside its own in `Settings`, `Settings::under`,
+  `agent_settings` and `FIELDS`, and the setting keeps one resolution.
 - **Program settings.** `keep_open` is flume's own setting and never a
   key of a program's own settings: no profile reserves it, and a
   layer's `programs.<program>.settings.keep_open` is the program's key,
   passed to the program, which flume reads nothing into (195).
 - **Effort.** Clause 197's resolution with decision 1's two
-  differences. The effort's `from` and status lines are the pattern for
-  `keep_open`'s.
+  differences. `keep_open`'s `from` and status lines follow the
+  model's, as the effort's do.
+- **Lost conversations.** A conversation's asking agent lost with its
+  terminal or its host is let go `ClosedBy::AgentEnded`, one brought
+  back bare left in its pane as `read_end` leaves one (77; core.10),
+  and its answer's retry carries its conversation by #130's path
+  (decisions 5, 6 and 14). Any other agent let go starts no carried
+  start, so record 0052's option 3 stays untaken.
+- **Settles.** An agent kept open is let go at a settle, and no terminal
+  settles (122): a caller's watch (208) or flume's next acting command
+  (119) reads its time passed, as decision 5 says.
+  `every-place-waiting-on-the-merge-queue-is-settled-at-every-depth`
+  and this change both add to `settle.rs`'s step for a live place;
+  whichever lands second keeps both. A base place runs no agent, so
+  none is kept open there (202).
 - **Questions.** An answer handed to a session is recorded on the
   stop-short's end it answers, `EndHeld::answer`, the field the
   questions change writes for a keyed retry's answer and reads to take
@@ -599,13 +684,11 @@ ours (core.35).
 
 ### 13. The statement's amendment
 
-These amend agentplot/blueprints `design/flume/requirements.md` at
-cd8fd73, on the branch `design/flume-an-answer-reaches-the-open-session`
-at 6bdd075, committed and not pushed, for the user's word (core.19). Clause 198 and
-scenarios S104 and S105 are new: 186 to 192, 195 to 197, S90 to S92,
-S95 to S97 and S100 to S103 are on main, and the designs in flight hold
-193, 194 and S93 to S99. Each item gives the clause's new text where it
-changes, or the words it gains.
+These amend agentplot/blueprints `design/flume/requirements.md` from
+cd8fd73, and are on its main from c188bf3 (core.19). Clause 198 and
+scenarios S104 and S105 are new, and every branch and place on the
+host holds them as this change's on 2026-11-06. Each item gives the
+clause's new text where it changes, or the words it gains.
 
 - **Section 3, settings**: "its program, its model, its effort, its
   mode, its instructions, its own settings, its environment, where in
@@ -758,6 +841,55 @@ changes, or the words it gains.
   the question and the answer, the first on another account of its
   pool (42, 96, 146, 198)."
 
+### 14. A conversation's asking agent lost with its host
+
+A conversation's agent (109) may stop short needing an answer, as any
+agent may, and be kept open. Within its time its terminal or its host
+may lose it: its pane gone, or the terminal's restore bringing it back
+bare, with no word that it started under its start's identity (77). Its
+stage said something, so it is not reported lost (45), and clause 49
+carries a conversation only for a stage reported lost. Yet its
+conversation is lost as record 0052's six were, and a person may be
+talking in the bare agent the terminal brought back.
+
+So a conversation's agent kept open and let go `ClosedBy::AgentEnded`
+is carried at its answer's retry as 49 carries a conversation reported
+lost (decision 6). The retry ends no agent. Its start waits while a
+process runs the conversation (207), takes the account the lost start
+ran under first, and resumes the session with flume's words and then
+the question and the answer. Where it cannot carry, the stage starts
+afresh with flume's words before them. Let go any other way, the agent
+carries nothing.
+
+This is this change's own choice, written as record 0046's amendment
+(proposed) and in core.27's details. The statement's amendment is on
+the agentplot/blueprints branch
+`design/flume-an-asking-conversation-lost-is-carried` at 6529c04, cut
+from main at a4eeec3, committed and not pushed, for the user's word
+(core.19):
+
+- **49**: its carry sentence begins "A retry of a conversation's stage
+  (109) reported lost (45), or whose agent kept open for its answer
+  (198) was lost with its terminal or its host (77), goes on with the
+  lost agent's conversation where its program can carry it (179)."
+- **179**: "or a conversation's start reported lost" reads "or a
+  conversation's start reported lost, or lost while kept open (49)".
+- **198** gains, after "as a restart of the host or its terminal leaves
+  it.": "A conversation's agent so let go is carried at its answer's
+  retry (49), and one its terminal brought back bare is left in its
+  pane (77)."
+
+Alternatives considered:
+
+- **A fresh agent with the question and the answer, as for any other
+  stage.** Rejected: the retry would still wait for a bare agent a
+  person may be talking in (77), then drop what the person said there
+  and all the conversation held, which record 0052 brings back whole.
+- **Every conversation's agent let go carried, by its time and by its
+  caller's stop too.** Rejected as record 0052 rejects its option 3: a
+  caller who stopped a conversation meant to, and record 0046 rules a
+  fresh agent past the time.
+
 ## Risks / Trade-offs
 
 - An agent kept open holds room for its whole time in the worst case: a
@@ -786,10 +918,13 @@ changes, or the words it gains.
 - The walkthroughs run under the pinned herdr with a stand-in, so they
   prove the session and the acts, never a real model's reading of its
   cache. Record 0021's cache use in status would show it.
-- The order of landing. Built before the effort change, `keep_open`
-  would miss the host's stream and every-agent tables and fold apart
-  from the effort. Group 1's first task merges main once that change
-  has landed, and not before.
-- Numbers. Clause 198, S104, S105 and record 0046 are free on every
-  branch and in every place's draft on this host on 2026-11-05. Task
-  1.1 checks them again before the code builds on them.
+- On a host no caller keeps watch over, an agent past its time holds
+  its room and its account until flume's next acting command settles
+  (119). A host that wants its room back on time keeps watch (208).
+- The order of landing. The effort change is in code beside this one,
+  and both add a field to `Settings`, `agent_settings` and `FIELDS`.
+  Whichever lands second takes the other's in at its merge, as
+  decision 12 says.
+- Numbers. Clause 198, S104, S105 and record 0046 hold this change's
+  text on every branch and in every place on this host on 2026-11-06,
+  and no other draft takes them.

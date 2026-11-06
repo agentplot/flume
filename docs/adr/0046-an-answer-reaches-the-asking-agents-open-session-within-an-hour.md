@@ -51,3 +51,32 @@ Option 3, the user's "Keep it open an hour, then end it".
 - That OpenSpec change builds it once the change `an-agents-effort-is-a-setting-of-flumes-layers` has landed, on the layers and tables that change and `an-agents-program-settings-come-from-flumes-layers` build.
 - The change `every-question-a-place-asks-reaches-someone-who-answers-it` gives each end a key and takes a retry's answer once by it; a stop-short after an answer in its session is an end of its own under its own key, and a tell that answers takes that key too.
 - A stage for review (163; record 0024) keeps its own tell and retry, apart from this.
+
+## Amendment, 2026-11-06: a conversation's agent lost with its host while kept open is carried at its answer's retry
+
+Status: proposed by the code stage of the change `an-answer-reaches-the-open-session-within-an-hour` on 2026-11-06, the choice its own, for the user's word. Its statement amendment, of 49, 179 and 198, is on agentplot/blueprints, branch `design/flume-an-asking-conversation-lost-is-carried` at 6529c04, cut from main at a4eeec3, committed and not pushed.
+
+Deciders: the words the code stage was started again with: "Reconcile with #130's lost-conversation retry and the settles change, since an agent kept open for its answer meets both". Record 0052 leaves "a conversation let go after its stop-short's hour (198)" to this record (its option 3).
+Sources: `agentplot/blueprints:design/flume/requirements.md` on main at a4eeec3, clauses 45, 49, 77, 109, 179, 198 and 207, and S113 to S117; record 0052; rules core.10 and core.27; `crates/flume-core/src/acts.rs` (`Engine::retry`), `crates/flume-core/src/end.rs` (`read_end`, `end_foreign`) and `crates/flume-core/src/start.rs` (`StartReason::Resumed`, `StartReason::Lost`).
+
+### Context and problem statement
+
+A conversation's agent (109) may stop short needing an answer and be kept open. Within its time its terminal or its host may lose it: its pane gone, or brought back bare by the terminal's restore with no word that it started under its start's identity (77). Its stage said something, so it is not reported lost (45), and 49 carries a conversation only for a stage reported lost. The record above has a later answer start a fresh agent. That agent would read nothing of the conversation, and the retry would still have to wait for a bare agent a person may be talking in (77, 207).
+
+### Considered options
+
+1. **Carried as a conversation reported lost is,** at its answer's retry, the question and the answer the retry's words.
+2. **A fresh agent with the question and the answer,** as for any other stage.
+3. **Every conversation's agent let go carried,** by its time and by its caller's stop too.
+
+### Decision outcome
+
+Option 1. A conversation's agent kept open and let go because it was read stopped, its own record said its session ended, or the agent in its pane is not its start's is let go as its agent ended. One its terminal brought back bare is left in its pane, sent nothing and ended by no settle (77; core.10). The answer's retry of that stage goes on with the lost agent's conversation as 49 says for a conversation reported lost. It ends no agent, waits while a process runs the conversation (207), takes the account the lost start ran under first, and resumes the session with flume's words and then the question and the answer. Where it cannot carry, the stage starts afresh with flume's words before them. A conversation's agent let go by its time, its account spent or its caller's stop carries nothing, and its answer starts a fresh agent as the record above says. A caller's stop is recorded as its own reason, so the two are told apart.
+
+Option 2 drops what the person said to the bare agent and all the conversation held, which record 0052 brings back whole. Option 3 overrides a caller who stopped a conversation on purpose, and the user ruled a fresh agent past the time.
+
+### Consequences
+
+- The statement's 49, 179 and 198 are amended on the branch above (core.19).
+- core.27's details gain the case.
+- The OpenSpec change `an-answer-reaches-the-open-session-within-an-hour` builds it, its design 14 and the stage-runs spec's "A conversation's asking agent lost is carried at its answer".

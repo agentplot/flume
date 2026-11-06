@@ -127,6 +127,36 @@ answer being a retry with a fresh agent (31, 42, 70, 96, 130, 134, 146,
 - **WHEN** two settles read an agent let go at once
 - **THEN** it is recorded let go once, and its agent is closed once (74, 75)
 
+### Requirement: A conversation's asking agent lost is carried at its answer
+
+The core SHALL read an agent kept open let go `agent_ended` where the
+agent in its pane is not its start's, as a restart leaves one brought
+back bare, leaving that agent in a conversation's pane and ending it
+once quiet elsewhere, and `stopped` where a caller's stop ended it; and
+a retry with words of a conversation's stage so let go `agent_ended`
+SHALL carry its conversation as a retry of one reported lost does, the
+question and the answer its words (45, 49, 51, 77, 179, 198, 207).
+
+#### Scenario: Brought back bare in a conversation's pane
+
+- **WHEN** a research talk's agent, kept open for its answer, is brought back bare in its pane by the terminal after a restart, and a settle runs
+- **THEN** it reads let go, `agent_ended`, the agent left in its pane, sent nothing and not ended, and talk still waits on its answer (77, 198; core.10)
+
+#### Scenario: Brought back bare in another stage
+
+- **WHEN** a code agent kept open for its answer is brought back bare in its pane after a restart, quiet, and a settle runs
+- **THEN** it reads let go, `agent_ended`, and the bare agent is ended (77, 198, S116)
+
+#### Scenario: The answer carries the conversation
+
+- **WHEN** the caller retries that talk with "notes.md" while the bare agent runs its conversation, and the bare agent then ends
+- **THEN** talk waits while the bare agent runs, status naming its process, and the next settle after it ends starts talk resuming the session on the account its lost start ran under, its prompt flume's words then the question and the answer (49, 179, 198, 207)
+
+#### Scenario: Stopped by its caller
+
+- **WHEN** a caller stops a talk's agent kept open, and then retries talk with "notes.md"
+- **THEN** the next settle reads it let go, `stopped`, and the retry starts a fresh agent carrying no conversation, its prompt carrying the question and the answer (49, 51, 198)
+
 ### Requirement: A fresh start carries what its stage was told
 
 A fresh start the core makes on its own of a stage, after a spent

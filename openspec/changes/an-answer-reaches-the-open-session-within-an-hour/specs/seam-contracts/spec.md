@@ -20,9 +20,10 @@ answer under a terminal that cannot (53, 95, 198, C.5).
 ### Requirement: The types of an agent kept open
 
 The held state SHALL hold a stage end's `open_until` and `closed`, with
-when, why and when its agent was ended, and a setting's `keep_open` as
-written, each read with a default so state written before reads with
-none (56, 75, 198).
+when, why, one of `time`, `stopped`, `agent_ended` and `account_spent`,
+when its agent was ended and whether a bare agent was left in its pane,
+and a setting's `keep_open` as written, each read with a default so
+state written before reads with none (56, 75, 77, 198).
 
 #### Scenario: An agent let go
 
