@@ -54,7 +54,7 @@ for, and `flume status <place>` for any other (43; core.11, core.25).
 #### Scenario: A stop-short's notice
 
 - **WHEN** a change whose brief begins "Every question a place asks reaches someone who answers it" ends short needing an answer at construct, and the settle delivers it to a pane
-- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short` and `flume inbox` (S93)
+- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short` and `flume inbox` (S94)
 
 #### Scenario: A delivery's notice
 

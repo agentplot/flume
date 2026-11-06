@@ -31,8 +31,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   mark from the parts they read. Its consequences give the
   agentplot/blueprints revision that holds the statement's amendment
   (section 3's address, 4, 7, 8, 28, 41, 42, 43, 49, 56, 130, 132, 143,
-  191, 192, 193, C.4, C.7, S92 to S94, S98; core.19). True when `sluice exec main -- moon
-  run root:adrs root:format` passes.
+  191, 192, 193, C.4, C.7, S93, S94, S98, S99; core.19). True when
+  `sluice exec main -- moon run root:adrs root:format` passes.
 - [ ] 1.2 Add to records 0009, 0013, 0014 and 0040 an amendment line
   each, naming record 0039 and what it changes of that record. 0009: a
   caller's start also sees what waits on it, and a notice names the
@@ -186,7 +186,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   flume:test` passes. `engine/role_waking.rs` holds the role-waking
   spec's scenarios of an address's stream, the run's session, its intent
   and settings, its stream and label, the two streams' planners, named
-  `s98_one_declaration_two_streams`, the run an earlier flume named, the
+  `s99_one_declaration_two_streams`, the run an earlier flume named, the
   carried address and a fault's address, and `crates/flume/tests/commands.rs`
   the wake's refusal and help.
 - [ ] 4.2 Have the settle that reads a role's run's last stage delivered
@@ -195,7 +195,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   behind its stream, and never to its own address (design 2, 6; 114,
   130, 132, 193). True when `sluice exec main -- moon run core:test
   conformance:test` passes, with the role-waking spec's scenarios of a
-  run over at its delivery, the next end, and a run's stall, S98's done
+  run over at its delivery, the next end, and a run's stall, S99's done
   among them, and every existing scenario passes.
 - [ ] 4.3 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
@@ -223,8 +223,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   give the address it named (design 1, 4; 41, 43, 56, 132). True when
   `sluice exec main -- moon run seams:test core:test conformance:test`
   passes, with the stage-runs spec's scenarios of a stop-short
-  addressed, its own stream's role and another stream's, S92's engine
-  part named `s92_a_question_for_ops_answered_once` once group 7 gives
+  addressed, its own stream's role and another stream's, S93's engine
+  part named `s93_a_question_for_ops_answered_once` once group 7 gives
   the key, and every existing stop-short scenario passes.
 - [ ] 5.3 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
@@ -256,8 +256,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   the submission, and a drop, end it (design 7; 47, 49, 52, 130). True
   when `sluice exec main -- moon run seams:test core:test
   conformance:test` passes, with the caller-waits spec's scenarios of
-  the hold and its lapse, S94's engine part named
-  `s94_a_card_held_and_lapsed`.
+  the hold and its lapse, S98's engine part named
+  `s98_the_users_question_held_and_lapsed`.
 - [ ] 6.3 Have status give a hold on the waiting move with its words,
   since when, its bound or that it lapsed, and a stall's stop-short with
   its addressee (56, 130; core.14). True when `sluice exec main -- moon
@@ -285,7 +285,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   refused for its key ends no agent (design 8; 42, 49, 50). True when
   `sluice exec main -- moon run core:test conformance:test` passes.
   `engine/caller_acts.rs` holds the caller-acts spec's four scenarios,
-  with S92's engine part, `s92_a_question_for_ops_answered_once`.
+  with S93's engine part, `s93_a_question_for_ops_answered_once`.
 - [ ] 7.3 Have status give each end's key, and a stop-short's answer
   with who gave it and when (56; core.14). True when `sluice exec main
   -- moon run core:test conformance:test flume:test` passes, with the
@@ -342,7 +342,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 - [ ] 9.2 Add to `crates/flume/tests/profiles/tools/walkthroughs.rs`,
   under the pinned herdr with the stand-in, every source, roles file,
   recipient and address a scratch one of the test's own:
-  - **S92.** A scratch host declaring the stream `east`, and a scratch
+  - **S93.** A scratch host declaring the stream `east`, and a scratch
     source `acme`, its one package locked on the host, whose roles file
     declares runs for `east/operator`, standing behind `east`, and
     `east/ops`, each with its words. A change launched from no session
@@ -353,12 +353,12 @@ name no program, no terminal, no queue and no caller's tool (core.1).
     answer. A second retry naming the key is refused. No run of
     `east/operator` is launched. The run of `east/ops` delivers and is
     tidied with no caller's word.
-  - **S93.** A change launched in `east` from a scratch pane, whose
+  - **S94.** A change launched in `east` from a scratch pane, whose
     stand-in is restarted after the notice. The new session's
     SessionStart gives it the place, and five minutes of the
     walkthrough's clock later the stall reaches `east/operator`.
 
-  (41, 43, 130, 132, 191, 193, S92, S93). True when `sluice exec main --
+  (41, 43, 130, 132, 191, 193, S93, S94). True when `sluice exec main --
   moon run flume:tools` passes with them, and every existing walkthrough
   passes.
 - [ ] 9.3 Run the checks of the projects this group touched. True when
@@ -400,8 +400,8 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 - [ ] 11.1 Have the suite's clause list read the statement at the
   revision of agentplot/blueprints main that holds record 0039's
-  amendment, Part A with 193 and the scenarios to S98. Have 193, S92 to
-  S94 and S98 cited by this change's scenarios, and nothing of this
+  amendment, Part A with 193 and the scenarios to S103. Have 193, S93,
+  S94, S98 and S99 cited by this change's scenarios, and nothing of this
   change's named unbuilt (clause-coverage spec; core.19). True when
   `sluice exec main -- moon run conformance:test conformance:coverage`
   passes.

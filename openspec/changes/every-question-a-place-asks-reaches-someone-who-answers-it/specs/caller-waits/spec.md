@@ -19,7 +19,7 @@ stop-short it waits on (43, 130, 193).
 #### Scenario: The stall reaches the answerer
 
 - **WHEN** the same place, launched from the pane `ops`, stalls in the stream `east`, behind which the scratch source `acme` declares `east/operator` with a run, and no run of it stands
-- **THEN** the stall is delivered once to `ops` and stands pending for `east/operator`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (193, S93)
+- **THEN** the stall is delivered once to `ops` and stands pending for `east/operator`, whose run the settle wakes, and the run's `flume inbox` gives the stall with the stop-short's words and its key (193, S94)
 
 #### Scenario: The role a question named
 
@@ -29,7 +29,7 @@ stop-short it waits on (43, 130, 193).
 #### Scenario: Another stream's role named
 
 - **WHEN** the same construct stopped short naming `west/design` instead, and `west/operator` stands behind `west`
-- **THEN** the stall is delivered to `east/planner`, to `west/design` and to `east/operator`, the answerer behind the place's own stream, once each, and not to `west/operator` (S94)
+- **THEN** the stall is delivered to `east/planner`, to `west/design` and to `east/operator`, the answerer behind the place's own stream, once each, and not to `west/operator` (S98)
 
 #### Scenario: The answerer is the recipient
 
@@ -87,7 +87,7 @@ words (130, 193).
 #### Scenario: A hold's bound passes
 
 - **WHEN** the hold's hour passes on the fake clock under a watch with no retry
-- **THEN** the watch's settle lapses the hold, status says it lapsed and when, and the place's stall, naming the lapsed hold's words, is delivered to each recipient, to the role the stop-short named and to the answerer (S94)
+- **THEN** the watch's settle lapses the hold, status says it lapsed and when, and the place's stall, naming the lapsed hold's words, is delivered to each recipient, to the role the stop-short named and to the answerer (S98)
 
 ### Requirement: A stall recorded before reaches the answerer
 

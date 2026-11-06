@@ -60,7 +60,7 @@ earlier flume named by the role alone SHALL be found by its role (3,
 #### Scenario: Two streams' planners from one declaration
 
 - **WHEN** ends come at once for `east/planner` and `west/planner`, which `acme`'s one roles file declares in one repository and the kind `turn`, named `east` and `west`
-- **THEN** two places are launched, `turn--east` and `turn--west`, and each run's `flume inbox` gives its own address's ends (S98)
+- **THEN** two places are launched, `turn--east` and `turn--west`, and each run's `flume inbox` gives its own address's ends (S99)
 
 #### Scenario: A run an earlier flume named
 
@@ -77,7 +77,7 @@ stream of its own (132, 143, 180, 193).
 #### Scenario: A role in its stream
 
 - **WHEN** `acme`'s file declares `east/planner`, whose kind declares the label `planning`, and an end pending for its address wakes it
-- **THEN** the woken place runs in `east`, from its address, with the label `planning` from its kind (143, 180, S98)
+- **THEN** the woken place runs in `east`, from its address, with the label `planning` from its kind (143, 180, S99)
 
 #### Scenario: An entry that names a stream
 
@@ -183,12 +183,12 @@ pending for the address wakes another run (114, 132).
 #### Scenario: A turn delivers
 
 - **WHEN** the run of `east/planner` delivers its one stage's report and its agent is quiet
-- **THEN** the settle declares it done and tidies the place, and status gives no run of `east/planner` standing (S98)
+- **THEN** the settle declares it done and tidies the place, and status gives no run of `east/planner` standing (S99)
 
 #### Scenario: The next end
 
 - **WHEN** an end for `east/planner` comes after that run was tidied
-- **THEN** the settle that reads it launches a new run (S98)
+- **THEN** the settle that reads it launches a new run (S99)
 
 ### Requirement: A role's run's stall reaches the answerer behind it
 

@@ -29,7 +29,7 @@ where it answers nothing, no session is named, or flume does not answer
 #### Scenario: A restarted pane
 
 - **WHEN** a session flume did not start begins in the pane `ops`, a place whose recipient is `ops` waits on a retry of construct with a stop-short delivered before, and SessionStart runs
-- **THEN** the hook's output gives the agent the place, the stop-short's words, its key and the three ways on, and exits 0 (S93)
+- **THEN** the hook's output gives the agent the place, the stop-short's words, its key and the three ways on, and exits 0 (S94)
 
 #### Scenario: Nothing waits
 

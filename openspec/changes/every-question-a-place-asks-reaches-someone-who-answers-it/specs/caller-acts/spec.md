@@ -12,12 +12,12 @@ A retry with no key SHALL be taken as before (42, 49).
 #### Scenario: One answer taken
 
 - **WHEN** a construct ended short needing an answer under the key `stage/construct/1/ended-short`, naming `east/ops`, and the run of `east/ops` retries construct with that key and its words
-- **THEN** a fresh agent starts whose prompt carries the question, then the words, and status gives the end answered by `east/ops`, with when (S92)
+- **THEN** a fresh agent starts whose prompt carries the question, then the words, and status gives the end answered by `east/ops`, with when (S93)
 
 #### Scenario: A second answer to the same question
 
 - **WHEN** a retry from the pane `ops` names the same key a minute later
-- **THEN** it is refused naming `east/ops`, its words and when, and no agent is ended or started (S92)
+- **THEN** it is refused naming `east/ops`, its words and when, and no agent is ended or started (S93)
 
 #### Scenario: An answer after the place moved on
 

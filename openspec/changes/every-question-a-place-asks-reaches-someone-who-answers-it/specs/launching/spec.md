@@ -19,7 +19,7 @@ session's name, or a role's address of any stream written whole (7, 8,
 #### Scenario: A launch from no session takes its stream's answerer
 
 - **WHEN** a launch in the stream `east` names no recipient, `FLUME_RECIPIENT` is unset, the fake terminal names no session, and the scratch source `acme` declares `east/operator` with a run, standing behind `east`
-- **THEN** the place's one recipient is `east/operator`, and status gives it as from the stream's answerer, declared by `acme` (7, 193, S92)
+- **THEN** the place's one recipient is `east/operator`, and status gives it as from the stream's answerer, declared by `acme` (7, 193, S93)
 
 #### Scenario: Each stream its own answerer
 

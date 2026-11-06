@@ -37,7 +37,7 @@ refused, naming the list, and the stage SHALL go on (41, 43, 56, 132).
 #### Scenario: A question for its own stream's ops
 
 - **WHEN** a construct of a place in `east`, whose recipient is `east/operator`, stops short naming `ops`, and no run of `east/ops` stands
-- **THEN** the stage ends short, the end stands pending for `east/ops` alone, the settle wakes `east/ops`, and `east/operator` is woken for none of it (S92)
+- **THEN** the stage ends short, the end stands pending for `east/ops` alone, the settle wakes `east/ops`, and `east/operator` is woken for none of it (S93)
 
 #### Scenario: A question for another stream's role
 

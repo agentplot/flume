@@ -60,7 +60,8 @@ kind at its own address; crew's roles are crew's to declare, never
 repeated in each host's configuration; planning is a label of each
 partition's stream; an address is a role of a stream; a role's run
 reads flume's list for its address; the operator may ask the user, in
-the Plannotator Inbox; the roles move in the user's order, the planner
+the Plannotator Inbox; crew's own cards stay on Pending You until crew
+moves them to the Inbox; the roles move in the user's order, the planner
 and the design agent once flume gives an agent's effort; and the word
 label keeps flume's meaning alone. It builds nothing until the user has
 read it. Its tasks are the build that follows.
@@ -71,12 +72,17 @@ read it. Its tasks are the build that follows.
   it is for, in any stream. The stream's door, its operator, stands
   behind every stall. An answer names the stop-short it answers and is
   taken once. A restarted recipient sees every place that waits on it.
-  A question that is the user's is asked once in the user's Plannotator
-  Inbox, by the role whose question it is, in its address's thread under
-  an Inbox identity of the address's that outlives each run; crew's
-  follower and the runner's `flume wake` carry the answer to the role's
-  next run. Plannotator offers no watch and no identity for an address,
-  and the design says how it works around both.
+  A place's question that is the user's is asked once in the user's
+  Plannotator Inbox, by the role whose question it is, in the Inbox of
+  its stream's partition as swancloud's design
+  `the-plannotator-inbox-runs-on-deneb-for-the-users-devices` gives a
+  stream's agents theirs, and deneb's one Inbox until it does, in its
+  address's thread under an Inbox identity of the address's that
+  outlives each run; crew's follower, reading each role's identity in
+  that role's partition's Inbox, and the runner's `flume wake` carry the
+  answer to the role's next run. crew's own cards stay on Pending You.
+  Plannotator offers no watch and no identity for an address, and the
+  design says how it works around both.
 - **An address is a role of a stream.** `<stream>/<role>`: the role a
   source declares for a stream the host declares (143). `madswan/ops`
   is ops of the stream `madswan`. A role's run runs in its address's
@@ -143,9 +149,9 @@ read it. Its tasks are the build that follows.
   its bound, and an answer's key and who gave it (56).
 - **Changes named in other repositories**, to be made there once the
   user has read the design, and not written here:
-  - agentplot/blueprints: flume's statement, as design 12.1 words it,
-    section 3's address, its new clause 193 and scenarios S92 to S94 and
-    S98. sluice's is not amended.
+  - agentplot/blueprints: flume's statement, as design 12.1 words it
+    against main at 2287669, section 3's address, its new clause 193 and
+    scenarios S93, S94, S98 and S99. sluice's is not amended.
   - afterthought/crew: its kinds as packages declaring the label
     `planning`; its roles file, written from its partitions at their
     streams' addresses; the teams file naming each partition's one
@@ -153,10 +159,13 @@ read it. Its tasks are the build that follows.
     answering, passing or putting each question to the user; each
     brief's part of the routing; the operator behind every stall of its
     stream; `crew answer` carrying the key and taking any place; a
-    place's question put to the user in the Plannotator Inbox as its
-    address's identity, keyed by the place and the end; the follower
-    reading each role's Inbox threads at its minute and writing each
-    answer as an ask; roles.7 holding as written, and the change
+    place's question put to the user in its partition's Plannotator
+    Inbox as its address's identity, keyed by the place and the end,
+    and its other questions and crew's commands' cards left on Pending
+    You; the follower reading each role's threads in that role's
+    partition's Inbox at its minute and writing each answer as an ask,
+    its Pending You notice kept beside it; each partition's Inbox's data
+    folder in the teams file; roles.7 holding as written, and the change
     `roles-run-as-flume-kinds` Decisions 1, 3 and 6 giving way to
     flume's launch and crew's roles file.
   - agentplot/boomdrive: the runner wakes a role by `flume wake`, and
@@ -210,7 +219,7 @@ None.
 - `command-line`: `needs --to`, `hold --waiting`, `retry --answers`, and
   `wake`'s address as `<stream>/<role>`.
 - `clause-coverage`: the suite reads the statement at the revision that
-  holds the amendment, and cites 193, S92 to S94 and S98.
+  holds the amendment, and cites 193, S93, S94, S98 and S99.
 
 ## Impact
 
@@ -246,7 +255,7 @@ None.
   SessionStart hook.
 - `crates/flume-fakes`: the fake host's sources' roles.
 - `crates/flume-conformance`: the clause list and the engine's scenarios
-  for 193, S92 to S94 and S98.
+  for 193, S93, S94, S98 and S99.
 - `plugins/claude/`: the hooks' description and tests, the SessionStart
   of a session flume did not start among them.
 - `site/`: `guides/callers-and-holds.md`, `guides/roles-and-wake.md`,
