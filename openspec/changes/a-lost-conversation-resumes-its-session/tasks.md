@@ -54,4 +54,4 @@ a herdr session a test starts is named by one letter of the test's own.
 
 ## 6. The gate
 
-- [ ] 6.1 Merge main into this branch where it has moved, resolving any file it contests, and run the gate over the merged tree. True when `openspec validate a-lost-conversation-resumes-its-session --strict` and `sluice exec main` pass.
+- [x] 6.1 Merge main into this branch where it has moved, resolving any file it contests, and run the gate over the merged tree. True when `openspec validate a-lost-conversation-resumes-its-session --strict` and `sluice exec main` pass.
