@@ -15,6 +15,8 @@ Amended 2026-10-28 by record 0014, accepted by the user: a waiter is a recipient
 
 Amended 2026-11-06 by madswan-design, below: an address may be held by a standing agent the host's configuration names, whose ends go into it and wake no run.
 
+The construct stage of `a-roles-address-may-be-held-by-a-standing-agent` read it into the code's terms on 2026-11-06, below the amendment.
+
 Deciders: the user, accepting recommendation R1 of the design review of 2026-10-28; the shape is the reviewing agent's.
 Sources: `agentplot/blueprints:design/flume/requirements.md` clauses 3, 43, 69, 70, 72, 132, C.7 and S38, as amended with this record, and the callers table's crew row; records 0005, 0009, 0010, 0011; `afterthought/crew:docs/adr/0047` move 6 (no crew role stands; each is a kind Flume launches on a nudge naming a record) and `0048` patterns 3 and 4; rules core.13, core.25, core.26, core.27.
 
@@ -52,7 +54,7 @@ Option 1.
 Status: decided on 2026-11-06 by madswan-design, the design agent, on swancloud-design's ask relayed by madswan-operator. Nothing in it is the user's alone: it holds to clauses 3, 43 and 132 and rule core.28 as they stand, and each choice in it is cheap to change.
 
 Deciders: madswan-design.
-Sources: `agentplot/blueprints:design/flume/requirements.md` on main at e6ab2a0, clauses 3, 43, 132, 143 and C.7 and the vocabulary's recipient; `crates/flume/src/profiles/terminal/herdr/mod.rs` `reach` on main at 78ea62ea, read 2026-11-06; `herdr --session madswan agent list` on deneb, read 2026-11-06, which names madswan's standing agents `madswan-planner`, `madswan-ops` and the rest in that session; `afterthought/swancloud:docs/adr/` record 0042 as amended at f424dd86; crew's runner, which names every place's recipient by a role's address (`afterthought/crew:plugin/lib/runner.py` on `teamless/deneb`, as swancloud's record reads it); `afterthought/crew:docs/adr/0047` move 6.
+Sources: `agentplot/blueprints:design/flume/requirements.md` on main at 6d322be, clauses 3, 43, 132, 143 and C.7 and the vocabulary's recipient; `crates/flume/src/profiles/terminal/herdr/mod.rs` `reach` on main at 78ea62ea, read 2026-11-06; `herdr --session madswan agent list` on deneb, read 2026-11-06, which names madswan's standing agents `madswan-planner`, `madswan-ops` and the rest in that session; `afterthought/swancloud:docs/adr/` record 0042 as amended at f424dd86; crew's runner, which names every place's recipient by a role's address (`afterthought/crew:plugin/lib/runner.py` on `teamless/deneb`, as swancloud's record reads it); `afterthought/crew:docs/adr/0047` move 6.
 
 ### Context and problem statement
 
@@ -83,5 +85,58 @@ Option 1.
 - Good: the crossing from standing roles to roles that run as kinds changes one entry per address and no launch.
 - Bad: a burst of ends while the agent is away is a burst of notices when it returns, one for each end, as for any recipient (43).
 - Bad: flume trusts the configuration's name. An agent that takes a standing agent's name in that session takes its ends, which no identity of flume's guards, since flume did not start it.
-- The statement's vocabulary, 43, 132 and C.7 say so (blueprints e6ab2a0). Rule core.28 takes it. The roadmap lists it as decided, not built. The herdr profile's reading of an agent by its name is the change's construct to read and state in C.5's herdr row.
+- The statement's vocabulary, 43, 132 and C.7 say so (blueprints 6d322be). Rule core.28 takes it. The roadmap lists it as decided, not built. The herdr profile's reading of an agent by its name is the change's construct to read and state in C.5's herdr row.
 - Unit: a role's address held by a standing agent, its `[roles]` entry read with `agent` and `session`, its ends delivered at a settle, and status naming where each address lives. swancloud's `lib/flume-config.nix` writes the entries from `lib/crew-teams.nix` once a release reads them (swancloud record 0042 as amended).
+
+### The construct's reading, 2026-11-06
+
+Status: decided on 2026-11-06 by the construct stage of flume's change
+`a-roles-address-may-be-held-by-a-standing-agent`. Each choice is cheap
+to change and none is the user's alone: the rules decide it or leave it
+open, and the change's design gives each in full.
+
+Deciders: the construct stage of `a-roles-address-may-be-held-by-a-standing-agent`.
+Sources: the amendment above; `herdr --session madswan agent list` under
+herdr 0.9.5 on deneb, read 2026-11-06, answering `result.agents[]` with
+`name`, `pane_id` and `agent_status`; the statement's amendment on
+agentplot/blueprints' branch `design/flume-a-standing-agent-is-found-by-its-name`
+at b8abde8, cut from main at 51b6316, for the orchestrator to push (C.5,
+C.7); rules core.11, core.15, core.28, core.44 and core.49; the change
+`every-question-a-place-asks-reaches-someone-who-answers-it`, held for
+the user's read.
+
+- **C.5's standing row.** herdr finds the session's socket by one
+  `session list --json`, starting no server, and reads `agent list` there
+  by `name`, `pane_id` and `agent_status`; an agent of the name is
+  reached at `herdr:<pane_id>@<socket>` by the send and state rows. The
+  printed command finds none. The statement says so on the branch above.
+- **The terminal is the entry's stream's** (190; core.49), as its session
+  is, and C.7 says so on that branch. Not taken: every terminal the host
+  binds, as a session's recipient is found, which would read two
+  terminals' agents of one name as more than one.
+- **The terminal seam gives a part's agents by name,** each with the
+  session name `send_to` already reaches, and the core counts them. Not
+  taken: a lookup by one name, which status would ask once per address
+  rather than once per session. No clause of B.5 is added, since 132
+  says what the terminal answers.
+- **A standing entry holds `agent`, `session` and `stream` alone.** A
+  run's other keys beside `agent` make the configuration unreadable,
+  naming the address and the key, as any key a role's table does not
+  know does. Not taken: keeping them and reading them for nothing, so
+  the crossing to a kind swaps one key; a key read for nothing tells a
+  reader the agent runs in that repository at that priority.
+- **`flume wake` of a standing address launches nothing** and answers
+  that a standing agent holds it, with what status says of it. Not
+  taken: a refusal, since the carrier asked nothing wrong.
+- **The configuration decides between a standing agent and a run** at
+  each delivery, so an entry that changes holder moves the next end and
+  a run still live of an earlier entry takes none.
+- **Status gives every address a standing agent holds,** pending or not,
+  read at the ask and once for each terminal and session (core.15).
+- **How it meets every-question's design.** That design takes `[roles]`
+  out of C.7 and reads the roles from crew's source, and its moves leave
+  a role standing until the user moves it. The standing entry is read
+  apart from the run's, so that design decides whether crew's file may
+  give `agent` for a role not yet moved, or whether such roles go back
+  to the door at the stall, and either keeps or drops one reader and one
+  step of the delivery.
