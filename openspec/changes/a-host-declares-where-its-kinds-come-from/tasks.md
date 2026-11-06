@@ -121,8 +121,8 @@ identities, hashes and locks (design, *What this change rests on*).
   - `guides/roles-and-wake.md`.
 
   True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 7.2 Have `plugins/claude/commands/launch.md` say that a kind of a source the host declares is named `<source>/<name>`, beside flume's own and the repository's (design 14; core.35). True when `sluice exec main -- moon run plugin-claude:format plugin-claude:validate plugin-claude:test` passes.
-- [ ] 7.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run site:prose site:build plugin-claude:format plugin-claude:validate plugin-claude:test root:format` passes.
+- [x] 7.2 Have `plugins/claude/commands/launch.md` say that a kind of a source the host declares is named `<source>/<name>`, beside flume's own and the repository's (design 14; core.35). True when `sluice exec main -- moon run plugin-claude:format plugin-claude:validate plugin-claude:test` passes.
+- [x] 7.3 Run the checks of the projects this group touched. True when `sluice exec main -- moon run site:prose site:build plugin-claude:format plugin-claude:validate plugin-claude:test root:format` passes.
 
 ## 8. Coverage and the gate
 
