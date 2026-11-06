@@ -1,100 +1,104 @@
 # Verify: where-an-agent-opens-is-given-by-kind-and-by-stage
 
-Read on 2026-11-06 at `65fa551`, the head of the branch
+Read on 2026-11-06 at `f25044a`, the head of the branch
 `change/where-an-agent-opens-is-given-by-kind-and-by-stage`. The check
 covers the change's proposal, design, nine delta specs and tasks. The
-branch holds flume's main at `b5dcf96`, its merge base. Origin's main
-has since moved to `880f1d0`, which lands #123 (see "Noted, not
-short").
+branch holds flume's main at `880f1d0`, which is origin's main after a
+fetch on 2026-11-06.
 
 ## Verdict
 
 **Holds; archived.**
 
-- Every task of groups 1 to 11 is ticked: 25 of 25.
+- Every task of groups 1 to 12 is ticked: 26 of 26.
 - Every requirement of the nine delta specs is built, and each scenario
-  is held by a test that asserts its THEN. The deltas are unchanged
-  since the verify at `29c4ea7`.
-- Task 11.1's scenario fails without its mend, verify begun, and passes
-  with it (below).
+  is held by a test that asserts its THEN.
+- The merge of `880f1d0` (task 12.1) keeps both sides in each of the
+  five files that conflicted (below).
 - `openspec validate where-an-agent-opens-is-given-by-kind-and-by-stage
   --strict --no-interactive` passes.
 - A trial archive passes 43 of 43 specs. It ran on the head's
   `openspec/`, copied to a scratch directory, and applied 7
-  requirements added and 18 modified. The specs it wrote are the same,
-  file for file, as those the archive at `97efe33` wrote.
-- `sluice exec main` at `65fa551` passes all 23 of the check tasks the
+  requirements added and 18 modified. Seven of the specs it wrote are
+  the same, file for file, as those the archive at `01a8e35` wrote.
+  command-line and the-list differ from that archive only by #123's
+  requirements and by the refitted requirement of task 12.1.
+- `sluice exec main` at `f25044a` passes all 23 of the check tasks the
   head affects, flume:tools 101 of 101 among them, and sluice recorded
   the pass under its key (below).
 
-## Since the verify at `29c4ea7`
+## Since the verify at `65fa551`
 
-That verify found the work holding, and `97efe33` archived it. #121
-then failed on main: sluice read flume:tools flaky, since the verify's
-run at `8d4b6b8` had failed one walkthrough at the inputs #121 passed
-at. The change came out of the archive for task 11.1. Between
-`29c4ea7` and `65fa551` these commits changed the tree:
+That verify found the work holding, and `01a8e35` archived it. Main's
+#123, `fix/flume-list-leaves-finished-places-out`, had landed at
+`880f1d0`, and the merge queue found the branch conflicting with it.
+The change came out of the archive for task 12.1. Between `65fa551`
+and `f25044a` these commits changed the tree:
 
-- `7020278` adds the earlier report.
-- `97efe33` archives the change and writes its deltas to the specs.
-- `b82c2b8` moves the change out of the archive and leaves
-  `openspec/specs/` as main holds it. No file of the change was
-  changed in the move.
-- `a775f45` merges main at `b5dcf96` (#120), which changes records 0047
-  and 0050 and nothing else. Nothing was contested.
-- `65fa551` delivers task 11.1. It changes `crates/flume-core`'s
-  settle, the fake store, `engine/running_through.rs`, the proposal
-  and the tasks.
+- `f46506d` adds the earlier report.
+- `01a8e35` archives the change and writes its deltas to the specs.
+- `8b2a916` merges main at `880f1d0`, resolving the five files that
+  conflicted.
+- `f25044a` moves the change out of the archive and leaves
+  `openspec/specs/` as main holds it at `880f1d0`. It refits the-list
+  delta's "The list reads only what flume keeps" and ticks task 12.1.
 
-Against the archived change at `97efe33`, only the proposal and the
-tasks differ, by 11.1's lines. No delta, site page, record or rule of
-the change changed, so the earlier report's reading of each scenario
-still holds at this head.
+Against the archived change at `01a8e35`, the proposal, the design and
+eight of the nine deltas are unchanged. The tasks gain 12.1, and
+the-list delta changes in one requirement. `crates/flume-core/src/settle.rs`
+and `crates/flume-fakes` are unchanged since `65fa551`, so 11.1's mend
+and its scenario stand as the earlier report read them.
 
-### Task 11.1
+### Task 12.1
 
-- **The race.** One settle reads construct delivered; another runs
-  whole beside it, starting code, which is refused, `held.current`
-  moving to code. The first's `advance` then read code as the ended
-  stage and started verify, past the refused code.
-- **The mend.** `advance` in `crates/flume-core/src/settle.rs` reads
-  the current stage again inside its update and starts nothing unless
-  that stage still stands `Delivered`, `Finished` or `Repeating`.
-  `advance`'s one caller, `step`, calls it only from those three
-  states, so the guard changes nothing but the raced read. The doc
-  comment cites 75.
-- **The hook.** `FakeStore::after_read_of` runs an act once, just after
-  the first read that hands out a held state its test holds of. It is
-  taken out before it runs, so the act's own reads do not fire it
-  again.
-- **The scenario.** `running_through.rs`'s
-  `a_refused_start_read_late`, citing 40, 46, 74 and 75, runs the second
-  settle just after the first reads construct delivered, code refused
-  by its stream's table for code naming a key it does not take. It
-  checks that the second settle ran, that code is `Refused` and verify
-  `NotReached`, that one agent opened, that status's refusal names
-  `streams.<stream>.kinds.change.stages.code.pool`, and that the place
-  waits on a retry of code, `Refused`.
-- **Fails without the mend.** In a scratch worktree at `65fa551` with
-  `settle.rs` as `a775f45` holds it, `cargo test -p flume-conformance
-  --test engine` failed 1 of 495 engine scenarios, this one alone:
-  `verify: Some(Begun) where Some(NotReached) was due`. With the mend
-  it passes, in the gate's `conformance:test`.
-- **No requirement changes.** The mend makes the settle meet clause 75
-  as the specs already say it, so no delta carries it. The proposal's
-  impact names it.
+- **Record 0049.** The record keeps both amendments. Its status line
+  names the runs amendment, accepted on the user's card, as "the first
+  section below". It names the finished-places amendment, accepted on
+  the user's yes, as "the last section below". Both sections follow,
+  in that order.
+- **core.52.** The rule keeps main's clause on leaving out places that
+  landed or were dropped. Its details keep both "Rules out" items: a
+  terminal asked once for each session, citing record 0049's first
+  amendment, and a landed or dropped place listed without `--all`,
+  citing its second. The source line names 63 and 199 and "record 0049
+  and its two amendments".
+- **`reference/commands.md`.** The stream line keeps this change's
+  sessions after the own. It ends with main's "A host with no places to
+  list prints `no places` before `streams`."
+- **`crates/flume-conformance/src/engine/list.rs`.** The module's doc
+  gives both: a landed or dropped place only where every place is
+  asked, and each session a stream names. It cites 63 and 199.
+- **The code.** `crates/flume-core/src/list.rs` merged without a
+  conflict. `Engine::list(every)` leaves out `landed_or_dropped` places
+  unless every place is asked, and `stream_listed` reads a stream's own
+  session and its named sessions in one runs. `flume list` takes
+  `--all`, and `flume open` takes a session's name
+  (`crates/flume/src/commands/mod.rs`).
+- **The refit.** The-list delta's "The list reads only what flume
+  keeps" is main's requirement at `880f1d0` with two additions. It
+  reads each stream's terminal once "for all its sessions together",
+  and it cites 199. Its body is 489 characters, within OpenSpec
+  1.14.3's 500. Its scenario "Fifty places in three repositories" is
+  main's word for word. `s108_the_list_of_fifty_places` asserts the
+  scenario's THEN: 48 places, the two landed left out, three runs, and
+  fifty places when every place is asked.
+- **The trial archive.** The-list's spec holds both "The list leaves out
+  a place that landed or was dropped unless every place is asked" and
+  "A stream's line gives each session it names for a kind or a stage".
+  command-line's holds main's `--all` and its scenario "A dropped place
+  listed only with --all".
 
 ## Tasks
 
-All 25 tasks are ticked, `[x]`, and none is open.
+All 26 tasks are ticked, `[x]`, and none is open.
 
 - **Record 0048** and its amendment are `accepted`. They cite the
   statement on agentplot/blueprints main at `f676e8f` and `fa40c94`
   (1.1). core.44 and core.48 cite it.
-- **Record 0049's amendment** is `accepted`, its statement on main at
-  `12866a8` (8.1, 10.1). No file of the record, the proposal or the
-  design names `9e08d54` or says unpushed; the tasks name it only in
-  10.1's own words.
+- **Record 0049's first amendment** is `accepted`, its statement on
+  main at `12866a8` (8.1, 10.1). No file of the record, the proposal or
+  the design names `9e08d54` or says unpushed. The tasks name it only
+  in 10.1's own words.
 - **The seams** (2.1, 2.2): `Stream::kinds`, `KindSessions`,
   `StageSession`, `SessionFrom::StreamKind` and `StreamStage`,
   `NamedSession`, `NamedFor` and `TableFault`; the fake host scripts a
@@ -108,15 +112,17 @@ All 25 tasks are ticked, `[x]`, and none is open.
   6.2), **the clause list** (7.1, `REVISION = "fa40c94"`), **the site**
   (7.2, 8.4), **runs over several parts and the list's sessions** (8.2,
   8.3), **the deltas within OpenSpec's length** (9.1) and **record
-  0049's amendment accepted** (10.1): as the verify at `29c4ea7` read
-  them, each test found again at `65fa551`.
-- **Two settles at once** (11.1): above.
+  0049's amendment accepted** (10.1): as the verifies at `29c4ea7` and
+  `65fa551` read them, each test found again at `f25044a`.
+- **Two settles at once** (11.1): as the verify at `65fa551` read it.
+  The mend, the fake store's hook and the scenario are unchanged.
+- **Main's list beside the list's sessions** (12.1): above.
 
 ## Requirements and scenarios
 
-For every scenario of the nine deltas, a test was found at `8d4b6b8`
-and read against its scenario's THEN; the deltas and those tests are
-unchanged since.
+For every scenario of the nine deltas, a test was found and read
+against its scenario's THEN. Eight deltas are unchanged since the
+verify at `8d4b6b8`, which first read them.
 
 - **stream-sessions** (8 requirements, 27 scenarios):
   `crates/flume-conformance/src/engine/sessions.rs`, with
@@ -136,34 +142,35 @@ unchanged since.
   `runs_of_several_sessions_reads_them_in_one_listing` and
   `runs_under_the_printed_command_holds_no_part_and_runs_nothing`.
 - **the-list** (2 modified, 1 added, 3 scenarios): `engine/list.rs`'s
-  `a_streams_sessions_for_its_kinds_and_stages`,
-  `s108_the_list_of_fifty_places` and the round trip's `sessions`.
+  `s108_the_list_of_fifty_places`, read again against the refitted
+  scenario, `a_streams_sessions_for_its_kinds_and_stages`, which asserts
+  the line and the one runs `runs work work-design`, and the round
+  trip's `sessions`.
 - **clause-coverage** (2 modified, 3 scenarios): `clauses.rs` at
   `fa40c94`, `coverage.rs`'s `a_clause_left_out_is_named`, and
   `conformance:coverage` in the gate.
 
 ## The gate
 
-`sluice exec main` ran on 2026-11-06 at `65fa551`, over the checks the
-head affects against origin's main at `880f1d0`. It exited 0 after 5
-minutes 36 seconds, with 24 tasks completed and all 23 checks among
-them passed, and recorded the result under its key for `65fa551`:
+`sluice exec main` ran on 2026-11-06 at `f25044a`, over the checks the
+head affects against main at `880f1d0`. It exited 0 after 5 minutes 7
+seconds. Of the 24 tasks it completed, all 23 checks passed, and sluice
+recorded the result under its key for `f25044a`:
 
-- **root:** format, adrs and changes. Changes found 2 of 2 valid.
+- **root:** format, adrs (44 records) and changes (2 of 2 valid).
 - **seams, fakes, core, conformance, flume:** format and lint.
 - **tests:**
-  - seams 68, core 26 and fakes 49;
-  - conformance's suites, the engine's 495 scenarios among them with
-    11.1's;
-  - flume:test's suites 167, 2, 46, 19, 148 and 2;
+  - seams 68, core 27 and fakes 49;
+  - conformance's suites, `the_engine_passes_its_scenarios` among them;
+  - flume:test's suites 167, 2, 47, 19, 148 and 2;
   - plugin-claude.
-- **conformance:coverage** passes at `fa40c94`.
-- **site:** install, prose and build.
+- **conformance:coverage** passes at `fa40c94`, every clause cited by
+  the suite's 598 scenarios except those it names for other changes.
+- **site:** install, prose and build, every internal link valid.
 - **flume:tools** passes 101 of 101, among them
   `s107_a_design_session_through_the_binary`,
   `runs_of_several_sessions_reads_them_in_one_listing` and
-  `a_pool_with_no_account_of_a_stages_program_refuses_it_at_its_launch_and_at_a_later_start`,
-  the walkthrough the race failed.
+  `a_pool_with_no_account_of_a_stages_program_refuses_it_at_its_launch_and_at_a_later_start`.
 
 `root:specs` is not among the tasks the head affects, since the branch
 leaves `openspec/specs/` as main holds it. Its command passes 43 of 43
@@ -171,20 +178,8 @@ over the specs the trial archive writes, as the verdict says.
 
 ## Noted, not short
 
-- **Main has moved.** Origin's main is `880f1d0`, which lands #123,
-  `fix/flume-list-leaves-finished-places-out`. The branch does not hold
-  it. A trial merge of `880f1d0` into the head conflicts in four files,
-  each where both sides reworded one paragraph:
-  `crates/flume-conformance/src/engine/list.rs`, record 0049,
-  `docs/architecture/core.md`'s core.52 details and
-  `site/src/content/docs/reference/commands.md`'s `flume list`. Merged
-  into a scratch commit of the archive, it conflicts in
-  `openspec/specs/the-list/spec.md` too. This is the merge queue's to
-  read as a conflicting submission, which starts the kind's stage for
-  it with sluice's words (core.27); nothing of this change's own
-  requirements turns on it.
 - `openspec archive` leaves each spec's Purpose as main holds it.
   stream-views' Purpose still says `flume open [<stream>]`, where its
   requirements now take a session's name. No requirement or scenario
-  depends on it; a later change that touches stream-views is where it
+  depends on it. A later change that touches stream-views is where it
   is reworded.
