@@ -43,11 +43,12 @@ impl Engine {
         tidy
     }
 
-    /// Where the terminal keeps no watch, every command of flume's that
-    /// acts on places settles every place first (119, I8); under a watch
-    /// the watch settles them.
+    /// Where a terminal the host binds, its own or a stream's, keeps no
+    /// watch, every command of flume's that acts on places settles every
+    /// place first (119, 190, I8); where each keeps one the watches settle
+    /// them.
     pub(crate) fn settle_attended(&self) -> Tidied {
-        if self.terminal.watch() == Watch::None {
+        if self.attended() {
             return self.settle_every();
         }
         Tidied::default()
@@ -87,7 +88,8 @@ impl Engine {
     /// Shows the place's clues where they changed since last shown: its
     /// current stage, a repeating one with its group's place, and that
     /// stage's state, and the count of the places
-    /// of its repository on its base. A clue is display only: one that
+    /// of its repository on its base, in the place's terminal (190). A
+    /// clue is display only: one that
     /// fails is logged and fails nothing, and nothing reads one back
     /// (139).
     fn show(&self, id: &PlaceId) {
@@ -105,7 +107,11 @@ impl Engine {
         if held.shown.as_ref() == Some(&key) {
             return;
         }
-        match self.terminal.show(&place.place_ref(), &clues) {
+        let shown = match self.place_terminal(&held) {
+            Ok(terminal) => terminal.show(&place.place_ref(), &clues),
+            Err(reason) => Shown::Failed { reason },
+        };
+        match shown {
             Shown::Failed { reason } => {
                 self.host
                     .log(&format!("the clues of {id} did not show: {reason}"));

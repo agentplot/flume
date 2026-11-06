@@ -1,8 +1,8 @@
 //! The host's own facts the core reads: its clock, a new secret, a
 //! file's write time, whether a command of flume's still lives, the bound
-//! on agents its configuration states, its streams with their sessions
-//! and labels, its pools of accounts, the labels it gives kinds, its
-//! configuration's values with their layers, and a lock over the room
+//! on agents its configuration states, its streams with their sessions,
+//! labels and displays, its pools of accounts, the labels it gives kinds,
+//! its configuration's values with their layers, and a lock over the room
 //! (design 3, 6). No seam of Part B.
 
 use crate::{KindSettings, Seconds, Secret};
@@ -18,9 +18,13 @@ pub const DEFAULT_STREAM: &str = "default";
 /// it; its priority among streams, zero where it gives none; the pool
 /// its agents' accounts come from, none where the host's own pool stands;
 /// the terminal session its agents open in, none where it names none and
-/// its name, or the terminal's own for the default stream, stands; and
-/// its labels' shares of its agents, by label, none where it states none
-/// (107, 143, 144, 181, C.7).
+/// its name, or the terminal's own for the default stream, stands; its
+/// labels' shares of its agents, by label, none where it states none; the
+/// terminal profile its agents run in, the view a person is shown them in
+/// and the window's profile, each none where it names none and the host's
+/// stands (`Host::display_for`); and the title a window on its part of
+/// the terminal carries, none where it gives none and its name stands
+/// (107, 143, 144, 181, 186, 190, C.7).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stream {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -33,6 +37,70 @@ pub struct Stream {
     pub session: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub labels: BTreeMap<String, Share>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiplexer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<View>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_app: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+/// How a person is shown a stream's agents: in a window a terminal app
+/// opens on the terminal's command, or in the terminal's own app (186).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum View {
+    Terminal,
+    App,
+}
+
+impl View {
+    /// The view as the host's configuration and status spell it.
+    pub fn name(self) -> &'static str {
+        match self {
+            View::Terminal => "terminal",
+            View::App => "app",
+        }
+    }
+}
+
+/// Where a stream's multiplexer, view or terminal app came from: its
+/// stream's key, the host's, or neither, the default standing (186, 190,
+/// C.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NamedBy {
+    Stream,
+    Host,
+    Neither,
+}
+
+/// A profile by its name and where it came from; the default the host's
+/// reader names where neither the stream nor the host names one (105,
+/// 190).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileHeld {
+    pub profile: String,
+    pub from: NamedBy,
+}
+
+/// A stream's view and where it came from (186).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewHeld {
+    pub view: View,
+    pub from: NamedBy,
+}
+
+/// A stream's terminal and how a person views it: the terminal profile
+/// its agents run in, the view, and the window profile a terminal view
+/// opens in (143, 186, 190).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamDisplay {
+    pub multiplexer: ProfileHeld,
+    pub view: ViewHeld,
+    pub terminal_app: ProfileHeld,
 }
 
 /// A label's share of its stream's agents: the reserve its places start
@@ -181,14 +249,14 @@ pub struct Pool {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
     pub read_at: Seconds,
-    pub windows: Vec<Window>,
+    pub windows: Vec<UsageWindow>,
 }
 
 /// One usage window of an account's allowance: its name as the host gives
 /// it, how much of it is used in hundredths of a percent, 0 to 10000, and
 /// when it resets, none where the reading gives none (184, C.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Window {
+pub struct UsageWindow {
     pub name: String,
     pub used: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -370,6 +438,12 @@ pub trait Host: Send + Sync {
     /// from; none where neither names one, and the place's agents run
     /// under no account (144, C.7).
     fn pool_for(&self, stream: &str) -> Option<PoolNamed>;
+
+    /// The multiplexer, view and terminal app of a place in `stream`, as
+    /// the host's configuration stands now: each the stream's own, else
+    /// the host's, else the default the host's reader names, with where
+    /// it came from (143, 186, 190, C.7).
+    fn display_for(&self, stream: &str) -> StreamDisplay;
 
     /// The pool the host's configuration declares under `name`, as it
     /// stands now (144, C.7).

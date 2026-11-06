@@ -4,11 +4,13 @@
 //! queue's data, and the terminal the host's configuration names.
 
 use crate::common::*;
+use crate::place_git_worktree::{equip_answer, stand_in_sluice};
 use flume::host::config::HostConfig;
 use flume::profiles::{core_over, terminal, BuiltIn, DEFAULT_PROGRAM, SEND_BACKS};
 use flume_core::Answer;
 use flume_seams::*;
 use std::path::Path;
+use std::sync::Arc;
 
 /// The resolver, a place's steps run in a scratch home with the test's
 /// own `PATH`.
@@ -173,14 +175,57 @@ fn a_terminal_the_host_names_is_bound_or_refused() {
 }
 
 #[test]
-fn a_place_is_readied_as_the_merge_queues_policy_says() {
-    let repository = Repository::new("readied");
-    repository.write(
-        ".config/sluice.toml",
-        "[tests]\ntoolchain = \"printf 'ANSWER=42\\\\n'\"\n",
+fn terminals_and_windows_are_given_by_name() {
+    // 105, 188, 190; design 2: the host's own terminal the engine's very
+    // one, each window profile by its name, and none for a name no
+    // profile holds.
+    let scratch = Scratch::new("by-name");
+    let state = scratch.path("state");
+    let resolver = built_in(&scratch).over(&state);
+    let herdr = resolver.terminal("herdr").expect("herdr by its name");
+    let again = resolver.terminal("herdr").expect("herdr again");
+    assert!(Arc::ptr_eq(&herdr, &again), "one herdr for the command");
+    assert!(resolver.terminal("rex").is_none());
+    assert_eq!(resolver.terminal_profiles(), ["printed", "herdr"]);
+    assert_eq!(
+        resolver.window_profiles(),
+        ["ghostty", "terminal", "printed"]
     );
+    for name in ["ghostty", "terminal", "printed"] {
+        assert!(resolver.window(name).is_some(), "{name}");
+    }
+    assert!(resolver.window("kitty").is_none());
+    let printed = resolver.window("printed").expect("the printed window");
+    let command = ViewCommand {
+        program: "/bin/herdr".into(),
+        arguments: vec!["session".into(), "attach".into(), "w".into()],
+        ..ViewCommand::default()
+    };
+    assert_eq!(
+        printed.show(&command, "Work Herdr"),
+        WindowShown::Printed {
+            line: "/bin/herdr session attach w".into()
+        }
+    );
+}
+
+#[test]
+fn a_place_is_readied_as_the_merge_queue_equips_it() {
+    let repository = Repository::new("readied");
+    repository.write(".config/sluice.toml", "[branches.main]\n");
     repository.commit("a policy");
-    let resolver = built_in(&repository.scratch);
+    let (path, _) = stand_in_sluice(
+        &repository.scratch,
+        &equip_answer(&[("toolchain", true)]),
+        0,
+    );
+    let home = repository.scratch.path("home");
+    std::fs::create_dir_all(&home).expect("a scratch home");
+    let resolver = BuiltIn::with_login(&[
+        ("HOME", &home.to_string_lossy()),
+        ("PATH", &path),
+        ("LANG", "C"),
+    ]);
 
     let queued = resolver
         .place(&repository.name(), &binding(Some("sluice")))

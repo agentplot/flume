@@ -58,7 +58,7 @@ pub(crate) enum Reading {
 
 /// The window's use now in hundredths of a percent: none where its reset
 /// has passed at `now`, its `used` otherwise (184).
-pub(crate) fn used_now(window: &Window, now: Seconds) -> u32 {
+pub(crate) fn used_now(window: &UsageWindow, now: Seconds) -> u32 {
     match window.resets_at {
         Some(resets_at) if resets_at <= now => 0,
         _ => window.used,
@@ -84,7 +84,7 @@ pub(crate) fn fresh(usage: &Usage, now: Seconds) -> bool {
 /// otherwise (185).
 pub(crate) fn holds_until(
     usage: &Usage,
-    window: &Window,
+    window: &UsageWindow,
     threshold: u32,
     now: Seconds,
 ) -> Option<Seconds> {
@@ -682,15 +682,15 @@ mod tests {
 
     const NOW: Seconds = 1_000_000;
 
-    fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> Window {
-        Window {
+    fn window(name: &str, used: u32, resets_at: Option<Seconds>) -> UsageWindow {
+        UsageWindow {
             name: name.into(),
             used,
             resets_at,
         }
     }
 
-    fn usage(read_at: Seconds, windows: Vec<Window>) -> Usage {
+    fn usage(read_at: Seconds, windows: Vec<UsageWindow>) -> Usage {
         Usage { read_at, windows }
     }
 

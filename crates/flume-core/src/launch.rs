@@ -16,8 +16,9 @@
 //! is created undoes what was made, so nothing is left (2, 76). The
 //! place's stream is chosen once, the launch's, else the one the host's
 //! configuration names for its repository and kind, its repository or
-//! its kind, else `default`, and one the host does not declare refuses
-//! the launch (4, 8, 143); its intent is the launch's name, else its
+//! its kind, else `default`, and one the host does not declare, or whose
+//! multiplexer names a terminal profile flume does not carry, refuses
+//! the launch (4, 8, 143, 190); its intent is the launch's name, else its
 //! repository and base (147).
 
 use crate::reading::reads_change;
@@ -226,6 +227,10 @@ impl Engine {
         no_stage_lacking(&kind, &launch.settings, &repository_settings)?;
         let intent = self.intent_of(launch);
         let stream = self.stream_of(launch, &kind.name, &intent)?;
+        // A stream whose multiplexer names a terminal profile the resolver
+        // does not carry runs no agent: the launch is refused before
+        // anything is made (4, 190; core.8).
+        self.stream_terminal(&stream.name)?;
         let named = format!("the kind {}@{}", kind.name, kind.version);
         if kind.lands && merge_queue.is_none() {
             return Err(format!(
@@ -303,7 +308,7 @@ impl Engine {
         } else if launch.recipients.is_empty() {
             self.host
                 .recipient()
-                .or_else(|| self.terminal.session())
+                .or_else(|| self.caller_session())
                 .into_iter()
                 .collect()
         } else {
@@ -368,6 +373,7 @@ impl Engine {
             moves: vec![],
             unsettled: vec![],
             uncarried: vec![],
+            terminals: vec![],
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),

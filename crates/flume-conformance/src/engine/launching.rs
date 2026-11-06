@@ -1,10 +1,11 @@
-//! Launching (1 to 12, 19 to 23, 154): one place made and its first
-//! stage started, held or waiting, its kind named with its version or
-//! with none; or the launch refused whole, naming why.
+//! Launching (1 to 12, 19 to 23, 154): one place made, made ready at the
+//! revision its launch read, and its first stage started, held or
+//! waiting, its kind named with its version or with none; or the launch
+//! refused whole, naming why.
 
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, WaitingOn, Waits};
+use flume_core::{Act, Retry, WaitingOn, Waits};
 use flume_fakes::Log;
 use flume_seams::*;
 
@@ -29,6 +30,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "launch: readiness fails; a change's place waits, a fix's starts with the step in its prompt",
             cites: &["S16", "11", "12"],
             run: readiness_fails,
+        },
+        Scenario {
+            name: "launch: a retry of a first stage whose readiness failed readies the place at the revision its launch read, not the base's as it moved on",
+            cites: &["12", "20"],
+            run: a_retry_readies_at_the_launchs_revision,
+        },
+        Scenario {
+            name: "launch: each step of the merge queue's equipping is named in status as it passed, in order, and the first stage starts",
+            cites: &["S89", "12"],
+            run: each_step_named_as_it_passed,
         },
         Scenario {
             name: "launch: a kind no declaration holds is refused, nothing made",
@@ -119,6 +130,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "launch: a launch naming change@2 where the repository declares change at version 1 is refused naming the version, nothing made",
             cites: &["4", "19", "154"],
             run: a_version_the_repository_does_not_hold,
+        },
+        Scenario {
+            name: "launch: a stream whose multiplexer names a terminal profile flume does not carry is refused, naming the stream, the name and the terminal profiles carried, nothing made",
+            cites: &["4", "190"],
+            run: a_streams_multiplexer_flume_does_not_carry,
         },
     ]
 }
@@ -348,6 +364,75 @@ fn readiness_fails(_: &()) -> Outcome {
         "the fix's prompt lacks the step and its words: {prompt}"
     );
     ensure_eq!(world.terminal.log.count("open"), 1, "agents opened");
+    Ok(())
+}
+
+fn a_retry_readies_at_the_launchs_revision(_: &()) -> Outcome {
+    let world = World::new();
+    let launched_at = world
+        .git
+        .branch_head(REPOSITORY, "main")
+        .ok_or("main has no revision")?;
+    world
+        .place
+        .set_readiness(REPOSITORY, &[("toolchain", false, "offline")]);
+    let change = launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    ensure_eq!(
+        change.stages[0].state,
+        StageState::WaitingOnReadiness,
+        "construct at the launch"
+    );
+    let moved = world.git.commit(REPOSITORY, "main", &["moved.rs"]);
+    world
+        .place
+        .set_readiness(REPOSITORY, &[("toolchain", true, "installed")]);
+    let id = World::id("change", "plan");
+    if let Some(reason) = world
+        .engine
+        .retry(&id, Retry::Stage("construct".into()), None, false)
+        .refusal()
+    {
+        return Err(format!("the retry was refused: {reason}"));
+    }
+    let readied = world.place.log.of("ready");
+    ensure_eq!(readied.len(), 2, "readiness runs");
+    ensure!(
+        readied
+            .iter()
+            .all(|line| line.ends_with(&format!(" {launched_at}"))),
+        "the place was not readied at the launch's revision {launched_at}, main now {moved}: {readied:?}"
+    );
+    ensure!(
+        world
+            .stage_state(&id, "construct")
+            .is_some_and(StageState::running),
+        "construct did not start"
+    );
+    Ok(())
+}
+
+fn each_step_named_as_it_passed(_: &()) -> Outcome {
+    let world = World::new();
+    let equipped = [
+        ("toolchain", true, "activated"),
+        ("proto install", true, "installed moon 2.6.1"),
+        ("moon --version", true, "moon 2.6.1"),
+        ("moon setup", true, "set up"),
+    ];
+    world.place.set_readiness(REPOSITORY, &equipped);
+    let change = launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    let named: Vec<(&str, bool, &str)> = change
+        .readiness
+        .steps
+        .iter()
+        .map(|step| (step.step.as_str(), step.passed, step.words.as_str()))
+        .collect();
+    ensure_eq!(named, equipped.to_vec(), "the steps status names");
+    ensure!(
+        change.stages[0].state.running(),
+        "construct did not start: {:?}",
+        change.stages[0].state
+    );
     Ok(())
 }
 
@@ -759,4 +844,20 @@ fn a_change_name_taken(_: &()) -> Outcome {
         "the refusal names not the live place: {reason}"
     );
     Ok(())
+}
+
+fn a_streams_multiplexer_flume_does_not_carry(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_display("trial", Some("rex"), None, None);
+    let reason = refused(&world.engine.launch(&Launch {
+        stream: Some("trial".into()),
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    ensure!(
+        reason.contains("trial")
+            && reason.contains("rex")
+            && reason.contains("the terminal profiles there are: fake"),
+        "the refusal: {reason}"
+    );
+    nothing_made(&world)
 }

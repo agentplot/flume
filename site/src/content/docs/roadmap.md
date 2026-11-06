@@ -32,9 +32,19 @@ the same answers you do.
 | A pool choosing the account with the most of its allowance left by the host's reading, and starting nothing on an account past its threshold | ✓ | ✓ |
 | Each agent's start checked against its program and environment | ✓ | ✓ |
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
+| Each stream's agents under a multiplexer of its own, the host's where it names none | ✓ | ✓ |
+| `flume open`: a stream's agents in a window titled as the stream declares, or the line to run | Ghostty, Terminal.app | Ghostty |
 | The herdr plugin's watch, sidebar rows and popup | ✓ | ✓ |
 | The Claude Code plugin's `/launch` and status over MCP | ✓ | ✓ |
 | Release binaries | Apple silicon | x86-64, ARM64 |
+
+A stream's multiplexer is herdr or the printed command. No profile is
+written yet for herdr-core, Rex, cmux or TUIOS. Each is a change of its
+own, checked against its release, and offers the views its multiplexer
+has: a window running its terminal client, its own app, or both
+([record 0037](https://github.com/agentplot/flume/blob/main/docs/adr/0037-a-stream-names-its-multiplexer-its-view-and-its-terminal-app-the-hosts-where-it-names-none-and-a-person-opens-its-agents-in-that-view.md)).
+Until then a stream naming one refuses its launches and starts, naming
+the profiles there are.
 
 ## Decided, not built
 

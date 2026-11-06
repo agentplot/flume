@@ -275,12 +275,12 @@ fn an_accounts_reading_from_its_file() {
         Ok(Usage {
             read_at: 1_793_887_331,
             windows: vec![
-                Window {
+                UsageWindow {
                     name: "5-hour".into(),
                     used: 4_200,
                     resets_at: Some(1_793_898_000),
                 },
-                Window {
+                UsageWindow {
                     name: "7-day".into(),
                     used: 7_150,
                     resets_at: None,

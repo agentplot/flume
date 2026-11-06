@@ -13,6 +13,7 @@
 //! drops it (3, 62).
 
 use crate::prompt::group_name;
+use crate::terminals::HeldIn;
 use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -71,22 +72,24 @@ pub fn what_ended(of: &EndOf) -> String {
 
 impl Engine {
     /// Sends each end of the place pending for a recipient whose session
-    /// asks no question, once, claimed before the send and released where
-    /// the send was not made (43, 75, core.11).
+    /// asks no question, once, through the first terminal the host binds
+    /// that holds the session, claimed before the send and released where
+    /// the send was not made (43, 75, 190, core.11).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
         let Some(read) = self.store.read(id) else {
             return;
         };
         let held = read.state;
-        let mut states: BTreeMap<String, Option<AgentState>> = BTreeMap::new();
+        let mut states: BTreeMap<String, Option<HeldIn>> = BTreeMap::new();
         for end in &held.ends {
             for recipient in end.pending(&held.place.recipients) {
-                let state = *states
+                let Some((terminal, AgentState::Working | AgentState::Waiting)) = states
                     .entry(recipient.clone())
-                    .or_insert_with(|| self.terminal.session_state(&recipient));
-                if !matches!(state, Some(AgentState::Working | AgentState::Waiting)) {
+                    .or_insert_with(|| self.recipient_terminal(&recipient))
+                    .clone()
+                else {
                     continue;
-                }
+                };
                 let key = end.of.key();
                 let now = self.host.now();
                 let claimed = self
@@ -108,10 +111,7 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
-                let why = match self
-                    .terminal
-                    .send_to(&recipient, &notice(&held.place, &end.of))
-                {
+                let why = match terminal.send_to(&recipient, &notice(&held.place, &end.of)) {
                     ToSession::Sent => continue,
                     ToSession::NotFound => format!("no session is named {recipient}"),
                     ToSession::Refused { reason } => reason,

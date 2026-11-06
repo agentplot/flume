@@ -122,9 +122,7 @@ impl Engine {
                 asking: reading.asking,
                 own_work: reading.own_work,
                 past_limit: start.past_limit,
-                screen: starting
-                    .then(|| self.terminal.screen(&start.identity))
-                    .flatten(),
+                screen: starting.then(|| self.agent_on(start).screen()).flatten(),
                 dialog: start.dialog.as_ref().map(|dialog| dialog.words.clone()),
                 printed: start.printed.clone(),
                 last_words,
@@ -132,6 +130,7 @@ impl Engine {
                 mode,
                 conversation: start.conversation.clone(),
                 session: start.session.clone(),
+                terminal: start.terminal.clone(),
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);
