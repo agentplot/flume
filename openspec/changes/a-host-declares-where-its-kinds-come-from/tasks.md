@@ -134,4 +134,4 @@ identities, hashes and locks (design, *What this change rests on*).
   - `unbuilt`'s test renamed for what it then names.
 
   True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 8.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools plugin-claude:format plugin-claude:validate plugin-claude:test site:prose site:build root:format root:adrs root:changes root:specs` passes.
+- [x] 8.2 Run the checks of the projects this change touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test fakes:format fakes:lint fakes:test core:format core:lint core:test conformance:format conformance:lint conformance:test conformance:coverage flume:format flume:lint flume:test flume:tools plugin-claude:format plugin-claude:validate plugin-claude:test site:prose site:build root:format root:adrs root:changes root:specs` passes.
