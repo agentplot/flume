@@ -159,8 +159,9 @@ variables alone (56, 143, 145 to 147, 161).
 
 Status SHALL give, for the host, each pool with its strategy and its
 threshold, and each account with its agents running, its bound, the
-time it stops being spent, its reading, and, while it is past its
-threshold, the window that holds it and until when; and never an
+time it stops being spent, the words in which no reset was read while
+it is spent for the hour 146 gives, its reading, and, while it is past
+its threshold, the window that holds it and until when; and never an
 account's environment's value or a reading's path (56, 144 to 146,
 185).
 
@@ -168,6 +169,11 @@ account's environment's value or a reading's path (56, 144 to 146,
 
 - **WHEN** status is asked while work-1 runs two agents under a bound of four and work-2 is spent until 15:00
 - **THEN** the pool `work` gives fill-first, work-1 with two running and a bound of four, and work-2 spent until 15:00 (56, 146)
+
+#### Scenario: An account spent for an hour
+
+- **WHEN** status is asked while work-3 is spent for an hour because no reset was read in "You've hit your weekly limit · resets Nov 8, 12am (UTC)"
+- **THEN** work-3 gives its spent time and `spent_unread` with those words, and the person's form gives them under its line (56, 146)
 
 #### Scenario: A pool with readings
 

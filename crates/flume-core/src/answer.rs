@@ -683,10 +683,11 @@ fn threshold() -> u32 {
 
 /// An account of a pool (144 to 146, 184, 185): the program it runs,
 /// flume's agents running on it, its own bound, none where it states
-/// none, the time it is spent until, none where it is not spent, its
-/// reading, none where it names none, and what holds it past its
-/// threshold, none where nothing does; never a value of its environment
-/// or a reading's path.
+/// none, the time it is spent until, none where it is not spent, and,
+/// where that time is the hour 146 gives because flume read no reset in
+/// its agent's words, those words, its reading, none where it names none,
+/// and what holds it past its threshold, none where nothing does; never a
+/// value of its environment or a reading's path.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountStatus {
     pub name: String,
@@ -694,6 +695,8 @@ pub struct AccountStatus {
     pub running: u32,
     pub bound: Option<u32>,
     pub spent_until: Option<Seconds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spent_unread: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reading: Option<ReadingStatus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

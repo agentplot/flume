@@ -240,6 +240,7 @@ fn spent_until(until: Seconds) -> HostDocument {
         until,
         words: Some("You've hit your session limit · resets 3pm (UTC)".into()),
         recorded_at: until - 3600,
+        unread: false,
     })
 }
 
