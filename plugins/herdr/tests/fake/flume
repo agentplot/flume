@@ -1,55 +1,23 @@
 #!/bin/sh
-# shellcheck disable=SC2016 # jq programs.
-# A stand-in flume: logs each call; status answers the test's status.json,
-# or, while the test drives a place ($FAKE/drive), the place and its line
-# at the step its settles have moved it to: each settle moves it one step
-# on, from its launch to its landing and its tidy. Launched while the
-# host has no room ($FAKE/no-room), it waits for room, with no agent,
-# until a settle finds room.
+# A stand-in flume: logs each call; status answers the test's
+# status.json; settle shows, as flume's herdr profile does at a settle
+# that changes a place's clues, each pane's title, agent and row the test
+# wrote in shows, one tab-separated line each, through herdr's
+# report-metadata (139, C.5).
 printf '%s\n' "$*" >>"$FAKE/flume-calls"
 case $1 in
-launch)
-  if [ -f "$FAKE/no-room" ]; then echo waiting >"$FAKE/drive"; else echo launched >"$FAKE/drive"; fi
-  echo '{"launched":{}}'
+status)
+  cat "$FAKE/status.json" 2>/dev/null || echo '{"status":{"host":{},"places":[]}}'
   ;;
 settle)
-  if [ -f "$FAKE/drive" ]; then
-    at=$(cat "$FAKE/drive")
-    if [ "$at" = waiting ]; then
-      next=
-      [ -f "$FAKE/no-room" ] || next=code-working
-    else
-      next=$(printf '%s\n' launched code-working code-delivered submitted landed tidied | awk -v at="$at" 'found { print; exit } $0 == at { found = 1 }')
-    fi
-    [ -n "$next" ] && echo "$next" >"$FAKE/drive"
+  if [ -f "$FAKE/shows" ]; then
+    tab=$(printf '\t')
+    while IFS=$tab read -r pane title agent row; do
+      "${HERDR_BIN_PATH:-herdr}" pane report-metadata "$pane" --source flume --title "$title" \
+        --display-agent "$agent" --token "flume=$row" >/dev/null
+    done <"$FAKE/shows"
   fi
   echo '{"settled":{"places":[],"tidy":{}}}'
-  ;;
-status)
-  if [ -f "$FAKE/drive" ]; then
-    jq -n --arg at "$(cat "$FAKE/drive")" --arg sock "${HERDR_SOCKET_PATH:-}" '
-      {status: {host: {bases: []},
-        places: (if $at == "tidied" then [] else [{
-          place: "/r/places/fix--one", kind: "fix", name: "one",
-          phase: (if $at == "landed" then {over: {over: "landed"}} else "live" end),
-          current: "code",
-          clues: (if $at == "landed" then null
-            elif $at == "waiting" then
-            {stage: "code", state: "waiting for room", title: "code · waiting for room",
-             display_agent: "fix--one", shown_at: {agent: null}}
-            else
-            {stage: "code", state: ($at | sub("^code-"; "")), title: "code · x",
-             display_agent: "fix--one", shown_at: {agent: "herdr:p1@\($sock)"}} end),
-          submission: (if $at == "submitted" then {read: {found: {}}}
-            elif $at == "landed" then {read: {found: {}}, verdict: {landed: {}}} else null end),
-          line: ((if $at == "landed" then "landed"
-              elif $at == "waiting" then "code · waiting for room"
-              else "code · run 1 · \($at | sub("^code-"; ""))" end)
-            | {short: ., full: "fix--one · fix@1 · \(.)"})
-        }] end)}}'
-  else
-    cat "$FAKE/status.json" 2>/dev/null || echo '{"status":{"host":{},"places":[]}}'
-  fi
   ;;
 *) echo '{"acted":{}}' ;;
 esac
