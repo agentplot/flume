@@ -12,25 +12,37 @@ whether that has to be explicit at the stream level (so we need
 different streams), or whether we can do it below the stream level".
 
 It is possible, below the stream. On 2026-11-06, in the Plannotator
-Inbox thread msg_01M6Q2N04BS0RPG16TA76W67W6 (their reply
-msg_01M6Q4DZM9GFJJFVDX9JE7G1N9), the user ruled where the work opens and
-where the host says it:
+Inbox thread msg_01M6Q2N04BS0RPG16TA76W67W6, the user ruled, first in
+their reply msg_01M6Q4DZM9GFJJFVDX9JE7G1N9:
 
 - **Which part of herdr:** "A session of its own beside the stream's,
   e.g. `madswan-design`".
 - **Where the host says it:** "The stream's own table,
   `[streams.<stream>.kinds.<kind>]`".
-- **What opens there**, on the example
+- **What the fleet opens there**, on the example
   `[streams.madswan.kinds.change.stages.construct]`: "not this one. just
   any elaboration types".
 - **How a person opens it**, on `flume open madswan --session
   madswan-design`: "This confuses me. Why wouldn't it just be madswan
   design? Why do you need the flag? Why wouldn't you just open madswan
   design?"
-- **Approval**, 2026-11-06: the user approved this design, the kind's
-  table alone, the kinds the host names by name and `flume open
-  <session>` among it, and named each partition's research-and-design
-  session `<partition>-design`.
+
+and then in their reply msg_01M6Q6MPHXPYEXK3FNW3RE2GRT:
+
+- **A stage's table:** "Yes: keep
+  `[streams.<stream>.kinds.<kind>.stages.<stage>]` for hosts that want
+  it".
+- **Which kinds:** "This isn't a flume or a weir thing. It's a […]
+  config file that we are going to be setting on the kinds in crew".
+- **The name a person opens:** "`flume open madswan-design`".
+- **What a person opens:** "I guess this really is important because we
+  need to determine whether we are opening a stream or a session. I was
+  confused because, in my mind, I thought the thing being opened was the
+  session. Semantically, if you just […] make changes willy-nilly
+  without thinking about it, we're going to end up with lots of bugs".
+
+The user approved the design on 2026-11-06 and named each partition's
+research-and-design session `<partition>-design`.
 
 This design carries those rulings: what the host writes, what a person
 opens and how, what the terminal profile does, what status says, and the
@@ -52,8 +64,8 @@ amendment:
   from its place's stream".
 - **143, 186 to 190.** A stream's words: its bound, priority, pool,
   points, pace, terminal (`multiplexer`), session, view, terminal app
-  and title. `flume open` shows a stream's own session (186); every
-  agent stays in the terminal it opened in (190).
+  and title. `flume open` shows "a stream's agents", the stream named
+  (186); every agent stays in the terminal it opened in (190).
 - **A place runs in exactly one stream (143).**
 
 On flume's main at 045361c, which this branch has merged, record 0031
@@ -71,8 +83,8 @@ built 107 and 143's session and record 0037 built 186 to 190:
   base's count on each of its workspaces (records 0018, 0031).
 - `Engine::open_stream(stream)` (`crates/flume-core/src/open.rs`) shows
   a stream's own session in its view through its multiplexer and
-  terminal app, under its title; `flume open [<stream>]` asks it
-  (core.48).
+  terminal app, under its title; `flume open [<stream>]` asks it, by the
+  stream's name (core.48).
 
 ### How herdr names sessions and workspaces
 
@@ -89,22 +101,18 @@ Under herdr 0.9.5, which the tree pins (C.5):
 - A **tab** within a workspace holds one place's panes, `<kind>--<name>`.
 - A **pane** is one agent.
 
-So a person who opens `madswan-design` sees every workspace in it, and
-in each the tabs of the research and design places whose agents opened
-there, and no construction agent.
+So what a person attaches to, and so what they open, is a session: one
+who opens `madswan-design` sees every workspace in it, and in each the
+tabs of the places whose agents opened there.
 
-### What "elaboration" names
+### Which kinds
 
-Weir's statement names an **elaboration kind**: "a kind with an
-elaboration section, read by whoever runs elaborations" (weir 55). Its
-section is sounding's: "Whoever runs places reads the kind's stages and
-nothing of the section" (weir 55, S11), and flume ignores every section
-it does not know (core.4). The user's "elaboration types" are the kinds
-whose whole work is research and design, as against a change, a fix or
-a chore, which build. On this host today that is `research`; crew's
-design and planning roles join it once they run as kinds, and any
-elaboration kind sounding hands flume. The host names each, one table
-per kind by its name (decision 2).
+The user: "This isn't a flume or a weir thing. It's a […] config file
+that we are going to be setting on the kinds in crew". flume reads no
+sort of kind: the host's configuration names each kind whose agents open
+apart, by its name, and whoever configures the host chooses them. Weir's
+elaboration section stays sounding's (weir 55), and flume reads nothing
+of it (core.4).
 
 ### Across the family and the changes in flight
 
@@ -117,14 +125,14 @@ per kind by its name (decision 2).
   fold (decision 2), so no two changes resolve one setting two ways.
 - **`flume-opens-a-streams-multiplexer`** landed on main as #109 and is
   merged here: its `open`, the terminal's attach by view and the window
-  seam (186 to 190, record 0037) are what decision 7 extends.
+  seam (186 to 190, record 0037) are what decision 7 builds on, `open`
+  taking a session's name where it took a stream's.
 - **`flume-list-shows-each-place-and-stream-on-one-line`** (record
-  0049, clause 200 on blueprints main at 7bd1891, its code in its own
-  place): the list gives a line for each stream "with the session its
-  agents run in", and says "The streams are what a person opens by name
-  (186)". This amendment gives each stream's line its kinds' sessions
-  too, each a name a person opens; whichever change's code lands on
-  flume's main second builds that line (decision 11).
+  0049, clause 200 on blueprints main, its code in its own place): the
+  list gives a line for each stream. This amendment has that line give
+  each of the stream's sessions, and says the sessions are what a person
+  opens, by name; whichever change's code lands on flume's main second
+  builds that line (decision 11).
 - **`every-question-a-place-asks-reaches-someone-who-answers-it`**
   (designing): crew's roles run as kinds in their partition's stream,
   each run a place of its role's kind. A host names a session for a
@@ -141,10 +149,12 @@ per kind by its name (decision 2).
 
 ### What rules what
 
-Record 0048, accepted on the user's word of 2026-11-06, decides it,
-carrying their rulings, and the statement's amendment is on blueprints
-main at f676e8f (decision 13).
-The rules this design relies on:
+Record 0048 decides it, carrying the user's rulings: accepted on the
+user's word of 2026-11-06, its amendment, that a person opens a session
+by its name, proposed until their yes. The statement's amendment is on
+blueprints main at f676e8f, and its follow-up on blueprints' branch
+`design/flume-a-stage-session-and-open-by-session` at 28d95e8, for the
+user's word (decision 13). The rules this design relies on:
 
 - core.1 and core.2: the core names no terminal; it hands the terminal
   `OpenIn::Session { name }` and the terminal profile makes it a herdr
@@ -176,11 +186,12 @@ no area another page would own.
 **Goals:**
 
 - A host keeps a stream's research and design places apart from its
-  construction in the terminal, by kind, while every place keeps its
-  one stream, its bound, its pool, its points, its pace and its label's
-  share (70, 143, 180).
-- A person opens the research and design agents together by the
-  session's name alone, `flume open madswan-design` (186).
+  construction in the terminal, by kind and by a kind's stage, while
+  every place keeps its one stream, its bound, its pool, its points, its
+  pace and its label's share (70, 143, 180).
+- What a person opens is a session, by its name: `flume open
+  madswan-design` for the research and design agents, `flume open
+  madswan` for the stream's own session (186).
 - Every agent is sent to, read and closed where it opened, and a place
   is tidied in every session it opened in (190, 137).
 - Status says where each agent opened and why, and which sessions each
@@ -190,18 +201,18 @@ no area another page would own.
 
 **Non-Goals:**
 
-- A session for one stage of a kind. Of a change's construct stage the
-  user said "not this one. just any elaboration types", and nothing else
-  asks for one (decision 2).
-- A terminal or a view per kind. A stream's terminal, view, terminal
-  app and title stay the stream's (186, 190).
+- Opening a stream. A stream is never what `open` names; its sessions
+  are (decision 7).
+- A terminal or a view per kind or per stage. A stream's terminal,
+  view, terminal app and title stay the stream's (186, 190).
 - A session for a repository, or a repository and kind, within a
-  stream. Nothing asks for it, and a stream's sessions stay few.
+  stream, or for every kind's stage of one name. Nothing asks for it,
+  and a stage's name means something only within its kind.
 - A workspace other than the repository and base's. The user ruled a
   session of its own.
 - Moving an agent that runs. An agent stays where it opened (190).
-- Which kinds a host opens apart, and what it names their sessions.
-  Those are the host's; decision 12 sketches the fleet's.
+- Which kinds and stages a host opens apart, and what it names their
+  sessions. Those are the host's; decision 12 sketches the fleet's.
 - A statechart kind's sessions (175), which flume runs none of yet
   (core.41); a host names a session for a statechart kind by its name
   as for any kind.
@@ -211,11 +222,11 @@ no area another page would own.
 ### 1. The part a person opens: a session of its own
 
 The user: "A session of its own beside the stream's, e.g.
-`madswan-design`". A stream may name, for a kind, a session of its own
-terminal for that kind's agents to open in (199). Under herdr it is a
-herdr session: a server of its own, started headless where none runs,
-laid out as every session flume opens in, a workspace per repository and
-base, a tab per place (C.5; record 0018).
+`madswan-design`". A stream may name, for a kind and for one stage of a
+kind, a session of its own terminal for those agents to open in (199).
+Under herdr it is a herdr session: a server of its own, started headless
+where none runs, laid out as every session flume opens in, a workspace
+per repository and base, a tab per place (C.5; record 0018).
 
 Alternatives considered: a workspace within the stream's session,
 holding the research and design places of every repository and base. One
@@ -224,31 +235,34 @@ places breaks record 0018's layout, which the base's count clue (139)
 and the tidy of a base's workspace (138) rest on, and needs a part within
 a part the terminal seam does not have. The user chose the session.
 
-### 2. Where the host says it: the stream's table for a kind
+### 2. Where the host says it: the stream's table for a kind and its stages
 
 The user: "The stream's own table, `[streams.<stream>.kinds.<kind>]`",
-and, of a change's construct stage, "not this one. just any elaboration
-types". The fleet's sketch:
+and "Yes: keep `[streams.<stream>.kinds.<kind>.stages.<stage>]` for
+hosts that want it".
 
 ```toml
 [streams.madswan.kinds.research]
 session = "madswan-design"
+
+[streams.work.kinds.release.stages.review]
+session = "work-review"
 ```
 
-`[streams.<stream>.kinds.<kind>]` holds `session` and nothing else. The
+`[streams.<stream>.kinds.<kind>]` holds `session` and `stages`;
+`[streams.<stream>.kinds.<kind>.stages.<stage>]` holds `session`. The
 kind is named as `[kinds.<kind>]` names it, by its name, whatever source
-and version it resolves to (19, 143, 180). Every stage of the kind opens
-there. It is not one of clause 32's settings: no agents table,
-launch's `--agent`, repository's file or kind gives it, and the launch's
-`session` keeps its place before it (decision 3).
+and version it resolves to (19, 143, 180), and a stage by its name in
+that kind. A kind's session takes every stage of the kind but a stage
+its own table names. It is not one of clause 32's settings: no agents
+table, launch's `--agent`, repository's file or kind gives it, and the
+launch's `session` keeps its place before it (decision 3).
 
-Why a kind's table and no stage's: the user's words name the kind's
-table, and of a change's construct stage they said "not this one". A
-change's design stays with its code in the change's own
-tab, which is where a person follows one change from its design to its
-landing. A stage's table adds later without breaking a host: `stages` in
-a kind's table is today another key, refused (decision 4), so no host
-can come to rely on it meaning something else.
+Which kinds and stages a host names is its own: the user, "a […] config
+file that we are going to be setting on the kinds in crew". Of a
+change's construct stage, they said "not this one" for the fleet, so a
+change's design stays with its code there; a host that wants it apart
+names that stage.
 
 Why the stream's own word:
 
@@ -267,16 +281,18 @@ Alternatives considered:
 
 - **A stream per sort of work.** Splits the partition's bound, pool,
   points, pace and planning share, which the user kept one per
-  partition.
+  partition, and leaves a change's stages with each other, since a
+  place runs in one stream (143).
 - **`session` one of 32's settings**, given by the launch and the
   host's four layers as `keep_open` is. The user chose the stream's
   table.
-- **Every elaboration kind at once**, one stream word, say
-  `elaboration_session`, opening every kind weir calls an elaboration
-  kind there. A new elaboration kind would join without the host's
-  word, but flume would read whether a kind has weir's elaboration
-  section, which weir 55 gives to whoever runs elaborations and core.4
-  keeps from flume, so weir's statement would change first.
+- **A table of every kind's stage, `[streams.<stream>.stages.<stage>]`.**
+  A stage's name means nothing across kinds: a repository's kind may
+  hold a `plan` stage that builds. Clause 32 names a stage only within
+  its kind.
+- **Every elaboration kind at once**, flume reading whether a kind has
+  weir's elaboration section. The user: "This isn't a flume or a weir
+  thing".
 - **A session per label.** A label is the kind's share of its stream
   and nothing else (180; core.46, the user's ruling).
 
@@ -288,17 +304,19 @@ At each start (107, 199):
    declaration's naming a launch's pane: a split beside it;
 2. the session the launch's settings name, the stage's own before every
    stage's;
-3. the session the place's stream names for the place's kind;
-4. the stream's own: the one `[streams.<stream>] session` names, else
+3. the session the place's stream names for the place's kind's stage;
+4. the session the place's stream names for the place's kind;
+5. the stream's own: the one `[streams.<stream>] session` names, else
    the stream's name, and, for `default` naming none, the terminal's
    own.
 
-`Queue::session_of` takes the place's kind's name beside the stream and
-the settings, and answers `SessionHeld` with `from` one of `launch`,
-`stream-kind`, `stream`, `stream-name` or `own`, or none beside a pane.
-A repeating stage's repetitions each open where their kind's word says.
-A start that carries a spent agent's conversation (179) opens where its
-own start resolves, as every start does.
+`Queue::session_of` takes the place's kind's name and the stage's name
+beside the stream and the settings, and answers `SessionHeld` with
+`from` one of `launch`, `stream-stage`, `stream-kind`, `stream`,
+`stream-name` or `own`, or none beside a pane. A repeating stage's
+repetitions each open where their stage's word says. A start that
+carries a spent agent's conversation (179) opens where its own start
+resolves, as every start does.
 
 ### 4. Read at each start; what is ignored, what refuses
 
@@ -307,25 +325,28 @@ own start resolves, as every start does.
   (32, C.7). A change to them takes the next start; an agent already
   started stays where it opened, and every call on it goes to the pane
   its start recorded (190; core.49).
-- A table for a kind the place does not run is ignored, as the host's
-  settings for a kind the place does not run are (C.7).
-- **Another key.** A table holding any key but `session` is kept with
-  the key named, as a label's table is (`Share::unknown`), and a start
-  that reads it is refused naming the key and the table, until the
-  configuration is mended and the stage retried (4, 27, 182, 199). Only
-  the starts of that kind on that stream are refused. A `session` that
-  is not a string refuses the configuration naming the key, as a
-  stream's `session` that is not a string does today.
-- **Another stream's session.** A session a stream names for a kind is
-  that stream's alone. Where it is a session another stream's agents
-  open in by that stream's word, its own session, its name where it
-  names none, or one it names for a kind, a start that reads it is
-  refused naming both streams and the session, until the configuration
-  is mended (4, 199). So a person opens a kind's session by its name
-  alone and it shows one stream's agents in that stream's view
-  (decision 7), and two partitions' research never share a session. A
-  stream may name its own session for a kind; that is its own session,
-  from `stream-kind`.
+- A table for a kind or a stage the place does not run is ignored, as
+  the host's settings for a kind or a stage the place does not run are
+  (C.7).
+- **Another key.** A table holding any key but `session` and, for a
+  kind, `stages` is kept with the key named, as a label's table is
+  (`Share::unknown`), and a start that reads it is refused naming the
+  key and the table, until the configuration is mended and the stage
+  retried (4, 27, 182, 199). Only the starts of that kind, or that
+  stage, on that stream are refused. A `session` that is not a string,
+  or a `stages` that is not a table of tables, refuses the configuration
+  naming the key, as a stream's `session` that is not a string does
+  today.
+- **Another stream's session.** A session a stream names for a kind or
+  a stage is that stream's alone. Where it is a session another
+  stream's agents open in by that stream's word, its own session, its
+  name where it names none, or one it names for a kind or a stage, a
+  start that reads it is refused naming both streams and the session,
+  until the configuration is mended (4, 199). So a person's open of a
+  session by its name finds one stream's view (decision 7), and two
+  partitions' research never share a session. A stream may name its own
+  session for a kind or a stage; that is its own session, from
+  `stream-kind` or `stream-stage`.
 - A session's name is herdr's to judge: one the pinned herdr refuses
   refuses the open in herdr's words, nothing of flume's left open
   (core.29, core.44).
@@ -347,55 +368,68 @@ today.
 
 ### 6. The local layer
 
-`LOCAL_KEYS` gains `streams.*.kinds.*.session`, a key of its own, so an
-operator moves a kind's session from hour to hour as they move a
-stream's (C.7; record 0032). The managed layer may pin it,
-`"streams.work.kinds.research.session"`, or pin a table holding it,
+`LOCAL_KEYS` gains `streams.*.kinds.*.session` and
+`streams.*.kinds.*.stages.*.session`, each a key of its own, so an
+operator moves a kind's or a stage's session from hour to hour as they
+move a stream's (C.7; record 0032). The managed layer may pin either,
+`"streams.work.kinds.research.session"`, or pin a table holding them,
 `"streams.work.kinds"`. A local layer that sets another key of these
 tables is not taken, as for any key outside the list.
 
-### 7. The view: a person opens a session by its name
+### 7. What a person opens is a session, by its name
 
-The user: "Why wouldn't it just be madswan design? Why do you need the
-flag? Why wouldn't you just open madswan design?" No flag is needed.
-`flume open [<name>]` (186) reads the one name it is given:
+The user: "we need to determine whether we are opening a stream or a
+session. I was confused because, in my mind, I thought the thing being
+opened was the session". It is the session: a person attaches to a
+session (herdr's `session attach`), and a stream holds several.
 
-- **A stream's name**, or none for `default`: the stream's own session,
-  as record 0037 builds it, under the stream's title, else its name.
-- **A session a stream names for a kind**: that session, in its
-  stream's view, through its stream's multiplexer and terminal app,
-  started headless where it does not run (187). Its window's title is
-  the session's name, which the host chose, so a window manager files it
+`flume open [<session>]` (186) takes one name, always a session's:
+
+- **A stream's own session**, by its name: the one the stream's
+  `session` names, else the stream's name. Shown in the stream's view,
+  through its multiplexer and terminal app, under the stream's title,
+  else its name, as record 0037 builds it.
+- **A session a stream names for a kind or a stage**, by its name:
+  shown in that stream's view, through its multiplexer and terminal
+  app, started headless where it does not run (187), under the
+  session's name as its window's title, so a window manager files it
   apart from the stream's own window. The answer gives the stream, the
-  session from `stream-kind` and the kinds it is named for. Where that
-  session is the stream's own, it is shown as the stream's own, under the
-  stream's title.
-- **Anything else** is refused naming the streams the host declares and
-  the sessions each names for its kinds, before the terminal or a window
-  is asked anything, so a mistyped name starts no stray session.
-
-A stream's name is read first. A name cannot be both a stream's and a
-session another stream names for a kind: decision 4 refuses that
-stream's starts and status names the fault, and `open` of that name is
-refused naming both streams, until the configuration is mended.
+  session from `stream-kind` or `stream-stage` and the kinds and stages
+  it is named for. Where it is the stream's own session too, it is shown
+  as the stream's own.
+- **No name**: the host's default stream's own session, as today.
+- **Any other name** is refused naming each stream's sessions, before
+  the terminal or a window is asked anything, so a mistyped name starts
+  no stray session. A stream's name that is not one of its sessions'
+  names, as `work` where `[streams.work] session = "office"`, is such a
+  name; the refusal names `office`. A launch's session, which no
+  stream's word gives, is not opened.
+- **A session two streams' own words give**, as two streams naming one
+  `session`, is refused naming both, before anything is started; where
+  a stream names a kind's or a stage's session that is another's,
+  decision 4 has refused its starts already.
 
 A person finds madswan's research and design agents by `flume open
-madswan-design`: one window, every workspace in it a repository and
-base, every tab a research or design place. `flume open madswan` opens
-madswan's own session as before.
+madswan-design`, and madswan's own session by `flume open madswan`,
+since madswan names no session of its own and its own bears its name.
+The session's name is the host's whole word, `<partition>-design` as
+the user named it: flume builds no name from a stream and a part
+(core.44).
 
-The session's name is the host's whole word, `madswan-design`, as the
-user named it, `<partition>-design`: flume builds no name from a stream
-and a part (core.44).
+Alternatives considered:
 
-Alternatives considered: `flume open madswan --session madswan-design`,
-naming the stream and then the session. It names one session twice and
-asks the person to know which stream owns it; the user asked why it
-needs the flag, and it does not, since each such session is one
-stream's (decision 4). `flume open madswan research`, the stream and a
-kind, resolving the kind's session: a second reading of the same table
-on the command line, and the person thinks of the session they want,
-not the kind that opens there.
+- **`flume open <stream> --session <name>`**: names one session twice
+  and asks the person which stream owns it. The user asked why it needs
+  the flag; it does not.
+- **A name read as a stream's first, else as a session's**: one word
+  meaning two things, so `flume open work` and `flume open office`
+  would open the same session where work names `office`, and a session
+  named as another stream would open that stream's. The user warned
+  that changes made "willy-nilly without thinking about it" end in
+  bugs; one meaning holds.
+- **`flume open <stream> <kind>`**, resolving the kind's session: a
+  second reading of the same table on the command line, when the person
+  thinks of the session they want.
 
 ### 8. The terminal profile
 
@@ -411,10 +445,9 @@ Nothing new is asked of herdr, and the core names no terminal (core.1):
   no longer answers (98, 190; core.49).
 - **tidy** closes the place's tab in every session it made one in, and
   each base's workspace once it holds no tab of a live place and nothing
-  flume did not make (137, 138). A place's agents open in one session
-  by their kind's word; a place has tabs in two only where its kind's
-  session changed between its starts or a launch named a session for
-  one stage, as record 0031 already built.
+  flume did not make (137, 138). A place whose stream names a session
+  for one of its kind's stages has a tab in two sessions, as record 0031
+  built for a launch's session per stage.
 - **show** gives the base's count on each of its workspaces in every
   session (139).
 - **watch**: each session's server runs flume's herdr plugin as each
@@ -424,63 +457,70 @@ Nothing new is asked of herdr, and the core names no terminal (core.1):
 
 A test through the binary under the pinned herdr holds it end to end: a
 research place's agent opening in herdr's session `w-design`, a fix's in
-`w`, `flume open w-design` attaching `w-design` under that title, each
-agent read and closed on its own server, and each tab closed at its tidy
-(task 6.2).
+`w`, a release's review agent in `w-review` and its other stage in `w`,
+`flume open w-design` attaching `w-design` under that title, each agent
+read and closed on its own server, and each tab closed at its tidy in
+every session (task 6.2).
 
 ### 9. Status
 
 - **Each agent** gives its session as today, `SessionHeld`, with `from`
-  gaining `stream-kind`. The person's form says `session madswan-design
-  (stream madswan, kind research)`.
+  gaining `stream-kind` and `stream-stage`. The person's form says
+  `session madswan-design (stream madswan, kind research)` or `(stream
+  work, stage release.review)`.
 - **Each stream** gives its own session as today, and a new
-  `sessions`: each session it names for its kinds, with the kinds it
-  names it for and the layer of each, `managed` or `local` (56, C.7). A
-  table's other key, and a session that is another stream's, are given
-  with the refusal each causes.
-- The JSON form only gains a field and a value (core.14). A start
+  `sessions`: each session it names for its kinds and stages, with the
+  kinds and the `<kind>.<stage>`s it names it for and the layer of each,
+  `managed` or `local` (56, C.7). A table's other key, and a session
+  that is another stream's, are given with the refusal each causes.
+- The JSON form only gains a field and two values (core.14). A start
   written before reads with its `from` as written.
 
 ### 10. The seams and the core
 
-- `flume-seams`: `Stream` gains `kinds: BTreeMap<String, KindSession>`,
-  `KindSession { session, unknown }`, read with none where written
-  before and written only where set. `SessionFrom` gains `StreamKind`,
-  serialized `stream-kind`. The stream status gains `sessions:
-  Vec<NamedSession>`, `NamedSession { name, kinds }`, each kind with its
-  layer.
+- `flume-seams`: `Stream` gains `kinds: BTreeMap<String, KindSessions>`,
+  `KindSessions { session, stages: BTreeMap<String, StageSession>,
+  unknown }` and `StageSession { session, unknown }`, each read with
+  none where written before and written only where set. `SessionFrom`
+  gains `StreamKind` and `StreamStage`, serialized `stream-kind` and
+  `stream-stage`. The stream status gains `sessions:
+  Vec<NamedSession>`, `NamedSession { name, kinds, stages }`, each with
+  its layer.
 - `flume-core`: `StreamRoom` keeps the stream's `kinds`.
-  `StreamRoom::session` becomes `session_for(stream, kind, others)`,
-  answering the session with its origin, or the refusal naming the
-  table's other key, or naming the other stream whose session it is.
-  `Queue::session_of` takes the kind; `Engine::claim` refuses the stage
-  where it answers a refusal, as a stream's label fault does.
-  `status.rs` gives each stream's sessions. `Engine::open_stream` takes a
-  name: a stream's, else a session a stream names for a kind.
+  `StreamRoom::session` becomes `session_for(stream, kind, stage,
+  others)`, answering the session with its origin, or the refusal naming
+  the table's other key, or naming the other stream whose session it
+  is. `Queue::session_of` takes the kind and the stage; `Engine::claim`
+  refuses the stage where it answers a refusal, as a stream's label
+  fault does. `status.rs` gives each stream's sessions.
+  `Engine::open_stream` becomes `Engine::open_session(name)`: the
+  session of that name among every stream's own and named sessions,
+  else the default stream's own where none is named, shown in its
+  stream's view.
 - `flume`: `host/config.rs`'s `streams_declared` reads `kinds` beside
-  `labels`, its key in `LOCAL_KEYS`; `commands/open`'s argument is a
-  name, its help saying a stream or a session a stream names for a
-  kind; `print.rs` gives the new origin and each stream's sessions.
+  `labels`, its keys in `LOCAL_KEYS`; `commands/open`'s argument is a
+  session's name, its help saying so; `print.rs` gives the new origins
+  and each stream's sessions.
 - `flume-fakes`: the fake host's `Stream` carries `kinds` as written by
   a test.
 
 ### 11. Agreement with the changes in flight
 
-- **Order.** The user approved this design on 2026-11-06, and
-  blueprints main holds decision 13's amendment at f676e8f, so the code
-  starts now. The multiplexer change it extends has landed and is
+- **Order.** The user approved this design on 2026-11-06. The code
+  starts once blueprints main holds decision 13's follow-up, 28d95e8 on
+  `design/flume-a-stage-session-and-open-by-session`, beside f676e8f,
+  which it holds. The multiplexer change it builds on has landed and is
   merged; group 1 merges main again.
 - **Program settings, effort, `keep_open`.** None of them reads or
   writes a session: `session` stays out of `Settings::under`'s fold
   but the launch's, and out of every agents table. Should any of them
   land first, nothing here changes.
-- **The list (200, record 0049).** Its stream lines name each stream's
-  own session and say the streams are what a person opens by name.
-  Clause 200 gains, in this amendment, each session the stream names
-  for a kind, with whether it runs (201). Where `flume list` is on
-  flume's main when this change's group 5 starts, this change gives
-  each stream's line those sessions (task 5.2); otherwise the list's
-  change builds it from 200 as amended, and is told so.
+- **The list (200, record 0049).** Clause 200, as amended, gives each
+  stream's line each of its sessions, with whether each runs (201), and
+  says the sessions are what a person opens, by name. Where `flume list`
+  is on flume's main when this change's group 5 starts, this change
+  gives each stream's line those sessions (task 5.2); otherwise the
+  list's change builds it from 200 as amended, and is told so.
 - **Questions.** A role's run is a place of its role's kind in its
   partition's stream; a host names a session for that kind as for any
   other. A role's run is reached by the pane its live start holds,
@@ -491,7 +531,7 @@ agent read and closed on its own server, and each tab closed at its tidy
 Beside its streams design, which names each stream by its partition and
 opens it in the partition's own session, the fleet's
 `lib/flume-streams.nix` would render, for each partition stream, one
-table per elaboration kind it runs, `madswan` shown:
+table per kind it opens apart, `madswan` shown:
 
 ```toml
 [streams.madswan.kinds.research]
@@ -500,153 +540,178 @@ session = "madswan-design"
 
 and the same for `swancloud` and `agentplot`, each in
 `<partition>-design`, the name the user gave each partition's
-research-and-design session on 2026-11-06. A crew role
-whose run is design work, the design agent and the planner, adds its
-kind's table once crew's roles run as kinds, named as the fleet's
-`[kinds.<kind>] label` tables name them; so would an elaboration kind
-of sounding's, once the fleet runs one. The fleet's nix could render a
-table for each kind it gives the `planning` label, so the two lists
-never drift; that is its own choice. The fleet would also declare each
-`<partition>-design` session on every Mac that holds a Flume file, as
-`lib/herdr-hosts.nix` checks each stream's session today, and give a
-person's launcher for it `flume open madswan-design`. This change adds
-nothing to the fleet; its orchestrator is told.
+research-and-design session on 2026-11-06. crew's kinds are named there
+as the user said, "on the kinds in crew": the design agent's and the
+planner's once crew's roles run as kinds, named as the fleet's
+`[kinds.<kind>] label` tables name them. A change's construct stage
+stays in the partition's own session ("not this one"). The fleet would
+also declare each `<partition>-design` session on every Mac that holds a
+Flume file, as `lib/herdr-hosts.nix` checks each stream's session today,
+and give a person's launchers `flume open <partition>-design` and
+`flume open <partition>`. This change adds nothing to the fleet; its
+orchestrator is told.
 
 ### 13. The statement's amendment
 
 On agentplot/blueprints main at f676e8f, on the user's word of
-2026-11-06 (core.19). Clause 199 and scenarios S106 and S107 are new,
-beside 186 to 192, 195 to 197, 200, 201, S90 to S92, S95 to S97, S100 to
-S103 and S108, and the designs in flight hold 193, 194, 198, S93 to S99,
-S104 and S105. Each item gives the words a clause gains or its new
-text.
+2026-11-06, and its follow-up on the branch
+`design/flume-a-stage-session-and-open-by-session` at 28d95e8, cut from
+main at c188bf3, not pushed, for the user's word (core.19). Clause 199
+and scenarios S106 and S107 are new, beside 186 to 192, 195 to 198,
+200, 201, S90 to S92, S95 to S97, S100 to S103 and S108 on main, and the
+designs in flight hold 193, 194, S93 to S99, S104 and S105. Each item
+gives the words a clause holds once both are on main.
 
 - **32**: "Where in the terminal an agent runs (107) is read from the
   launch's settings and the stage's declaration, else from its place's
-  stream, by its kind (143, 199)."
+  stream, by its kind and its stage (143, 199)."
 - **107**: "Where the settings name no place in the terminal, the agent
   runs in its place's stream's own: the session the stream names for
-  the place's kind (199), else the one the host's configuration names
-  for the stream, else one named by the stream's name, so every agent
-  of a stream is found in the stream's sessions and a person opens each
-  by its name. A place in the host's default stream runs in flume's own
-  where its stream names none for it (143)."
+  the place's kind's stage, else for its kind (199), else the one the
+  host's configuration names for the stream, else one named by the
+  stream's name, so every agent of a stream is found in the stream's
+  sessions and a person opens each by its name. A place in the host's
+  default stream runs in flume's own where its stream names none for it
+  (143)."
 - **143** gains, after "its own name where it states none (107)": "and,
-  for a kind, the session of that terminal the kind's agents run in
-  instead (199)".
-- **186**: flume shows "the stream's own part of its terminal, or a
-  session the stream names for a kind (107, 190, 199), the person
-  naming the stream, or the session by its name alone". Its title is
-  the stream's "and, for a session the stream names for a kind, that
-  session's name". It refuses "a name that is no stream the host
-  declares and no session a stream names for a kind … naming the
-  streams and their sessions, each before anything is started".
+  for a kind or one stage of a kind, the session of that terminal its
+  agents run in instead (199)".
+- **186**: "A person may ask flume to show them a stream's agents, one
+  session at a time, by the session's name: the stream's own part of
+  its terminal (107, 190), or a session the stream names for a kind or
+  one stage of a kind (199). What a person opens is a session, never a
+  stream: a stream's own session bears the stream's name where the host
+  names none for it, so a person opens it by that name, and asked for no
+  name flume shows the host's default stream's own." Its title, "for the
+  stream's own session, is the one the host's configuration declares for
+  the stream, else the stream's name, and, for a session the stream
+  names for a kind or a stage, that session's name". "A name that is no
+  session a stream's word gives is refused naming each stream's
+  sessions, and a session two streams' own words give is refused naming
+  both, each before anything is started".
 - **190**: "the one the host's configuration names for the stream, else
   the host's, whose parts the sessions the stream names for its kinds
-  are (199)."
+  and their stages are (199)."
 - **199**, new: "A stream may name, for a kind, the session of its
-  terminal that kind's agents run in. So a host keeps a stream's
-  research and design apart from its construction in the terminal,
-  every stage of such a kind running there. Every place of the stream
-  keeps the stream's bound, priority, pool, points, pace and labels
-  alike (70, 143, 180 to 182). Where the settings name no place in the
-  terminal, a stage's agent runs in the session its stream names for
-  its kind, else in the stream's own (107). A kind is named there by its
-  name, whatever source and version it resolves to, as the host's
-  configuration names a kind for a stream or a label (19, 143, 180).
-  The host names nothing else there: no stage, repository, label or
-  terminal. A session a stream names for a kind is that stream's alone:
-  one another stream's agents run in by that stream's word, its own or
-  one it names for a kind, refuses the starts that read it, naming both
-  streams, until the configuration is mended (4). The session is read
-  at each start from the configuration as it stands (32). A change to
-  it takes the next start, and an agent already started stays in the
-  session it opened in (190). A session named for a kind the place does
-  not run is ignored. A start that reads a stream's table for its kind
-  holding any key but the session is refused naming the key, until the
-  configuration is mended (4). A person opens such a session by its
-  name, and is shown it as the stream's own is (186). Status gives each
-  session a stream names, with the kinds it names it for (56). It gives
-  each agent's session with where it came from: the launch, the
-  stream's word for its kind, the stream's own session, the stream's
-  name, or flume's own."
-- **200** gives each stream's line "with the session its agents run in
-  (107) and each session it names for a kind (199), and whether each
-  runs now (201). The streams, and the sessions they name for their
-  kinds, are what a person opens by name (186)."
+  terminal that kind's agents run in, and, for one stage of a kind, the
+  one that stage's agents run in. So a host keeps a stream's research
+  and design apart from its construction in the terminal. Every place of
+  the stream keeps the stream's bound, priority, pool, points, pace and
+  labels alike (70, 143, 180 to 182). Where the settings name no place
+  in the terminal, a stage's agent runs in the session its stream names
+  for its kind's stage, else for its kind, else in the stream's own
+  (107). A kind is named there by its name, whatever source and version
+  it resolves to, as the host's configuration names a kind for a stream
+  or a label (19, 143, 180), and a stage by its name in that kind. The
+  host names nothing else there: no repository, label, stage of every
+  kind or terminal. A session a stream names for a kind or a stage is
+  that stream's alone: one another stream's agents run in by that
+  stream's word, its own or one it names for a kind or a stage, refuses
+  the starts that read it, naming both streams, until the configuration
+  is mended (4). The session is read at each start from the
+  configuration as it stands (32). A change to it takes the next start,
+  and an agent already started stays in the session it opened in (190).
+  A session named for a kind or a stage the place does not run is
+  ignored. A start that reads a stream's table for its kind or its stage
+  holding any key but the session and a kind's stages is refused naming
+  the key, until the configuration is mended (4). A person opens such a
+  session by its name, and is shown it as the stream's own is (186).
+  Status gives each session a stream names, with the kinds and stages it
+  names it for (56). It gives each agent's session with where it came
+  from: the launch, the stream's word for its kind's stage or for its
+  kind, the stream's own session, the stream's name, or flume's own."
+- **200** gives each stream's line "with each of its sessions, its own
+  (107) and each it names for a kind or a stage (199), and whether each
+  runs now (201). The sessions are what a person opens, each by its name
+  (186)."
 - **C.5's herdr row**, open: "a pane in the herdr session the launch's
   settings name, else the one its place's stream names for the place's
-  kind (199), else the one its place's stream names, by default the
-  stream's name, and flume's own for a place in the host's default
-  stream naming none (107, 143): in each session, one workspace per
-  repository and base … made when the first place on that base opens
-  there, and in it one tab per place … whose panes are the place's
-  agents that open in that session". The prose after it: "It closes a
-  place's tab in each session it made one in when the place goes".
+  kind's stage or its kind (199), else the one its place's stream names,
+  by default the stream's name, and flume's own for a place in the
+  host's default stream naming none (107, 143): in each session, one
+  workspace per repository and base … made when the first place on that
+  base opens there, and in it one tab per place … whose panes are the
+  place's agents that open in that session". The prose after it: "It
+  closes a place's tab in each session it made one in when the place
+  goes".
 - **C.7**: the local layer may set "a stream's `agents`, `priority`,
   `points`, `pace` and `session` and `multiplexer`, and the `session`
-  it names for a kind (107, 143, 166, 167, 190, 199)". A stream may
-  state, after `session`: "in `[streams.<stream>.kinds.<kind>]`,
-  `session`, the session of that terminal the kind's agents run in, the
-  kind named as `[kinds.<kind>]` names it, the table holding nothing
-  else (199)". The example gains `[streams.work.kinds.research]
-  session = "work-design"`, and its reading "a research place's agents
-  opening in the session `work-design`, which a person opens by that
-  name, and work's other agents in `work`, every one of them counted in
-  work's five".
+  it names for a kind or a kind's stage (107, 143, 166, 167, 190,
+  199)". A stream may state, after `session`: "in
+  `[streams.<stream>.kinds.<kind>]`, `session`, the session of that
+  terminal the kind's agents run in, and, in its `.stages.<stage>`
+  table, the one for that stage of the kind, the kind named as
+  `[kinds.<kind>]` names it and the stage by its name in that kind, each
+  table holding nothing but these and the kind's `stages` (199)". The
+  example gains `[streams.work.kinds.research] session = "work-design"`,
+  and its reading "a research place's agents opening in the session
+  `work-design`, which a person opens by that name, and work's other
+  agents in `work`, every one of them counted in work's five".
 - **S106** and **S107**, new: a stream's research in `work-design`, a
-  change and a fix in `work`, the room and the shares unchanged, a
-  launch's session and a pane before it, status, and the tidy in each
-  session; then a person's `flume open work-design`, a name that is no
-  stream and no session refused, the local layer moving research's next
-  start, a table's other key, and another stream's session, each
-  refusing research's next start on `work` alone.
+  release's review stage in `work-review` and its other stages in
+  `work`, a change and a fix in `work`, the room and the shares
+  unchanged, a launch's session and a pane before it, status, and the
+  tidy in each session; then a person's `flume open work-design`, `flume
+  open work` showing work's own, a name that is no session refused, the
+  local layer moving research's next start, a table's other key, and
+  another stream's session, each refusing research's next start on
+  `work` alone.
 
 ### 14. The site
 
 Written to any host's operator, naming no host, team or word of ours
 (core.35):
 
-- `guides/places-and-herdr.mdx`: a stream's sessions for its kinds, and
-  how a person opens one by its name.
+- `guides/places-and-herdr.mdx`: a stream's sessions for its kinds and
+  stages, a place with tabs in two sessions, and how a person opens a
+  session by its name.
 - `guides/agent-settings.md`: where an agent opens, in order, and that
   it is the stream's word, not a layered setting.
-- `reference/configuration.md`: `[streams.<stream>.kinds.<kind>]`, the
-  local layer's key and its pins.
-- `reference/commands.md`: `flume open <stream or session>`.
-- `reference/state.md`: `SessionFrom`'s new value and each stream's
-  `sessions`.
+- `reference/configuration.md`: `[streams.<stream>.kinds.<kind>]` and
+  its `stages`, the local layer's keys and their pins.
+- `reference/commands.md`: `flume open [<session>]`.
+- `reference/state.md`: `SessionFrom`'s two new values and each
+  stream's `sessions`.
 
 ## Risks / Trade-offs
 
 - **[A second window to watch]** → The design session is its own
   server, so a person keeps two windows per stream. That is the ask:
   the research and design agents found apart.
-- **[A new elaboration kind opens in the stream's own session]** → A
-  kind joins the design session only once the host names it. Status
-  gives each stream's sessions with their kinds, so a missing kind
-  shows.
+- **[A stream's name that is not its session's]** → A host whose stream
+  names its own session otherwise, `[streams.work] session = "office"`,
+  opens it by `office`; `flume open work` is refused naming `office`,
+  where it opened `office` before. A host naming no session of a
+  stream's own, as the fleet, opens every stream as before.
+- **[A change's tab in two sessions]** → Where a host names a session
+  for one of a kind's stages, the place's tab sits in that session until
+  the place's tidy. Its agent ends with its stage; the tab and the
+  base's workspace close at the tidy, as for a launch's session per
+  stage today.
 - **[More herdr servers]** → Each named session is a server with the
   herdr plugin's watch. Settles are safe to repeat; a few servers per
   host cost a few more settles.
 - **[A typo in a session name]** → It opens a session of that name at
   the next start, which status shows by name and origin; `flume open`
-  refuses a name that is no stream and no session, so a person's typo
-  starts nothing.
-- **[A typo in a kind's name]** → The table is ignored as for a kind the
-  place does not run, so agents open in the stream's own; status gives
-  each stream's sessions with the kinds named, which shows the
-  misspelt kind. Refusing an unknown kind is not possible: a kind's name
-  resolves only at a launch (19).
+  refuses a name no stream's word gives, so a person's typo starts
+  nothing.
+- **[A typo in a kind's or a stage's name]** → The table is ignored as
+  for a kind or a stage the place does not run, so agents open in the
+  stream's own; status gives each stream's sessions with the kinds and
+  stages named, which shows the misspelt name. Refusing an unknown kind
+  is not possible: a kind's name resolves only at a launch (19).
 
 ## Migration Plan
 
-Additive. A host that names no session for a kind runs as before. A host
-that adds one finds the next start of that kind there; every agent
-running stays where it opened, and its place's tabs in each session are
-closed at its tidy. `flume open <stream>` opens as before. Rollback is
-removing the tables: the next starts open in the stream's own session.
+Additive for where agents open: a host that names no session for a kind
+or a stage runs as before, and one that adds one finds the next start of
+that kind or stage there, every agent running staying where it opened.
+`flume open` takes a session's name: every stream whose own session
+bears its name opens as before, and a stream naming its own session
+otherwise is opened by that session's name. Rollback is removing the
+tables: the next starts open in the stream's own session.
 
 ## Open Questions
 
-None: the user approved this design on 2026-11-06.
+None: the user approved this design on 2026-11-06, and answered each
+question it asked in the reply msg_01M6Q6MPHXPYEXK3FNW3RE2GRT.

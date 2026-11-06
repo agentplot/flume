@@ -2,12 +2,12 @@
 
 ### Requirement: open names a stream or none
 
-`flume open [<name>]` SHALL show the view of the stream of that name, or
-of the session of that name a stream names for a kind, `default`'s
-where it names none, needing no repository, its multiplexer and terminal
-app bound through the resolver for that stream alone, and printing the
-printed window's line on a line of its own; its help SHALL say the name
-is a stream's or a session's a stream names for a kind (61, 105, 186,
+`flume open [<session>]` SHALL show the session of that name in its
+stream's view, the default stream's own where it names none, needing no
+repository, its stream's multiplexer and terminal app bound through the
+resolver for that stream alone, and printing the printed window's line
+on a line of its own; its help SHALL say the name is a session's, a
+stream's own or one a stream names for a kind or a stage (61, 105, 186,
 190, 199, C.8).
 
 #### Scenario: open under the printed command
@@ -37,10 +37,10 @@ is a stream's or a session's a stream names for a kind (61, 105, 186,
 
 #### Scenario: A design session through the binary
 
-- **WHEN** the same host's `[streams.w.kinds.research]` gives `session = "w-design"`, a research place and a fix are launched on `w`, `flume open w-design --json` runs, each place's agent is read by `flume status --json` and the places are tidied
-- **THEN** the pinned herdr lists the sessions `w-design` and `w` running, the research agent's pane on `w-design`'s server in its place's tab and the fix's on `w`'s; the open's JSON gives the stream `w`, the session `w-design` from `stream-kind` named for research and the title `w-design`, and the stand-in records a window titled `w-design` running `session attach w-design`; status gives each agent's session with its origin; and after the tidies neither server holds a tab or a workspace of flume's (107, 137, 138, 186, 190, 199, S106, S107)
+- **WHEN** the same host's `[streams.w.kinds.research]` gives `session = "w-design"`, a research place and a fix are launched on `w`, `flume open w-design --json` runs, then `flume open w`, each place's agent is read by `flume status --json` and the places are tidied
+- **THEN** the pinned herdr lists the sessions `w-design` and `w` running, the research agent's pane on `w-design`'s server in its place's tab and the fix's on `w`'s; the open's JSON gives the stream `w`, the session `w-design` from `stream-kind` named for research and the title `w-design`, and the stand-in records a window titled `w-design` running `session attach w-design` and one titled `Work Herdr` running `session attach w`; status gives each agent's session with its origin; and after the tidies no server holds a tab or a workspace of flume's (107, 137, 138, 186, 190, 199, S106, S107)
 
-#### Scenario: A name that is no stream and no session
+#### Scenario: A name no stream's word gives
 
 - **WHEN** `flume open nightly` runs over a scratch host whose `work` names `work-design` for research
 - **THEN** it exits refused naming `nightly`, `work` and `work-design`, and starts no session (186, 199)
