@@ -1,7 +1,7 @@
 ---
 number: 51
 title: Every branch that lands is a place's, a caller keeps watch over the host, and every place waiting on the merge queue is settled at every depth
-status: proposed
+status: accepted
 date: 2026-11-06
 decision-makers:
 - Chuck Swanberg
@@ -9,10 +9,10 @@ decision-makers:
 
 # Every branch that lands is a place's, a caller keeps watch over the host, and every place waiting on the merge queue is settled at every depth
 
-Status: proposed on 2026-11-06 by the construct stage of the change `every-place-waiting-on-the-merge-queue-is-settled-at-every-depth`. The direction is the user's: on Pending You, 2026-11-06, they approved the plan to close the gaps between flume's merge-queue design and deneb, with the note quoted below; and, reading the design the same day, they ruled that a base place has no worktree and that the runner, not herdr's plugin, settles every waiting place between commands, in the words quoted below. How a caller states its watch and how flume reads it lapsed, the terminal's nudge, the base place's shape, the refusals that keep the depths apart and shipping no kind of that shape are the stage's choices. The record is accepted on the user's yes to it and to the statement's amendment.
+Status: accepted by the user on 2026-11-06, on their card ("Approve: push the statement, start code, launch the follow-ups in order"), its statement on agentplot/blueprints main at 51b6316. Proposed the same day by the construct stage of the change `every-place-waiting-on-the-merge-queue-is-settled-at-every-depth`. The direction is the user's: on Pending You, 2026-11-06, they approved the plan to close the gaps between flume's merge-queue design and deneb, with the note quoted below; and, reading the design the same day, they ruled that a base place has no worktree and that the runner, not herdr's plugin, settles every waiting place between commands, in the words quoted below. How a caller states its watch and how flume reads it lapsed, the terminal's nudge, the base place's shape, the refusals that keep the depths apart and shipping no kind of that shape are the stage's choices.
 
 Deciders: the user, by their note and their two answers; the construct stage, on clauses 10, 46, 111, 119, 122 and C.6 and rules core.4, core.5, core.6 and core.13.
-Sources: `agentplot/blueprints:design/flume/requirements.md` on the branch `design/flume-every-place-on-the-queue-is-settled-at-every-depth` at c2e3170, cut from main at c94c496, with weir's 51, 52 and 57 and sluice's 124 beside it; the research note `research-queues-driven.md` of 2026-11-06 (the research place `research--how-a-host-drives-the-queues-of-the-repositories-it-keeps`); flume's log on deneb, 00:54Z to 02:34Z on 2026-11-06; crew's `plugin/lib/plan.py` at 23b3b3dc (`bolt_give`, `BOLT_CREATE`, `SUBMIT`, `land_delete`) and its rules plan.8, plan.16, plan.18 and plan.19; Boomdrive at 2937b09: `crates/boomdrive/src/sluice.rs` and `carry.rs`, its rules core.1, core.13, core.14, core.15 and core.16, its records 0002 and 0003, and its running spec's passes; `plugins/herdr/bin/watch.sh`, `crates/flume/src/commands/mod.rs`, `crates/flume-core/src/settle.rs`, `submit.rs` and `terminals.rs`.
+Sources: `agentplot/blueprints:design/flume/requirements.md` on main at 51b6316, with weir's 51, 52 and 57 and sluice's 124 beside it, rebased onto 6d322be, whose standing agent touched the vocabulary, 43, 132 and C.7, of which this record amends the vocabulary, 43's wait and C.7's host state, each read whole with both; the research note `research-queues-driven.md` of 2026-11-06 (the research place `research--how-a-host-drives-the-queues-of-the-repositories-it-keeps`); flume's log on deneb, 00:54Z to 02:34Z on 2026-11-06; crew's `plugin/lib/plan.py` at 23b3b3dc (`bolt_give`, `BOLT_CREATE`, `SUBMIT`, `land_delete`) and its rules plan.8, plan.16, plan.18 and plan.19; Boomdrive at 2937b09: `crates/boomdrive/src/sluice.rs` and `carry.rs`, its rules core.1, core.13, core.14, core.15 and core.16, its records 0002 and 0003, and its running spec's passes; `plugins/herdr/bin/watch.sh`, `crates/flume/src/commands/mod.rs`, `crates/flume-core/src/settle.rs`, `submit.rs` and `terminals.rs`.
 
 ## Context and problem statement
 

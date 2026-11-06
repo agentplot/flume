@@ -568,9 +568,10 @@ stages as any kind. The fake place logs nothing for a base place.
 
 ### 14. How it is held
 
-- **The statement**, on agentplot/blueprints' branch
-  `design/flume-every-place-on-the-queue-is-settled-at-every-depth` at
-  c2e3170, cut from main at c94c496 and unpushed. flume: the
+- **The statement**, on agentplot/blueprints main at 51b6316, the
+  branch `design/flume-every-place-on-the-queue-is-settled-at-every-depth`
+  rebased onto main's 6d322be on the user's approval of 2026-11-06.
+  flume: the
   vocabulary's place, base place, watch, nudge and attended entries, the
   preamble, 9, 10, 14, 18, 46, 47, 67, 78, 80, 82, 111, 112, 117, 119,
   120, 122, 133, 165, 176, the common profile's list and row, a wait's
@@ -592,12 +593,15 @@ stages as any kind. The fake place logs nothing for a base place.
   serves record 0052's wait: a lost conversation's retry, with no agent
   of flume's in its place, starts within the watch's bound once no
   process runs its session, or at a nudge or a command that acts on a
-  host with no watch (49, 207).
-  weir: 51, 52, 57 and the format's example. sluice: 124's submission
-  naming its head from anywhere in the repository, with no worktree as
-  its submitter. They hold on the user's yes, and the orchestrator
-  pushes the branch.
-- **Record 0051**, proposed: "Every branch that lands is a place's, a
+  host with no watch (49, 207). Main's standing agent (flume record
+  0013 as amended, 6d322be) touched the vocabulary, 43, 132 and C.7: it
+  gives a role's address to a standing agent, its ends going into that
+  agent at the settles that read them, beside this change's watch in
+  the vocabulary, its wait in 43 and its host state in C.7, each read
+  whole with both. weir: 51, 52, 57 and the format's example. sluice:
+  124's submission naming its head from anywhere in the repository,
+  with no worktree as its submitter.
+- **Record 0051**, accepted on the user's approval of 2026-11-06: "Every branch that lands is a place's, a
   caller keeps watch over the host, and every place waiting on the
   merge queue is settled at every depth", quoting the user's note and
   their two answers.

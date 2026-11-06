@@ -174,14 +174,13 @@ it after. Those are sluice's and the host's, named below.
 - `site/`: the merge-queue guide's base places and who moves a submitted
   place, the places-and-herdr guide's watch and nudge, the commands and
   state references.
-- `docs/`: record 0051, proposed; rule core.53, core.13's rule, and
+- `docs/`: record 0051, accepted; rule core.53, core.13's rule, and
   core.5's, core.6's, core.13's, core.25's and core.49's details.
 - agentplot/blueprints: flume's vocabulary, preamble, 9, 10, 14, 18, 46,
   47, 67, 78, 80, 82, 111, 112, 117, 119, 120, 122, 133, 165, 176, 202
   to 206, 208, C.1, C.5, C.6, C.7, section 9, I8, section 12, S27, S28, S91 and
-  S109 to S112 and S118; weir 51, 52 and 57; sluice 124; on the branch
-  `design/flume-every-place-on-the-queue-is-settled-at-every-depth` at
-  c2e3170, cut from main at c94c496, unpushed (core.19).
+  S109 to S112 and S118; weir 51, 52 and 57; sluice 124; on main at
+  51b6316 (core.19).
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool. weir-kinds' pin moves, and the pinned sluice moves
   to the release that submits a named head from no worktree.
