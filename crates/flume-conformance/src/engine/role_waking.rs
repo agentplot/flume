@@ -356,7 +356,8 @@ fn two_settles_at_once(_: &()) -> Outcome {
 
 fn three_ends_one_run(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    // A watch whose bound holds it past the five minutes the stall takes.
+    world.engine.settle_every(300);
     world.host.set_bound(Some(3));
     configure(
         &world,
@@ -474,7 +475,7 @@ fn a_wake_while_the_run_waits_for_room(_: &()) -> Outcome {
 
 fn the_run_starts(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     configure(
         &world,
         "Read what is pending for you.",

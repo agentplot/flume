@@ -1,13 +1,14 @@
-//! The wait by place and the inbox (43, 119, 122; design 9; core.13,
-//! core.25). A wait names a place and its stage or its submission, and
+//! The wait by place and the inbox (43, 119, 122, 208; design 9;
+//! core.13, core.25). A wait names a place and its stage or its submission, and
 //! the recipient it waits as: it answers at once with the newest end of
 //! that stage's current start or that submission pending for the
 //! recipient, recording it delivered by the wait; answers one already
 //! delivered as a read, delivering nothing again; and otherwise follows
-//! the host's state until such an end comes or its timeout passes. Under
-//! a terminal that keeps watch it reads the store alone, and the watch
-//! moves the place; under one that keeps none it settles every place
-//! before each reading after its first, as every acting command does,
+//! the host's state until such an end comes or its timeout passes. While
+//! a caller keeps watch over the host it reads the store alone, and the
+//! caller's settles move the place; while none does it settles every
+//! place before each reading after its first, whatever any terminal
+//! nudges, as every acting command does,
 //! the first reading answering at once an end that stands pending
 //! before a settle could deliver it by notice and tidy its place away. The inbox gives
 //! every end pending for a recipient, of every place on the host, a
@@ -67,7 +68,7 @@ impl Engine {
                 Ok(None) => {}
             }
             if !watched {
-                self.settle_every();
+                self.settle_all();
                 match self.waited(place, of, recipient) {
                     Err(reason) => return Answer::refused(reason),
                     Ok(Some(answer)) => return answer,
@@ -177,8 +178,8 @@ impl Engine {
 
     /// Collects every end pending for `recipient` of every place on the
     /// host, each recorded delivered by the inbox in the write that reads
-    /// it; an act on places, so under a terminal that keeps no watch it
-    /// settles every place first (43, 119; design 9).
+    /// it; an act on places, so while no caller keeps watch it settles
+    /// every place first (43, 119, 208; design 9).
     pub fn inbox(&self, recipient: &str) -> Answer {
         self.settle_attended();
         let mut ends = vec![];

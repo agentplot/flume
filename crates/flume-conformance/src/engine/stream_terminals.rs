@@ -71,18 +71,18 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_caller_under_a_streams_terminal,
         },
         Scenario {
-            name: "stream terminals: one stream under a terminal that keeps no watch has a caller's act settle every place first, and a wait drive its settles",
-            cites: &["119", "122", "S91"],
-            run: one_stream_under_a_terminal_with_no_watch,
+            name: "stream terminals: with no caller keeping watch, the host's terminal and a stream's both nudging, a caller's act settles every place first, and a wait drives its settles",
+            cites: &["119", "122", "190", "208"],
+            run: every_terminal_nudging_and_no_watch,
         },
         Scenario {
-            name: "stream terminals: S91, a stream under a terminal of its own beside the host's, flume attended while it keeps no watch, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
-            cites: &["S91", "4", "119", "143", "190"],
+            name: "stream terminals: S91, a stream under a terminal of its own beside the host's, which decides nothing of whether flume runs attended, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
+            cites: &["S91", "4", "119", "143", "190", "208"],
             run: s91_a_stream_under_its_own_terminal,
         },
         Scenario {
-            name: "stream terminals: status gives each stream's multiplexer with where it came from, each agent's terminal, and each terminal the host binds with what it keeps and its watch, in the JSON form",
-            cites: &["56", "190", "S91"],
+            name: "stream terminals: status gives each stream's multiplexer with where it came from, each agent's terminal, and each terminal the host binds with what it keeps, its watch none and its nudge, in the JSON form",
+            cites: &["56", "122", "190", "S91"],
             run: the_terminals_in_status,
         },
     ]
@@ -518,10 +518,10 @@ fn a_caller_under_a_streams_terminal(_: &()) -> Outcome {
     Ok(())
 }
 
-fn one_stream_under_a_terminal_with_no_watch(_: &()) -> Outcome {
+fn every_terminal_nudging_and_no_watch(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
-    work_and_trial(&world);
+    world.terminal.set_nudge(Nudge::OnChange);
+    work_and_trial(&world).set_nudge(Nudge::OnChange);
     world.terminal.add_session("ops", AgentState::Working);
     let id = World::id("fix", "one");
     launched(&world.engine.launch(&Launch {
@@ -572,7 +572,7 @@ fn one_stream_under_a_terminal_with_no_watch(_: &()) -> Outcome {
 
 fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let other = work_and_trial(&world);
     let work = fix_on(&world, "work", "one")?;
     ensure_eq!(
@@ -604,8 +604,14 @@ fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
     );
     ensure_eq!(
         world.stage_state(&World::id("fix", "one"), "code"),
+        Some(StageState::Begun),
+        "the work fix's stage once a caller acted under the watch, trial nudging nothing"
+    );
+    world.engine.settle_every(30);
+    ensure_eq!(
+        world.stage_state(&World::id("fix", "one"), "code"),
         Some(StageState::Lost),
-        "the work fix's stage once a caller acted, trial keeping no watch"
+        "the work fix's stage at the caller's settle"
     );
     world.host.set_display("trial", Some("fake"), None, None);
     write_change(&world, "two");
@@ -663,7 +669,7 @@ fn host_stream(world: &World, name: &str) -> Result<flume_core::StreamStatus, St
 
 fn the_terminals_in_status(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.terminal.set_nudge(Nudge::OnChange);
     work_and_trial(&world);
     fix_on(&world, "work", "one")?;
     fix_on(&world, "trial", "two")?;
@@ -701,12 +707,14 @@ fn the_terminals_in_status(_: &()) -> Outcome {
             flume_core::TerminalStatus {
                 profile: Some("fake".into()),
                 kept: vec![],
-                watch: Watch::Bound { seconds: 30 },
+                watch: Watch::None,
+                nudge: Nudge::OnChange,
             },
             flume_core::TerminalStatus {
                 profile: Some("other".into()),
                 kept: vec![],
                 watch: Watch::None,
+                nudge: Nudge::None,
             },
         ],
         "the host's terminals"
@@ -715,9 +723,10 @@ fn the_terminals_in_status(_: &()) -> Outcome {
     ensure_eq!(
         (
             json["terminals"][1]["profile"].as_str(),
-            json["terminals"][0]["watch"]["bound"]["seconds"].as_u64()
+            json["terminals"][0]["watch"].as_str(),
+            json["terminals"][0]["nudge"].as_str()
         ),
-        (Some("other"), Some(30)),
+        (Some("other"), Some("none"), Some("on_change")),
         "the host's terminals in the JSON form"
     );
     Ok(())

@@ -252,7 +252,7 @@ fn s40_held_waits_on_a_person(_: &()) -> Outcome {
 
 fn never_begun_then_started(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let id = World::id("fix", "one");
     let code = World::identity("fix", "one", "code", 1);
     world.agent.set_started(&code, Reading::No);

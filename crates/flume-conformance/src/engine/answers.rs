@@ -572,7 +572,8 @@ fn host_status() -> HostStatus {
         terminals: vec![TerminalStatus {
             profile: Some("fake".into()),
             kept: vec!["the workspace r main, held by the pane w1:p3".into()],
-            watch: Watch::Bound { seconds: 30 },
+            watch: Watch::None,
+            nudge: Nudge::OnChange,
         }],
         bases: vec![BaseClues {
             repository: "/r".into(),
@@ -1011,10 +1012,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.watch.bound.seconds",
             "status.host.terminals",
             "status.host.terminals[].kept",
+            "status.host.terminals[].nudge",
             "status.host.terminals[].profile",
             "status.host.terminals[].watch",
-            "status.host.terminals[].watch.bound",
-            "status.host.terminals[].watch.bound.seconds",
             "status.places",
             "status.places[].agent",
             "status.places[].agent.account",

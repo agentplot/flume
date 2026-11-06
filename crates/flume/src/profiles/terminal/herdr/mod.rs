@@ -64,11 +64,12 @@
 //! `herdr session list --json`, bounded at a second, and finds the part
 //! by its name, the own session `flume`, or an own server held by its
 //! socket alone by the session listed at that socket, and starts no
-//! server, where attach starts one (201). The watch is flume's herdr plugin's: while a
+//! server, where attach starts one (201). The nudge is flume's herdr plugin's: while a
 //! watch of it has renewed its lease within the lease's term, a minute,
-//! the profile answers its bound, thirty seconds, and no watch
-//! otherwise, reading the lease and starting nothing (119, 122; design
-//! 10). setup is what the watch wrote herdr's configuration lacks for the
+//! the profile answers that it settles at each agent's change, and that
+//! it nudges nothing otherwise, reading the lease and starting nothing;
+//! it keeps no watch, and decides nothing of whether flume runs attended
+//! (119, 122, 208; design 2, 10). setup is what the watch wrote herdr's configuration lacks for the
 //! plugin, `setup.json` beside each fresh lease, its words in order and
 //! once each, read from the files alone (122; design 8). The session a
 //! command runs in is `herdr:<pane>@<socket>`, its pane on its server
@@ -93,9 +94,9 @@
 
 use crate::host::process::{executable, program_path};
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
-    PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
-    ViewCommand, Watch,
+    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, Nudge, OpenIn,
+    Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
+    ViewCommand,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -118,10 +119,6 @@ pub const BOUND: Duration = Duration::from_secs(10);
 /// The bound on runs' one session listing, which herdr answers in
 /// milliseconds (201, C.5).
 pub const RUNS_BOUND: Duration = Duration::from_secs(1);
-
-/// The bound flume's herdr plugin settles every place on while its watch
-/// runs (122).
-pub const WATCH_BOUND: flume_seams::Seconds = 30;
 
 /// How long a lease of the plugin's watch is fresh after it was last
 /// renewed; the watch renews it four times as often.
@@ -365,7 +362,7 @@ impl Herdr {
     }
 
     /// The state directory of flume's herdr plugin, whose watch's lease
-    /// says the terminal keeps watch; none, no watch.
+    /// says the terminal nudges; none, no nudge.
     pub fn with_plugin(mut self, plugin: Option<PathBuf>) -> Herdr {
         self.plugin = plugin;
         self
@@ -2232,13 +2229,11 @@ impl Terminal for Herdr {
         }
     }
 
-    fn watch(&self) -> Watch {
+    fn nudge(&self) -> Nudge {
         if self.watch_kept() {
-            Watch::Bound {
-                seconds: WATCH_BOUND,
-            }
+            Nudge::OnChange
         } else {
-            Watch::None
+            Nudge::None
         }
     }
 

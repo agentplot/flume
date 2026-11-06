@@ -1,9 +1,9 @@
 //! The settle, flume's one mover (46, 119 to 122): it reads every fact of
 //! a place again and takes each step Part A then allows, collecting its
 //! submission's outcomes first, safe to repeat (74, 133). It runs inside
-//! a command of flume's, started by an agent going quiet, by the
-//! terminal's watch, or by a caller, and waits on no merge queue (120,
-//! core.13). Each end it or an act reads is recorded once as it is
+//! a command of flume's, started by an agent going quiet, by a caller
+//! keeping watch over the host, by a terminal's nudge, or by any other
+//! caller, and waits on no merge queue (120, 208, core.13). Each end it or an act reads is recorded once as it is
 //! written, and the settle delivers each end pending for a recipient,
 //! then wakes each role's address one stands pending for with no run
 //! (43, 132, core.25).
@@ -14,6 +14,10 @@ use flume_seams::*;
 
 /// How many steps one settle of a place takes at most.
 const STEPS: usize = 64;
+
+/// How many times a write of the host's watch reads again where its
+/// version moved.
+const TRIES: usize = 8;
 
 impl Engine {
     /// Settles the place, or every place on the host.
@@ -34,8 +38,74 @@ impl Engine {
         Answer::Settled { places, tidy }
     }
 
+    /// Settles every place on the host as a caller's watch over it,
+    /// whose bound is `bound`: the host's watch written first, when this
+    /// settle began and its bound, by compare-and-set, then every place
+    /// settled as [`Engine::settle`] naming none settles them. A caller
+    /// keeps watch while its newest such settle began less than twice its
+    /// bound ago; the watch decides nothing of what the settle does (46,
+    /// 119, 120, 208; core.13).
+    pub fn settle_every(&self, bound: Seconds) -> Answer {
+        if bound == 0 {
+            return Answer::refused(
+                "a watch's bound is a positive duration, and 0 seconds is none",
+            );
+        }
+        self.keep_watch(Watched {
+            began: self.host.now(),
+            bound,
+        });
+        self.settle(None)
+    }
+
+    /// Writes the host's watch as `watched`, by compare-and-set, reading
+    /// it again where its version moved; a watch that began later and
+    /// stands is kept (73, 153, 208).
+    fn keep_watch(&self, watched: Watched) {
+        for _ in 0..TRIES {
+            let read = self.store.read_host(&HostKey::Watch);
+            if let Some(HostVersioned {
+                document: HostDocument::Watch(standing),
+                ..
+            }) = &read
+            {
+                if standing.began > watched.began {
+                    return;
+                }
+            }
+            let at = read.map(|read| read.version);
+            if let Written::Written { .. } =
+                self.store
+                    .write_host(&HostKey::Watch, at, Some(&HostDocument::Watch(watched)))
+            {
+                return;
+            }
+        }
+        self.host.log(&format!(
+            "the host's watch was not written: its version moved {TRIES} times"
+        ));
+    }
+
+    /// The host's watch as it is held, none where none is held, a host's
+    /// state written before among it (153, 208).
+    pub(crate) fn watched(&self) -> Option<Watched> {
+        match self.store.read_host(&HostKey::Watch)?.document {
+            HostDocument::Watch(watched) => Some(watched),
+            _ => None,
+        }
+    }
+
+    /// Whether flume runs attended: no caller keeps watch over the host,
+    /// none being held or the newest lapsed, twice its bound having
+    /// passed since it began. No terminal is read (119, 208).
+    pub(crate) fn attended(&self) -> bool {
+        !self
+            .watched()
+            .is_some_and(|watched| watched.kept(self.host.now()))
+    }
+
     /// Settles every place on the host.
-    pub(crate) fn settle_every(&self) -> Tidied {
+    pub(crate) fn settle_all(&self) -> Tidied {
         let mut tidy = Tidied::default();
         for read in self.store.read_every() {
             tidy.add(self.settle_place(&read.state.place.id));
@@ -43,13 +113,13 @@ impl Engine {
         tidy
     }
 
-    /// Where a terminal the host binds, its own or a stream's, keeps no
-    /// watch, every command of flume's that acts on places settles every
-    /// place first (119, 190, I8); where each keeps one the watches settle
-    /// them.
+    /// Where no caller keeps watch over the host, every command of
+    /// flume's that acts on places settles every place first, whatever
+    /// the terminals it binds nudge (119, 190, 208, I8); where one keeps
+    /// watch its settles settle them.
     pub(crate) fn settle_attended(&self) -> Tidied {
         if self.attended() {
-            return self.settle_every();
+            return self.settle_all();
         }
         Tidied::default()
     }

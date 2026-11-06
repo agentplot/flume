@@ -226,7 +226,7 @@ fn the_merge_queue_unreadable(_: &()) -> Outcome {
 
 fn an_agent_still_working(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let id = world.begun("notes", Some(Deliverable::Commits), "one")?;
     let work = World::identity("notes", "one", "work", 1);
     world.terminal.set_state(&work, AgentState::Working);

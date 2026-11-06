@@ -57,12 +57,14 @@ pub trait Store: Send + Sync {
 }
 
 /// A document of the host's own, by what it is of: an account of a pool,
-/// or an intent by its digest (146, 147, 153).
+/// an intent by its digest, or the host's watch, one for the host (146,
+/// 147, 153, 208).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(tag = "of", rename_all = "snake_case")]
 pub enum HostKey {
     Account { pool: String, account: String },
     Intent { digest: String },
+    Watch,
 }
 
 impl std::fmt::Display for HostKey {
@@ -70,6 +72,7 @@ impl std::fmt::Display for HostKey {
         match self {
             HostKey::Account { pool, account } => write!(f, "account {pool}/{account}"),
             HostKey::Intent { digest } => write!(f, "intent {digest}"),
+            HostKey::Watch => write!(f, "the host's watch"),
         }
     }
 }
@@ -81,13 +84,38 @@ pub struct HostVersioned {
     pub document: HostDocument,
 }
 
-/// A host's own document: an account's spent time, or an intent's
-/// affinity (146, 147, 153).
+/// A host's own document: an account's spent time, an intent's
+/// affinity, or the host's watch (146, 147, 153, 208).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "of", rename_all = "snake_case")]
 pub enum HostDocument {
     Account(AccountSpent),
     Intent(Affinity),
+    Watch(Watched),
+}
+
+/// The newest settle of every place a caller asked as its watch: when it
+/// began by the host's clock, and the bound it stated. A caller keeps
+/// watch while it began less than twice its bound ago; a host that holds
+/// none has no watch (119, 208).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Watched {
+    pub began: Seconds,
+    pub bound: Seconds,
+}
+
+impl Watched {
+    /// Whether the watch is kept at `now`: its settle began less than
+    /// twice its bound ago (119, 208).
+    pub fn kept(&self, now: Seconds) -> bool {
+        now.saturating_sub(self.began) < self.bound.saturating_mul(2)
+    }
+
+    /// When the watch lapses: twice its bound after its settle began
+    /// (119, 208).
+    pub fn lapses(&self) -> Seconds {
+        self.began.saturating_add(self.bound.saturating_mul(2))
+    }
 }
 
 /// An account spent until a time by the host's clock, with the words its

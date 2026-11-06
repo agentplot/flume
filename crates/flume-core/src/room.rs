@@ -1148,7 +1148,7 @@ impl Engine {
             pools,
             terminal_kept: self.terminal.kept(),
             addresses: self.addresses(),
-            watch: self.terminal.watch(),
+            watch: Watch::None,
             terminals: self.terminals_status(),
             bases: self.bases(agents),
             terminal_setup: self.terminal.setup(),

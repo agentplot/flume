@@ -75,6 +75,11 @@ pub fn scenarios<H: StoreHarness>() -> Vec<Scenario<H>> {
             cites: &["102", "103", "104", "153"],
             run: the_hosts_own_documents::<H>,
         },
+        Scenario {
+            name: "store: two settles with a bound writing the host's watch from the same version, one write takes, the other is refused, and the one that read again writes over it",
+            cites: &["73", "103", "153", "208"],
+            run: two_watches_at_once::<H>,
+        },
     ]
 }
 
@@ -277,6 +282,51 @@ fn the_hosts_own_documents<H: StoreHarness>(harness: &H) -> Outcome {
     ensure!(
         harness.seam().read_host(&account).is_some(),
         "the removal took another document"
+    );
+    Ok(())
+}
+
+/// The seam-contracts spec's "Two watches at once": the host's watch is
+/// one document for the host, written by compare-and-set as every host
+/// document is, none read on a host that holds none (73, 153, 208).
+fn two_watches_at_once<H: StoreHarness>(harness: &H) -> Outcome {
+    ensure!(
+        harness.seam().read_host(&HostKey::Watch).is_none(),
+        "a watch read on a host that holds none"
+    );
+    let watch = |began| HostDocument::Watch(Watched { began, bound: 120 });
+    let at = written(
+        harness
+            .seam()
+            .write_host(&HostKey::Watch, None, Some(&watch(100))),
+    )?;
+    let another = harness.another();
+    let taken = written(another.write_host(&HostKey::Watch, Some(at), Some(&watch(160))))?;
+    ensure_eq!(
+        harness
+            .seam()
+            .write_host(&HostKey::Watch, Some(at), Some(&watch(170))),
+        Written::Moved,
+        "the second settle's write at the version both read"
+    );
+    let read = harness
+        .seam()
+        .read_host(&HostKey::Watch)
+        .ok_or("no watch read")?;
+    ensure_eq!(
+        (read.version, read.document),
+        (taken, watch(160)),
+        "the watch after the first write took"
+    );
+    written(
+        harness
+            .seam()
+            .write_host(&HostKey::Watch, Some(taken), Some(&watch(170))),
+    )?;
+    ensure_eq!(
+        another.read_host(&HostKey::Watch).map(|read| read.document),
+        Some(watch(170)),
+        "the watch once the second read again and wrote"
     );
     Ok(())
 }

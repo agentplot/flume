@@ -763,7 +763,7 @@ pub fn affinity(world: &World, intent: &IntentKey) -> Option<Affinity> {
         digest: intent.digest().to_string(),
     })? {
         HostDocument::Intent(affinity) => Some(affinity),
-        HostDocument::Account(_) => None,
+        HostDocument::Account(_) | HostDocument::Watch(_) => None,
     }
 }
 
@@ -1347,7 +1347,7 @@ fn spent_until(world: &World, pool: &str, account: &str) -> Option<AccountSpent>
         account: account.into(),
     })? {
         HostDocument::Account(spent) => Some(spent),
-        HostDocument::Intent(_) => None,
+        HostDocument::Intent(_) | HostDocument::Watch(_) => None,
     }
 }
 

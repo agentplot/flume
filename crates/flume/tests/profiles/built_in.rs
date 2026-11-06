@@ -337,10 +337,10 @@ fn a_recipient_unnamed_is_the_herdr_pane_the_command_runs_in() {
     );
 }
 
-/// The herdr terminal over a scratch state directory, with flume's herdr
-/// plugin's watch on one server having renewed its lease `renewed` seconds
-/// ago, or with no lease where none is given.
-fn herdr_watch(name: &str, renewed: Option<u64>) -> Watch {
+/// The nudge of the herdr terminal over a scratch state directory, with
+/// flume's herdr plugin's watch on one server having renewed its lease
+/// `renewed` seconds ago, or with no lease where none is given.
+fn herdr_nudge(name: &str, renewed: Option<u64>) -> Nudge {
     let scratch = Scratch::new(name);
     let state = scratch.path("state/flume");
     std::fs::create_dir_all(&state).expect("flume's state");
@@ -359,30 +359,28 @@ fn herdr_watch(name: &str, renewed: Option<u64>) -> Watch {
     }
     terminal(Some("herdr"), &state, None)
         .expect("the herdr terminal")
-        .watch()
+        .nudge()
 }
 
 #[test]
-fn the_herdr_terminal_keeps_watch_while_the_plugins_lease_is_fresh() {
-    // 122, C.5, design 10: the plugin's watch renewed its lease a moment
-    // ago, so the terminal answers its bound, starting nothing.
-    assert_eq!(
-        herdr_watch("watch-fresh", Some(5)),
-        Watch::Bound { seconds: 30 }
-    );
+fn the_herdr_terminal_nudges_while_the_plugins_lease_is_fresh() {
+    // 122, C.5, design 2: the plugin's watch renewed its lease a moment
+    // ago, so the terminal answers that it settles at each agent's
+    // change, starting nothing and stating no bound.
+    assert_eq!(herdr_nudge("nudge-fresh", Some(5)), Nudge::OnChange);
 }
 
 #[test]
-fn the_herdr_terminal_keeps_no_watch_on_a_stale_lease() {
-    // 119, 122, C.5: a lease last renewed two minutes ago is a watch
-    // that stopped, so flume runs attended.
-    assert_eq!(herdr_watch("watch-stale", Some(120)), Watch::None);
+fn the_herdr_terminal_nudges_nothing_on_a_stale_lease() {
+    // 122, C.5: a lease last renewed two minutes ago is a watch that
+    // stopped, so nothing nudges.
+    assert_eq!(herdr_nudge("nudge-stale", Some(120)), Nudge::None);
 }
 
 #[test]
-fn the_herdr_terminal_keeps_no_watch_without_the_plugin() {
-    // 119, 122, C.5: no lease, the plugin not installed or never started.
-    assert_eq!(herdr_watch("watch-none", None), Watch::None);
+fn the_herdr_terminal_nudges_nothing_without_the_plugin() {
+    // 122, C.5: no lease, the plugin not installed or never started.
+    assert_eq!(herdr_nudge("nudge-none", None), Nudge::None);
 }
 
 /// The content hash of each version of flume's own kinds as this release

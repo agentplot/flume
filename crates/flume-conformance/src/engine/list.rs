@@ -384,7 +384,7 @@ fn a_teardown_that_failed(_: &()) -> Outcome {
 
 fn holds_a_live_agent_and_a_tidied_document(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let dropped = begun_fix(&world, "drop")?;
     world.place.set_holds(
         &dropped.0,

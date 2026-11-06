@@ -1873,6 +1873,44 @@ fn an_affinity_written_before() {
 }
 
 #[test]
+fn the_hosts_watch() {
+    // The seam-contracts spec's round trips: the host's watch, its key
+    // and its document read back as written, and a host's state written
+    // before, which holds no watch, reading unchanged (73, 153, 208).
+    round_trips(HostKey::Watch);
+    assert_eq!(
+        serde_json::to_value(HostKey::Watch).unwrap(),
+        serde_json::json!({"of": "watch"})
+    );
+    let watched = Watched {
+        began: 47_400,
+        bound: 120,
+    };
+    round_trips(watched);
+    round_trips(HostVersioned {
+        version: 2,
+        document: HostDocument::Watch(watched),
+    });
+    assert!(watched.kept(47_400 + 239));
+    assert!(!watched.kept(47_400 + 240));
+    assert_eq!(watched.lapses(), 47_640);
+    // A host's state written before holds an account's and an intent's
+    // documents alone, each reading as it did.
+    let before: HostVersioned = serde_json::from_value(serde_json::json!({
+        "version": 3,
+        "document": {
+            "of": "account",
+            "until": 54_000,
+            "words": null,
+            "recorded_at": 47_400,
+        },
+    }))
+    .expect("a host document written before");
+    assert!(matches!(before.document, HostDocument::Account(_)));
+    round_trips(before);
+}
+
+#[test]
 fn a_versioned_held_state() {
     round_trips(Versioned {
         version: 4,
@@ -2824,6 +2862,12 @@ fn the_terminal_seams_answers() {
     });
     round_trips(Watch::Bound { seconds: 30 });
     round_trips(Watch::None);
+    round_trips(Nudge::OnChange);
+    round_trips(Nudge::None);
+    assert_eq!(
+        serde_json::to_value(Nudge::OnChange).unwrap(),
+        serde_json::json!("on_change")
+    );
     round_trips(Some("pane-3".to_string()));
     round_trips(Some("Do you trust the files in this folder?".to_string()));
 }

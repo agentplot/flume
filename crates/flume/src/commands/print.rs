@@ -10,7 +10,7 @@ use flume_core::{
 };
 use flume_seams::{
     AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, HoldOn, HostConfiguration,
-    IntentKey, KindFrom, LabelHeld, LocalLayer, Made, NamedBy, NamedSession, ProfileHeld,
+    IntentKey, KindFrom, LabelHeld, LocalLayer, Made, NamedBy, NamedSession, Nudge, ProfileHeld,
     Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart,
     UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
@@ -962,13 +962,11 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         for kept in &terminal.kept {
             lines.push(format!("  the terminal {name} keeps {kept}"));
         }
-        lines.push(match terminal.watch {
-            Watch::Bound { seconds } => {
-                format!("  the terminal {name} keeps watch every {seconds} seconds")
+        lines.push(match terminal.nudge {
+            Nudge::OnChange => {
+                format!("  the terminal {name} settles every place when an agent's state changes")
             }
-            Watch::None => format!(
-                "  the terminal {name} keeps no watch, so every place settles at each command of flume's that acts"
-            ),
+            Nudge::None => format!("  the terminal {name} nudges nothing"),
         });
     }
     for address in &host.addresses {

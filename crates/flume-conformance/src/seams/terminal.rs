@@ -169,9 +169,9 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             run: close_never_lies::<H>,
         },
         Scenario {
-            name: "terminal: watch states its bound, or that it keeps none",
-            cites: &["122", "119"],
-            run: watch_states_its_bound::<H>,
+            name: "terminal: nudge answers that it nudges at each change, or nothing, with no bound",
+            cites: &["122", "208"],
+            run: nudge_or_none::<H>,
         },
         Scenario {
             name: "terminal: session names the session a command runs in, or none",
@@ -699,12 +699,11 @@ fn setup_gives_what_is_lacking<H: TerminalHarness>(harness: &H) -> Outcome {
     Ok(())
 }
 
-fn watch_states_its_bound<H: TerminalHarness>(harness: &H) -> Outcome {
-    match harness.seam().watch() {
-        Watch::Bound { seconds } => {
-            ensure!(seconds > 0, "a watch with no bound");
-            Ok(())
-        }
-        Watch::None => Ok(()),
-    }
+/// The seam-contracts spec's "A nudge or none": the terminal answers
+/// that it nudges at each change or nothing, the same when asked again;
+/// a nudge carries no bound it settles on (122, 208).
+fn nudge_or_none<H: TerminalHarness>(harness: &H) -> Outcome {
+    let nudge: Nudge = harness.seam().nudge();
+    ensure_eq!(harness.seam().nudge(), nudge, "the nudge asked again");
+    Ok(())
 }

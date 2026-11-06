@@ -9,9 +9,10 @@
 //! of none removes the document and the folder (62), and with it the
 //! lines of `made.jsonl` a stage's run wrote there (129). The host's own
 //! documents lie beside the places, an account's spent time at
-//! `accounts/<pool>/<account>.json` and an intent's affinity at
-//! `intents/<digest>.json`, each written whole the same way under its own
-//! lock, readable by the host's user alone (153, C.7). Nothing is written
+//! `accounts/<pool>/<account>.json`, an intent's affinity at
+//! `intents/<digest>.json` and the host's watch at `watch.json`, each
+//! written whole the same way under its own lock, readable by the host's
+//! user alone (153, 208, C.7). Nothing is written
 //! into a repository (104, core.16).
 
 use flume_seams::{
@@ -91,6 +92,7 @@ impl StateDir {
                 flat_name(account),
             ),
             HostKey::Intent { digest } => (self.root.join("intents"), flat_name(digest)),
+            HostKey::Watch => (self.root.clone(), "watch".into()),
         };
         (
             directory.join(format!("{name}.json")),

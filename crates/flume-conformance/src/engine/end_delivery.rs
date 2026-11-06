@@ -684,7 +684,7 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
     let world = World::new();
     world.queue.plan_submits(vec![Plan::Hold]);
     let id = fix_for_ops(&world, "one")?;
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     deliver_fix(&world, &id);
     clear_calls(&world);
     let first = world
@@ -799,7 +799,7 @@ fn collected_after_a_restart(_: &()) -> Outcome {
         collected(&world.engine().inbox("planner"))?.is_empty(),
         "another recipient's inbox collected"
     );
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     world.terminal.add_session("ops", AgentState::Working);
     let answer = world.engine().inbox("ops");
     ensure_eq!(
@@ -846,7 +846,7 @@ fn collected_after_a_restart(_: &()) -> Outcome {
 fn two_inboxes_at_once(_: &()) -> Outcome {
     let world = World::new();
     two_pending(&world)?;
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let other = Arc::new(Mutex::new(None));
     let engine = world.engine();
     let into = other.clone();

@@ -23,23 +23,23 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: s7_two_held_places,
         },
         Scenario {
-            name: "settle: with nobody watching, a killed agent is read only when a command acts",
+            name: "settle: with no caller keeping watch and nothing nudging, a killed agent is read only when a command acts",
             cites: &["S27", "119", "I8", "57"],
             run: s27_killed_with_nobody_watching,
         },
         Scenario {
-            name: "settle: under a watch, a crashed agent reads lost within its bound",
-            cites: &["S28", "122", "46", "120"],
+            name: "settle: under a caller's watch, with nothing nudging, a crashed agent reads lost at the caller's next settle, within its bound",
+            cites: &["S28", "46", "120", "208"],
             run: s28_crashed_under_a_watch,
         },
         Scenario {
-            name: "settle: on a host whose own terminal keeps a watch, a stream under a terminal that keeps none has a caller's act settle every place first",
-            cites: &["119", "190", "S91"],
+            name: "settle: under a caller's watch, the host's own terminal nudging and a stream under a terminal that nudges nothing, a caller's act settles nothing first, and the stream's places move at the caller's settles",
+            cites: &["119", "122", "190", "208", "S91"],
             run: a_watched_host_with_one_stream_unwatched,
         },
         Scenario {
-            name: "settle: under a watch, a launch and a retry each send the agent they opened its prompt, waiting on no receipt, which the watch's settles read",
-            cites: &["6", "37", "38", "46", "49", "122"],
+            name: "settle: under a caller's watch, a launch and a retry each send the agent they opened its prompt, waiting on no receipt, which the watch's settles read",
+            cites: &["6", "37", "38", "46", "49", "208"],
             run: opened_and_sent_under_a_watch,
         },
         Scenario {
@@ -332,7 +332,7 @@ fn s27_killed_with_nobody_watching(_: &()) -> Outcome {
 
 fn s28_crashed_under_a_watch(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     world.agent.no_on_quiet();
     let id = World::id("fix", "one");
     launched(&world.engine.launch(&launch("fix", "one", Some("x"))))?;
@@ -347,7 +347,7 @@ fn s28_crashed_under_a_watch(_: &()) -> Outcome {
         "a launch under a watch settles not"
     );
     world.host.advance(30);
-    world.engine().settle(None);
+    world.engine().settle_every(30);
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::Lost),
@@ -359,42 +359,51 @@ fn s28_crashed_under_a_watch(_: &()) -> Outcome {
 
 fn a_watched_host_with_one_stream_unwatched(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
-    world.other_terminal("other");
+    world.engine.settle_every(30);
+    world.terminal.set_nudge(Nudge::OnChange);
+    let trial = world.other_terminal("other");
     world.host.set_stream("work", Some(Stream::default()));
     world.host.set_display("trial", Some("other"), None, None);
     let id = World::id("fix", "one");
     let other = World::id("fix", "two");
-    for name in ["one", "two"] {
+    let tried = World::id("fix", "three");
+    for (stream, name) in [("work", "one"), ("work", "two"), ("trial", "three")] {
         launched(&world.engine.launch(&Launch {
-            stream: Some("work".into()),
+            stream: Some(stream.into()),
             ..launch("fix", name, Some("x"))
         }))?;
     }
     world
         .terminal
         .kill(&World::identity("fix", "one", "code", 1));
-    ensure_eq!(
-        world.status(&id)?.stages[0].state,
-        StageState::Begun,
-        "the stage before a command acts"
-    );
+    trial.kill(&World::identity("fix", "three", "code", 1));
     let dropped = world.engine.drop_place(&other, true);
     ensure!(
         dropped.refusal().is_none(),
         "the drop was refused: {dropped:?}"
     );
-    ensure_eq!(
-        world.status(&id)?.stages[0].state,
-        StageState::Lost,
-        "the stage once a command acted"
-    );
+    for (place, stream) in [(&id, "work"), (&tried, "trial")] {
+        ensure_eq!(
+            world.status(place)?.stages[0].state,
+            StageState::Begun,
+            format!("the {stream} stage once the drop acted, which settles nothing first")
+        );
+    }
+    world.host.advance(30);
+    world.engine().settle_every(30);
+    for (place, stream) in [(&id, "work"), (&tried, "trial")] {
+        ensure_eq!(
+            world.status(place)?.stages[0].state,
+            StageState::Lost,
+            format!("the {stream} stage at the caller's settle")
+        );
+    }
     Ok(())
 }
 
 fn opened_and_sent_under_a_watch(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let id = World::id("fix", "one");
     let first = World::identity("fix", "one", "code", 1);
     let at = world.host.now();
@@ -440,7 +449,7 @@ fn opened_and_sent_under_a_watch(_: &()) -> Outcome {
         "the time the launch and the retry waited"
     );
     world.host.advance(30);
-    world.engine().settle(None);
+    world.engine().settle_every(30);
     ensure_eq!(
         world.terminal.sent_to(&second).len(),
         2,

@@ -755,7 +755,7 @@ fn construct_finds_work(_: &()) -> Outcome {
 
 fn a_fix_runs_unattended(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     world.terminal.add_session("ops", AgentState::Waiting);
     let id = World::id("fix", "one");
     let mut fix = launch("fix", "one", Some("mend it"));
@@ -763,7 +763,7 @@ fn a_fix_runs_unattended(_: &()) -> Outcome {
     launched(&world.engine.launch(&fix))?;
     // From here only the watch settles every place on its bound, and the
     // agent's going quiet settles its own; no caller acts.
-    world.engine().settle(None);
+    world.engine().settle_every(30);
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::Begun),
@@ -773,7 +773,7 @@ fn a_fix_runs_unattended(_: &()) -> Outcome {
     world.settle(&id);
     for _ in 0..3 {
         world.host.advance(30);
-        world.engine().settle(None);
+        world.engine().settle_every(30);
     }
     ensure!(world.held(&id).is_none(), "the place's document stands");
     ensure!(!world.place.exists(&id.0), "the place's worktree stands");

@@ -115,12 +115,24 @@ pub enum Closed {
     Refused { reason: String },
 }
 
-/// watch: the terminal settling its places on a bound it states, or no
-/// watch (122).
+/// A watch as status gives it: a caller settling every place on a bound
+/// it states, or none (61, 208). No terminal keeps one: a terminal
+/// nudges at most, and a terminal's answer in status gives its watch
+/// none (122).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Watch {
     Bound { seconds: Seconds },
+    None,
+}
+
+/// nudge: whether the terminal settles when an agent's state changes
+/// (122). A nudge is no watch: flume runs attended or not by the host's
+/// watch alone (119, 208).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Nudge {
+    OnChange,
     None,
 }
 
@@ -307,8 +319,10 @@ pub trait Terminal: Send + Sync {
     /// none (139).
     fn shown_at(&self, place: &crate::PlaceRef, agent: Option<&crate::Identity>) -> ShownAt;
 
-    /// The watch the terminal keeps, if any (122).
-    fn watch(&self) -> Watch;
+    /// Whether the terminal settles when an agent's state changes, or
+    /// nudges nothing; it states no bound and decides nothing of whether
+    /// flume runs attended (122, 208).
+    fn nudge(&self) -> Nudge;
 
     /// What the terminal's own configuration lacks for flume's plugin
     /// there, each in words a person acts on, which status gives when

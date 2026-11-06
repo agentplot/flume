@@ -7,8 +7,7 @@
 //! inbox (43); state is unknown from the terminal, the core reading the
 //! agent stopped once its own record says the session ended (134);
 //! screen is nothing (136); tidy and show do nothing, as it makes
-//! nothing and shows no clue (138, 139); there is no watch, so flume runs attended
-//! (119); it names no session (7), and attach refuses, since it holds
+//! nothing and shows no clue (138, 139); it nudges nothing (122); it names no session (7), and attach refuses, since it holds
 //! no session a person can be shown (187), and runs answers it holds no
 //! part, in the same words (201). A command printed once for an
 //! identity is printed for it never again, kept as a mark in the place's
@@ -18,8 +17,8 @@
 
 use crate::shell;
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, Identity, OpenIn, Opened, PlaceRef, Sent,
-    SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View, Watch,
+    AgentCommand, AgentState, Attached, Closed, Clues, Identity, Nudge, OpenIn, Opened, PlaceRef,
+    Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
 };
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -191,8 +190,8 @@ impl Terminal for Printed {
         ShownAt::default()
     }
 
-    fn watch(&self) -> Watch {
-        Watch::None
+    fn nudge(&self) -> Nudge {
+        Nudge::None
     }
 
     fn session(&self) -> Option<String> {
