@@ -49,6 +49,26 @@ pub fn repository(given: Option<&Path>) -> Result<String, String> {
         .ok_or_else(|| format!("{} has no directory above it", common.display()))
 }
 
+/// The working copy the command runs in, `given` or the working
+/// directory, by the directory at its top: the one whose
+/// `.config/flume.lock` `flume kinds lock` writes (155).
+pub fn working_copy(given: Option<&Path>) -> Result<String, String> {
+    let directory = match given {
+        Some(path) => absolute(path)?,
+        None => std::env::current_dir()
+            .map_err(|error| format!("the working directory cannot be read: {error}"))?,
+    };
+    Git::at(&directory.to_string_lossy())
+        .text(&["rev-parse", "--show-toplevel"])
+        .map(|top| top.trim().to_string())
+        .map_err(|reason| {
+            format!(
+                "{} is in no working copy, whose lock flume kinds lock writes; --host writes the host's: {reason}",
+                directory.display()
+            )
+        })
+}
+
 /// The place `named` names: a location where it holds a `/`, else
 /// `<kind>--<name>` of the repository `repository` finds, where the place
 /// profile makes it. Where the host's store holds no place there and

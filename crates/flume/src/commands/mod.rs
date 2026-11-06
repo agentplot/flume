@@ -10,7 +10,7 @@ pub mod place;
 mod print;
 
 use clap::{Args, Parser, Subcommand};
-use flume_core::{Answer, Engine, Retry, WaitFor};
+use flume_core::{Answer, Engine, KindsLock, LockOf, Retry, WaitFor};
 use flume_seams::{AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -207,6 +207,35 @@ enum Command {
     /// flume's status over MCP on standard input and output, one tool,
     /// `status`, settling nothing (57, 60).
     Mcp,
+    /// The kinds a lock records, by which a kind from outside flume and
+    /// the repository runs (155, C.2).
+    Kinds {
+        #[command(subcommand)]
+        kinds: KindsCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum KindsCommand {
+    /// Record each kind, named whole as `<source>/<name>@<version>`, at
+    /// its content's hash: in `.config/flume.lock` of the working copy the
+    /// command runs in, which its caller commits, or in the host's lock
+    /// with `--host`. It fetches nothing and commits nothing (155, C.2).
+    Lock {
+        /// Write the host's lock, beside its configuration.
+        #[arg(long)]
+        host: bool,
+        /// Take each kind's entry out, reading no package.
+        #[arg(long, conflicts_with = "hash")]
+        remove: bool,
+        /// Record the one kind named only where its content hashes so,
+        /// and otherwise refuse, the lock left as it was.
+        #[arg(long)]
+        hash: Option<String>,
+        /// Each kind, `<source>/<name>@<version>`.
+        #[arg(required = true, value_name = "IDENTITY")]
+        kinds: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -248,6 +277,10 @@ struct Forced {
 
 #[derive(Debug, Args)]
 struct LaunchArgs {
+    /// The kind, as the launch's declaration, the repository's or flume's
+    /// own names it, `<name>` or `<name>@<version>`, or by its source,
+    /// `<source>/<name>` or `<source>/<name>@<version>`; read whole by
+    /// the core (19, 154).
     #[arg(long)]
     kind: String,
     #[arg(long)]
@@ -525,6 +558,32 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
             core.inbox(&recipient)
         }
         Command::Wake { address } => build()?.wake(address),
+        Command::Kinds {
+            kinds:
+                KindsCommand::Lock {
+                    host,
+                    remove,
+                    hash,
+                    kinds,
+                },
+        } => {
+            let of = if *host {
+                LockOf::Host
+            } else {
+                LockOf::WorkingCopy {
+                    dir: place::working_copy(given)?,
+                }
+            };
+            // Held until the lock is written, so two writers on the host
+            // never lose each other's entry (74, 155; design 6).
+            let _writing = crate::host::writing_kinds_lock()?;
+            build()?.lock_kinds(&KindsLock {
+                of,
+                kinds: kinds.clone(),
+                remove: *remove,
+                hash: hash.clone(),
+            })
+        }
         Command::Open { stream } => build()?.open_stream(stream.as_deref()),
         Command::Hook { .. } | Command::Ack { .. } | Command::Mcp => {
             unreachable!("answered before the core's acts")

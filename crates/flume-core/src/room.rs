@@ -863,6 +863,7 @@ impl Engine {
             bases: self.bases(agents),
             terminal_setup: self.terminal.setup(),
             configuration: self.host.configuration(),
+            sources: self.host_sources(),
         }
     }
 

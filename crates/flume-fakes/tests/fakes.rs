@@ -1436,6 +1436,333 @@ fn a_stream_named_for_a_place() {
     assert_eq!(named("/s", "fix"), None);
 }
 
+/// A one-stage kind `name` at `version`.
+fn kind_at(name: &str, version: u32) -> Kind {
+    Kind {
+        name: name.into(),
+        version,
+        branch_prefix: name.into(),
+        starts_unready: false,
+        lands: true,
+        agents: KindSettings::default(),
+        stages: vec![],
+        label: None,
+    }
+}
+
+fn hash_of(digit: char) -> String {
+    format!("sha256:{}", digit.to_string().repeat(64))
+}
+
+fn lock_entry(name: &str, version: u32, hash: &str) -> LockEntry {
+    LockEntry {
+        kind: kind_identity("acme", name, version),
+        hash: hash.into(),
+    }
+}
+
+#[test]
+fn a_kinds_name_is_read_as_written_or_refused_as_scripted() {
+    let kinds = FakeKinds::default();
+    assert_eq!(
+        kinds.read_named("acme/review@2"),
+        Ok(KindNamed {
+            source: Some("acme".into()),
+            name: "review".into(),
+            version: Some(2),
+            spelled: "acme/review@2".into(),
+        })
+    );
+    assert_eq!(
+        kinds.read_named("review"),
+        Ok(KindNamed {
+            source: None,
+            name: "review".into(),
+            version: None,
+            spelled: "review".into(),
+        })
+    );
+    for text in ["acme/", "review@0", "review@x", "a/b/c"] {
+        assert!(kinds.read_named(text).is_err(), "`{text}` read");
+    }
+    kinds.unreadable_named("review", "scripted");
+    assert_eq!(kinds.read_named("review"), Err("scripted".into()));
+    assert_eq!(
+        kinds.log.of("read_named"),
+        [
+            "read_named acme/review@2",
+            "read_named review",
+            "read_named acme/",
+            "read_named review@0",
+            "read_named review@x",
+            "read_named a/b/c",
+            "read_named review",
+        ]
+    );
+}
+
+#[test]
+fn flumes_own_are_packages_at_a_stand_in_hash_or_as_scripted() {
+    let kinds = FakeKinds::default();
+    kinds.set_own(vec![kind_at("fix", 1), kind_at("change", 2)]);
+    let own = kinds.flumes_own();
+    assert_eq!(
+        own.iter()
+            .map(|package| package.identity.spelled.as_str())
+            .collect::<Vec<_>>(),
+        ["flume/fix@1", "flume/change@2"]
+    );
+    assert!(own
+        .iter()
+        .all(|package| package.hash.starts_with("sha256:")
+            && package.hash.len() == "sha256:".len() + 64));
+    assert_ne!(own[0].hash, own[1].hash, "two kinds at one stand-in hash");
+    kinds.set_own(vec![kind_at("fix", 1)]);
+    assert_eq!(
+        kinds.flumes_own()[0].hash,
+        own[0].hash,
+        "one kind's hash moved"
+    );
+    kinds.set_own_packages(vec![packaged(
+        "flume",
+        kind_at("fix", 1),
+        Some(&hash_of('f')),
+    )]);
+    assert_eq!(kinds.flumes_own()[0].hash, hash_of('f'));
+    assert_eq!(kinds.log.count("flumes_own"), 3);
+}
+
+#[test]
+fn a_sources_packages_are_scripted_by_its_directory() {
+    let kinds = FakeKinds::default();
+    kinds.set_package("/kinds/acme", kind_at("review", 2), &hash_of('2'));
+    kinds.set_package("/kinds/acme", kind_at("review", 1), &hash_of('1'));
+    kinds.refuse_package(
+        "/kinds/acme",
+        "lint",
+        1,
+        "kinds.lint.env: no declaration gives one",
+    );
+    assert_eq!(
+        kinds.read_source("acme", "/kinds/acme"),
+        SourceRead::Read {
+            kinds: vec![
+                kind_identity("acme", "lint", 1),
+                kind_identity("acme", "review", 1),
+                kind_identity("acme", "review", 2),
+            ],
+        },
+        "every package by identity, the refused one among them"
+    );
+    assert_eq!(
+        kinds.read_package("acme", "/kinds/acme", "review", 2),
+        PackageRead::Read {
+            package: Box::new(Packaged {
+                dir: Some(package_dir("/kinds/acme", "review", 2)),
+                ..packaged("acme", kind_at("review", 2), Some(&hash_of('2')))
+            }),
+        },
+        "the package with its directory as read"
+    );
+    assert_eq!(
+        kinds.read_package("acme", "/kinds/acme", "lint", 1),
+        PackageRead::CouldNotRead {
+            reason: "kinds.lint.env: no declaration gives one".into(),
+        }
+    );
+    assert!(matches!(
+        kinds.read_package("acme", "/kinds/acme", "review", 3),
+        PackageRead::CouldNotRead { reason } if reason.contains("review@3")
+    ));
+    kinds.set_package("/kinds/acme", kind_at("review", 2), &hash_of('3'));
+    assert!(
+        matches!(
+            kinds.read_package("acme", "/kinds/acme", "review", 2),
+            PackageRead::Read { package } if package.hash == hash_of('3')
+        ),
+        "a package scripted again at another hash"
+    );
+    kinds.remove_package("/kinds/acme", "review", 1);
+    assert!(matches!(
+        kinds.read_source("acme", "/kinds/acme"),
+        SourceRead::Read { kinds } if kinds.len() == 2
+    ));
+    assert!(matches!(
+        kinds.read_source("beta", "/kinds/beta"),
+        SourceRead::CouldNotRead { reason } if reason.contains("/kinds/beta")
+    ));
+    kinds.unreadable_source("/kinds/acme", "permission denied");
+    assert_eq!(
+        kinds.read_source("acme", "/kinds/acme"),
+        SourceRead::CouldNotRead {
+            reason: "permission denied".into(),
+        }
+    );
+    assert_eq!(
+        kinds.read_package("acme", "/kinds/acme", "review", 2),
+        PackageRead::CouldNotRead {
+            reason: "permission denied".into(),
+        }
+    );
+    assert_eq!(
+        kinds.log.of("read_source")[0],
+        "read_source acme /kinds/acme"
+    );
+    assert_eq!(
+        kinds.log.of("read_package")[0],
+        "read_package acme /kinds/acme review@2"
+    );
+}
+
+#[test]
+fn the_repositorys_lock_is_scripted_at_a_revision_or_every_revision() {
+    let git = FakeGit::new();
+    let first = git.init("/r", "main");
+    let second = git.commit("/r", "main", &["x"]);
+    let third = git.commit("/r", "main", &["y"]);
+    let kinds = FakeKinds::default();
+    assert_eq!(kinds.read_lock_at("/r", &first), LockRead::None);
+    kinds.set_lock("/r", vec![lock_entry("review", 1, &hash_of('1'))]);
+    kinds.set_lock_at("/r", &second, vec![]);
+    kinds.unreadable_lock_at("/r", &third, "kinds: must be an array of tables");
+    assert_eq!(
+        kinds.read_lock_at("/r", &first),
+        LockRead::Read {
+            entries: vec![lock_entry("review", 1, &hash_of('1'))],
+        }
+    );
+    assert_eq!(
+        kinds.read_lock_at("/r", &second),
+        LockRead::Read { entries: vec![] }
+    );
+    assert_eq!(
+        kinds.read_lock_at("/r", &third),
+        LockRead::CouldNotRead {
+            reason: "kinds: must be an array of tables".into(),
+        }
+    );
+    assert_eq!(
+        kinds.log.of("read_lock_at")[0],
+        format!("read_lock_at /r {first}")
+    );
+}
+
+#[test]
+fn a_lock_on_disk_is_scripted_and_a_lock_written_replaces_it() {
+    let kinds = FakeKinds::default();
+    let host_lock = "/config/flume/flume.lock";
+    assert_eq!(kinds.read_lock_file(host_lock), LockRead::None);
+    kinds.set_lock_file(host_lock, vec![lock_entry("review", 1, &hash_of('1'))]);
+    assert_eq!(
+        kinds.read_lock_file(host_lock),
+        LockRead::Read {
+            entries: vec![lock_entry("review", 1, &hash_of('1'))],
+        }
+    );
+    let written = [
+        lock_entry("review", 2, &hash_of('2')),
+        lock_entry("lint", 1, &hash_of('3')),
+    ];
+    kinds.write_lock(host_lock, &written).expect("written");
+    assert_eq!(
+        kinds.read_lock_file(host_lock),
+        LockRead::Read {
+            entries: vec![written[1].clone(), written[0].clone()],
+        },
+        "written whole, in identity order"
+    );
+    assert_eq!(
+        kinds.log.of("write_lock"),
+        [format!(
+            "write_lock {host_lock} acme/review@2={},acme/lint@1={}",
+            hash_of('2'),
+            hash_of('3')
+        )]
+    );
+    kinds.unwritable_lock(host_lock, "read-only");
+    assert_eq!(kinds.write_lock(host_lock, &[]), Err("read-only".into()));
+    assert!(
+        matches!(
+            kinds.read_lock_file(host_lock),
+            LockRead::Read { entries } if entries.len() == 2
+        ),
+        "a write that failed left the lock as it was"
+    );
+    kinds.unreadable_lock_file("/bad.lock", "not TOML");
+    assert_eq!(
+        kinds.read_lock_file("/bad.lock"),
+        LockRead::CouldNotRead {
+            reason: "not TOML".into(),
+        }
+    );
+}
+
+#[test]
+fn the_hosts_sources_are_scripted() {
+    let host = FakeHost::default();
+    assert!(
+        host.sources().is_empty(),
+        "a host with no sources directory"
+    );
+    host.set_source("acme", "/kinds/acme");
+    host.faulty_source("bad", "it gives no kinds_dir");
+    let sources = host.sources();
+    assert_eq!(
+        sources.get("acme"),
+        Some(&HostSource {
+            file: source_file("acme"),
+            read: HostSourceRead::Read {
+                kinds_dir: "/kinds/acme".into(),
+            },
+        })
+    );
+    assert_eq!(
+        sources.get("bad"),
+        Some(&HostSource {
+            file: format!("{SOURCES}/bad.toml"),
+            read: HostSourceRead::CouldNotRead {
+                reason: "it gives no kinds_dir".into(),
+            },
+        })
+    );
+    host.set_source("acme", "/kinds/acme-2");
+    assert!(
+        matches!(
+            &host.sources()["acme"].read,
+            HostSourceRead::Read { kinds_dir } if kinds_dir == "/kinds/acme-2"
+        ),
+        "a file renamed over another"
+    );
+    host.remove_source("bad");
+    assert_eq!(host.sources().keys().collect::<Vec<_>>(), ["acme"]);
+    assert_eq!(host.log.count("sources"), 4);
+    assert_eq!(
+        (host.sources_dir(), host.kinds_lock()),
+        (Some(SOURCES.to_string()), Some(HOST_LOCK.to_string())),
+        "where the sources' files and the host's lock lie"
+    );
+}
+
+#[test]
+fn a_declarations_identity_and_the_repositorys_files() {
+    let kinds = FakeKinds::default();
+    assert_eq!(
+        kinds.identity_of("repo", "bump", 2),
+        Ok(kind_identity("repo", "bump", 2))
+    );
+    assert_eq!(
+        kinds.log.of("identity_of"),
+        vec!["identity_of repo bump@2".to_string()]
+    );
+    assert_eq!(
+        (kinds.declaration_path(), kinds.lock_path()),
+        (
+            Some(".config/flume.toml".to_string()),
+            Some(".config/flume.lock".to_string())
+        )
+    );
+}
+
 /// A one-stage kind of the name given, which declares no label.
 fn kind_named(name: &str) -> Kind {
     Kind {
@@ -1633,7 +1960,10 @@ fn a_scripted_label() {
     };
     let labels: Vec<Option<&str>> = read.iter().map(|kind| kind.label.as_deref()).collect();
     assert_eq!(labels, vec![Some("operation"), None]);
-    assert_eq!(kinds.flumes_own()[0].label.as_deref(), Some("operation"));
+    assert_eq!(
+        kinds.flumes_own()[0].kind.label.as_deref(),
+        Some("operation")
+    );
     let host = FakeHost::default();
     assert_eq!(host.label_for("/r", "deploy"), None);
     let label = host.label_for("/r", "deploy").or_else(|| {
@@ -1650,7 +1980,7 @@ fn a_scripted_label() {
         })
     );
     kinds.set_label("deploy", None);
-    assert_eq!(kinds.flumes_own()[0].label, None, "as it was set");
+    assert_eq!(kinds.flumes_own()[0].kind.label, None, "as it was set");
 }
 
 /// The fake host's labels for a repository and kind, else for a kind,

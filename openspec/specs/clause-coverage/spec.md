@@ -19,7 +19,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the revision of agentplot/blueprints main that states 186 to 190, S90 and S91 as record 0037 amends them, or a later one the build read; Part A holds 1 to 77, 107 to 114, 118 to 120, 123, 124, 129 to 132, 137, 140 to 149, 154 to 159, 161 to 163, 165 to 173, 175 to 177, 180 to 183, 186 and 190, with 184 and 185 where that revision holds them; Part B holds 78 to 99, 101 to 106, 115 to 117, 121, 122, 125 to 128, 133 to 136, 138, 139, 151 to 153, 160, 164, 174, 178, 179 and 187 to 189; the scenarios run S1 to S91 as that revision holds them; and it names as unbuilt 148, 149, 152, S57 and S58 by record 0021's change, 155, 156, 158 to 160 and S59 to S63 by record 0022's, 163, 164 and S68 by record 0024's plan stage's, 165 to 168, S69 and S70 by record 0025's, 170 to 174 and S71 to S75 by record 0026's, 175 to 178, S76 and S77 by records 0028 and 0029's, 183 by the answer to section 10's question on how a host's MCP servers reach an agent, 184, 185 and S86 to S88 by record 0035's change and S89 by record 0036's, each where that revision holds it and its change has not landed, and nothing else
+- **THEN** it names the statement's revision the build read, which states the host's sources as the user ruled on this change's design; Part A and Part B hold every clause that revision holds, 191 and 192 among them; the scenarios are every one that revision holds, and no other; and it names as unbuilt no clause or scenario of record 0022's, 154 to 160 and S59 to S63 among them, nor 191, 192 or S95 to S97, each named otherwise as the revision's list holds it
 
 ### Requirement: Every scenario cites its clauses
 
@@ -48,7 +48,7 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and S1 to S91 but those named as unbuilt is cited, 186 to 190, S90 and S91 by this change's scenarios
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario but those named as unbuilt is cited, 155, 156, 158 to 160, S59 to S63, 191, 192 and S95 to S97 by this change's scenarios
 
 ### Requirement: Seam scenarios run against any profile
 

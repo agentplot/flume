@@ -14,6 +14,41 @@
 //! a launch's, and from the binary for flume's own, whose versions are
 //! each a declaration of its own with its prompts beside it (157).
 //!
+//! flume's own kinds are packages, each read through weir-kinds' package
+//! reader at its identity, `flume/<name>@<version>`, with its content's
+//! hash over its declaration's and prompts' paths and bytes (156, 157).
+//! A kind as a launch or a role names it is read by weir-kinds' reader of
+//! a kind's name, which spells it back, and the identity of a kind of the
+//! repository's or a launch's, which lies in no package, is read by
+//! weir-kinds' reader of an identity, as is a package's (154; weir C.4).
+//! The repository's declaration is [`DECLARATION`] and its lock [`LOCK`],
+//! each given the core by its path within the tree (20, 155).
+//!
+//! A host's source is read through weir-kinds alone (155 to 160, 192; weir
+//! 88 to 93, C.4; core.4):
+//!
+//! - **Its listing**, read-source: every entry of its `kinds_dir`, through
+//!   a link or not, that is a directory holding a `kind.toml` and whose
+//!   name weir's reader reads, joined to the source's name by `/`, as a
+//!   whole identity, in weir's order of identities; every entry of any
+//!   other shape is ignored (159).
+//! - **A package**, read-package: `<kinds_dir>/<name>@<version>/`, read by
+//!   weir-kinds' reader of a package's folder at that identity, with its
+//!   content's hash, each prompt read beside its `kind.toml`; a package
+//!   weir refuses, or whose agents give an `env` or a program by a
+//!   location, is answered as could not be read, naming the package and
+//!   every field (157, 158).
+//! - **The repository's lock**, [`LOCK`] at a revision as git gives it, and
+//!   **a lock on disk**, each read by weir-kinds' lock reader; no file is
+//!   no lock (20, 155).
+//! - **A lock written**, spelled by weir-kinds' lock writer, written beside
+//!   the lock and renamed over it, so a write that fails leaves the lock
+//!   as it was and no reader sees half of one (155).
+//!
+//! [`source_fault`] says which names a host's source may not take: none
+//! weir's reader refuses, and none of flume's own source, the
+//! repository's or a launch's (154, 191; weir C.4).
+//!
 //! The repository's binding is the declaration's `[profiles]` table at
 //! the default branch: the remote's, after one fetch, where the
 //! repository has a remote, and the local default branch otherwise (20,
@@ -21,10 +56,11 @@
 
 use crate::git::{tree_path, Git, REMOTE};
 use flume_seams::{
-    Binding, BindingRead, Deliverable, Kind, KindSettings, Kinds, KindsRead, Revision, Settings,
-    Stage,
+    Binding, BindingRead, Deliverable, Kind, KindIdentity, KindNamed, KindSettings, Kinds,
+    KindsRead, LockEntry, LockRead, PackageRead, Packaged, Revision, Settings, SourceRead, Stage,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::io::ErrorKind;
 use std::path::Path;
 use weir_kinds::toml::{Table, Value};
 use weir_kinds::{End, Refusal};
@@ -32,13 +68,26 @@ use weir_kinds::{End, Refusal};
 /// Where a repository declares its kinds and its binding, in its tree.
 pub const DECLARATION: &str = ".config/flume.toml";
 
-/// One version of one of flume's own kinds, built into the binary: its
-/// declaration and each prompt it names by its path within the version's
-/// own directory (22, 157, C.2; design 7).
+/// Where a repository's lock lies, in its tree and in a working copy
+/// (155, C.2).
+pub const LOCK: &str = ".config/flume.lock";
+
+/// The source of flume's own kinds: flume's name, as weir's identity
+/// names a tool's own source (154; weir C.4).
+pub const OWN_SOURCE: &str = "flume";
+
+/// One version of one of flume's own kinds, built into the binary: the
+/// identity it is held at, as weir's reader is given it, its declaration
+/// and each prompt it names by its path within the version's own
+/// directory (22, 156, 157, C.2; design 7).
 struct Own {
+    identity: &'static str,
     declaration: &'static str,
     prompts: &'static [(&'static str, &'static str)],
 }
+
+/// Where a package declares its kind, at its root (157; weir C.4).
+const KIND_TOML: &str = "kind.toml";
 
 /// flume's own kinds, one declaration per version, each in a directory of
 /// its own under `own/`, `<name>@<version>/kind.toml` with its prompts
@@ -46,6 +95,7 @@ struct Own {
 /// fix@1 and chore@1 (22, 157, C.2; record 0022).
 const OWN: &[Own] = &[
     Own {
+        identity: "flume/change@1",
         declaration: include_str!("own/change@1/kind.toml"),
         prompts: &[
             (
@@ -63,6 +113,7 @@ const OWN: &[Own] = &[
         ],
     },
     Own {
+        identity: "flume/change@2",
         declaration: include_str!("own/change@2/kind.toml"),
         prompts: &[
             (
@@ -80,6 +131,7 @@ const OWN: &[Own] = &[
         ],
     },
     Own {
+        identity: "flume/chore@1",
         declaration: include_str!("own/chore@1/kind.toml"),
         prompts: &[(
             "prompts/code.md",
@@ -87,6 +139,7 @@ const OWN: &[Own] = &[
         )],
     },
     Own {
+        identity: "flume/fix@1",
         declaration: include_str!("own/fix@1/kind.toml"),
         prompts: &[("prompts/code.md", include_str!("own/fix@1/prompts/code.md"))],
     },
@@ -142,24 +195,20 @@ impl Kinds for Weir {
         })
     }
 
-    /// Every kind of every one of flume's own declarations, each read
-    /// through weir-kinds with its prompts from its own version's
-    /// directory, two versions of `change` among them (22, 157).
-    fn flumes_own(&self) -> Vec<Kind> {
+    /// Each version of flume's own kinds as a package, read through
+    /// weir-kinds' package reader over its declaration and prompts by
+    /// their paths within its version's directory, at the identity it is
+    /// held at, with its content's hash over those paths and bytes; two
+    /// versions of `change` among them (22, 156, 157).
+    fn flumes_own(&self) -> Vec<Packaged> {
         OWN.iter()
-            .flat_map(|own| {
-                match read(own.declaration, |path| {
-                    own.prompts
-                        .iter()
-                        .find(|(at, _)| *at == path)
-                        .map(|(_, text)| text.to_string())
-                        .ok_or_else(|| format!("{path} is not built in"))
-                }) {
-                    KindsRead::Read { kinds, .. } => kinds,
-                    KindsRead::CouldNotRead { reason } => {
-                        panic!("flume's own declaration is built in and reads: {reason}")
-                    }
-                }
+            .map(|own| {
+                own_package(own).unwrap_or_else(|reason| {
+                    panic!(
+                        "flume's own {} is built in and reads: {reason}",
+                        own.identity
+                    )
+                })
             })
             .collect()
     }
@@ -169,6 +218,319 @@ impl Kinds for Weir {
             Ok(revision) => binding_at(repository, &revision),
             Err(reason) => BindingRead::CouldNotRead { reason },
         }
+    }
+
+    fn read_named(&self, text: &str) -> Result<KindNamed, String> {
+        let named: weir_kinds::NamedKind = text
+            .parse()
+            .map_err(|refusal: weir_kinds::NameRefusal| refusal.to_string())?;
+        let version = named
+            .version()
+            .map(|version| {
+                u32::try_from(version)
+                    .map_err(|_| format!("`{text}` names a version more than flume counts"))
+            })
+            .transpose()?;
+        Ok(KindNamed {
+            source: named.source().map(str::to_string),
+            name: named.name().to_string(),
+            version,
+            spelled: named.to_string(),
+        })
+    }
+
+    fn identity_of(&self, source: &str, name: &str, version: u32) -> Result<KindIdentity, String> {
+        let held = held_at(source, &format!("{name}@{version}"))?;
+        let mut problems = vec![];
+        let identity = map_identity(&held, &mut problems);
+        if problems.is_empty() {
+            Ok(identity)
+        } else {
+            Err(problems.join("; "))
+        }
+    }
+
+    fn declaration_path(&self) -> Option<String> {
+        Some(DECLARATION.into())
+    }
+
+    fn lock_path(&self) -> Option<String> {
+        Some(LOCK.into())
+    }
+
+    fn read_source(&self, source: &str, kinds_dir: &str) -> SourceRead {
+        let dir = Path::new(kinds_dir);
+        let unread = |words: String| SourceRead::CouldNotRead {
+            reason: format!("{kinds_dir}, the directory of the source {source}, {words}"),
+        };
+        if let Err(refusal) = weir_kinds::check_name(source) {
+            return SourceRead::CouldNotRead {
+                reason: format!("the source {refusal}"),
+            };
+        }
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                return unread("does not exist".into())
+            }
+            Err(error) => return unread(format!("could not be read: {error}")),
+        };
+        let mut held = BTreeSet::new();
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => return unread(format!("could not be read: {error}")),
+            };
+            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+                continue;
+            };
+            let Ok(identity) = held_at(source, &name) else {
+                continue;
+            };
+            if entry.path().join(KIND_TOML).is_file() {
+                held.insert(identity);
+            }
+        }
+        let kinds = held
+            .iter()
+            .filter_map(|identity| {
+                let mut problems = vec![];
+                let identity = map_identity(identity, &mut problems);
+                problems.is_empty().then_some(identity)
+            })
+            .collect();
+        SourceRead::Read { kinds }
+    }
+
+    fn read_package(&self, source: &str, kinds_dir: &str, name: &str, version: u32) -> PackageRead {
+        let unread = |reason: String| PackageRead::CouldNotRead { reason };
+        let entry = format!("{name}@{version}");
+        let held = match held_at(source, &entry) {
+            Ok(held) => held,
+            Err(reason) => return unread(reason),
+        };
+        let dir = Path::new(kinds_dir).join(&entry);
+        if !dir.exists() {
+            return unread(format!(
+                "the source {source} holds no {entry}: {} does not exist",
+                dir.display()
+            ));
+        }
+        let refused_at = |problems: String| {
+            unread(format!(
+                "the package {held} at {}: {problems}",
+                dir.display()
+            ))
+        };
+        let package = match weir_kinds::read_package_dir(&dir, &held) {
+            Ok(package) => package,
+            Err(refusal) => return refused_at(refused(&refusal)),
+        };
+        let mut problems = vec![];
+        let identity = map_identity(&package.identity, &mut problems);
+        let kind = map_kind(
+            &package.kind,
+            &|path: &str| {
+                let at = dir.join(path);
+                std::fs::read_to_string(&at)
+                    .map_err(|error| format!("{} could not be read: {error}", at.display()))
+            },
+            &mut problems,
+        );
+        if !problems.is_empty() {
+            return refused_at(problems.join("; "));
+        }
+        PackageRead::Read {
+            package: Box::new(Packaged {
+                identity,
+                kind,
+                hash: package.hash.to_string(),
+                dir: Some(dir.to_string_lossy().into_owned()),
+            }),
+        }
+    }
+
+    fn read_lock_at(&self, repository: &str, revision: &Revision) -> LockRead {
+        let git = Git::at(repository);
+        if let Err(reason) = git.commit(&revision.0) {
+            return LockRead::CouldNotRead { reason };
+        }
+        match git.file(&revision.0, LOCK) {
+            Ok(None) => LockRead::None,
+            Ok(Some(text)) => lock_read(&text, &format!("{LOCK} at {revision}")),
+            Err(reason) => LockRead::CouldNotRead { reason },
+        }
+    }
+
+    fn read_lock_file(&self, path: &str) -> LockRead {
+        match std::fs::read_to_string(path) {
+            Ok(text) => lock_read(&text, path),
+            Err(error) if error.kind() == ErrorKind::NotFound => LockRead::None,
+            Err(error) => LockRead::CouldNotRead {
+                reason: format!("{path} could not be read: {error}"),
+            },
+        }
+    }
+
+    fn write_lock(&self, path: &str, entries: &[LockEntry]) -> Result<(), String> {
+        let mut lock = weir_kinds::Lock::default();
+        for entry in entries {
+            let identity: weir_kinds::Identity = entry
+                .kind
+                .spelled
+                .parse()
+                .map_err(|refusal: weir_kinds::NameRefusal| refusal.to_string())?;
+            let hash: weir_kinds::ContentHash = entry
+                .hash
+                .parse()
+                .map_err(|refusal: weir_kinds::HashRefusal| refusal.to_string())?;
+            if let Some(given) = lock
+                .entries
+                .get(&identity)
+                .filter(|given| given.hash != hash)
+            {
+                return Err(format!(
+                    "{identity} is given at two hashes, {} and {hash}, and a lock records an identity once",
+                    given.hash
+                ));
+            }
+            lock.entries.insert(
+                identity,
+                weir_kinds::LockEntry {
+                    hash,
+                    sections: Table::new(),
+                },
+            );
+        }
+        write_beside(Path::new(path), &weir_kinds::spell_lock(&lock))
+            .map_err(|reason| format!("the lock {path} could not be written: {reason}"))
+    }
+}
+
+/// Why `name` cannot be the name of a source the host declares: one weir's
+/// reader refuses as a name, or the source of flume's own kinds, the
+/// repository's or a launch's; none where it can be (154, 191; weir C.4).
+pub fn source_fault(name: &str) -> Option<String> {
+    if let Err(refusal) = weir_kinds::check_name(name) {
+        return Some(format!("its name {refusal}"));
+    }
+    let whose = match name {
+        OWN_SOURCE => "flume's own kinds",
+        weir_kinds::REPO => "the repository's kinds",
+        weir_kinds::LAUNCH => "a launch's kinds",
+        _ => return None,
+    };
+    Some(format!(
+        "its name `{name}` is the source of {whose}, which no host declares"
+    ))
+}
+
+/// The identity a package of the source `source` is held at, its
+/// directory named `entry`, `<name>@<version>`, as weir's reader reads the
+/// two joined (159; weir C.4).
+fn held_at(source: &str, entry: &str) -> Result<weir_kinds::Identity, String> {
+    format!("{source}/{entry}")
+        .parse()
+        .map_err(|refusal: weir_kinds::NameRefusal| refusal.to_string())
+}
+
+/// A lock's text, `named` as its reader names it, read by weir's lock
+/// reader (155; weir 91, 93).
+fn lock_read(text: &str, named: &str) -> LockRead {
+    let lock = match weir_kinds::read_lock(text) {
+        Ok(lock) => lock,
+        Err(refusal) => {
+            return LockRead::CouldNotRead {
+                reason: format!("{named}: {}", refused(&refusal)),
+            }
+        }
+    };
+    let mut problems = vec![];
+    let entries = lock
+        .entries
+        .iter()
+        .map(|(identity, entry)| LockEntry {
+            kind: map_identity(identity, &mut problems),
+            hash: entry.hash.to_string(),
+        })
+        .collect();
+    if problems.is_empty() {
+        LockRead::Read { entries }
+    } else {
+        LockRead::CouldNotRead {
+            reason: format!("{named}: {}", problems.join("; ")),
+        }
+    }
+}
+
+/// `text` written whole at `file`: written beside it, under a name of its
+/// own that begins with `.`, and renamed over it, its directory made where
+/// it is missing; the file as it was where any step fails (155).
+fn write_beside(file: &Path, text: &str) -> Result<(), String> {
+    let name = file
+        .file_name()
+        .ok_or_else(|| format!("{} names no file", file.display()))?;
+    if let Some(dir) = file.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+    }
+    let beside = file.with_file_name(format!(
+        ".{}.{}.tmp",
+        name.to_string_lossy(),
+        std::process::id()
+    ));
+    let written = std::fs::write(&beside, text)
+        .and_then(|()| std::fs::rename(&beside, file))
+        .map_err(|error| error.to_string());
+    if written.is_err() {
+        let _ = std::fs::remove_file(&beside);
+    }
+    written
+}
+
+/// One version of flume's own kinds read as a package (156, 157).
+fn own_package(own: &Own) -> Result<Packaged, String> {
+    let held: weir_kinds::Identity = own
+        .identity
+        .parse()
+        .map_err(|refusal: weir_kinds::NameRefusal| refusal.to_string())?;
+    let files = std::iter::once((KIND_TOML, own.declaration)).chain(own.prompts.iter().copied());
+    let package = weir_kinds::read_package(files, &held).map_err(|refusal| refused(&refusal))?;
+    let mut problems = vec![];
+    let identity = map_identity(&package.identity, &mut problems);
+    let kind = map_kind(
+        &package.kind,
+        &|path: &str| {
+            own.prompts
+                .iter()
+                .find(|(at, _)| *at == path)
+                .map(|(_, text)| text.to_string())
+                .ok_or_else(|| format!("{path} is not built in"))
+        },
+        &mut problems,
+    );
+    if !problems.is_empty() {
+        return Err(problems.join("; "));
+    }
+    Ok(Packaged {
+        identity,
+        kind,
+        hash: package.hash.to_string(),
+        dir: None,
+    })
+}
+
+/// An identity as weir's reader gave it, mapped onto the seam's with its
+/// parts and weir's spelling (154; weir 88, C.4).
+fn map_identity(identity: &weir_kinds::Identity, problems: &mut Vec<String>) -> KindIdentity {
+    let version = u32::try_from(identity.version()).unwrap_or_else(|_| {
+        problems.push(format!("{identity}: its version is more than flume counts"));
+        0
+    });
+    KindIdentity {
+        source: identity.source().to_string(),
+        name: identity.name().to_string(),
+        version,
+        spelled: identity.to_string(),
     }
 }
 
@@ -409,8 +771,9 @@ fn map_agents(
 /// flume's four or a table of programs, read as the host's configuration
 /// reads it, any other failing it naming the field (169, C.2); an `env`
 /// fails it, naming the field, since an agent's environment is its
-/// account's alone (144, C.2); every other key is the runner's, and
-/// ignored.
+/// account's alone (144, C.2), and so does a program named by a location,
+/// a `/` in it, since a location is the host's (158); every other key is
+/// the runner's, and ignored.
 fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
     let mut text = |name: &str| match agent.get(name) {
         None => None,
@@ -432,6 +795,11 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
     if agent.contains_key("env") {
         problems.push(format!(
             "{at}.env: an agent's environment is its account's to give, and no declaration gives one"
+        ));
+    }
+    if let Some(program) = program.as_deref().filter(|program| program.contains('/')) {
+        problems.push(format!(
+            "{at}.program: `{program}` names a program by a location, which is the host's, and a declaration names its program by name"
         ));
     }
     Settings {

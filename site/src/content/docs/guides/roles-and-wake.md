@@ -42,7 +42,7 @@ brief = "Read the records and plan the next unit."
 | Key | Meaning | Left out |
 |---|---|---|
 | `repository` | the repository the run's place is in; a leading `~` is your home | refused |
-| `kind` | the kind the run launches, from that repository's kinds or flume's own | refused |
+| `kind` | the kind the run launches, named as a launch's `--kind` is: from that repository's kinds or flume's own, or by its source | refused |
 | `priority` | the run's priority in the host's queue | `0` |
 | `base` | the base the run's place is cut from | the repository's default branch |
 | `brief` | the run's brief, for a kind whose prompt asks for one | none |
@@ -50,6 +50,16 @@ brief = "Read the records and plan the next unit."
 
 A key the table does not know, or a key that is no address, makes the
 host's configuration unreadable, and every command of flume's says so.
+
+A role's `kind` is read as `flume launch --kind` reads one
+([where kinds come from](/flume/guides/kinds/#where-kinds-come-from)).
+A bare `kind = "planner"` takes the repository's `planner`, else flume's
+own. A role names a kind from a source the host declares by its
+source, `kind = "beta/planner@1"`, or `kind = "beta/planner"` to take
+the version the locks pick, and the kind runs under the same locks as
+any launch's.
+A role's run carries no `--kinds` file, so a kind that no repository
+declares and flume does not carry reaches a role through a source.
 
 A run of the role is a place like any other, `<kind>--<role>`, here
 `planner--planner`, named by the role, with the address as

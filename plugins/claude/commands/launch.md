@@ -11,7 +11,11 @@ $ARGUMENTS
 1. Choose the kind with the operator. flume's own kinds are `fix` (one
    stage that commits a fix), `chore` (one stage that commits a chore)
    and `change` (an OpenSpec change written, coded and verified); the
-   repository's `.config/flume.toml` may declare more. Say which you would
+   repository's `.config/flume.toml` may declare more. A kind of a source
+   the host declares is named by its source, `<source>/<name>`, as
+   `acme/review`, or `<source>/<name>@<version>`; a bare name never
+   reaches it, and `flume status --json` lists the host's sources and the
+   kinds each holds under `status.host.sources`. Say which you would
    choose and why, and take the operator's word.
 2. Choose a name with the operator: a few words in kebab case saying what
    the place will do, such as `the-parser-reads-tabs`.

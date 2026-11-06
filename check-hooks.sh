@@ -5,8 +5,11 @@
 # the hooks devenv.nix installs ($FLUME_HOOKS, $FLUME_HOOKS_CONFIG); a
 # fresh worktree beside it, with no config of its own, commits a Rust file;
 # convco, treefmt and clippy must each run and pass, with no
-# PREK_ALLOW_NO_CONFIG. Every git call is the scratch clone's alone: no
-# global or system config, no credential helper, no prompt.
+# PREK_ALLOW_NO_CONFIG. A revert committed as after a conflict passes
+# convco, as CI's `convco check --ignore-reverts` takes it, and a message
+# that is not a conventional commit is refused. Every git call is the
+# scratch clone's alone: no global or system config, no credential helper,
+# no prompt.
 set -eu
 
 fail() {
@@ -71,4 +74,31 @@ for hook in convco treefmt 'clippy (-D warnings)'; do
     fail "$hook did not run and pass in the fresh worktree"
 done
 [ "$(git -C "$scratch/fresh" rev-list --count main..fresh)" = 1 ] || fail "no commit was made"
-echo "check-hooks: convco, treefmt and clippy ran in a fresh worktree on the main checkout's config"
+
+# git runs the commit-msg hook on a revert committed after a conflict or
+# `--no-commit`, not on one `git revert` commits itself.
+doc=README.md
+printf '\nA line the hooks check reverts.\n' >>"$scratch/fresh/$doc"
+git -C "$scratch/fresh" add -- "$doc"
+if ! out=$(cd "$scratch/fresh" && git commit -m 'docs: a line the hooks check reverts' -- "$doc" 2>&1); then
+  printf '%s\n' "$out" >&2
+  fail "the commit to revert failed"
+fi
+git -C "$scratch/fresh" revert --no-commit HEAD
+if ! out=$(cd "$scratch/fresh" && git commit --no-edit 2>&1); then
+  printf '%s\n' "$out" >&2
+  fail "the hooks refused a commit git revert wrote"
+fi
+printf '%s\n' "$out"
+printf '%s\n' "$out" | grep -E '^convco\.+Passed' >/dev/null ||
+  fail "convco did not run and pass on a commit git revert wrote"
+
+if out=$(cd "$scratch/fresh" && git commit --allow-empty -m 'a message with no type' 2>&1); then
+  fail "the hooks took a message that is not a conventional commit"
+fi
+printf '%s\n' "$out" | grep -E '^convco\.+Failed' >/dev/null || {
+  printf '%s\n' "$out" >&2
+  fail "convco did not refuse a message that is not a conventional commit"
+}
+[ "$(git -C "$scratch/fresh" rev-list --count main..fresh)" = 3 ] || fail "the revert was not committed"
+echo "check-hooks: convco, treefmt and clippy ran in a fresh worktree on the main checkout's config, convco taking a revert and refusing a message with no type"
