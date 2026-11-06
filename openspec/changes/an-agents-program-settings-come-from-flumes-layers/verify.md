@@ -1,39 +1,85 @@
 # Verify: an-agents-program-settings-come-from-flumes-layers
 
-Read on 2026-11-06 at `5257da8`, the head of the branch
+Read on 2026-11-06 at `f6cc42f`, the head of the branch
 `change/an-agents-program-settings-come-from-flumes-layers`. The check
 covers the change's proposal, design, twelve delta specs and tasks. The
-branch holds flume's main at `b51498e`, which is origin's main after a
-fetch on 2026-11-06.
+branch holds flume's main at `b51498e`. Origin's main, after a fetch on
+2026-11-06, is `4b3d2d1`: #127 added one commit, `53a65f8`, which
+touches record 0013, core.28, the site's rules page and its roadmap,
+and no spec or code. It merges with the branch with no file contested,
+and sluice ran the gate's checks against it.
 
 ## Verdict
 
 **Holds; archived.**
 
-- Every task of groups 1 to 10 is ticked: 28 of 28.
+- Every task of groups 1 to 11 is ticked: 29 of 29.
 - Every requirement of the twelve delta specs is built: 40
   requirements and 81 scenarios. Each scenario is held by a test that
   asserts its THEN (below).
 - `openspec validate an-agents-program-settings-come-from-flumes-layers
   --strict --no-interactive` passes.
 - A trial archive passes 44 of 44 specs. It ran on the head's
-  `openspec/`, copied to a scratch directory. It applied 36
-  requirements added, 4 modified and 1 renamed, and wrote the new spec
-  `own-settings`. The four it modifies, launching's layers, agent-modes'
-  layers and clause-coverage's two, keep every scenario main holds and
-  add this change's. clause-coverage's two scenarios are rewritten for
-  this change, as each change rewrites them.
-- `sluice exec main` at `5257da8` passes all 24 of the check tasks the
-  head affects, flume:tools 105 of 105 among them. sluice recorded the
-  pass under its keys for `5257da8`.
+  `openspec/`, copied to a scratch directory. The specs it writes are
+  byte for byte those of the first archive at `74d7819`: 36
+  requirements added, 4 modified and 1 renamed, and the new spec
+  `own-settings`. The four it modifies, launching's layers,
+  agent-modes' layers and clause-coverage's two, keep every scenario
+  main holds and add this change's. clause-coverage's two scenarios
+  are rewritten for this change, as each change rewrites them.
+- `sluice exec main` at `f6cc42f`, against main at `4b3d2d1`, passes
+  all 24 of the check tasks the head affects, flume:tools 105 of 105
+  among them. sluice recorded the pass under its keys for `f6cc42f`.
+- Task 11.1's mend holds (below). Its conformance scenario fails
+  without the mend and passes with it.
 - The live check (10.1) passed 7 of 7 at `f6ebc1f8`, run by hand
-  outside the gate as `CLAUDE.md` says. Only `tasks.md` changed since,
-  in one line. It was not run again here: it needs a test account's
-  token, and no branch's gate requires `check-live`.
+  outside the gate as `CLAUDE.md` says. Since then only 11.1's mend
+  changed code, in the core's delivery. It was not run again here: it
+  needs a test account's token, and no branch's gate requires
+  `check-live`.
+
+## Task 11.1: the race #126's flume:tools failed on
+
+#126's run on main failed `a_fix_begun_in_another_mode_twice_is_never_begun`:
+code read never begun with no `unsettled` in its end. The cause is in
+`Engine::deliver_reading` (`crates/flume-core/src/deliver.rs`). One
+pass reads the start begun without its settings and records so, in
+`read_unsettled`. It then reads the agent not quiet, and reads it
+stopped. `never_begun` then built the end from the held state read
+before that record, so the end did not name how it began.
+
+The mend reads such a start once more from the held state as it stands
+before it reads it never begun. On that second pass:
+
+- where `read_unsettled` reads the agent quiet, it ends it as clause
+  161 says: a first start is started afresh, and a second never begun
+  with its end naming the variable;
+- where the agent is stopped but still not quiet, `never_begun` builds
+  the end from the held state that holds the record, so the end names
+  the variable.
+
+`read_again` bounds the loop to one more pass. Both outcomes are the
+start-integrity spec's: "a start so begun that is not quiet by the
+stage's limit SHALL be never begun, naming the same". The new
+conformance scenario, `stopped_before_it_reads_quiet` in
+`engine/start_integrity.rs`, cites 161, 35 and 43. It is the second of
+these: an agent stopped with its own work going on, read in the
+launch's own delivery. Its end names `AGENT_HOME`, and no prompt was
+sent.
+
+With the mend's twelve lines taken out of `deliver.rs`,
+`cargo test -p flume-conformance --test engine` fails 1 of 538 engine
+scenarios, this one, with "the end names the variable:
+`None where Some(["AGENT_HOME"]) was due`". With them, all 538 pass. In the gate, flume:tools ran
+`a_fix_begun_in_another_mode_twice_is_never_begun`, the walkthrough
+#126 failed on, and it passed.
+
+The mend changes no requirement: the start-integrity spec holds the
+behaviour already, and the change's deltas are unchanged.
 
 ## Tasks
 
-All 28 tasks are ticked, `[x]`, and none is open.
+All 29 tasks are ticked, `[x]`, and none is open.
 
 - **The record and the rules** (1.1, 5.4): record 0043 is `proposed`.
   It waits on the user's yes once they have seen it as a record, at
@@ -42,11 +88,11 @@ All 28 tasks are ticked, `[x]`, and none is open.
   drawn into "Stages and agents". Each cites blueprints main at
   `033d887`.
 - **The clause list** (1.2, 5.4, 9.1): `REVISION` is `fa40c94`, which
-  main's #125 set and the merge at `f6ebc1f8` kept. `fa40c94` is on
-  blueprints main and descends from `033d887`. It states 195 in Part A,
-  196 in Part B and S100 to S102, as the clause-coverage delta allows
-  ("or the later one of main the build read"). None of the five is
-  named unbuilt, and conformance:coverage passes.
+  main's #125 set. `fa40c94` is on blueprints main and descends from
+  `033d887`. It states 195 in Part A, 196 in Part B and S100 to S102,
+  as the clause-coverage delta allows ("or the later one of main the
+  build read"). None of the five is named unbuilt, and
+  conformance:coverage passes.
 - **The seams** (2.1, 2.2): `Settings::programs` with
   `ProgramSettings` and `NamedFile`, `Layer::HostStream` and
   `Layer::Host`, `KindsRead::Read`'s `agents`, the held
@@ -83,6 +129,7 @@ All 28 tasks are ticked, `[x]`, and none is open.
   `--agent` forms), `guides/claude-code.mdx` and `reference/state.md`.
   None names a host, a team or a word of ours (core.35). site:prose
   and site:build pass.
+- **The mend** (11.1): above.
 
 ## Specs
 
@@ -166,7 +213,8 @@ Each scenario and the test that asserts it. Tests under
 
 ## The checks
 
-`sluice exec main` at `5257da8` passed these 24 tasks:
+`sluice exec main` at `f6cc42f` ran the checks the head affects
+against main at `4b3d2d1`, in 8m 19s, and passed these 24 tasks:
 
 - conformance: coverage, format, lint, test
 - core: format, lint, test
@@ -177,8 +225,10 @@ Each scenario and the test that asserts it. Tests under
 - seams: format, lint, test
 - site: build, prose
 
-moon warned that it could not write its output cache. That warning
-touches no task's result.
+These cover task 11.1's own checks: core:test, conformance:test,
+conformance:coverage and flume:tools. moon warned that it could not
+write its output cache and that it had no internet connection for its
+dependency install. Neither warning touches a task's result.
 
 ## Outside this repository
 
@@ -187,5 +237,6 @@ touches no task's result.
   branch `design/flume-the-store-writes-a-starts-files`, as task 4.3
   asked. Record 0043 and design 8 cite it there. The branch is on this
   host's clone alone: origin does not hold it and blueprints main does
-  not contain it. It waits on the orchestrator to push and land it.
+  not contain it, as read on 2026-11-06 after a fetch. It waits on the
+  orchestrator to push and land it.
 - Record 0043 stays `proposed` until the user's yes at their review.
