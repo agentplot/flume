@@ -113,8 +113,9 @@ table's `mode` table is taken whole. flume writes neither file.
 
 The local layer sets only what runs the host's work from hour to hour:
 
-- a stream's `agents`, `priority`, `session` and `multiplexer`, and
-  its labels' `reserve` and `keep_free`;
+- a stream's `agents`, `priority`, `session` and `multiplexer`, the
+  `session` it names for a kind or a kind's stage, and its labels'
+  `reserve` and `keep_free`;
 - the `stream` and the `label` a repository's kind, a repository or a
   kind is given;
 - a kind's agents tables, `[kinds.<kind>.agents]` and
@@ -335,26 +336,80 @@ account. Its stages keep their order and start first once it has room,
 and they never hold the host's room from another stream's stages. flume ends no
 agent to make room.
 
-### A stream's session
+### A stream's sessions
 
-Under herdr, a stream's agents open in a herdr session of the
-stream's: the one its `session` names, else the one named by the
-stream's name. The `default` stream's agents open in flume's own
-session, `flume`, unless `[streams.default]` names one. So `herdr
---session work` shows every agent of the `work` stream.
+Under herdr, a stream's agents open in herdr sessions of the stream's.
+Its own is the one its `session` names, else the one named by the
+stream's name. The `default` stream's own is flume's session, `flume`,
+unless `[streams.default]` names one. A stream may also name, for a
+kind, a session of its own for that kind's agents, and, for one stage
+of a kind, one for that stage's agents. So a host keeps a stream's
+research apart from the rest of its work:
 
 ```toml
 [streams.work]
 agents = 5
-session = "office"
+
+[streams.work.kinds.research]
+session = "work-design"
+
+[streams.work.kinds.release.stages.review]
+session = "work-review"
 ```
 
-A launch's `--agent session=<name>` opens its place's agents in that
-session whatever their stream, and `--agent <stage>.session=<name>`
-one stage's. An agent whose settings name a pane to open beside opens
-beside it, in whatever session that pane is. No other layer gives a
-session. A stream's session is read at each start, and an agent stays
-where it opened.
+At each start, an agent opens in the first of:
+
+| Where | Status names it |
+|---|---|
+| beside a pane its settings name, by `beside`, in whatever session that pane is | `beside the pane` |
+| the session the launch names, `--agent <stage>.session=<name>` before `--agent session=<name>` | `launch` |
+| the session its stream names for its kind's stage | `stream-stage` |
+| the session its stream names for its kind | `stream-kind` |
+| the stream's own `session` | `stream` |
+| the session named by the stream's name | `stream-name` |
+| flume's own session, for `default` naming none | `own` |
+
+Here a research place's agents open in `work-design`, a release's
+review agent in `work-review`, the release's other agents in `work`,
+and every other place's agents in `work`. A kind is named as
+`[kinds.<kind>]` names it, whatever source and version it resolves to,
+and a stage by its name in that kind. A kind's session takes every
+stage of the kind but one its own table names.
+
+These tables are the stream's word, not one of the six layers: no
+agents table, repository's file or kind gives a session, and nothing
+names one for a repository, a label or a stage of every kind. They are
+read at each start, the local layer over the managed one, so a change
+takes the next start and an agent stays where it opened. A table for a
+kind or a stage the place does not run is ignored. A misspelt kind's
+table opens nothing apart, and status, which gives each stream's
+sessions with the kinds and stages it names them for, shows the name as
+written.
+
+A place whose agents open apart keeps its stream. They count in its
+bound and the host's, take its pool's accounts and take their label's
+share, wherever they open.
+
+A start that reads one of these tables is refused, its stage waiting
+for a retry once the file is mended, where:
+
+- the table holds any key but `session` and, for a kind, `stages`.
+  Only the starts of that kind, or that stage, on that stream are
+  refused;
+- the session it names is one another stream's agents open in by that
+  stream's word: its own, or one it names for a kind or a stage. A
+  session a stream names apart is that stream's alone, so `flume open`
+  finds it in one stream's view. A stream may name its own session for a
+  kind.
+
+The refusal names the table's key, or both streams:
+
+```text
+streams.work.kinds.research.pool: a stream's table for a kind holds the session its agents open in and its stages' tables alone
+```
+
+A stage waiting for room whose table comes to refuse is refused at the
+next settle, ahead of the room.
 
 ### A stream's multiplexer and view
 
@@ -384,7 +439,7 @@ multiplexer = "printed"
 | `title`, on a stream alone | the stream's name | `stream` or `stream-name` |
 
 Here `work`'s agents open in herdr's session `office`, and `flume open
-work` opens a Ghostty window titled `Work Agents` on it. `trial`'s
+office` opens a Ghostty window titled `Work Agents` on it. `trial`'s
 agents run as commands flume prints, while every other stream runs
 under herdr. A stream's multiplexer is read at each start, as its
 session is, and an agent stays in the one it opened in. No launch,
@@ -826,7 +881,10 @@ program differed and the modes asked and begun, never a value.
 
 A place gives its stream and its label, each with where it came from,
 and its intent. Its current agent gives the session and the
-multiplexer it opened in, each with where it came from. Its
+multiplexer it opened in, each with where it came from. An agent that
+opened in a session its stream names for its kind or its stage says
+which, as `in the session work-design (stream work, kind research)` or
+`(stream work, stage release.review)`. Its
 current agent gives its account, with `from` saying whether the
 intent's affinity for the agent's program or the pool's strategy chose
 it, and each variable `env.<NAME>` from `account` as `<set>`, and its
@@ -869,7 +927,9 @@ ended before it said it started, and its stage started afresh`.
 
 The host gives its `streams` and its `pools`. Each stream gives its
 running agents, bound, room, queue, session, multiplexer, view,
-terminal app, title and labels. Each pool gives its strategy and
+terminal app, title and labels, and each session it names for its
+kinds and stages, with the kinds and the `<kind>.<stage>`s it names it
+for and the layer each came from. Each pool gives its strategy and
 threshold, and each account with its agents running, bound, spent time,
 reading, and what holds it past its threshold ([a pool's
 accounts](#a-pools-accounts-and-their-readings)). A stream gives each
@@ -877,18 +937,23 @@ label's reserve, what it keeps free, its agents running and its stages
 waiting, and a stage waiting gives its label. A stream whose labels or
 multiplexer refuse its starts says `it starts no stage:` with why, and
 one whose terminal app names no profile says `it opens no view:`, its
-stages starting as before. Then comes the
+stages starting as before. A table for a kind or a stage that refuses
+the starts that read it says `it starts no stage that reads <table>:`
+with the refusal ([a stream's sessions](#a-streams-sessions)). Then comes the
 local layer, with each value it set and each key passed over with its
 pin, or, where it was not taken, each key it may not set or its fault:
 
 ```text
   stream work, priority 30: 5 agents running of 5, room for 0
     its agents open in the session work, the stream's name
+    it names the session work-design for the kind research (from managed)
+    it names the session work-review for the stage release.review (from local)
     multiplexer herdr (the host's), view terminal (the default), terminal app ghostty (the host's), title "Work Agents" (the stream's title)
     label construction: a reserve of 2, keeping 0 free, 4 agents running, 0 waiting
     label operation: a reserve of 2, keeping 1 free, 1 agents running, 1 waiting
     waiting for room: /home/you/.local/share/flume/places/f5f5e14159a8/deploy--rollout's code in work as operation, priority 0, short of the stream work's room, at its bound of 5
   the host's local layer is taken, setting:
+    streams.work.kinds.release.stages.review.session = "work-review"
     streams.work.priority = 30
     streams.work.agents passed over: the managed layer pins streams.work.agents
 ```

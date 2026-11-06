@@ -172,14 +172,17 @@ of flume's that acts settles every place first.
 
 <Diagram name="herdr" caption="A tell waits while its agent works and reaches it once the agent waits. retry starts a stage that ended short again, with your words and a fresh agent; stop ends an agent that went the wrong way, and its stage waits for a retry." />
 
-flume keeps each stream's agents in a herdr session of the stream's:
-the one its `session` names, else the one named by the stream's name.
-So `flume open work`, or `herdr --session work`, shows every agent of
-the `work` stream ([seeing a stream's agents](#seeing-a-streams-agents)). The
+flume keeps each stream's agents in herdr sessions of the stream's.
+Its own is the one its `session` names, else the one named by the
+stream's name, and every agent of the stream opens there but those of
+a kind or a stage the stream names a session of its own for
+([a session for a kind or a stage](#a-session-for-a-kind-or-a-stage)).
+So `flume open work`, or `herdr --session work`, shows the `work`
+stream's agents in its own session ([seeing a stream's agents](#seeing-a-streams-agents)). The
 `default` stream's agents run in flume's own session, `flume`, unless
 `[streams.default]` names another. A launch's `--agent
 session=<name>` opens its place's agents in that session whatever their
-stream ([a stream's session](/flume/guides/agent-settings/#a-streams-session)).
+stream ([a stream's sessions](/flume/guides/agent-settings/#a-streams-sessions)).
 flume starts a session's server, headless, the first time an agent
 opens in it. Where herdr does not take a session's name, the start is
 refused in herdr's words. In each session:
@@ -230,11 +233,46 @@ call states none, with the calling session's `HERDR_*` variables
 stripped and the recorded server's socket passed. A call that does not
 answer in time reads as unknown, never as an answer.
 
+### A session for a kind or a stage
+
+A stream may open one kind's agents, or one stage's, in a session of
+their own beside the stream's, so you find them apart from its other
+work:
+
+```toml
+[streams.work.kinds.research]
+session = "work-design"
+
+[streams.work.kinds.release.stages.review]
+session = "work-review"
+```
+
+Here a research place's agents open in herdr's session `work-design`, a
+release's review agent in `work-review`, and its other agents and every
+other place's in `work`. Each such session is a server of its own,
+started headless the first time an agent opens in it, and laid out as
+every session is: a workspace per repository and base, a tab per place.
+A release place has a tab in `work` and one in `work-review`. Its review
+agent ends with its stage, and its tidy closes its tab in each session,
+and each base's workspace once it holds no tab of a live place and
+nothing flume did not make.
+
+The place keeps its stream wherever its agents open: they count in
+`work`'s bound and the host's, take accounts from `work`'s pool and take
+their label's share. [A stream's sessions](/flume/guides/agent-settings/#a-streams-sessions)
+gives the order an agent's session is read in, and what refuses a
+start.
+
 ## Seeing a stream's agents
 
-`flume open <stream>` shows a stream's agents, and `flume open` the
-`default` stream's. It opens the session the stream's agents open in,
-in the stream's view, else the host's:
+`flume open <session>` shows a stream's agents one session at a time,
+by the session's name, and `flume open` the `default` stream's own
+session. What you open is a session, never a stream. A stream's own
+session bears the stream's name where the stream names none, so you
+open it by that name. A stream whose `session` names its own, as
+`session = "desk"`, is opened by that name, `flume open desk`. A session
+a stream names for a kind or a stage is opened by its name too. flume
+shows it in its stream's view, else the host's:
 
 ```toml
 [host]
@@ -244,18 +282,37 @@ terminal_app = "ghostty"
 [streams.work]
 title = "Work Agents"
 
+[streams.work.kinds.research]
+session = "work-design"
+
 [streams.office]
 terminal_app = "terminal"
 title = "Office Agents"
 ```
 
 Here `flume open work` opens a Ghostty window titled `Work Agents`
-running `herdr session attach work`, and `flume open office` a
-Terminal.app window titled `Office Agents` on the session `office`.
+running `herdr session attach work`, `flume open work-design` one
+titled `work-design` running `herdr session attach work-design`, and
+`flume open office` a Terminal.app window titled `Office Agents` on the
+session `office`.
 Under herdr, flume names the herdr it runs by its full path, so the
 window runs the same release whatever its own `PATH`. A session not yet
 running is started headless first, before any of its places has an
 agent, and stays running as every session's server does.
+
+A name no stream's word gives is refused before the multiplexer or a
+window is asked anything, naming each stream's sessions, so a mistyped
+name starts no stray session:
+
+```console
+$ flume open work-desing
+refused: no stream's word gives a session work-desing; each stream's sessions: the stream default gives the terminal's own, opened by no name; the stream office gives office; the stream work gives work and work-design
+```
+
+A stream's name that is not one of its sessions' is refused the same
+way, naming the session it does give. A session two streams' words
+give, as two streams naming one `session`, is refused naming both, and
+a launch's session, which no stream's word gives, is not opened.
 
 A stream's `view` is `terminal` unless the stream or the host names
 `app`. The view `terminal` is a window of a terminal app running the
@@ -302,9 +359,11 @@ refuses its open, saying so.
 
 ### Filing a window by its title
 
-A window carries its stream's `title`, else the stream's name. A window
-manager that places windows by a rule on their title files each
-stream's window where you keep it. Match the stream's title within the
+A window on a stream's own session carries its stream's `title`, else
+the stream's name. A window on a session the stream names for a kind or
+a stage carries the session's name, so it files apart from the
+stream's own. A window manager that places windows by a rule on their
+title files each window where you keep it. Match the stream's title within the
 whole title, since Terminal.app may add to it.
 
 flume keeps nothing of a window. Each asking opens a window of its own,
