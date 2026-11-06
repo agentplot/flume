@@ -69,8 +69,10 @@ flume's meaning alone. Then on the user's answers of 2026-11-06: cards
 are written by code, never by an agent, and no construction agent
 writes a card or an Inbox message; Pending You and the Inbox together,
 the user's question a Pending You card that links to a thread in the
-partition's Inbox when it needs elaboration; and an answer reaches
-whoever asked, never a session the user picks. It builds nothing until
+partition's Inbox when it needs elaboration, the instruction for
+crew's design too, so crew's cards stay on Pending You for good, raised
+by its code; and an answer reaches whoever asked, never a session the
+user picks. It builds nothing until
 the user has read it. Its tasks are the build that follows.
 
 - **The decision.** Record 0039, written to the rulings. An address is
@@ -91,8 +93,10 @@ the user has read it. Its tasks are the build that follows.
   elaboration's named agent, there while the user talks. Where each
   partition's Inbox runs is swancloud's design
   `the-plannotator-inbox-runs-on-deneb-for-the-users-devices`. No
-  construction agent writes a card or an Inbox message, and crew's own
-  cards stay as they are.
+  construction agent writes a card or an Inbox message. crew's cards
+  stay on Pending You for good, crew's rail of decisions, raised by its
+  code, each linking a thread in the partition's Inbox when it needs
+  elaboration.
 - **An address is a role of a stream.** `<stream>/<role>`: the role a
   source declares for a stream the host declares (143). `madswan/ops`
   is ops of the stream `madswan`. A role's run runs in its address's
@@ -175,7 +179,9 @@ the user has read it. Its tasks are the build that follows.
     flume's facts, once under its key, with a thread where it needs
     talk; `crew _answered` carrying the card's answer to the place as
     its retry with the key; the follower reading each role's threads as
-    its address and closing each card whose place no longer waits;
+    its address and closing each card whose place no longer waits; a
+    role's own question raised by its code on its rail, as its six
+    cards are, Pending You staying crew's rail for good;
     each brief's part of the routing, a role writing no card and, in the
     Inbox, only as its address; the operator behind every stall of its
     stream; `crew answer` carrying the key and taking any place; roles.7

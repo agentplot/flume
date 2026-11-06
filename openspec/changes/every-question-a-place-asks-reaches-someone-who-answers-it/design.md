@@ -76,7 +76,9 @@ and, past a bound, the stream's door:
    address, whose replies reach the role by crew's follower whichever
    session holds it, or by an elaboration's named agent, there while
    the user talks. No construction agent writes a card or an Inbox
-   message, and crew's own cards stay as they are (decision 10).
+   message. crew's cards stay on Pending You for good, crew's rail of
+   decisions, raised by its code, each linking a thread in the
+   partition's Inbox when it needs elaboration (decision 10).
 
 What remains of the host is crew declared as a source, the lock of
 crew's kinds, and its streams with their room. Each is the host's own:
@@ -330,7 +332,10 @@ deneb runs).
 2026-11-06: "We are trying to use Pending You and Inbox together, not
 as alternatives ... I almost think that everything will be a card in
 Pending You and then, when appropriate, there would be a thread in the
-inbox."
+inbox." And, the same day, when the orchestrator took that for its own
+work alone: "that's the instruction for you but it's also the instruction for the design of crew". So crew's cards stay on Pending You for good,
+crew's rail of decisions, raised by its code, a card linking a thread
+in the partition's Inbox when it needs elaboration.
 
 **Pending You** (0.39.0 as the host gives it) holds cards, each asked in
 an assistant's name, its `sessionLabel`, under an idempotency key of
@@ -552,9 +557,10 @@ its name.
   their partitions move them (decision 11.5).
 - sluice's own outcomes, which are not questions. They stay sluice's
   (decision 12.2; Found beside).
-- Changing crew's own cards: its six, a role's own question, and the
-  follower's Pending You notice that runs `crew _answered` for them stay
-  as they are.
+- Moving crew's rail off Pending You. crew's cards stay there for good,
+  raised by its code, and the follower's Pending You notice runs `crew
+  _answered` for them. What crew changes of its rail, a role's own
+  question raised by its code and a card's thread, is crew's (12.3).
 - Designing the elaboration kind, which is sounding's (capture design;
   crew's record 0019). This design says only what a question's thread
   asks of one.
@@ -1196,9 +1202,9 @@ turn, briefs and code, and for any source's own answering kind.
 | who | a card | an Inbox message |
 |---|---|---|
 | A construction kind's agent: every stage of a change, a fix, a chore or a plan | never | never. It asks by `flume needs` alone (decision 4) |
-| A role's run | never. It says a place's question is the user's by `crew question`, and crew's code raises the card. A role's own question stays as crew has it (briefs.11) | in a question's thread, as its address, never as its run's session |
+| A role's run | never. It says a place's question is the user's by `crew question`, and crew's code raises the card. A role's own question is raised by crew's code too, on its rail (12.3) | in a question's thread, as its address, never as its run's session |
 | An elaboration's agent, while open | never | in its own thread, as a named agent, there when the user answers |
-| crew's code | a place's question's card, and crew's own six (briefs.13) | a question's thread's first message, where the question needs talk |
+| crew's code | a place's question's card, crew's own six (briefs.13), and a role's own question's | a question's thread's first message, where the question needs talk |
 
 A construction agent is kept to `flume needs` in two ways. flume's way
 to stop short says so (decision 4). The host's layers give the Inbox's
@@ -1525,8 +1531,9 @@ Rejected:
   question`, once; briefs.11: a place's question is put to the user by
   `crew question` alone, never on a card or in the Inbox in a role's own
   words, and a role writes in the Inbox only as its address, with its
-  address as `agent_name`. A role's own questions, and crew's six
-  cards, stay as they are.
+  address as `agent_name`. A role's own questions are cards crew's code
+  raises on its rail, as its six are, each linking a thread in the
+  partition's Inbox where it needs elaboration.
 - **The records and rules**: roles.7 holds again as written, since flume
   wakes a role. The change `roles-run-as-flume-kinds` Decisions 1, 3 and
   6, and its departure from roles.7, give way. Record 0049 part 1 holds,
@@ -1609,7 +1616,7 @@ So serving is a stop-gap for the time between moves, and is left out.
 | Carrying the user's answer on the card to the place | crew's code, run by Pending You's notice, and the runner's retry | flume takes it once (42, 49) |
 | A question's thread, where it needs talk | the role as its address, or an elaboration's named agent while open | the Inbox of the stream's partition, where swancloud's design runs it |
 | Carrying a reply in a role's thread to the role | crew's follower, as an ask, and the runner's wake | Plannotator offers no watch (decision 10) |
-| crew's own cards, and carrying their answers | crew's code, Pending You and the follower's notice running `crew _answered` | as they are |
+| crew's rail of decisions: its cards, raised by its code, and carrying their answers | crew's code, on Pending You for good, and the follower's notice running `crew _answered` | a card links a thread in the partition's Inbox where it needs elaboration |
 | Which agents get the Inbox's and Pending You's tools | the host's layers (32, 195): an elaboration kind's agents alone | flume's way to stop short says a stop-short is the one way to ask (28) |
 | Taking an answer once | flume (42, 49) | `crew answer`, `crew _answered` and the runner carry the key |
 
@@ -2023,13 +2030,15 @@ is Found beside.
     code, not done by agents". A role writes in the Inbox only in a
     question's thread, as its address's identity `crew:<stream>-<role>`,
     with its address as `agent_name`. A role's own questions, at most two
-    open at a time, and crew's six cards stay as they are.
+    open at a time, are cards crew's code raises on its rail, as its six
+    are, each linking a thread in the partition's Inbox where it needs
+    elaboration, on the user's word of 2026-11-06: "that's the instruction for you but it's also the instruction for the design of crew".
 - **`crew question <place> <key> [--talk]`**, a command of crew's code,
   as 11.2 has it: the question read from flume, one card built from its
   facts in `cards.py` and raised once under its key in the role's name,
   and, with `--talk`, the place's thread, the role's or an
   elaboration's, linked from the card. Record 0031 and briefs.13 gain
-  the question's card beside the six, built from facts as they are.
+  the question's card beside the six, built from facts as the six are.
 - **`crew _answered`**: a question's card's answer written as the
   request `Act: retry` with `Answers:` and the user's words, and no ask
   of a role; a message on the card, and every other card, as today.
@@ -2243,12 +2252,11 @@ each partition its own (decision 10, *Which Inbox*).
   door says once by `crew question` that a stalled question is the
   user's, on the user's word of 2026-11-05 (decision 10), and 12.3
   amends the brief.
-- **The user's word of 2026-11-06 that crew's card integration is code,
-  not agents', and crew's `cards.py`**, which has a role's own question
-  go through Pending You's tools in its session. This design keeps a
-  place's question to crew's code and leaves a role's own question as
-  crew has it, as the user's word that crew's own cards stay as they are
-  asks.
+- **The user's words of 2026-11-06 that crew's card integration is
+  code, not agents', and that this is the instruction for crew's design
+  too, and crew's `cards.py`**, which has a role's own question go
+  through Pending You's tools in its session. 12.3 brings a role's own
+  question onto crew's code, on its rail.
 - **Clause 41 has a stage's agent ask by its stop-short**, and
   Plannotator's prompt hook tells every session on deneb, a flume
   stage's agent among them, to send a decision to the Inbox. Decision 4
