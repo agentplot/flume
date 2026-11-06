@@ -107,6 +107,50 @@ pub struct Settings {
     /// before (32, 107).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
+    /// Each program's own settings as the layer gave them, by the
+    /// program's name, the agent's taken by its program's alone; none
+    /// where the layer gives none, and in settings written before (195).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub programs: BTreeMap<String, ProgramSettings>,
+}
+
+/// One program's own settings as one table of a layer gives them, each
+/// key in the program's own words and never flume's: a settings file the
+/// table names, and keys it gives inline, which come before the file's
+/// (195).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProgramSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<NamedFile>,
+    /// The keys given inline, each a top-level key of the program's
+    /// settings with its value as written.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub settings: BTreeMap<String, serde_json::Value>,
+}
+
+impl ProgramSettings {
+    /// Whether the table gives the program nothing, no file and no key.
+    pub fn is_empty(&self) -> bool {
+        self.file.is_none() && self.settings.is_empty()
+    }
+}
+
+/// A settings file a layer names for a program, as read where its layer
+/// lives: its path as the layer wrote it and as it was read, its
+/// top-level keys as read, and the keys the program's profile reserves,
+/// left out of them unread, each by its path alone (195).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedFile {
+    /// The path as its layer wrote it, `~/` or relative among them.
+    pub written: String,
+    /// The path it was read at.
+    pub read: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub keys: BTreeMap<String, serde_json::Value>,
+    /// Each reserved key left out of `keys`, a nested one by its path,
+    /// `permissions.defaultMode`, and never its value.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<String>,
 }
 
 /// flume's four modes, which mean the same on every program (169).
@@ -265,7 +309,9 @@ pub const SET: &str = "<set>";
 impl Settings {
     /// These settings with `over`'s fields set over them, field by field,
     /// each taken whole: a mode's table of programs is never merged with
-    /// another's (32, 169).
+    /// another's (32, 169). Own settings are taken whole too, `over`'s
+    /// where they give any: folding them key by key, each table's file
+    /// kept beneath its own keys, is the core's (195).
     pub fn under(&self, over: &Settings) -> Settings {
         Settings {
             program: over.program.clone().or_else(|| self.program.clone()),
@@ -277,6 +323,11 @@ impl Settings {
             beside: over.beside.clone().or_else(|| self.beside.clone()),
             mode: over.mode.clone().or_else(|| self.mode.clone()),
             session: over.session.clone().or_else(|| self.session.clone()),
+            programs: if over.programs.is_empty() {
+                self.programs.clone()
+            } else {
+                over.programs.clone()
+            },
         }
     }
 }
@@ -306,18 +357,24 @@ impl KindSettings {
 }
 
 /// Where a setting an agent started with came from, the first of the
-/// six that gave it, or for an environment variable its account (32, 56,
-/// 144).
+/// eight that gave it, or for an environment variable its account (32,
+/// 56, 144).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Layer {
     /// The launch's settings (7).
     Launch,
-    /// The host's configuration for the place's repository and kind.
+    /// The host's configuration for the place's repository: for its
+    /// kind, and for every kind (195).
     HostRepository,
     /// The host's configuration for the kind.
     HostKind,
-    /// The repository's settings for a kind it does not declare.
+    /// The host's configuration for the place's stream (143).
+    HostStream,
+    /// The host's configuration for every agent.
+    Host,
+    /// The repository's settings: for a kind it does not declare, and for
+    /// every kind (195).
     Repository,
     /// The kind's declaration (23).
     Kind,
@@ -335,6 +392,8 @@ impl Layer {
             Layer::Launch => "launch",
             Layer::HostRepository => "host-repository",
             Layer::HostKind => "host-kind",
+            Layer::HostStream => "host-stream",
+            Layer::Host => "host",
             Layer::Repository => "repository",
             Layer::Kind => "kind",
             Layer::Default => "default",
@@ -350,11 +409,30 @@ impl std::fmt::Display for Layer {
 }
 
 /// One setting's layer and its value as that layer wrote it, before an
-/// account value's `~` and variables are read (32, 56).
+/// account value's `~` and variables are read, an own setting's as JSON
+/// (32, 56, 195).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Given {
     pub layer: Layer,
     pub value: String,
+    /// For an own setting a layer's named file gave, the file as it was
+    /// read; none for every other setting, and in a start written before
+    /// (195).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+}
+
+/// A settings file a layer named for an agent's program, as its start
+/// took it: its layer, its path as the layer wrote it and as it was read,
+/// and each key its program's profile reserves, left out of it unread,
+/// by its path alone (195).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnFile {
+    pub layer: Layer,
+    pub written: String,
+    pub read: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<String>,
 }
 
 /// `from` with the value of every environment variable, `env.<NAME>`,
@@ -372,6 +450,7 @@ pub fn unvalued_from(from: &BTreeMap<String, Given>) -> BTreeMap<String, Given> 
                 Given {
                     layer: given.layer,
                     value,
+                    file: given.file.clone(),
                 },
             )
         })
@@ -513,6 +592,11 @@ pub enum KindsRead {
         /// by the kind's name (32, C.2).
         #[serde(default)]
         settings: BTreeMap<String, KindSettings>,
+        /// The settings the repository gives every kind run in it, its
+        /// own among them, by its `[agents]`; none where it gives none,
+        /// and in a read written before (32, 195, C.2).
+        #[serde(default)]
+        agents: Settings,
     },
     CouldNotRead {
         reason: String,

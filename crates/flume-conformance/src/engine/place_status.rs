@@ -13,8 +13,8 @@ use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, ta
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
-    AccountStatus, Act, Answer, Cache, ModeStatus, MoveStatus, PlaceStatus, PoolStatus, Retry,
-    WaitingOn, Waits,
+    AccountStatus, Act, AgentStatus, Answer, Cache, ModeStatus, MoveStatus, PlaceStatus,
+    PoolStatus, Retry, WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -166,6 +166,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_start_in_another_mode,
         },
         Scenario {
+            name: "status: an agent's own settings give each key with its layer and its file, how its profile passed them and that they were not read back, in the JSON form",
+            cites: &["S100", "56", "32", "143"],
+            run: own_settings_from_three_layers,
+        },
+        Scenario {
+            name: "status: an agent's own settings name each file with the keys left out of it and their owners, and no value of either",
+            cites: &["S100", "195", "56", "29"],
+            run: own_settings_left_out_of_a_file,
+        },
+        Scenario {
+            name: "status: an agent's own settings name nothing of another program's entry",
+            cites: &["195", "56", "32"],
+            run: own_settings_of_another_program,
+        },
+        Scenario {
             name: "status: a place of a host's source's kind gives its identity, declared host, and where it came from: the source, its file, the kind's directory, its hash and the host's lock",
             cites: &["19", "56", "191"],
             run: a_kind_of_a_hosts_source,
@@ -206,6 +221,143 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_bare_agent_left,
         },
     ]
+}
+
+/// A fix in the stream `work`, its agent given own settings from the
+/// host's table for `work`, the host's file for every agent and the
+/// repository, the fake taking them by a file and reserving `env` and
+/// `perms.mode`; its agent's status and the same in the JSON form.
+fn own_settings_in_work(world: &World) -> Result<(AgentStatus, serde_json::Value), String> {
+    use super::own_settings::{by_file, inline, HOST_FILE};
+    use serde_json::json;
+    world.agent.take_own();
+    world.agent.reserve("env", "the account");
+    world.agent.reserve("perms.mode", "flume's mode");
+    world.host.set_stream("work", Some(Stream::default()));
+    let mut every = by_file(
+        "agent",
+        HOST_FILE,
+        json!({
+            "tips": true,
+            "env": { "PEOPLE": "people-only" },
+            "perms": { "mode": "full-for-people", "allow": ["a"] },
+        }),
+        json!({}),
+    );
+    every
+        .programs
+        .extend(inline("other", json!({ "line": "b" })).programs);
+    world.host.set_every_agent(every);
+    world
+        .host
+        .set_stream_settings("work", inline("agent", json!({ "line": "work" })));
+    world.kinds.set_settings(
+        REPOSITORY,
+        "fix",
+        for_every_stage(inline("agent", json!({ "style": "plain" }))),
+    );
+    launched(&world.engine.launch(&Launch {
+        stream: Some("work".into()),
+        ..launch("fix", "one", Some("mend it"))
+    }))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let status = world.status(&id)?;
+    let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+    Ok((status.agent.ok_or("no agent")?, json["agent"].clone()))
+}
+
+fn own_settings_from_three_layers(_: &()) -> Outcome {
+    use super::own_settings::HOST_FILE;
+    use serde_json::json;
+    let world = World::new();
+    let (agent, json) = own_settings_in_work(&world)?;
+    let from =
+        |key: &str| json["settings"]["from"][format!("programs.agent.settings.{key}")].clone();
+    ensure_eq!(
+        from("line"),
+        json!({ "layer": "host-stream", "value": r#""work""# }),
+        "line"
+    );
+    ensure_eq!(
+        from("tips"),
+        json!({ "layer": "host", "value": "true", "file": HOST_FILE }),
+        "tips"
+    );
+    ensure_eq!(
+        from("style"),
+        json!({ "layer": "repository", "value": r#""plain""# }),
+        "style"
+    );
+    let own = agent.own.ok_or("no own settings")?;
+    let file = flume_fakes::FakeAgent::own_file(
+        &world.store.folder(&World::id("fix", "one")),
+        &World::identity("fix", "one", "code", 1),
+    );
+    ensure_eq!(
+        own.passed,
+        Some(format!("--own {file}")),
+        "how they were passed"
+    );
+    ensure!(!own.read_back, "own settings read back");
+    ensure_eq!(json["own"]["read_back"], json!(false), "read_back as JSON");
+    ensure_eq!(
+        json["settings"]["programs"]["agent"]["settings"],
+        json!({ "line": "work", "tips": true, "style": "plain", "perms": { "allow": ["a"] } }),
+        "the keys the agent's settings give"
+    );
+    Ok(())
+}
+
+fn own_settings_left_out_of_a_file(_: &()) -> Outcome {
+    use super::own_settings::HOST_FILE;
+    use serde_json::json;
+    let world = World::new();
+    let (agent, json) = own_settings_in_work(&world)?;
+    let own = agent.own.ok_or("no own settings")?;
+    ensure_eq!(
+        own.files
+            .iter()
+            .map(|file| (file.layer, file.read.as_str(), file.left_out.clone()))
+            .collect::<Vec<_>>(),
+        vec![(
+            Layer::Host,
+            HOST_FILE,
+            vec![
+                Reserved {
+                    key: "env".into(),
+                    owner: "the account".into(),
+                },
+                Reserved {
+                    key: "perms.mode".into(),
+                    owner: "flume's mode".into(),
+                },
+            ],
+        )],
+        "the file and the keys left out of it"
+    );
+    ensure_eq!(
+        json["own"]["files"][0]["left_out"][1],
+        json!({ "key": "perms.mode", "owner": "flume's mode" }),
+        "a key left out as JSON"
+    );
+    let text = json.to_string();
+    ensure!(
+        !text.contains("people-only") && !text.contains("full-for-people"),
+        "a value left out in status: {text}"
+    );
+    Ok(())
+}
+
+fn own_settings_of_another_program(_: &()) -> Outcome {
+    let world = World::new();
+    let (_, json) = own_settings_in_work(&world)?;
+    let text = json.to_string();
+    ensure!(
+        !text.contains("programs.other") && json["settings"]["programs"].get("other").is_none(),
+        "another program's entry in status: {text}"
+    );
+    Ok(())
 }
 
 fn a_kind_of_a_hosts_source(_: &()) -> Outcome {
@@ -450,6 +602,7 @@ fn a_tables_entry(_: &()) -> Outcome {
         Some(&Given {
             layer: Layer::Launch,
             value: r#"{ agent = "careful", other = "edits" }"#.into(),
+            file: None,
         }),
         "the mode as written and its layer"
     );

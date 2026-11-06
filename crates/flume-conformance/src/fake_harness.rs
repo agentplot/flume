@@ -2,7 +2,7 @@
 //! scenarios a profile does (106).
 
 use crate::seams::{
-    agent::{AgentHarness, CarryAccounts, LiveSessions, Modes},
+    agent::{AgentHarness, CarryAccounts, LiveSessions, Modes, OwnWay},
     change::ChangeHarness,
     history::HistoryHarness,
     kinds::{KindsHarness, SourceDir},
@@ -354,6 +354,9 @@ pub struct FakeAgentHarness {
     /// read a running session, or leaves it carrying none and reading none,
     /// as a profile that keeps the seam's defaults (179, 207).
     carries: bool,
+    /// How the harness scripted the fake to take own settings, by
+    /// [`fake_own`], or left it keeping the seam's defaults (195, 196).
+    own: OwnWay,
 }
 
 impl FakeAgentHarness {
@@ -367,6 +370,59 @@ impl FakeAgentHarness {
         harness.agent.live_not_read();
         harness
     }
+
+    /// The fake left taking no own settings and reserving no key, as a
+    /// profile that keeps the seam's defaults (195, 196).
+    pub fn taking_no_own() -> Self {
+        let host = Arc::new(FakeHost::default());
+        let terminal = Arc::new(FakeTerminal::new(host.clone()));
+        FakeAgentHarness {
+            agent: scripted(FakeAgent::new(terminal.clone()), &OwnWay::default()),
+            terminal,
+            host,
+            carries: true,
+            own: OwnWay::default(),
+        }
+    }
+}
+
+/// The fake agent's own settings the seam's scenarios run with: taken by
+/// a file, `env` reserved for the account and `permissions.default`, by
+/// its path, for flume's mode (195, 196).
+pub fn fake_own() -> OwnWay {
+    OwnWay {
+        takes: true,
+        reserved: vec![
+            Reserved {
+                key: "env".into(),
+                owner: "the account, whose env is an agent's whole environment".into(),
+            },
+            Reserved {
+                key: "permissions.default".into(),
+                owner: "flume's mode".into(),
+            },
+        ],
+    }
+}
+
+/// `agent` scripted with [`fake_modes`], reading the mode back, and
+/// taking own settings as `own` says (161, 169, 195).
+fn scripted(agent: FakeAgent, own: &OwnWay) -> FakeAgent {
+    let modes = fake_modes();
+    for (mode, value) in &modes.four {
+        agent.map_mode(*mode, value);
+    }
+    for value in &modes.own {
+        agent.own_mode(value);
+    }
+    agent.read_mode_back();
+    if own.takes {
+        agent.take_own();
+    }
+    for Reserved { key, owner } in &own.reserved {
+        agent.reserve(key, owner);
+    }
+    agent
 }
 
 /// The fake agent's map of modes the seam's scenarios run with: each of
@@ -386,24 +442,17 @@ pub fn fake_modes() -> Modes {
 
 impl Default for FakeAgentHarness {
     /// The fake agent scripted with [`fake_modes`], reading the mode
-    /// back (161, 169).
+    /// back, and with [`fake_own`] (161, 169, 195).
     fn default() -> Self {
         let host = Arc::new(FakeHost::default());
         let terminal = Arc::new(FakeTerminal::new(host.clone()));
-        let agent = FakeAgent::new(terminal.clone());
-        let modes = fake_modes();
-        for (mode, value) in &modes.four {
-            agent.map_mode(*mode, value);
-        }
-        for value in &modes.own {
-            agent.own_mode(value);
-        }
-        agent.read_mode_back();
+        let own = fake_own();
         FakeAgentHarness {
-            agent,
+            agent: scripted(FakeAgent::new(terminal.clone()), &own),
             terminal,
             host,
             carries: true,
+            own,
         }
     }
 }
@@ -560,6 +609,28 @@ impl AgentHarness for FakeAgentHarness {
             session: "s-1".into(),
             reaches_none: home("/scratch/agent-work-3"),
         })
+    }
+
+    fn own_way(&self) -> OwnWay {
+        self.own.clone()
+    }
+
+    /// The JSON object of the file the command names by `--own`, read
+    /// from the files it lists; an empty one where it lists no such file,
+    /// and none where it names none (196).
+    fn own_passed(&self, command: &AgentCommand) -> Option<BTreeMap<String, serde_json::Value>> {
+        let file = command
+            .args
+            .iter()
+            .skip_while(|arg| *arg != "--own")
+            .nth(1)?;
+        Some(
+            command
+                .files
+                .get(file)
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default(),
+        )
     }
 }
 

@@ -1,15 +1,15 @@
 ---
 title: Agent settings
-description: The settings each agent starts with and the six layers they come from; the mode an agent may act in; the streams a host runs its places in, the pools of accounts its agents run under, each account's reading of its allowance and its pool's threshold, and how a start is checked against what it was given.
+description: The settings each agent starts with and the eight layers they come from; the mode an agent may act in; its program's own settings, a people's settings file and a commit's tagline among them; the streams a host runs its places in, the pools of accounts its agents run under, each account's reading of its allowance and its pool's threshold, and how a start is checked against what it was given.
 sidebar:
   order: 6
 ---
 
-Each agent flume starts runs with five settings, resolved at its start
-from six layers, and under an account of a pool when the host names
-one. The account gives the agent its environment. `flume status` gives
-each setting of the current agent with the layer it came from, and the
-account with what chose it.
+Each agent flume starts runs with five settings and its program's own
+settings, resolved at its start from eight layers, and under an account
+of a pool when the host names one. The account gives the agent its
+environment. `flume status` gives each setting of the current agent
+with the layer it came from, and the account with what chose it.
 
 ## The settings
 
@@ -20,43 +20,64 @@ account with what chose it.
 | `instructions` | text appended to the agent's system prompt, written to a file of the start's own and passed as `--append-system-prompt-file`, so it may hold newlines |
 | `beside` | a pane the agent's pane opens beside, under herdr |
 | `mode` | how far the agent may act in its place without asking a person: one of flume's four modes, or a table of programs ([the mode](#the-mode)) |
+| `programs` | each program's own settings, in that program's words: a settings file and keys given inline ([a program's own settings](#a-programs-own-settings)) |
 
 `program` defaults to `claude`. Every other setting is empty unless a
 layer gives it.
 
-## The six layers
+## The eight layers
 
 Each setting comes from the first of these layers that gives it:
 
 | Layer | Status names it | Where it is written |
 |---|---|---|
 | the launch | `launch` | `flume launch --agent [<stage>.]<field>=<value>` |
-| the host, for a repository and kind | `host-repository` | the host's `[repos."<repository>".kinds.<kind>.agents]` |
+| the host, for a repository | `host-repository` | the host's `[repos."<repository>".kinds.<kind>.agents]`, then its `[repos."<repository>".agents]` for every kind |
 | the host, for a kind | `host-kind` | the host's `[kinds.<kind>.agents]` |
-| the repository | `repository` | the repository's `[kinds.<kind>.agents]`, for a kind it does not declare |
+| the host, for a stream | `host-stream` | the host's `[agents.streams.<stream>]`, for the place's stream |
+| the host, for every agent | `host` | the host's `[agents]` |
+| the repository | `repository` | the repository's `[kinds.<kind>.agents]`, for a kind it does not declare, then its `[agents]` for every kind |
 | the kind | `kind` | the kind's own `agents` table and its stage's agent table |
 | flume's default | `default` | the program `claude`, and nothing else |
 
 Within a layer, a stage's own setting, in a further `.stages.<stage>`
 table, or `--agent <stage>.<field>=<value>` at the launch, comes before
 one given for every stage. In the kind's layer, a stage's own agent
-table comes before the kind's `agents` table. Each setting is taken
-whole from the first layer that gives it.
+table comes before the kind's `agents` table. In a repository's two
+layers, the tables for one kind come before the table for every kind.
+Each setting is taken whole from the first layer that gives it, and a
+program's own settings key by key ([key by key](#key-by-key)).
 
-The host's two layers give `model`, `instructions` and `mode` alone,
-and flume reads no other key of those tables. `beside` comes only from the launch
-and the kind, since where a pane opens is the caller's to say or the
-kind's to need. No layer gives an environment: an agent's environment
-is its account's ([the environment](#the-environment)).
+The host's layers give `model`, `instructions`, `mode` and `programs`,
+and never a program, since the host chooses a program by the accounts
+it pools. flume reads no other key of a host's kind tables. Its tables
+for a stream, for every agent and for all of a repository's kinds name
+no stage, since a stage's name is its kind's. Each refuses a `program`,
+an `env`, a `beside` or a `stages` table, naming the table and the key
+([what refuses](/flume/reference/configuration/#what-refuses)).
+`beside` comes only from the launch and the kind, since where a pane
+opens is the caller's to say or the kind's to need. No layer gives an
+environment: an agent's environment is its account's ([the
+environment](#the-environment)).
+
+The host's layers come before the repository's and the kind's, so a
+host that gives a setting has the last word on its agents. Among them,
+the tables for a repository and for a kind name the work and where it
+lands. A stream's names the share of the host the work runs in, and
+`[agents]` names nothing, so those two come after. A host that wants
+one repository to differ from its default gives that repository's
+table.
 
 ### When each layer is read
 
 The host's layers are read from its configuration as it stands at each
-agent's start. Change a model in the host's file and retry a stage, and
-the next agent runs on the new model, with no new launch. A mode changed
-the same way reaches the next agent's start the same way. Every other
-layer is what the launch read: a place keeps its launch's settings, its
-repository's and its kind's for its whole life.
+agent's start, and so is every file they name. Change a model in the
+host's file and retry a stage, and the next agent runs on the new model,
+with no new launch. A mode or a program's own setting changed the same
+way reaches the next agent's start the same way. Every other layer is
+what the launch read: a place keeps its launch's settings, its
+repository's and its kind's for its whole life. It keeps every file
+they name as the launch read it too.
 
 ## At the launch
 
@@ -65,19 +86,31 @@ flume launch --kind change --name csv-export --brief "Export the ledger as CSV."
   --agent model=sonnet \
   --agent verify.model=opus \
   --agent code.instructions="Run the tests before every commit." \
-  --agent code.mode=edits
+  --agent code.mode=edits \
+  --agent code.programs.claude.settings.tui=fullscreen
 ```
 
-The field is one of `program`, `model`, `instructions`, `beside` and
-`mode`, with an optional stage before it. A setting for a stage the
-kind does not hold refuses the launch, naming the stage, and so does a
-field that is none of the five.
+The field is one of `program`, `model`, `instructions`, `beside`,
+`session`, `mode` and `programs`, with an optional stage before it. A
+setting for a stage the kind does not hold refuses the launch, naming
+the stage, and so does a field that is none of these.
 
 `mode=<mode>` gives one of flume's four modes. `mode.<program>=<value>`
 gives one entry of a table of programs, and several such entries build
 one table: `--agent mode.claude=auto`. A mode word and a table for the
 same stage, or for every stage, refuse the launch naming both, since a
 mode is one word or one table.
+
+`programs.<program>.settings.<key>=<value>` gives one of a program's
+own settings ([a program's own settings](#a-programs-own-settings)).
+Its value is read as JSON where it parses as JSON, and as the text
+written otherwise: `tui=fullscreen` gives a string, and
+`statusLine={"type":"command","command":"line"}` a table. Several build
+one entry. A key is given whole by its top-level name, so a nested one,
+as `permissions.allow`, refuses the launch, and so does one key given
+twice for one stage. `programs.<program>.file=<path>` names a settings
+file, relative to the command's working directory, read once at the
+launch.
 
 ## On the host
 
@@ -102,6 +135,30 @@ home. Settings for a kind or a stage the place does not run are
 ignored. Each agent runs under whichever account its stage's pool
 gives.
 
+The host also gives settings to every agent it runs, by `[agents]`, to
+every agent of one stream, by `[agents.streams.<stream>]`, and to every
+kind in one repository, by `[repos."<repository>".agents]`:
+
+```toml
+[agents]
+model = "haiku"
+
+[agents.streams.personal]
+model = "sonnet"
+
+[repos."~/src/acme".agents]
+instructions = "Every commit in this repository names its ticket."
+```
+
+With the tables above, an agent of any kind the host names no model for
+runs on haiku, or on sonnet in the `personal` stream. Every change
+still runs on opus and every fix on sonnet, since the host's table for
+a kind comes before its table for a stream. Every agent of every kind
+in acme gets acme's instructions, but a fix there, whose own table for
+acme comes first, gets that table's instructions in their place. A
+stream's table names a stream the host declares, or `default`, and one
+naming another refuses the configuration.
+
 ### Two layers
 
 The host's configuration is two files read as one. `config.toml` is
@@ -118,8 +175,14 @@ The local layer sets only what runs the host's work from hour to hour:
   `reserve` and `keep_free`;
 - the `stream` and the `label` a repository's kind, a repository or a
   kind is given;
-- a kind's agents tables, `[kinds.<kind>.agents]` and
+- every agents table of the host's, `[agents]`,
+  `[agents.streams.<stream>]`, `[kinds.<kind>.agents]`,
+  `[repos."<repository>".agents]` and
   `[repos."<repository>".kinds.<kind>.agents]`, with their stages'.
+  Each setting of one is a key of its own, and so is each of a
+  program's own settings and each program's `file`. So the local layer
+  replaces one own setting, or names another file, and keeps the
+  managed layer's other keys.
 
 The accounts, the pools, a stream's `pool`, `view`, `terminal_app` and
 `title`, `[host]` and `[roles]` are the managed layer's alone. A local
@@ -170,6 +233,28 @@ instructions = "Check every scenario of the change's specs, not only its tasks."
 A declaration gives no environment: an `env` in any agents table of a
 repository's file or a launch's declaration refuses the launch, naming
 the field. What a host's agents run under is that host's to say.
+
+The repository's `[agents]`, flume's own table beside `[profiles]` and
+no part of any kind, gives settings to every agent of every kind the
+repository runs, its own kinds and flume's:
+
+```toml
+[agents]
+model = "sonnet"
+
+[kinds.change.agents.stages.verify]
+model = "opus"
+```
+
+Here every agent working in the repository runs on sonnet but a
+change's verify, which runs on opus, since the repository's table for a
+kind comes before its table for every kind. `[agents]` gives `program`,
+`model`, `instructions`, `mode` and `programs`, and comes before a kind
+the repository declares, as the repository's layer comes before the
+kind's. A repository whose own kind should differ on a key leaves the
+key out of `[agents]` and gives it in each kind's table. A `stages`, a
+`streams`, an `env` or a `beside` in `[agents]` refuses the launch,
+naming the field. A launch's declaration is not read for it.
 
 ## The mode
 
@@ -267,6 +352,336 @@ someone watches. Claude Code warns before an account's first session in
 accept it once yourself under the account, as
 `CLAUDE_CONFIG_DIR=~/.claude-work-1 claude --permission-mode
 bypassPermissions`, before its agents run `full`.
+
+## A program's own settings
+
+An agent program has settings of its own beyond the five flume gives,
+such as Claude Code's status line, its renderer, its hooks and its
+tools' permissions. Every layer may give them, under `programs`, a
+table of programs. Each entry is named for a program, and gives that
+program's `file`, a settings file in the program's own words, its
+`settings`, keys as the program spells them, or both:
+
+```toml
+[agents.programs.claude]
+file = "~/.config/agent-launcher/claude-settings.json"
+
+[agents.programs.claude.settings]
+tui = "fullscreen"
+statusLine = { type = "command", command = "~/.config/flume/status-line.sh" }
+```
+
+Any other key of an entry refuses its table, naming the key and saying
+a program's own settings go under `settings`. A program's keys sit one
+level down, so none collides with `file`. A program's name is the last
+part of the path a stage's `program` names, `claude` for Claude Code.
+Only the entry for the agent's program reaches the agent, so an entry
+for another program never reaches Claude Code, and flume translates
+nothing from one program's words to another's.
+
+TOML's strings, numbers, booleans, arrays and tables are held as JSON.
+A TOML date or time refuses its table, naming the key: give it as a
+string.
+
+### A file a layer names
+
+`file` names a file whose top level is a table of the program's
+settings, read as JSON where its name ends `.json` and as TOML where it
+ends `.toml`. Its keys lie beneath the entry's `settings`: a key
+`settings` gives is taken from `settings`, and every other key as the
+file gives it. A file that cannot be read, does not parse or holds no
+table at its top, and a name that ends in neither, refuse its table,
+naming the file.
+
+So a host hands its agents the file its people's sessions get, with a
+status line of its own over the file's:
+
+```toml
+[agents.programs.claude]
+file = "~/.config/agent-launcher/claude-settings.json"
+settings = { statusLine = { type = "command", command = "~/.config/flume/status-line.sh" } }
+```
+
+where the file gives:
+
+```json
+{
+  "tui": "fullscreen",
+  "statusLine": { "type": "command", "command": "~/.config/agent-launcher/status-line.sh" },
+  "hooks": { "Notification": [{ "hooks": [{ "type": "command", "command": "notify-send 'Claude Code'" }] }] },
+  "env": { "EDITOR": "hx" },
+  "permissions": { "allow": ["Bash(git log:*)"], "defaultMode": "bypassPermissions" },
+  "skipDangerousModePermissionPrompt": true
+}
+```
+
+Every agent on this host gets `tui`, `hooks` and `permissions` from the
+file, and `statusLine` from `settings`. It gets `permissions` without
+its `defaultMode`, and no `env` or `skipDangerousModePermissionPrompt`,
+since other settings own those ([keys another setting
+owns](#keys-another-setting-owns)). flume never passes a named file to
+its program as it stands: it passes the keys the layers resolved, in a
+file of the start's own.
+
+Within a layer that names stages, a stage's table, its `settings` over
+its file, comes before the table for every stage, its `settings` over
+its file. In a repository's two layers, a kind's table comes before the
+table for every kind. So a stage's file comes before every stage's
+inline keys.
+
+### Where a file is read
+
+| Layer | `file` names | When it is read |
+|---|---|---|
+| the host's, each of its tables | a file on the host: absolute, under `~/` as your home, or relative to the configuration's own folder, `~/.config/flume/` | with the host's configuration, at each start |
+| the repository's, for one kind and for every kind | a file of the repository, relative to `.config/`, the folder of `.config/flume.toml` | at the launch, at the revision the launch read, as a kind's prompts are |
+| the kind's declaration | a file beside it, relative to the declaration's own folder | at the launch, as its prompts are: at the revision for a repository's kind, from disk for a launch's |
+| the launch | a file on the host, relative to the command's working directory, or absolute | at the launch |
+
+A repository's or a kind's file outside its repository, by `..`, an
+absolute path or a link, refuses the launch. flume reads no `$VAR` in a
+path. A file read at the launch is kept as read, so a commit that
+changes it reaches the next launch, never a place already running. A
+host's file is read again at each start, so a host that changes the
+file its people get changes its next agent's.
+
+**A file that moves.** A host's file may be a link, which flume reads
+where it leads. Where the file a host's people get moves, as one a
+system's rebuild writes at a new path each time, name a link at a path
+that stays. Have whatever writes the file point the link at it.
+Each start then reads the file the link names at that start.
+
+### Key by key
+
+Each top-level key of a program's settings is one setting, taken whole
+from the first layer that gives it, and within a layer from its
+`settings` before its file. flume never merges two layers' values of
+one key. With the host above, a stream's table:
+
+```toml
+[agents.streams.personal.programs.claude.settings]
+statusLine = { type = "command", command = "~/.config/flume/status-line-personal.sh" }
+tui = "default"
+```
+
+gives an agent in `personal` the stream's `statusLine` and `tui`, and
+the file's `hooks` and `permissions`. An agent of any other stream gets
+the file's `tui` and the host's status line.
+
+A layer that changes part of a key's value restates the whole key. A
+stream that keeps the file's permissions and allows one more command
+gives `permissions` whole:
+
+```toml
+[agents.streams.personal.programs.claude.settings]
+permissions = { allow = ["Bash(git log:*)", "Bash(cargo test:*)"] }
+```
+
+No layer removes a key a layer beneath gives, since TOML has no null:
+a layer replaces it. A host that names its people's file and wants none
+of its hooks for its agents gives an empty table, which replaces the
+file's `hooks` whole:
+
+```toml
+[agents.programs.claude]
+file = "~/.config/agent-launcher/claude-settings.json"
+settings = { hooks = {} }
+```
+
+### Nothing given, nothing passed
+
+Where no layer gives the agent's program a key, flume passes it nothing
+and writes no file, and the account's own configuration decides, as it
+decides everything else flume does not give. A host and a repository
+that say nothing change nothing.
+
+Where the layers give keys, the program lays them over its account's
+own configuration and the repository's as it lays its own sources.
+Claude Code takes them by `--settings <file>`: flume writes the agent's
+resolved keys as one JSON object to `own-settings.json`, in the start's
+own folder, readable by your user alone, and names it ([the Claude Code
+plugin](/flume/guides/claude-code/#the-plugin-flume-hands-its-agents)).
+Claude Code reads that file after the user's, the project's and the
+local settings and merges it over them. A key flume passes replaces a
+value beneath it, merges into a table beneath it key by key, and joins
+a list beneath it with the duplicates dropped. Every key flume does not
+pass stays as the account or the repository gives it.
+
+### Keys another setting owns
+
+Claude Code's agent profile reserves the keys of its settings that
+another of flume's settings, the account or a person owns:
+
+| Key | Owned by |
+|---|---|
+| `env` | the account's `env`, which is an agent's whole environment ([the environment](#the-environment)) |
+| `model` | flume's `model` |
+| `permissions.defaultMode` | flume's `mode` ([the mode](#the-mode)) |
+| `apiKeyHelper`, `awsAuthRefresh`, `awsCredentialExport`, `gcpAuthRefresh`, `otelHeadersHelper`, `forceLoginMethod`, `forceLoginOrgUUID` | the account's sign-in |
+| `disableAllHooks` | flume's plugin, whose hooks say an agent started and received its prompt |
+| `skipDangerousModePermissionPrompt`, `skipAutoPermissionPrompt` | a person, who alone accepts the warning each records |
+
+flume treats a reserved key one of two ways:
+
+- **Written in a table's `settings`** or given at the launch, it refuses
+  the launch, or at a later start the stage, naming the key, the
+  program, the layer and its owner. Give it in the setting that owns it.
+- **Given by a named file**, it is left out, unread, and status names it
+  with its file, its layer and its owner. flume takes
+  `permissions.defaultMode` out of `permissions` and keeps the rest of
+  `permissions` as the file gives it. So a people's file that gives an
+  environment, a mode and an acceptance can still be named whole.
+
+The environment a people's file gives reaches an agent only through
+its account's `env`, where status names each variable and never its
+value. Every other key is taken as written, `statusLine`, `tui`,
+`hooks` and `attribution` among them. A hook a layer gives runs beside
+the hooks of flume's plugin, as one of the account's own does. So a
+hook that denies a tool or blocks a stop does so in flume's agents too.
+
+### No credential
+
+A credential goes in the account's `env`, where status names it and
+never shows it, and the program reads it from its environment. flume
+checks every string of a program's own settings, at any depth, inline
+or from a file, once the reserved keys are out of the files and before
+anything holds it. It refuses a string, naming its key's path, its
+layer and its file and never its value, that:
+
+- opens with a token's prefix, such as `ghp_`, `github_pat_`, `glpat-`,
+  `sk-`, `xoxb-`, `AKIA` or `hf_`, followed by sixteen or more letters,
+  digits, `_` or `-`;
+- holds a private key's opening, `-----BEGIN` and `PRIVATE KEY-----`;
+- is a JSON web token;
+- holds, outside any `$VAR` or `${VAR}`, a run of 32 or more letters,
+  digits, `_` and `-` that mixes upper case, lower case and digits;
+- is the value of a key named as a secret, such as `token`, `secret`,
+  `password`, `apiKey` or `Authorization`, and is not empty and names
+  no variable.
+
+So `headers = { Authorization = "Bearer ${API_TOKEN}" }` is taken as
+written, and the program, or the shell it runs a command in, reads the
+variable, while `Bearer abc` there is refused. flume reads no `~` and
+no `$VAR` inside a value. The check reads shapes: a short password of
+no known shape passes it, so keep every credential in the account's
+`env`. A long identifier mixing cases and digits in a command is
+refused too. Move it into a script the command runs.
+
+### Other programs
+
+Claude Code's is the one agent profile that takes a program's own
+settings. Every other program's profile refuses them until its way of
+taking them is built and checked against the release flume pins. A
+stage that runs another program with own settings for it is refused,
+naming the program and the key. An entry for a program no stage runs
+refuses nothing but a value shaped as a credential, and reaches no
+agent.
+
+### Refusals
+
+The launch checks every layer's own settings before it makes anything,
+and refuses whole, where:
+
+- a table or a file cannot be read: the host's configuration then
+  refuses every launch and start, and a repository's or a launch's
+  declaration cannot be read;
+- a table's `settings` or the launch gives a reserved key;
+- a string is shaped as a credential;
+- the agent's profile cannot take the keys resolved for its program.
+
+At each later start, flume checks the host's tables and files as they
+stand then. One changed after the launch leaves the stage refused in
+the same words, starting no agent until a retry. Each refusal names the
+key, the program, the stage or the table, the layer and the file it
+came from, and never a value:
+
+```text
+`programs.claude.settings.apiKeyHelper`, which the layer `host` gives for every agent, is a key `claude`'s agent profile reserves for the account's sign-in: it is given there, and never among a program's own settings
+```
+
+### What status gives
+
+Status gives each of the current agent's own settings as
+`programs.<program>.settings.<key>`, with its layer and the file it
+came from. A value too long for its line prints as `{…}` or `[…]`, and
+the JSON form gives it whole. Under them it names each file a layer
+named for the agent's program, with the keys left out of it and their
+owners. Then it says how the profile passed the settings, and that the
+program does not read them back. A fix in `work` on the host above,
+whose `work` stream gives its own status line, reads:
+
+```text
+  agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude) on the account work-1 of work (from the strategy): working
+    in the session work, the stream's name
+    env.CLAUDE_CONFIG_DIR = <set> (from account)
+    program = claude (from default)
+    programs.claude.settings.hooks = {…} (from host, the file /home/you/.config/agent-launcher/claude-settings.json)
+    programs.claude.settings.permissions = {…} (from host, the file /home/you/.config/agent-launcher/claude-settings.json)
+    programs.claude.settings.statusLine = {…} (from host-stream)
+    programs.claude.settings.tui = "fullscreen" (from host, the file /home/you/.config/agent-launcher/claude-settings.json)
+    the file /home/you/.config/agent-launcher/claude-settings.json (from host)
+      env left out, owned by the account's `env`
+      permissions.defaultMode left out, owned by flume's `mode`
+      skipDangerousModePermissionPrompt left out, owned by a person, who alone accepts the warning it records
+    own settings passed as --settings /home/you/.local/state/flume/places/home%you%.local%share%flume%places%f5f5e14159a8%fix--the-parser-reads-tabs/claude/flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1/own-settings.json
+    own settings not read back
+```
+
+An agent no layer gives its program's own settings shows none of these
+lines.
+
+### What a commit says about who made it
+
+Claude Code adds a `Co-Authored-By` trailer to each commit it makes and
+a `Generated with Claude Code` line to each pull request it writes,
+unless its `attribution` setting says otherwise. Some projects refuse a
+pull request that carries such a line. `attribution` is one of Claude
+Code's own settings, given, checked and passed as every other is.
+
+A host whose fork of another project must carry no tagline says so for
+every kind and every stage run there, in its table for the repository:
+
+```toml
+[repos."~/src/upstream-fork".agents.programs.claude.settings]
+attribution = { commit = "", pr = "", sessionUrl = false }
+```
+
+A repository of the host's own that wants its own words gives them in
+its `.config/flume.toml`, for every kind run in it, and the words
+travel with it to every host that runs it:
+
+```toml
+[agents.programs.claude.settings]
+attribution = { commit = "Assisted-by: Claude Code", pr = "" }
+```
+
+A repository that neither names keeps its account's attribution:
+Claude Code writes what the account's `settings.json` says, else its
+own lines. Status names `programs.claude.settings.attribution` with
+`host-repository` for the fork and `repository` for the repository
+that gives its own.
+
+**Why a fork's word is the host's.** A fork's own `.config/flume.toml`
+would travel in the pull request the other project reviews. The host's
+table for the repository says it on the host alone. Of the host's
+tables, only its table for one of that repository's kinds comes first,
+so the fork carries no tagline whatever the host gives every agent. A
+repository's own `[agents]` stands only where no host table gives
+`attribution`.
+
+**Why both texts.** `attribution` is taken whole, and Claude Code fills
+a text it leaves out with its own. `attribution = { commit = "" }`
+alone hides the commit's trailer and leaves the pull request's line to
+the account's settings or Claude Code's own. Give both texts empty for
+none, and `sessionUrl = false`, which keeps a session started from the
+web or by Remote Control from adding its link. Claude Code 2.1.296 also
+reads `attribution = false` as all three, but earlier releases refuse
+it, so give the table.
+
+**What no layer gives.** A commit's signature, its author and its
+committer are the host's git's: git signs a commit and names its
+author as the host's git configuration says. What the merge queue
+writes when it lands the work is the merge queue's own.
 
 ## Streams
 
@@ -687,7 +1102,9 @@ the program back in the pool, then run `flume retry <place>`.
 
 An agent's environment is your login environment with its account's
 `env` over it, and nothing else gives one: not the launch, not the
-host's agents tables, not the repository or the kind. A launch from a
+host's agents tables, not the repository or the kind. Nor do a
+program's own settings: flume refuses or leaves out their `env` ([keys
+another setting owns](#keys-another-setting-owns)). A launch from a
 session signed in to another account changes nothing, since the agent's
 environment never comes from the launching session.
 
@@ -933,8 +1350,10 @@ which, as `in the session work-design (stream work, kind research)` or
 current agent gives its account, with `from` saying whether the
 intent's affinity for the agent's program or the pool's strategy chose
 it, and each variable `env.<NAME>` from `account` as `<set>`, and its
-`mode` with the value passed and whether it was read back. The place
-lists its `moves` and each start in `unsettled`.
+`mode` with the value passed and whether it was read back. It gives its
+program's own settings, each with its layer and its file ([what status
+gives](#what-status-gives)). The place lists its `moves` and each start
+in `unsettled`.
 
 A change whose code started on work-2 once the intent's account for
 `claude`, work-1, was spent runs its verify on work-2 from the

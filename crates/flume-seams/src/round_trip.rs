@@ -19,6 +19,61 @@ fn settings() -> Settings {
         beside: Some("operator".into()),
         mode: None,
         session: Some("office".into()),
+        programs: BTreeMap::new(),
+    }
+}
+
+/// Own settings for two programs: one's keys given inline over a named
+/// file whose `env` and nested `permissions.default` its profile
+/// reserved and left out, the other's given inline alone (195).
+fn own_programs() -> BTreeMap<String, ProgramSettings> {
+    BTreeMap::from([
+        (
+            "agent".into(),
+            ProgramSettings {
+                file: Some(NamedFile {
+                    written: "~/.config/agent/settings.json".into(),
+                    read: "/home/operator/.config/agent/settings.json".into(),
+                    keys: BTreeMap::from([
+                        ("tips".into(), serde_json::json!(false)),
+                        (
+                            "permissions".into(),
+                            serde_json::json!({"allow": ["Read", "Bash(git log:*)"]}),
+                        ),
+                    ]),
+                    left_out: vec!["env".into(), "permissions.default".into()],
+                }),
+                settings: BTreeMap::from([(
+                    "line".into(),
+                    serde_json::json!({"type": "command", "command": "line", "padding": 1}),
+                )]),
+            },
+        ),
+        (
+            "other".into(),
+            ProgramSettings {
+                file: None,
+                settings: BTreeMap::from([("theme".into(), serde_json::json!("dark"))]),
+            },
+        ),
+    ])
+}
+
+/// A repository's settings for every kind run in it: what its agents'
+/// commits and pull requests say of who made them (195).
+fn every_kind() -> Settings {
+    Settings {
+        programs: BTreeMap::from([(
+            "agent".into(),
+            ProgramSettings {
+                file: None,
+                settings: BTreeMap::from([(
+                    "attribution".into(),
+                    serde_json::json!({"commit": "", "pr": "", "sessionUrl": false}),
+                )]),
+            },
+        )]),
+        ..Settings::default()
     }
 }
 
@@ -181,11 +236,13 @@ fn held() -> HeldState {
                 "code".into(),
                 Settings {
                     mode: Some(programs()),
+                    programs: own_programs(),
                     ..settings()
                 },
             )]),
             every_stage: settings(),
             repository_settings: kind_settings(),
+            repository_agents: every_kind(),
             hold: vec!["review".into()],
             hold_submission: true,
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
@@ -265,6 +322,7 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Repository,
                             value: "opus".into(),
+                            file: None,
                         },
                     ),
                     (
@@ -272,6 +330,7 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Launch,
                             value: programs().written(),
+                            file: None,
                         },
                     ),
                     (
@@ -279,6 +338,23 @@ fn held() -> HeldState {
                         Given {
                             layer: Layer::Account,
                             value: "~/.agent-work".into(),
+                            file: None,
+                        },
+                    ),
+                    (
+                        "programs.agent.settings.line".into(),
+                        Given {
+                            layer: Layer::HostStream,
+                            value: r#"{"type":"command","command":"work-line"}"#.into(),
+                            file: None,
+                        },
+                    ),
+                    (
+                        "programs.agent.settings.tips".into(),
+                        Given {
+                            layer: Layer::Host,
+                            value: "false".into(),
+                            file: Some("/home/operator/.config/agent/settings.json".into()),
                         },
                     ),
                 ]),
@@ -325,6 +401,15 @@ fn held() -> HeldState {
                 terminal: Some(ProfileHeld {
                     profile: "fake".into(),
                     from: NamedBy::Stream,
+                }),
+                own: Some(OwnHeld {
+                    files: vec![OwnFile {
+                        layer: Layer::Host,
+                        written: "~/.config/agent/settings.json".into(),
+                        read: "/home/operator/.config/agent/settings.json".into(),
+                        left_out: vec!["env".into()],
+                    }],
+                    passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
             }),
             since: Some(120),
@@ -1288,6 +1373,120 @@ fn a_held_state_with_a_session_and_a_label() {
     );
 }
 
+/// `value` with every `programs` of a settings' table, a start's `own`
+/// and a setting's `file` taken out, at any depth, as a held state
+/// written before own settings holds none.
+fn without_programs(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.remove("programs");
+            map.remove("own");
+            map.remove("file");
+            map.values_mut().for_each(without_programs);
+        }
+        serde_json::Value::Array(values) => values.iter_mut().for_each(without_programs),
+        _ => {}
+    }
+}
+
+#[test]
+fn a_held_state_with_own_settings() {
+    // A held state whose launch gives own settings for two programs, one
+    // by a named file whose `env` its profile left out, and whose start
+    // took a key from the host's table for its stream, reads back
+    // unchanged, holding `env` by name alone; one written before reads
+    // with none, and writes none back (195).
+    let state = held();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let agent = &json["place"]["settings"]["code"]["programs"]["agent"];
+    assert_eq!(
+        agent["file"]["left_out"],
+        serde_json::json!(["env", "permissions.default"])
+    );
+    assert_eq!(
+        agent["file"]["keys"].get("env"),
+        None,
+        "env held by name alone"
+    );
+    assert_eq!(
+        agent["file"]["keys"]["permissions"],
+        serde_json::json!({"allow": ["Read", "Bash(git log:*)"]})
+    );
+    assert_eq!(agent["settings"]["line"]["padding"], 1);
+    assert_eq!(
+        json["place"]["settings"]["code"]["programs"]["other"],
+        serde_json::json!({"settings": {"theme": "dark"}}),
+        "a program with no file writes none"
+    );
+    assert_eq!(
+        json["stages"][0]["start"]["from"]["programs.agent.settings.line"]["layer"],
+        "host-stream"
+    );
+    assert_eq!(
+        json["stages"][0]["start"]["from"]["programs.agent.settings.line"].get("file"),
+        None,
+        "a key given inline names no file"
+    );
+    assert_eq!(
+        json["stages"][0]["start"]["own"]["files"][0]["left_out"],
+        serde_json::json!(["env"])
+    );
+    let mut before = json;
+    without_programs(&mut before);
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    assert!(read.place.settings["code"].programs.is_empty());
+    assert!(read.place.repository_agents.programs.is_empty());
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!(start.own, None);
+    assert_eq!(start.from["programs.agent.settings.tips"].file, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no programs written where none are held"
+    );
+}
+
+#[test]
+fn a_held_state_with_a_repositorys_settings_for_every_kind() {
+    // A kinds read and a held state whose repository gave its agents'
+    // attribution for every kind read back unchanged; each written before
+    // reads with none (21, 32, 195, C.2).
+    let read = KindsRead::Read {
+        kinds: vec![kind()],
+        settings: BTreeMap::from([("change".into(), kind_settings())]),
+        agents: every_kind(),
+    };
+    round_trips(read.clone());
+    let state = held();
+    round_trips(state.clone());
+    let attribution = serde_json::json!({"commit": "", "pr": "", "sessionUrl": false});
+    assert_eq!(
+        serde_json::to_value(&read).unwrap()["read"]["agents"]["programs"]["agent"]["settings"]
+            ["attribution"],
+        attribution
+    );
+    let mut before = serde_json::to_value(&state).unwrap();
+    assert_eq!(
+        before["place"]["repository_agents"]["programs"]["agent"]["settings"]["attribution"],
+        attribution
+    );
+    before["place"]
+        .as_object_mut()
+        .unwrap()
+        .remove("repository_agents");
+    let state: HeldState = serde_json::from_value(before).expect("held state from before");
+    assert_eq!(state.place.repository_agents, Settings::default());
+    let mut before = serde_json::to_value(&read).unwrap();
+    before["read"].as_object_mut().unwrap().remove("agents");
+    let KindsRead::Read { agents, .. } =
+        serde_json::from_value(before).expect("kinds read from before")
+    else {
+        panic!("a kinds read read back as another");
+    };
+    assert_eq!(agents, Settings::default());
+}
+
 #[test]
 fn where_an_agent_opens_and_its_session() {
     for at in [
@@ -1542,6 +1741,7 @@ impl Agent for Bare {
         _folder: &str,
         _settings: &Settings,
         _mode: Option<&str>,
+        _own: &BTreeMap<String, serde_json::Value>,
         _resume: Option<&str>,
         _env: &BTreeMap<String, String>,
         _place: &PlaceRef,
@@ -1610,6 +1810,23 @@ fn a_profile_that_maps_no_mode() {
 }
 
 #[test]
+fn a_profile_that_passes_no_own_settings() {
+    // A profile that keeps the seam's defaults reserves no key, refuses
+    // its program's keys, saying it passes none, and takes an empty entry
+    // (170, 195, 196).
+    assert_eq!(Bare.reserved(), vec![]);
+    let given = BTreeMap::from([("line".to_string(), serde_json::json!("a"))]);
+    let words = Bare
+        .own(&given)
+        .expect_err("a profile that passes no own settings took one");
+    assert!(
+        words.contains("passes no settings of its program's own"),
+        "{words}"
+    );
+    assert_eq!(Bare.own(&BTreeMap::new()), Ok(()));
+}
+
+#[test]
 fn a_profile_that_carries_no_conversation() {
     // A profile that keeps the seam's default offers no carry, for any
     // start and account (179).
@@ -1670,6 +1887,21 @@ fn settings_under_others_take_the_mode_whole() {
     assert_eq!(under.under(&over).mode, over.mode);
     assert_eq!(under.under(&Settings::default()).mode, Some(programs()));
     assert_eq!(Settings::default().under(&under).mode, Some(programs()));
+}
+
+#[test]
+fn settings_under_others_take_own_settings_whole() {
+    // Own settings over own settings are taken whole, the more specific
+    // table's where it gives any; their fold key by key is the core's
+    // (195).
+    let under = Settings {
+        programs: own_programs(),
+        ..Settings::default()
+    };
+    let over = every_kind();
+    assert_eq!(under.under(&over).programs, over.programs);
+    assert_eq!(under.under(&Settings::default()).programs, own_programs());
+    assert_eq!(Settings::default().under(&under).programs, own_programs());
 }
 
 #[test]
@@ -2118,15 +2350,37 @@ fn a_kind_with_its_stages() {
     round_trips(KindsRead::Read {
         kinds: vec![kind()],
         settings: BTreeMap::from([("change".into(), kind_settings())]),
+        agents: every_kind(),
     });
     round_trips(HostSettings {
         repository: kind_settings(),
         kind: KindSettings::default(),
+        ..HostSettings::default()
     });
+    round_trips(HostSettings {
+        every_kind: every_kind(),
+        stream: Settings {
+            model: Some("opus".into()),
+            ..every_kind()
+        },
+        every_agent: Settings {
+            model: Some("sonnet".into()),
+            ..Settings::default()
+        },
+        ..HostSettings::default()
+    });
+    let written_before: HostSettings = serde_json::from_value(serde_json::json!({
+        "repository": KindSettings::default(),
+        "kind": KindSettings::default(),
+    }))
+    .unwrap();
+    assert_eq!(written_before, HostSettings::default());
     for layer in [
         Layer::Launch,
         Layer::HostRepository,
         Layer::HostKind,
+        Layer::HostStream,
+        Layer::Host,
         Layer::Repository,
         Layer::Kind,
         Layer::Default,
@@ -2918,6 +3172,10 @@ fn the_agent_seams_answers() {
             confirm: "enter".into(),
         }),
         kind: Some("agent".into()),
+        files: BTreeMap::from([(
+            "/state/fix--one/agent/own.json".into(),
+            r#"{"line":"a"}"#.into(),
+        )]),
     });
     let before: AgentCommand =
         serde_json::from_str(r#"{"program":"agent","args":[],"env":{},"prompt_args":[]}"#).unwrap();
@@ -2925,6 +3183,14 @@ fn the_agent_seams_answers() {
         before.kind, None,
         "a command written before it named a kind"
     );
+    assert!(
+        before.files.is_empty(),
+        "a command written before it listed files"
+    );
+    round_trips(Reserved {
+        key: "permissions.default".into(),
+        owner: "flume's mode".into(),
+    });
     for reading in [Reading::Yes, Reading::No, Reading::Unknown] {
         round_trips(reading);
     }

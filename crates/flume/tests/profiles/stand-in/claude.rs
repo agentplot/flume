@@ -38,6 +38,18 @@
 //! file, it prints `Error: Append system prompt file not found: <file>`
 //! and exits 1 before any hook, as that release does.
 //!
+//! Before its session starts it reads its settings as that release reads
+//! them: the `settings.json` of its configuration home, then the place's
+//! `.claude/settings.json` and `.claude/settings.local.json`, then the
+//! settings `--settings <file-or-json>` passes, a JSON object as written
+//! or the file it names, each source merged over those before it, objects
+//! key by key, two lists joined with a repeated value kept once, and
+//! anything else taken from the later source. It writes the settings so
+//! merged to the file `STAND_IN_SETTINGS` names, where one is named, so a
+//! walkthrough reads what the program read (195; design 14). Where the
+//! settings `--settings` passes cannot be read, or are not JSON, it says so
+//! and exits 1 before any hook.
+//!
 //! Where the command passes `--resume <session>`, it resumes the session
 //! as that release does: it looks for `<home>/projects/<folder>/<session>.jsonl`
 //! alone, `<home>` its configuration home, `CLAUDE_CONFIG_DIR` or else
@@ -101,12 +113,14 @@ fn main() {
     let mut prompt = None;
     let mut mode = None;
     let mut resume = None;
+    let mut flag = None;
     let mut words = args.iter();
     while let Some(word) = words.next() {
         match word.as_str() {
             "--plugin-dir" => plugin = words.next().map(PathBuf::from),
             "--permission-mode" => mode = words.next().cloned(),
             "--resume" => resume = words.next().cloned(),
+            "--settings" => flag = words.next().cloned(),
             "--append-system-prompt-file" => {
                 let file = words.next().cloned().unwrap_or_default();
                 if !Path::new(&file).is_file() {
@@ -114,7 +128,7 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-            "--model" | "--append-system-prompt" | "--settings" => {
+            "--model" | "--append-system-prompt" => {
                 words.next();
             }
             flag if flag.starts_with("--") => {}
@@ -139,6 +153,17 @@ fn main() {
         }
     }
     let cwd = std::env::current_dir().expect("the place");
+    match settings(&cwd, flag.as_deref()) {
+        Ok(read) => {
+            if let Some(file) = std::env::var_os("STAND_IN_SETTINGS").filter(|f| !f.is_empty()) {
+                std::fs::write(&file, format!("{read}\n")).expect("the settings read");
+            }
+        }
+        Err(words) => {
+            eprintln!("{words}");
+            std::process::exit(1);
+        }
+    }
     let resumed = resume.map(|session| {
         let transcript = transcript_of(&cwd, &session);
         if !transcript.is_file() {
@@ -154,16 +179,6 @@ fn main() {
         let _ = std::fs::remove_file(record);
     }
     std::process::exit(i32::from(failed));
-}
-
-/// The configuration home: `CLAUDE_CONFIG_DIR`, else `~/.claude`.
-fn config_home() -> PathBuf {
-    std::env::var_os("CLAUDE_CONFIG_DIR")
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
-        })
 }
 
 /// The prompt as the session submits it: as given, or where
@@ -185,16 +200,90 @@ fn submitted(prompt: &str) -> String {
 /// the working directory with every character that is not a letter or a
 /// digit written `-`.
 fn transcript_of(cwd: &Path, session: &str) -> PathBuf {
-    let config = config_home();
     let project: String = cwd
         .to_string_lossy()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
-    config
+    config_home()
         .join("projects")
         .join(project)
         .join(format!("{session}.jsonl"))
+}
+
+/// That release's configuration home: `CLAUDE_CONFIG_DIR`, or else
+/// `~/.claude`.
+fn config_home() -> PathBuf {
+    std::env::var_os("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".claude")
+        })
+}
+
+/// The settings that release reads in `cwd`, `flag` the value of its
+/// `--settings`: the user's `settings.json` in its configuration home, the
+/// project's `.claude/settings.json` and its `.claude/settings.local.json`,
+/// then the flag's, a JSON object as written or the file it names, each
+/// merged over those before it (195; design 14). A source that is not there
+/// gives nothing; the flag's that cannot be read or is not JSON gives the
+/// words the session ends with.
+fn settings(cwd: &Path, flag: Option<&str>) -> Result<Value, String> {
+    let mut read = json!({});
+    for file in [
+        config_home().join("settings.json"),
+        cwd.join(".claude/settings.json"),
+        cwd.join(".claude/settings.local.json"),
+    ] {
+        if let Some(source) = std::fs::read_to_string(&file)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        {
+            merge(&mut read, source);
+        }
+    }
+    if let Some(given) = flag {
+        let text = if given.trim_start().starts_with('{') {
+            given.to_string()
+        } else {
+            std::fs::read_to_string(given)
+                .map_err(|error| format!("Error: --settings {given} cannot be read: {error}"))?
+        };
+        let source: Value = serde_json::from_str(&text)
+            .map_err(|error| format!("Error: --settings {given} is not JSON: {error}"))?;
+        merge(&mut read, source);
+    }
+    Ok(read)
+}
+
+/// `over` merged into `under` as that release merges one source of its
+/// settings over those before it: two objects key by key, two lists joined,
+/// a string, a number or a boolean the two give kept once, as its `Set`
+/// keeps one; anything else taken from `over`.
+fn merge(under: &mut Value, over: Value) {
+    match (under, over) {
+        (Value::Object(under), Value::Object(over)) => {
+            for (key, value) in over {
+                match under.get_mut(&key) {
+                    Some(beneath) => merge(beneath, value),
+                    None => {
+                        under.insert(key, value);
+                    }
+                }
+            }
+        }
+        (Value::Array(under), Value::Array(over)) => {
+            let joined: Vec<Value> = under.drain(..).chain(over).collect();
+            for item in joined {
+                let kept_once = !matches!(item, Value::Object(_) | Value::Array(_));
+                if !(kept_once && under.contains(&item)) {
+                    under.push(item);
+                }
+            }
+        }
+        (under, over) => *under = over,
+    }
 }
 
 /// One session of the stand-in.

@@ -22,6 +22,7 @@ mod line;
 mod list;
 mod live;
 mod open;
+mod own;
 mod prompt;
 mod reading;
 mod room;
@@ -46,6 +47,7 @@ pub use ends::{notice, what_ended};
 pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
+pub use own::shaped_as_credential;
 pub use prompt::group_name;
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
@@ -277,6 +279,7 @@ mod tests {
             settings: BTreeMap::new(),
             every_stage: Settings::default(),
             repository_settings: KindSettings::default(),
+            repository_agents: Settings::default(),
             hold: vec![],
             hold_submission: false,
             hold_words: BTreeMap::new(),

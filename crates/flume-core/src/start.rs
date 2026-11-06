@@ -1,9 +1,11 @@
-//! A stage's start (27 to 33): its settings resolved from their six
+//! A stage's start (27 to 33): its settings resolved from their eight
 //! layers, or the stage refused naming the setting (32), a fresh identity
 //! and secret, its prompt filled or the stage refused naming the part,
 //! and one agent opened through the agent seam's command in its stream's
 //! terminal, never while another of the place's is live, and only under
-//! the host's bound (70, 190).
+//! the host's bound (70, 190). Each file the command lists is written
+//! into the place's folder before the terminal opens the agent, and a
+//! start whose command lists one outside it is not opened (196).
 
 use crate::accounts::Choice;
 use crate::live::LiveRead;
@@ -44,6 +46,9 @@ pub(crate) struct Claim {
     /// start whose agent stopped at its account's usage limit, or whose
     /// conversation was reported lost (49, 146, 179).
     resume: Option<String>,
+    /// Its program's own settings as the layers resolved them, which its
+    /// profile takes, none where they give none (195, 196).
+    own: BTreeMap<String, serde_json::Value>,
 }
 
 impl Claim {
@@ -630,6 +635,7 @@ impl Engine {
                         Given {
                             layer: Layer::Account,
                             value: value.clone(),
+                            file: None,
                         },
                     );
                 }
@@ -699,6 +705,10 @@ impl Engine {
                 session: opens_in.clone(),
                 label: label.clone(),
                 terminal: Some(named.clone()),
+                own: resolution.resolved.own.as_ref().map(|own| OwnHeld {
+                    files: own.files.clone(),
+                    passed: None,
+                }),
             });
             if !held
                 .terminals
@@ -722,6 +732,7 @@ impl Engine {
                 account,
                 mode: resolution.mode.clone(),
                 resume: resume.clone(),
+                own: resolution.own_keys(),
             }))
         });
         let claimed = claimed.unwrap_or(Err(Start::NoPlace));
@@ -757,12 +768,14 @@ impl Engine {
             account: _,
             mode,
             resume,
+            own,
         } = claim;
         let folder = self.store.folder(id);
         let command = agent.command(
             &folder,
             &settings,
             mode.as_deref(),
+            &own,
             resume.as_deref(),
             &env,
             &place,
@@ -770,6 +783,16 @@ impl Engine {
             &secret,
             &text,
         );
+        if let Err(failure) = self.write_files(id, &folder, &command) {
+            self.with_start(id, &identity, |start, _| start.opening = None);
+            self.not_opened(
+                id,
+                &identity,
+                format!("{identity} was not opened: {failure}"),
+            );
+            return Start::NotOpened(failure);
+        }
+        let passed = passed(&command);
         let at = match (&settings.beside, opens_in) {
             (Some(pane), _) => OpenIn::Beside { pane: pane.clone() },
             (
@@ -790,6 +813,9 @@ impl Engine {
         );
         self.with_start(id, &identity, |start, _| {
             start.opening = None;
+            if let Some(own) = start.own.as_mut() {
+                own.passed.clone_from(&passed);
+            }
             if let Opened::Opened { carried, printed } = &opened {
                 start.prompt.carried = *carried;
                 start.printed.clone_from(printed);
@@ -816,20 +842,48 @@ impl Engine {
             }
             Opened::Refused { reason } => {
                 let failure = format!("the terminal did not open {identity}: {reason}");
-                self.update(id, |held| {
-                    if let Some(index) = held.index_of(&identity) {
-                        let stage = &mut held.stages[index];
-                        stage.state = StageState::NeverBegun;
-                        if let Some(start) = stage.start.as_mut() {
-                            start.live = false;
-                        }
-                        held.failures.push(failure.clone());
-                    }
-                    Step::Write(())
-                });
+                self.not_opened(id, &identity, failure);
                 Start::NotOpened(reason)
             }
         }
+    }
+
+    /// The start under `identity` ended never begun, its room freed, and
+    /// `failure` kept with the place (35, 70).
+    fn not_opened(&self, id: &PlaceId, identity: &Identity, failure: String) {
+        self.update(id, |held| {
+            if let Some(index) = held.index_of(identity) {
+                let stage = &mut held.stages[index];
+                stage.state = StageState::NeverBegun;
+                if let Some(start) = stage.start.as_mut() {
+                    start.live = false;
+                }
+                held.failures.push(failure.clone());
+            }
+            Step::Write(())
+        });
+    }
+
+    /// Writes each file `command` lists into the place's own `folder`
+    /// through the store, written beside and renamed over, readable by
+    /// the host's user alone; or, writing nothing, why not: a file
+    /// outside the folder, named, or the store's words (196; core.16,
+    /// core.17).
+    fn write_files(
+        &self,
+        id: &PlaceId,
+        folder: &str,
+        command: &AgentCommand,
+    ) -> Result<(), String> {
+        if let Some(outside) = command.files.keys().find(|path| !under(folder, path)) {
+            return Err(format!(
+                "its command lists the file {outside}, which lies outside the place's folder {folder}"
+            ));
+        }
+        for (path, text) in &command.files {
+            self.store.write_file(id, path, text)?;
+        }
+        Ok(())
     }
 
     /// Changes the start under `identity`, if it is still the stage's,
@@ -873,6 +927,36 @@ impl Engine {
             Step::Write(())
         });
     }
+}
+
+/// Whether `path` is a file under `folder`, by its components, none of
+/// them `..` (196).
+fn under(folder: &str, path: &str) -> bool {
+    let path = std::path::Path::new(path);
+    path.starts_with(folder)
+        && path != std::path::Path::new(folder)
+        && !path
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+}
+
+/// How `command` passed its program's own settings: each of its
+/// arguments naming a file it lists, with the argument before it; none
+/// where it names none (195, 196; design 12).
+fn passed(command: &AgentCommand) -> Option<String> {
+    let words: Vec<String> = command
+        .args
+        .iter()
+        .enumerate()
+        .filter(|(_, arg)| command.files.contains_key(*arg))
+        .map(
+            |(at, file)| match at.checked_sub(1).map(|before| &command.args[before]) {
+                Some(flag) => format!("{flag} {file}"),
+                None => file.clone(),
+            },
+        )
+        .collect();
+    (!words.is_empty()).then(|| words.join(" "))
 }
 
 /// Finding a start in held state by its identity.

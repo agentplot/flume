@@ -20,7 +20,23 @@ under `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>`, and
 starts each agent with it:
 
 ```sh
-claude --plugin-dir <plugin> [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
+claude --plugin-dir <plugin> [--settings <file>] [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
+```
+
+`--settings` is there only where a layer gives Claude Code's own
+settings ([a program's own
+settings](/flume/guides/agent-settings/#a-programs-own-settings)). It
+names `own-settings.json`, a file beside the start's record holding
+the keys the layers resolved as one JSON object, never a file a layer
+named. Claude Code lays it over the user's, the project's and the local
+settings. Take a host that gives no own setting but its table for a
+fork, whose commits and pull requests must name no one ([what a commit
+says about who made
+it](/flume/guides/agent-settings/#what-a-commit-says-about-who-made-it)).
+Each agent in the fork gets this file:
+
+```json
+{"attribution":{"commit":"","pr":"","sessionUrl":false}}
 ```
 
 `--resume` is there only for a start that carries a spent agent's
@@ -51,7 +67,9 @@ agent as Claude Code. Any other program refuses the launch, since
 Claude Code is the one agent program flume runs.
 
 flume checks the plugin's hooks against the Claude Code release its
-repository pins, 2.1.296.
+repository pins, 2.1.296. It checks there too the `--settings` option,
+the order Claude Code reads its settings in, each key flume reserves
+for another setting, and `attribution`'s two texts.
 
 ## What each hook does
 

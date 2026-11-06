@@ -9,10 +9,13 @@
 //! mapped onto the seam's settings for every stage and for each stage it
 //! names, the latter returned apart from the kinds (32, C.2; weir 52,
 //! 57, C.4); which declaration they join, and whether the stages they
-//! name exist, are the core's to say. A prompt is a path relative to its declaration's file,
-//! read beside it: at the same revision for a repository's, on disk for
-//! a launch's, and from the binary for flume's own, whose versions are
-//! each a declaration of its own with its prompts beside it (157).
+//! name exist, are the core's to say. Every agents table's `programs`,
+//! each program's own settings, is read by flume's one reader of them, a
+//! file it names read as a prompt is (195). A prompt is a path relative
+//! to its declaration's file, read beside it: at the same revision for a
+//! repository's, on disk for a launch's, and from the binary for flume's
+//! own, whose versions are each a declaration of its own with its prompts
+//! beside it (157).
 //!
 //! flume's own kinds are packages, each read through weir-kinds' package
 //! reader at its identity, `flume/<name>@<version>`, with its content's
@@ -53,8 +56,15 @@
 //! the default branch: the remote's, after one fetch, where the
 //! repository has a remote, and the local default branch otherwise (20,
 //! 105, C.2). No other tool's file is read to choose a profile (core.3).
+//! Beside `[profiles]`, the repository's `[agents]` is flume's own table
+//! of its declaration and no part of any kind: its settings for every
+//! kind it runs, read from the sections weir returns unnamed with the
+//! kinds at their revision, as a kind's agents table is but naming no
+//! stage, stream, environment or pane (21, 32, 195, C.2). A launch's
+//! declaration and flume's own are not read for it.
 
 use crate::git::{tree_path, Git, REMOTE};
+use crate::own::{self, Reader};
 use flume_seams::{
     Binding, BindingRead, Deliverable, Kind, KindIdentity, KindNamed, KindSettings, Kinds,
     KindsRead, LockEntry, LockRead, PackageRead, Packaged, Revision, Settings, SourceRead, Stage,
@@ -161,6 +171,7 @@ impl Kinds for Weir {
                 return KindsRead::Read {
                     kinds: vec![],
                     settings: BTreeMap::new(),
+                    agents: Settings::default(),
                 }
             }
             Err(reason) => return KindsRead::CouldNotRead { reason },
@@ -169,11 +180,13 @@ impl Kinds for Weir {
             .parent()
             .map(|parent| parent.to_string_lossy().into_owned())
             .unwrap_or_default();
-        read(&text, |path| {
+        read(&text, Whose::Repository, &|path| {
             let at = tree_path(&directory, path)
                 .ok_or_else(|| format!("{path} lies outside the repository"))?;
-            git.file(&revision.0, &at)?
-                .ok_or_else(|| format!("{at} is not in {revision}"))
+            let text = git
+                .file(&revision.0, &at)?
+                .ok_or_else(|| format!("{at} is not in {revision}"))?;
+            Ok((at, text))
         })
     }
 
@@ -188,9 +201,10 @@ impl Kinds for Weir {
             }
         };
         let directory = file.parent().unwrap_or(Path::new(""));
-        read(&text, |path| {
+        read(&text, Whose::Launch, &|path| {
             let at = directory.join(path);
             std::fs::read_to_string(&at)
+                .map(|text| (at.display().to_string(), text))
                 .map_err(|error| format!("{} could not be read: {error}", at.display()))
         })
     }
@@ -330,11 +344,7 @@ impl Kinds for Weir {
         let identity = map_identity(&package.identity, &mut problems);
         let kind = map_kind(
             &package.kind,
-            &|path: &str| {
-                let at = dir.join(path);
-                std::fs::read_to_string(&at)
-                    .map_err(|error| format!("{} could not be read: {error}", at.display()))
-            },
+            &|path: &str| in_package(&dir, path),
             &mut problems,
         );
         if !problems.is_empty() {
@@ -503,7 +513,7 @@ fn own_package(own: &Own) -> Result<Packaged, String> {
             own.prompts
                 .iter()
                 .find(|(at, _)| *at == path)
-                .map(|(_, text)| text.to_string())
+                .map(|(at, text)| (at.to_string(), text.to_string()))
                 .ok_or_else(|| format!("{path} is not built in"))
         },
         &mut problems,
@@ -517,6 +527,28 @@ fn own_package(own: &Own) -> Result<Packaged, String> {
         hash: package.hash.to_string(),
         dir: None,
     })
+}
+
+/// A file of the package at `dir` by its path within it, with the path
+/// read: a path that leaves the package, by `..`, an absolute path or a
+/// link, is refused, so a prompt or a program's settings file reads
+/// nothing outside it (157, 195; core.34, core.50).
+fn in_package(dir: &Path, path: &str) -> Result<(String, String), String> {
+    let outside = || format!("{path} lies outside the package");
+    if Path::new(path).is_absolute() {
+        return Err(outside());
+    }
+    let within = tree_path("", path).ok_or_else(outside)?;
+    let at = dir.join(within);
+    let unread = |error: std::io::Error| format!("{} could not be read: {error}", at.display());
+    let real = at.canonicalize().map_err(unread)?;
+    let root = dir.canonicalize().map_err(unread)?;
+    if !real.starts_with(&root) {
+        return Err(outside());
+    }
+    std::fs::read_to_string(&real)
+        .map(|text| (at.display().to_string(), text))
+        .map_err(unread)
 }
 
 /// An identity as weir's reader gave it, mapped onto the seam's with its
@@ -606,10 +638,20 @@ fn profiles(text: &str) -> Result<Binding, String> {
     }
 }
 
-/// Every kind a declaration's text holds, its prompts read by `prompt`
-/// from their paths, and the settings it gives kinds it does not
-/// declare, or every field that fails it (84, 32).
-fn read(text: &str, prompt: impl Fn(&str) -> Result<String, String>) -> KindsRead {
+/// Whose declaration is read: a repository's, which alone gives
+/// `[agents]` for every kind, or a launch's; flume's own and a host's
+/// source's are packages, read by weir's package reader (21, 32, 157).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Whose {
+    Repository,
+    Launch,
+}
+
+/// Every kind a declaration's text holds, its prompts and its agents
+/// tables' settings files read by `beside` from their paths, the settings
+/// it gives kinds it does not declare, and, for a repository's, its
+/// settings for every kind; or every field that fails it (84, 32, 157).
+fn read(text: &str, whose: Whose, beside: Reader) -> KindsRead {
     let declaration = match weir_kinds::read_kinds(text) {
         Ok(declaration) => declaration,
         Err(refusal) => {
@@ -622,7 +664,7 @@ fn read(text: &str, prompt: impl Fn(&str) -> Result<String, String>) -> KindsRea
     let kinds = declaration
         .kinds
         .values()
-        .map(|kind| map_kind(kind, &prompt, &mut problems))
+        .map(|kind| map_kind(kind, beside, &mut problems))
         .collect();
     let settings = declaration
         .settings
@@ -631,17 +673,59 @@ fn read(text: &str, prompt: impl Fn(&str) -> Result<String, String>) -> KindsRea
             let at = format!("kinds.{}.agents", given.name);
             (
                 given.name.clone(),
-                map_agents(&given.agents, &at, &mut problems),
+                map_agents(&given.agents, &at, beside, &mut problems),
             )
         })
         .collect();
+    let agents = match whose {
+        Whose::Repository => every_kind(&declaration.sections, beside, &mut problems),
+        Whose::Launch => Settings::default(),
+    };
     if problems.is_empty() {
-        KindsRead::Read { kinds, settings }
+        KindsRead::Read {
+            kinds,
+            settings,
+            agents,
+        }
     } else {
         KindsRead::CouldNotRead {
             reason: problems.join("; "),
         }
     }
+}
+
+/// A repository's `[agents]`, its settings for every kind it runs, among
+/// the declaration's `sections`: read as a kind's agents table is, with a
+/// `stages`, a `streams`, an `env` or a `beside` failing it naming the
+/// field, since a stage's name is its kind's, a stream and an environment
+/// the host's and a pane the launch's (21, 32, 107, 144, 195, C.2).
+fn every_kind(sections: &Table, beside: Reader, problems: &mut Vec<String>) -> Settings {
+    let Some(agents) = sections.get("agents") else {
+        return Settings::default();
+    };
+    let Some(agents) = agents.as_table() else {
+        problems.push("agents: must be a table of settings for every kind".into());
+        return Settings::default();
+    };
+    for (key, words) in [
+        (
+            "stages",
+            "a repository's settings for every kind name no stage, since a stage's name is its kind's: a stage's settings go in [kinds.<kind>.agents.stages.<stage>]",
+        ),
+        (
+            "streams",
+            "a repository's settings name no stream, since a stream is the host's: a stream's settings go in the host's [agents.streams.<stream>]",
+        ),
+        (
+            "beside",
+            "a repository's settings for every kind name no pane to open beside, which is the launch's to name",
+        ),
+    ] {
+        if agents.contains_key(key) {
+            problems.push(format!("agents.{key}: {words}"));
+        }
+    }
+    map_agent(agents, "agents", beside, problems)
 }
 
 fn refused(refusal: &Refusal) -> String {
@@ -660,11 +744,7 @@ fn refused(refusal: &Refusal) -> String {
 /// `label` another meaning, and flume reads no field of the format
 /// itself; until then only the host's configuration gives a place a
 /// label (180; record 0033; core.4).
-fn map_kind(
-    kind: &weir_kinds::Kind,
-    prompt: &impl Fn(&str) -> Result<String, String>,
-    problems: &mut Vec<String>,
-) -> Kind {
+fn map_kind(kind: &weir_kinds::Kind, beside: Reader, problems: &mut Vec<String>) -> Kind {
     let at = format!("kinds.{}", kind.name);
     let version = u32::try_from(kind.version).unwrap_or_else(|_| {
         problems.push(format!("{at}.version: is more than flume counts"));
@@ -676,12 +756,12 @@ fn map_kind(
         branch_prefix: kind.branch.clone(),
         starts_unready: kind.starts_unready,
         lands: kind.lands,
-        agents: map_agents(&kind.agents, &format!("{at}.agents"), problems),
+        agents: map_agents(&kind.agents, &format!("{at}.agents"), beside, problems),
         stages: kind
             .stages
             .iter()
             .enumerate()
-            .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), prompt, problems))
+            .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), beside, problems))
             .collect(),
         label: None,
     }
@@ -690,13 +770,15 @@ fn map_kind(
 fn map_stage(
     stage: &weir_kinds::Stage,
     at: &str,
-    prompt: &impl Fn(&str) -> Result<String, String>,
+    beside: Reader,
     problems: &mut Vec<String>,
 ) -> Stage {
-    let text = prompt(&stage.prompt).unwrap_or_else(|reason| {
-        problems.push(format!("{at}.prompt: {reason}"));
-        String::new()
-    });
+    let text = beside(&stage.prompt)
+        .map(|(_, text)| text)
+        .unwrap_or_else(|reason| {
+            problems.push(format!("{at}.prompt: {reason}"));
+            String::new()
+        });
     let (conversation, deliverables) = match &stage.end {
         End::Conversation => (true, vec![]),
         End::Deliverable(deliverable) => (false, vec![map_deliverable(deliverable)]),
@@ -716,7 +798,7 @@ fn map_stage(
             .agents
             .iter()
             .enumerate()
-            .map(|(n, agent)| map_agent(agent, &format!("{at}.agents[{n}]"), problems))
+            .map(|(n, agent)| map_agent(agent, &format!("{at}.agents[{n}]"), beside, problems))
             .collect(),
         waits: stage.wait,
         quiet_limit: stage.quiet.map(|quiet| quiet.as_secs()),
@@ -751,30 +833,35 @@ fn map_deliverable(deliverable: &weir_kinds::Deliverable) -> Deliverable {
 fn map_agents(
     agents: &weir_kinds::KindAgents,
     at: &str,
+    beside: Reader,
     problems: &mut Vec<String>,
 ) -> KindSettings {
     KindSettings {
-        every_stage: map_agent(&agents.every_stage, at, problems),
+        every_stage: map_agent(&agents.every_stage, at, beside, problems),
         stages: agents
             .stages
             .iter()
             .map(|(stage, table)| {
                 let at = format!("{at}.stages.{stage}");
-                (stage.clone(), map_agent(table, &at, problems))
+                (stage.clone(), map_agent(table, &at, beside, problems))
             })
             .collect(),
     }
 }
 
 /// An agent's settings, its table as written: `program`, `model`,
-/// `instructions`, `beside` and `mode` (32, 107, 162), the mode one of
-/// flume's four or a table of programs, read as the host's configuration
-/// reads it, any other failing it naming the field (169, C.2); an `env`
-/// fails it, naming the field, since an agent's environment is its
-/// account's alone (144, C.2), and so does a program named by a location,
-/// a `/` in it, since a location is the host's (158); every other key is
-/// the runner's, and ignored.
-fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
+/// `instructions`, `beside`, `mode` and `programs` (32, 107, 162, 195),
+/// the mode one of flume's four or a table of programs, read as the
+/// host's configuration reads it, any other failing it naming the field
+/// (169, C.2), and `programs` each program's own settings, read by
+/// flume's one reader of them, a file an entry names read by `beside` as
+/// a prompt is, so never outside the repository or the package, any part
+/// not as it reads them failing it naming the field (157, 195, C.2;
+/// core.34); an `env` fails it, naming the field, since an agent's
+/// environment is its account's alone (144, C.2), and so does a program
+/// named by a location, a `/` in it, since a location is the host's
+/// (158); every other key is the runner's, and ignored.
+fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>) -> Settings {
     let mut text = |name: &str| match agent.get(name) {
         None => None,
         Some(Value::String(value)) => Some(value.clone()),
@@ -786,12 +873,20 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
     let program = text("program");
     let model = text("model");
     let instructions = text("instructions");
-    let beside = text("beside");
+    let pane = text("beside");
     let mode = agent.get("mode").and_then(|mode| {
         crate::mode::read(mode)
             .map_err(|reason| problems.push(format!("{at}.mode: {reason}")))
             .ok()
     });
+    let programs = agent
+        .get("programs")
+        .and_then(|programs| {
+            own::read(programs, at, beside)
+                .map_err(|fault| problems.push(fault))
+                .ok()
+        })
+        .unwrap_or_default();
     if agent.contains_key("env") {
         problems.push(format!(
             "{at}.env: an agent's environment is its account's to give, and no declaration gives one"
@@ -806,9 +901,10 @@ fn map_agent(agent: &Table, at: &str, problems: &mut Vec<String>) -> Settings {
         program,
         model,
         instructions,
-        beside,
+        beside: pane,
         mode,
         // A kind names nothing a host owns, a session among it (158).
         session: None,
+        programs,
     }
 }

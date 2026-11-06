@@ -87,6 +87,7 @@ fn settings() -> Settings {
             ("other".into(), "edits".into()),
         ]))),
         session: Some("review".into()),
+        programs: BTreeMap::new(),
     }
 }
 
@@ -201,6 +202,7 @@ fn place_status() -> PlaceStatus {
                     Given {
                         layer: Layer::Launch,
                         value: "large".into(),
+                        file: None,
                     },
                 )]),
             },
@@ -237,6 +239,19 @@ fn place_status() -> PlaceStatus {
             terminal: Some(ProfileHeld {
                 profile: "other".into(),
                 from: NamedBy::Stream,
+            }),
+            own: Some(OwnStatus {
+                passed: Some("--own /state/fix--one/agent/own.json".into()),
+                read_back: false,
+                files: vec![OwnFileStatus {
+                    layer: Layer::Host,
+                    written: "~/.config/agent.json".into(),
+                    read: "/home/user/.config/agent.json".into(),
+                    left_out: vec![Reserved {
+                        key: "env".into(),
+                        owner: "the account".into(),
+                    }],
+                }],
             }),
         }),
         head: Some(Revision::new("c3")),

@@ -11,10 +11,10 @@ type Interleaved = Box<dyn FnOnce() + Send>;
 type Holds = Box<dyn Fn(&HeldState) -> bool + Send>;
 
 /// The store seam: each place's held state with its version, written by
-/// compare-and-set, the host's own documents in memory beside them, and
-/// hooks that run another act just before the next write, or just after
-/// a read hands out a held state a test holds of, as two commands acting
-/// at once do.
+/// compare-and-set, the files written into its folder, the host's own
+/// documents in memory beside them, and hooks that run another act just
+/// before the next write, or just after a read hands out a held state a
+/// test holds of, as two commands acting at once do.
 pub struct FakeStore {
     state: Mutex<StoreState>,
     before_write: Mutex<Vec<Interleaved>>,
@@ -28,6 +28,9 @@ struct StoreState {
     documents: BTreeMap<PlaceId, Versioned>,
     /// The lines of each place's `made.jsonl`, which go with its folder.
     made: BTreeMap<PlaceId, Vec<String>>,
+    /// The files written into each place's folder, by path, each with its
+    /// text and its mode, which go with the folder (196).
+    files: BTreeMap<PlaceId, BTreeMap<String, (String, u32)>>,
     /// The host's own documents, by key (153).
     host: BTreeMap<HostKey, HostVersioned>,
     next: u64,
@@ -100,6 +103,15 @@ impl FakeStore {
             .entry(place.clone())
             .or_default()
             .push(line.to_string());
+    }
+
+    /// The text of the file at `path` in a place's folder and its mode,
+    /// as the last write left it; none where none was written (196).
+    pub fn file(&self, path: &str) -> Option<(String, u32)> {
+        lock(&self.state)
+            .files
+            .values()
+            .find_map(|files| files.get(path).cloned())
     }
 
     /// Whether the place's folder holds a line of what was made.
@@ -191,6 +203,7 @@ impl Store for FakeStore {
             None => {
                 state.documents.remove(place);
                 state.made.remove(place);
+                state.files.remove(place);
             }
         }
         Written::Written { version }
@@ -211,6 +224,22 @@ impl Store for FakeStore {
             .get(place)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Refuses a path outside the place's folder, and otherwise keeps the
+    /// text whole, readable by the host's user alone (196).
+    fn write_file(&self, place: &PlaceId, path: &str, text: &str) -> Result<(), String> {
+        self.log.push(format!("write_file {place} {path}"));
+        let under = format!("{}/", self.folder(place));
+        if !path.starts_with(&under) || path.split('/').any(|part| part == "..") {
+            return Err(format!("{path} lies outside the place's folder"));
+        }
+        lock(&self.state)
+            .files
+            .entry(place.clone())
+            .or_default()
+            .insert(path.to_string(), (text.to_string(), 0o600));
+        Ok(())
     }
 
     fn read_host(&self, key: &HostKey) -> Option<HostVersioned> {

@@ -228,6 +228,7 @@ fn the_same_revision_the_same_kinds<H: KindsHarness>(harness: &H) -> Outcome {
         KindsRead::Read {
             kinds: first,
             settings: BTreeMap::new(),
+            agents: Settings::default(),
         },
         "a launch's declaration of the same kind"
     );
