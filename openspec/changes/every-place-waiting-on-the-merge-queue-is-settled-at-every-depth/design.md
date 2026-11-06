@@ -214,7 +214,8 @@ nothing takes its place. Between flume's commands a place moves at its
 agent's quiet (121) and at the settles of a caller keeping watch (208);
 where none is kept, at each command that acts (119). Status's terminal
 answers keep their `watch` field, given none for every terminal, so the
-JSON form keeps its fields (61; core.14).
+JSON form keeps its fields (61; core.14); the person's form gives no line
+of a terminal's watch, since the host's watch line says it all.
 
 What flume's herdr plugin still does:
 
@@ -222,15 +223,25 @@ What flume's herdr plugin still does:
   once when a person opens it and again after each key that acts, and
   redraws from that answer, reading nothing on a timer. Each key is
   herdr's focus or one flume command, `tell`, `stop` or `retry` (53,
-  107).
+  107). A key acts when it runs a flume command: `o`, herdr's focus,
+  changes nothing status gives, so the popup reads nothing after it, and
+  a key whose words were left empty runs nothing and reads nothing.
 - **What herdr's configuration lacks.** The plugin's startup, herdr's
   `[[startup]]`, reads herdr's configuration file, writes `setup.json`
   in its server's state directory with the server's socket, logs what
   it lacks and exits. The herdr profile gives those words in status for
   each server whose socket is still present, reading no lease (56,
-  C.5). The startup also ends a watch an earlier release left running,
-  by the pid and identity its lease names (record 0016), and removes the
-  lease, so an upgraded server stops settling at its next start.
+  C.5). `setup.json` is one object, `{"socket": <the server's
+  socket>, "lacking": [<words>]}`, so the file names its server
+  itself; an earlier release's bare array names no socket and gives
+  nothing. A socket file beside the array was the other way, two files
+  to keep in step. The startup also ends a watch an earlier release
+  left running, by the pid and identity its lease names (record 0016),
+  and removes the lease, so an upgraded server stops settling at its
+  next start: it asks the watch to end, whose own trap removes its
+  lease, and kills it once 30 seconds pass with it still that process.
+  A lease whose identity is the pid alone ends no process, since
+  another may hold the pid now, and is removed all the same.
 - **Nothing else.** No process between herdr's startup and a person's
   asking, no lease, no `flume settle`, no `flume status` on a tick, and
   no `report-metadata` of its own.
