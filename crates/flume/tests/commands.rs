@@ -1695,6 +1695,167 @@ fn one_places_line_under_the_printed_command() {
     );
 }
 
+/// A host holding the fix named one, launched under the printed command
+/// over a scratch repository, its code agent not yet said started; the
+/// repository and the place's location.
+fn one_unstarted_fix(label: &str) -> (Host, Repository, String) {
+    let host = Host::new(label);
+    let repository = repository(label, None);
+    let kinds = kinds_file(&host, false);
+    let program = format!("program={UNSTARTED}");
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--agent", &program,
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    (host, repository, place)
+}
+
+/// A folder of the host's scratch in no repository, made empty.
+fn outside(host: &Host, name: &str) -> PathBuf {
+    let dir = host.scratch.path(name);
+    std::fs::create_dir_all(&dir).expect("a folder in no repository");
+    dir
+}
+
+#[test]
+fn the_list_through_the_command_line_and_the_core() {
+    // 60, 200: `flume list --json` is the core's own list over the same
+    // state.
+    let (host, repository, _) = one_unstarted_fix("list-same");
+    let ran = host.flume(&repository.dir, &["list", "--json"], &[]);
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    let core = core_over(
+        &host.state(),
+        HostConfig::default(),
+        None,
+        BuiltIn::with_login(&[("HOME", &host.home().to_string_lossy())]),
+    )
+    .expect("the core over the same state");
+    assert_eq!(ran.answer(), core.list());
+}
+
+#[test]
+fn a_fix_under_the_printed_command_is_listed_outside_any_repository_running_no_tool() {
+    // 57, 200, 201: run in no repository with nothing on its `PATH`, so a
+    // tool the list ran would fail, it prints the fix's line, exits 0 and
+    // writes nothing under the host's state.
+    let (host, _, _) = one_unstarted_fix("list-no-tool");
+    let empty = outside(&host, "empty-path");
+    let before = files_under(&host.scratch.path("state"));
+    let ran = host.flume(
+        &outside(&host, "elsewhere"),
+        &["list"],
+        &[("PATH", &empty.to_string_lossy())],
+    );
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    assert!(
+        ran.text.contains("\n  fix--one · code · starting\n"),
+        "{}",
+        ran.text
+    );
+    assert_eq!(
+        files_under(&host.scratch.path("state")),
+        before,
+        "the list wrote"
+    );
+}
+
+#[test]
+fn fifty_places_are_listed_within_a_second() {
+    // 200, S108: the launched fix and 49 documents written from its under
+    // names of their own, in three repositories.
+    let (host, _, place) = one_unstarted_fix("list-fifty");
+    let held = held_of(&host, &place).state;
+    let store = StateDir::at(host.state());
+    let repositories = [
+        held.place.repository.clone(),
+        "/code/two".into(),
+        "/code/three".into(),
+    ];
+    for n in 1..50 {
+        let mut copy = held.clone();
+        copy.place.repository = repositories[n % 3].clone();
+        copy.place.name = format!("n{n}");
+        copy.place.branch = format!("fix/n{n}");
+        copy.place.location = format!("{}/places/fix--n{n}", copy.place.repository);
+        copy.place.id = PlaceId::new(copy.place.location.clone());
+        let written = store.write(&copy.place.id, None, Some(&copy));
+        assert!(
+            matches!(written, Written::Written { .. }),
+            "fix--n{n} written: {written:?}"
+        );
+    }
+    let began = std::time::Instant::now();
+    let ran = host.flume(&outside(&host, "elsewhere"), &["list", "--json"], &[]);
+    let took = began.elapsed();
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    let Answer::List { places, .. } = ran.answer() else {
+        panic!("the list's answer: {}", ran.text);
+    };
+    assert_eq!(places.len(), 50, "the places listed");
+    let mut repositories: Vec<&str> = places
+        .iter()
+        .map(|place| place.repository.as_str())
+        .collect();
+    repositories.dedup();
+    assert_eq!(repositories.len(), 3, "{repositories:?}");
+    assert!(
+        places
+            .iter()
+            .all(|place| place.line == format!("{} · code · starting", place.name)),
+        "{:?}",
+        places.iter().map(|place| &place.line).collect::<Vec<_>>()
+    );
+    assert!(
+        took < std::time::Duration::from_secs(1),
+        "the list took {took:?}"
+    );
+}
+
+#[test]
+fn the_list_for_a_person_under_the_printed_command() {
+    // 200, 201: the repository's path, the fix's line, then the streams;
+    // and `no places` on a host holding none.
+    let (host, _, place) = one_unstarted_fix("list-person");
+    let repository = held_of(&host, &place).state.place.repository;
+    let ran = host.flume(&outside(&host, "elsewhere"), &["list"], &[]);
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    assert_eq!(
+        ran.text,
+        format!("{repository}\n  fix--one · code · starting\nstreams\n  default · no session\n")
+    );
+    let none = Host::new("list-none");
+    let ran = none.flume(&outside(&none, "elsewhere"), &["list"], &[]);
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    assert_eq!(ran.text, "no places\nstreams\n  default · no session\n");
+}
+
+#[test]
+fn the_lists_help_names_status_for_a_places_every_fact() {
+    // 200; core.35.
+    let host = Host::new("list-help");
+    let ran = host.flume(&outside(&host, "elsewhere"), &["list", "--help"], &[]);
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    let words = ran.text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for said in [
+        "A line for each place on the host and each stream it declares",
+        "reading only what flume keeps",
+        "`flume status <place>` gives a place's every fact",
+    ] {
+        assert!(
+            words.contains(said),
+            "the help says not {said:?}: {}",
+            ran.text
+        );
+    }
+}
+
 /// The place's held state as the store holds it.
 fn held_of(host: &Host, place: &str) -> Versioned {
     StateDir::at(host.state())
