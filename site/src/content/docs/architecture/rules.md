@@ -36,7 +36,7 @@ yet built.
 - **[core.7]** A place's branch is cut from the base's current revision: where the merge queue's profile says the base lives, where a merge queue lands the base, and otherwise origin's after flume's own fetch, the host's own branch read only where the repository has no `origin` or origin holds no such branch; a launch that cannot read it is refused, and status says where it was read.
 - **[core.8]** A launch is refused whole, leaving nothing it made, when anything of it already stands or its kind asks for more than flume runs.
 - **[core.47]** A place is made ready only by its merge queue's equipping of it, asked at the revision its launch read; flume runs no readiness step of its own, reads no tool's step from the merge queue's policy, and keeps nothing a step makes.
-- **[core.53]** A branch other places land on, and that itself lands, is a base place's, a place whose kind lands and has no stages, known by that shape alone: the merge queue alone makes and removes its branch, at flume's asking; its worktree checks out no branch; it runs no agent; it is submitted only on its caller's retry, by its branch's name, once no place on its branch is live; and flume names no depth and no use of one.
+- **[core.53]** A branch other places land on, and that itself lands, is a base place's, a place whose kind lands and has no stages, known by that shape alone: it has no worktree and is its branch and its record; the merge queue alone makes and removes its branch, at flume's asking; it runs no agent; it is submitted only on its caller's retry, by its branch's name from the repository, once no place on its branch is live, its outcome read from the merge queue's record of its branch; and flume names no depth and no use of one.
 
 ### Stages and agents
 
@@ -55,7 +55,7 @@ yet built.
 
 ### Settling, surfaces and state
 
-- **[core.13]** flume starts no process that outlives a command of its own, and no command of flume's waits on the merge queue: every settle runs inside a command, started by an agent going quiet, by the terminal's watch or by a caller.
+- **[core.13]** flume starts no process that outlives a command of its own, and no command of flume's waits on the merge queue: every settle runs inside a command, started by an agent going quiet, by a caller keeping watch over the host, by a terminal's nudge or by any other caller, and whether flume runs attended is read from the host's watch alone.
 - **[core.14]** Every surface answers from one core through one form a program reads, which only ever gains fields, and no surface computes a stage's end, a status, a submission or a tidy of its own.
 - **[core.48]** A stream's view is opened only at a caller's asking for the stream, never at a launch, a settle or a start, in the view the host's configuration names for the stream, else the host's: in a window, through the window seam alone, running nothing but the stream's terminal's attach for the stream's own session as a start resolves it, under the title the host's configuration declares for the stream or else its name; or in the terminal's own app, through its attach alone; flume keeps, reads, finds again and closes nothing of a window, and neither the window nor the view in it is a process of flume's.
 - **[core.15]** Status reads every fact of a deliverable, a change or a submission where it lives when asked, and flume keeps no record of one between asks.
