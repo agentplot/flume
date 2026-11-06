@@ -149,6 +149,11 @@ None.
 - `crates/flume-fakes`, `crates/flume-conformance`: the fake host's
   streams carry their kinds' and stages' sessions; new scenarios in
   `engine/sessions.rs` and `engine/open.rs`; the clause list.
+- `crates/flume-core`'s settle: the stage after a delivered one starts
+  only while the current stage still stands delivered, finished or
+  repeating, so two settles at once never start past a refused start
+  (75; task 11.1). The fake store gains a hook run after a read, and
+  `engine/running_through.rs` a scenario for it.
 - `site/`: the herdr and agent-settings guides, and the configuration,
   commands and state references.
 - Built on `flume-opens-a-streams-multiplexer`, landed on main as #109
