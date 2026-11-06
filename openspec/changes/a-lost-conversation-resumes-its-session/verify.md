@@ -1,38 +1,66 @@
 # Verify: a-lost-conversation-resumes-its-session
 
 The verify stage's report on `change/a-lost-conversation-resumes-its-session`
-at c8aa98d, against the change's proposal, design, delta specs and tasks.
+at 9466204, against the change's proposal, design, delta specs and
+tasks, after the send-back on #128's conflict in the merge queue and
+task 6.2's merge of main at c591179.
 
 ## Verdict
 
 The work holds. Every requirement and scenario of the change's thirteen
-delta specs is met by a test that asserts it, every task is ticked, and
-the gate passes over the branch's head. The change is archived with
-this report.
+delta specs is met by a test that asserts it, every task is ticked, the
+merge of main at c591179 keeps both sides, and the gate passes over the
+branch's head. The change is archived with this report.
 
 ## The base and the statement
 
-- main at 4b3d2d1 is an ancestor of the branch: main had not moved
-  since task 6.1 merged it, and a fetch of origin's main read the same
-  revision.
+- main at c591179, where #128 landed record 0043's change, is an
+  ancestor of the branch: a fetch of origin's main read the same
+  revision, so main has not moved since task 6.2 merged it.
 - `crates/flume-conformance/src/clauses.rs` reads agentplot/blueprints
-  at c94c496. The statement there, read for this report, states 207
-  (live) in Part B and S113 to S117 in section 11, and holds no 202 to
-  206 and no S109 to S112, as the list's gaps and skips say (106;
-  core.19).
+  at c94c496, which is on blueprints main and descends from fa40c94,
+  the revision main's list read. The statement there, read for this
+  report, states 207 (live) in Part B and S113 to S117 in section 11,
+  and holds no 202 to 206 and no S109 to S112, as the list's gaps and
+  skips say. blueprints main has since moved to 1c89abc, adding 202 to
+  206, 208, S109 to S112 and S118 for other changes; task 5.2 and the
+  clause-coverage delta take the revision that lands record 0052's
+  amendment, so this change's list stands (106; core.19).
 - Record 0052 is `accepted`, on the user's card in Pending You on
   2026-11-06, and rules core.10, core.18 and core.32 cite it.
 
+## The merge of main at c591179
+
+The branch's diff against main removes nothing #128 added. In the
+fourteen files the merge queue contested, both sides stand: the agent
+seam's `live` beside own settings in the seam, the fake agent, the
+conformance harness and the Claude Code profile; `left_in_pane` beside
+`own` in status and its person's form; the stand-in's configuration
+home once; the clause list's built list holding 195, 196 and S100 to
+S102 beside 207 and S113 to S117; and the state reference's agent row
+holding both.
+
+Of the requirements this change modifies, #128 changed only
+clause-coverage's two, and only their scenarios, which name what each
+change leaves the suite as; their bodies stand as main has them, and
+the delta's scenarios name this change's revision and clauses. The
+other seven modified requirements and the two renamed ones stand on
+main as the delta read them.
+
 ## Tasks
 
-Every task of groups 1 to 6 is ticked, each with its check named in the
-commits that ticked it.
+All 25 tasks of groups 1 to 6 are ticked, each with its check named in
+the commits that ticked it.
 
 ## Requirements and scenarios
 
-Each scenario of the delta specs maps to a test that asserts its THEN.
-The engine's scenarios are in `crates/flume-conformance/src/engine/`,
-run over the fakes; the profile's in `crates/flume/tests/profiles/`.
+Each of the 66 scenarios of the delta specs' 30 requirements maps to a
+test that asserts its THEN, each found on the branch's head for this
+report. The engine's scenarios are in
+`crates/flume-conformance/src/engine/`, run over the fakes; the
+profile's in `crates/flume/tests/profiles/`, over scratch homes and
+processes each test starts; the person's form in
+`crates/flume/src/commands/print.rs`'s tests.
 
 | spec | scenario | test |
 |---|---|---|
@@ -113,16 +141,14 @@ in `tools/walkthroughs.rs`.
 
 - `Engine::retry` ends no agent where the stage named is a conversation
   read lost with a start, and writes its wait with a `CarryFrom` of
-  cause `lost` and the retry's words under the room lock; every other
-  retry ends the place's agent and clears the marker as before (30, 49,
-  77).
+  cause `lost`, the next order and the retry's words under the room
+  lock; every other retry ends the place's agent and clears the marker
+  as before (30, 49, 77).
 - `claim` asks `live` of every home the host's pools declare for the
   program and the login environment's, before a carried start and a
   lost conversation's fresh start, and leaves the stage waiting with
-  what it read; it also holds the start while the agent the terminal
-  brought back in the lost start's pane stands. `start_waiting` asks
-  again at each settle whatever the room, and the queue passes over a
-  stage so held (49, 70, 207).
+  what it read; `start_waiting` asks again at each settle, and a stage
+  so held is never read stalled (49, 70, 207).
 - `choose_account` takes the lost start's account first where its pool
   declares it, of the program and usable, as `conversation`, moving no
   affinity; under no pool, carry is asked with an empty environment
@@ -135,22 +161,39 @@ in `tools/walkthroughs.rs`.
   reads running, or cannot read, as `SessionRuns` with its processes
   (64, 207; core.18).
 - Claude Code's `live.rs` reads `sessions/<pid>.json` matched by
-  `sessionId`, counted only where the `pid` runs started at its
-  `procStart`, and any `claude` resuming the session by `--resume`,
-  `--resume=` or `-r` from one listing of the host's processes; unknown
-  names `CLAUDE_CONFIG_DIR` or the host's processes and no path (207,
-  C.4; core.30).
+  `sessionId`, counted only where the `pid` runs started within a
+  second of its `procStart` (a record with none counted where its
+  process runs, as design 2 and 2.1.296 read it), and any `claude`
+  resuming the session by `--resume`, `--resume=` or `-r` from one
+  listing of the host's processes; unknown names `CLAUDE_CONFIG_DIR` or
+  the host's processes and no path. It reads only, and ends, signals and
+  sends nothing (207, C.4; core.10, core.30).
+
+## Outside the change
+
+`site/src/content/docs/architecture/rules.md` mirrors core.18 and
+core.32 word for word. Its core.10 was already shorter than
+`docs/architecture/core.md`'s on main, wanting the statechart kind's
+sessions and the mode read at the first prompt that other changes
+added. This change adds its two clauses to it, but leaves out "and
+flume adopts, ends and sends nothing to a process that does". No spec
+of this change covers the mirror, and task 1.2's checks pass, so the
+work still holds. Bringing the mirror's core.10 back to core.md's words
+is a chore for main.
 
 ## Checks
 
 - `openspec validate a-lost-conversation-resumes-its-session --strict`:
   valid.
 - Each requirement the delta specs modify or rename stands under its
-  old name in `openspec/specs/`, so the archive applies.
-- `sluice exec main` at c8aa98d against main at 4b3d2d1: passed, 23
-  tasks of 24 run, `flume:tools` 104 of 104 in the `check-tools` layer,
-  the two walkthroughs above among them, and `flume:test`,
-  `core:test`, `seams:test`, `fakes:test`, `conformance:test`,
-  `conformance:coverage`, `site:prose` and `site:build` with them.
-  sluice recorded no result for the run, since this report stood
-  uncommitted in the worktree beside it.
+  old name in `openspec/specs/` at main's c591179, so the archive
+  applies; `openspec validate --specs --strict` is run over the
+  archived specs in the archive's commit.
+- `sluice exec main` at 9466204 against main at c591179, the tree
+  clean: passed, 23 checks recorded under their keys for 9466204,
+  `root:format`, `root:adrs`, `root:changes`, `seams`', `fakes`',
+  `core`', `conformance`' and `flume`'s format, lint and test,
+  `conformance:coverage`, `plugin-claude:test`, `site:prose` and
+  `site:build`, and `flume:tools` 108 of 108 in the `check-tools`
+  layer, design 13's two walkthroughs and the pinned release's session
+  record test among them.
