@@ -67,9 +67,13 @@
 //! socket alone by the session listed at that socket, and starts no
 //! server, where attach starts one (201). The profile settles nothing,
 //! keeps no watch and decides nothing of whether flume runs attended
-//! (119, 122, 208). setup is what the watch wrote herdr's configuration lacks for the
-//! plugin, `setup.json` beside each fresh lease, its words in order and
-//! once each, read from the files alone (122; design 8). The session a
+//! (119, 122, 208). flume's herdr plugin keeps no watch and no process
+//! of its own: at herdr's startup of a server it writes what herdr's
+//! configuration lacks for it into that server's `setup.json`, with the
+//! server's socket, and exits. setup is those words of each server whose
+//! socket is still present, in order and once each, read from the files
+//! alone, reading no lease and calling no herdr command (122, C.5;
+//! core.29). The session a
 //! command runs in is `herdr:<pane>@<socket>`, its pane on its server
 //! (7).
 //!
@@ -117,10 +121,6 @@ pub const BOUND: Duration = Duration::from_secs(10);
 /// The bound on runs' one session listing, which herdr answers in
 /// milliseconds (201, C.5).
 pub const RUNS_BOUND: Duration = Duration::from_secs(1);
-
-/// How long a lease of the plugin's watch is fresh after it was last
-/// renewed; the watch renews it four times as often.
-pub const LEASE_TERM: Duration = Duration::from_secs(60);
 
 /// How long a start waits for the pane's shell to come to its prompt and
 /// the program to be ready: room for a shell and SessionStart hooks slow
@@ -367,36 +367,28 @@ impl Herdr {
         self
     }
 
-    /// The state directory of each herdr server whose watch of flume's
-    /// herdr plugin renewed its lease within the lease's term, in the
-    /// order of their names: the lease's first line is the watch's pid
-    /// and when it last renewed, in seconds since the epoch (design 10).
-    fn watched_servers(&self) -> Vec<PathBuf> {
+    /// The state directory of each herdr server whose startup of flume's
+    /// herdr plugin wrote its `setup.json` naming a socket still present,
+    /// in the order of their names, with what it holds (122, C.5).
+    fn running_servers(&self) -> Vec<(PathBuf, Value)> {
         let Some(plugin) = &self.plugin else {
             return vec![];
         };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs());
         let mut servers: Vec<PathBuf> = fs::read_dir(plugin.join("servers"))
             .into_iter()
             .flatten()
             .filter_map(Result::ok)
             .map(|server| server.path())
-            .filter(|server| {
-                fs::read_to_string(server.join("watch.lease"))
-                    .ok()
-                    .and_then(|lease| {
-                        let first = lease.lines().next()?.to_string();
-                        first.split_whitespace().nth(1)?.parse::<u64>().ok()
-                    })
-                    .is_some_and(|renewed| {
-                        renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs()
-                    })
-            })
             .collect();
         servers.sort();
         servers
+            .into_iter()
+            .filter_map(|server| {
+                let written = read_json(&server.join("setup.json"))?;
+                let socket = written.get("socket")?.as_str()?;
+                Path::new(socket).exists().then_some((server, written))
+            })
+            .collect()
     }
 
     /// Exactly `variables` for the host user's login environment, in
@@ -2227,8 +2219,8 @@ impl Terminal for Herdr {
 
     fn setup(&self) -> Vec<String> {
         let mut setup: Vec<String> = Vec::new();
-        for server in self.watched_servers() {
-            let Some(Value::Array(lacking)) = read_json(&server.join("setup.json")) else {
+        for (_, written) in self.running_servers() {
+            let Some(Value::Array(lacking)) = written.get("lacking") else {
                 continue;
             };
             for words in lacking.iter().filter_map(Value::as_str) {
@@ -2597,21 +2589,21 @@ mod tests {
         (herdr, plugin, ran)
     }
 
-    /// A server of the plugin's whose watch last renewed its lease `ago`
-    /// seconds since, and wrote `lacking` into its setup.json.
-    fn server(plugin: &Path, name: &str, ago: u64, lacking: &[&str]) {
+    /// A server of the plugin's whose startup wrote `lacking` into its
+    /// setup.json, naming the socket `socket` under the plugin's scratch,
+    /// present where `running`.
+    fn server(plugin: &Path, name: &str, running: bool, lacking: &[&str]) {
         let server = plugin.join("servers").join(name);
         fs::create_dir_all(&server).unwrap();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        fs::write(
-            server.join("watch.lease"),
-            format!("4242 {}\n/plugin\n0.0.0\n77\n", now - ago),
+        let socket = plugin.join(format!("{name}.sock"));
+        if running {
+            fs::write(&socket, "").unwrap();
+        }
+        write_json(
+            &server.join("setup.json"),
+            &json!({ "socket": socket, "lacking": lacking }),
         )
         .unwrap();
-        write_json(&server.join("setup.json"), &json!(lacking)).unwrap();
     }
 
     const KEY: &str = "herdr's configuration, /h/config.toml, binds no key to flume's places";
@@ -2619,30 +2611,41 @@ mod tests {
         "herdr's configuration, /h/config.toml, shows no row of flume's in the sidebar";
 
     #[test]
-    fn setup_is_a_fresh_leases_words_alone() {
-        // 122, C.5, design 8: one server's watch keeps a fresh lease and
-        // says the popup's key is missing; another's lease is stale, its
-        // words of the rows no longer what a watch reads. The profile
-        // gives the first's words alone and runs no herdr command.
-        let (herdr, plugin, ran) = over_plugin("fresh-stale");
-        server(&plugin, "1111", 5, &[KEY]);
-        server(&plugin, "2222", 120, &[ROWS]);
+    fn setup_is_a_running_servers_words_alone() {
+        // The terminal-profiles spec's "A running server and a gone one"
+        // (122, C.5): one server's setup.json names its present socket and
+        // the popup's missing key; another's names a socket now gone and
+        // the missing rows. The profile gives the first's words alone and
+        // runs no herdr command, an earlier release's fresh lease beside
+        // the gone one read as nothing.
+        let (herdr, plugin, ran) = over_plugin("running-gone");
+        server(&plugin, "1111", true, &[KEY]);
+        server(&plugin, "2222", false, &[ROWS]);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        fs::write(
+            plugin.join("servers/2222/watch.lease"),
+            format!("4242 {now}\n/plugin\n0.0.0\n77\n"),
+        )
+        .unwrap();
         assert_eq!(herdr.setup(), vec![KEY.to_string()]);
         assert!(!ran.exists(), "a herdr command was run");
     }
 
     #[test]
     fn setup_gives_each_servers_words_in_order_and_once() {
-        // 122, design 8: two watches read one configuration file, and a
-        // third another; each of their words is given once, in the order
-        // of their servers.
+        // 122, C.5: two servers read one configuration file, and a third
+        // another; each of their words is given once, in the order of
+        // their servers.
         let (herdr, plugin, ran) = over_plugin("in-order");
-        server(&plugin, "1111", 5, &[KEY, ROWS]);
-        server(&plugin, "2222", 5, &[KEY, ROWS]);
+        server(&plugin, "1111", true, &[KEY, ROWS]);
+        server(&plugin, "2222", true, &[KEY, ROWS]);
         server(
             &plugin,
             "3333",
-            5,
+            true,
             &["herdr's configuration, /other.toml, binds no key"],
         );
         assert_eq!(
@@ -2657,15 +2660,18 @@ mod tests {
     }
 
     #[test]
-    fn setup_is_none_beside_no_lease_or_nothing_lacking() {
-        // 122, design 8: no plugin's state, a fresh lease beside an empty
-        // array, and one beside no setup.json, as a watch of an earlier
-        // plugin keeps, each give none.
+    fn setup_is_none_for_nothing_lacking_or_nothing_written() {
+        // 122, C.5: no plugin's state, a running server's setup.json
+        // naming nothing lacking, one with no setup.json, and an earlier
+        // release's array, which names no socket, each give none.
         let (herdr, plugin, ran) = over_plugin("none");
         assert_eq!(herdr.setup(), Vec::<String>::new());
-        server(&plugin, "1111", 5, &[]);
-        server(&plugin, "2222", 5, &[KEY]);
+        server(&plugin, "1111", true, &[]);
+        server(&plugin, "2222", true, &[KEY]);
         fs::remove_file(plugin.join("servers/2222/setup.json")).unwrap();
+        let earlier = plugin.join("servers/3333");
+        fs::create_dir_all(&earlier).unwrap();
+        write_json(&earlier.join("setup.json"), &json!([KEY])).unwrap();
         assert_eq!(herdr.setup(), Vec::<String>::new());
         assert!(!ran.exists(), "a herdr command was run");
     }
