@@ -160,14 +160,3 @@ with no runs part, before the line's one `no profile for <multiplexer>`
 
 - **WHEN** the fake host's `work` names `work-design` for research and for release's review, and `work` for the kind fix, and the fake terminal is scripted to read `work` running and `work-design` not
 - **THEN** `work`'s line is `work · session work · runs · session work-design · not running`, its JSON gives `work-design` not running among its `sessions` and no `work` there, and the fake terminal logs the one runs `runs work work-design` for `work` (199, 200, 201)
-
-### Requirement: The list says a place waits on its session
-
-A place's line SHALL add `waits on its session` where its state is
-`waiting on its session`, in the place of `waits on the host`, read
-from the stage's wait as the last settle left it (49, 200, 207).
-
-#### Scenario: A talk waiting on its session
-
-- **WHEN** the list is asked of a place whose lost talk waits on its session
-- **THEN** its line ends `waiting on its session · waits on its session`, and the list asks no agent program whether the session runs (49, 200, 207)
