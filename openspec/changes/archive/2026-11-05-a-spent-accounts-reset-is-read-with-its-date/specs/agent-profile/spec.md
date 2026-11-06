@@ -4,16 +4,12 @@
 
 The Claude Code profile's `spent` SHALL read yes only where the
 StopFailure hook recorded `rate_limit` with words that open as the
-pinned release's usage-limit messages do, with the reset its words'
-` · resets <when> (<zone>)` part names, or, where the limit hit is a
-budget, their ` · your <limit> resets <when> (<zone>)` part, read in
-that zone from when the hook ran. `<when>` SHALL be read as the pinned
-release's reset formatter writes it: a time of day being the first such
-time no more than a minute before the hook ran, and a date and a time
-joined by ` at ` being that date, in the year the hook ran in the zone
-where the date names none. Words that name no reset, or one in another
-form, SHALL read yes with none; a `rate_limit` with other words SHALL
-read no (146, 151, C.4).
+pinned release's usage-limit messages do, with the reset their
+` · resets <when> (<zone>)` part names, or, for a budget, their
+` · your <limit> resets <when> (<zone>)` part, read in that zone from
+when the hook ran. Words that name no reset, or one in
+another form, SHALL read yes with none; a `rate_limit` with other words
+SHALL read no (146, 151, C.4).
 
 #### Scenario: A session limit with a time of day
 
@@ -25,20 +21,15 @@ read no (146, 151, C.4).
 - **WHEN** the hook ran on 2026-11-05 at 20:40 UTC and recorded `rate_limit` with "You've hit your weekly limit · resets Nov 8 at 12am (America/New_York)"
 - **THEN** `spent` reads yes until 2026-11-08 at 05:00 UTC (151, C.4)
 
-#### Scenario: A date in another year
+#### Scenario: A reset past midnight
 
-- **WHEN** the hook ran on 2026-12-30 in London and the words say "resets Jan 3, 2027 at 9am (Europe/London)"
-- **THEN** `spent` reads yes until 3 January 2027 at 09:00 in London (151, C.4)
+- **WHEN** the hook ran at 23:40 in UTC and the words say "resets 1am (UTC)"
+- **THEN** `spent` reads yes until 01:00 UTC the next day (151)
 
 #### Scenario: A budget with its plan limit's reset
 
 - **WHEN** the words are "You've hit your team's shared budget · raise it at https://claude.ai/admin-settings/usage · your weekly limit resets Nov 8 at 12am (America/New_York)"
 - **THEN** `spent` reads yes until 2026-11-08 at 05:00 UTC (151, C.4)
-
-#### Scenario: A reset past midnight
-
-- **WHEN** the hook ran at 23:40 in UTC and the words say "resets 1am (UTC)"
-- **THEN** `spent` reads yes until 01:00 UTC the next day (151)
 
 #### Scenario: No reset in the words
 
@@ -69,3 +60,28 @@ C.4).
 
 - **WHEN** the test reads the program devenv.nix pins, the file its `claude` wrapper runs
 - **THEN** each fragment the profile's reading rests on is found in it, and the test names any that is not (C.4)
+
+## ADDED Requirements
+
+### Requirement: A reset read as the pinned release's formatter writes it
+
+The Claude Code profile SHALL read a reset's `<when>` as the pinned
+release's reset formatter writes it: a time of day being the first such
+time no more than a minute before the hook ran, and a date and a time
+joined by ` at ` being that date, in the year the hook ran in the zone
+where the date names none (151, C.4).
+
+#### Scenario: A reset in the minute the hook ran
+
+- **WHEN** the hook ran 20 seconds past 15:00 UTC and the words say "resets 3pm (UTC)"
+- **THEN** `spent` reads yes until 15:00 UTC that day, not the next (151)
+
+#### Scenario: A date with its minutes
+
+- **WHEN** the hook ran on 2026-11-05 in UTC and the words say "resets Nov 12 at 3:30pm (UTC)"
+- **THEN** `spent` reads yes until 2026-11-12 at 15:30 UTC (151, C.4)
+
+#### Scenario: A date in another year
+
+- **WHEN** the hook ran on 2026-12-30 in London and the words say "resets Jan 3, 2027 at 9am (Europe/London)"
+- **THEN** `spent` reads yes until 3 January 2027 at 09:00 in London (151, C.4)

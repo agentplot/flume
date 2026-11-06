@@ -9,7 +9,8 @@ an hour, as 146 gives where the words name no reset, since the Claude
 Code profile read a date only joined to its time by a comma, a form the
 pinned 2.1.296 never writes. An hour later the pool took the account
 again with its weekly limit spent, and status gave nothing of why the
-pause was an hour (record 0045, proposed).
+pause was an hour (record 0045, accepted by the user on 2026-11-05 at
+the fix's review).
 
 ## What Changes
 
@@ -59,8 +60,8 @@ None.
   field list.
 - `site/`: the guide's spent account and threshold, and the state
   reference.
-- `docs/`: record 0045, proposed; rule core.32's details.
-- agentplot/blueprints: 146 and C.4's spent row, on the branch
-  `design/flume-a-spent-accounts-reset-is-read-with-its-date` (core.19).
+- `docs/`: record 0045, accepted 2026-11-05; rule core.32's details.
+- agentplot/blueprints: 146 and C.4's spent row, on main at 2287669
+  (core.19).
 - No new crate, plugin or site part, so no new moon project, and no new
   dependency or tool.
