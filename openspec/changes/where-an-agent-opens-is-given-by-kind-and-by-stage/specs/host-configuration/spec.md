@@ -4,12 +4,11 @@
 
 The local layer SHALL set only a stream's `agents`, `priority`,
 `points`, `pace`, `session` and `multiplexer`, the `session` a stream
-names for a kind and for a kind's stage, a label's `reserve` and
-`keep_free`, the `stream` and `label` a repository's kind or a kind is
-given, the `stream` a repository is given, and a kind's agents table; a
-local file setting any other key, unreadable, or setting a value its key
-refuses, SHALL not be taken at all, the managed layer read alone (C.7,
-199).
+names for a kind, a label's `reserve` and `keep_free`, the `stream` and
+`label` a repository's kind or a kind is given, the `stream` a
+repository is given, and a kind's agents table; a local file setting any
+other key, unreadable, or setting a value its key refuses, SHALL not be
+taken at all, the managed layer read alone (C.7, 199).
 
 #### Scenario: A local file that sets a pool
 
@@ -36,10 +35,10 @@ refuses, SHALL not be taken at all, the managed layer read alone (C.7,
 - **WHEN** the managed layer gives `[host] multiplexer = "herdr"` and `[streams.trial] multiplexer = "printed"`, and the local layer gives `[streams.trial] multiplexer = "herdr"`
 - **THEN** the local layer is taken, `trial` reads `herdr` from `stream` in the local layer, and status gives it with that layer (190, C.7, S91)
 
-#### Scenario: A kind's session and a stage's set locally
+#### Scenario: A kind's session set locally
 
-- **WHEN** the managed layer gives `[streams.work.kinds.research] session = "work-design"`, and the local layer gives it `session = "work-research"` and `[streams.work.kinds.change.stages.construct] session = "work-design"`
-- **THEN** the local layer is taken, research reads `work-research` and change's construct `work-design` in `work`, each from the local layer, and status gives each with that layer (199, C.7, S107)
+- **WHEN** the managed layer gives `[streams.work.kinds.research] session = "work-design"`, and the local layer gives it `session = "work-research"` and `[streams.work.kinds.plan] session = "work-design"`
+- **THEN** the local layer is taken, research reads `work-research` and plan `work-design` in `work`, each from the local layer, and status gives each with that layer (199, C.7, S107)
 
 #### Scenario: A kind's table key the local layer cannot set
 
