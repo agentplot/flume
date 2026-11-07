@@ -1178,9 +1178,54 @@ afresh. The fresh agent's prompt says, in flume's own words, that the
 earlier agent stopped at its account's usage limit and that what it
 committed and left is in the place. The agent reads only that.
 
-Only the start after a spent agent carries a conversation. A retry, a
-fix round, a later stage and the start after an agent a caller ended
-start afresh.
+A retry of a conversation reported lost carries it too. A stage a
+kind declares a `conversation` ([kinds](/flume/guides/kinds/)) is lost
+when its agent stops with nothing delivered: its pane was closed, or
+the host or the terminal restarted. `flume retry <place> --stage
+<stage>` then goes on with the lost agent's own session. Its start takes the
+account the lost start ran under first, while that account is usable,
+of the stage's program and in the stream's pool, since that account
+holds the conversation; that choice moves no intent's affinity.
+Otherwise it takes the account any start would take, by the intent's
+affinity or the pool's strategy, and carries where that account
+reaches the conversation. A stream with no pool carries where the
+login environment's configuration home reaches it.
+Status names the account `(its conversation's)` where it came from the
+conversation. The carried agent's prompt is flume's words, then the
+retry's `--words`, then the way to stop short:
+
+```text
+Your session was lost and goes on here, with its conversation as it stood. Anything you had running then has stopped: read the place again before you carry on.
+```
+
+No carried start opens while a process runs its conversation, after a
+spent agent or a lost one. A person may have resumed the session by
+hand, in a pane of their own, or the terminal may have brought the lost
+agent back in its pane. flume adopts, ends and sends nothing to that
+process, and the stage waits as for room, never stalled, until a settle
+reads that no process runs the session. Where flume cannot read whether
+one does, the stage waits the same way, and status says what could not
+be read. Claude Code's profile reads it from the program's own record of
+its running sessions, in every configuration home the host declares for
+it, and from the host's processes. On a program whose profile reads no
+running session, a lost conversation's retry keeps waiting, since
+flume never reads that no process runs it, and status says so.
+
+Where the conversation cannot be carried, the stage starts afresh, and
+status says why. Its transcript is gone, the lost agent never said it
+started, so no configuration home is known to hold it, or no account
+the start takes reaches it. The fresh agent's prompt puts flume's words
+before the retry's:
+
+```text
+The stage's earlier agent was lost, and its conversation could not be carried, so this agent starts the stage afresh. What it committed is on the place's branch and what it left is in the place: read them and carry the stage on from there.
+```
+
+Only the start after a spent agent and a lost conversation's retry
+carry a conversation. Any other retry, a lost stage that is not a
+conversation among them, a fix round, a later stage and the start after
+an agent a caller ended start afresh. A construction stage's work is
+what its place holds, and its lost agent stopped at no turn's end.
 
 A carried start may not begin: its agent stops before it says it
 started, says nothing by the stage's limit, never receives its prompt,

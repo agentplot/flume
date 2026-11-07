@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "fa40c94";
+pub const REVISION: &str = "c94c496";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -36,7 +36,7 @@ pub fn part_b() -> Vec<u32> {
         .chain(151..=153)
         .chain([160, 164, 174, 178, 179])
         .chain(187..=189)
-        .chain([192, 196, 201])
+        .chain([192, 196, 201, 207])
         .collect()
 }
 
@@ -58,11 +58,11 @@ pub fn all() -> Vec<String> {
 }
 
 /// The last scenario of section 11.
-pub const SCENARIOS: u32 = 108;
+pub const SCENARIOS: u32 = 117;
 
 /// The numbers section 11 skips at the revision, which designs the
 /// statement does not hold yet keep for their own scenarios.
-pub const SKIPPED: [u32; 4] = [93, 94, 98, 99];
+pub const SKIPPED: [u32; 8] = [93, 94, 98, 99, 109, 110, 111, 112];
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -159,8 +159,9 @@ mod tests {
         let a = part_a();
         let b = part_b();
         assert_eq!(a.len(), 77 + 8 + 3 + 2 + 4 + 1 + 10 + 6 + 3 + 9 + 3 + 7 + 7);
-        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 3);
-        for gap in [100, 150, 193, 194] {
+        assert_eq!(b.len(), 22 + 6 + 3 + 2 + 4 + 4 + 2 + 3 + 5 + 3 + 4);
+        let gaps = [100, 150, 193, 194, 202, 203, 204, 205, 206];
+        for gap in gaps {
             assert!(!a.contains(&gap) && !b.contains(&gap), "{gap} is listed");
         }
         assert!(a.iter().all(|clause| !b.contains(clause)));
@@ -168,25 +169,25 @@ mod tests {
         every.sort();
         assert_eq!(
             every,
-            (1..=201)
-                .filter(|clause| ![100, 150, 193, 194].contains(clause))
+            (1..=207)
+                .filter(|clause| !gaps.contains(clause))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(all().len(), 197 + 8 + 104);
+        assert_eq!(all().len(), 198 + 8 + 109);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
         for gap in SKIPPED.map(|scenario| format!("S{scenario}")) {
             assert!(!all().contains(&gap), "{gap} is listed");
         }
         for scenario in [
             "S91", "S92", "S95", "S96", "S97", "S100", "S103", "S104", "S105", "S106", "S107",
-            "S108",
+            "S108", "S113", "S114", "S115", "S116", "S117",
         ] {
             assert!(
                 all().contains(&scenario.to_string()),
                 "{scenario} is not listed"
             );
         }
-        assert_eq!(REVISION, "fa40c94");
+        assert_eq!(REVISION, "c94c496");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 155, 156, 157, 158, 159, 161, 162,
             163, 165, 168, 169, 173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191,
@@ -196,7 +197,7 @@ mod tests {
         }
         for clause in [
             126, 127, 128, 133, 134, 135, 136, 138, 139, 151, 153, 160, 164, 174, 178, 179, 187,
-            188, 189, 192, 196, 201,
+            188, 189, 192, 196, 201, 207,
         ] {
             assert!(part_b().contains(&clause), "{clause} is not in Part B");
         }
@@ -214,7 +215,7 @@ mod tests {
             "S84", "S85", "184", "185", "186", "187", "188", "189", "190", "S86", "S87", "S88",
             "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
             "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "199", "S106", "S107",
-            "195", "196", "S100", "S101", "S102",
+            "207", "S113", "S114", "S115", "S116", "S117", "195", "196", "S100", "S101", "S102",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

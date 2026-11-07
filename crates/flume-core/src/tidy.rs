@@ -4,6 +4,8 @@
 //! remove-branch's judgement, named once when kept; nothing is removed
 //! while the merge queue cannot be read; what the terminal made for it
 //! is tidied, kept where what flume did not make holds it (137, 138);
+//! a place whose kind holds a conversation is kept while a process runs
+//! its last conversation start's session (207; core.18);
 //! its held state and folder go last, its document alone kept apart from
 //! a live place's while an end of it stands pending (43, 62).
 
@@ -109,6 +111,23 @@ impl Engine {
                 }
                 self.with_start(id, &identity, |start, _| start.live = false);
             }
+            // A place whose kind holds a conversation is kept while a
+            // process runs its last conversation start's session, or flume
+            // cannot read whether one does: a person may be at it, in a
+            // pane flume did not make among them (64, 207; core.18).
+            if let Some(start) = last_conversation(&held) {
+                let queue = self.queue();
+                if let Some(read) = self.live_session(id, &start.program, &start.identity, &queue) {
+                    return self.keep(
+                        id,
+                        Kept::SessionRuns {
+                            processes: read.processes,
+                            unread: read.unread,
+                        },
+                        tidied,
+                    );
+                }
+            }
             match bound.place.read(&at) {
                 PlaceRead::Gone => {}
                 PlaceRead::CouldNotRead { reason } => {
@@ -176,7 +195,7 @@ impl Engine {
         true
     }
 
-    /// Keeps a place whose work is over, naming why (64 to 66, 68).
+    /// Keeps a place whose work is over, naming why (64 to 66, 68, 207).
     fn keep(&self, id: &PlaceId, why: Kept, tidied: &mut Tidied) -> bool {
         self.update(id, |held| {
             if let Phase::Over { kept, .. } = &mut held.phase {
@@ -190,4 +209,16 @@ impl Engine {
         });
         false
     }
+}
+
+/// The last start of the place's last stage declared a conversation that
+/// started, none where its kind holds no conversation or none started
+/// (64, 109, 207).
+fn last_conversation(held: &HeldState) -> Option<&StartHeld> {
+    held.stages
+        .iter()
+        .zip(&held.place.kind.stages)
+        .filter(|(_, declared)| declared.conversation)
+        .filter_map(|(stage, _)| stage.start.as_ref())
+        .max_by_key(|start| start.started_at)
 }

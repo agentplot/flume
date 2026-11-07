@@ -20,6 +20,7 @@ mod kinds_lock;
 mod launch;
 mod line;
 mod list;
+mod live;
 mod open;
 mod own;
 mod prompt;

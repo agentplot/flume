@@ -16,6 +16,7 @@
 //! does not declare leaving it pending, and nothing of where the agent
 //! was is kept (132, 143, 190, C.7; core.28).
 
+use super::carried_conversations::{talk, talking};
 use super::settling::deliver_fix;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -170,6 +171,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "end delivery: the inbox collects an end pending for a standing address whose agent is away, delivered to the address, and no later settle sends a notice of it",
             cites: &["43", "132"],
             run: the_inbox_collects_for_a_standing_address,
+        },
+        Scenario {
+            name: "end delivery: a talk read lost while the agent the terminal brought back bare stands in its pane ends with left_in_pane, its one notice to ops saying flume left the agent in its pane",
+            cites: &["S113", "43", "77"],
+            run: a_lost_talk_with_a_bare_agent,
+        },
+        Scenario {
+            name: "end delivery: a talk whose agent was killed ends with no agent left, its notice saying nothing of one",
+            cites: &["43", "45"],
+            run: a_lost_talk_with_no_agent,
         },
     ]
 }
@@ -1259,6 +1270,64 @@ fn the_inbox_collects_for_a_standing_address(_: &()) -> Outcome {
     ensure!(
         world.terminal.notices(&at).is_empty(),
         "a notice of an end the inbox collected"
+    );
+    Ok(())
+}
+
+/// talk's lost end as held state records it, and the notices sent to
+/// `ops`.
+fn talks_lost_end(world: &World, id: &PlaceId) -> Result<(StageEnd, Vec<String>), String> {
+    let held = world.held(id).ok_or("no held state")?;
+    let end = held
+        .ends
+        .iter()
+        .find_map(|end| match &end.of {
+            EndOf::Stage {
+                stage,
+                state: StageState::Lost,
+                end,
+                ..
+            } if stage == "talk" => Some(end.clone()),
+            _ => None,
+        })
+        .ok_or("no lost end of talk is recorded")?;
+    Ok((end, world.terminal.notices("ops")))
+}
+
+fn a_lost_talk_with_a_bare_agent(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.host.restart();
+    world.terminal.forget_all();
+    world.agent.bring_back_bare(&talk(1));
+    world.engine().settle(None);
+    let (end, notices) = talks_lost_end(&world, &id)?;
+    ensure!(
+        end.left_in_pane,
+        "talk's lost end does not say an agent was left"
+    );
+    ensure_eq!(
+        notices,
+        vec![
+            "flume: research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status research--one"
+                .to_string()
+        ],
+        "the notices to ops"
+    );
+    Ok(())
+}
+
+fn a_lost_talk_with_no_agent(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    world.terminal.kill(&talk(1));
+    world.settle(&id);
+    let (end, notices) = talks_lost_end(&world, &id)?;
+    ensure!(!end.left_in_pane, "talk's lost end says an agent was left");
+    ensure_eq!(
+        notices,
+        vec!["flume: research--one talk lost; read: flume status research--one".to_string()],
+        "the notices to ops"
     );
     Ok(())
 }

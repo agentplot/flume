@@ -5,14 +5,15 @@
 
 use flume_core::{
     group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
-    Queued, ReadingStatus, Reserves, SourceStatus, StageStatus, StandingFound, StandingStatus,
-    StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
+    Queued, ReadingStatus, Reserves, SessionWait, SourceStatus, StageStatus, StandingFound,
+    StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, BaseFrom, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
-    HostConfiguration, IntentKey, KindFrom, LabelHeld, LocalLayer, Made, NamedBy, NamedSession,
-    ProfileHeld, Readiness, SessionFrom, SessionHeld, StreamHeld, SubmissionRead, UncarriedStart,
-    UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
+    AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
+    HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer, Made,
+    NamedBy, NamedSession, Phase, ProfileHeld, Readiness, SessionFrom, SessionHeld, StreamHeld,
+    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE,
+    OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
 
@@ -287,6 +288,12 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
         facts.push(format!("head {head}"));
     }
     lines.push(format!("  {}", facts.join(", ")));
+    if let Phase::Over {
+        kept: Some(kept), ..
+    } = &place.phase
+    {
+        lines.extend(session_runs_words(kept).map(|words| format!("  kept {words}")));
+    }
     lines.push(stream_line(
         &place.stream,
         place.label.as_ref(),
@@ -339,6 +346,9 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
     }
     if let Some(waiting) = &place.waiting_on {
         lines.push(waiting_line(waiting, place.stalled));
+    }
+    if let Some(wait) = &place.waits_on_session {
+        lines.push(session_wait_line(wait));
     }
     for hold in &place.holds {
         let what = match &hold.on {
@@ -487,6 +497,49 @@ fn waiting_line(waiting: &WaitingOn, stalled: bool) -> String {
     line
 }
 
+/// A stage waiting for room while a process runs the conversation its
+/// start would carry, since when, and each process by its id and start,
+/// or what flume could not read (49, 56, 207; core.30).
+fn session_wait_line(wait: &SessionWait) -> String {
+    let mut line = format!("  {} waits for its conversation to end", wait.stage);
+    if let Some(since) = wait.since {
+        line.push_str(&format!(" since {since}"));
+    }
+    format!(
+        "{line}: {}",
+        live_words(&wait.processes, wait.unread.as_deref())
+    )
+}
+
+/// Each process that runs a conversation, by its id and when it started,
+/// and what flume could not read of whether one does, naming no path
+/// (207; core.30).
+fn live_words(processes: &[LiveProcess], unread: Option<&str>) -> String {
+    let mut words: Vec<String> = processes
+        .iter()
+        .map(|process| format!("process {}, started {}", process.pid, process.started))
+        .collect();
+    if let Some(unread) = unread {
+        words.push(format!(
+            "flume cannot read whether a process runs it: {unread}"
+        ));
+    }
+    words.join("; ")
+}
+
+/// A place whose work is over kept while a process runs its last
+/// conversation start's session: each process, or what flume could not
+/// read; none for a place kept otherwise (64, 207).
+fn session_runs_words(kept: &Kept) -> Option<String> {
+    match kept {
+        Kept::SessionRuns { processes, unread } => Some(format!(
+            "while its session runs: {}",
+            live_words(processes, unread.as_deref())
+        )),
+        _ => None,
+    }
+}
+
 /// The last lines of a failed readiness step's words a person is shown.
 const FAILED_LINES: usize = 10;
 
@@ -618,6 +671,9 @@ fn agent_lines(agent: &AgentStatus, stream: &str, kind: &str) -> Vec<String> {
     if let Some(conversation) = &agent.conversation {
         lines.push(conversation_line(conversation));
     }
+    if agent.left_in_pane {
+        lines.push(LEFT_IN_PANE.to_string());
+    }
     if let Some(printed) = &agent.printed {
         lines.push(format!("    run: {printed}"));
     }
@@ -684,19 +740,21 @@ fn own_lines(own: &OwnStatus) -> Vec<String> {
 }
 
 /// The current agent's line: its identity, program, account and state,
-/// the account from the intent's affinity for the agent's program or the
-/// strategy, and its mode as written with its layer, the entry it took of
+/// the account from the intent's affinity for the agent's program, the
+/// strategy, or the account a lost conversation's start ran under, its
+/// conversation's, and its mode as written with its layer, the entry it took of
 /// a table and the value passed, where a layer gave one (56, 145, 147,
 /// 169).
 fn agent_line(agent: &AgentStatus) -> String {
     let mut line = format!("  agent {} ({})", agent.identity, agent.program);
     if let Some(account) = &agent.account {
         let from = match account.from {
-            AccountFrom::Affinity => format!("the affinity for {}", agent.program),
-            AccountFrom::Strategy => "the strategy".to_string(),
+            AccountFrom::Affinity => format!("from the affinity for {}", agent.program),
+            AccountFrom::Strategy => "from the strategy".to_string(),
+            AccountFrom::Conversation => "its conversation's".to_string(),
         };
         line.push_str(&format!(
-            " on the account {} of {} (from {from})",
+            " on the account {} of {} ({from})",
             account.name, account.pool,
         ));
     }
@@ -1147,23 +1205,31 @@ fn unsettled_line(unsettled: &UnsettledStart) -> String {
 }
 
 /// Whether the current agent carries the conversation of its stage's
-/// start whose agent stopped at its account's usage limit, or why not,
-/// naming no path (56, 146, 179; core.30).
+/// start whose agent stopped at its account's usage limit or was lost,
+/// the latter said, or why not, naming no path (56, 146, 179; core.30).
 fn conversation_line(conversation: &Conversation) -> String {
+    let lost = match conversation.cause {
+        CarryCause::Lost => ", lost",
+        CarryCause::Spent => "",
+    };
     match &conversation.why {
         None if conversation.carried => {
             format!(
-                "    carries the conversation of start {}",
+                "    carries the conversation of start {}{lost}",
                 conversation.from
             )
         }
         why => format!(
-            "    starts afresh after start {}: {}",
+            "    starts afresh after start {}{lost}: {}",
             conversation.from,
             why.as_deref().unwrap_or("its conversation stayed behind")
         ),
     }
 }
+
+/// The agent of a conversation's stage read lost that the terminal
+/// brought back in its last start's pane, left there (77; core.10).
+const LEFT_IN_PANE: &str = "    brought back by the terminal in its start's pane after its stage was lost, and left there: flume sends it nothing, and only its caller's stop, drop or done ends it";
 
 /// A start that carried its stage's conversation and did not begin, with
 /// what happened (56, 146, S79).
@@ -1277,7 +1343,10 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
         lines.push(format!("removed {place}"));
     }
     for kept in &tidy.kept {
-        lines.push(format!("kept {}: {}", kept.place, word(json!(kept.why))));
+        lines.push(match session_runs_words(&kept.why) {
+            Some(words) => format!("kept {} {words}", kept.place),
+            None => format!("kept {}: {}", kept.place, word(json!(kept.why))),
+        });
     }
     for branch in &tidy.branches_kept {
         lines.push(format!(
@@ -1308,21 +1377,24 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flume_core::EndStatus;
     use flume_core::{
         AccountStatus, AddressStatus, AgentSettings, Listed, ModeStatus, MoveStatus, OwnFileStatus,
         OwnStatus, Past, PendingEnd, PlaceLine, RoomWanted, StreamListed, StreamStatus, TitleFrom,
         TitleHeld, WindowStatus,
     };
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, Declared, Given, Layer, ModeBegan,
-        MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, Reserved,
-        SessionRuns, Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
+        AccountFrom, AccountHeld, AccountMove, AgentState, Declared, EndHeld, EndOf, Given, Layer,
+        ModeBegan, MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep,
+        Reserved, SessionRuns, StageEnd, StageState, Strategy, StreamFrom, StreamHeld, Unsettled,
+        View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
     #[test]
     fn an_agents_account() {
         let agent = AgentStatus {
+            left_in_pane: false,
             identity: "flume:r:fix--one:code:2".into(),
             stage: "code".into(),
             program: "agent".into(),
@@ -1802,6 +1874,7 @@ mod tests {
     /// mode as `status` gives it.
     fn in_mode(written: &str, layer: Layer, status: ModeStatus) -> AgentStatus {
         AgentStatus {
+            left_in_pane: false,
             identity: "flume:r:fix--one:code:1".into(),
             stage: "code".into(),
             program: "agent".into(),
@@ -2074,6 +2147,7 @@ mod tests {
         assert_eq!(
             conversation_line(&Conversation {
                 from: 1,
+                cause: flume_seams::CarryCause::Spent,
                 carried: true,
                 why: None,
             }),
@@ -2086,6 +2160,7 @@ mod tests {
         assert_eq!(
             conversation_line(&Conversation {
                 from: 1,
+                cause: flume_seams::CarryCause::Spent,
                 carried: false,
                 why: Some("the chosen account's configuration home (`CLAUDE_CONFIG_DIR`) does not reach its conversation: its `projects` folder is not the stopped account's".into()),
             }),
@@ -2765,10 +2840,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_places_heading_with_its_line() {
-        // 56, 60: the place's line under its heading.
-        let place = PlaceStatus {
+    /// A live place of a fix kind, its current stage code, and nothing
+    /// else to say.
+    fn a_place() -> PlaceStatus {
+        PlaceStatus {
             place: PlaceId::new("/d/places/1/fix--one"),
             repository: "/r".into(),
             kind: "fix".into(),
@@ -2798,6 +2873,7 @@ mod tests {
             hold_words: BTreeMap::new(),
             waiting_on: None,
             stalled: false,
+            waits_on_session: None,
             holds: vec![],
             priority: 0,
             stream: StreamHeld {
@@ -2816,7 +2892,220 @@ mod tests {
             role: None,
             clues: None,
             line: a_line("fix--one", "code · run 1 · working"),
+        }
+    }
+
+    /// A process that runs a lost talk's session, as live read it.
+    fn by_hand() -> LiveProcess {
+        LiveProcess {
+            pid: 4242,
+            started: 9000,
+        }
+    }
+
+    #[test]
+    fn a_lost_conversation_carried_and_one_started_afresh() {
+        // 56, 179: a lost start's conversation carried says it was lost;
+        // one that could not be carried says so with why, naming no path.
+        let lost = |carried, why: Option<&str>| Conversation {
+            from: 1,
+            cause: flume_seams::CarryCause::Lost,
+            carried,
+            why: why.map(str::to_string),
         };
+        assert_eq!(
+            conversation_line(&lost(true, None)),
+            "    carries the conversation of start 1, lost"
+        );
+        assert_eq!(
+            conversation_line(&lost(false, Some("its conversation's transcript, in the stopped account's configuration home (`CLAUDE_CONFIG_DIR`), cannot be read"))),
+            "    starts afresh after start 1, lost: its conversation's transcript, in the stopped account's configuration home (`CLAUDE_CONFIG_DIR`), cannot be read"
+        );
+    }
+
+    #[test]
+    fn an_account_from_its_conversation() {
+        // 145: the account a lost conversation's start ran under, taken
+        // first, as its conversation's.
+        let agent = AgentStatus {
+            account: Some(AccountHeld {
+                pool: "ops".into(),
+                name: "work-1".into(),
+                from: AccountFrom::Conversation,
+            }),
+            mode: None,
+            settings: AgentSettings::default(),
+            ..in_mode(
+                "edits",
+                Layer::Kind,
+                ModeStatus {
+                    passed: "edit-files".into(),
+                    entry: None,
+                    read_back: true,
+                },
+            )
+        };
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent) on the account work-1 of ops (its conversation's): working"
+        );
+    }
+
+    #[test]
+    fn a_stage_waiting_on_its_session() {
+        // 49, 56, 207: the stage waits for its conversation to end, since
+        // when, with each process by its id and start, or what flume could
+        // not read.
+        let place = PlaceStatus {
+            waits_on_session: Some(SessionWait {
+                stage: "talk".into(),
+                processes: vec![
+                    by_hand(),
+                    LiveProcess {
+                        pid: 4343,
+                        started: 9100,
+                    },
+                ],
+                unread: None,
+                since: Some(54_000),
+            }),
+            ..a_place()
+        };
+        assert!(
+            place_lines(&place).contains(
+                &"  talk waits for its conversation to end since 54000: process 4242, started 9000; process 4343, started 9100".to_string()
+            ),
+            "{:#?}",
+            place_lines(&place)
+        );
+        let unread = PlaceStatus {
+            waits_on_session: Some(SessionWait {
+                stage: "talk".into(),
+                processes: vec![],
+                unread: Some("the host's processes cannot be listed".into()),
+                since: None,
+            }),
+            ..a_place()
+        };
+        assert!(place_lines(&unread).contains(
+            &"  talk waits for its conversation to end: flume cannot read whether a process runs it: the host's processes cannot be listed".to_string()
+        ));
+    }
+
+    #[test]
+    fn an_agent_left_in_its_pane_and_the_end_that_says_so() {
+        // 43, 77: the agent the terminal brought back in a lost talk's
+        // pane, left there, on a line of its own beneath it; the lost end
+        // in the notice's words, in status and in the inbox.
+        let end = EndStatus {
+            end: EndHeld {
+                of: EndOf::Stage {
+                    stage: "talk".into(),
+                    start: 1,
+                    state: StageState::Lost,
+                    quiet_from: None,
+                    end: StageEnd {
+                        left_in_pane: true,
+                        ..StageEnd::default()
+                    },
+                },
+                read_at: 54_000,
+                deliveries: vec![],
+            },
+            pending_for: vec!["ops".into()],
+        };
+        let place = PlaceStatus {
+            agent: Some(AgentStatus {
+                left_in_pane: true,
+                ..in_mode(
+                    "edits",
+                    Layer::Kind,
+                    ModeStatus {
+                        passed: "edit-files".into(),
+                        entry: None,
+                        read_back: true,
+                    },
+                )
+            }),
+            ends: vec![end.clone()],
+            ..a_place()
+        };
+        let lines = place_lines(&place);
+        assert!(
+            lines.contains(&"    brought back by the terminal in its start's pane after its stage was lost, and left there: flume sends it nothing, and only its caller's stop, drop or done ends it".to_string()),
+            "{lines:#?}"
+        );
+        assert!(lines.contains(
+            &"  ended: talk lost, and flume left the agent the terminal brought back in its pane; pending for ops".to_string()
+        ));
+        let inbox = Answer::Inbox {
+            recipient: "ops".into(),
+            ends: vec![flume_core::Collected {
+                place: PlaceId::new("/d/places/1/research--one"),
+                kind: "research".into(),
+                name: "one".into(),
+                end,
+            }],
+        };
+        assert_eq!(
+            person(&inbox),
+            "research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status /d/places/1/research--one"
+        );
+    }
+
+    #[test]
+    fn a_place_kept_while_its_session_runs() {
+        // 64, 207: the tidy keeps a place while a process runs its last
+        // conversation start's session, naming each process, and the
+        // place says so beneath its heading.
+        let place = PlaceId::new("/d/places/1/research--one");
+        let tidy = Tidied {
+            removed: vec![],
+            kept: vec![
+                flume_core::KeptPlace {
+                    place: place.clone(),
+                    why: Kept::SessionRuns {
+                        processes: vec![by_hand()],
+                        unread: None,
+                    },
+                },
+                flume_core::KeptPlace {
+                    place: PlaceId::new("/d/places/1/research--two"),
+                    why: Kept::SessionRuns {
+                        processes: vec![],
+                        unread: Some("its agent profile reads no running session".into()),
+                    },
+                },
+            ],
+            branches_kept: vec![],
+            not_over: vec![],
+            terminal: vec![],
+        };
+        assert_eq!(
+            tidy_lines(&tidy),
+            [
+                "kept /d/places/1/research--one while its session runs: process 4242, started 9000",
+                "kept /d/places/1/research--two while its session runs: flume cannot read whether a process runs it: its agent profile reads no running session",
+            ]
+        );
+        let kept = PlaceStatus {
+            phase: Phase::Over {
+                over: flume_seams::Over::Dropped,
+                kept: Some(Kept::SessionRuns {
+                    processes: vec![by_hand()],
+                    unread: None,
+                }),
+            },
+            ..a_place()
+        };
+        assert!(place_lines(&kept)
+            .contains(&"  kept while its session runs: process 4242, started 9000".to_string()));
+    }
+
+    #[test]
+    fn a_places_heading_with_its_line() {
+        // 56, 60: the place's line under its heading.
+        let place = a_place();
         assert_eq!(
             place_lines(&place)[..2],
             [

@@ -8,13 +8,14 @@
 //! place whose held state keeps neither, its `declared` then saying its
 //! source (19, 21).
 
+use crate::live::waits_on_session;
 use crate::reading::{find_group, reads_change};
 use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
     side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EndStatus, Engine, GroupStatus,
-    ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SourceStatus, StageStatus,
-    SubmissionStatus, WaitingOn, Waits,
+    ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionWait, SourceStatus,
+    StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 use std::collections::BTreeMap;
@@ -258,6 +259,10 @@ impl Engine {
                 conversation: start.conversation.clone(),
                 session: start.session.clone(),
                 terminal: start.terminal.clone(),
+                left_in_pane: held.stages[index]
+                    .end
+                    .as_ref()
+                    .is_some_and(|end| end.left_in_pane),
                 own,
             }
         });
@@ -351,6 +356,7 @@ impl Engine {
             hold_words: place.hold_words.clone(),
             waiting_on: held.waiting.as_ref().map(|waiting| waiting.on.clone()),
             stalled: held.waiting.as_ref().is_some_and(|waiting| waiting.stalled),
+            waits_on_session: session_wait(held),
             holds: held.holds.clone(),
             priority: held.priority,
             stream: place.stream.clone(),
@@ -475,6 +481,29 @@ pub(crate) fn group_status(
         of: facts.groups.len(),
         number: group.number.clone(),
         title: group.title.clone(),
+    })
+}
+
+/// The stage of a live place that waits for room while a process runs
+/// the conversation its start would carry, or flume could not read
+/// whether one does, with what the last settle's live read and since
+/// when, from its held state alone; none where no stage waits so (49, 56,
+/// 207).
+pub(crate) fn session_wait(held: &HeldState) -> Option<SessionWait> {
+    if held.phase != Phase::Live {
+        return None;
+    }
+    held.stages.iter().find_map(|stage| {
+        let room = stage
+            .room
+            .as_ref()
+            .filter(|room| stage.state == StageState::WaitingForRoom && waits_on_session(room))?;
+        Some(SessionWait {
+            stage: stage.name.clone(),
+            processes: room.live.clone(),
+            unread: room.live_unread.clone(),
+            since: stage.since,
+        })
     })
 }
 

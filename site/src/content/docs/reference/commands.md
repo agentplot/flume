@@ -226,11 +226,14 @@ stage. Then come the parts that hold:
 
 - whom it waits on: `waits on its caller`, where its next move is its
   caller's, stalled or not; `waits on the host`, where a stage waits for
-  room; or `waits on the merge queue`, where it is submitted;
+  room; `waits on its session`, where a stage waits while a process
+  runs the conversation its start would carry; or `waits on the merge
+  queue`, where it is submitted;
 - what keeps a place whose work is over, in a word: `kept by <step>`,
   the teardown's step that failed, such as `sluice release`; `kept
   holding work`, `kept holding a lock` or `kept holding work and a
-  lock`; `kept while its agent runs`; or `kept unread`. A place removed
+  lock`; `kept while its agent runs`; `kept while its session runs`,
+  while a process runs its conversation; or `kept unread`. A place removed
   whose branch and document are still to go reads `being tidied`, and a
   tidied place's document kept for an end pending reads `tidied`. A
   place that landed or was dropped shows these only under `--all`; a

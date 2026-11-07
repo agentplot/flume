@@ -189,3 +189,20 @@ SHALL leave it pending; nothing of where the agent was SHALL be kept
 
 - **WHEN** under the pinned herdr and the stand-in, a fix names `w/planner` as its recipient, the host's configuration gives it `agent = "w-planner"` and `session = "w"`, and a stand-in runs in `w` under the herdr name `w-planner`
 - **THEN** the fix's end reaches that pane as one notice, and no place of a planner is made (43, 132, C.5)
+
+### Requirement: A lost conversation's end says flume left an agent in its pane
+
+The end of a conversation's stage read lost while an agent the
+terminal brought back stands in its pane SHALL say that flume left that
+agent in its pane, in the end held on the place and in its notice to
+each recipient (43, 77).
+
+#### Scenario: A lost talk with a bare agent
+
+- **WHEN** after a rebuild the fake terminal brings a talk's agent back bare, with the session `ops` waiting, and the settle reads talk lost
+- **THEN** the end gives `left_in_pane`, and the fake terminal records one notice to `ops` naming talk lost and that flume left the agent in its pane (43, 77, S113)
+
+#### Scenario: A lost talk with no agent
+
+- **WHEN** a talk's agent is killed and the settle reads talk lost
+- **THEN** the end gives no `left_in_pane`, and the notice says nothing of an agent left (43, 45)

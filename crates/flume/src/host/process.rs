@@ -3,7 +3,8 @@
 //! in a pane's foreground (32; record 0018), and the agent program's, for
 //! the program its hook runs under (161); and a program run to its end
 //! under a bound, as a window's profile runs the program that hands the
-//! display its window (189). No tool is named here (core.1), and no
+//! display its window (189); and every process of the host's user, as
+//! the agent program's profile reads which of them runs a session (207). No tool is named here (core.1), and no
 //! profile calls another for it (core.2).
 
 use std::io::Read;
@@ -104,6 +105,166 @@ pub fn executable(pid: u32) -> Option<PathBuf> {
     std::fs::read_link(format!("/proc/{pid}/exe")).ok()
 }
 
+/// A process of the host as its process table gives it: its id, when it
+/// started by the host's clock in seconds since the epoch, and its
+/// arguments, as the process holds them now (207).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Listed {
+    pub pid: u32,
+    pub started: u64,
+    pub args: Vec<String>,
+}
+
+/// Each process of the host this process may read, the host user's own
+/// among them, from the process table itself, which a sandbox that
+/// refuses to run a setuid `ps`, as a merge queue's checks run under,
+/// lets it read; a process that ended while it was read left out, and
+/// one whose arguments cannot be read listed with none; none where the
+/// table cannot be listed (207).
+#[cfg(target_os = "macos")]
+pub fn listed() -> Option<Vec<Listed>> {
+    // SAFETY: a null buffer of no length asks only for the count.
+    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
+    let count = usize::try_from(count).ok().filter(|count| *count > 0)?;
+    // Room for the processes started since the count.
+    let mut pids: Vec<libc::pid_t> = vec![0; count + count / 2 + 64];
+    let size = libc::c_int::try_from(std::mem::size_of_val(pids.as_slice())).ok()?;
+    // SAFETY: the buffer holds `size` bytes, as the call is told.
+    let found = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), size) };
+    let found = usize::try_from(found).ok().filter(|found| *found > 0)?;
+    pids.truncate(found.min(pids.len()));
+    Some(
+        pids.into_iter()
+            .filter_map(|pid| {
+                let started = macos::started(pid)?;
+                Some(Listed {
+                    pid: u32::try_from(pid).ok().filter(|pid| *pid > 0)?,
+                    started,
+                    args: macos::args(pid).unwrap_or_default(),
+                })
+            })
+            .collect(),
+    )
+}
+
+#[cfg(target_os = "macos")]
+mod macos {
+    /// When the process `pid` started, from its BSD information.
+    pub fn started(pid: libc::pid_t) -> Option<u64> {
+        // SAFETY: proc_bsdinfo is plain data, for which all zeroes is a value.
+        let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+        let size = libc::c_int::try_from(std::mem::size_of::<libc::proc_bsdinfo>()).ok()?;
+        // SAFETY: the buffer is one proc_bsdinfo, `size` bytes, as the call
+        // is told.
+        let read = unsafe {
+            libc::proc_pidinfo(pid, libc::PROC_PIDTBSDINFO, 0, (&raw mut info).cast(), size)
+        };
+        (read == size).then_some(info.pbi_start_tvsec)
+    }
+
+    /// The process `pid`'s arguments, from `KERN_PROCARGS2`: the count of
+    /// arguments, the program's path, then each argument, every one ended
+    /// by a NUL.
+    pub fn args(pid: libc::pid_t) -> Option<Vec<String>> {
+        let mut mib = [libc::CTL_KERN, libc::KERN_PROCARGS2, pid];
+        let mut size: libc::size_t = 0;
+        // SAFETY: a null buffer asks only for the size.
+        let asked = unsafe {
+            libc::sysctl(
+                mib.as_mut_ptr(),
+                3,
+                std::ptr::null_mut(),
+                &mut size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if asked != 0 || size < 4 {
+            return None;
+        }
+        let mut buffer = vec![0u8; size];
+        // SAFETY: the buffer holds `size` bytes, as the call is told.
+        let read = unsafe {
+            libc::sysctl(
+                mib.as_mut_ptr(),
+                3,
+                buffer.as_mut_ptr().cast(),
+                &mut size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if read != 0 || size < 4 {
+            return None;
+        }
+        buffer.truncate(size);
+        let count = usize::try_from(i32::from_ne_bytes(buffer[..4].try_into().ok()?)).ok()?;
+        let rest = &buffer[4..];
+        let path_end = rest.iter().position(|byte| *byte == 0)?;
+        let rest = &rest[path_end..];
+        let start = rest.iter().position(|byte| *byte != 0)?;
+        Some(
+            rest[start..]
+                .split(|byte| *byte == 0)
+                .take(count)
+                .map(|arg| String::from_utf8_lossy(arg).into_owned())
+                .collect(),
+        )
+    }
+}
+
+/// Each process of the host this process may read, from `/proc`: its
+/// start from its `stat`'s clock ticks after the boot `/proc/stat` names,
+/// and its arguments from its `cmdline`; a process that ended while it was
+/// read left out; none where `/proc` cannot be listed (207).
+#[cfg(target_os = "linux")]
+pub fn listed() -> Option<Vec<Listed>> {
+    let boot: u64 = std::fs::read_to_string("/proc/stat")
+        .ok()?
+        .lines()
+        .find_map(|line| line.strip_prefix("btime ")?.trim().parse().ok())?;
+    // SAFETY: sysconf reads a value of the system's and changes nothing.
+    let ticks = u64::try_from(unsafe { libc::sysconf(libc::_SC_CLK_TCK) })
+        .ok()
+        .filter(|ticks| *ticks > 0)?;
+    let entries = std::fs::read_dir("/proc").ok()?;
+    Some(
+        entries
+            .flatten()
+            .filter_map(|entry| {
+                let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
+                let stat = std::fs::read_to_string(entry.path().join("stat")).ok()?;
+                // The fields after the program's name, which may hold any
+                // character, `)` among them: the state is the third field,
+                // and the start the twenty-second.
+                let after = &stat[stat.rfind(')')? + 1..];
+                let since_boot: u64 = after.split_whitespace().nth(19)?.parse().ok()?;
+                let args = std::fs::read(entry.path().join("cmdline"))
+                    .map(|bytes| {
+                        bytes
+                            .split(|byte| *byte == 0)
+                            .filter(|arg| !arg.is_empty())
+                            .map(|arg| String::from_utf8_lossy(arg).into_owned())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Some(Listed {
+                    pid,
+                    started: boot + since_boot / ticks,
+                    args,
+                })
+            })
+            .collect(),
+    )
+}
+
+/// The host's processes, on a system whose process table flume does not
+/// read: none.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn listed() -> Option<Vec<Listed>> {
+    None
+}
+
 /// The file this process's parent runs; none where it cannot be read.
 pub fn parent_executable() -> Option<PathBuf> {
     executable(std::os::unix::process::parent_id())
@@ -156,6 +317,33 @@ mod tests {
         assert_eq!(run("sleep 30; exit 0", 1), Bounded::Unanswered);
         assert!(asked.elapsed() < Duration::from_secs(10), "the bound held");
         assert!(run_bounded(Command::new("/no/such/program"), Duration::from_secs(1)).is_err());
+    }
+
+    #[test]
+    fn this_process_and_a_child_are_listed() {
+        let mut child = Command::new("sleep")
+            .args(["600", "listed"])
+            .stdin(Stdio::null())
+            .spawn()
+            .expect("sleep");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("after the epoch")
+            .as_secs();
+        let processes = listed().expect("the process table");
+        let _ = child.kill();
+        let _ = child.wait();
+        let this = processes
+            .iter()
+            .find(|process| process.pid == std::process::id())
+            .expect("this process listed");
+        assert!(this.started <= now && this.started + 3600 > now, "{this:?}");
+        let sleeping = processes
+            .iter()
+            .find(|process| process.pid == child.id())
+            .expect("the child listed");
+        assert_eq!(sleeping.args, ["sleep", "600", "listed"]);
+        assert!(sleeping.started + 60 > now && sleeping.started <= now + 1);
     }
 
     #[test]
