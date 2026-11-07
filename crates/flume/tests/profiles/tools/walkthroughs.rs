@@ -9,8 +9,10 @@
 //! answers at the submit itself among them (133); a pull request the
 //! stand-in for sluice answers with no entry is followed until it is
 //! taken in, then to its landing, and a failure of the entry taken in
-//! from it goes back to code once and lands on the next (124, C.6); a change runs construct, code and
-//! verify, its report committed in the archived change (S2, S35); verify
+//! from it goes back to code once and lands on the next (124, C.6); a bare
+//! `change` runs flume's newest, change@3, through construct, code started
+//! once and verify, its report committed in the archived change (S2, S35,
+//! S119); verify
 //! finding work sends the place back to code (131); a fix whose prompt
 //! Claude Code submits inside paste tags lands (89); a host's bound
 //! queues a launch and starts the waiting ones by priority (S37), and a
@@ -20,9 +22,10 @@
 //! accounts is refused with nothing made, and a change whose pool the
 //! host's configuration leaves a `codex` account alone while construct
 //! works has code refused, no command printed for it, until a retry once
-//! the configuration is mended (S81; 4, 32, 145); and
-//! change@2's code stage works a change of three task groups one fresh
-//! agent at a time, and a failed submission sends it back for one
+//! the configuration is mended (S81; 4, 32, 145); and a change launched
+//! as `change@2`, named since a bare `change` runs change@3, has its
+//! repeating code stage work a change of three task groups one fresh
+//! agent at a time, and a failed submission send it back for one
 //! repetition with no group (S50, S52; 112, 140 to 142); and a fix whose
 //! code agent stops at its account's usage limit moves to the pool's
 //! second account and lands (S55; 146, 151), and, where the second's
@@ -44,8 +47,9 @@
 //! begun, and a retry leaves it be (35, 38, 50); a fix's code agent's
 //! line, asked by `flume hook status-line` in its environment as the
 //! plugin's module asks it, is status's line asked alone and in full, and
-//! the fix lands, while a change@2 code agent's names its group, its run
-//! and the change's tasks (56, 60, 142; S14); a host's people's file, the
+//! the fix lands, while the code agent's of a change launched as
+//! `change@2` names its group, its run and the change's tasks (56, 60,
+//! 142; S14); a host's people's file, the
 //! host's own status line over it, a stream's and a repository's file reach
 //! a fix's agent in `work` and in `default` by a `--settings` file of its
 //! start's own, which the stand-in reads over its account's settings, the
@@ -266,11 +270,12 @@ const TWO_GROUPS: &str = "## 1. Parser\n\n- [ ] 1.1 Write the parser\n- [ ] 1.2 
 
 #[test]
 fn a_change_code_agents_line_names_its_group_its_run_and_its_tasks() {
-    // change@2's code agent on the first of two groups, waiting on a
-    // file: its line names the stage with its group, its run and the
-    // change's tasks ticked at the head (56, 60, 140, 142; S14).
+    // The code agent of a change launched as `change@2` on the first of
+    // two groups, waiting on a file: its line names the stage with its
+    // group, its run and the change's tasks ticked at the head (56, 60,
+    // 140, 142; S14).
     let walk = Walk::new("walk-line-groups");
-    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let place = walk.launch("change@2", "add-parser", &["--brief", "add a parser"]);
     walk.agent(&place, construct_tasks("add-parser", TWO_GROUPS));
     walk.until(&place, "code on group 1", |status| {
         status["current"] == "code" && !status["agent"].is_null()
@@ -941,13 +946,14 @@ fn group(status: &Value) -> (Value, Value) {
 
 #[test]
 fn a_change_of_three_task_groups_takes_three_agents_in_turn() {
-    // S50, 140 to 142: change@2's code stage on a change of three groups
+    // S50, 140 to 142: a change launched as `change@2`, its code stage
+    // repeating, on a change of three groups
     // starts a fresh agent for each in turn; each ticks its group, adds to
     // the notes its prompt names and commits; status between them gives
     // code 2/3; the three prompts are byte for byte the same up to the
     // group; verify archives and the place lands.
     let walk = Walk::new("walk-groups");
-    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let place = walk.launch("change@2", "add-parser", &["--brief", "add a parser"]);
     assert_eq!(walk.status(&place)["version"], 2, "the change's version");
     walk.agent(&place, construct_tasks("add-parser", THREE_GROUPS));
     let tasks = "openspec/changes/add-parser/tasks.md";
@@ -1021,13 +1027,14 @@ fn a_change_of_three_task_groups_takes_three_agents_in_turn() {
 
 #[test]
 fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_group() {
-    // S52, 112, 140: the gate fails the change's first submission with
+    // S52, 112, 140: a change launched as `change@2`, its code stage
+    // repeating; the gate fails the change's first submission with
     // every task ticked; code starts one repetition with no group and
     // sluice's words, which moves the change out of the archive, fixes
     // the tree and records the fix as a task ticked; verify archives
     // again and the second submission lands.
     let walk = Walk::new("walk-groups-failed");
-    let place = walk.launch("change", "add-parser", &["--brief", "add a parser"]);
+    let place = walk.launch("change@2", "add-parser", &["--brief", "add a parser"]);
     walk.agent(&place, construct("add-parser"));
     walk.until(&place, "its code stage", |status| {
         status["current"] == "code" && !status["agent"].is_null()
