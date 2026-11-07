@@ -249,7 +249,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   exec main -- moon run core:test conformance:test` passes, with the
   stage-runs spec's three scenarios of the list, and every scenario that
   reads a rendered prompt brought to it.
-- [ ] 5.2 Have a stop-short take an optional role or address. Take it
+- [x] 5.2 Have a stop-short take an optional role or address. Take it
   only among those the start's prompt listed, a role alone read as the
   place's own stream's, and refuse any other naming the list, the stage
   going on. Record the whole address on the stop-short's end, and have
@@ -261,7 +261,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   addressed, its own stream's role and another stream's, S93's engine
   part named `s93_a_question_for_ops_answered_once` once group 7 gives
   the key, and every existing stop-short scenario passes.
-- [ ] 5.3 Run the checks of the projects this group touched. True when
+- [x] 5.3 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
   core:format core:lint core:test conformance:format conformance:lint
   conformance:test` passes.
