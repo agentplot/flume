@@ -75,13 +75,18 @@ effort = "high"
 [kinds.change.agents.stages.verify]
 instructions = "Check every scenario of the change's specs."
 
+# a clone whose origin is on no forge, named by its folder
 [repos."~/src/notes"]
 stream = "personal"
 
-[repos."~/src/acme".kinds.fix.agents]
+# a clone whose origin is git@github.com:acme/acme.git, named by its address
+[repos."acme/acme"]
+stream = "work"
+
+[repos."acme/acme".kinds.fix.agents]
 instructions = "Run the tests with `just test`."
 
-[repos."~/src/upstream-fork".agents.programs.claude.settings]
+[repos."acme/upstream-fork".agents.programs.claude.settings]
 attribution = { commit = "", pr = "", sessionUrl = false }
 ```
 
@@ -200,19 +205,47 @@ refuses no start. A file that is missing or not in the reading's form
 is no reading either, and status says why. Status gives `usage` as
 `<set>`, never its path.
 
+### A repository's name
+
+`[repos."<repository>"]` and every table under it name a repository by
+its address, `<owner>/<name>` as its clone's `origin` remote gives it
+on its forge. An origin of `git@github.com:acme/acme.git`,
+`https://github.com/acme/acme` or `ssh://git@git.example.org/acme/acme.git`
+gives `acme/acme`. A key matches exactly, its case as written and with
+no star. An origin that is a folder on the host, or whose path has one
+part or three, gives no address. A clone with no address, or no origin,
+goes by its folder, a leading `~` in the key your home.
+
+Where the configuration has a table under a repository's address, that
+table comes first and is the repository's whole table: a table under
+its folder is not read for it. Where none names the address, the
+folder's table is read, so a file that names repositories by folder
+reads as before. A launch reads the address from the clone it runs in,
+or the folder `--repository` names, and its place keeps it, so the
+place's later starts read the tables for that address. flume finds no
+clone by its address: `--repository acme/acme` is the folder
+`acme/acme`. Status gives each place's address beside its folder.
+
 ### `stream`
 
 `stream` in `[repos."<repository>".kinds.<kind>]`, in
 `[repos."<repository>"]` and in `[kinds.<kind>]` names the stream of a
 place of that repository and kind, of that repository, or of that kind,
-in that order, where the launch and the intent name none.
+in that order, where the launch and the intent name none. The
+configuration names the repository by its address, `<owner>/<name>`
+as its clone's `origin` gives it, matched exactly, else by its folder.
+The address's table comes first, whole
+([a repository's name](#a-repositorys-name)).
 
 ### `label`
 
 `label` in `[repos."<repository>".kinds.<kind>]` and in
 `[kinds.<kind>]` names the label of a place of that repository and
 kind, or of that kind, in that order. It is one word of letters,
-digits, `-` and `_`. A place's label is read at each start.
+digits, `-` and `_`. A place's label is read at each start. The
+configuration names the repository by its address, matched exactly,
+else by its folder. The address's table comes first, whole
+([a repository's name](#a-repositorys-name)).
 
 ### `[kinds.<kind>.agents]`
 
@@ -237,15 +270,20 @@ means.
 
 ### `[repos."<repository>".kinds.<kind>.agents]`
 
-The same, for a kind in one repository, named by its location; a
-leading `~` in the key is your home. It comes before the host's
-settings for the kind in every repository.
+The same, for a kind in one repository. The key is the repository's
+address, `<owner>/<name>` as its clone's `origin` gives it, matched
+exactly, else its folder, a leading `~` in the key your home. The
+address's table comes first, whole
+([a repository's name](#a-repositorys-name)). It comes before the
+host's settings for the kind in every repository.
 
 ### `[repos."<repository>".agents]`
 
-Settings for every agent of every kind in one repository, named by its
-location as `[repos."<repository>"]` is: `model`, `effort`,
-`instructions`, `mode`, `keep_open` and `programs`. It comes after the repository's tables for one
+Settings for every agent of every kind in one repository: `model`,
+`effort`, `instructions`, `mode`, `keep_open` and `programs`. The key
+names the repository as `[repos."<repository>"]` does, by its address,
+matched exactly, else by its folder, the address's table first and
+whole ([a repository's name](#a-repositorys-name)). It comes after the repository's tables for one
 kind, and before the host's settings for the kind in every repository.
 It is how a host speaks for a repository it does not write to, a fork
 of another project among them

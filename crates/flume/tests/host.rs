@@ -86,6 +86,20 @@ impl HistoryHarness for Harness {
         self.repository
             .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
     }
+
+    fn origin_named(&self, _repository: &str, url: &str) {
+        let remotes = self.repository.git(&["remote"]);
+        let verb = if remotes.lines().any(|remote| remote == "origin") {
+            "set-url"
+        } else {
+            "add"
+        };
+        self.repository.git(&["remote", verb, "origin", url]);
+    }
+
+    fn origin_removed(&self, _repository: &str) {
+        self.repository.git(&["remote", "remove", "origin"]);
+    }
 }
 
 #[test]
@@ -94,6 +108,33 @@ fn the_history_scenarios_pass_against_git() {
         repository: Repository::new("history"),
         seam: GitHistory,
     });
+}
+
+/// origin's URL as the configuration holds it, where a host's
+/// `url.<base>.insteadOf` rewrites it to a bare remote on the host, so a
+/// repository's address turns on the origin its clone names and not on
+/// the host's rewriting rules (143, C.7).
+#[test]
+fn a_rewritten_origin_is_read_as_configured() {
+    let repository = Repository::new("rewritten");
+    let bare = repository.bare_remote();
+    let origin = "git@github.com:acme/acme.git";
+    repository.git(&["remote", "add", "origin", origin]);
+    repository.git(&[
+        "config",
+        &format!("url.{}.insteadOf", bare.to_string_lossy()),
+        origin,
+    ]);
+    assert_eq!(
+        repository.git(&["remote", "get-url", "origin"]),
+        bare.to_string_lossy(),
+        "git rewrites the origin it reaches"
+    );
+    assert_eq!(
+        GitHistory.origin_url(&repository.name()),
+        Some(origin.to_string()),
+        "the origin as configured"
+    );
 }
 
 #[test]
@@ -1121,7 +1162,7 @@ fn a_child_process_reads_the_hosts_layers() {
             "configuration": host.configuration(),
             "bound": host.bound(),
             "streams": host.streams(),
-            "label": host.label_for("/r", "fix"),
+            "label": host.label_for(&RepositoryName::of_folder("/r"), "fix"),
         }),
         Err(refused) => serde_json::json!({ "refused": refused }),
     };

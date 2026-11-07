@@ -7,8 +7,9 @@
 //! common git directory, `symbolic-ref` for its default branch,
 //! `check-ref-format --branch`, and `fetch` from `origin` for a branch
 //! as origin holds it, `ls-remote --exit-code` telling a branch origin
-//! lacks from a fetch that failed (9, 24, 25, 33, 132, C.1). A revision
-//! git cannot read holds nothing since and touches nothing.
+//! lacks from a fetch that failed, and `config --get remote.origin.url`
+//! for origin's URL as configured (9, 24, 25, 33, 132, 143, C.1, C.7). A
+//! revision git cannot read holds nothing since and touches nothing.
 
 use crate::git::{Git, REMOTE};
 use flume_seams::{History, OriginBranch, Revision, Touch};
@@ -58,6 +59,17 @@ impl History for GitHistory {
             },
             Err(reason) => OriginBranch::Refused { reason },
         }
+    }
+
+    /// `git config --get remote.origin.url`, which reads the URL as the
+    /// configuration holds it where `remote get-url` would rewrite it by
+    /// `url.<base>.insteadOf`; none where git answers nothing (143, C.7).
+    fn origin_url(&self, repository: &str) -> Option<String> {
+        let url = Git::at(repository)
+            .text(&["config", "--get", &format!("remote.{REMOTE}.url")])
+            .ok()?;
+        let url = url.trim_end_matches(['\n', '\r']);
+        (!url.is_empty()).then(|| url.to_string())
     }
 
     fn holds_since(&self, repository: &str, head: &Revision, start: &Revision) -> bool {
