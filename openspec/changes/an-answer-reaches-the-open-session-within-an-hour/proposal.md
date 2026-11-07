@@ -135,9 +135,9 @@ None: every part of this change belongs to a capability that stands.
 - **Order.** The code builds on flume's main once
   `an-agents-program-settings-come-from-flumes-layers` landed, and folds
   `keep_open` in the same resolution and host tables as the model.
-  `an-agents-effort-is-a-setting-of-flumes-layers`, in code beside it,
-  folds the effort there too, and whichever lands second takes the
-  other's field in. A conversation's asking agent lost with its host is
+  `an-agents-effort-is-a-setting-of-flumes-layers`, on main from #144,
+  folds the effort there too, and `keep_open` stands beside it. A
+  conversation's asking agent lost with its host is
   carried at its answer's retry by the lost-conversation retry on main
   (record 0052), and no terminal settles an agent kept open (122, 208).
   `every-question-a-place-asks-reaches-someone-who-answers-it` reads

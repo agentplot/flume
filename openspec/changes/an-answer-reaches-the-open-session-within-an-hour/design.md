@@ -106,7 +106,7 @@ change (its option 3).
 The changes in flight that touch the same code:
 
 - **`an-agents-effort-is-a-setting-of-flumes-layers`** (record 0044;
-  clause 197 on blueprints main), in code beside this one. It adds
+  clause 197 on blueprints main), on main from #144. It adds
   `Settings::effort`, read in every agents table and by `--agent
   [<stage>.]effort=<word>`, folded by `Engine::resolve` as the model
   is, with `from["effort"]` naming its layer.
@@ -685,12 +685,12 @@ ours (core.35).
 - **Order.** This change's code builds on main as it stands once
   `an-agents-program-settings-come-from-flumes-layers` landed, which
   built the layers decision 1's table names, as the user's go-ahead of
-  2026-11-06 has it. `an-agents-effort-is-a-setting-of-flumes-layers`
-  is in code beside it. Each folds its setting in the same
-  `Engine::resolve`, reads it in the same host tables and names it in
-  the same `--agent` refusals, so whichever lands second merges the
-  other's field beside its own in `Settings`, `Settings::under`,
-  `agent_settings` and `FIELDS`, and the setting keeps one resolution.
+  2026-11-06 has it. `an-agents-effort-is-a-setting-of-flumes-layers`,
+  on main from #144, folds its effort in the same `Engine::resolve`,
+  reads it in the same host tables and names it in the same `--agent`
+  refusals, and `keep_open` stands beside the effort in `Settings`,
+  `Settings::under`, `agent_settings` and `FIELDS`, so every setting
+  keeps one resolution.
 - **Program settings.** `keep_open` is flume's own setting and never a
   key of a program's own settings: no profile reserves it, and a
   layer's `programs.<program>.settings.keep_open` is the program's key,
@@ -965,10 +965,6 @@ Alternatives considered:
 - On a host no caller keeps watch over, an agent past its time holds
   its room and its account until flume's next acting command settles
   (119). A host that wants its room back on time keeps watch (208).
-- The order of landing. The effort change is in code beside this one,
-  and both add a field to `Settings`, `agent_settings` and `FIELDS`.
-  Whichever lands second takes the other's in at its merge, as
-  decision 12 says.
 - Numbers. Clause 198, S104, S105 and record 0046 hold this change's
   text on every branch and in every place on this host on 2026-11-06,
   and no other draft takes them.
