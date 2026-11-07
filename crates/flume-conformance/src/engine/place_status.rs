@@ -1,6 +1,8 @@
 //! Status (43, 56 to 62, 69): every fact read where it lives when asked,
 //! at one head per place, from one core, and nothing written, sent or
-//! started.
+//! started. The host's part gives every role's address a standing agent
+//! holds, pending or not, with what its terminal found at the ask, each
+//! terminal and part read once (132, 190).
 
 use super::account_pools::{
     account, account_at_home, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in,
@@ -14,8 +16,8 @@ use super::open_sessions::{asking, code, stops_short, taken, QUESTION};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
-    AccountStatus, Act, AgentStatus, Answer, Cache, ModeStatus, MoveStatus, PlaceStatus,
-    PoolStatus, Retry, SessionAnswer, WaitingOn, Waits, KEEP_OPEN,
+    AccountStatus, Act, AddressStatus, AgentStatus, Answer, Cache, ModeStatus, MoveStatus,
+    PlaceStatus, PoolStatus, Retry, SessionAnswer, StandingFound, WaitingOn, Waits, KEEP_OPEN,
 };
 use flume_seams::*;
 
@@ -215,6 +217,36 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: the host's part gives each source with its file, its kinds_dir and every identity it holds, and a faulty one with its fault, read when asked",
             cites: &["S96", "56", "159", "191"],
             run: a_source_and_a_fault,
+        },
+        Scenario {
+            name: "status: a standing address whose agent waits in its session gives the agent, the session from the entry, the agent found waiting and its two pending ends",
+            cites: &["56", "132"],
+            run: a_standing_agent_found,
+        },
+        Scenario {
+            name: "status: a standing address whose session holds no agent of its name says none found, its pending ends beneath",
+            cites: &["132", "56"],
+            run: none_of_the_name,
+        },
+        Scenario {
+            name: "status: a standing address whose session holds two agents of its name says two found",
+            cites: &["132"],
+            run: more_than_one_of_the_name,
+        },
+        Scenario {
+            name: "status: a standing address whose part the terminal cannot read says so in the terminal's words",
+            cites: &["132"],
+            run: a_part_not_read,
+        },
+        Scenario {
+            name: "status: a standing address with nothing pending is still given with its standing",
+            cites: &["56", "132"],
+            run: a_standing_address_with_nothing_pending,
+        },
+        Scenario {
+            name: "status: two standing addresses whose agents live in one session ask the terminal for that session's agents once",
+            cites: &["58", "132"],
+            run: two_addresses_in_one_session,
         },
         Scenario {
             name: "status: a place whose talk start 2 carries the conversation of start 1, lost, under work-1 gives its agent's conversation from start 1, lost and carried",
@@ -1907,6 +1939,221 @@ fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
         json["uncarried"][0]["words"],
         serde_json::json!(ended),
         "the place's carried start that did not begin in the JSON form"
+    );
+    Ok(())
+}
+
+const PLANNER: &str = "madswan/planner";
+
+/// The host's configuration gives `address` the standing agent `agent`
+/// in the session `madswan`.
+fn stands_in_madswan(world: &World, address: &str, agent: &str) {
+    world.host.set_standing(
+        address,
+        Some(StandingAgent {
+            agent: agent.into(),
+            session: Some("madswan".into()),
+            stream: None,
+        }),
+    );
+}
+
+/// Two fixes for the planner delivered, their submissions held, while no
+/// agent of its name stands, so both ends stand pending for it.
+fn two_pending_for_the_planner(world: &World) -> Result<Vec<PlaceId>, String> {
+    stands_in_madswan(world, PLANNER, "madswan-planner");
+    world
+        .queue
+        .plan_submits(vec![flume_fakes::Plan::Hold, flume_fakes::Plan::Hold]);
+    let mut places = vec![];
+    for name in ["one", "two"] {
+        let mut launch = launch("fix", name, Some("mend it"));
+        launch.recipients = vec![PLANNER.into()];
+        launched(&world.engine.launch(&launch))?;
+        let id = World::id("fix", name);
+        world.settle(&id);
+        super::settling::deliver_fix(world, &id);
+        world.settle(&id);
+        places.push(id);
+    }
+    Ok(places)
+}
+
+/// The host's addresses as status gives them, by the address.
+fn host_addresses(world: &World) -> Result<Vec<AddressStatus>, String> {
+    match world.engine().status(None) {
+        Answer::Status { host, .. } => Ok(host.addresses),
+        other => Err(format!("status answered {other:?}")),
+    }
+}
+
+/// The address `address` as status gives it.
+fn address_status(world: &World, address: &str) -> Result<AddressStatus, String> {
+    host_addresses(world)?
+        .into_iter()
+        .find(|status| status.address == address)
+        .ok_or_else(|| format!("status gives no {address}"))
+}
+
+/// What the terminal found of the address's standing agent.
+fn found(status: &AddressStatus) -> Result<StandingFound, String> {
+    status
+        .standing
+        .as_ref()
+        .map(|standing| standing.found.clone())
+        .ok_or_else(|| format!("{} has no standing", status.address))
+}
+
+fn a_standing_agent_found(_: &()) -> Outcome {
+    let world = World::new();
+    let places = two_pending_for_the_planner(&world)?;
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    let status = address_status(&world, PLANNER)?;
+    let standing = status.standing.clone().ok_or("no standing")?;
+    ensure_eq!(standing.agent, "madswan-planner", "the agent");
+    ensure_eq!(standing.stream, DEFAULT_STREAM, "the stream");
+    ensure_eq!(
+        standing.session,
+        SessionHeld {
+            name: Some("madswan".into()),
+            from: SessionFrom::Role,
+        },
+        "the session"
+    );
+    ensure_eq!(standing.terminal.as_deref(), Some("fake"), "the terminal");
+    ensure_eq!(
+        standing.found,
+        StandingFound::One {
+            at,
+            state: AgentState::Waiting,
+        },
+        "found"
+    );
+    ensure_eq!(
+        status
+            .pending
+            .iter()
+            .map(|end| (end.place.clone(), end.what.clone()))
+            .collect::<Vec<_>>(),
+        places
+            .into_iter()
+            .map(|id| (id, "code delivered".to_string()))
+            .collect::<Vec<_>>(),
+        "the ends pending"
+    );
+    ensure_eq!(status.role, None, "its run's entry");
+    ensure_eq!(status.unwoken, None, "why it was not woken");
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "status sent a notice"
+    );
+    Ok(())
+}
+
+fn none_of_the_name(_: &()) -> Outcome {
+    let world = World::new();
+    two_pending_for_the_planner(&world)?;
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-ops", AgentState::Waiting);
+    let status = address_status(&world, PLANNER)?;
+    ensure_eq!(found(&status)?, StandingFound::None, "found");
+    ensure_eq!(status.pending.len(), 2, "the ends pending");
+    Ok(())
+}
+
+fn more_than_one_of_the_name(_: &()) -> Outcome {
+    let world = World::new();
+    two_pending_for_the_planner(&world)?;
+    for _ in 0..2 {
+        world
+            .terminal
+            .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    }
+    let status = address_status(&world, PLANNER)?;
+    ensure_eq!(
+        found(&status)?,
+        StandingFound::Several { count: 2 },
+        "found"
+    );
+    Ok(())
+}
+
+fn a_part_not_read(_: &()) -> Outcome {
+    let world = World::new();
+    stands_in_madswan(&world, PLANNER, "madswan-planner");
+    world
+        .terminal
+        .refuse_agents_in(Some("madswan"), "the part madswan answered nothing");
+    let status = address_status(&world, PLANNER)?;
+    ensure_eq!(
+        found(&status)?,
+        StandingFound::Unread {
+            reason: "the part madswan answered nothing".into(),
+        },
+        "found"
+    );
+    Ok(())
+}
+
+fn a_standing_address_with_nothing_pending(_: &()) -> Outcome {
+    let world = World::new();
+    stands_in_madswan(&world, "madswan/ops", "madswan-ops");
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-ops", AgentState::Working);
+    let status = address_status(&world, "madswan/ops")?;
+    ensure_eq!(status.pending.len(), 0, "the ends pending");
+    let standing = status.standing.ok_or("no standing")?;
+    ensure_eq!(standing.agent, "madswan-ops", "the agent");
+    ensure!(
+        matches!(
+            standing.found,
+            StandingFound::One {
+                state: AgentState::Working,
+                ..
+            }
+        ),
+        "found: {:?}",
+        standing.found
+    );
+    Ok(())
+}
+
+fn two_addresses_in_one_session(_: &()) -> Outcome {
+    let world = World::new();
+    stands_in_madswan(&world, PLANNER, "madswan-planner");
+    stands_in_madswan(&world, "madswan/ops", "madswan-ops");
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-ops", AgentState::Asking);
+    world.terminal.log.clear();
+    let addresses = host_addresses(&world)?;
+    ensure_eq!(
+        addresses
+            .iter()
+            .map(|status| status.address.as_str())
+            .collect::<Vec<_>>(),
+        vec!["madswan/ops", PLANNER],
+        "the addresses"
+    );
+    for status in &addresses {
+        ensure!(
+            matches!(found(status)?, StandingFound::One { .. }),
+            "{} found: {:?}",
+            status.address,
+            status.standing
+        );
+    }
+    ensure_eq!(
+        world.terminal.log.of("agents_in"),
+        vec!["agents_in madswan".to_string()],
+        "the parts the terminal was asked for"
     );
     Ok(())
 }

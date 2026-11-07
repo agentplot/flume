@@ -1,8 +1,8 @@
 use crate::{lock, FakeHost, Log};
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, Host, Identity, OpenIn, Opened, PlaceRef,
-    Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
-    ViewCommand, Watch,
+    AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, Host, Identity, NamedAgent,
+    OpenIn, Opened, PlaceRef, Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy,
+    ToSession, View, ViewCommand, Watch,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -26,7 +26,13 @@ use std::sync::{Arc, Mutex};
 /// view shown, or either as scripted, and logs each asking with its view
 /// (187). Runs answers each part as scripted, and otherwise that it does
 /// not run, its own named `own` as attach names it, logging each asking
-/// as one `runs <part> <part>…` and starting nothing (201).
+/// as one `runs <part> <part>…` and starting nothing (201). It holds
+/// named agents in parts, each a recipient's session under a key of its
+/// own, `fake:<n>@<part>`, which its sends, its state and its notices
+/// reach, two of one name in a part among them, which the core reads
+/// as no one agent; agents in gives a part's in the order added, or the
+/// words a test refused the part with, logging each asking as
+/// `agents_in <part>` and starting nothing (132, C.5).
 pub struct FakeTerminal {
     host: Arc<FakeHost>,
     state: Mutex<TerminalState>,
@@ -54,8 +60,16 @@ struct TerminalState {
     persons: BTreeMap<Workspace, String>,
     shows_fail: bool,
     shown: Vec<(String, Clues)>,
-    /// Recipients' sessions by name, each with its state.
+    /// Recipients' sessions by name, each with its state, a named
+    /// agent's by its key among them.
     sessions: BTreeMap<String, AgentState>,
+    /// The named agents added, oldest first.
+    named: Vec<Named>,
+    /// How many named agents were ever added, numbering their keys.
+    added: u32,
+    /// Each part whose agents are not read, its own named `own`, with
+    /// the words it was refused with.
+    agents_unread: BTreeMap<String, String>,
     /// The agent each session name an open gave names, by its identity.
     agent_sessions: BTreeMap<String, String>,
     /// Every text sent to a session by its name, in order.
@@ -70,6 +84,20 @@ struct TerminalState {
     /// What the terminal's configuration lacks for flume's plugin, as
     /// scripted.
     setup: Vec<String>,
+}
+
+/// A named agent in a part, its own named `own`, by its name and the
+/// key its session is held under.
+struct Named {
+    part: String,
+    name: String,
+    key: String,
+}
+
+/// A part as the fake names it: its name, or `own` for the terminal's
+/// own, as attach and runs name it.
+fn part_of(session: Option<&str>) -> &str {
+    session.unwrap_or("own")
 }
 
 /// What the next opens answer.
@@ -198,6 +226,9 @@ impl FakeTerminal {
                 shows_fail: false,
                 shown: vec![],
                 sessions: BTreeMap::new(),
+                named: vec![],
+                added: 0,
+                agents_unread: BTreeMap::new(),
                 agent_sessions: BTreeMap::new(),
                 notices: vec![],
                 attaches_terminal: None,
@@ -344,6 +375,41 @@ impl FakeTerminal {
         if let Some(standing) = lock(&self.state).sessions.get_mut(name) {
             *standing = state;
         }
+    }
+
+    /// An agent named `name` in the part `session`, the terminal's own
+    /// where none, reading `state`: a recipient's session held under a
+    /// key of its own, which is answered, and listed in its part by its
+    /// name. A second of one name in a part is added beside the first
+    /// (132, C.5).
+    pub fn add_agent(&self, session: Option<&str>, name: &str, state: AgentState) -> String {
+        let mut held = lock(&self.state);
+        held.added += 1;
+        let part = part_of(session);
+        let key = format!("fake:{}@{part}", held.added);
+        held.sessions.insert(key.clone(), state);
+        held.named.push(Named {
+            part: part.into(),
+            name: name.into(),
+            key: key.clone(),
+        });
+        key
+    }
+
+    /// The named agent under `key` is gone, from its part and as a
+    /// session, as an agent whose pane closed.
+    pub fn remove_agent(&self, key: &str) {
+        let mut held = lock(&self.state);
+        held.sessions.remove(key);
+        held.named.retain(|named| named.key != key);
+    }
+
+    /// The part `session`, the terminal's own where none, cannot be read
+    /// from now: agents in answers not read, in `reason` (132, C.5).
+    pub fn refuse_agents_in(&self, session: Option<&str>, reason: &str) {
+        lock(&self.state)
+            .agents_unread
+            .insert(part_of(session).into(), reason.into());
     }
 
     /// Every text sent to the session named `name`, in order.
@@ -653,6 +719,35 @@ impl Terminal for FakeTerminal {
             return Some(read);
         }
         lock(&self.state).sessions.get(session).copied()
+    }
+
+    /// The part's named agents in the order added, each by its key and
+    /// with its session's state, one whose session was removed left out;
+    /// or the words the part was refused with; logged, and nothing
+    /// started (132, C.5).
+    fn agents_in(&self, session: Option<&str>) -> AgentsIn {
+        let part = part_of(session);
+        self.log.push(format!("agents_in {part}"));
+        let state = lock(&self.state);
+        if let Some(reason) = state.agents_unread.get(part) {
+            return AgentsIn::Unread {
+                reason: reason.clone(),
+            };
+        }
+        AgentsIn::Read {
+            agents: state
+                .named
+                .iter()
+                .filter(|named| named.part == part)
+                .filter_map(|named| {
+                    state.sessions.get(&named.key).map(|read| NamedAgent {
+                        name: named.name.clone(),
+                        at: named.key.clone(),
+                        state: *read,
+                    })
+                })
+                .collect(),
+        }
     }
 
     fn screen(&self, agent: &Identity) -> Option<String> {

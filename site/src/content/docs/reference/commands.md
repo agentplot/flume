@@ -23,7 +23,7 @@ sidebar:
 | `flume settle [<place>]` | Move a place, or every place, on. |
 | `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
 | `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
-| `flume wake <address>` | Wake a role's address: launch its run where none stands. |
+| `flume wake <address>` | Wake a role's address: launch its run where none stands, and nothing where an agent already holds it. |
 | `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
 | `flume open [<session>]` | Show a session of a stream's, by the session's name, in its stream's view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
 | `flume mcp` | Serve flume's status over MCP on standard input and output. |
@@ -170,7 +170,9 @@ queue. Each stream's part gives its session, its multiplexer, view,
 terminal app and title, each with where it came from, and its labels.
 Then come each pool's part, each source of kinds the host declares with
 the kinds it holds or why it cannot be read, each base's count and the
-role addresses with ends pending. Each multiplexer the host binds gives
+role addresses with ends pending. Every address an agent already holds
+is there too, with its agent, its session and where that came from, and
+what the multiplexer found there when asked. Each multiplexer the host binds gives
 its watch and what a tidy kept there. Last comes the host's
 configuration: whether its local layer was taken, each value it set and
 each key passed over with its pin. Where a multiplexer keeps no watch, it says so: places
@@ -492,6 +494,24 @@ Wakes a role's address, `<group>/<role>`: launches the run the host's
 `[roles]` table names for it where none stands, and otherwise makes
 nothing, saying the run is live or waits. Refused for a name that is no
 address, or an address the table names nothing for.
+
+An address the table gives an agent that already runs
+([an address an agent already holds](/flume/guides/roles-and-wake/#an-address-an-agent-already-holds))
+launches nothing. The wake settles as any act does, then answers that
+the agent holds the address. It names the agent, its session and where
+that came from, and what the multiplexer found there, with the ends
+pending for it beneath:
+
+```console
+$ flume wake acme/ops
+acme/ops is held by the standing agent acme-ops in the session acme (the entry's), none of that name there, so nothing was launched; 1 end pending
+  ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs: submission landed d185a879b51dba33555c036392b50443f4dfc5e8
+```
+
+With `--json` the answer is `{"woken":{…}}` for a run and
+`{"held":{…}}` for an agent that holds the address, as the [state
+reference](/flume/reference/state/#the-answer-of-flume-wake-json)
+gives them.
 
 ## `flume kinds lock`
 

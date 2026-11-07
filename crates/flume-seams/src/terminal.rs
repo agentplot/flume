@@ -1,5 +1,6 @@
-//! The terminal seam's answers (94 to 98, 122, 136 to 139, 187, 201, 7), what
-//! its configuration lacks for flume's plugin (122), and an agent's state.
+//! The terminal seam's answers (94 to 98, 122, 132, 136 to 139, 187, 201,
+//! 7, C.5), what its configuration lacks for flume's plugin (122), and an
+//! agent's state.
 
 use crate::Seconds;
 use serde::{Deserialize, Serialize};
@@ -66,7 +67,9 @@ pub enum OpenIn {
 /// settings, its stream's word for its kind's stage, its stream's word
 /// for its kind, its stream's `session`, its stream's name, or, for the
 /// host's default stream naming none, the terminal's own (32, 107, 143,
-/// 199).
+/// 199). For a role's address a standing agent holds, the session it is
+/// found in comes from the entry's own `session`, `role`, or else from
+/// its stream as a start's does (132, C.7).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionFrom {
@@ -76,6 +79,7 @@ pub enum SessionFrom {
     Stream,
     StreamName,
     Own,
+    Role,
 }
 
 /// The session an agent opens in, by its name, none for the terminal's
@@ -231,6 +235,32 @@ pub enum SessionRuns {
     Unread { reason: String },
 }
 
+/// An agent a part of the terminal holds that carries a name: that name,
+/// the session name `send_to` and `session_state` reach it by, and its
+/// state as the terminal reads it (95, 96, 132, C.5).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedAgent {
+    pub name: String,
+    pub at: String,
+    pub state: AgentState,
+}
+
+/// agents in a part: each agent the part holds that carries a name, none
+/// for a part that does not run; or why the part could not be read, in
+/// the terminal's words, a terminal that holds no agent a name finds
+/// among them. The terminal decides nothing of names: two of one name
+/// are both given, and the core counts them (132, C.5).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentsIn {
+    Read { agents: Vec<NamedAgent> },
+    Unread { reason: String },
+}
+
+/// What the seam's default `agents_in` answers: the terminal holds no
+/// agent a name finds (132, C.5).
+pub const NO_NAMED_AGENTS: &str = "the terminal holds no agent a name finds";
+
 /// The terminal seam (B.5), kept once for the host. The guarantee: open
 /// never runs a second agent under an identity already live, and close
 /// never reports an end that did not happen (98).
@@ -276,6 +306,19 @@ pub trait Terminal: Send + Sync {
     /// The state of the recipient's session named `session`, read as an
     /// agent's is; none where the terminal holds no such session (43, 96).
     fn session_state(&self, session: &str) -> Option<AgentState>;
+
+    /// The agents the part `session` holds, the terminal's own where
+    /// none, each that carries a name, by that name, with the session
+    /// name `send_to` and `session_state` reach it by and its state as
+    /// the terminal reads it; or why the part could not be read. A part
+    /// that does not run holds none, and nothing is started; nothing is
+    /// kept of what was read (132, C.5; core.13, core.15). The default
+    /// answers not read: the terminal holds no agent a name finds.
+    fn agents_in(&self, _session: Option<&str>) -> AgentsIn {
+        AgentsIn::Unread {
+            reason: NO_NAMED_AGENTS.into(),
+        }
+    }
 
     /// What the terminal shows of the agent, for status and a prompt
     /// never begun; none where it shows nothing (136, 35, 43).

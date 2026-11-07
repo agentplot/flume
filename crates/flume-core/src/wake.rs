@@ -15,7 +15,14 @@
 //! status names its pending ends and why its run was not woken. A role's
 //! `kind` is resolved and locked as a launch's is, a name or an identity,
 //! its run carrying no declaration of its own (154, 155). flume
-//! decides nothing of what the run does (69, 70, 72).
+//! decides nothing of what the run does (69, 70, 72). An address the
+//! configuration gives a standing agent wakes no run, whatever its
+//! terminal finds and whatever run of an earlier entry stands: a settle
+//! passes over it, recording nothing, and a carrier's wake settles as
+//! any act does, launches nothing and answers that the agent holds it,
+//! with where it lives and its pending ends; which agent holds an
+//! address is the configuration's at each delivery and each wake (132;
+//! core.13, core.28).
 
 use crate::start::Starts;
 use crate::{what_ended, AddressStatus, Answer, Engine, PendingEnd, Step, Woke};
@@ -24,7 +31,10 @@ use std::collections::BTreeMap;
 
 impl Engine {
     /// Wakes the role's address for a carrier: its run launched where
-    /// none stands, and otherwise the run that stands, nothing made (132).
+    /// none stands, and otherwise the run that stands, nothing made; and,
+    /// for an address the configuration gives a standing agent, nothing
+    /// launched, answered held with where the agent lives and the ends
+    /// pending for it (132; core.28).
     pub fn wake(&self, address: &str) -> Answer {
         if !is_address(address) {
             return Answer::refused(format!(
@@ -32,6 +42,17 @@ impl Engine {
             ));
         }
         self.settle_attended();
+        if let Some(reach) = self.reach(&mut self.standing(), address) {
+            let every = self.every_held();
+            return Answer::Held {
+                address: address.into(),
+                standing: reach.status,
+                pending: pending_addresses(&every)
+                    .remove(address)
+                    .map(|status| status.pending)
+                    .unwrap_or_default(),
+            };
+        }
         match self.wake_address(address) {
             Ok((woke, held)) => Answer::Woken {
                 address: address.into(),
@@ -109,7 +130,9 @@ impl Engine {
 
     /// The settle's wake step (design 2): each role's address an end of
     /// the place stands pending for is woken, and why one was not is kept
-    /// on the place for status, gone once it is woken (43, 132).
+    /// on the place for status, gone once it is woken; an address the
+    /// standing entries name, read once, is passed over, nothing launched
+    /// and nothing kept (43, 132; core.28).
     pub(crate) fn wake_roles(&self, id: &PlaceId) {
         let Some(read) = self.store.read(id) else {
             return;
@@ -118,12 +141,20 @@ impl Engine {
         if matches!(held.phase, Phase::Making { .. }) {
             return;
         }
-        let mut unwoken = BTreeMap::new();
-        for address in held
+        let addresses: Vec<String> = held
             .pending_for()
             .into_iter()
             .filter(|name| is_address(name))
-        {
+            .collect();
+        let standing = (!addresses.is_empty()).then(|| self.standing());
+        let mut unwoken = BTreeMap::new();
+        for address in addresses {
+            if standing
+                .as_ref()
+                .is_some_and(|standing| standing.holds(&address))
+            {
+                continue;
+            }
             if let Err(reason) = self.wake_address(&address) {
                 unwoken.insert(address, reason);
             }
@@ -137,42 +168,27 @@ impl Engine {
     }
 
     /// Each role's address an end stands pending for, of every place on
-    /// the host, with the run the configuration names for it, its run
-    /// standing and why it was not woken (132; core.28).
+    /// the host, and each the configuration gives a standing agent,
+    /// pending or not: with the run the configuration names for it, its
+    /// run standing and why it was not woken, or, for a standing address,
+    /// where its agent lives, each terminal and part asked once (56, 132,
+    /// 190; core.15, core.28).
     pub(crate) fn addresses(&self) -> Vec<AddressStatus> {
-        let every: Vec<HeldState> = self
-            .store
-            .read_every()
-            .into_iter()
-            .map(|read| read.state)
-            .collect();
-        let mut by: BTreeMap<String, AddressStatus> = BTreeMap::new();
-        for held in &every {
-            for end in &held.ends {
-                for address in end.pending(&held.place.recipients) {
-                    if !is_address(&address) {
-                        continue;
-                    }
-                    let status = by.entry(address.clone()).or_insert_with(|| AddressStatus {
-                        address: address.clone(),
-                        role: None,
-                        run: None,
-                        pending: vec![],
-                        unwoken: None,
-                    });
-                    status.pending.push(PendingEnd {
-                        place: held.place.id.clone(),
-                        key: end.of.key(),
-                        what: what_ended(&end.of),
-                    });
-                    if status.unwoken.is_none() {
-                        status.unwoken = held.unwoken.get(&address).cloned();
-                    }
-                }
-            }
+        let every = self.every_held();
+        let mut by = pending_addresses(&every);
+        let mut standing = self.standing();
+        for address in standing.addresses() {
+            by.entry(address.clone())
+                .or_insert_with(|| AddressStatus::of(address));
         }
         for status in by.values_mut() {
-            status.role = self.host.role(&status.address);
+            status.standing = self
+                .reach(&mut standing, &status.address)
+                .map(|reach| reach.status);
+            match status.standing {
+                Some(_) => status.unwoken = None,
+                None => status.role = self.host.role(&status.address),
+            }
             status.run = every
                 .iter()
                 .filter(|held| !matches!(held.phase, Phase::Tidied { .. }))
@@ -180,6 +196,59 @@ impl Engine {
                 .map(|held| held.place.id.clone());
         }
         by.into_values().collect()
+    }
+}
+
+impl Engine {
+    /// Every place's held state on the host, tidied documents among them.
+    fn every_held(&self) -> Vec<HeldState> {
+        self.store
+            .read_every()
+            .into_iter()
+            .map(|read| read.state)
+            .collect()
+    }
+}
+
+/// Each role's address an end of `every` stands pending for, with those
+/// ends and why the last settle did not wake it, by the address (43,
+/// 132).
+fn pending_addresses(every: &[HeldState]) -> BTreeMap<String, AddressStatus> {
+    let mut by: BTreeMap<String, AddressStatus> = BTreeMap::new();
+    for held in every {
+        for end in &held.ends {
+            for address in end.pending(&held.place.recipients) {
+                if !is_address(&address) {
+                    continue;
+                }
+                let status = by
+                    .entry(address.clone())
+                    .or_insert_with(|| AddressStatus::of(address.clone()));
+                status.pending.push(PendingEnd {
+                    place: held.place.id.clone(),
+                    key: end.of.key(),
+                    what: what_ended(&end.of),
+                });
+                if status.unwoken.is_none() {
+                    status.unwoken = held.unwoken.get(&address).cloned();
+                }
+            }
+        }
+    }
+    by
+}
+
+impl AddressStatus {
+    /// The address with nothing read of it yet.
+    fn of(address: String) -> AddressStatus {
+        AddressStatus {
+            address,
+            role: None,
+            run: None,
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+        }
     }
 }
 

@@ -31,8 +31,11 @@
 //! C.7; core.30). Its
 //! `[roles."<partition>/<role>"]` tables are the runs the host wakes for
 //! each role's address, with `repository`, `kind`, `priority`, `base`,
-//! `brief` and `stream`, an address it names nothing for woken by nothing
-//! (132, C.7). Its `[streams.<stream>]` tables declare the host's streams,
+//! `brief` and `stream`, or, where one gives `agent`, the standing agent
+//! that holds the address, by the terminal's name for it, with an
+//! optional `session` and `stream` and none of a run's other keys, a
+//! table giving both `agent` and `kind` unreadable; an address it names
+//! nothing for is woken by nothing (3, 132, C.7). Its `[streams.<stream>]` tables declare the host's streams,
 //! each with `agents`, `priority`, `pool`, `session`, `multiplexer`,
 //! `view`, `terminal_app`, `title`, its labels' shares in
 //! `[streams.<stream>.labels.<label>]`, and the session it names for a
@@ -75,7 +78,8 @@ use flume_seams::{
     is_address, read_span, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource,
     HostSourceRead, KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy,
     PinnedKey, Pool, PoolFrom, PoolNamed, ProfileHeld, RoleRun, Settings, Share, StageSession,
-    Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
+    StandingAgent, Strategy, Stream, StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld,
+    DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -181,6 +185,9 @@ pub struct HostConfig {
     pub every_agent: Settings,
     /// The run woken for each role's address, by the address (132, C.7).
     pub roles: BTreeMap<String, RoleRun>,
+    /// The standing agent named for each role's address an entry gives
+    /// `agent`, by the address, none of them in `roles` (132, C.7).
+    pub standing: BTreeMap<String, StandingAgent>,
     /// The streams declared, by name, `default` among them always (143).
     pub streams: BTreeMap<String, Stream>,
     /// The streams named for places, by repository and kind, by
@@ -242,6 +249,7 @@ impl Default for HostConfig {
             streams_agents: BTreeMap::new(),
             every_agent: Settings::default(),
             roles: BTreeMap::new(),
+            standing: BTreeMap::new(),
             streams: BTreeMap::from([(DEFAULT_STREAM.to_string(), Stream::default())]),
             streams_named: StreamsNamed::default(),
             labels_named: LabelsNamed::default(),
@@ -461,7 +469,7 @@ impl HostConfig {
             }
         }
         if let Some(roles) = table.get("roles") {
-            config.roles = role_runs(roles)?;
+            (config.roles, config.standing) = role_runs(roles)?;
         }
         if let Some(pools) = table.get("pools") {
             config.pools = pools_declared(pools)?;
@@ -1463,15 +1471,27 @@ fn env_of(table: &Table, at: &str) -> Result<BTreeMap<String, String>, String> {
     Ok(env)
 }
 
+/// The runs the `roles` table names, by the address (132, C.7).
+type Roles = BTreeMap<String, RoleRun>;
+
+/// The standing agents the `roles` table names, by the address (132, C.7).
+type StandingAgents = BTreeMap<String, StandingAgent>;
+
 /// The `roles` table: each address's run, its repository and kind named,
 /// its priority zero, its base the repository's default branch and its
-/// brief none where the table gives none; a key that is no address, or a
-/// key the run does not know, refused naming it (132, C.7).
-fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
+/// brief none where the table gives none; and each address an entry
+/// giving `agent` names a standing agent for, with its `session` and
+/// `stream` where it gives them. A key that is no address, a key the run
+/// does not know, `session` among them, an `agent` beside `kind`, which
+/// would be two agents of one role, a key of a run's beside `agent`, or an
+/// `agent` or a `session` that is empty or no string, refused naming the
+/// address and the key (3, 132, C.7).
+fn role_runs(roles: &Value) -> Result<(Roles, StandingAgents), String> {
     let roles = roles
         .as_table()
         .ok_or("[roles] is not a table of addresses".to_string())?;
     let mut runs = BTreeMap::new();
+    let mut standing = BTreeMap::new();
     for (address, table) in roles {
         let at = format!("roles.{}", quoted(address));
         if !is_address(address) {
@@ -1480,6 +1500,15 @@ fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
             ));
         }
         let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
+        let text = |name: &str| match table.get(name) {
+            None => Ok(None),
+            Some(Value::String(value)) => Ok(Some(value.clone())),
+            Some(_) => Err(format!("[{at}] {name} is not a string")),
+        };
+        if table.contains_key("agent") {
+            standing.insert(address.clone(), standing_agent(table, &at)?);
+            continue;
+        }
         if let Some(unknown) = table.keys().find(|key| {
             !matches!(
                 key.as_str(),
@@ -1488,11 +1517,6 @@ fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
         }) {
             return Err(format!("[{at}] {unknown} is no word of a role's run"));
         }
-        let text = |name: &str| match table.get(name) {
-            None => Ok(None),
-            Some(Value::String(value)) => Ok(Some(value.clone())),
-            Some(_) => Err(format!("[{at}] {name} is not a string")),
-        };
         let named = |name: &str| text(name)?.ok_or(format!("[{at}] names no {name}"));
         let priority = match table.get("priority") {
             None => 0,
@@ -1512,7 +1536,45 @@ fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
             },
         );
     }
-    Ok(runs)
+    Ok((runs, standing))
+}
+
+/// The standing agent an entry of the `roles` table at `at` names by its
+/// `agent`, with its `session` and `stream` where it gives them; a `kind`
+/// beside it, a run's other key or any key a standing agent's entry does
+/// not know, or an `agent` or a `session` that is empty or no string,
+/// refused naming the address and the key. The name is the terminal's to
+/// hold or never list, and flume checks no rule of its own on it (3, 132,
+/// C.7; core.44).
+fn standing_agent(table: &Table, at: &str) -> Result<StandingAgent, String> {
+    if table.contains_key("kind") {
+        return Err(format!(
+            "[{at}] gives both a standing agent and a kind, two agents of one role"
+        ));
+    }
+    if let Some(unknown) = table
+        .keys()
+        .find(|key| !matches!(key.as_str(), "agent" | "session" | "stream"))
+    {
+        return Err(format!(
+            "[{at}] {unknown} is no word of a standing agent's entry"
+        ));
+    }
+    let name = |key: &str| match table.get(key) {
+        None => Ok(None),
+        Some(Value::String(value)) if value.is_empty() => Err(format!("[{at}] {key} is empty")),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err(format!("[{at}] {key} is not a string")),
+    };
+    Ok(StandingAgent {
+        agent: name("agent")?.ok_or(format!("[{at}] names no agent"))?,
+        session: name("session")?,
+        stream: match table.get("stream") {
+            None => None,
+            Some(Value::String(stream)) => Some(stream.clone()),
+            Some(_) => return Err(format!("[{at}] stream is not a string")),
+        },
+    })
 }
 
 /// The host's `[agents]`, its settings for every agent, and each of its
@@ -2000,6 +2062,160 @@ mod tests {
             let refused = HostConfig::parse(text).unwrap_err();
             assert!(refused.contains(named), "{refused}");
         }
+    }
+
+    /// role-waking, "A standing agent's entry read" (132, C.7).
+    #[test]
+    fn a_standing_agents_entry_read() {
+        let config = HostConfig::parse(
+            "[roles.\"madswan/planner\"]\nagent = \"madswan-planner\"\nsession = \"madswan\"\n\
+             [roles.\"madswan/ops\"]\nrepository = \"/r\"\nkind = \"ops\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.standing,
+            BTreeMap::from([(
+                "madswan/planner".to_string(),
+                StandingAgent {
+                    agent: "madswan-planner".into(),
+                    session: Some("madswan".into()),
+                    stream: None,
+                }
+            )]),
+            "the planner's agent and session, and nothing standing for ops"
+        );
+        assert_eq!(
+            config.roles.keys().collect::<Vec<_>>(),
+            vec!["madswan/ops"],
+            "ops's run, and no run for the planner"
+        );
+        assert_eq!(config.roles["madswan/ops"].kind, "ops");
+    }
+
+    #[test]
+    fn a_standing_agent_in_its_stream() {
+        let config = HostConfig::parse(
+            "[roles.\"madswan/planner\"]\nagent = \"madswan-planner\"\nstream = \"madswan\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.standing["madswan/planner"],
+            StandingAgent {
+                agent: "madswan-planner".into(),
+                session: None,
+                stream: Some("madswan".into()),
+            },
+            "no session, the stream's own"
+        );
+        assert!(config.roles.is_empty());
+    }
+
+    #[test]
+    fn the_real_host_gives_the_standing_agents() {
+        use flume_seams::Host;
+        let config = HostConfig::parse(
+            "[roles.\"madswan/planner\"]\nagent = \"madswan-planner\"\n\
+             [roles.\"madswan/ops\"]\nrepository = \"/r\"\nkind = \"ops\"\n",
+        )
+        .unwrap();
+        let scratch = Scratch::new("standing");
+        let host = super::super::RealHost::new(scratch.0.join("state"), config, None);
+        assert_eq!(
+            host.standing().keys().collect::<Vec<_>>(),
+            vec!["madswan/planner"]
+        );
+        assert_eq!(host.role("madswan/planner"), None);
+        assert!(host.role("madswan/ops").is_some());
+    }
+
+    /// role-waking, "A standing agent and a kind" (3, 132).
+    #[test]
+    fn a_standing_agent_and_a_kind_are_refused() {
+        for text in [
+            "[roles.\"madswan/planner\"]\nagent = \"madswan-planner\"\nkind = \"planner\"\n",
+            "[roles.\"madswan/planner\"]\nagent = \"madswan-planner\"\nrepository = \"/r\"\n\
+             kind = \"planner\"\npriority = 5\n",
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains("roles.\"madswan/planner\"")
+                    && refused.contains("both a standing agent and a kind"),
+                "{refused}"
+            );
+        }
+    }
+
+    /// role-waking, "A run's key beside a standing agent" (C.7).
+    #[test]
+    fn a_runs_key_beside_a_standing_agent_is_refused() {
+        for (key, value) in [
+            ("repository", "\"/r\""),
+            ("priority", "5"),
+            ("base", "\"main\""),
+            ("brief", "\"Plan.\""),
+            ("pane", "\"w-1\""),
+        ] {
+            let refused = HostConfig::parse(&format!(
+                "[roles.\"madswan/planner\"]\nagent = \"madswan-planner\"\n{key} = {value}\n"
+            ))
+            .unwrap_err();
+            assert!(
+                refused.contains("roles.\"madswan/planner\"")
+                    && refused.contains(&format!("{key} is no word of a standing agent's entry")),
+                "{refused}"
+            );
+        }
+    }
+
+    /// role-waking, "A session with no agent" (C.7).
+    #[test]
+    fn a_session_with_no_agent_is_refused() {
+        let refused = HostConfig::parse(
+            "[roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\n\
+             session = \"madswan\"\n",
+        )
+        .unwrap_err();
+        assert!(
+            refused.contains("roles.\"madswan/planner\"")
+                && refused.contains("session is no word of a role's run"),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn an_agent_or_a_session_empty_or_no_string_is_refused() {
+        for (text, named) in [
+            ("agent = \"\"\n", "agent is empty"),
+            ("agent = 4\n", "agent is not a string"),
+            ("agent = \"w\"\nsession = \"\"\n", "session is empty"),
+            (
+                "agent = \"w\"\nsession = [\"w\"]\n",
+                "session is not a string",
+            ),
+            ("agent = \"w\"\nstream = 2\n", "stream is not a string"),
+        ] {
+            let refused =
+                HostConfig::parse(&format!("[roles.\"madswan/planner\"]\n{text}")).unwrap_err();
+            assert!(
+                refused.contains("roles.\"madswan/planner\"") && refused.contains(named),
+                "{refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_standing_agent_from_the_local_layer_is_not_taken() {
+        // C.7, core.45: `[roles]` is the managed layer's alone.
+        let config = HostConfig::layers(
+            "",
+            Some("[roles.\"madswan/planner\"]\nagent = \"madswan-planner\"\n"),
+        )
+        .unwrap();
+        assert!(config.standing.is_empty());
+        let LocalLayer::NotTaken { keys, .. } = config.configuration.local else {
+            panic!("the local layer taken");
+        };
+        assert_eq!(keys, vec!["roles.\"madswan/planner\""]);
     }
 
     /// C.7's example, as the statement writes it at fa40c94, its program

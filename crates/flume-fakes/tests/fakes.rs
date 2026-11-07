@@ -1371,6 +1371,150 @@ fn the_terminal_holds_recipients_sessions_by_name() {
     assert_eq!(terminal.notices("ops"), vec!["two", "four"]);
 }
 
+/// The seam-fakes spec's "An entry set and taken away": a standing agent
+/// given `madswan/planner` is among the host's standing entries until a
+/// test takes it away, a run set beside it left as it is, and each read
+/// logged (132, C.7).
+#[test]
+fn an_entry_set_and_taken_away() {
+    let host = FakeHost::default();
+    assert!(host.standing().is_empty());
+    let planner = StandingAgent {
+        agent: "madswan-planner".into(),
+        session: Some("madswan".into()),
+        stream: None,
+    };
+    host.set_standing("madswan/planner", Some(planner.clone()));
+    assert_eq!(
+        host.standing(),
+        BTreeMap::from([("madswan/planner".to_string(), planner)])
+    );
+    assert_eq!(host.role("madswan/planner"), None, "no run for it");
+    host.set_standing("madswan/planner", None);
+    assert!(host.standing().is_empty());
+    assert_eq!(
+        host.log.calls(),
+        vec!["standing", "standing", "role madswan/planner", "standing"]
+    );
+}
+
+/// The seam-fakes spec's "An agent added, removed and refused":
+/// `w-planner` added waiting in `w` is listed there by its name under its
+/// key, which a send and a state reach and whose notices are kept; gone
+/// once removed; and `w` refused answers not read in the test's words,
+/// each asking logged and nothing opened (132, C.5).
+#[test]
+fn an_agent_added_removed_and_refused() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read { agents: vec![] },
+        "a part holding none"
+    );
+    let at = terminal.add_agent(Some("w"), "w-planner", AgentState::Waiting);
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "w-planner".into(),
+                at: at.clone(),
+                state: AgentState::Waiting,
+            }]
+        }
+    );
+    assert_eq!(
+        terminal.agents_in(Some("office")),
+        AgentsIn::Read { agents: vec![] },
+        "another part's agents are its own"
+    );
+    assert_eq!(terminal.agents_in(None), AgentsIn::Read { agents: vec![] });
+    assert_eq!(terminal.session_state(&at), Some(AgentState::Waiting));
+    assert_eq!(terminal.send_to(&at, "an end of fix--one"), ToSession::Sent);
+    assert_eq!(terminal.notices(&at), vec!["an end of fix--one"]);
+    terminal.set_session_state(&at, AgentState::Asking);
+    let AgentsIn::Read { agents } = terminal.agents_in(Some("w")) else {
+        panic!("w is read");
+    };
+    assert_eq!(agents[0].state, AgentState::Asking, "its state as set");
+
+    terminal.remove_agent(&at);
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read { agents: vec![] }
+    );
+    assert_eq!(terminal.session_state(&at), None);
+    assert_eq!(terminal.send_to(&at, "another"), ToSession::NotFound);
+
+    terminal.refuse_agents_in(Some("w"), "the session w did not answer");
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Unread {
+            reason: "the session w did not answer".into()
+        }
+    );
+    let own = terminal.add_agent(None, "planner", AgentState::Working);
+    assert!(own.ends_with("@own"), "{own}");
+    assert_eq!(
+        terminal.agents_in(None),
+        AgentsIn::Read {
+            agents: vec![NamedAgent {
+                name: "planner".into(),
+                at: own,
+                state: AgentState::Working,
+            }]
+        },
+        "the terminal's own part, read while w is refused"
+    );
+    assert_eq!(
+        terminal.log.of("agents_in"),
+        vec![
+            "agents_in w",
+            "agents_in w",
+            "agents_in office",
+            "agents_in own",
+            "agents_in w",
+            "agents_in w",
+            "agents_in w",
+            "agents_in own",
+        ]
+    );
+    assert_eq!(terminal.log.count("open"), 0, "nothing started");
+}
+
+/// The seam-fakes spec's "Two of one name": `w-planner` added twice in
+/// `w` is listed twice, each under its own key, which the core reads
+/// as no one agent (132; core.28).
+#[test]
+fn two_of_one_name() {
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let first = terminal.add_agent(Some("w"), "w-planner", AgentState::Waiting);
+    let second = terminal.add_agent(Some("w"), "w-planner", AgentState::Working);
+    assert_ne!(first, second);
+    assert_eq!(
+        terminal.agents_in(Some("w")),
+        AgentsIn::Read {
+            agents: vec![
+                NamedAgent {
+                    name: "w-planner".into(),
+                    at: first.clone(),
+                    state: AgentState::Waiting,
+                },
+                NamedAgent {
+                    name: "w-planner".into(),
+                    at: second.clone(),
+                    state: AgentState::Working,
+                },
+            ]
+        }
+    );
+    assert_eq!(terminal.send_to(&second, "one"), ToSession::Sent);
+    assert_eq!(terminal.notices(&second), vec!["one"]);
+    assert!(
+        terminal.notices(&first).is_empty(),
+        "each reached by its key"
+    );
+}
+
 fn attach_command(part: &str) -> Attached {
     Attached::Command {
         command: ViewCommand {

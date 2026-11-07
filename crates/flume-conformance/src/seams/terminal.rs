@@ -1,7 +1,8 @@
 //! The terminal seam's scenarios (B.5, 94 to 98, 122, 136 to 139, 7),
-//! a recipient's session reached by its name (43, 132), a part shown to
-//! a person in each view the terminal offers (187), whether a part
-//! runs (201), and whether the terminal hands a running agent words (95).
+//! a recipient's session reached by its name (43, 132), a part's agents
+//! given by their names (132, C.5), a part shown to a person in each
+//! view the terminal offers (187), whether a part runs (201), and
+//! whether the terminal hands a running agent words (95).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -112,6 +113,14 @@ pub trait TerminalHarness {
     /// `own`; none where it logs nothing (201).
     fn logged(&self) -> Option<Vec<String>> {
         None
+    }
+
+    /// An agent the harness started under `name` in the part `session`,
+    /// which is no agent of flume's, waiting for input; whether it
+    /// started one, none by default, for a terminal that holds no agent
+    /// a name finds (132, C.5).
+    fn named_agent(&self, _session: &str, _name: &str) -> bool {
+        false
     }
 }
 
@@ -229,6 +238,11 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             run: an_agent_under_a_session_name::<H>,
         },
         Scenario {
+            name: "terminal: a part's agents are given by their names, each with its state and a session name a send reaches it by, a name no agent carries is not given, and a part that does not run holds none and is not started",
+            cites: &["132", "95", "96", "98"],
+            run: an_agent_by_its_name::<H>,
+        },
+        Scenario {
             name: "terminal: attach gives a window's command for each part, shows the app, or refuses a view it does not offer",
             cites: &["187"],
             run: attach_by_view::<H>,
@@ -321,6 +335,86 @@ fn runs_reads_each_part<H: TerminalHarness>(harness: &H) -> Outcome {
             format!("{} asked again", of(part))
         );
     }
+    Ok(())
+}
+
+/// The seam-contracts spec's "An agent by its name": an agent the harness
+/// started under `w-planner` in the part `w` is given there by that name,
+/// once, with a state that is not stopped and a session name whose state
+/// is read and to which a send goes, or is refused by a terminal that
+/// cannot send; no agent is given by a name none carries; and the part
+/// `idle`, which does not run, holds none and runs no more after it was
+/// asked. A terminal that holds no agent a name finds answers each part
+/// not read, in words (95, 96, 98, 132, C.5; core.13).
+fn an_agent_by_its_name<H: TerminalHarness>(harness: &H) -> Outcome {
+    let (part, name, idle, nobody) = ("w", "w-planner", "idle", "w-nobody");
+    if !harness.named_agent(part, name) {
+        for asked in [Some(part), Some(idle), None] {
+            match harness.seam().agents_in(asked) {
+                AgentsIn::Unread { reason } => ensure!(
+                    !reason.trim().is_empty(),
+                    "the agents of {asked:?} not read, with no words"
+                ),
+                other => {
+                    return Err(format!(
+                        "the agents of {asked:?}, in a terminal that holds no agent a name finds, gave {other:?}"
+                    ))
+                }
+            }
+        }
+        return Ok(());
+    }
+    let agents = match harness.seam().agents_in(Some(part)) {
+        AgentsIn::Read { agents } => agents,
+        other => return Err(format!("the agents of {part} gave {other:?}")),
+    };
+    let found: Vec<&NamedAgent> = agents.iter().filter(|agent| agent.name == name).collect();
+    let [agent] = found[..] else {
+        return Err(format!(
+            "{name} given {} times among {agents:?}",
+            found.len()
+        ));
+    };
+    ensure!(
+        agent.state != AgentState::Stopped,
+        "{name} given stopped: {agent:?}"
+    );
+    ensure!(
+        agents
+            .iter()
+            .all(|agent| agent.name != nobody && !agent.at.trim().is_empty()),
+        "the agents of {part}: {agents:?}"
+    );
+    let state = harness.seam().session_state(&agent.at);
+    ensure!(
+        state.is_some_and(|state| state != AgentState::Stopped),
+        "{name}'s session {} read {state:?}",
+        agent.at
+    );
+    let sent = harness.seam().send_to(&agent.at, "a notice");
+    if harness.sends() {
+        ensure_eq!(sent, ToSession::Sent, format!("the send to {name}"));
+        ensure_eq!(
+            harness.received(&agent.at).last().cloned(),
+            Some("a notice".to_string()),
+            format!("what {name} took")
+        );
+    } else {
+        ensure!(
+            matches!(sent, ToSession::Refused { .. }),
+            "a terminal that cannot send sent {sent:?}"
+        );
+    }
+    ensure_eq!(
+        harness.seam().agents_in(Some(idle)),
+        AgentsIn::Read { agents: vec![] },
+        format!("the agents of {idle}, which does not run")
+    );
+    let runs = harness.seam().runs(&[Some(idle)]);
+    ensure!(
+        !matches!(runs[..], [SessionRuns::Runs { .. }]),
+        "{idle} runs once its agents were asked: {runs:?}"
+    );
     Ok(())
 }
 

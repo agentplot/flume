@@ -21,10 +21,12 @@
 //! keep their scratch in the walkthrough's own folder. A walkthrough may
 //! run under the pinned herdr instead (design 10): its agents in panes of
 //! flume's own herdr session, started headless on the walkthrough's
-//! scratch home, each start of the stand-in acting its own script; and a
-//! test may start a herdr server of its own, on a scratch socket and home,
-//! to run the stand-in in one of its panes. Every herdr call a test makes
-//! is bounded (core.29).
+//! scratch home, which it keeps behind a short link so the sockets of its
+//! sessions fit, each start of the stand-in acting its own script, and
+//! its sessions' servers stopped when it ends; and a test may start a
+//! herdr server of its own, on a scratch socket and home, to run the
+//! stand-in in one of its panes. Every herdr call a test makes is bounded
+//! (core.29).
 
 use crate::common::*;
 use flume::profiles::place::git_worktree;
@@ -1003,24 +1005,22 @@ impl Drop for HerdrServer {
     }
 }
 
-/// The socket of the herdr session flume's own places' panes open in
-/// beneath a walkthrough's configuration home.
-const OWN_SOCKET: &str = "config/herdr/sessions/flume/herdr-client.sock";
-
-/// A walkthrough's host under the pinned herdr (design 10): `[host]
-/// multiplexer = "herdr"`, its agents in panes of flume's own herdr
+/// A walkthrough's host under the pinned herdr (C.5; design 10): the
+/// walk, its home a short link so the sockets the pinned herdr binds for
+/// its sessions beneath its configuration home fit a socket's path, every
+/// herdr call it makes itself bounded and passing the session's socket
+/// (core.29), and each session's server running under its home stopped,
+/// its panes with it, and its link removed when it is dropped. Made by
+/// [`Walk::under_herdr`], it runs its agents in panes of flume's own herdr
 /// session, whose server flume's herdr profile starts headless on the
-/// walkthrough's scratch home, never the host's, a short link to that home
-/// so the session's socket fits; the stand-in first on the panes' `PATH`
-/// as `claude`, through the login environment the walk's shell gives; and
-/// the walkthrough's account giving `STAND_IN_SCRIPTS`, the walk's folder
-/// of each start's script, beside its scratch `CLAUDE_CONFIG_DIR` and
-/// token. Every herdr call it makes itself is bounded and passes the
-/// session's socket (core.29); each session's server running under its
-/// home is stopped, its panes with it, when it is dropped.
+/// walkthrough's scratch home, never the host's; the stand-in first on the
+/// panes' `PATH` as `claude`, through the login environment the walk's
+/// shell gives; and the walkthrough's account giving `STAND_IN_SCRIPTS`,
+/// the walk's folder of each start's script, beside its scratch
+/// `CLAUDE_CONFIG_DIR` and token.
 pub struct UnderHerdr {
     pub walk: Walk,
-    link: PathBuf,
+    pub link: PathBuf,
 }
 
 impl std::ops::Deref for UnderHerdr {
@@ -1032,21 +1032,33 @@ impl std::ops::Deref for UnderHerdr {
 }
 
 impl Walk {
-    /// A walkthrough's host under the pinned herdr.
+    /// A walkthrough's host under the pinned herdr, its agents in flume's
+    /// own session.
     pub fn under_herdr(label: &str) -> UnderHerdr {
         let mut walk = Walk::made(label, true);
         let scripts = walk.repository.scratch.path("scripts");
         std::fs::create_dir_all(&scripts).expect("the scripts' folder");
         walk.scripts = Some(scripts);
-        let link = short_link(walk.home(), OWN_SOCKET);
-        let walk = walk.with_home(link.clone());
-        let host = UnderHerdr { walk, link };
+        let host = UnderHerdr::new(walk, own_session());
         host.configure("", "");
         host
     }
 }
 
 impl UnderHerdr {
+    /// `walk` under herdr, its home a short link whose sockets fit for the
+    /// session `longest`, the longest name it opens (core.51).
+    pub fn new(walk: Walk, longest: &str) -> UnderHerdr {
+        // The longest socket the pinned herdr binds for a session,
+        // beneath the configuration home.
+        let socket = format!("config/herdr/sessions/{longest}/herdr-client.sock");
+        let link = short_link(walk.home(), &socket);
+        UnderHerdr {
+            walk: walk.with_home(link.clone()),
+            link,
+        }
+    }
+
     /// The host's configuration: `[host]` naming herdr with `host`'s keys
     /// beside, then `rest`, with the stand-in's pool of one account.
     pub fn configure(&self, host: &str, rest: &str) {
@@ -1084,27 +1096,31 @@ impl UnderHerdr {
     }
 
     /// herdr's answer to `args` under the host's configuration home, on
-    /// the server at `socket` where one is named, within the bound.
-    pub fn herdr(&self, socket: Option<&str>, args: &[&str]) -> Result<Value, String> {
+    /// the server at `socket` where one is named, within the bound: its
+    /// JSON where it answers JSON, else its text, or its words where it
+    /// refuses or does not answer.
+    pub fn try_herdr(&self, socket: Option<&str>, args: &[&str]) -> Result<Value, String> {
         let mut command = self.walk.command("herdr", &self.walk.repository.dir);
         command.args(args);
         if let Some(socket) = socket {
             command.env("HERDR_SOCKET_PATH", socket);
         }
-        herdr_within(&mut command)
+        herdr_within(&mut command).map(|answer| match answer {
+            Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::String(text)),
+            answer => answer,
+        })
+    }
+
+    /// herdr's answer to `args` as [`UnderHerdr::try_herdr`] gives it, or
+    /// null where herdr refused or did not answer within the bound.
+    pub fn herdr(&self, socket: Option<&str>, args: &[&str]) -> Value {
+        self.try_herdr(socket, args).unwrap_or(Value::Null)
     }
 
     /// The sessions herdr lists running under the host's configuration
     /// home, by name, with their sockets.
     pub fn running(&self) -> Vec<(String, String)> {
-        let listed = self
-            .herdr(None, &["session", "list", "--json"])
-            .unwrap_or(Value::Null);
-        let listed = match listed {
-            Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::Null),
-            listed => listed,
-        };
-        listed["sessions"]
+        self.herdr(None, &["session", "list", "--json"])["sessions"]
             .as_array()
             .into_iter()
             .flatten()
@@ -1118,6 +1134,27 @@ impl UnderHerdr {
             .collect()
     }
 
+    /// The socket of the session `name` herdr lists running under the
+    /// host's configuration home.
+    pub fn socket_of(&self, name: &str) -> String {
+        self.running()
+            .into_iter()
+            .find(|(running, _)| running == name)
+            .map(|(_, socket)| socket)
+            .unwrap_or_else(|| panic!("no session {name}: {:?}", self.running()))
+    }
+
+    /// The labels of what herdr lists of `what`, `tab` or `workspace`, on
+    /// the server at `socket`.
+    pub fn labels(&self, socket: &str, what: &str) -> Vec<String> {
+        self.herdr(Some(socket), &[what, "list"])[format!("{what}s")]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|listed| listed["label"].as_str().map(str::to_string))
+            .collect()
+    }
+
     /// The panes of flume's own session, as herdr lists them.
     pub fn panes(&self) -> Vec<Value> {
         let Some((_, socket)) = self
@@ -1127,8 +1164,9 @@ impl UnderHerdr {
         else {
             return vec![];
         };
-        self.herdr(Some(&socket), &["pane", "list"])
-            .map(|listed| listed["panes"].as_array().cloned().unwrap_or_default())
+        self.herdr(Some(&socket), &["pane", "list"])["panes"]
+            .as_array()
+            .cloned()
             .unwrap_or_default()
     }
 }
@@ -1141,7 +1179,7 @@ fn own_session() -> &'static str {
 impl Drop for UnderHerdr {
     fn drop(&mut self) {
         for (_, socket) in self.running() {
-            let _ = self.herdr(Some(&socket), &["server", "stop"]);
+            let _ = self.try_herdr(Some(&socket), &["server", "stop"]);
         }
         let deadline = Instant::now() + Duration::from_secs(10);
         while !self.running().is_empty() && Instant::now() < deadline {
