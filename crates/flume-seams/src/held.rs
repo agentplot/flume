@@ -285,8 +285,9 @@ impl EndHeld {
 
     /// The recipients of the end, of a place whose recipients are
     /// `recipients`: for a stop-short that named a role, that role's
-    /// address alone; otherwise those, then a stall's answerer where it is
-    /// none of them, each once (41, 43, 130, 193).
+    /// address alone; otherwise those, then, for a stall, the role the
+    /// stop-short it waits on named and the answerer behind the place's
+    /// stream, each once (41, 43, 130, 193).
     pub fn recipients(&self, recipients: &[String]) -> Vec<String> {
         if let EndOf::Stage { end, .. } = &self.of {
             if let Some(addressee) = &end.addressee {
@@ -295,12 +296,18 @@ impl EndHeld {
         }
         let mut every = recipients.to_vec();
         if let EndOf::Stall {
-            answerer: Some(answerer),
+            answerer,
+            stop_short,
             ..
         } = &self.of
         {
-            if !every.contains(answerer) {
-                every.push(answerer.clone());
+            let addressee = stop_short
+                .as_ref()
+                .and_then(|stop_short| stop_short.addressee.as_ref());
+            for also in [addressee, answerer.as_ref()].into_iter().flatten() {
+                if !every.contains(also) {
+                    every.push(also.clone());
+                }
             }
         }
         every
@@ -359,13 +366,40 @@ pub enum EndOf {
         waiting: String,
         /// The answerer behind the place's stream as its sources declared
         /// it when the stall was read, delivered the stall besides the
-        /// place's recipients: for a role's run, which has none, the one
-        /// it reaches; none where no role stood behind the stream, where
-        /// the place is that answerer's own run, or where an earlier
+        /// place's recipients; none where no role stood behind the stream,
+        /// where the place is that answerer's own run, or where an earlier
         /// flume wrote none (130, 132, 193).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         answerer: Option<String>,
+        /// The stop-short the place waits on, where the move answers one,
+        /// so a reader who never saw the place has the question whole;
+        /// none where it answers none, or an earlier flume wrote none
+        /// (41, 42, 130, 193); boxed, so an end stays small.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stop_short: Option<Box<StopShortWaited>>,
+        /// Whether the flume that recorded it read the answerer and the
+        /// stop-short: false only for a stall an earlier flume recorded,
+        /// which the first settle that reads it, while the place still
+        /// waits on its caller under no hold's words, reads them for
+        /// (130, 193).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        answerer_read: bool,
     },
+}
+
+/// The stop-short a stalled place waits on, as the stall read it: its
+/// words, whether it needs an answer or found work, its end's key, and the
+/// role's address it named, whole, none where it named none (41, 42, 43,
+/// 130, 193).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StopShortWaited {
+    pub words: Option<String>,
+    #[serde(default)]
+    pub needs: Option<StopKind>,
+    /// The key of the stop-short's end, by which it is recorded (43).
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressee: Option<String>,
 }
 
 impl EndOf {

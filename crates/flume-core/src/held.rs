@@ -7,8 +7,8 @@
 use crate::status::waiting_on;
 use crate::Engine;
 use flume_seams::{
-    EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageState, Verdict, Versioned,
-    Waiting, Waits, Written,
+    Act, EndHeld, EndOf, HeldState, Over, Phase, PlaceId, Seconds, StageState, StopShortWaited,
+    Verdict, Versioned, Waiting, WaitingOn, Waits, Written,
 };
 
 /// What an act decided of a place's held state.
@@ -202,11 +202,14 @@ pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
 }
 
 /// Reads the place stalled where it has waited on its caller under no
-/// hold's words for its bound, recording the stall as an end once, to
-/// be delivered to each recipient and to the answerer `answerer` reads
-/// of the place as the stall is recorded (43, 130, 193; core.24). A hold
-/// with words never stalls, and a stage waiting for room is no move of
-/// its caller's (70).
+/// hold's words for its bound, recording the stall as an end once, with
+/// the stop-short the place waits on, to be delivered to each recipient,
+/// to the role that stop-short named and to the answerer `answerer` reads
+/// of the place as the stall is recorded (43, 130, 193; core.24). A stall
+/// an earlier flume recorded, which read neither, is read for them at the
+/// first settle that reads it while the place still waits so, and
+/// delivered as a new stall would be. A hold with words never stalls, and
+/// a stage waiting for room is no move of its caller's (70).
 pub(crate) fn read_stall(
     next: &mut HeldState,
     now: Seconds,
@@ -218,10 +221,18 @@ pub(crate) fn read_stall(
     };
     let held = waiting.on.why == Waits::OnHold && waiting.on.words.is_some();
     let since = waiting.on.since.unwrap_or(now);
-    if waiting.stalled || held || now.saturating_sub(since) < next.stall_after {
+    if held {
+        return;
+    }
+    if waiting.stalled {
+        read_earlier_stall(next, since, answerer);
+        return;
+    }
+    if now.saturating_sub(since) < next.stall_after {
         return;
     }
     let words = waiting.on.move_words();
+    let stop_short = stop_short_waited(next, &waiting.on);
     let answerer = answerer(next);
     if let Some(waiting) = &mut next.waiting {
         waiting.stalled = true;
@@ -230,6 +241,8 @@ pub(crate) fn read_stall(
         since,
         waiting: words,
         answerer,
+        stop_short: stop_short.map(Box::new),
+        answerer_read: true,
     };
     if !next.ends.iter().any(|end| end.same(&of)) {
         next.ends.push(EndHeld {
@@ -238,4 +251,80 @@ pub(crate) fn read_stall(
             deliveries: vec![],
         });
     }
+}
+
+/// Reads, for the stall of the move the place still waits on since
+/// `since` that an earlier flume recorded, the answerer behind its stream
+/// and the stop-short it waits on, so the stall stands pending for them
+/// (130, 193).
+fn read_earlier_stall(
+    next: &mut HeldState,
+    since: Seconds,
+    answerer: &dyn Fn(&HeldState) -> Option<String>,
+) {
+    let earlier = |end: &EndHeld| {
+        matches!(
+            end.of,
+            EndOf::Stall { since: at, answerer_read: false, .. } if at == since
+        )
+    };
+    if !next.ends.iter().any(earlier) {
+        return;
+    }
+    let Some(waiting) = &next.waiting else {
+        return;
+    };
+    let read = stop_short_waited(next, &waiting.on);
+    let found = answerer(next);
+    let Some(EndOf::Stall {
+        answerer,
+        stop_short,
+        answerer_read,
+        ..
+    }) = next
+        .ends
+        .iter_mut()
+        .rev()
+        .find(|end| earlier(end))
+        .map(|end| &mut end.of)
+    else {
+        return;
+    };
+    if answerer.is_none() {
+        *answerer = found;
+    }
+    if stop_short.is_none() {
+        *stop_short = read.map(Box::new);
+    }
+    *answerer_read = true;
+}
+
+/// The stop-short the move `waiting` answers: the end of the place's
+/// current stage's start that ended short, where the move is a retry
+/// that answers it, with its words, whether it needs an answer or found
+/// work, its key and the role it named; none for any other move (41, 42,
+/// 130).
+fn stop_short_waited(held: &HeldState, waiting: &WaitingOn) -> Option<StopShortWaited> {
+    if waiting.act != Act::Retry || !matches!(waiting.why, Waits::Answer | Waits::PastBound) {
+        return None;
+    }
+    let stage = &held.stages[held.current?];
+    if stage.state != StageState::EndedShort {
+        return None;
+    }
+    held.ends.iter().rev().find_map(|end| match &end.of {
+        EndOf::Stage {
+            stage: name,
+            start,
+            state: StageState::EndedShort,
+            end: read,
+            ..
+        } if *name == stage.name && *start == stage.starts => Some(StopShortWaited {
+            words: read.words.clone(),
+            needs: read.needs,
+            key: end.of.key(),
+            addressee: read.addressee.clone(),
+        }),
+        _ => None,
+    })
 }

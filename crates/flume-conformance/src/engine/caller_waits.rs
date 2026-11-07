@@ -8,10 +8,12 @@
 //! and a stage waiting for room waits on the host, never on its caller
 //! (70, 72).
 
+use super::role_waking::answerer_behind;
 use super::settling::{construct_begun, deliver_fix, fix_begun, write_change};
+use super::stage_runs::east_and_west;
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Answer, PlaceStatus, Retry, Waits};
+use flume_core::{Act, Answer, Collected, PlaceStatus, Retry, Waits};
 use flume_fakes::Plan;
 use flume_seams::*;
 
@@ -83,6 +85,31 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_held_place_is_not_stalled,
         },
         Scenario {
+            name: "caller waits: a place launched from the pane ops stalls in east, behind which acme declares east/operator with a run, and its stall is delivered once to ops and stands pending for east/operator, whose run the settle wakes and whose inbox gives the stall with the stop-short's words and key",
+            cites: &["193", "130", "43", "132", "S94"],
+            run: the_stall_reaches_the_answerer,
+        },
+        Scenario {
+            name: "caller waits: a construct in east whose recipient is east/planner, stopped short naming ops and neither held nor answered for five minutes, stalls to east/planner, east/ops and east/operator, once each",
+            cites: &["130", "41", "43", "193"],
+            run: the_role_a_question_named,
+        },
+        Scenario {
+            name: "caller waits: the same construct stopped short naming west/design stalls to east/planner, west/design and east/operator, the answerer behind its own stream, once each, and not to west/operator",
+            cites: &["130", "41", "143", "193", "S98"],
+            run: another_streams_role_named,
+        },
+        Scenario {
+            name: "caller waits: a place whose one recipient is its stream's answerer stalls to the answerer once",
+            cites: &["130", "43", "193"],
+            run: the_answerer_is_the_recipient,
+        },
+        Scenario {
+            name: "caller waits: a stall an earlier flume recorded, delivered to nobody, is delivered once to east/operator, now standing behind the place's stream, at the next settle, with the stop-short it waits on, and to no one again after",
+            cites: &["130", "43", "193"],
+            run: a_stall_from_the_earlier_release,
+        },
+        Scenario {
             name: "caller waits: a stage waiting for room an hour waits on the host, never on its caller, and is never stalled",
             cites: &["130", "70", "56"],
             run: a_long_queue,
@@ -131,6 +158,18 @@ fn stall_notices(world: &World, recipient: &str) -> Vec<String> {
         .into_iter()
         .filter(|text| text.contains(" stalled: "))
         .collect()
+}
+
+/// The key of the end of construct's first start, ended short.
+fn construct_short_key() -> String {
+    EndOf::Stage {
+        stage: "construct".into(),
+        start: 1,
+        state: StageState::EndedShort,
+        quiet_from: None,
+        end: Box::default(),
+    }
+    .key()
 }
 
 /// The secret of the live start of the place's stage at `index`.
@@ -642,6 +681,13 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
             since: asked,
             waiting: "a retry of construct".into(),
             answerer: None,
+            stop_short: Some(Box::new(StopShortWaited {
+                words: Some("Which design does the brief mean?".into()),
+                needs: Some(StopKind::NeedsAnswer),
+                key: construct_short_key(),
+                addressee: None,
+            })),
+            answerer_read: true,
         },
         "the stall"
     );
@@ -735,5 +781,288 @@ fn a_long_queue(_: &()) -> Outcome {
     ensure!(!status.stalled, "a place waiting for room stalled");
     ensure!(stalls(&world, &two).is_empty(), "a stall recorded");
     ensure!(stall_notices(&world, "ops").is_empty(), "a stall delivered");
+    Ok(())
+}
+
+/// A change `plan` launched in `east` for `recipients`, its construct
+/// ended short needing an answer, naming the role `to` where given;
+/// gives the place and when it asked. The streams `east` and `west` and
+/// acme's runs are as [`east_and_west`] declares them (41, 132, 193).
+fn asks_in_east(
+    world: &World,
+    recipients: &[&str],
+    to: Option<&str>,
+) -> Result<(PlaceId, Seconds), String> {
+    let mut change = launch("change", "plan", Some("one of two designs"));
+    change.stream = Some("east".into());
+    change.recipients = recipients.iter().map(|name| name.to_string()).collect();
+    launched(&world.engine.launch(&change))?;
+    let id = World::id("change", "plan");
+    world.settle(&id);
+    let construct = World::identity("change", "plan", "construct", 1);
+    let asked = world.host.now();
+    let answer = world.engine.needs_to(
+        &construct.to_string(),
+        &secret(world, &id, 0)?.0,
+        "Which design does the brief mean?",
+        StopKind::NeedsAnswer,
+        to,
+    );
+    ensure!(
+        answer.refusal().is_none(),
+        "the stop-short was refused: {answer:?}"
+    );
+    world.settle(&id);
+    Ok((id, asked))
+}
+
+/// The place's stall bound passed, the place settled, then every place of
+/// the host settled twice, so a run the stall woke is up and its notice
+/// lands (130, 132).
+fn stall_and_settle(world: &World, id: &PlaceId) {
+    world.host.advance(STALL_AFTER);
+    world.settle(id);
+    world.engine().settle(None);
+    world.engine().settle(None);
+}
+
+/// The recipients the place's newest stall was delivered to, in order,
+/// each as often as it was.
+fn stall_reached(world: &World, id: &PlaceId) -> Result<Vec<String>, String> {
+    let stall = stalls(world, id).pop().ok_or("no stall")?;
+    let mut reached: Vec<String> = stall
+        .deliveries
+        .into_iter()
+        .map(|delivery| delivery.recipient)
+        .collect();
+    reached.sort();
+    Ok(reached)
+}
+
+/// The stop-short the place's newest stall carries.
+fn stall_asks(world: &World, id: &PlaceId) -> Result<StopShortWaited, String> {
+    match stalls(world, id).pop().map(|end| end.of) {
+        Some(EndOf::Stall {
+            stop_short: Some(stop_short),
+            ..
+        }) => Ok(*stop_short),
+        other => Err(format!("the stall carries no stop-short: {other:?}")),
+    }
+}
+
+fn the_stall_reaches_the_answerer(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.host.set_recipient(None);
+    world.terminal.set_session(Some("ops"));
+    let (id, _) = asks_in_east(&world, &[], None)?;
+    world.host.advance(STALL_AFTER);
+    world.settle(&id);
+    let held = world.held(&id).ok_or("no place")?;
+    ensure_eq!(held.place.recipients, vec!["ops".to_string()], "recipients");
+    let stall = stalls(&world, &id).pop().ok_or("no stall")?;
+    ensure_eq!(
+        stall
+            .deliveries
+            .iter()
+            .map(|delivery| delivery.recipient.as_str())
+            .collect::<Vec<_>>(),
+        vec!["ops"],
+        "the stall's deliveries"
+    );
+    ensure_eq!(
+        stall.pending(&held.place.recipients),
+        vec!["east/operator".to_string()],
+        "the stall pending for"
+    );
+    ensure!(
+        world.held(&World::id("turn", "east-operator")).is_some(),
+        "no run of east/operator woken"
+    );
+    let ends = match world.engine.inbox("east/operator") {
+        Answer::Inbox { ends, .. } => ends,
+        other => return Err(format!("the inbox answered {other:?}")),
+    };
+    let collected = ends
+        .iter()
+        .find(|Collected { place, .. }| place == &id)
+        .ok_or("the inbox gives nothing of the place")?;
+    ensure_eq!(
+        collected.end.end.of.key(),
+        stall.of.key(),
+        "the end the inbox gives"
+    );
+    let EndOf::Stall {
+        stop_short: Some(stop_short),
+        ..
+    } = &collected.end.end.of
+    else {
+        return Err(format!("the stall collected: {:?}", collected.end.end.of));
+    };
+    ensure_eq!(
+        (stop_short.words.as_deref(), stop_short.key.clone()),
+        (
+            Some("Which design does the brief mean?"),
+            construct_short_key()
+        ),
+        "the stop-short's words and key"
+    );
+    ensure_eq!(
+        stall_notices(&world, "ops").len(),
+        1,
+        "the stall's notices to ops"
+    );
+    Ok(())
+}
+
+fn the_role_a_question_named(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    let (id, _) = asks_in_east(&world, &["east/planner"], Some("ops"))?;
+    stall_and_settle(&world, &id);
+    world.engine().settle(None);
+    ensure_eq!(
+        stall_reached(&world, &id)?,
+        vec![
+            "east/operator".to_string(),
+            "east/ops".to_string(),
+            "east/planner".to_string()
+        ],
+        "the stall's deliveries"
+    );
+    ensure_eq!(
+        stall_asks(&world, &id)?.addressee,
+        Some("east/ops".to_string()),
+        "the role the stall says was asked"
+    );
+    Ok(())
+}
+
+fn another_streams_role_named(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    answerer_behind(&world, "west");
+    world.host.set_role(
+        "west/design",
+        Some(RoleRun {
+            answers: Some("a decision west's design has not made".into()),
+            ..super::role_waking::planner_run(None, None)
+        }),
+    );
+    let (id, _) = asks_in_east(&world, &["east/planner"], Some("west/design"))?;
+    stall_and_settle(&world, &id);
+    world.engine().settle(None);
+    ensure_eq!(
+        stall_reached(&world, &id)?,
+        vec![
+            "east/operator".to_string(),
+            "east/planner".to_string(),
+            "west/design".to_string()
+        ],
+        "the stall's deliveries"
+    );
+    ensure!(
+        world.held(&World::id("turn", "west-operator")).is_none(),
+        "a run of west/operator was woken"
+    );
+    Ok(())
+}
+
+fn the_answerer_is_the_recipient(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    answerer_behind(&world, "east");
+    let (id, _) = asks_in_east(&world, &["east/operator"], None)?;
+    stall_and_settle(&world, &id);
+    ensure_eq!(
+        stall_reached(&world, &id)?,
+        vec!["east/operator".to_string()],
+        "the stall's deliveries"
+    );
+    ensure_eq!(
+        world.terminal.notices("east/operator"),
+        vec![
+            "flume: change--plan construct needs an answer; read: flume status change--plan"
+                .to_string(),
+            "flume: change--plan stalled: a retry of construct; read: flume status change--plan"
+                .to_string()
+        ],
+        "the notices into the answerer's run's pane"
+    );
+    Ok(())
+}
+
+fn a_stall_from_the_earlier_release(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let (id, asked) = asks_in_east(&world, &["ops"], None)?;
+    world.host.advance(STALL_AFTER);
+    world.settle(&id);
+    // The held state as an earlier flume wrote it: a place with no
+    // recipient, its stall delivered to nobody, naming no answerer and no
+    // stop-short.
+    let read = world.store.read(&id).ok_or("no place")?;
+    let mut json = serde_json::to_value(&read.state).map_err(|error| error.to_string())?;
+    json["place"]["recipients"] = serde_json::json!([]);
+    for end in json["ends"].as_array_mut().ok_or("no ends")? {
+        if end["of"] == "stall" {
+            let end = end.as_object_mut().ok_or("an end")?;
+            for field in ["answerer", "stop_short", "answerer_read"] {
+                end.remove(field);
+            }
+            end.insert("deliveries".into(), serde_json::json!([]));
+        }
+    }
+    let earlier: HeldState = serde_json::from_value(json).map_err(|error| error.to_string())?;
+    ensure!(
+        matches!(
+            world.store.write(&id, Some(read.version), Some(&earlier)),
+            Written::Written { .. }
+        ),
+        "the earlier held state was not written"
+    );
+    answerer_behind(&world, "east");
+    world.settle(&id);
+    ensure!(
+        world.held(&World::id("turn", "east-operator")).is_some(),
+        "no run of east/operator woken at the next settle"
+    );
+    for _ in 0..3 {
+        world.host.advance(30);
+        world.engine().settle(None);
+    }
+    let stall = stalls(&world, &id).pop().ok_or("no stall")?;
+    ensure_eq!(
+        stall
+            .deliveries
+            .iter()
+            .map(|delivery| delivery.recipient.as_str())
+            .collect::<Vec<_>>(),
+        vec!["east/operator"],
+        "the stall's deliveries"
+    );
+    ensure_eq!(
+        stall.of,
+        EndOf::Stall {
+            since: asked,
+            waiting: "a retry of construct".into(),
+            answerer: Some("east/operator".into()),
+            stop_short: Some(Box::new(StopShortWaited {
+                words: Some("Which design does the brief mean?".into()),
+                needs: Some(StopKind::NeedsAnswer),
+                key: construct_short_key(),
+                addressee: None,
+            })),
+            answerer_read: true,
+        },
+        "the stall read for its answerer"
+    );
+    ensure_eq!(stalls(&world, &id).len(), 1, "stalls recorded");
     Ok(())
 }

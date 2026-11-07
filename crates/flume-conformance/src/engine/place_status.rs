@@ -79,8 +79,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_moves_waited_on,
         },
         Scenario {
-            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another",
-            cites: &["56", "130", "43"],
+            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another and for the answerer behind its stream",
+            cites: &["56", "130", "43", "193"],
             run: a_stalled_place_with_a_pending_end,
         },
         Scenario {
@@ -1206,7 +1206,10 @@ fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
     );
     ensure_eq!(
         stall.pending_for,
-        vec!["madswan/planner".to_string()],
+        vec![
+            "madswan/planner".to_string(),
+            "default/operator".to_string()
+        ],
         "pending for"
     );
     Ok(())

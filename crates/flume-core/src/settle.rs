@@ -86,15 +86,17 @@ impl Engine {
         });
     }
 
-    /// Whom a stall of the place reaches besides its recipients, read from
-    /// the sources as the stall is recorded: for a role's run, which has
-    /// no recipient, the answerer behind its stream, never the run's own
-    /// address, so the door's own run's stall reaches no one; none for
-    /// any other place (130, 132, 193; design 2, 6).
+    /// Whom a stall of the place reaches besides its recipients and the
+    /// role its stop-short named, read from the sources as the stall is
+    /// recorded: the answerer behind the place's own stream, never a role's
+    /// run's own address, so the door's own run's stall reaches no one;
+    /// none where no role, or two, stand behind it (130, 132, 193; design
+    /// 2, 6).
     fn stall_answerer(&self, held: &HeldState) -> Option<String> {
-        let role = held.role.as_deref()?;
         match self.host.answerer(&held.place.stream.name)? {
-            StreamAnswerer::Stands(by) if by.address != role => Some(by.address),
+            StreamAnswerer::Stands(by) if held.role.as_ref() != Some(&by.address) => {
+                Some(by.address)
+            }
             _ => None,
         }
     }

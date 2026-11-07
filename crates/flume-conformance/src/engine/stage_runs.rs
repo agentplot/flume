@@ -909,7 +909,7 @@ const LISTED: &str = "Where your words are for one of these roles";
 /// The scratch host declares the streams `east` and `west`, and acme,
 /// its kind `turn` locked, declares a run of it for each of [`ROLES`]
 /// with its words (132, 193).
-fn east_and_west(world: &World) {
+pub fn east_and_west(world: &World) {
     let run = |answers: &str| RoleRun {
         answers: Some(answers.into()),
         ..super::role_waking::planner_run(None, None)
