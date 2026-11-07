@@ -86,6 +86,20 @@ impl HistoryHarness for Harness {
         self.repository
             .git(&["remote", "set-url", "origin", &gone.to_string_lossy()]);
     }
+
+    fn origin_named(&self, _repository: &str, url: &str) {
+        let remotes = self.repository.git(&["remote"]);
+        let verb = if remotes.lines().any(|remote| remote == "origin") {
+            "set-url"
+        } else {
+            "add"
+        };
+        self.repository.git(&["remote", verb, "origin", url]);
+    }
+
+    fn origin_removed(&self, _repository: &str) {
+        self.repository.git(&["remote", "remove", "origin"]);
+    }
 }
 
 #[test]

@@ -1129,4 +1129,12 @@ impl HistoryHarness for FakeHistoryHarness {
         self.git
             .origin_fails(repository, "origin does not appear to be a git repository");
     }
+
+    fn origin_named(&self, repository: &str, url: &str) {
+        self.git.set_origin_url(repository, url);
+    }
+
+    fn origin_removed(&self, repository: &str) {
+        self.git.remove_origin_url(repository);
+    }
 }
