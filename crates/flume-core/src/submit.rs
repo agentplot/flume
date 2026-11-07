@@ -453,13 +453,19 @@ fn recorded(
     }
 }
 
-/// Whether the stage at `index` ended short having found work, as the
-/// kind's last stage, its fix round not yet started nor refused past the
-/// kind's bound (131).
-fn sent_back_by(held: &HeldState, index: usize) -> bool {
+/// Whether the stage at `index` ended short having found work that sends
+/// the place back: the kind's last stage, its fix round a stage before
+/// it, not yet started nor refused past the kind's bound. A found from
+/// any other stage, and from a last stage that is its kind's fix round,
+/// is no send-back, since no stage before it can do that work again, and
+/// is taken as needing an answer (42, 131). The settle and status read
+/// it alike, so status never says a place waits on an answer that the
+/// next settle sends back, nor the reverse.
+pub(crate) fn sent_back_by(held: &HeldState, index: usize) -> bool {
     let stage = &held.stages[index];
     held.phase == Phase::Live
         && index + 1 == held.stages.len()
+        && fix_round_of(held).is_some_and(|round| round < index)
         && stage.state == StageState::EndedShort
         && stage.end.as_ref().and_then(|end| end.needs) == Some(StopKind::FoundWork)
         && held.submission.waiting.is_none()

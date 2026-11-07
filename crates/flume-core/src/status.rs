@@ -595,12 +595,13 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
             )
         }
         StageState::EndedShort => {
-            let end = stage.end.as_ref();
-            let found = end.and_then(|end| end.needs) == Some(StopKind::FoundWork);
-            if found && index == last {
+            if crate::submit::sent_back_by(held, index) {
                 return None;
             }
-            retry(Waits::Answer, end.and_then(|end| end.words.clone()))
+            retry(
+                Waits::Answer,
+                stage.end.as_ref().and_then(|end| end.words.clone()),
+            )
         }
         StageState::Lost => retry(Waits::Lost, None),
         StageState::NeverBegun => retry(Waits::NeverBegun, None),
