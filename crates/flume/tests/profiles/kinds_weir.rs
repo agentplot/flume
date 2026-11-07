@@ -1562,8 +1562,10 @@ fn asks_nothing_it_may_not(prompt: &str) {
 
 #[test]
 fn no_prompt_of_flumes_own_asks_to_submit() {
+    // 28, 71, 112: every prompt of fix@1, chore@1, change@1, change@2 and
+    // change@3 rendered for a place.
     let mut prompts = vec![];
-    for version in [1, 2] {
+    for version in [1, 2, 3] {
         let world = world_with_own_kinds(version);
         fix_begun(&world, "one").expect("a fix begun");
         prompts.push(opened(&world, "fix", "one", "code", 1));
@@ -1614,6 +1616,8 @@ fn sent_back_with_a_conflict(world: &World, kind: &str, name: &str) -> (String, 
 
 #[test]
 fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
+    // 112: fix@1's, chore@1's, change@2's and change@3's code prompts sent
+    // back with a conflict's words.
     let world = world_with_own_kinds(2);
     let mut prompts = vec![];
 
@@ -1634,7 +1638,15 @@ fn a_code_prompt_sent_back_with_a_conflict_merges_the_base_never_rebasing() {
     change_at_verify(&world, "plan").expect("a change at verify");
     archive(&world, "plan");
     prompts.push((
-        "change",
+        "change@2",
+        sent_back_with_a_conflict(&world, "change", "plan"),
+    ));
+
+    let world = world_with_own_kinds(3);
+    change_at_verify(&world, "plan").expect("a change@3 at verify");
+    archive(&world, "plan");
+    prompts.push((
+        "change@3",
         sent_back_with_a_conflict(&world, "change", "plan"),
     ));
 
