@@ -1,17 +1,18 @@
-//! Role addresses and the wake (3, 43, 132, S38; core.28): a role's run
-//! is a place of the kind the host's configuration names for the
-//! address, named by the role, on its base or the repository's default
+//! Role addresses and the wake (3, 43, 132, 193, S38; core.28): a role's
+//! run is a place of the kind of its own a source declares for the
+//! address, `<source>/<kind>` at the version the locks record, in the
+//! address's stream, named by the role, on its base or the repository's default
 //! branch, with its brief, its agents' session named by the address and
 //! no recipient of its own; a settle that finds an end pending for an
 //! address with no run standing launches it, a carrier's wake does the
 //! same, and a wake of an address whose run stands makes nothing; an
-//! address the configuration names nothing for is woken by nothing and
+//! address no source declares a run for is woken by nothing and
 //! status names its pending ends; and a run's inbox collects for its
 //! address. A place launched again under a name whose earlier place
 //! landed never reads that landing as its own (3, 99). The host gives an
-//! address a standing agent holds apart from a run (132, C.7): a settle
+//! address a standing agent holds apart from a run (132, 193): a settle
 //! wakes no run for it and records nothing, a carrier's wake launches
-//! nothing and answers held, and the configuration at each delivery
+//! nothing and answers held, and the source's entry at each delivery
 //! decides between a standing agent and a run (132, S38; core.28).
 
 use super::settling::deliver_fix;
@@ -28,8 +29,8 @@ use std::sync::{Arc, Mutex};
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
-            name: "role waking: a wake of a configured role launches its kind in its repository at its priority, cut from the default branch, with no brief and no recipient",
-            cites: &["132", "70", "7"],
+            name: "role waking: a wake of a role a source declares launches its source's own kind at the version locked, in its repository at its priority, cut from the default branch, with no brief and no recipient",
+            cites: &["132", "193", "154", "155", "70", "7"],
             run: a_role_configured,
         },
         Scenario {
@@ -38,7 +39,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_base_and_a_brief,
         },
         Scenario {
-            name: "role waking: an end pending for an address the configuration names nothing for launches nothing, and status names it pending with no role",
+            name: "role waking: an end pending for an address no source declares launches nothing, and status names it pending with no role",
             cites: &["132", "43", "56"],
             run: an_address_with_no_kind,
         },
@@ -73,18 +74,18 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: launched_again_after_a_landing,
         },
         Scenario {
-            name: "role waking: a role's run whose table names a stream runs in it, from the launch, and one naming a stream the host does not declare is not woken",
-            cites: &["132", "143"],
+            name: "role waking: a role's run runs in its address's stream, from the launch, and one whose address names a stream the host does not declare is not woken",
+            cites: &["132", "143", "193"],
             run: a_role_in_its_stream,
         },
         Scenario {
-            name: "role waking: a role whose kind names a host's source with no version is woken by an end pending for it to the newest the locks record, status naming its identity and the source's file",
-            cites: &["132", "154", "155", "191"],
+            name: "role waking: a role whose kind is its source's own is woken by an end pending for it to the newest the locks record, status naming its identity and the source's file",
+            cites: &["132", "154", "155", "191", "193"],
             run: a_role_woken_to_a_hosts_source,
         },
         Scenario {
-            name: "role waking: a role whose kind no lock records is refused at its wake naming it, no place made",
-            cites: &["4", "132", "155"],
+            name: "role waking: a role whose kind no lock records is refused at its wake naming it as a launch's kind is, no place made",
+            cites: &["4", "132", "155", "193"],
             run: a_roles_kind_unlocked,
         },
         Scenario {
@@ -122,9 +123,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 fn standing_and_run_apart(_: &()) -> Outcome {
     let world = World::new();
     let planner = StandingAgent {
+        source: ACME.into(),
         agent: "madswan-planner".into(),
         session: Some("madswan".into()),
-        stream: None,
+        answers: None,
+        answerer: false,
     };
     world.host.set_standing(PLANNER, Some(planner.clone()));
     world
@@ -147,30 +150,52 @@ fn standing_and_run_apart(_: &()) -> Outcome {
 
 const PLANNER: &str = "madswan/planner";
 
-/// The planner's run as the configuration names it in the repository.
+/// The source that declares the roles, and where its packages lie.
+const ACME: &str = "acme";
+const ACME_KINDS: &str = "/kinds/acme";
+
+/// The planner's run as acme declares it in the repository, of its own
+/// kind `turn`.
 fn planner_run(base: Option<&str>, brief: Option<&str>) -> RoleRun {
     RoleRun {
+        source: ACME.into(),
         repository: REPOSITORY.into(),
-        kind: "planner".into(),
+        kind: "turn".into(),
         priority: 5,
         base: base.map(str::to_string),
         brief: brief.map(str::to_string),
-        stream: None,
+        name: None,
+        intent: None,
+        agents: RoleAgents::default(),
+        answers: None,
+        answerer: false,
     }
 }
 
-/// The repository declares the kind `planner`, one conversation stage
-/// whose prompt is `prompt`, and the host names `run` for the planner.
+/// acme holds `turn@1`, one conversation stage `plan` whose prompt is
+/// `prompt`, which the host's lock records; the host declares the stream
+/// `address` names; and acme declares `run` for `address` (132, 155,
+/// 193).
+fn configure_at(world: &World, address: &str, prompt: &str, run: RoleRun) {
+    use crate::seams::kinds::{entry, hash_of};
+    let mut turn = kind("turn", false, vec![stage("plan", None, prompt)]);
+    turn.version = 1;
+    world.host.set_source(ACME, ACME_KINDS);
+    world.kinds.set_package(ACME_KINDS, turn, &hash_of('a'));
+    super::kind_sources::host_locks(world, vec![entry(ACME, "turn", 1, &hash_of('a'))]);
+    world
+        .host
+        .set_stream(stream_of(address), Some(Stream::default()));
+    world.host.set_role(address, Some(run));
+}
+
+/// acme declares `run` for the planner, as `configure_at` has it.
 fn configure(world: &World, prompt: &str, run: RoleRun) {
-    world.kinds.set_kinds(
-        REPOSITORY,
-        vec![kind("planner", false, vec![stage("plan", None, prompt)])],
-    );
-    world.host.set_role(PLANNER, Some(run));
+    configure_at(world, PLANNER, prompt, run);
 }
 
 fn planner_id() -> PlaceId {
-    World::id("planner", "planner")
+    World::id("turn", "planner")
 }
 
 /// What a wake answered: how it woke and the run's status.
@@ -232,36 +257,49 @@ fn addresses(world: &World) -> Result<Vec<AddressStatus>, String> {
     }
 }
 
+/// The role-waking spec's "A role configured": the scratch host declares
+/// the stream `east`, acme declares `east/planner` in the repository of
+/// its own kind `turn` at priority 5, `acme/turn@1` is locked, and a wake
+/// launches a place of `acme/turn@1` there at priority 5, cut from the
+/// repository's default branch, with no brief and no recipient; a name
+/// of no address is refused (132, 154, 155, 193).
 fn a_role_configured(_: &()) -> Outcome {
     let world = World::new();
     world.git.init(REPOSITORY, "trunk");
     world.git.set_default_branch(REPOSITORY, "trunk");
-    configure(
+    configure_at(
         &world,
+        "east/planner",
         "Read what is pending for you.",
         planner_run(None, None),
     );
-    let (woke, place) = woken(&world.engine.wake(PLANNER))?;
+    let (woke, place) = woken(&world.engine.wake("east/planner"))?;
     ensure_eq!(woke, Woke::Launched, "the wake");
-    ensure_eq!(place.place, planner_id(), "the run's place");
+    ensure_eq!(runs(&world), vec![place.place.clone()], "the run's place");
     ensure_eq!(
-        (
-            place.kind.as_str(),
-            place.name.as_str(),
-            place.base.as_str()
-        ),
-        ("planner", "planner", "trunk"),
-        "the run's kind, name and base"
+        (place.kind.as_str(), place.base.as_str()),
+        ("turn", "trunk"),
+        "the run's kind and base"
+    );
+    let status = world.status(&place.place)?;
+    ensure_eq!(
+        status.identity.as_deref(),
+        Some("acme/turn@1"),
+        "the run's kind, its source's own at the version locked"
     );
     ensure_eq!(place.repository, REPOSITORY, "the run's repository");
     ensure_eq!(place.priority, 5, "the run's priority");
-    ensure_eq!(place.role.as_deref(), Some(PLANNER), "the run's role");
+    ensure_eq!(
+        place.role.as_deref(),
+        Some("east/planner"),
+        "the run's role"
+    );
     ensure_eq!(
         place.recipients,
         Vec::<String>::new(),
         "the run's recipients"
     );
-    let held = world.held(&planner_id()).ok_or("no run")?;
+    let held = world.held(&place.place).ok_or("no run")?;
     ensure_eq!(held.place.brief, None, "the run's brief");
     let refused = world.engine.wake("planner");
     ensure!(
@@ -280,7 +318,7 @@ fn a_base_and_a_brief(_: &()) -> Outcome {
     configure(&world, "{{brief}}", planner_run(Some("next"), Some(brief)));
     let (_, place) = woken(&world.engine.wake(PLANNER))?;
     ensure_eq!(place.base, "next", "the run's base");
-    let identity = World::identity("planner", "planner", "plan", 1);
+    let identity = World::identity("turn", "planner", "plan", 1);
     let prompt = world
         .prompt(&planner_id(), &identity)
         .ok_or("no prompt sent")?;
@@ -397,7 +435,7 @@ fn two_settles_at_once(_: &()) -> Outcome {
         "the second launch was not refused at its create"
     );
     ensure_eq!(runs(&world), vec![planner_id()], "the runs made");
-    let opened = World::identity("planner", "planner", "plan", 1);
+    let opened = World::identity("turn", "planner", "plan", 1);
     ensure!(
         world.terminal.opened(&opened).is_some(),
         "the run's agent was not opened"
@@ -463,7 +501,7 @@ fn three_ends_one_run(_: &()) -> Outcome {
     let busy_start = World::identity("fix", "busy", "code", 1);
     world.terminal.kill(&busy_start);
     world.settle(&busy);
-    let identity = World::identity("planner", "planner", "plan", 1);
+    let identity = World::identity("turn", "planner", "plan", 1);
     ensure!(
         world.terminal.opened(&identity).is_some(),
         "the run's agent did not start once there was room"
@@ -605,34 +643,25 @@ fn launched_again_after_a_landing(_: &()) -> Outcome {
 
 fn a_role_in_its_stream(_: &()) -> Outcome {
     let world = World::new();
-    world.host.set_stream("work", Some(Stream::default()));
     configure(
         &world,
         "Read what is pending for you.",
-        RoleRun {
-            stream: Some("work".into()),
-            ..planner_run(None, None)
-        },
+        planner_run(None, None),
     );
     let (woke, place) = woken(&world.engine.wake(PLANNER))?;
     ensure_eq!(woke, Woke::Launched, "the wake");
     ensure_eq!(
         place.stream,
         StreamHeld {
-            name: "work".into(),
+            name: "madswan".into(),
             from: StreamFrom::Launch,
         },
-        "the run's stream"
+        "the run's stream, its address's"
     );
-    world.host.set_role(
-        "madswan/ops",
-        Some(RoleRun {
-            kind: "planner".into(),
-            stream: Some("nightly".into()),
-            ..planner_run(None, None)
-        }),
-    );
-    let refused = world.engine.wake("madswan/ops");
+    world
+        .host
+        .set_role("nightly/ops", Some(planner_run(None, None)));
+    let refused = world.engine.wake("nightly/ops");
     ensure!(
         refused
             .refusal()
@@ -643,28 +672,26 @@ fn a_role_in_its_stream(_: &()) -> Outcome {
     Ok(())
 }
 
-/// The planner's run, its kind `kind` as the host's configuration names
-/// it, with acme holding turn@1 and turn@2 (132, 154, 191).
-fn turn_planner(world: &World, kind: &str) {
+/// The planner's run of acme's own kind `turn`, with acme holding turn@1
+/// and turn@2, in the stream `madswan` the host declares (132, 154, 191,
+/// 193).
+fn turn_planner(world: &World) {
     super::kind_sources::holds(
         world,
-        "acme",
-        "/kinds/acme",
+        ACME,
+        ACME_KINDS,
         &[("turn", 1, '1'), ("turn", 2, '2')],
     );
-    world.host.set_role(
-        PLANNER,
-        Some(RoleRun {
-            kind: kind.into(),
-            ..planner_run(None, Some("take your turn"))
-        }),
-    );
+    world.host.set_stream("madswan", Some(Stream::default()));
+    world
+        .host
+        .set_role(PLANNER, Some(planner_run(None, Some("take your turn"))));
 }
 
 fn a_role_woken_to_a_hosts_source(_: &()) -> Outcome {
     use crate::seams::kinds::{entry, hash_of};
     let world = World::new();
-    turn_planner(&world, "acme/turn");
+    turn_planner(&world);
     super::kind_sources::host_locks(
         &world,
         vec![
@@ -699,11 +726,18 @@ fn a_role_woken_to_a_hosts_source(_: &()) -> Outcome {
 
 fn a_roles_kind_unlocked(_: &()) -> Outcome {
     let world = World::new();
-    turn_planner(&world, "acme/turn@1");
+    turn_planner(&world);
     let refused = world.engine.wake(PLANNER);
     let reason = refused.refusal().ok_or("the wake was taken")?;
+    let launched_as_a_launch =
+        world
+            .engine
+            .launch(&launch("acme/turn", "planner", Some("take your turn")));
+    let launch_refused = launched_as_a_launch
+        .refusal()
+        .ok_or("the launch was taken")?;
     ensure!(
-        reason.contains("acme/turn@1") && reason.contains("recorded in no lock"),
+        reason.contains("acme/turn") && reason.contains(launch_refused),
         "the refusal names not the kind as unlocked: {reason}"
     );
     ensure_eq!(world.store.places(), Vec::<PlaceId>::new(), "places made");
@@ -711,15 +745,18 @@ fn a_roles_kind_unlocked(_: &()) -> Outcome {
     Ok(())
 }
 
-/// The host's configuration gives the planner the standing agent
-/// `madswan-planner` in the session `madswan`.
+/// acme gives the planner the standing agent `madswan-planner` in the
+/// session `madswan`, of the stream `madswan` the host declares.
 fn planner_stands(world: &World) {
+    world.host.set_stream("madswan", Some(Stream::default()));
     world.host.set_standing(
         PLANNER,
         Some(StandingAgent {
+            source: ACME.into(),
             agent: "madswan-planner".into(),
             session: Some("madswan".into()),
-            stream: None,
+            answers: None,
+            answerer: false,
         }),
     );
 }

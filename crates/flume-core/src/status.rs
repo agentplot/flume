@@ -391,7 +391,7 @@ impl Engine {
             .sources()
             .into_iter()
             .map(|(name, source)| match source.read {
-                HostSourceRead::Read { kinds_dir } => {
+                HostSourceRead::Read { kinds_dir, .. } => {
                     let (kinds, cannot_read) = match kinds.read_source(&name, &kinds_dir) {
                         SourceRead::Read { kinds } => {
                             (kinds.into_iter().map(|kind| kind.spelled).collect(), None)

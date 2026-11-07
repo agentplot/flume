@@ -1357,17 +1357,18 @@ fn the_terminal_holds_recipients_sessions_by_name() {
 }
 
 /// The seam-fakes spec's "An entry set and taken away": a standing agent
-/// given `madswan/planner` is among the host's standing entries until a
-/// test takes it away, a run set beside it left as it is, and each read
-/// logged (132, C.7).
+/// a source declares for `madswan/planner` is among the host's standing
+/// entries until a test takes it away, and each read logged (132, 193).
 #[test]
 fn an_entry_set_and_taken_away() {
     let host = FakeHost::default();
     assert!(host.standing().is_empty());
     let planner = StandingAgent {
+        source: "acme".into(),
         agent: "madswan-planner".into(),
         session: Some("madswan".into()),
-        stream: None,
+        answers: None,
+        answerer: false,
     };
     host.set_standing("madswan/planner", Some(planner.clone()));
     assert_eq!(
@@ -1381,6 +1382,98 @@ fn an_entry_set_and_taken_away() {
         host.log.calls(),
         vec!["standing", "standing", "role madswan/planner", "standing"]
     );
+}
+
+/// The fake host scripts what its sources declare of roles: a run, a
+/// standing agent and a carried address, each in place of the entry
+/// before it and taken away by its own kind alone; an entry that declares
+/// nothing, with why; a roles file not read; and each stream's answerer
+/// and the answering roles, read from them as the test sets them (132,
+/// 191, 193, C.7).
+#[test]
+fn the_roles_its_sources_declare() {
+    let host = FakeHost::default();
+    let run = |source: &str, answers: Option<&str>, answerer: bool| RoleRun {
+        source: source.into(),
+        repository: "/r".into(),
+        kind: "turn".into(),
+        priority: 5,
+        base: None,
+        brief: None,
+        name: None,
+        intent: None,
+        agents: RoleAgents::default(),
+        answers: answers.map(str::to_string),
+        answerer,
+    };
+    host.set_role(
+        "east/planner",
+        Some(run("acme", Some("The work's scope."), false)),
+    );
+    host.set_role("east/operator", Some(run("acme", None, true)));
+    host.set_carried(
+        "north/design",
+        Some(CarriedRole {
+            source: "acme".into(),
+            answers: Some("A decision the design has not made.".into()),
+        }),
+    );
+    host.refuse_role("east/ops", "acme", "its kind beta/turn is not acme's own");
+    host.set_roles_unread("beta", Some(("/state/beta/roles.toml", "is not TOML")));
+    assert_eq!(
+        host.role("east/planner"),
+        Some(run("acme", Some("The work's scope."), false))
+    );
+    assert!(matches!(
+        host.declared("north/design"),
+        Ok(RoleEntry::Carried(_))
+    ));
+    assert_eq!(
+        host.declared("east/ops"),
+        Err("its kind beta/turn is not acme's own".into())
+    );
+    assert_eq!(
+        host.answerer("east"),
+        Some(StreamAnswerer::Stands(DeclaredBy {
+            address: "east/operator".into(),
+            source: "acme".into(),
+        }))
+    );
+    assert_eq!(host.answerer("west"), None);
+    assert_eq!(
+        host.answering()
+            .into_iter()
+            .map(|role| (role.address, role.stream))
+            .collect::<Vec<_>>(),
+        [
+            ("east/planner".to_string(), "east".to_string()),
+            ("north/design".to_string(), "north".to_string()),
+        ]
+    );
+    let roles = host.roles();
+    assert_eq!(roles.unread["beta"].file, "/state/beta/roles.toml");
+    assert_eq!(roles.refused.len(), 1);
+    host.set_standing("east/planner", None);
+    assert!(
+        host.role("east/planner").is_some(),
+        "a run kept from a standing agent's taking away"
+    );
+    host.set_standing(
+        "east/planner",
+        Some(StandingAgent {
+            source: "acme".into(),
+            agent: "east-planner".into(),
+            session: None,
+            answers: None,
+            answerer: false,
+        }),
+    );
+    assert_eq!(host.role("east/planner"), None, "the run replaced");
+    host.set_carried("north/design", None);
+    host.set_roles_unread("beta", None);
+    assert!(host.declared("north/design").is_err());
+    assert!(host.roles().unread.is_empty());
+    assert_eq!(host.log.of("answerer"), ["answerer east", "answerer west"]);
 }
 
 /// The seam-fakes spec's "An agent added, removed and refused":
@@ -2155,6 +2248,7 @@ fn the_hosts_sources_are_scripted() {
             file: source_file("acme"),
             read: HostSourceRead::Read {
                 kinds_dir: "/kinds/acme".into(),
+                roles: None,
             },
         })
     );
@@ -2171,7 +2265,7 @@ fn the_hosts_sources_are_scripted() {
     assert!(
         matches!(
             &host.sources()["acme"].read,
-            HostSourceRead::Read { kinds_dir } if kinds_dir == "/kinds/acme-2"
+            HostSourceRead::Read { kinds_dir, .. } if kinds_dir == "/kinds/acme-2"
         ),
         "a file renamed over another"
     );

@@ -15,12 +15,13 @@
 pub mod config;
 pub mod history;
 pub mod process;
+pub mod roles;
 pub mod usage;
 
 use config::HostConfig;
 use flume_seams::{
-    Host, HostConfiguration, HostSettings, HostSource, LabelHeld, Pool, PoolNamed, RoleRun,
-    RoomGuard, Seconds, Secret, StandingAgent, Stream, StreamDisplay, StreamHeld, Usage,
+    Host, HostConfiguration, HostRoles, HostSettings, HostSource, LabelHeld, Pool, PoolNamed,
+    RoomGuard, Seconds, Secret, Stream, StreamDisplay, StreamHeld, Usage,
 };
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
@@ -311,15 +312,11 @@ impl Host for RealHost {
         }
     }
 
-    fn role(&self, address: &str) -> Option<RoleRun> {
-        self.config.roles.get(address).cloned()
-    }
-
-    /// The standing agents as this command read the configuration: the
-    /// engine is built for each command, so each delivery and each status
-    /// reads them as they stand (132, C.7).
-    fn standing(&self) -> BTreeMap<String, StandingAgent> {
-        self.config.standing.clone()
+    /// What the sources declare of roles, each source's roles file read
+    /// at each call, so a file its tool renamed over the last is read as
+    /// it stands (132, 191, 193, C.7).
+    fn roles(&self) -> HostRoles {
+        roles::read(&self.config.sources, &self.config.streams)
     }
 
     fn streams(&self) -> BTreeMap<String, Stream> {

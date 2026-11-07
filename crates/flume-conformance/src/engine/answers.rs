@@ -593,12 +593,17 @@ fn host_status() -> HostStatus {
         addresses: vec![AddressStatus {
             address: "madswan/planner".into(),
             role: Some(RoleRun {
+                source: "acme".into(),
                 repository: "/r".into(),
                 kind: "planner".into(),
                 priority: 5,
                 base: Some("next".into()),
                 brief: Some("read the records".into()),
-                stream: Some("work".into()),
+                name: None,
+                intent: None,
+                agents: RoleAgents::default(),
+                answers: None,
+                answerer: false,
             }),
             run: Some(PlaceId::new("/r/places/planner--planner")),
             pending: vec![PendingEnd {

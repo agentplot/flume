@@ -1741,15 +1741,20 @@ fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
 
 const PLANNER: &str = "madswan/planner";
 
-/// The host's configuration gives `address` the standing agent `agent`
-/// in the session `madswan`.
+/// A source gives `address` the standing agent `agent` in the session
+/// `madswan`, the stream its address names declared.
 fn stands_in_madswan(world: &World, address: &str, agent: &str) {
+    world
+        .host
+        .set_stream(stream_of(address), Some(Stream::default()));
     world.host.set_standing(
         address,
         Some(StandingAgent {
+            source: "acme".into(),
             agent: agent.into(),
             session: Some("madswan".into()),
-            stream: None,
+            answers: None,
+            answerer: false,
         }),
     );
 }
@@ -1809,7 +1814,7 @@ fn a_standing_agent_found(_: &()) -> Outcome {
     let status = address_status(&world, PLANNER)?;
     let standing = status.standing.clone().ok_or("no standing")?;
     ensure_eq!(standing.agent, "madswan-planner", "the agent");
-    ensure_eq!(standing.stream, DEFAULT_STREAM, "the stream");
+    ensure_eq!(standing.stream, "madswan", "the stream, its address's");
     ensure_eq!(
         standing.session,
         SessionHeld {

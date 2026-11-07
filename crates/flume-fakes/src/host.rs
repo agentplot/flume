@@ -1,9 +1,11 @@
 use crate::{lock, Log};
+use flume_seams::{CarriedRole, HostRoles};
 use flume_seams::{
     ConfigLayer, ConfigValue, Host, HostConfiguration, HostSettings, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, NamedBy, Pool, PoolFrom, PoolNamed,
-    ProfileHeld, RoleRun, RoomGuard, Seconds, Secret, Settings, Share, StandingAgent, Stream,
-    StreamDisplay, StreamFrom, StreamHeld, Usage, View, ViewHeld, DEFAULT_STREAM,
+    ProfileHeld, RoleEntry, RoleRefused, RoleRun, RolesUnread, RoomGuard, Seconds, Secret,
+    Settings, Share, StandingAgent, Stream, StreamDisplay, StreamFrom, StreamHeld, Usage, View,
+    ViewHeld, DEFAULT_STREAM,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -15,9 +17,10 @@ use std::sync::{Arc, Condvar, Mutex};
 /// and stages' sessions, labels' shares, titles and displays, the host's own display, its pools of
 /// accounts, each account's reading by its path, the labels it gives
 /// kinds, its configuration's values with their layers, the sources of
-/// its kinds with where their files and its lock lie, the runs and the
-/// standing agents it names for roles' addresses, each apart from the
-/// other, the recipient the calling command's environment names, the
+/// its kinds with where their files and its lock lie, what its sources
+/// declare for roles' addresses, a run, a standing agent or a carrying,
+/// each entry that declares nothing with why, and each roles file not
+/// read, the recipient the calling command's environment names, the
 /// host user's login
 /// environment, and an exclusive room lock. It reads no configuration
 /// file and no reading's file (106, 184).
@@ -74,11 +77,10 @@ struct HostState {
     /// The settings for every agent on the host (32).
     every_agent: Settings,
     login: BTreeMap<String, String>,
-    /// The role runs the configuration names, by address (132, C.7).
-    roles: BTreeMap<String, RoleRun>,
-    /// The standing agents the configuration names, by address (132,
-    /// C.7).
-    standing: BTreeMap<String, StandingAgent>,
+    /// What the sources declare of roles: each address's entry, each
+    /// entry that declares nothing, and each roles file not read (132,
+    /// 193, C.7).
+    roles: HostRoles,
     /// The streams the configuration declares, by name (143).
     streams: BTreeMap<String, Stream>,
     /// The stream named for a repository and kind, a repository, or a
@@ -131,8 +133,7 @@ impl Default for FakeHost {
                 streams_agents: BTreeMap::new(),
                 every_agent: Settings::default(),
                 login: BTreeMap::from([("HOME".to_string(), "/home/user".to_string())]),
-                roles: BTreeMap::new(),
-                standing: BTreeMap::new(),
+                roles: HostRoles::default(),
                 streams: BTreeMap::new(),
                 streams_named: BTreeMap::new(),
                 pool: None,
@@ -262,24 +263,81 @@ impl FakeHost {
         };
     }
 
-    /// The run the configuration names for a role's address, or none.
+    /// The run a source declares for a role's address, in place of any
+    /// entry declared for it; or none, the address's run taken away and
+    /// any other entry left as it is (132, 193).
     pub fn set_role(&self, address: &str, run: Option<RoleRun>) {
-        let mut state = lock(&self.state);
-        match run {
-            Some(run) => state.roles.insert(address.to_string(), run),
-            None => state.roles.remove(address),
-        };
+        self.set_entry(
+            address,
+            run.map(|run| RoleEntry::Run(Box::new(run))),
+            |entry| matches!(entry, RoleEntry::Run(_)),
+        );
     }
 
-    /// The standing agent the configuration names for a role's address,
-    /// or none; the address's run, if one is set, is left as it is
-    /// (132, C.7).
+    /// The standing agent a source declares for a role's address, in
+    /// place of any entry declared for it; or none, the address's
+    /// standing agent taken away and any other entry left as it is (132,
+    /// 193; record 0039's amendment).
     pub fn set_standing(&self, address: &str, agent: Option<StandingAgent>) {
-        let mut state = lock(&self.state);
-        match agent {
-            Some(agent) => state.standing.insert(address.to_string(), agent),
-            None => state.standing.remove(address),
-        };
+        self.set_entry(address, agent.map(RoleEntry::Standing), |entry| {
+            matches!(entry, RoleEntry::Standing(_))
+        });
+    }
+
+    /// The address a source declares carried to another host, in place of
+    /// any entry declared for it; or none, the carrying taken away and any
+    /// other entry left as it is (132, 193).
+    pub fn set_carried(&self, address: &str, carried: Option<CarriedRole>) {
+        self.set_entry(address, carried.map(RoleEntry::Carried), |entry| {
+            matches!(entry, RoleEntry::Carried(_))
+        });
+    }
+
+    /// `entry` declared for `address`, or, for none, the address's entry
+    /// taken away where `taken` holds of it.
+    fn set_entry(&self, address: &str, entry: Option<RoleEntry>, taken: fn(&RoleEntry) -> bool) {
+        let declared = &mut lock(&self.state).roles.declared;
+        match entry {
+            Some(entry) => {
+                declared.insert(address.to_string(), entry);
+            }
+            None => {
+                if declared.get(address).is_some_and(taken) {
+                    declared.remove(address);
+                }
+            }
+        }
+    }
+
+    /// An entry of `source`'s that declares nothing for `address`, for
+    /// `reason`, beside every other; its declaration, if one stands for
+    /// the address, is left as it is (132, 193).
+    pub fn refuse_role(&self, address: &str, source: &str, reason: &str) {
+        lock(&self.state).roles.refused.push(RoleRefused {
+            address: address.into(),
+            source: source.into(),
+            reason: reason.into(),
+        });
+    }
+
+    /// The roles file of `source`, `file`, cannot be read, for `reason`;
+    /// or, for none, it is read again (191, 193).
+    pub fn set_roles_unread(&self, source: &str, unread: Option<(&str, &str)>) {
+        let unread_files = &mut lock(&self.state).roles.unread;
+        match unread {
+            Some((file, reason)) => {
+                unread_files.insert(
+                    source.to_string(),
+                    RolesUnread {
+                        file: file.into(),
+                        reason: reason.into(),
+                    },
+                );
+            }
+            None => {
+                unread_files.remove(source);
+            }
+        }
     }
 
     /// The stream the configuration declares under `name`, or none.
@@ -432,6 +490,7 @@ impl FakeHost {
             name,
             HostSourceRead::Read {
                 kinds_dir: kinds_dir.into(),
+                roles: None,
             },
         );
     }
@@ -513,14 +572,34 @@ impl Host for FakeHost {
         lock(&self.state).recipient.clone()
     }
 
+    fn roles(&self) -> HostRoles {
+        self.log.push("roles");
+        lock(&self.state).roles.clone()
+    }
+
+    fn declared(&self, address: &str) -> Result<RoleEntry, String> {
+        self.log.push(format!("declared {address}"));
+        lock(&self.state).roles.declared(address)
+    }
+
     fn role(&self, address: &str) -> Option<RoleRun> {
         self.log.push(format!("role {address}"));
-        lock(&self.state).roles.get(address).cloned()
+        lock(&self.state).roles.run(address)
     }
 
     fn standing(&self) -> BTreeMap<String, StandingAgent> {
         self.log.push("standing");
-        lock(&self.state).standing.clone()
+        lock(&self.state).roles.standing()
+    }
+
+    fn answerer(&self, stream: &str) -> Option<flume_seams::StreamAnswerer> {
+        self.log.push(format!("answerer {stream}"));
+        lock(&self.state).roles.answerer(stream)
+    }
+
+    fn answering(&self) -> Vec<flume_seams::AnsweringRole> {
+        self.log.push("answering");
+        lock(&self.state).roles.answering()
     }
 
     fn streams(&self) -> BTreeMap<String, Stream> {

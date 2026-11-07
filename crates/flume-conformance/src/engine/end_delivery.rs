@@ -153,18 +153,18 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: an_agent_revived_under_its_name,
         },
         Scenario {
-            name: "end delivery: a standing entry naming a stream and no session is sought in the session the stream names, in the stream's terminal",
-            cites: &["143", "190", "132"],
-            run: the_session_from_the_entrys_stream,
+            name: "end delivery: a standing entry naming no session is sought in the session its address's stream names, in that stream's terminal",
+            cites: &["143", "190", "132", "193"],
+            run: the_session_from_the_addresss_stream,
         },
         Scenario {
-            name: "end delivery: a standing entry naming neither stream nor session is sought in the terminal's own part where the default stream names no session",
-            cites: &["107", "143", "132"],
+            name: "end delivery: a standing entry of an address of the default stream naming no session is sought in the terminal's own part where the default stream names no session",
+            cites: &["107", "143", "132", "193"],
             run: the_default_streams_own_session,
         },
         Scenario {
-            name: "end delivery: a standing entry naming a stream the host does not declare asks no terminal, and the end stays pending",
-            cites: &["143", "132"],
+            name: "end delivery: a standing entry whose address names a stream the host does not declare asks no terminal, and the end stays pending",
+            cites: &["143", "132", "193"],
             run: a_stream_not_declared,
         },
         Scenario {
@@ -967,22 +967,26 @@ fn fix_for(world: &World, name: &str, recipient: &str) -> Result<PlaceId, String
     Ok(id)
 }
 
-/// The host's configuration gives `address` the standing agent `agent`,
-/// in `session` and `stream` where given.
-fn stands(world: &World, address: &str, agent: &str, session: Option<&str>, stream: Option<&str>) {
+/// A source gives `address` the standing agent `agent`, in `session`
+/// where given, its stream its address's (132, 193).
+fn stands(world: &World, address: &str, agent: &str, session: Option<&str>) {
     world.host.set_standing(
         address,
         Some(StandingAgent {
+            source: "acme".into(),
             agent: agent.into(),
             session: session.map(str::to_string),
-            stream: stream.map(str::to_string),
+            answers: None,
+            answerer: false,
         }),
     );
 }
 
-/// The planner stands as `madswan-planner` in the session `madswan`.
+/// The planner stands as `madswan-planner` in the session `madswan`, of
+/// the stream `madswan` the host declares.
 fn planner_stands(world: &World) {
-    stands(world, PLANNER, "madswan-planner", Some("madswan"), None);
+    world.host.set_stream("madswan", Some(Stream::default()));
+    stands(world, PLANNER, "madswan-planner", Some("madswan"));
 }
 
 /// A fix named `name` for the planner, launched, begun and delivered, its
@@ -1148,7 +1152,7 @@ fn an_agent_revived_under_its_name(_: &()) -> Outcome {
     Ok(())
 }
 
-fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
+fn the_session_from_the_addresss_stream(_: &()) -> Outcome {
     let world = World::new();
     let other = world.other_terminal("other");
     world.host.set_stream(
@@ -1159,7 +1163,7 @@ fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
         }),
     );
     world.host.set_display("w", Some("other"), None, None);
-    stands(&world, "w/planner", "w-planner", None, Some("w"));
+    stands(&world, "w/planner", "w-planner", None);
     let wrong = world
         .terminal
         .add_agent(Some("w-main"), "w-planner", AgentState::Waiting);
@@ -1192,7 +1196,7 @@ fn the_session_from_the_entrys_stream(_: &()) -> Outcome {
 
 fn the_default_streams_own_session(_: &()) -> Outcome {
     let world = World::new();
-    stands(&world, "w/planner", "w-planner", None, None);
+    stands(&world, "default/planner", "w-planner", None);
     let elsewhere = world
         .terminal
         .add_agent(Some("w"), "w-planner", AgentState::Waiting);
@@ -1200,7 +1204,7 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
         .terminal
         .add_agent(None, "w-planner", AgentState::Waiting);
     world.queue.plan_submits(vec![Plan::Hold]);
-    let id = fix_for(&world, "one", "w/planner")?;
+    let id = fix_for(&world, "one", "default/planner")?;
     deliver_fix(&world, &id);
     world.settle(&id);
     ensure_eq!(
@@ -1222,12 +1226,14 @@ fn the_default_streams_own_session(_: &()) -> Outcome {
 
 fn a_stream_not_declared(_: &()) -> Outcome {
     let world = World::new();
-    stands(&world, PLANNER, "madswan-planner", None, Some("gone"));
+    stands(&world, "gone/planner", "madswan-planner", None);
     let at = world
         .terminal
         .add_agent(Some("gone"), "madswan-planner", AgentState::Waiting);
     world.queue.plan_submits(vec![Plan::Hold]);
-    let id = delivered_for_planner(&world, "one")?;
+    let id = fix_for(&world, "one", "gone/planner")?;
+    deliver_fix(&world, &id);
+    world.settle(&id);
     ensure_eq!(world.terminal.log.count("agents_in"), 0, "parts asked");
     ensure!(
         world.terminal.notices(&at).is_empty(),
@@ -1235,7 +1241,7 @@ fn a_stream_not_declared(_: &()) -> Outcome {
     );
     ensure_eq!(
         pending(&world, &id)?,
-        vec![vec![PLANNER.to_string()]],
+        vec![vec!["gone/planner".to_string()]],
         "pending"
     );
     Ok(())

@@ -1959,47 +1959,200 @@ fn a_wake_not_made_and_the_submission_before_the_launch() {
 }
 
 #[test]
-fn a_role_run_as_the_configuration_names_it() {
+fn a_role_run_as_its_source_declares_it() {
+    // A run's entry with every key, and with none it may leave out; its
+    // stream is its address's, so it holds none (132, 193, C.7).
     let run = RoleRun {
+        source: "acme".into(),
         repository: "/r".into(),
-        kind: "planner".into(),
+        kind: "turn".into(),
         priority: 5,
         base: Some("next".into()),
         brief: Some("read the records".into()),
-        stream: Some("work".into()),
+        name: Some("east".into()),
+        intent: Some("east-planner".into()),
+        agents: RoleAgents {
+            every_stage: Settings {
+                model: Some("opus".into()),
+                ..Settings::default()
+            },
+            stages: BTreeMap::from([(
+                "turn".into(),
+                Settings {
+                    instructions: Some("be brief".into()),
+                    ..Settings::default()
+                },
+            )]),
+        },
+        answers: Some("The work's scope.".into()),
+        answerer: true,
     };
     round_trips(run.clone());
-    round_trips(RoleRun {
+    let bare = RoleRun {
         base: None,
         brief: None,
-        stream: None,
+        name: None,
+        intent: None,
+        agents: RoleAgents::default(),
+        answers: None,
+        answerer: false,
         ..run
+    };
+    round_trips(bare.clone());
+    assert_eq!(
+        serde_json::to_value(&bare).unwrap(),
+        serde_json::json!({"source": "acme", "repository": "/r", "kind": "turn", "priority": 5}),
+        "only the keys the entry gives"
+    );
+    let before: RoleRun = serde_json::from_value(
+        serde_json::json!({"repository": "/r", "kind": "planner", "priority": 5}),
+    )
+    .unwrap();
+    assert_eq!(before.source, "", "a run status gave before sources");
+}
+
+#[test]
+fn what_a_source_declares_for_an_address() {
+    // A run, a standing agent and a carried address, an entry that
+    // declares nothing, and a roles file not read, as the host gives them
+    // (132, 191, 193, C.7).
+    let standing = StandingAgent {
+        source: "acme".into(),
+        agent: "east-design".into(),
+        session: None,
+        answers: Some("A decision the design has not made.".into()),
+        answerer: false,
+    };
+    let roles = HostRoles {
+        declared: BTreeMap::from([
+            (
+                "east/design".to_string(),
+                RoleEntry::Standing(standing.clone()),
+            ),
+            (
+                "north/planner".to_string(),
+                RoleEntry::Carried(CarriedRole {
+                    source: "acme".into(),
+                    answers: Some("The work's scope.".into()),
+                }),
+            ),
+            (
+                "east/operator".to_string(),
+                RoleEntry::Run(Box::new(RoleRun {
+                    source: "beta".into(),
+                    repository: "/r".into(),
+                    kind: "turn".into(),
+                    priority: 0,
+                    base: None,
+                    brief: None,
+                    name: None,
+                    intent: None,
+                    agents: RoleAgents::default(),
+                    answers: None,
+                    answerer: true,
+                })),
+            ),
+        ]),
+        refused: vec![RoleRefused {
+            address: "east/ops".into(),
+            source: "acme".into(),
+            reason: "its kind beta/turn is not acme's own".into(),
+        }],
+        unread: BTreeMap::from([(
+            "gamma".to_string(),
+            RolesUnread {
+                file: "/state/gamma/roles.toml".into(),
+                reason: "is not TOML".into(),
+            },
+        )]),
+    };
+    round_trips(roles.clone());
+    round_trips(HostRoles::default());
+    assert_eq!(
+        serde_json::to_value(HostRoles::default()).unwrap(),
+        serde_json::json!({})
+    );
+    assert_eq!(
+        serde_json::to_value(RoleEntry::Standing(standing.clone())).unwrap(),
+        serde_json::json!({"standing": {
+            "source": "acme",
+            "agent": "east-design",
+            "answers": "A decision the design has not made."
+        }})
+    );
+    assert_eq!(roles.run("east/design"), None, "a standing address's run");
+    assert_eq!(
+        roles.standing(),
+        BTreeMap::from([("east/design".to_string(), standing)])
+    );
+    assert_eq!(
+        roles.declared("east/ops"),
+        Err("its kind beta/turn is not acme's own".into())
+    );
+    assert!(roles
+        .declared("west/ops")
+        .is_err_and(|why| why.contains("no source") && why.contains("west/ops")));
+    let door = StreamAnswerer::Stands(DeclaredBy {
+        address: "east/operator".into(),
+        source: "beta".into(),
     });
+    assert_eq!(roles.answerer("east"), Some(door.clone()));
+    assert_eq!(
+        roles.answerer("north"),
+        None,
+        "a carried address stands behind none"
+    );
+    round_trips(door);
+    round_trips(StreamAnswerer::Contested {
+        roles: vec![
+            DeclaredBy {
+                address: "east/operator".into(),
+                source: "acme".into(),
+            },
+            DeclaredBy {
+                address: "east/ops".into(),
+                source: "beta".into(),
+            },
+        ],
+    });
+    let answering = roles.answering();
+    round_trips(answering[0].clone());
+    assert_eq!(
+        answering
+            .iter()
+            .map(|role| (role.address.as_str(), role.stream.as_str()))
+            .collect::<Vec<_>>(),
+        [("east/design", "east"), ("north/planner", "north")],
+        "each address declared with its words, and its stream"
+    );
 }
 
 #[test]
 fn a_standing_address_round_trips() {
     // The seam-contracts spec's "A standing address round-trips", for
-    // the seams' types: a standing entry with and without its session
-    // and stream, a part's agents read, two of one name among them, and
-    // not read, and a session from the entry's own `session` (56, 132,
-    // C.5, C.7; core.14).
+    // the seams' types: a standing entry with and without its session,
+    // its words and its standing behind its stream, a part's agents read,
+    // two of one name among them, and not read, and a session from the
+    // entry's own `session` (56, 132, 193, C.5, C.7; core.14).
     let entry = StandingAgent {
+        source: "acme".into(),
         agent: "madswan-planner".into(),
         session: Some("madswan".into()),
-        stream: Some("madswan".into()),
+        answers: Some("The work's scope.".into()),
+        answerer: true,
     };
     round_trips(entry.clone());
     let bare = StandingAgent {
         session: None,
-        stream: None,
+        answers: None,
+        answerer: false,
         ..entry
     };
     round_trips(bare.clone());
     assert_eq!(
         serde_json::to_value(&bare).unwrap(),
-        serde_json::json!({"agent": "madswan-planner"}),
-        "no session or stream where the entry names none"
+        serde_json::json!({"source": "acme", "agent": "madswan-planner"}),
+        "no session, words or standing behind where the entry gives none"
     );
     let named = |name: &str, pane: &str, state| NamedAgent {
         name: name.into(),
@@ -2225,10 +2378,12 @@ fn a_move_past_a_threshold() {
 }
 
 #[test]
-fn an_address_is_a_partition_and_a_role() {
+fn an_address_is_a_stream_and_a_role() {
     assert!(is_address("madswan/planner"));
     assert!(is_address("slc-2/ops.1"));
     assert_eq!(role_of("madswan/planner"), "planner");
+    assert_eq!(stream_of("madswan/planner"), "madswan");
+    assert_eq!(stream_of("slc-2/ops.1"), "slc-2");
     for session in [
         "ops",
         "term:p1@/tmp/term.sock",
@@ -2615,8 +2770,19 @@ fn a_source_the_host_declares() {
         file: "/config/flume/sources/acme.toml".into(),
         read: HostSourceRead::Read {
             kinds_dir: "/data/flume/kinds/acme".into(),
+            roles: Some("/state/crew/flume/roles.toml".into()),
         },
     });
+    let bare = HostSourceRead::Read {
+        kinds_dir: "/data/flume/kinds/acme".into(),
+        roles: None,
+    };
+    round_trips(bare.clone());
+    assert_eq!(
+        serde_json::to_value(&bare).unwrap(),
+        serde_json::json!({"read": {"kinds_dir": "/data/flume/kinds/acme"}}),
+        "no roles where the source names none, as a source read before roles"
+    );
     round_trips(HostSource {
         file: "/config/flume/sources/bad.toml".into(),
         read: HostSourceRead::CouldNotRead {

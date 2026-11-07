@@ -36,7 +36,7 @@ pub struct HeldState {
     /// pending for every recipient it has no delivery to (43).
     #[serde(default)]
     pub ends: Vec<EndHeld>,
-    /// The role's address `<partition>/<role>` a role's run serves, by
+    /// The role's address `<stream>/<role>` a role's run serves, by
     /// which a command run in it collects for the address (132); none
     /// for any other place.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -57,9 +57,9 @@ pub struct HeldState {
     #[serde(default = "stall_after")]
     pub stall_after: Seconds,
     /// Why a role's address this place has an end pending for was not
-    /// woken at the last settle, by the address: the configuration naming
-    /// nothing for it, or the wake's launch refused; gone once it is
-    /// woken (132; core.28).
+    /// woken at the last settle, by the address: no source declaring a run
+    /// for it, or the wake's launch refused; gone once it is woken (132,
+    /// 193; core.28).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub unwoken: BTreeMap<String, String>,
     /// Each move of a stage of the place, or of its intent at a start of

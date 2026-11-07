@@ -2268,25 +2268,49 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
 
 #[test]
 fn a_wake_of_a_roles_address() {
-    // 132, C.7: the host's [roles] table names the planner's run, a kind
-    // the repository declares; `flume wake` launches it once, answers the
-    // run that stands after, refuses an address the table names nothing
-    // for and a name that is no address, and the run's inbox collects for
-    // its address.
+    // 132, 193, C.7: the host's source acme declares the planner's run in
+    // its roles file, of its own kind `planner`, locked; `flume wake`
+    // launches it once in its address's stream, answers the run that
+    // stands after, refuses an address no source declares and a name
+    // that is no address, and the run's inbox collects for its address.
     let host = Host::new("wake");
     let repository = Repository::new("wake");
     repository.write(
         ".config/flume.toml",
-        &format!(
-            "[profiles]\nplace = \"git-worktree\"\n\n[kinds.planner]\nversion = 1\nbranch = \"planner\"\nstarts_unready = false\nlands = false\n\n[[kinds.planner.stages]]\nname = \"plan\"\nprompt = \"prompts/plan.md\"\ndeliverables = [\"commits\"]\nagents = [{{ program = \"{STAND_IN}\" }}]\n"
-        ),
+        "[profiles]\nplace = \"git-worktree\"\n",
     );
-    repository.write(".config/prompts/plan.md", "Read what is pending for you.\n");
-    repository.commit("the binding and the planner");
-    host.configure(&format!(
-        "[roles.\"madswan/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
-        repository.name()
-    ));
+    repository.commit("the binding");
+    let acme = kinds_dir_of(&host, "acme");
+    write_package(&acme, "planner", 1, false, "Read what is pending for you");
+    let roles = host.scratch.path("state/acme/roles.toml");
+    std::fs::create_dir_all(roles.parent().unwrap()).expect("the roles file's directory");
+    std::fs::write(
+        &roles,
+        format!(
+            "[roles.\"madswan/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
+            repository.name()
+        ),
+    )
+    .expect("the roles file");
+    std::fs::create_dir_all(sources_of(&host)).expect("the sources directory");
+    std::fs::write(
+        sources_of(&host).join("acme.toml"),
+        format!(
+            "kinds_dir = \"{}\"\nroles = \"{}\"\n",
+            acme.display(),
+            roles.display()
+        ),
+    )
+    .expect("the source's file");
+    host.configure("[streams.madswan]\n");
+    answered(
+        &host.flume(
+            &repository.dir,
+            &["kinds", "lock", "--host", "acme/planner@1", "--json"],
+            &[],
+        ),
+        0,
+    );
 
     let woke = answered(
         &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
@@ -2297,6 +2321,8 @@ fn a_wake_of_a_roles_address() {
     let run = &woke["woken"]["place"];
     assert_eq!(run["role"], "madswan/planner", "{woke}");
     assert_eq!(run["kind"], "planner");
+    assert_eq!(run["identity"], "acme/planner@1", "{woke}");
+    assert_eq!(run["stream"]["name"], "madswan", "{woke}");
     assert_eq!(run["name"], "planner");
     assert_eq!(run["base"], "main", "the repository's default branch");
     assert_eq!(run["priority"], 5);

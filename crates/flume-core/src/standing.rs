@@ -1,13 +1,13 @@
-//! A role's address a standing agent holds (43, 107, 132, 143, 190, C.7;
-//! core.11, core.28, core.49). The host's configuration names the agent
-//! by the name its terminal knows it by: it is sought in the stream the
-//! entry names, else the default stream, a stream the host does not
-//! declare reaching nothing; in that stream's terminal, as a start reads
-//! it; and in the session the entry names, else the stream's own, as a
-//! start resolves it. The terminal gives the session's agents by name,
-//! and the core counts those of the entry's name: one is found, none or
-//! more than one leave its ends pending. Each is read as the
-//! configuration stands at each delivery and each status, and nothing of
+//! A role's address a standing agent holds (43, 107, 132, 143, 190, 193,
+//! C.7; core.11, core.28, core.49; record 0039's amendment). A source's
+//! roles file names the agent by the name its terminal knows it by: it is
+//! sought in its address's stream, a stream the host does not declare
+//! reaching nothing; in that stream's terminal, as a start reads it; and
+//! in the session the entry names, else the stream's own, as a start
+//! resolves it. The terminal gives the session's agents by name, and the
+//! core counts those of the entry's name: one is found, none or more than
+//! one leave its ends pending. Each is read as the sources stand at each
+//! delivery and each status, and nothing of
 //! where the agent was is kept, so an agent revived under its name is
 //! found where it is. flume opens, starts, wakes and watches nothing for
 //! the address (core.13).
@@ -110,8 +110,8 @@ fn count(agents: &AgentsIn, agent: &str) -> StandingFound {
 }
 
 impl Engine {
-    /// The host's standing entries as its configuration stands now, for
-    /// one delivery or one status (132, C.7).
+    /// The host's standing entries as its sources stand now, for one
+    /// delivery or one status (132, 193).
     pub(crate) fn standing(&self) -> Standing {
         Standing {
             entries: self.host.standing(),
@@ -121,14 +121,11 @@ impl Engine {
     }
 
     /// The standing agent the entries give `address`, sought in its
-    /// stream's terminal and session; none where the entries name no
-    /// standing agent for it (107, 132, 143, 190, C.7).
+    /// address's stream's terminal and session; none where the entries
+    /// name no standing agent for it (107, 132, 143, 190, 193).
     pub(crate) fn reach(&self, standing: &mut Standing, address: &str) -> Option<Reach> {
         let entry = standing.entries.get(address)?.clone();
-        let stream = entry
-            .stream
-            .clone()
-            .unwrap_or_else(|| DEFAULT_STREAM.to_string());
+        let stream = stream_of(address).to_string();
         let declared = standing
             .streams
             .get_or_insert_with(|| self.host.streams())

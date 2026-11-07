@@ -228,10 +228,16 @@ impl Walk {
         self.configure_whole(&text);
     }
 
+    /// The host's configuration folder, `$XDG_CONFIG_HOME/flume`, which
+    /// holds `config.toml` and `sources/` (191, C.7).
+    pub fn config_dir(&self) -> PathBuf {
+        self.home.join("config/flume")
+    }
+
     /// The host's configuration as `text` gives it whole, its pools and
     /// accounts among it.
     pub fn configure_whole(&self, text: &str) {
-        let dir = self.home.join("config/flume");
+        let dir = self.config_dir();
         std::fs::create_dir_all(&dir).expect("the configuration's folder");
         std::fs::write(dir.join("config.toml"), text).expect("the configuration");
     }

@@ -13,8 +13,10 @@
 //! of the address now stands is that run, answered as waiting (75). An
 //! address the configuration names nothing for is woken by nothing, and
 //! status names its pending ends and why its run was not woken. A role's
-//! `kind` is resolved and locked as a launch's is, a name or an identity,
-//! its run carrying no declaration of its own (154, 155). flume
+//! kind is its source's own, launched as the identity `<source>/<kind>`
+//! and resolved and locked as a launch's kind is, its version the
+//! locks', its run carrying no declaration of its own (154, 155, 193;
+//! core.34). flume
 //! decides nothing of what the run does (69, 70, 72). An address the
 //! configuration gives a standing agent wakes no run, whatever its
 //! terminal finds and whatever run of an earlier entry stands: a settle
@@ -88,12 +90,12 @@ impl Engine {
         };
         let launch = Launch {
             repository: run.repository.clone(),
-            kind: run.kind.clone(),
+            kind: role_kind(&run),
             name: role_of(address).into(),
             base,
             brief: run.brief.clone(),
             priority: run.priority,
-            stream: run.stream.clone(),
+            stream: Some(stream_of(address).into()),
             ..Launch::default()
         };
         match self.make_place(&launch, Some(address)) {
@@ -111,11 +113,12 @@ impl Engine {
     /// wherever it was made, a tidied document of an earlier run aside
     /// (3, 132).
     fn run_of(&self, address: &str, run: &RoleRun) -> Option<HeldState> {
+        let identity = role_kind(run);
         let kind = self
             .resolver
             .kinds()
-            .read_named(&run.kind)
-            .map_or_else(|_| run.kind.clone(), |named| named.name);
+            .read_named(&identity)
+            .map_or(identity, |named| named.name);
         let short = format!("{kind}--{}", role_of(address));
         self.store
             .read_every()
@@ -250,6 +253,13 @@ impl AddressStatus {
             standing: None,
         }
     }
+}
+
+/// The kind a role's run is launched as: its source's own, by the
+/// identity `<source>/<kind>`, resolved and locked as a launch's kind is,
+/// its version the locks' (154, 155, 193; core.34).
+fn role_kind(run: &RoleRun) -> String {
+    format!("{}/{}", run.source, run.kind)
 }
 
 /// A standing run as a wake answers it: live while its agent is, and

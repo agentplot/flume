@@ -2811,17 +2811,34 @@ fn standing_under_herdr(host: &UnderHerdr, session: &str, name: &str) -> (String
 #[test]
 fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
     // The end-delivery spec's "A standing agent under herdr through the
-    // binary" (43, 132, C.5): the default stream's terminal is herdr, where
-    // `w/planner`'s agent `w-planner` stands in the session `w`; the fix
-    // runs in `t` under the printed command, its submission held so one
-    // end is pending for the planner.
+    // binary" (43, 132, 193, C.5): the stream `w`'s terminal is the host's,
+    // herdr, where the source acme's roles file gives `w/planner` the
+    // agent `w-planner` in the session `w`; the fix runs in `t` under the
+    // printed command, its submission held so one end is pending for the
+    // planner.
     let host = UnderHerdr::new(Walk::new("walk-standing"), "w");
     host.walk.configure_whole(&format!(
-        "[host]\nmultiplexer = \"herdr\"\n\n[streams.t]\nmultiplexer = \"printed\"\npool = \"stand-in\"\n\n\
-         [pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n\n\
-         [roles.\"w/planner\"]\nagent = \"w-planner\"\nsession = \"w\"\n",
+        "[host]\nmultiplexer = \"herdr\"\n\n[streams.w]\n\n[streams.t]\nmultiplexer = \"printed\"\npool = \"stand-in\"\n\n\
+         [pools.stand-in]\nstrategy = \"fill-first\"\naccounts = [{{ name = \"stand-in-1\", program = \"claude\", env = {{ CLAUDE_CONFIG_DIR = {:?}, CLAUDE_CODE_OAUTH_TOKEN = \"{STAND_IN_TOKEN}\" }} }}]\n",
         host.walk.account().display().to_string()
     ));
+    let config = host.walk.config_dir();
+    let roles = config.join("acme-roles.toml");
+    std::fs::write(
+        &roles,
+        "[roles.\"w/planner\"]\nagent = \"w-planner\"\nsession = \"w\"\n",
+    )
+    .expect("acme's roles file");
+    std::fs::create_dir_all(config.join("sources")).expect("the sources folder");
+    std::fs::write(
+        config.join("sources/acme.toml"),
+        format!(
+            "kinds_dir = {:?}\nroles = {:?}\n",
+            config.join("kinds/acme").display().to_string(),
+            roles.display().to_string()
+        ),
+    )
+    .expect("acme's source file");
     let (at, took) = standing_under_herdr(&host, "w", "w-planner");
     let took = || -> Vec<String> {
         std::fs::read_to_string(&took)
@@ -2873,7 +2890,7 @@ fn a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary() {
         planner["standing"],
         json!({
             "agent": "w-planner",
-            "stream": "default",
+            "stream": "w",
             "session": {"name": "w", "from": "role"},
             "terminal": "herdr",
             "found": {"one": {"at": at, "state": "waiting"}},

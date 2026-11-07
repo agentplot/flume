@@ -329,7 +329,7 @@ impl Engine {
                 "the kind {} names the source {source}, whose file {} cannot be read: {reason} (4, 191)",
                 named.spelled, sources[source].file
             )),
-            Some(HostSourceRead::Read { kinds_dir }) => Ok(SourceAt {
+            Some(HostSourceRead::Read { kinds_dir, .. }) => Ok(SourceAt {
                 name: source.into(),
                 file: sources[source].file.clone(),
                 kinds_dir: kinds_dir.clone(),
@@ -462,7 +462,7 @@ impl Engine {
         let kinds = self.resolver.kinds();
         let mut hosted = vec![];
         for (source, declared) in self.host.sources() {
-            if let HostSourceRead::Read { kinds_dir } = declared.read {
+            if let HostSourceRead::Read { kinds_dir, .. } = declared.read {
                 if let SourceRead::Read { kinds } = kinds.read_source(&source, &kinds_dir) {
                     hosted.extend(
                         kinds
