@@ -56,6 +56,51 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["9", "126", "204"],
             run: on_a_branch_no_place_holds,
         },
+        Scenario {
+            name: "base places: S110, a base place on main and two changes on its branch land under a caller's watch, the base place submitted by name on its caller's retry, its landing read from the merge queue's record and delivered, and its branch closed into main at its tidy",
+            cites: &["S110", "63", "67", "202", "203", "204", "205", "206", "117", "124", "133", "208"],
+            run: s110_a_base_place_and_two_changes_land,
+        },
+        Scenario {
+            name: "base places: S111, a retry of a base place's submission is refused while a change on its branch works, submits once it lands, and then a launch on its branch is refused, as is a launch on a live change's branch",
+            cites: &["S111", "10", "203", "204", "49"],
+            run: s111_a_retry_and_a_launch_refused,
+        },
+        Scenario {
+            name: "base places: twenty settles of a base place with no place on its branch submit nothing, and it waits on its caller",
+            cites: &["111", "203"],
+            run: no_settle_submits_it,
+        },
+        Scenario {
+            name: "base places: a base place's landing is read from the merge queue's record with no inbox asked, delivered once to its recipient, and its work is over",
+            cites: &["63", "133", "203", "43", "99"],
+            run: landed_with_no_inbox,
+        },
+        Scenario {
+            name: "base places: S112, a base place's failed submission starts nothing and waits on its caller with the merge queue's words, delivered once; a fix launched on its branch with them lands there, and the retry lands the base place",
+            cites: &["S112", "112", "203", "204", "43", "36"],
+            run: s112_a_failed_base_place_takes_a_fix,
+        },
+        Scenario {
+            name: "base places: a base place's conflicting submission starts no stage, and waits on its caller with words naming the files and the base's revision it was tested against",
+            cites: &["112", "203", "S112"],
+            run: a_conflicting_submission,
+        },
+        Scenario {
+            name: "base places: a drop of a base place while a change on its branch works is refused naming the change, and the base place stays live",
+            cites: &["52", "204"],
+            run: a_drop_while_a_change_works,
+        },
+        Scenario {
+            name: "base places: a base place whose submission landed is tidied by the merge queue's close into main, the place seam asked no removal, and no held state stays once its ends are delivered",
+            cites: &["62", "66", "67", "204", "206", "S110"],
+            run: the_landed_base_place_tidied,
+        },
+        Scenario {
+            name: "base places: a dropped base place whose branch the merge queue keeps is removed, the branch named once with the merge queue's words in the drop's answer, and a launch of it again refused while the branch stands",
+            cites: &["3", "67", "206", "52"],
+            run: the_merge_queue_keeps_the_branch,
+        },
     ]
 }
 
@@ -397,5 +442,465 @@ fn on_a_branch_no_place_holds(_: &()) -> Outcome {
         "where the base was read"
     );
     ensure_eq!(world.place.log.count("make"), 1, "the place seam's makes");
+    Ok(())
+}
+
+/// The notice a base place's end is sent to its recipient as.
+fn notice(name: &str, what: &str) -> String {
+    format!("flume: train--{name} {what}; read: flume status train--{name}")
+}
+
+/// A retry of the base place's submission, or its refusal's reason.
+fn retry_submission(world: &World, place: &PlaceId) -> Result<(), String> {
+    match world
+        .engine()
+        .retry(place, flume_core::Retry::Submission, None, false)
+    {
+        flume_core::Answer::Acted { .. } => Ok(()),
+        other => Err(format!("the retry answered {other:?}")),
+    }
+}
+
+fn s110_a_base_place_and_two_changes_land(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    let watch = || world.engine().settle_every(30);
+    watch();
+    let spring = train_on(&world, "spring", "main")?;
+    ensure_eq!(
+        world.queue.log.of("open"),
+        vec!["open train/spring from main".to_string()],
+        "the merge queue's opens"
+    );
+    ensure_eq!(world.place.log.count("make"), 0, "the place seam's makes");
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    for name in ["one", "two"] {
+        launched(&world.engine.launch(&Launch {
+            base: "train/spring".into(),
+            ..launch("change", name, Some("plan it"))
+        }))?;
+    }
+    watch();
+    for name in ["one", "two"] {
+        write_change(&world, name);
+    }
+    watch();
+    watch();
+    for name in ["one", "two"] {
+        world.tick(&format!("change/{name}"), name, 1, 1);
+    }
+    watch();
+    watch();
+    for name in ["one", "two"] {
+        ensure_eq!(
+            world.stage_state(&World::id("change", name), "verify"),
+            Some(StageState::Begun),
+            "{name}'s verify"
+        );
+        archive(&world, name);
+    }
+    // Each watch's settle steps the branch's queue once, so the second
+    // change, submitted after the first's round, lands at the next (125).
+    watch();
+    watch();
+    for name in ["one", "two"] {
+        ensure!(
+            world.held(&World::id("change", name)).is_none(),
+            "{name} did not land and go"
+        );
+        let submitted = world
+            .queue
+            .submissions(REPOSITORY, &format!("change/{name}"));
+        ensure!(
+            matches!(
+                submitted.as_slice(),
+                [Submission { target, state: SubmissionState::Landed { .. }, .. }] if target == "train/spring"
+            ),
+            "{name}'s submissions: {submitted:?}"
+        );
+    }
+    ensure!(
+        world
+            .queue
+            .submissions(REPOSITORY, "train/spring")
+            .is_empty(),
+        "the base place was submitted by a settle"
+    );
+    ensure_eq!(
+        world.status(&spring)?.waiting_on.map(|waiting| waiting.why),
+        Some(Waits::Unsubmitted),
+        "what the base place waits on its caller for"
+    );
+    retry_submission(&world, &spring)?;
+    ensure_eq!(
+        world.queue.log.of("submit").last().cloned(),
+        Some("submit train/spring named".to_string()),
+        "the base place's submit"
+    );
+    let landed = match world
+        .queue
+        .submissions(REPOSITORY, "train/spring")
+        .as_slice()
+    {
+        [Submission {
+            target,
+            state: SubmissionState::Landed { commit },
+            ..
+        }] if target == "main" => commit.clone(),
+        other => return Err(format!("the base place's submissions: {other:?}")),
+    };
+    ensure_eq!(
+        world.terminal.notices("ops"),
+        vec![notice("spring", &format!("submission landed {landed}"))],
+        "the notices to ops"
+    );
+    ensure!(world.held(&spring).is_none(), "the base place stays");
+    ensure_eq!(
+        world.queue.log.of("close"),
+        vec!["close train/spring into main".to_string()],
+        "the merge queue's closes"
+    );
+    ensure!(
+        world.git.branch_head(REPOSITORY, "train/spring").is_none(),
+        "the base place's branch stays"
+    );
+    let location = spring.to_string();
+    ensure!(
+        !world
+            .place
+            .log
+            .calls()
+            .iter()
+            .chain(world.queue.log.of("inbox").iter())
+            .any(|call| call.split(' ').any(|word| word == location)
+                || call.starts_with(&format!("remove_branch {REPOSITORY} train/spring "))),
+        "the place seam or an inbox was asked of the base place: {:?}",
+        world.place.log.calls()
+    );
+    for name in ["one", "two"] {
+        ensure!(
+            world
+                .git
+                .branch_head(REPOSITORY, &format!("change/{name}"))
+                .is_none(),
+            "{name}'s branch stays"
+        );
+    }
+    Ok(())
+}
+
+fn s111_a_retry_and_a_launch_refused(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    change_working(&world, "one", "train/spring")?;
+    let reason = match world
+        .engine()
+        .retry(&spring, flume_core::Retry::Submission, None, false)
+    {
+        answer @ flume_core::Answer::Refused { .. } => refused(&answer)?,
+        other => return Err(format!("the retry answered {other:?}")),
+    };
+    ensure!(
+        reason.contains(&World::id("change", "one").to_string()),
+        "the refusal names no change: {reason}"
+    );
+    ensure_eq!(world.queue.log.count("submit"), 0, "submits");
+    change_lands(&world, "one")?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    retry_submission(&world, &spring)?;
+    ensure_eq!(
+        world.queue.log.of("submit").last().cloned(),
+        Some("submit train/spring named".to_string()),
+        "the base place's submit"
+    );
+    let reason = refused(&world.engine.launch(&Launch {
+        base: "train/spring".into(),
+        ..launch("fix", "late", Some("mend it"))
+    }))?;
+    ensure!(
+        reason.contains(&spring.to_string()),
+        "the refusal names no base place: {reason}"
+    );
+    change_working(&world, "two", "main")?;
+    let reason = refused(&world.engine.launch(&Launch {
+        base: "change/two".into(),
+        ..launch("fix", "under", Some("mend it"))
+    }))?;
+    ensure!(
+        reason.contains(&World::id("change", "two").to_string()),
+        "the refusal names no change: {reason}"
+    );
+    Ok(())
+}
+
+fn no_settle_submits_it(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    for _ in 0..20 {
+        world.engine().settle(None);
+    }
+    ensure_eq!(world.queue.log.count("submit"), 0, "submits");
+    let status = world.status(&spring)?;
+    ensure_eq!(
+        status.waits_on,
+        Some(flume_core::WaitsOn::Caller),
+        "whom it waits on"
+    );
+    ensure_eq!(
+        status.waiting_on.map(|waiting| (waiting.act, waiting.why)),
+        Some((Act::Retry, Waits::Unsubmitted)),
+        "what it waits on its caller for"
+    );
+    Ok(())
+}
+
+fn landed_with_no_inbox(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    retry_submission(&world, &spring)?;
+    ensure_eq!(
+        world.status(&spring)?.line.short,
+        "submitted",
+        "the line while under test"
+    );
+    world
+        .queue
+        .decide(REPOSITORY, "train/spring", flume_fakes::Plan::Land);
+    world.engine().settle(None);
+    world.engine().settle(None);
+    let landed = world
+        .queue
+        .submissions(REPOSITORY, "train/spring")
+        .into_iter()
+        .find_map(|submission| match submission.state {
+            SubmissionState::Landed { commit } => Some(commit),
+            _ => None,
+        })
+        .ok_or("the submission did not land")?;
+    ensure_eq!(
+        world.terminal.notices("ops"),
+        vec![notice("spring", &format!("submission landed {landed}"))],
+        "the notices to ops, once"
+    );
+    ensure!(world.held(&spring).is_none(), "the landed base place stays");
+    ensure!(
+        !world
+            .queue
+            .log
+            .of("inbox")
+            .iter()
+            .any(|call| call.contains(&spring.to_string())),
+        "an inbox was asked of the base place"
+    );
+    Ok(())
+}
+
+fn s112_a_failed_base_place_takes_a_fix(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    let words = "the check test failed on main: 2 of 46";
+    world
+        .queue
+        .plan_submits(vec![flume_fakes::Plan::Fail(words.into())]);
+    retry_submission(&world, &spring)?;
+    world.engine().settle(None);
+    let status = world.status(&spring)?;
+    ensure_eq!(status.phase, Phase::Live, "the failed base place");
+    let waiting = status.waiting_on.ok_or("waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.why),
+        (Act::Retry, Waits::Submission),
+        "the move it waits on"
+    );
+    ensure!(
+        waiting
+            .words
+            .as_deref()
+            .is_some_and(|said| said.contains(words)),
+        "its words: {:?}",
+        waiting.words
+    );
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    let fix = World::id("fix", "spring-test");
+    launched(&world.engine.launch(&Launch {
+        base: "train/spring".into(),
+        ..launch("fix", "spring-test", Some(words))
+    }))?;
+    world.settle(&fix);
+    world.commit("fix/spring-test", &["test.rs"]);
+    world.agent.set_own_work(
+        &World::identity("fix", "spring-test", "code", 1),
+        Reading::No,
+    );
+    world.settle(&fix);
+    ensure!(world.held(&fix).is_none(), "the fix did not land and go");
+    retry_submission(&world, &spring)?;
+    world.engine().settle(None);
+    ensure!(
+        world.held(&spring).is_none(),
+        "the base place did not land and go"
+    );
+    let notices = world.terminal.notices("ops");
+    ensure_eq!(
+        notices
+            .iter()
+            .filter(|text| **text == notice("spring", "submission failed"))
+            .count(),
+        1,
+        "notices of the failure: {notices:?}"
+    );
+    ensure!(
+        notices
+            .iter()
+            .any(|text| text.starts_with("flume: train--spring submission landed")),
+        "no notice of the landing: {notices:?}"
+    );
+    ensure!(
+        world
+            .terminal
+            .log
+            .of("open")
+            .iter()
+            .all(|call| !call.contains("train--spring")),
+        "an agent opened in the base place"
+    );
+    Ok(())
+}
+
+fn a_conflicting_submission(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    world.commit("main", &["README.md"]);
+    let tested = world.git.branch_head(REPOSITORY, "main").ok_or("no main")?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Conflict(
+        vec!["README.md".into()],
+        "README.md conflicts with main".into(),
+    )]);
+    retry_submission(&world, &spring)?;
+    world.engine().settle(None);
+    let status = world.status(&spring)?;
+    let waiting = status.waiting_on.ok_or("waits on nobody")?;
+    ensure_eq!(waiting.why, Waits::Submission, "why it waits");
+    let said = waiting.words.unwrap_or_default();
+    ensure!(
+        said.contains("README.md") && said.contains(&tested.to_string()),
+        "its words name neither the file nor {tested}: {said}"
+    );
+    ensure!(status.stages.is_empty(), "a stage: {:?}", status.stages);
+    ensure_eq!(world.terminal.log.count("open"), 0, "agents opened");
+    Ok(())
+}
+
+fn a_drop_while_a_change_works(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    change_working(&world, "one", "train/spring")?;
+    let reason = refused(&world.engine().drop_place(&spring, false))?;
+    ensure!(
+        reason.contains(&World::id("change", "one").to_string()),
+        "the refusal names no change: {reason}"
+    );
+    ensure_eq!(
+        world.held(&spring).map(|held| held.phase),
+        Some(Phase::Live),
+        "the base place"
+    );
+    Ok(())
+}
+
+fn the_landed_base_place_tidied(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    retry_submission(&world, &spring)?;
+    world.place.log.clear();
+    world.queue.log.clear();
+    world
+        .queue
+        .decide(REPOSITORY, "train/spring", flume_fakes::Plan::Land);
+    let answer = world.engine().settle(None);
+    ensure_eq!(
+        world.queue.log.of("close"),
+        vec!["close train/spring into main".to_string()],
+        "the merge queue's closes"
+    );
+    ensure!(
+        world.place.log.calls().is_empty(),
+        "the place seam was asked: {:?}",
+        world.place.log.calls()
+    );
+    ensure!(
+        world.held(&spring).is_none(),
+        "the base place's held state stays"
+    );
+    ensure!(
+        world.store.places().is_empty(),
+        "documents stay: {:?}",
+        world.store.places()
+    );
+    match answer {
+        flume_core::Answer::Settled { tidy, .. } => {
+            ensure_eq!(tidy.removed, vec![spring.clone()], "the places removed");
+            ensure!(
+                tidy.branches_kept.is_empty(),
+                "a branch kept: {:?}",
+                tidy.branches_kept
+            );
+        }
+        other => return Err(format!("settle answered {other:?}")),
+    }
+    Ok(())
+}
+
+fn the_merge_queue_keeps_the_branch(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    world.queue.answer_close(
+        REPOSITORY,
+        "train/spring",
+        BranchClosed::Kept {
+            reason: "work main lacks".into(),
+        },
+    );
+    let tidy = match world.engine().drop_place(&spring, false) {
+        flume_core::Answer::Acted {
+            tidy: Some(tidy), ..
+        } => tidy,
+        other => return Err(format!("the drop answered {other:?}")),
+    };
+    ensure_eq!(tidy.removed, vec![spring.clone()], "the places removed");
+    ensure_eq!(
+        tidy.branches_kept
+            .iter()
+            .map(|kept| (kept.branch.as_str(), kept.reason.as_deref()))
+            .collect::<Vec<_>>(),
+        vec![("train/spring", Some("work main lacks"))],
+        "the branches kept, named once"
+    );
+    ensure_eq!(
+        world.place.log.count("remove_branch"),
+        0,
+        "the place seam's branch removals"
+    );
+    ensure!(
+        world.held(&spring).is_none(),
+        "the dropped base place stays"
+    );
+    world.engine().settle(None);
+    ensure_eq!(
+        world.queue.log.count("close"),
+        1,
+        "the merge queue's closes"
+    );
+    ensure!(
+        world.git.branch_head(REPOSITORY, "train/spring").is_some(),
+        "the kept branch is gone"
+    );
+    let reason = refused(&world.engine.launch(&launch("train", "spring", None)))?;
+    ensure!(
+        reason.contains("train/spring"),
+        "the refusal names no branch: {reason}"
+    );
     Ok(())
 }

@@ -58,8 +58,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_queue_that_moves_on_its_own,
         },
         Scenario {
-            name: "settle: one settle of every place with a submission open on main and one open on a branch landing on main steps each base once in the command",
-            cites: &["124", "125", "46"],
+            name: "settle: one settle of every place with a submission open on main and one open on a base place's branch landing on main steps each base once in the command",
+            cites: &["124", "125", "46", "202"],
             run: two_depths_in_one_settle,
         },
         Scenario {
@@ -1296,7 +1296,10 @@ fn s118_a_host_with_no_watch_runs_attended(_: &()) -> Outcome {
 fn two_depths_in_one_settle(_: &()) -> Outcome {
     let world = World::new();
     world.queue.plan_submits(vec![Plan::Hold, Plan::Hold]);
-    world.commit("train/x", &["train.rs"]);
+    world
+        .kinds
+        .set_kinds(REPOSITORY, vec![kind("train", true, vec![])]);
+    launched(&world.engine.launch(&launch("train", "x", None)))?;
     for (name, base) in [("one", "main"), ("two", "train/x")] {
         let id = World::id("chore", name);
         launched(&world.engine.launch(&Launch {
