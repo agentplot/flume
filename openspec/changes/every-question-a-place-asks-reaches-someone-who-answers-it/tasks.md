@@ -525,3 +525,11 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   core:test conformance:test flume:test site:prose site:build` passes,
   with `engine/caller_acts.rs`'s two scenarios and `round_trip.rs`'s
   `an_answer_being_taken`, the first failing where the claim is not read.
+- [x] 12.6 Run the checks of the projects this group touched, and archive
+  the change over a copy of `openspec/`. True when `sluice exec main`
+  passes and the trial archive leaves `openspec validate --specs
+  --strict` passing: at b5be23f9, `sluice exec main` passed 26 of 26
+  tasks, `flume:tools` 132 of 132 and `conformance:coverage` among them,
+  recorded under the key for b5be23f; the trial archive applied +33,
+  ~19, −1 and →5, and 46 of 46 specs passed. `root:specs` was not
+  affected, so the trial archive stands in for it.
