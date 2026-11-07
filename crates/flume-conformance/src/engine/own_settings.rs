@@ -1027,8 +1027,8 @@ fn a_peoples_file_with_keys_another_setting_owns(_: &()) -> Outcome {
     Ok(())
 }
 
-/// The fake reserving `effortLevel` for flume's effort, as Claude Code's
-/// profile does (197).
+/// The fake reserving `effortLevel` for flume's effort, as a profile
+/// whose program's own settings hold an effort does (197).
 fn reserving_the_effort(world: &World) {
     world.agent.take_own();
     world.agent.reserve("effortLevel", "flume's `effort`");
