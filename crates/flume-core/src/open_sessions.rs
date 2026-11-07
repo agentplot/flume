@@ -55,9 +55,11 @@ impl Engine {
     /// records it on the stop-short's end with `act` and when it was sent
     /// and received, raises its start's count of answers, carries the stage
     /// on begun under the same start, its quiet and its limit read afresh,
-    /// and ends each hold on the stage, then settles the place. Refused
-    /// with the tell's words, nothing recorded, where the agent does not
-    /// take it (42, 47 to 50, 53 to 55, 198; core.11).
+    /// and ends each hold on the stage, then settles the place, which reads
+    /// the agent's end where a settle read its session ended once it took
+    /// the answer. Refused with the tell's words, nothing recorded, where
+    /// the agent does not take it, or where it was let go otherwise before
+    /// the write (42, 47 to 50, 53 to 55, 96, 198; core.11).
     pub(crate) fn answer(
         &self,
         id: &PlaceId,
@@ -74,12 +76,22 @@ impl Engine {
         };
         let recorded = self
             .update(id, |held| {
-                if kept.end_in(held).is_none() {
+                let Some(end) = kept.end_in(held) else {
                     return Step::Keep(false);
-                }
+                };
+                // The agent took the answer while it was kept open. A settle
+                // that read it let go since, its session ended, as the
+                // settle its own quiet starts reads it once it delivers on
+                // the answer and ends, ended it after it took the answer:
+                // the stage carries on under its start, live again, and the
+                // settle that follows reads its end as any running stage's
+                // (42, 96; design 4).
+                let ended = end.closed.is_some_and(|closed| {
+                    matches!(closed.by, ClosedBy::AgentEnded) && !closed.left_in_pane
+                });
                 let stage = &mut held.stages[kept.index];
                 let name = stage.name.clone();
-                let Some(start) = stage.start.as_mut().filter(|start| start.live) else {
+                let Some(start) = stage.start.as_ref().filter(|start| start.live || ended) else {
                     return Step::Keep(false);
                 };
                 let (n, answered) = (start.n, start.answered);
@@ -101,6 +113,7 @@ impl Engine {
                 });
                 let stage = &mut held.stages[kept.index];
                 if let Some(start) = stage.start.as_mut() {
+                    start.live = true;
                     start.answered += 1;
                     start.first_quiet = None;
                     start.past_limit = false;

@@ -68,6 +68,11 @@ no agent and counting no start (42, 47 to 50, 53 to 55, 198).
 - **WHEN** a caller tells "notes.md" to a place whose code ended short needing an answer, its agent kept open
 - **THEN** the same agent receives the question then the answer, code reads begun under its first start, and the stop-short's end holds the answer with `tell` (42, 53, 55)
 
+#### Scenario: An answer taken before its session ends
+
+- **WHEN** a code agent kept open takes a tell's answer, commits and ends its session, and a settle reads it let go, `agent_ended`, before the tell reads the answer received
+- **THEN** the stop-short's end holds the answer with `tell`, and code, carried on under its first start, reads delivered from its commit (42, 96, 121)
+
 #### Scenario: A repeating stage's answer
 
 - **WHEN** the third repetition of change@2's code stops short needing an answer, its agent kept open, and its caller retries code with words

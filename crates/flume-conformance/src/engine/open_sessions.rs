@@ -16,8 +16,10 @@ use super::repeating_stages::{branch, code_begun, GROUPS};
 use super::settling::{change_at_verify, construct_begun, fix_begun};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Retry, WaitFor, Waits, ANSWER_RECORDED_WITHIN, KEEP_OPEN};
+use flume_core::{Act, Retry, WaitFor, Waits, ANSWER_RECORDED_WITHIN, KEEP_OPEN, POLL};
+use flume_fakes::Plan;
 use flume_seams::*;
+use std::sync::{Arc, Mutex};
 
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
@@ -110,6 +112,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "answer: the third repetition of a repeating code, kept open for its answer, takes a retry's question and answer in its session and carries on its third group under the same start, never its first",
             cites: &["142", "140", "42", "49", "198"],
             run: a_repeating_stages_answer,
+        },
+        Scenario {
+            name: "answer: a code agent kept open that takes a tell's answer, commits and ends its session, a settle its quiet started reading it let go, agent_ended, before the tell reads the answer received, has the answer recorded with tell, and code, carried on under its first start, read delivered from its commit",
+            cites: &["42", "96", "121", "198"],
+            run: an_answer_taken_before_its_session_ended,
         },
         Scenario {
             name: "answer: one given while the asking agent asks a person in its pane, and one past the tell's bound while it works, are each refused with nothing typed and nothing recorded, and code still waits on its answer",
@@ -980,6 +987,85 @@ fn a_tells_answer(_: &()) -> Outcome {
     let at = world.host.now();
     taken(&world.engine.tell(&id, "notes.md", None))?;
     answered_in_session(&world, &id, &code("one", 1), Act::Tell, at)
+}
+
+/// A settle's reading of a stage's agent kept open: its close, and
+/// whether its start is live.
+type LetGo = (Option<SessionClosed>, bool);
+
+fn an_answer_taken_before_its_session_ended(_: &()) -> Outcome {
+    let world = World::new();
+    world.queue.plan_submits(vec![Plan::Hold]);
+    let (id, _) = asking(&world, "one")?;
+    let who = code("one", 1);
+    world.agent.receives_at(&who, None);
+    let read: Arc<Mutex<Option<LetGo>>> = Arc::default();
+    let (git, agent, terminal, store) = (
+        world.git.clone(),
+        world.agent.clone(),
+        world.terminal.clone(),
+        world.store.clone(),
+    );
+    let (settler, place, taker, seen) = (world.engine(), id.clone(), who.clone(), read.clone());
+    world.host.at_next_sleep(move || {
+        // While the tell waits to read the answer received, the agent
+        // takes it, commits, and its session ends; the settle its quiet
+        // started reads it let go.
+        agent.receives_at(&taker, Some(1));
+        git.commit(REPOSITORY, "fix/one", &["fix.rs"]);
+        terminal.kill(&taker);
+        agent.set_ended(&taker, Reading::Yes);
+        settler.settle(Some(&place));
+        let held = store.held(&place);
+        let stage = held.as_ref().map(|held| &held.stages[0]);
+        *seen.lock().expect("the settle's reading") = stage.map(|stage| {
+            (
+                stage.end.as_ref().and_then(|end| end.closed),
+                stage.start.as_ref().is_some_and(|start| start.live),
+            )
+        });
+    });
+    let at = world.host.now();
+    taken(&world.engine.tell(&id, "notes.md", None))?;
+    ensure_eq!(
+        read.lock().map_err(|_| "the settle's reading")?.clone(),
+        Some((
+            Some(SessionClosed {
+                at: at + POLL,
+                by: ClosedBy::AgentEnded,
+                ended_at: Some(at + POLL),
+                left_in_pane: false,
+            }),
+            false
+        )),
+        "the settle's letting go of code's agent before the tell recorded its answer, and whether code's start was live"
+    );
+    ensure_eq!(
+        short_end(&world, &id, "code", 1)?.answer,
+        Some(AnswerHeld {
+            words: "notes.md".into(),
+            act: Act::Tell,
+            at,
+            session: Some(Handed {
+                sent_at: at,
+                received_at: at + POLL,
+            }),
+        }),
+        "the answer the stop-short's end holds"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let stage = &held.stages[0];
+    ensure_eq!(
+        (
+            stage.state,
+            stage.starts,
+            stage.start.as_ref().map(|start| (start.n, start.live, start.answered)),
+            world.terminal.log.count("open")
+        ),
+        (StageState::Delivered, 1, Some((1, false, 1)), 1),
+        "code, its starts, its start's number, whether it is live and its answers, and the agents opened"
+    );
+    Ok(())
 }
 
 fn a_repeating_stages_answer(_: &()) -> Outcome {

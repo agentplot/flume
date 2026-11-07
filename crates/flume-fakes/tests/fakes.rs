@@ -5,7 +5,7 @@
 use flume_fakes::*;
 use flume_seams::*;
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn identity(stage: &str, start: u32) -> Identity {
     Identity {
@@ -35,6 +35,21 @@ fn the_clock_moves_only_when_advanced_or_slept_on() {
     host.sleep(60);
     assert_eq!(host.now(), at + 90);
     assert_eq!(host.log.calls(), vec!["sleep 60"]);
+}
+
+#[test]
+fn what_another_process_does_runs_once_at_the_next_sleep() {
+    // seam-fakes: another process acting while a command sleeps.
+    let host = Arc::new(FakeHost::default());
+    let at = host.now();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let (by, on) = (seen.clone(), host.clone());
+    host.at_next_sleep(move || by.lock().unwrap().push(on.now()));
+    host.advance(30);
+    assert!(seen.lock().unwrap().is_empty(), "ran before a sleep");
+    host.sleep(5);
+    host.sleep(5);
+    assert_eq!(*seen.lock().unwrap(), vec![at + 35]);
 }
 
 #[test]

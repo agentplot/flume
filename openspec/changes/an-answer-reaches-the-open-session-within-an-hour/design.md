@@ -368,6 +368,21 @@ it is typed, so the agent's own received ack could carry the stage on:
 it adds held state for a window of seconds. The walkthroughs found the
 window, the stand-in stopping short again within it (decision 10).
 
+In the same window the agent can take the answer, deliver on it and
+end its session: the settle its own quiet starts (121) reads it let
+go, `agent_ended`, and ends its start before the act's write. It took
+the answer while it was kept open, so the write still records it and
+carries the stage on under the same start, the start live again, and
+the settle that follows reads its end as a running stage's, delivered
+from its deliverable or else lost (45, 96). An agent let go in the
+window by its caller's stop, its time or its account was ended by
+flume: the act is refused with nothing recorded, and a retry gives a
+fresh agent the question and the answer (49). The path not taken was
+holding the settle's letting go while an answer is received and not
+yet recorded, which no held state says. The walkthroughs found this
+window under the gate's load, the stand-in's last run committing and
+ending its session within it (decision 10).
+
 Two acts carry an answer:
 
 - **A retry** naming the stage with words, as the current stage or by

@@ -15,3 +15,15 @@ stop-short, so the engine's scenarios read each (53, 96, 134, 198).
 
 - **WHEN** the fake agent is scripted to end its session after a stop-short
 - **THEN** the fake reads the agent stopped and its session ended from then on (96, 134)
+
+### Requirement: The fake host runs another process while a command sleeps
+
+The fake host SHALL take what another process does while a command of
+flume's sleeps on its clock, and run it once, at the next sleep, after
+the clock moves, so the engine's scenarios place a settle an agent's
+quiet started inside an act's wait (121, 198).
+
+#### Scenario: Another process at the next sleep
+
+- **WHEN** a test gives the fake host what another process does, advances its clock, then a command sleeps twice
+- **THEN** it runs once, at the first sleep, after that sleep moved the clock, and not before
