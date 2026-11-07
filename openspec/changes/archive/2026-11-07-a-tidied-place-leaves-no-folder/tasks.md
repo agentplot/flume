@@ -13,7 +13,7 @@ for record 0057 on its branch
 
 ## 2. The spec and the records
 
-- [x] 2.1 Modify place-profile's "A place is a plain git worktree" and add tidying's "A place read gone is removed all the same". True when `openspec validate a-tidied-place-leaves-no-folder --strict` passes.
+- [x] 2.1 Add place-profile's "Nothing of a removed place stands at its location" and tidying's "A place read gone is removed all the same". True when `openspec validate a-tidied-place-leaves-no-folder --strict` passes.
 - [x] 2.2 Record 0057, proposed, and rule core.18's details in `docs/architecture/core.md`. True when `sluice exec bolt/flume-tidy-leaves-nothing-behind -- moon run root:adrs` passes.
 
 ## 3. The gate

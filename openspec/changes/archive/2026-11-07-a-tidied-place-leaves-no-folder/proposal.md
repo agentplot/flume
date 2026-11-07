@@ -44,7 +44,7 @@ None.
 
 ### Modified Capabilities
 
-- `place-profile`: "A place is a plain git worktree".
+- `place-profile`: nothing of a removed place stands at its location.
 - `tidying`: a place read gone is removed all the same.
 
 ## Impact
