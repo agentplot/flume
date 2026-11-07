@@ -352,7 +352,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   conformance:test` passes, with the end-delivery spec's two scenarios
   of a notice and every scenario that reads a notice's words brought to
   the new line.
-- [ ] 8.3 In the Claude Code profile's `hook`, have SessionStart in a
+- [x] 8.3 In the Claude Code profile's `hook`, have SessionStart in a
   session flume did not start run the inbox as the session the terminal
   names, never as an address. Have it give the agent, as SessionStart's
   added context, each end and each waiting place with its key and the
@@ -363,7 +363,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   with the claude-code-plugin spec's scenarios in `hooks_claude.rs` and
   `plugins/claude/tests/`, the fixture
   `session-start-another-session.json` among them.
-- [ ] 8.4 Run the checks of the projects this group touched. True when
+- [x] 8.4 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run core:format core:lint core:test
   conformance:format conformance:lint conformance:test flume:format
   flume:lint flume:test plugin-claude:format plugin-claude:validate

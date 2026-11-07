@@ -1206,6 +1206,13 @@ given with:
 `waiting` delivers and marks nothing (43; core.25), so a recipient that
 collected a question, then restarted, still finds it.
 
+The answerer is given a place only for a stall of the move the place
+waits on now, one whose since is that move's or a lapsed hold's after
+it, so an answerer is not handed a place for a stall it had of an
+earlier move the place has since left. The hold given is the one on the
+move that still holds; a lapsed hold holds nothing, and status gives it.
+The brief's first line is its first line that holds anything, trimmed.
+
 **A role's run** collects at its start: `crew role start` for crew's
 asks, then `flume inbox --json` for its address, which takes the role
 from `FLUME_PLACE` (132). Every question waiting on the role is in it,
@@ -1226,6 +1233,16 @@ in a session flume did not start, acts:
    or leave it, and the door has it at the stall.
 3. Where the answer holds nothing, it gives nothing.
 
+The core makes the words (`session_words`), as it makes every line a
+surface prints (core.14), and the hook hands them on as
+SessionStart's `additionalContext`. The ways on name the commands as
+sections 7 and 8 give them, with the place by its kind and name:
+`flume retry <place> --stage <stage> --answers <key> --words
+"<answer>"`, `flume tell <place> --answers <key> "<answer>"` while its
+agent is kept open, and `flume hold <place> "<words>" --waiting --for
+<time>`. A place that waits on any other move is given that move's own
+command in place of the answer.
+
 It never blocks the start, under its 20 seconds' timeout, and a flume
 that cannot be reached gives nothing. This is sluice's design for a
 session's start (sluice 51, 135), so the two tools do one thing one
@@ -1242,6 +1259,15 @@ end, its key, and the command that reads it whole: `flume inbox` for an
 end that waits on a move, which gives the question and how to answer,
 and `flume status <place>` for any other. It names no fact to act on
 blindly (core.25).
+
+An end waits on a move where the place, as its held state stands when
+the notice is sent, waits on a move of its caller's. That is read from
+the place, not from the end's kind: a stop-short, a lost stage or a
+stall points at the inbox, and so does a stage delivered whose place
+then waits on a held submission or on done; a delivery the next stage
+follows, and an end sent after the place moved on, point at status. A
+brief cut ends in an ellipsis where it was cut, after its first 60
+characters, trailing spaces dropped.
 
 Rejected:
 
