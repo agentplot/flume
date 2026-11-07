@@ -70,26 +70,14 @@ document written before reading as it did (61, 139, 202 to 206 and
 - **WHEN** `round_trip.rs` writes each new type and each new variant and reads it back
 - **THEN** each reads as written, and a held state and a host's state written before this change read unchanged (61)
 
-## MODIFIED Requirements
+### Requirement: The clues a terminal shows
 
-### Requirement: The terminal seam's open, tidy and show
-
-The terminal seam's open SHALL take where the agent runs, beside a
-pane, in a session by its name or in the terminal's own, and SHALL
-answer, beside opened and refused, a start held at a question
-its program asks before it starts and a program that did not come up
-within its bound, each with the screen (94, 107); it SHALL tidy what it
-made for a place gone (138) and show a place's clues, its current
+The clues the terminal seam's show takes SHALL be a place's current
 stage and that stage's state, the short form of its line and the count
-of the places of its repository on its base (139); and every terminal
-operation SHALL answer within a bound the profile states (98).
+of the places of its repository on its base; a terminal that shows no
+clues SHALL answer so, and no terminal SHALL read them back (139).
 
-#### Scenario: Held, tidied and shown
+#### Scenario: A place's clues shown
 
-- **WHEN** the fake terminal holds a start at a question, makes a place's tab in its base's workspace, and has a person's pane in that workspace
-- **THEN** open answers held with the screen, tidy closes the place's tab and keeps the workspace naming the person's pane, and show takes the place's clues with its line's short form (94, 138, 139)
-
-#### Scenario: Where an agent opens
-
-- **WHEN** the fake terminal is asked to open one agent beside the pane `operator`, one in the session `work` and one in its own
-- **THEN** its log names each where it was asked, and the open's answer is the same for each (94, 107)
+- **WHEN** the terminal seam is asked to show a place whose code stage is working, its line's short form `code · run 1 · tasks 2/5 · working`, with one place of its repository running on its base
+- **THEN** a terminal that shows clues answers shown, one that shows none answers so, and nothing is read back (139)

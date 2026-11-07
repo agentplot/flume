@@ -22,38 +22,19 @@ core.29).
 - **WHEN** one server's state directory holds a `setup.json` naming its present socket and the popup's missing key, and another's names a socket now gone and the missing `$flume` rows
 - **THEN** the profile's setup is the first server's words alone, and no herdr command was run
 
-## MODIFIED Requirements
+### Requirement: herdr settles nothing
 
-### Requirement: The terminal through herdr
-
-The herdr profile SHALL open, send to, read and close agents through
-herdr, and settle nothing, keeping no watch and nudging nothing (94 to
-98, 122, C.5). Every herdr command, state name, error code and field
-it reads SHALL be checked against the pinned herdr, and every herdr
-call SHALL run under a bound, ten seconds where the call states none,
-with the caller's `HERDR_*` stripped and the recorded server's socket
-passed; a call past its bound SHALL read unknown or refused in herdr's
-words (98, core.29; record 0016).
-
-#### Scenario: Seam scenarios against herdr
-
-- **WHEN** the terminal seam's scenarios run against the profile on a herdr server the test starts
-- **THEN** each passes: no second agent under a live identity, and no close reported that did not happen (98)
-
-#### Scenario: A herdr call that never answers
-
-- **WHEN** herdr does not answer a send within its bound
-- **THEN** the send is refused in words naming the bound, and nothing waits on herdr (98, core.29)
-
-#### Scenario: A quiet pane with nothing delivered
-
-- **WHEN** a stage's agent under herdr goes idle with no deliverable and no stop-short
-- **THEN** no settle ends the stage or its agent (39, I1)
+The herdr profile SHALL start no settle, keep no watch over the host
+and say nothing of whether flume runs attended, and nothing its plugin
+runs SHALL either: flume reads attended from the host's watch alone,
+running no herdr command for it (119, 122, 208, C.5).
 
 #### Scenario: Unattended by the host's watch alone
 
 - **WHEN** the herdr profile is bound against the pinned herdr's server, whatever the plugin's state there, and a caller settles every place with a bound of a minute, then three minutes pass with no such settle
 - **THEN** flume runs unattended after the first, and attended after the three minutes, and no herdr command was run to decide either (119, 122, 208)
+
+## MODIFIED Requirements
 
 ### Requirement: The printed command
 
