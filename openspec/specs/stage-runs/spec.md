@@ -90,7 +90,8 @@ current stage's live agent and that start's secret, saying whether it
 needs an answer or found work, SHALL end the stage short with the
 agent's words whole and its kind, and SHALL start no next stage, except
 that found work from the kind's last stage starts the kind's fix round
-(41, 42, 131).
+where it is a stage before that last stage, and any other found work is
+taken as needing an answer (41, 42, 131).
 
 #### Scenario: A construct stops short
 

@@ -276,3 +276,13 @@ launch (7, 21, 195, C.2).
 
 - **WHEN** `flume launch --kind fix --agent programs.claude.file=claude.json` runs in a scratch directory holding `claude.json`, which gives `tui = "fullscreen"`
 - **THEN** the launch's settings name the file by its absolute path with `tui` as read at the launch, at the `launch` layer (7, 21, 195)
+
+### Requirement: needs' help says what a found is
+
+`flume needs --help` SHALL say that `--found` is for work a stage before
+the agent's own must do again (41, C.4).
+
+#### Scenario: needs' help
+
+- **WHEN** `flume needs --help` runs
+- **THEN** its words for `--found` name work a stage before its own must do again, and none says "cannot deliver past"
