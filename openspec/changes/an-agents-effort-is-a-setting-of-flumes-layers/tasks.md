@@ -53,3 +53,7 @@ test names is a scratch directory or file of the test's own.
 
 - [x] 7.1 Have the suite's clause list read the statement at the revision task 1.1 fitted, `c94c496` or a later one of blueprints main, holding 197 and S103, and cite 197 and S103 from this change's scenarios, so neither is named unbuilt (clause-coverage spec; 106). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
 - [x] 7.2 Run the gate's checks over the change as it stands. True when `sluice exec main` passes.
+
+## 8. Main merged at f6a5ba7
+
+- [x] 8.1 Merge main at f6a5ba7, which lands #131 to #141 (`change/a-roles-address-may-be-held-by-a-standing-agent` at #141) and which the merge queue found conflicting in five files, and resolve each with both kept: `engine/place_status.rs` and `print.rs` importing `EffortStatus` beside `AddressStatus`, `StandingFound` and `PendingEnd`; and place-status's, seam-contracts' and seam-fakes' specs holding the effort's requirements beside the standing address's. Then move the change out of the archive, its ten specs main's at f6a5ba7 and `agent-effort` gone from `openspec/specs/` until the archive (132, 197; core.19). True when a trial `openspec archive` over a copy of `openspec/` leaves `openspec validate --specs --strict --no-interactive` passing 45 of 45, and `sluice exec main -- moon run conformance:test flume:test root:specs root:changes root:format` passes.
