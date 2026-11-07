@@ -7,14 +7,16 @@
 //! account is spent, records when and why, and ends it once quiet, the
 //! stage waiting on its answer still (31, 70, 77, 96, 130, 134, 146).
 
-use super::account_pools::{account, account_of};
+use super::account_pools::{account, account_of, fill_first_at_homes};
 use super::account_pools::{fix_in, on, pool, pool_at, reading_at, reads, stops_at_limit, window};
 use super::agent_settings::kept_open;
-use super::carried_conversations::{talk, talking};
+use super::carried_conversations::{by_hand, carries_lost, carries_none, carries_to};
+use super::carried_conversations::{resumed_prompt, retry_talk, start_of, talk, talking};
+use super::repeating_stages::{branch, code_begun, GROUPS};
 use super::settling::{change_at_verify, construct_begun, fix_begun};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Waits, KEEP_OPEN};
+use flume_core::{Act, Retry, Waits, KEEP_OPEN};
 use flume_seams::*;
 
 pub fn scenarios() -> Vec<Scenario<()>> {
@@ -94,11 +96,164 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["77", "S116", "31"],
             run: brought_back_bare_in_another_stage,
         },
+        Scenario {
+            name: "answer: a retry of code with the words notes.md while its asking agent is kept open hands the same agent the question then the answer as one prompt, code begun again under its first start and started once, and the stop-short's end holds the answer by retry with when it was sent and received",
+            cites: &["S4", "42", "49", "50", "53", "54"],
+            run: a_retrys_answer,
+        },
+        Scenario {
+            name: "answer: a tell of notes.md to a place whose code waits on an answer, its agent kept open, hands the same agent the question then the answer, code begun again under its first start, and the stop-short's end holds the answer by tell",
+            cites: &["42", "53", "55"],
+            run: a_tells_answer,
+        },
+        Scenario {
+            name: "answer: the third repetition of a repeating code, kept open for its answer, takes a retry's question and answer in its session and carries on its third group under the same start, never its first",
+            cites: &["142", "140", "42", "49"],
+            run: a_repeating_stages_answer,
+        },
+        Scenario {
+            name: "answer: one given while the asking agent asks a person in its pane, and one past the tell's bound while it works, are each refused with nothing typed and nothing recorded, and code still waits on its answer",
+            cites: &["53", "54", "42"],
+            run: an_answer_the_agent_does_not_take,
+        },
+        Scenario {
+            name: "answer: a retry with words once the agent's time kept open has passed, before any settle read it let go, lets the agent go and ends it once quiet, and a fresh agent starts whose prompt carries the question and the answer",
+            cites: &["42", "49", "50", "31"],
+            run: an_answer_after_the_time_passed,
+        },
+        Scenario {
+            name: "answer: a retry with no words while the asking agent is kept open and quiet ends it, and a fresh agent starts whose prompt carries the question alone",
+            cites: &["49", "50", "31"],
+            run: a_retry_with_no_words_while_kept_open,
+        },
+        Scenario {
+            name: "answer: a tell to a place whose code waits on an answer once its agent was let go is refused with nothing typed, naming the retry that answers it",
+            cites: &["42", "53"],
+            run: a_tell_once_the_agent_is_let_go,
+        },
+        Scenario {
+            name: "let go: a retry of code with notes.md once its agent was let go by its time and ended starts code's second start, a fresh agent whose prompt carries the question, then the answer",
+            cites: &["42", "49"],
+            run: a_late_answer,
+        },
+        Scenario {
+            name: "let go: a retry with notes.md of a talk whose agent kept open was brought back bare in its pane waits while the bare agent runs its conversation, naming its process, and once it ends starts talk resuming its session on the account its lost start ran under, its prompt flume's words then the question and the answer",
+            cites: &["49", "179", "207", "77"],
+            run: the_answer_carries_the_conversation,
+        },
+        Scenario {
+            name: "let go: a talk's agent kept open and stopped by its caller reads let go, stopped, at the next settle, and a retry with notes.md starts a fresh agent carrying no conversation, its prompt the question and the answer",
+            cites: &["49", "51", "42"],
+            run: stopped_by_its_caller,
+        },
     ]
 }
 
 /// The question every asking agent here stops short with.
 const QUESTION: &str = "Which file holds the log?";
+
+/// The question and `answer` as a retry's prompt and an answer handed to
+/// a session give them (42, 49).
+fn asked(answer: &str) -> String {
+    format!("The question: {QUESTION}\n\nThe answer: {answer}")
+}
+
+/// The act was taken.
+fn taken(answer: &flume_core::Answer) -> Outcome {
+    match answer.refusal() {
+        Some(reason) => Err(format!("the act was refused: {reason}")),
+        None => Ok(()),
+    }
+}
+
+/// The ends the place records of its stage `stage`'s start `start` ended
+/// short, in the order they were read.
+fn short_ends(
+    world: &World,
+    id: &PlaceId,
+    stage: &str,
+    start: u32,
+) -> Result<Vec<EndHeld>, String> {
+    Ok(world
+        .held(id)
+        .ok_or("no held state")?
+        .ends
+        .into_iter()
+        .filter(|end| {
+            matches!(
+                &end.of,
+                EndOf::Stage { stage: named, start: n, state: StageState::EndedShort, .. }
+                    if named == stage && *n == start
+            )
+        })
+        .collect())
+}
+
+/// The first end the place records of its stage `stage`'s start `start`
+/// ended short.
+fn short_end(world: &World, id: &PlaceId, stage: &str, start: u32) -> Result<EndHeld, String> {
+    short_ends(world, id, stage, start)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("no end of {stage}'s start {start} ended short"))
+}
+
+/// The answer notes.md reached the agent `who` of the fix's code, start 1,
+/// kept open for it, by `act` at `at`: the question then the answer its
+/// last words, code begun again under that start and started once, no
+/// agent opened or closed for it, the stop-short's end holding the answer,
+/// and the place waiting on its caller no more (42, 48, 49, 53).
+fn answered_in_session(
+    world: &World,
+    id: &PlaceId,
+    who: &Identity,
+    act: Act,
+    at: Seconds,
+) -> Outcome {
+    ensure_eq!(
+        world.terminal.sent_to(who).last().cloned(),
+        Some(asked("notes.md")),
+        "the last words code's agent was sent"
+    );
+    let held = world.held(id).ok_or("no held state")?;
+    let stage = &held.stages[0];
+    let start = stage.start.clone().ok_or("code has no start")?;
+    ensure_eq!(
+        (
+            stage.state,
+            stage.starts,
+            start.n,
+            start.live,
+            start.answered,
+            stage.end.clone()
+        ),
+        (StageState::Begun, 1, 1, true, 1, None),
+        "code, its starts, its start, whether it is live, its answers and its end"
+    );
+    ensure_eq!(
+        (world.terminal.log.count("open"), closed(world)),
+        (1, vec![]),
+        "the agents opened and closed"
+    );
+    ensure_eq!(
+        short_end(world, id, "code", 1)?.answer,
+        Some(AnswerHeld {
+            words: "notes.md".into(),
+            act,
+            at,
+            session: Some(Handed {
+                sent_at: at,
+                received_at: at,
+            }),
+        }),
+        "the answer the stop-short's end holds"
+    );
+    ensure!(
+        world.status(id)?.waiting_on.is_none(),
+        "the place still waits on its caller"
+    );
+    Ok(())
+}
 
 /// The fix `name`'s code start `start`.
 fn code(name: &str, start: u32) -> Identity {
@@ -717,4 +872,284 @@ fn brought_back_bare_in_another_stage(_: &()) -> Outcome {
         "the agents closed, whether code's start is live, and code"
     );
     waits_on_answer(&world, &id, "code", at)
+}
+
+fn a_retrys_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking(&world, "one")?;
+    let at = world.host.now();
+    taken(&world.engine.retry(
+        &id,
+        Retry::Stage("code".into()),
+        Some("notes.md".into()),
+        false,
+    ))?;
+    answered_in_session(&world, &id, &code("one", 1), Act::Retry, at)
+}
+
+fn a_tells_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking(&world, "one")?;
+    let at = world.host.now();
+    taken(&world.engine.tell(&id, "notes.md", None))?;
+    answered_in_session(&world, &id, &code("one", 1), Act::Tell, at)
+}
+
+fn a_repeating_stages_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let id = code_begun(&world, "plan", &[])?;
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 2);
+    world.settle(&id);
+    world.tick_groups(&branch("plan"), "plan", GROUPS, 4);
+    world.settle(&id);
+    let third = World::identity("change", "plan", "code", 3);
+    let group = |world: &World| -> Result<(Identity, Option<String>), String> {
+        let start = world.held(&id).ok_or("no held state")?.stages[1]
+            .start
+            .clone()
+            .ok_or("code has no start")?;
+        Ok((start.identity, start.group.and_then(|group| group.number)))
+    };
+    ensure_eq!(
+        group(&world)?,
+        (third.clone(), Some("3".to_string())),
+        "code's third repetition and its group"
+    );
+    stops_short(&world, &id, 1, &third, QUESTION, StopKind::NeedsAnswer)?;
+    world.settle(&id);
+    taken(&world.engine.retry(
+        &id,
+        Retry::Stage("code".into()),
+        Some("notes.md".into()),
+        false,
+    ))?;
+    ensure_eq!(
+        world.terminal.sent_to(&third).last().cloned(),
+        Some(asked("notes.md")),
+        "the last words the third repetition's agent was sent"
+    );
+    ensure_eq!(
+        (
+            world.stage_state(&id, "code"),
+            group(&world)?,
+            world.terminal.log.count("open")
+        ),
+        (Some(StageState::Begun), (third, Some("3".to_string())), 4),
+        "code, its repetition and its group, and the agents opened, construct's and code's three repetitions'"
+    );
+    Ok(())
+}
+
+fn an_answer_the_agent_does_not_take(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, at) = asking(&world, "one")?;
+    let who = code("one", 1);
+    let sent = world.terminal.sent_to(&who).len();
+    world.agent.set_asking(&who, Reading::Yes);
+    world.terminal.set_state(&who, AgentState::Asking);
+    refused(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    world.agent.set_asking(&who, Reading::No);
+    world.terminal.set_state(&who, AgentState::Working);
+    let told = world.host.now();
+    refused(&world.engine.tell(&id, "notes.md", Some(60)))?;
+    ensure!(
+        world.host.now() - told >= 60,
+        "the tell gave up before its bound"
+    );
+    let start = world.held(&id).ok_or("no held state")?.stages[0]
+        .start
+        .clone()
+        .ok_or("code has no start")?;
+    ensure_eq!(
+        (
+            world.terminal.sent_to(&who).len(),
+            world.stage_state(&id, "code"),
+            short_end(&world, &id, "code", 1)?.answer,
+            start.answered,
+            closed(&world)
+        ),
+        (sent, Some(StageState::EndedShort), None, 0, vec![]),
+        "what code's agent was sent, code, the answer its end holds, its start's answers, and the agents closed"
+    );
+    waits_on_answer(&world, &id, "code", at)
+}
+
+fn an_answer_after_the_time_passed(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking(&world, "one")?;
+    world.host.advance(KEEP_OPEN);
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    let first = code("one", 1);
+    ensure_eq!(
+        closed(&world),
+        vec![format!("close {first}")],
+        "the agents closed"
+    );
+    let prompt = world
+        .prompt(&id, &code("one", 2))
+        .ok_or("code's second start did not open")?;
+    ensure!(
+        prompt.contains(&asked("notes.md")),
+        "the question then the answer are not in {prompt}"
+    );
+    Ok(())
+}
+
+fn a_retry_with_no_words_while_kept_open(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking(&world, "one")?;
+    taken(&world.engine.retry(&id, Retry::Current, None, false))?;
+    let first = code("one", 1);
+    ensure_eq!(
+        closed(&world),
+        vec![format!("close {first}")],
+        "the agents closed"
+    );
+    let prompt = world
+        .prompt(&id, &code("one", 2))
+        .ok_or("code's second start did not open")?;
+    ensure!(
+        prompt.contains(&format!("The question: {QUESTION}")) && !prompt.contains("The answer:"),
+        "the question alone is not in {prompt}"
+    );
+    Ok(())
+}
+
+fn a_tell_once_the_agent_is_let_go(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, at) = asking(&world, "one")?;
+    world.host.advance(KEEP_OPEN);
+    world.settle(&id);
+    let sendings = world.terminal.log.count("send");
+    let reason = refused(&world.engine.tell(&id, "notes.md", None))?;
+    ensure!(
+        reason.contains(&format!("flume retry {id} --words")),
+        "the refusal names not the retry: {reason}"
+    );
+    ensure_eq!(
+        world.terminal.log.count("send"),
+        sendings,
+        "the sendings after the tell"
+    );
+    waits_on_answer(&world, &id, "code", at)
+}
+
+fn a_late_answer(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking(&world, "one")?;
+    world.host.advance(KEEP_OPEN);
+    world.settle(&id);
+    taken(&world.engine.retry(
+        &id,
+        Retry::Stage("code".into()),
+        Some("notes.md".into()),
+        false,
+    ))?;
+    let second = code("one", 2);
+    let prompt = world
+        .prompt(&id, &second)
+        .ok_or("code's second start did not open")?;
+    ensure!(
+        prompt.contains(&asked("notes.md")),
+        "the question then the answer are not in {prompt}"
+    );
+    ensure_eq!(
+        world.held(&id).map(|held| held.stages[0].starts),
+        Some(2),
+        "code's starts"
+    );
+    Ok(())
+}
+
+fn the_answer_carries_the_conversation(_: &()) -> Outcome {
+    let world = World::new();
+    fill_first_at_homes(&world);
+    carries_to(&world, "work-1");
+    let id = talking(&world)?;
+    stops_short(&world, &id, 0, &talk(1), QUESTION, StopKind::NeedsAnswer)?;
+    world.settle(&id);
+    world.host.advance(10 * 60);
+    world.host.restart();
+    world.terminal.forget_all();
+    world.agent.bring_back_bare(&talk(1));
+    world.engine().settle(None);
+    ensure_eq!(
+        end_of(&world, &id, "talk")?
+            .closed
+            .map(|closed| (closed.by, closed.left_in_pane)),
+        Some((ClosedBy::AgentEnded, true)),
+        "talk's agent's letting go"
+    );
+    world.agent.live_runs("s-1", &[by_hand()]);
+    let status = retry_talk(&world, &id, Some("notes.md"), false)?;
+    let waiting = status
+        .waits_on_session
+        .ok_or("the retry's answer says talk waits on nothing")?;
+    ensure_eq!(
+        (
+            waiting.stage.as_str(),
+            waiting.processes,
+            world.stage_state(&id, "talk"),
+            closed(&world)
+        ),
+        (
+            "talk",
+            vec![by_hand()],
+            Some(StageState::WaitingForRoom),
+            vec![]
+        ),
+        "what talk waits on, talk, and the agents closed after the retry"
+    );
+    world.agent.live_ended("s-1");
+    world.terminal.kill(&talk(1));
+    world.engine().settle(None);
+    let start = start_of(&world, &id, "talk")?;
+    ensure_eq!(start.n, 2, "talk's start once the bare agent ended");
+    carries_lost(&world, &start, "work-1")?;
+    ensure_eq!(
+        world.prompt(&id, &talk(2)),
+        Some(resumed_prompt(&world, &talk(2), Some(&asked("notes.md")))),
+        "the carried start's prompt"
+    );
+    Ok(())
+}
+
+fn stopped_by_its_caller(_: &()) -> Outcome {
+    let world = World::new();
+    let id = talking(&world)?;
+    let at = stops_short(&world, &id, 0, &talk(1), QUESTION, StopKind::NeedsAnswer)?;
+    world.settle(&id);
+    world.host.advance(10 * 60);
+    taken(&world.engine.stop(&id, false))?;
+    world.settle(&id);
+    ensure_eq!(
+        end_of(&world, &id, "talk")?.closed,
+        Some(SessionClosed {
+            at: at + 10 * 60,
+            by: ClosedBy::Stopped,
+            ended_at: Some(at + 10 * 60),
+            left_in_pane: false,
+        }),
+        "talk's agent's letting go"
+    );
+    retry_talk(&world, &id, Some("notes.md"), false)?;
+    let start = start_of(&world, &id, "talk")?;
+    ensure_eq!(start.n, 2, "talk's start after the retry");
+    carries_none(&world, &start)?;
+    let prompt = world
+        .prompt(&id, &talk(2))
+        .ok_or("talk's second start did not open")?;
+    ensure!(
+        prompt.contains(&asked("notes.md")),
+        "the question then the answer are not in {prompt}"
+    );
+    Ok(())
 }

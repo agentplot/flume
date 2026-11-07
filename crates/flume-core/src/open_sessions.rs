@@ -18,13 +18,110 @@
 //! than the time, and are what a later answer's retry acts on (49, 77),
 //! so a settle that finds the time passed and the agent ended as well
 //! records the agent ended.
+//!
+//! While the agent is kept open, an answer, a retry with words naming its
+//! stage or a tell to its place, is handed to its session as a tell is,
+//! the question then the answer, and recorded on the stop-short it
+//! answers in the one write that carries the stage on there under the
+//! same start, begun again, starting and ending no agent; one the agent
+//! does not take is refused with nothing recorded, the stage waiting on
+//! its answer still (42, 47 to 50, 53 to 55).
 
+use crate::acts::asked;
 use crate::reading::AgentReading;
 use crate::start::Starts;
-use crate::{Engine, Step};
+use crate::{Answer, Engine, Step};
 use flume_seams::*;
 
 impl Engine {
+    /// The agent of the place's current stage kept open for its answer, as
+    /// `held` reads now: its stage ended short needing an answer, its time
+    /// kept open not yet passed, its start live and no letting go recorded;
+    /// none otherwise (42, 198).
+    pub(crate) fn kept_open(&self, held: &HeldState) -> Option<Kept> {
+        let kept = Kept::of(held)?;
+        let open = kept.end.closed.is_none()
+            && kept.start.live
+            && kept
+                .end
+                .open_until
+                .is_some_and(|until| self.host.now() < until);
+        open.then_some(kept)
+    }
+
+    /// Hands `words`, the answer to the question the agent `kept` holds
+    /// open stopped short with, to its session as a tell is handed, within
+    /// `bound`, the question then the answer; once received, in one write,
+    /// records it on the stop-short's end with `act` and when it was sent
+    /// and received, raises its start's count of answers, carries the stage
+    /// on begun under the same start, its quiet and its limit read afresh,
+    /// and ends each hold on the stage, then settles the place. Refused
+    /// with the tell's words, nothing recorded, where the agent does not
+    /// take it (42, 47 to 50, 53 to 55, 198; core.11).
+    pub(crate) fn answer(
+        &self,
+        id: &PlaceId,
+        kept: &Kept,
+        words: &str,
+        act: Act,
+        bound: Option<Seconds>,
+    ) -> Answer {
+        let at = self.host.now();
+        let question = kept.end.words.clone().unwrap_or_default();
+        let handed = match self.hand(id, &kept.start, &asked(&question, words), bound) {
+            Ok(handed) => handed,
+            Err(reason) => return Answer::refused(reason),
+        };
+        let recorded = self
+            .update(id, |held| {
+                if kept.end_in(held).is_none() {
+                    return Step::Keep(false);
+                }
+                let stage = &mut held.stages[kept.index];
+                let name = stage.name.clone();
+                let Some(start) = stage.start.as_mut().filter(|start| start.live) else {
+                    return Step::Keep(false);
+                };
+                let (n, answered) = (start.n, start.answered);
+                let Some(end) = held.ends.iter_mut().rev().find(|end| {
+                    end.answer.is_none()
+                        && matches!(
+                            &end.of,
+                            EndOf::Stage { stage, start, state: StageState::EndedShort, answered: count, .. }
+                                if *stage == name && *start == n && *count == answered
+                        )
+                }) else {
+                    return Step::Keep(false);
+                };
+                end.answer = Some(AnswerHeld {
+                    words: words.to_string(),
+                    act,
+                    at,
+                    session: Some(handed),
+                });
+                let stage = &mut held.stages[kept.index];
+                if let Some(start) = stage.start.as_mut() {
+                    start.answered += 1;
+                    start.first_quiet = None;
+                    start.past_limit = false;
+                }
+                stage.state = StageState::Begun;
+                stage.end = None;
+                let on = HoldOn::Stage { stage: name };
+                held.holds.retain(|hold| hold.on != on);
+                Step::Write(true)
+            })
+            .unwrap_or(false);
+        if !recorded {
+            return Answer::refused(format!(
+                "the stage {} of {id} moved on before its answer was recorded",
+                kept.stage
+            ));
+        }
+        self.settle_place(id);
+        self.acted(act, id)
+    }
+
     /// The settle's step for a stage ended short needing an answer whose
     /// agent was kept open for it: the agent read let go and recorded so,
     /// then ended once quiet; true when it changed something (198).
@@ -215,11 +312,25 @@ fn brought_back_bare(reading: &AgentReading) -> bool {
         && (reading.started == Reading::No || reading.own_record == Reading::No)
 }
 
+/// The name of the place's current stage where it ended short waiting on
+/// an answer: needing one, or having found work from a stage before the
+/// kind's last (42, 131).
+pub(crate) fn waits_on_answer(held: &HeldState) -> Option<&str> {
+    let index = held.current?;
+    let stage = &held.stages[index];
+    if held.phase != Phase::Live || stage.state != StageState::EndedShort {
+        return None;
+    }
+    let found = stage.end.as_ref().and_then(|end| end.needs) == Some(StopKind::FoundWork);
+    (!found || index + 1 < held.stages.len()).then_some(stage.name.as_str())
+}
+
 /// A place's current stage ended short needing an answer whose end gives
 /// the time its agent is kept open until, as one read of its held state
 /// gives it.
-struct Kept {
+pub(crate) struct Kept {
     index: usize,
+    stage: String,
     start: StartHeld,
     end: StageEnd,
 }
@@ -234,9 +345,15 @@ impl Kept {
         let end = stage.end.clone().filter(|end| end.open_until.is_some())?;
         Some(Kept {
             index,
+            stage: stage.name.clone(),
             start: stage.start.clone()?,
             end,
         })
+    }
+
+    /// The index of the stage whose agent is kept open.
+    pub(crate) fn index(&self) -> usize {
+        self.index
     }
 
     /// The same stage's end in `held`, as a write decides it: none where

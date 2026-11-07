@@ -703,6 +703,10 @@ fn a_retry_after_a_stop_short(_: &()) -> Outcome {
         "the notice of the stop-short: {:?}",
         world.terminal.notices("ops")
     );
+    // The asking agent stopped, so the retry starts a fresh agent rather
+    // than answering its session (51, 198).
+    let stopped = world.engine.stop(&id, false);
+    ensure!(stopped.refusal().is_none(), "the stop: {stopped:?}");
     let retried = world.engine.retry(
         &id,
         flume_core::Retry::Stage("code".into()),

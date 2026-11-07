@@ -1754,6 +1754,10 @@ fn two_repetitions_prompts_are_equal_up_to_the_group() {
     );
     assert!(stopped.refusal().is_none(), "the stop-short: {stopped:?}");
     world.settle(&id);
+    // The asking agent stopped, so the retry starts a fresh agent rather
+    // than answering its session (51, 198).
+    let ended = world.engine.stop(&id, false);
+    assert!(ended.refusal().is_none(), "the stop: {ended:?}");
     let retried = world.engine.retry(
         &id,
         flume_core::Retry::Stage("code".into()),
