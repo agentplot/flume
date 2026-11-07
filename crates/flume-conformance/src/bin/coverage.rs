@@ -23,12 +23,19 @@ fn main() -> ExitCode {
             .iter()
             .map(|(change, left)| format!("{} to {change}", left.join(", ")))
             .collect();
+        // The scenarios the statement skips, said only where it skips any.
+        let skipped: Vec<String> = clauses::SKIPPED
+            .iter()
+            .map(|scenario| format!("S{scenario}"))
+            .collect();
+        let skipped = if skipped.is_empty() {
+            String::new()
+        } else {
+            format!(" but {}, which it does not hold,", skipped.join(", "))
+        };
         println!(
-            "every clause of Parts A and B, I1 to I8 and S1 to S{} but {}, which it does not hold, at {} is cited by the suite's {} scenarios{}",
+            "every clause of Parts A and B, I1 to I8 and S1 to S{}{skipped} at {} is cited by the suite's {} scenarios{}",
             clauses::SCENARIOS,
-            clauses::SKIPPED
-                .map(|scenario| format!("S{scenario}"))
-                .join(", "),
             clauses::REVISION,
             scenarios.len(),
             if left.is_empty() {

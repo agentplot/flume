@@ -35,7 +35,7 @@ is passed by moon to the task's `cargo test`.
 
 ## 5. The clause list
 
-- [ ] 5.1 Have `crates/flume-conformance/src/clauses.rs` read agentplot/blueprints main at 9371cda, or the later revision of main the build reads, as design 7 and the clause-coverage spec have it: every clause the revision states in Part A or Part B, `SCENARIOS` its last scenario, `SKIPPED` only what it skips, each clause and scenario added since c94c496 but S119 named unbuilt by the change that builds it, and the list's own tests at the revision's counts (106; core.19). Check: `devenv shell -- moon run conformance:test -- --lib clauses` and `devenv shell -- moon run conformance:coverage`.
+- [x] 5.1 Have `crates/flume-conformance/src/clauses.rs` read agentplot/blueprints main at 9371cda, or the later revision of main the build reads, as design 7 and the clause-coverage spec have it: every clause the revision states in Part A or Part B, `SCENARIOS` its last scenario, `SKIPPED` only what it skips, each clause and scenario added since c94c496 but S119 named unbuilt by the change that builds it, and the list's own tests at the revision's counts (106; core.19). Check: `devenv shell -- moon run conformance:test -- --lib clauses` and `devenv shell -- moon run conformance:coverage`.
 
 ## 6. The site
 
