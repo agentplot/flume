@@ -238,7 +238,7 @@ pub enum BranchClosed {
 /// forecast: the conflicts a branch's head would meet were it submitted
 /// to its base now, placed after every entry already submitted. A
 /// forecast creates no entry, moves no branch, and is never read as a
-/// verdict (203, 210; sluice 64, 65).
+/// verdict (203, 210).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Forecast {
@@ -327,6 +327,6 @@ pub trait MergeQueue: Send + Sync {
     /// The conflicts `branch`'s head would meet were it submitted to
     /// `base` now, placed after every entry already submitted; it creates
     /// no entry and moves nothing, and is never read as a verdict (203,
-    /// 210; sluice 64, 65).
+    /// 210).
     fn forecast(&self, repository: &str, branch: &str, base: &str) -> Forecast;
 }
