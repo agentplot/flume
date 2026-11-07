@@ -31,8 +31,8 @@ Every scenario added cites its clauses as data (106).
 
 ## 1. The decision recorded
 
-- [ ] 1.1 Hold record 0056's amendment line as this change's construct wrote it, as design 14 words it, citing the blueprints branch at cffcbcc; amend it where the statement the build reads differs (core.19). True when `devenv shell -- sh check-adrs.sh` and `devenv shell -- treefmt --ci docs/adr/0056-a-base-place-forecast-or-found-to-conflict-with-its-base-or-whose-submission-failed-has-its-fix-launched-by-flume.md` pass.
-- [ ] 1.2 Hold core.53's and core.34's rules and details and core.6's and core.36's details in `docs/architecture/core.md`, and the mirror of core.53 and core.34 in `site/src/content/docs/architecture/rules.md`, as this change's construct wrote them to design 14 (core.19, core.35). True when `devenv shell -- treefmt --ci docs/architecture/core.md site/src/content/docs/architecture/rules.md` and `devenv shell -- sh -c 'cd site && vale src/content/docs/architecture/rules.md'` pass.
+- [x] 1.1 Hold record 0056's amendment line as this change's construct wrote it, as design 14 words it, citing the blueprints branch at cffcbcc; amend it where the statement the build reads differs (core.19). True when `devenv shell -- sh check-adrs.sh` and `devenv shell -- treefmt --ci docs/adr/0056-a-base-place-forecast-or-found-to-conflict-with-its-base-or-whose-submission-failed-has-its-fix-launched-by-flume.md` pass.
+- [x] 1.2 Hold core.53's and core.34's rules and details and core.6's and core.36's details in `docs/architecture/core.md`, and the mirror of core.53 and core.34 in `site/src/content/docs/architecture/rules.md`, as this change's construct wrote them to design 14 (core.19, core.35). True when `devenv shell -- treefmt --ci docs/architecture/core.md site/src/content/docs/architecture/rules.md` and `devenv shell -- sh -c 'cd site && vale src/content/docs/architecture/rules.md'` pass.
 
 ## 2. The seams and the fakes
 
