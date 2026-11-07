@@ -195,7 +195,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   passes, with the place-status spec's scenarios of recipients and of an
   address that wakes nothing in `engine/place_status.rs` and `print.rs`'s
   tests.
-- [ ] 3.3 Run the checks of the projects this group touched. True when
+- [x] 3.3 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run core:format core:lint core:test
   conformance:format conformance:lint conformance:test flume:format
   flume:lint flume:test` passes.
