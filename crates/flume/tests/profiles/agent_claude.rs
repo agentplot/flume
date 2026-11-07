@@ -2,7 +2,9 @@
 //! agent seam's scenarios against it over fixture transcripts and hook
 //! records of Claude Code 2.1.296, the release `devenv.nix` pins; the
 //! command for a code stage, its instructions in a file of the start's
-//! own, and for a stage in a mode; the command for a stage with own
+//! own, and for a stage in a mode; the command for a stage with no
+//! effort and at `xhigh`, the five efforts it takes and two the release
+//! reads otherwise; the command for a stage with own
 //! settings and with none, the keys the profile reserves, a people's
 //! settings file named by the host through the core, the keys it takes
 //! as written and a repository's tagline among them; the map of
@@ -25,7 +27,7 @@ use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, STANDING_PROMPT_FLAG, TRUST_CONFIRM,
     TRUST_FOCUS, TRUST_NEXT, TRUST_QUESTION, VERSION,
 };
-use flume::profiles::agent::claude::{carry, live, mode, settings, transcript};
+use flume::profiles::agent::claude::{carry, effort, live, mode, settings, transcript};
 use flume::profiles::{core_over, BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::agent::{self, AgentHarness, Efforts, Modes, OwnWay};
@@ -548,10 +550,15 @@ impl AgentHarness for Harness {
         }
     }
 
-    /// None yet: the profile keeps the seam's defaults, naming no way to
-    /// give an effort and no variable read over one (197).
+    /// 2.1.296's five `--effort` words, and `CLAUDE_CODE_EFFORT_LEVEL`
+    /// read over them (197, C.4).
     fn efforts(&self) -> Efforts {
-        Efforts::default()
+        Efforts {
+            words: ["low", "medium", "high", "xhigh", "max"]
+                .map(String::from)
+                .to_vec(),
+            variable: Some("CLAUDE_CODE_EFFORT_LEVEL"),
+        }
     }
 
     /// The JSON object of the file the command names by `--settings`, as
@@ -724,6 +731,93 @@ fn the_command_passes_the_mode_it_is_given() {
             .any(|arg| arg == "--permission-mode"),
         "a mode passed where none was given"
     );
+}
+
+#[test]
+fn the_command_for_a_stage_with_no_effort() {
+    // Settings giving no effort start `claude` with no `--effort`, the
+    // account's own configuration deciding (197).
+    let harness = Harness::new();
+    let command = harness.seam.command(
+        &harness.folder(),
+        &Settings {
+            model: Some("opus".into()),
+            ..Settings::default()
+        },
+        Some("acceptEdits"),
+        &BTreeMap::new(),
+        None,
+        &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
+        &harness.place(),
+        &identity("code"),
+        &Secret("s".into()),
+        "x",
+    );
+    assert!(
+        !command.args.iter().any(|arg| arg == effort::FLAG),
+        "an effort passed where none was given: {:?}",
+        command.args
+    );
+    assert_eq!(
+        command.args[2..],
+        ["--model", "opus", "--permission-mode", "acceptEdits"]
+    );
+}
+
+#[test]
+fn the_command_for_a_stage_at_xhigh() {
+    // Settings giving the model `opus` and the effort `xhigh` start
+    // `claude` with `--model opus --effort xhigh`, the effort right after
+    // the model and before the mode (S103, 88, C.4).
+    let harness = Harness::new();
+    let command = harness.seam.command(
+        &harness.folder(),
+        &Settings {
+            model: Some("opus".into()),
+            effort: Some("xhigh".into()),
+            ..Settings::default()
+        },
+        Some("acceptEdits"),
+        &BTreeMap::new(),
+        None,
+        &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
+        &harness.place(),
+        &identity("code"),
+        &Secret("s".into()),
+        "x",
+    );
+    assert_eq!(command.program, NAME);
+    assert_eq!(
+        command.args[2..],
+        [
+            "--model",
+            "opus",
+            "--effort",
+            "xhigh",
+            "--permission-mode",
+            "acceptEdits"
+        ]
+    );
+}
+
+#[test]
+fn each_of_the_five_and_two_the_release_reads_otherwise() {
+    // The profile takes 2.1.296's five `--effort` words and refuses `med`
+    // and `ultracode`, which the release reads as `medium` and `xhigh`,
+    // each naming it, `claude` and the five; it names the variable the
+    // release reads over `--effort` (197, C.4).
+    let seam = Harness::new().seam;
+    for word in ["low", "medium", "high", "xhigh", "max"] {
+        assert_eq!(seam.effort(word), Ok(()), "{word}");
+    }
+    for word in ["med", "ultracode"] {
+        let words = seam.effort(word).expect_err(word);
+        assert_eq!(
+            words,
+            format!("`{word}` is no effort claude takes: low, medium, high, xhigh or max")
+        );
+    }
+    assert_eq!(seam.effort_variable(), Some("CLAUDE_CODE_EFFORT_LEVEL"));
 }
 
 #[test]
