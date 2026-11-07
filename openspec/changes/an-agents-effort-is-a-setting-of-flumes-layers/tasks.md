@@ -35,8 +35,8 @@ test names is a scratch directory or file of the test's own.
 
 ## 4. The effort in status
 
-- [ ] 4.1 Give `AgentStatus` its `effort`, the word, its layer, the value passed, `read_back: false` and `outranked_by` naming the account's variable where design 7 finds it, only where a layer gave one, in the JSON form, and print it on the agent's line of the person's form (design 7, 9; 56, 197; core.14, core.30). True when `sluice exec main -- moon run core:test conformance:test flume:test` passes with `engine/place_status.rs` gaining the place-status spec's three scenarios and `print.rs` unit tests of them, no value of the variable in either form.
-- [ ] 4.2 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test core:format core:lint core:test conformance:format conformance:lint conformance:test flume:format flume:lint flume:test` passes.
+- [x] 4.1 Give `AgentStatus` its `effort`, the word, its layer, the value passed, `read_back: false` and `outranked_by` naming the account's variable where design 7 finds it, only where a layer gave one, in the JSON form, and print it on the agent's line of the person's form (design 7, 9; 56, 197; core.14, core.30). True when `sluice exec main -- moon run core:test conformance:test flume:test` passes with `engine/place_status.rs` gaining the place-status spec's three scenarios and `print.rs` unit tests of them, no value of the variable in either form.
+- [x] 4.2 Run the checks of the projects this group touched. True when `sluice exec main -- moon run seams:format seams:lint seams:test core:format core:lint core:test conformance:format conformance:lint conformance:test flume:format flume:lint flume:test` passes.
 
 ## 5. The walkthroughs
 
