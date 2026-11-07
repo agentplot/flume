@@ -381,6 +381,7 @@ fn held() -> HeldState {
                     title: Some("Task groups".into()),
                     tasks: vec!["2.1 add the groups".into(), "2.2 read them".into()],
                 }),
+                may_name: vec!["east/ops".into(), "west/ops".into()],
                 opening: Some("4242@Thu Oct 30 15:45:50 2026".into()),
                 dialog: Some(Dialog {
                     words: "New MCP server found in .mcp.json: docs".into(),
@@ -1868,6 +1869,10 @@ impl Agent for Bare {
     }
 
     fn stop_short(&self, _agent: &Identity) -> String {
+        String::new()
+    }
+
+    fn stop_short_to(&self) -> String {
         String::new()
     }
 

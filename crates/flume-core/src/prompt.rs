@@ -1,12 +1,83 @@
 //! A stage's prompt, filled before it is sent (27 to 29): every part it
 //! asks for filled, `{{#words}}…{{/words}}` only when there are words,
-//! and the one way to stop short always given. The parts are flume's own
-//! prompt vocabulary (design 6), not fields of the kind format (core.4).
+//! and the one way to stop short always given, saying it is the agent's
+//! one way to ask, with the roles a stop-short may name after every part
+//! the stage's repetitions share. The parts are flume's own prompt
+//! vocabulary (design 6), not fields of the kind format (core.4).
 
-use flume_seams::{GroupHeld, PromptPart};
+use flume_seams::{Agent, AnsweringRole, GroupHeld, Identity, PromptPart};
 
 const OPEN: &str = "{{#words}}";
 const CLOSE: &str = "{{/words}}";
+
+/// What the way to stop short says after the agent profile's words: that
+/// it is the agent's one way to ask for what its stage needs, and that the
+/// agent writes no card and no message to a person, since whoever answers
+/// decides whether a question is a person's (28, 41, 69, 72).
+pub const ONE_WAY_TO_ASK: &str = "Stopping short is your one way to ask for what your stage needs: write no card and no message to a person yourself, since whoever answers your question decides whether it is a person's.";
+
+/// The way to stop short as every prompt gives it: `agent`'s, filled in
+/// for `identity`'s place and stage, then [`ONE_WAY_TO_ASK`]; the same for
+/// every start of the stage (28, 92; core.31).
+pub fn way_to_stop_short(agent: &dyn Agent, identity: &Identity) -> String {
+    format!("{} {ONE_WAY_TO_ASK}", agent.stop_short(identity))
+}
+
+/// The roles a stop-short of a place in `stream` may name, of every role
+/// `answering` gives, the host's sources' roles declared with words of
+/// what they answer: all but `own`, the place's own address where it is a
+/// role's run; `stream`'s first, then every other stream's, each in its
+/// addresses' order (28, 41, 132, 193).
+pub(crate) fn may_name(
+    answering: Vec<AnsweringRole>,
+    stream: &str,
+    own: Option<&str>,
+) -> Vec<AnsweringRole> {
+    let (mut listed, others): (Vec<AnsweringRole>, Vec<AnsweringRole>) = answering
+        .into_iter()
+        .filter(|role| Some(role.address.as_str()) != own)
+        .partition(|role| role.stream == stream);
+    listed.extend(others);
+    listed
+}
+
+/// A role's address as a prompt of a place in `stream` lists it: a role
+/// of `stream` by the role alone, any other stream's whole (28, 41, 132).
+pub(crate) fn listed_name<'a>(address: &'a str, stream: &str) -> &'a str {
+    match address.split_once('/') {
+        Some((of, role)) if of == stream => role,
+        _ => address,
+    }
+}
+
+/// The roles a stop-short may name, as the prompt of a place in `stream`
+/// gives them after every part its repetitions share: `agent`'s way of
+/// naming one, then each name as listed with its source's words; none
+/// where it lists none (28, 41, 193; core.31).
+pub(crate) fn roles_text(
+    listed: &[AnsweringRole],
+    stream: &str,
+    agent: &dyn Agent,
+) -> Option<String> {
+    if listed.is_empty() {
+        return None;
+    }
+    let names: Vec<String> = listed
+        .iter()
+        .map(|role| {
+            format!(
+                "- `{}`: {}",
+                listed_name(&role.address, stream),
+                role.answers
+            )
+        })
+        .collect();
+    Some(format!(
+        "Where your words are for one of these roles rather than for the place's recipients, {}:\n{}",
+        agent.stop_short_to(),
+        names.join("\n")
+    ))
+}
 
 /// What `{{group}}` renders for a repetition: its group's number and
 /// title, `Group <n>. <title>`, and its tasks' lines as the change gives
@@ -192,6 +263,87 @@ mod tests {
         );
         assert_eq!(render("{{notes}}", |_| None), Err(PromptPart::Notes));
         assert_eq!(render("{{group}}", |_| None), Err(PromptPart::Group));
+    }
+
+    fn role(address: &str, answers: &str) -> AnsweringRole {
+        AnsweringRole {
+            address: address.into(),
+            stream: flume_seams::stream_of(address).into(),
+            answers: answers.into(),
+        }
+    }
+
+    fn agent() -> flume_fakes::FakeAgent {
+        let host = std::sync::Arc::new(flume_fakes::FakeHost::default());
+        flume_fakes::FakeAgent::new(std::sync::Arc::new(flume_fakes::FakeTerminal::new(host)))
+    }
+
+    #[test]
+    fn the_roles_listed_are_the_streams_first_then_every_others_but_its_own() {
+        let answering = vec![
+            role("east/design", "design"),
+            role("east/ops", "east's systems"),
+            role("north/ops", "north's systems"),
+            role("west/ops", "west's systems"),
+        ];
+        let addresses = |listed: Vec<AnsweringRole>| -> Vec<String> {
+            listed.into_iter().map(|role| role.address).collect()
+        };
+        assert_eq!(
+            addresses(may_name(answering.clone(), "west", None)),
+            ["west/ops", "east/design", "east/ops", "north/ops"]
+        );
+        assert_eq!(
+            addresses(may_name(answering, "east", Some("east/ops"))),
+            ["east/design", "north/ops", "west/ops"]
+        );
+        assert_eq!(listed_name("east/ops", "east"), "ops");
+        assert_eq!(listed_name("west/ops", "east"), "west/ops");
+    }
+
+    #[test]
+    fn the_list_names_each_role_with_its_words_or_is_none() {
+        let agent = agent();
+        assert_eq!(roles_text(&[], "east", &agent), None);
+        let text = roles_text(
+            &[
+                role("east/ops", "east's systems"),
+                role("west/ops", "west's systems"),
+            ],
+            "east",
+            &agent,
+        )
+        .expect("a list");
+        assert!(text.contains(&agent.stop_short_to()), "{text}");
+        assert!(
+            text.ends_with("\n- `ops`: east's systems\n- `west/ops`: west's systems"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_way_to_stop_short_says_it_is_the_one_way_to_ask() {
+        let agent = agent();
+        let identity = Identity {
+            repository: "r".into(),
+            place: "fix--one".into(),
+            stage: "code".into(),
+            start: 1,
+        };
+        let way = way_to_stop_short(&agent, &identity);
+        assert!(way.starts_with(&agent.stop_short(&identity)), "{way}");
+        assert!(way.ends_with(ONE_WAY_TO_ASK), "{way}");
+        assert_eq!(
+            way,
+            way_to_stop_short(
+                &agent,
+                &Identity {
+                    start: 2,
+                    ..identity
+                }
+            ),
+            "the way at the stage's second start"
+        );
     }
 
     #[test]

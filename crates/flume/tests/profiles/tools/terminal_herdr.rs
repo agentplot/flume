@@ -2195,6 +2195,10 @@ impl Agent for StandIn {
         "to stop short, run flume needs".into()
     }
 
+    fn stop_short_to(&self) -> String {
+        "name it by flume needs --to".into()
+    }
+
     fn send_back(&self) -> Offered {
         Offered::NotOffered
     }

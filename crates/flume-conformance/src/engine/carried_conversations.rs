@@ -189,11 +189,12 @@ fn carries_to(world: &World, name: &str) {
 }
 
 /// The words a carried start's agent is sent: flume's, then the way to
-/// stop short as the fake agent gives it.
+/// stop short as the fake agent gives it, saying it is the agent's one way
+/// to ask (28).
 fn carried_prompt(world: &World, identity: &Identity) -> String {
     format!(
         "Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.\n\n{}",
-        world.agent.stop_short(identity)
+        flume_core::way_to_stop_short(world.agent.as_ref(), identity)
     )
 }
 
@@ -1094,9 +1095,12 @@ fn resumed_prompt(world: &World, identity: &Identity, words: Option<&str>) -> St
     match words {
         Some(words) => format!(
             "{resumed}\n\n{words}\n\n{}",
-            world.agent.stop_short(identity)
+            flume_core::way_to_stop_short(world.agent.as_ref(), identity)
         ),
-        None => format!("{resumed}\n\n{}", world.agent.stop_short(identity)),
+        None => format!(
+            "{resumed}\n\n{}",
+            flume_core::way_to_stop_short(world.agent.as_ref(), identity)
+        ),
     }
 }
 

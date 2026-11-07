@@ -229,7 +229,7 @@ const ACME_KINDS: &str = "/kinds/acme";
 
 /// The planner's run as acme declares it in the repository, of its own
 /// kind `turn`.
-fn planner_run(base: Option<&str>, brief: Option<&str>) -> RoleRun {
+pub fn planner_run(base: Option<&str>, brief: Option<&str>) -> RoleRun {
     RoleRun {
         source: ACME.into(),
         repository: REPOSITORY.into(),
@@ -261,7 +261,7 @@ pub fn answerer_behind(world: &World, stream: &str) {
 /// `prompt`, which the host's lock records; the host declares the stream
 /// `address` names; and acme declares `run` for `address` (132, 155,
 /// 193).
-fn configure_at(world: &World, address: &str, prompt: &str, run: RoleRun) {
+pub fn configure_at(world: &World, address: &str, prompt: &str, run: RoleRun) {
     declare_turn(world, address, stage("plan", None, prompt), run);
 }
 

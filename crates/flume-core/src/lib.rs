@@ -49,7 +49,7 @@ pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
 pub use own::shaped_as_credential;
-pub use prompt::group_name;
+pub use prompt::{group_name, way_to_stop_short, ONE_WAY_TO_ASK};
 pub use start_record::{
     variable_digest, AGENT_VARIABLE, PLACE_VARIABLE, STAGE_VARIABLE, TERMINALS_OWN,
 };

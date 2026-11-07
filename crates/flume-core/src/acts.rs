@@ -41,6 +41,7 @@ impl Engine {
             .head(&held.place.repository, &held.place.branch)
             .unwrap_or_else(|| held.place.base_revision.clone());
         let group = self.group_at(&held, index, &head);
+        let listed = self.may_name(&held);
         match self.fill(
             &held,
             index,
@@ -48,6 +49,7 @@ impl Engine {
             None,
             agent.as_deref(),
             group.as_ref().map(Option::as_ref),
+            &listed,
         ) {
             Ok(text) => Answer::Prompt {
                 place: place.clone(),

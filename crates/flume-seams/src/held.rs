@@ -901,6 +901,12 @@ pub struct StartHeld {
     /// where every task was ticked there (140).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<GroupHeld>,
+    /// Each role's address, whole, its prompt listed for a stop-short to
+    /// name, in the prompt's order, read from the host's sources at the
+    /// start; none where it listed none, and in a start written before
+    /// (28, 41, 193).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub may_name: Vec<String>,
     /// The command of flume's opening the agent, as the host names it,
     /// until the terminal's open answers: while it lives, the terminal may
     /// still be bringing the program up, and no other command sends the

@@ -105,6 +105,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: another_starts_secret,
         },
         Scenario {
+            name: "stop-short: a place's prompt lists its own stream's roles by name, then every other stream's whole, each with its words, after every other part",
+            cites: &["28", "41", "132", "193"],
+            run: the_roles_a_place_may_name,
+        },
+        Scenario {
+            name: "stop-short: a role's own run lists every role a source declares with words but its own",
+            cites: &["28", "41", "132", "193"],
+            run: a_roles_own_run_lists_the_others,
+        },
+        Scenario {
+            name: "stop-short: where no source declares a role with words, the prompt lists none",
+            cites: &["28", "41", "193"],
+            run: no_roles_listed,
+        },
+        Scenario {
+            name: "stop-short: a construct's prompt says stopping short is its one way to ask, and that it writes no card and no message to a person",
+            cites: &["28", "41", "69", "72"],
+            run: the_one_way_to_ask,
+        },
+        Scenario {
             name: "stop check: an agent that would stop with nothing made is sent back",
             cites: &["S24", "110", "115", "28"],
             run: s24_sent_back,
@@ -851,6 +871,213 @@ fn another_starts_secret(_: &()) -> Outcome {
             .is_none(),
         "the current start's stop-short was refused"
     );
+    Ok(())
+}
+
+/// The roles acme declares, each with its words of what it answers (28,
+/// 193).
+const ROLES: [(&str, &str); 4] = [
+    ("east/design", "a decision the design has not made"),
+    ("east/ops", "a reading of east's live systems"),
+    ("east/planner", "the work's scope and order"),
+    ("west/ops", "a reading of west's live systems"),
+];
+
+/// The words that open the list of roles a stop-short may name (28).
+const LISTED: &str = "Where your words are for one of these roles";
+
+/// The scratch host declares the streams `east` and `west`, and acme,
+/// its kind `turn` locked, declares a run of it for each of [`ROLES`]
+/// with its words (132, 193).
+fn east_and_west(world: &World) {
+    let run = |answers: &str| RoleRun {
+        answers: Some(answers.into()),
+        ..super::role_waking::planner_run(None, None)
+    };
+    super::role_waking::configure_at(
+        world,
+        "west/ops",
+        "Answer what is pending for you.",
+        run(ROLES[3].1),
+    );
+    world.host.set_stream("east", Some(Stream::default()));
+    for (address, answers) in ROLES {
+        world.host.set_role(address, Some(run(answers)));
+    }
+}
+
+/// The prompt the place's first stage started with, and the addresses
+/// its start recorded a stop-short may name.
+fn first_start(world: &World, id: &PlaceId) -> Result<(String, Vec<String>), String> {
+    let start = world
+        .held(id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?;
+    Ok((start.prompt.text, start.may_name))
+}
+
+/// Where each of `names`, as a list's line gives it with its words,
+/// stands in `text`, in order, or the first that is not there.
+fn listed_in_order(text: &str, names: &[(&str, &str)]) -> Outcome {
+    let mut from = text.find(LISTED).ok_or("no roles are listed")?;
+    for (name, words) in names {
+        let line = format!("- `{name}`: {words}");
+        let at = text[from..]
+            .find(&line)
+            .ok_or_else(|| format!("{line} is not listed after the last in {text}"))?;
+        from += at + line.len();
+    }
+    Ok(())
+}
+
+/// The stage-runs spec's "A place of the stream's work": a fix in `east`
+/// naming `east/planner` lists `design`, `ops` and `planner` by the role
+/// alone, then `west/ops` whole, each with its words, last in its prompt,
+/// after the way to stop short; its start records the four addresses
+/// whole (28, 41, 132, 193; core.31).
+fn the_roles_a_place_may_name(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.stream = Some("east".into());
+    fix.recipients = vec!["east/planner".into()];
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let (text, may_name) = first_start(&world, &id)?;
+    listed_in_order(
+        &text,
+        &[
+            ("design", ROLES[0].1),
+            ("ops", ROLES[1].1),
+            ("planner", ROLES[2].1),
+            ("west/ops", ROLES[3].1),
+        ],
+    )?;
+    let way = flume_core::way_to_stop_short(
+        world.agent.as_ref(),
+        &World::identity("fix", "one", "code", 1),
+    );
+    let (at_way, at_list) = (
+        text.find(&way).ok_or("no way to stop short")?,
+        text.find(LISTED).ok_or("no list")?,
+    );
+    ensure!(at_way < at_list, "the list stands before the way: {text}");
+    ensure!(
+        text.trim_end().ends_with(ROLES[3].1),
+        "the list is not the prompt's last part: {text}"
+    );
+    ensure!(
+        text.contains(&world.agent.stop_short_to()),
+        "the list does not say how to name a role: {text}"
+    );
+    ensure_eq!(
+        may_name,
+        vec![
+            "east/design".to_string(),
+            "east/ops".into(),
+            "east/planner".into(),
+            "west/ops".into()
+        ],
+        "the addresses the start may name"
+    );
+    let rendered = match world.engine.prompt(&id, "code") {
+        Answer::Prompt { text, .. } => text,
+        other => return Err(format!("prompt answered {other:?}")),
+    };
+    listed_in_order(
+        &rendered,
+        &[("design", ROLES[0].1), ("west/ops", ROLES[3].1)],
+    )
+}
+
+/// The stage-runs spec's "A role's own run": the run of `east/ops`,
+/// woken, lists `design` and `planner`, then `west/ops`, and not `ops`
+/// (28, 41, 132, 193).
+fn a_roles_own_run_lists_the_others(_: &()) -> Outcome {
+    let world = World::new();
+    east_and_west(&world);
+    ensure!(
+        world.engine.wake("east/ops").refusal().is_none(),
+        "the wake of east/ops was refused"
+    );
+    let id = World::id("turn", "east-ops");
+    world.settle(&id);
+    let (text, may_name) = first_start(&world, &id)?;
+    listed_in_order(
+        &text,
+        &[
+            ("design", ROLES[0].1),
+            ("planner", ROLES[2].1),
+            ("west/ops", ROLES[3].1),
+        ],
+    )?;
+    ensure!(
+        !text.contains("- `ops`"),
+        "the run lists its own role: {text}"
+    );
+    ensure_eq!(
+        may_name,
+        vec![
+            "east/design".to_string(),
+            "east/planner".into(),
+            "west/ops".into()
+        ],
+        "the addresses the run may name"
+    );
+    Ok(())
+}
+
+/// The stage-runs spec's "No roles": a fix whose recipient is the
+/// caller's pane, where the one role a source declares gives no words of
+/// what it answers, lists no role, and its start records none (28, 41,
+/// 193).
+fn no_roles_listed(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_role(
+        "default/reviewer",
+        Some(super::role_waking::planner_run(None, None)),
+    );
+    launched(&world.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let (text, may_name) = first_start(&world, &id)?;
+    ensure!(!text.contains(LISTED), "roles are listed: {text}");
+    ensure!(
+        !text.contains("reviewer"),
+        "a role with no words is named: {text}"
+    );
+    ensure_eq!(may_name, Vec::<String>::new(), "the addresses it may name");
+    Ok(())
+}
+
+/// The stage-runs spec's "A change's construct": its way to stop short
+/// says the agent asks by it alone and writes no card and no message to a
+/// person, with roles listed or none (28, 41, 69, 72).
+fn the_one_way_to_ask(_: &()) -> Outcome {
+    for listed in [false, true] {
+        let world = World::new();
+        let mut change = launch("change", "plan", Some("one of two designs"));
+        if listed {
+            east_and_west(&world);
+            change.stream = Some("east".into());
+            change.recipients = vec!["east/planner".into()];
+        }
+        launched(&world.engine.launch(&change))?;
+        let id = World::id("change", "plan");
+        world.settle(&id);
+        let (text, _) = first_start(&world, &id)?;
+        ensure!(
+            text.contains(flume_core::ONE_WAY_TO_ASK),
+            "the construct is not told it asks by stopping short alone ({}): {text}",
+            if listed { "roles listed" } else { "no roles" }
+        );
+        ensure!(
+            flume_core::ONE_WAY_TO_ASK.contains("no card and no message to a person"),
+            "the words do not say it writes no card and no message"
+        );
+        ensure_eq!(text.contains(LISTED), listed, "the roles listed");
+    }
     Ok(())
 }
 

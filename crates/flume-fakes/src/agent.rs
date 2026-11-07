@@ -852,6 +852,10 @@ impl Agent for FakeAgent {
         "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work the stage cannot deliver past, run `flume needs --found \"<the work you found>\"`".into()
     }
 
+    fn stop_short_to(&self) -> String {
+        "add `--to <name>` to `flume needs`".into()
+    }
+
     fn send_back(&self) -> Offered {
         if lock(&self.state).no_send_back {
             Offered::NotOffered

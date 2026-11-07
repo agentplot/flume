@@ -457,6 +457,12 @@ pub trait Agent: Send + Sync {
     /// up to its group (141; core.31).
     fn stop_short(&self, agent: &Identity) -> String;
 
+    /// How the way to stop short names the role its words are for, one
+    /// of the names its prompt lists after these words, a role of the
+    /// place's own stream by the role alone and any other stream's by its
+    /// address: the same for every start (41, 92, 132; core.31).
+    fn stop_short_to(&self) -> String;
+
     /// Whether the program lets flume keep an agent about to go quiet at
     /// work, with words naming its deliverable (115).
     fn send_back(&self) -> Offered;

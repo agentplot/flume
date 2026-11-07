@@ -632,6 +632,12 @@ impl Agent for Claude {
         "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop.".into()
     }
 
+    /// `--to <name>` given to `flume needs`, the name as the prompt lists
+    /// it (41, 92, 132).
+    fn stop_short_to(&self) -> String {
+        "name it with `--to`, as `flume needs --to <name> \"<words>\"` or `flume needs --found --to <name> \"<words>\"`, the name written as listed here".into()
+    }
+
     fn send_back(&self) -> Offered {
         Offered::Offered
     }

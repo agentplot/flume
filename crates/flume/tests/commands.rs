@@ -140,6 +140,9 @@ impl Agent for StandInAgent {
     fn stop_short(&self, _agent: &Identity) -> String {
         "flume needs \"<words>\"".into()
     }
+    fn stop_short_to(&self) -> String {
+        "flume needs --to <role>".into()
+    }
     /// Each of flume's four as its word, and an own value as written.
     fn mode(&self, entry: &ModeEntry) -> Result<String, String> {
         Ok(entry.to_string())
