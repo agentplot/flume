@@ -1,8 +1,8 @@
 use crate::{lock, FakeGit, Log};
 use flume_seams::{
-    BaseRevision, BranchClosed, BranchOpened, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross,
-    Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState, SubmitHead,
-    Submitted,
+    BaseRevision, BranchClosed, BranchOpened, Forecast, Inbox, MergeQueue, PassedOver, PlaceRef,
+    ReadAcross, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState,
+    SubmitHead, Submitted,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -659,5 +659,24 @@ impl MergeQueue for FakeMergeQueue {
         }
         self.git.delete_branch(repository, branch);
         BranchClosed::Removed
+    }
+
+    fn forecast(&self, repository: &str, branch: &str, base: &str) -> Forecast {
+        self.log.push(format!("forecast {branch} onto {base}"));
+        let Some(head) = self.git.branch_head(repository, branch) else {
+            return Forecast::CouldNotRead {
+                reason: format!("no branch {branch} in {repository}"),
+            };
+        };
+        match self.where_base(repository, base) {
+            BaseRevision::At { revision } => Forecast::Clear {
+                head,
+                onto: revision,
+            },
+            BaseRevision::Refused { reason } => Forecast::CouldNotRead { reason },
+            BaseRevision::Unlanded => Forecast::CouldNotRead {
+                reason: format!("the merge queue lands no {base} in {repository}"),
+            },
+        }
     }
 }

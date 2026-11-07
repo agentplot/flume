@@ -73,9 +73,9 @@
 use crate::git::Git;
 use crate::shell;
 use flume_seams::{
-    BaseRevision, BranchClosed, BranchOpened, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross,
-    ReadyStep, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState,
-    SubmitHead, Submitted,
+    BaseRevision, BranchClosed, BranchOpened, Forecast, Inbox, MergeQueue, PassedOver, PlaceRef,
+    ReadAcross, ReadyStep, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead,
+    SubmissionState, SubmitHead, Submitted,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -851,6 +851,12 @@ impl MergeQueue for Sluice {
             _ => BranchClosed::Kept {
                 reason: branch_words("delete", &stdout, &stderr),
             },
+        }
+    }
+
+    fn forecast(&self, _repository: &str, _branch: &str, _base: &str) -> Forecast {
+        Forecast::CouldNotRead {
+            reason: "not yet built".into(),
         }
     }
 }
