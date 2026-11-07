@@ -1,5 +1,5 @@
 #!/bin/sh
-# shellcheck disable=SC2016,SC1091 # jq programs name their own $variables; procs.sh, sourced.
+# shellcheck disable=SC2016 # jq programs name their own $variables.
 # The herdr plugin's scripts against stand-in `herdr` and `flume` on PATH
 # (tests/fake): the status the stand-in flume answers in, the herdr and
 # flume calls made checked. Nothing here reaches a running herdr, the
@@ -213,7 +213,7 @@ pass
 old_watch() {
   old=$(sh -c 'sleep 600 </dev/null >/dev/null 2>&1 & echo $!')
   olds="$olds $old"
-  printf '%s %s\n%s\n%s\n%s\n%s\n' "$old" "$(date +%s)" "$(. "$plugin/lib/procs.sh" && identity "$old")" \
+  printf '%s %s\n%s\n%s\n%s\n%s\n' "$old" "$(date +%s)" "$(sh -c '. "$1" && identity "$2"' _ "$plugin/lib/procs.sh" "$old")" \
     "$plugin" "0.0.0" "77" >"$S/watch.lease"
 }
 
