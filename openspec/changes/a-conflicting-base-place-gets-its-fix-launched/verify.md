@@ -1,135 +1,135 @@
 # Verify: a-conflicting-base-place-gets-its-fix-launched
 
 Verified on `change/a-conflicting-base-place-gets-its-fix-launched` at
-7fc1a197, cut from `bolt/flume-launches-a-conflicting-bolts-fix`.
+b7392d0f, cut from `bolt/flume-launches-a-conflicting-bolts-fix`. The
+branch holds origin's `bolt/flume-launches-a-conflicting-bolts-fix` at
+c3e1af20.
 
 ## Outcome
 
-**The whole checks fail. Nothing is archived.** The change goes back to
-its code stage with the failure below.
+**The whole checks pass and the work holds: archived.**
+
+- `sluice exec main` passed 23 of 23 tasks.
+- All 22 tasks, 1.1 to 7.1 with 2.5, are ticked done.
+- Every scenario of the six delta specs is held by a scenario of the
+  suite or a test.
+- A trial archive on a copy of `openspec/` applies +19, ~3, -0 and →0.
+  After it, `openspec validate --specs --strict` passes 46 of 46.
 
 ## The whole checks
 
-Run once, `sluice exec main`, which runs `#check-fast` and
-`#check-tools` (`.config/sluice.toml`, `[branches.main]`): 23 tasks
-passed and 1 failed, in 6m 55s.
+Run once, `sluice exec main` at b7392d0f. It runs `#check-fast` and
+`#check-tools`, as `.config/sluice.toml`'s `[branches.main]` requires.
+All 23 tasks passed in 6m 40s, and sluice recorded the 23 results under
+their keys for b7392d0. 24 tasks completed with `site:install`.
 
-- **Failed: `conformance:test`** (check-fast). The test
-  `no_tool_is_named_outside_a_profile` (`crates/flume-conformance/tests/no_tool.rs`)
-  fails on core.1, since a tool is named outside a profile:
-
-  ```
-  a tool is named outside a profile (core.1):
-  crates/flume-seams/src/merge_queue.rs:241: sluice
-  crates/flume-seams/src/merge_queue.rs:330: sluice
-  ```
-
-  Both are the citation `sluice 64, 65` in the doc comments of
-  `Forecast` and `MergeQueue::forecast`, added in e6c97f51
-  (`feat(seams): the merge queue seam's forecast…`). core.1 rules out
-  the string `sluice` in any module outside a profile directory, and
-  `flume-seams` is no profile. The fix drops the tool's name from the two
-  comments, citing only flume's clauses (203, 210), or citing sluice's
-  clauses only inside the sluice profile, where the profile already
-  cites them.
-
-  Because `cargo test -p flume-conformance` stops at the first failing
-  test binary, the binaries after `no_tool` did not run in this gate:
-  `tests/seams.rs`, which holds the seam scenarios (task 2.4's "Clear,
-  then in conflict" on the fake among them), and `tests/suite.rs`. Their
-  outcome is unknown until the gate runs again. `tests/engine.rs`, the
-  engine's scenarios, ran before it and passed, and so did the library's
-  own tests.
-
-- **Passed:** `seams:test` (103), `seams:format`, `seams:lint`,
-  `core:test`, `core:format`, `core:lint`, `fakes:test`, `fakes:format`,
-  `fakes:lint`, `conformance:coverage`, `conformance:format`,
-  `conformance:lint`, `flume:test`, `flume:format`, `flume:lint`,
-  `flume:tools` (check-tools, 133 passed, the walkthroughs and the
-  pinned sluice's profile tests, `merge_queue_sluice` among them),
-  `plugin-claude:test`, `site:prose`, `site:install`, `site:build`,
-  `root:adrs`, `root:changes`, `root:format`.
+- **Tests:**
+  - `flume:tools` (check-tools): 133 of 133, the walkthroughs and the
+    pinned sluice's profile tests among them,
+    `a_base_places_branch_forecast_over_a_scratch_repository` with
+    them.
+  - `flume:test`: 526.
+  - `seams:test`: 103, the round trips among them.
+  - `fakes:test`: 65.
+  - `core:test`: 45.
+  - `plugin-claude:test`: 10.
+  - `conformance:test`: 25, over every binary. `engine` runs the
+    engine's scenarios. `no_tool_is_named_outside_a_profile` passes:
+    task 2.5 took `sluice` out of the forecast's comments in
+    `crates/flume-seams/src/merge_queue.rs` (core.1). `seams` holds
+    `the_fake_merge_queue_passes_the_base_place_scenarios`, with "Clear,
+    then in conflict" among them, and `suite` passes too.
+- **Format and lint:** `seams`, `core`, `fakes`, `conformance` and
+  `flume` each passed `format` and `lint`.
+- **The rest:** `conformance:coverage`, `root:adrs`, `root:changes`,
+  `root:format`, `site:prose` and `site:build` passed.
 
 ## The work against the change
 
-Read against the proposal, the design and the six delta specs. Apart
-from the failure above, the work holds.
+Read against the proposal, the design and the six delta specs.
 
 ### Tasks
 
-All 21 tasks, 1.1 to 7.1, are ticked done.
+Every task in `tasks.md` is ticked, 22 of 22, and none is open.
 
 ### Specs
 
-Each scenario of each delta spec has a scenario or test that checks it.
-
-- **base-places**: every added requirement's scenarios are in
-  `crates/flume-conformance/src/engine/base_places.rs`:
-  - a base place naming `mend`
-  - the two refused fix kinds
-  - the three settles that ask no forecast
-  - the forecast held, and one that could not be read
-  - the failed and conflicting submissions launching `mend--spring-1`
-  - the entry queued ahead
-  - the forecast conflict launching the fix in `east` at priority 4
-    with recipients from its base place
-  - the forecast conflict's brief
-  - S120 as `s120_a_base_place_forecast_in_conflict_launches_its_fix`
-  - the fix landing, then a clear forecast
-  - two settles at once
-  - a launch that died between its writing and its making
-  - a dropped fix
-  - the bound spent, stall included
-  - the bound left out
-  - a refused launch
-  - a declaration changed after the launch
-
-  The modified requirement's two scenarios are moved to a `train` naming
-  no fix, S112 among them. The engine's scenarios passed in the gate.
-- **place-status**: the four JSON scenarios are in
-  `crates/flume-conformance/src/engine/place_status.rs`, and their fields
-  are listed in `answers.rs`'s `FIELDS`. "A fix landed, in the person's
-  form" is `commands::print::tests::a_fix_landed_in_the_persons_form`,
-  JSON half included.
-- **seam-contracts**: the round trips are in
-  `crates/flume-seams/src/round_trip.rs`, including a held state written
-  before this change; they passed in `seams:test`. "Clear, then in
-  conflict" is `base_place_scenarios` in
-  `crates/flume-conformance/src/seams/merge_queue.rs`. Against sluice it
-  passed in `flume:tools`. Against the fake it is in `tests/seams.rs`,
-  which the gate did not reach.
-- **seam-fakes**: `the_fake_merge_queue_scripts_a_forecast` passed in
+- **base-places.** Each scenario is in
+  `crates/flume-conformance/src/engine/base_places.rs`, which the
+  engine's scenarios ran:
+  - The fix kind at launch: `a_base_place_whose_kind_names_mend`,
+    `a_declaration_changed_after_the_launch`,
+    `a_fix_kind_that_resolves_to_nothing` and
+    `a_fix_kind_with_no_stages`.
+  - When a settle forecasts: `no_forecast_while_a_change_works`,
+    `no_forecast_while_submitted` and
+    `no_forecast_for_a_kind_naming_no_fix`.
+  - What a forecast holds: `forecast_while_it_waits_on_its_caller` and
+    `a_forecast_that_could_not_be_read`.
+  - What launches a fix: `a_failed_submission_launches_mend`, whose
+    failure goes once to `ops` and opens no agent in the base place;
+    `a_conflicting_submission_launches_mend`; and
+    `a_conflict_with_an_entry_queued_ahead`.
+  - The fix as its base place's: `a_forecast_conflict_launches_mend`,
+    in `east` at priority 4 with recipients from its base place, and
+    S120's engine half,
+    `s120_a_base_place_forecast_in_conflict_launches_its_fix`.
+  - The brief: `the_brief_of_a_forecast_conflicts_fix`.
+  - One at a time, once each: `the_fix_lands_and_the_forecast_is_clear`,
+    `two_settles_at_once` and
+    `a_launch_that_died_between_its_writing_and_its_making`.
+  - A drop: `a_fix_dropped`, whose second fix waits until main moves.
+  - The bound: `the_bound_spent`, whose stall goes once to `ops` after
+    six minutes; `the_bound_left_out`; and `a_refused_launch`.
+  - The modified requirement: `s112_a_failed_base_place_takes_a_fix`
+    and `a_conflicting_submission`, over a `train` naming no fix.
+- **place-status.** The JSON scenarios are in
+  `crates/flume-conformance/src/engine/place_status.rs`:
+  `a_base_place_whose_first_fix_is_live`,
+  `the_fix_names_its_base_place`, and the fields left out of a change
+  and of a base place naming no fix. Their fields are listed in
+  `answers.rs`'s `FIELDS`. "A fix landed, in the person's form" is
+  `commands::print::tests::a_fix_landed_in_the_persons_form`, its JSON
+  half included.
+- **seam-contracts.** The round trips are in
+  `crates/flume-seams/src/round_trip.rs`:
+  `a_forecast_clear_in_conflict_or_unread`,
+  `a_kind_that_names_its_fix`, and a held state with fixes. A held
+  state written before this change reads with no fix kind, forecast or
+  fixes. "Clear, then in conflict" is `base_place_scenarios` in
+  `crates/flume-conformance/src/seams/merge_queue.rs`. It passed against
+  the fake in `conformance:test` and against sluice in `flume:tools`.
+- **seam-fakes.** `the_fake_merge_queue_scripts_a_forecast` passed in
   `fakes:test`.
-- **merge-queue-profile**: the sluice profile's four readings of an
-  answer (`a_clear_forecast`, `a_conflicts_words`,
-  `a_conflict_with_entries_ahead`, `a_forecast_refused`) passed in
-  `flume:test`. `a_base_places_branch_forecast_over_a_scratch_repository`
-  passed against the pinned sluice in `flume:tools`.
-- **clause-coverage**: `clauses.rs` reads agentplot/blueprints 31f9f1c.
-  That revision of `design/flume/requirements.md` holds 210, in Part B,
-  and S120, and no clause 209. `RENAME` is gone from the unbuilt list,
-  and 210 and S120 are cited and named as built. `conformance:coverage`
-  passed.
+- **merge-queue-profile.** The sluice profile reads four kinds of
+  answer: `a_clear_forecast`, `a_conflicts_words`,
+  `a_conflict_with_entries_ahead` and `a_forecast_refused`, all in
+  `crates/flume/src/profiles/merge_queue/sluice/mod.rs`. They passed in
+  `flume:test`.
+  `a_base_places_branch_forecast_over_a_scratch_repository` passed
+  against the pinned sluice in `flume:tools`.
+- **clause-coverage.** `clauses.rs` reads agentplot/blueprints at
+  `REVISION` 31f9f1c, which holds 210 in Part B and S120, and no 209.
+  `RENAME` is out of the unbuilt list. `conformance:coverage` passed, so
+  this change's scenarios cite 210 and S120.
 
-### Core behaviour checked by reading
+### The specs as archived
 
-- **The forecast** (`base.rs`, `forecast_base`) is asked only for a live
-  base place that names a fix, with no live fix, no place on its branch
-  and no open submission. It is held only where its outcome, head or
-  base's revision changed. `Engine::update` skips a write that changes
-  nothing, so a repeated forecast writes nothing.
-- **A failure's fix** (`submit.rs`, `verdict_at`) is decided in the same
-  compare-and-set write that holds the verdict.
-- **A fix's end** is written onto its base place before its tidy
-  removes anything (`tidy.rs`, `fixes.rs`'s `fix_ended`).
-- **What `decide` checks**, in `fixes.rs`, in order:
-  1. one fix per cause;
-  2. one fix live at a time;
-  3. the bound, else `Defaults::send_backs`.
+The trial archive ran on a copy of `openspec/` with the devenv's
+openspec 1.14.3. It writes +12 and ~1 into `base-places` and ~2 into
+`clause-coverage`. It writes +2 each into `merge-queue-profile`,
+`place-status` and `seam-contracts`, and +1 into `seam-fakes`. Afterwards
+`openspec validate --specs --strict` passes 46 of 46. `root:specs`
+runs only once the archive changes `openspec/specs/`. It checks the
+archive's commit when the branch is next gated.
 
-## What goes back to the code stage
+### Left to the named follow-ups
 
-Take `sluice` out of the doc comments at
-`crates/flume-seams/src/merge_queue.rs:241` and `:330` (core.1). Then run
-the gate again, so that `conformance:test`'s `seams` and `suite`
-binaries run.
+As the proposal and design name them, and as task 7.1 holds:
+
+- weir's unit a-kind-with-no-stages-names-its-fix;
+- then flume's a-base-places-fix-kind-is-read-from-weirs-format, which
+  maps weir's two fields in the kinds profile.
+
+Until they land, a kind in weir's format names no fix, and its base
+place waits on its caller as before. The merge-queue guide says so.
