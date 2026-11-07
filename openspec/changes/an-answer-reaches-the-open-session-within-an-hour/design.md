@@ -322,8 +322,8 @@ kept open, its group named by its end as today (142).
 An agent is kept open while all of these hold: its stage is the
 place's current one, ended short needing an answer; its `open_until` is
 set and later than now; its start is live; and no settle has recorded
-its close (decision 5). `Engine::open_session` reads it from the held
-state. Each act reads it again after its own settle, so no act answers
+its close (decision 5). `Engine::kept_open` reads it from the held
+state, beside `Engine::open_session`, which opens a stream's view. Each act reads it again after its own settle, so no act answers
 an agent that settle just let go.
 
 `Engine::answer(place, words, act, bound)` is the one path an answer
@@ -384,7 +384,7 @@ its stage still ended short, and the next settle reads it let go,
 A new `crates/flume-core/src/open_sessions.rs` holds
 `Engine::close_session`, the settle's step for a stage ended short
 needing an answer, beside `found_work` (`settle.rs`), and
-`Engine::open_session` and `Engine::answer`. Where the stage's
+`Engine::kept_open` and `Engine::answer`. Where the stage's
 `open_until` is set and its end records no close, it reads the agent
 let go by the first of these that holds:
 
@@ -461,9 +461,12 @@ the conversation (207), takes the account the lost start ran under
 first, and is `StartReason::Resumed`, flume's words then the retry's
 words, the question and the answer. Where it cannot carry, it is
 `StartReason::Lost`, flume's words before the question and the answer.
-A conversation's agent let go by its time, by its account spent or by
-its caller's stop carries nothing, and its retry is the fresh agent of
-this decision's first paragraph.
+One let go another way and, before it was ended, brought back bare
+in its pane by a restart (`left_in_pane`) is taken so too: it was lost
+with its terminal or its host, and no retry ends the bare agent
+(core.10). A conversation's agent let go by its time, by its account
+spent or by its caller's stop, and ended, carries nothing, and its
+retry is the fresh agent of this decision's first paragraph.
 
 The place waits on the same move throughout: a retry of the stage,
 `Waits::Answer`, since the stop-short. `same_move` reads the act, the
