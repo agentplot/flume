@@ -31,9 +31,9 @@ The host's configuration SHALL be read from
 `$XDG_CONFIG_HOME/flume/config.toml` at every start: `[host]` `agents`,
 `terminal` and `pool`; `[streams.<stream>]`; `[pools.<pool>]`; agents'
 model, mode and instructions by kind and by repository and kind, each
-with `.stages.<stage>`; `stream` where C.7 names it; and `[roles]`. A
-key left out SHALL be no bound, the printed command, no stream, pool or
-settings (32, 70, 105, 143, 144, 162, C.7).
+with `.stages.<stage>`; and `stream` where C.7 names it, and no
+`[roles]` (193). A key left out SHALL be no bound, the printed command,
+no stream, pool or settings (32, 70, 105, 143, 144, 162, C.7).
 
 #### Scenario: A bound stated
 

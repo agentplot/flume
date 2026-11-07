@@ -13,9 +13,9 @@ by `flume inbox` (43, 46, 119, 120, 122; record 0009; core.25).
 The settle that reads a stage's end, a stage lost, never begun or
 stuck, a submission's outcome or a stall SHALL record it on the place
 as an end, with what flume read, and SHALL deliver each end once to
-each recipient the launch named: a notice through the terminal into
-the recipient's own pane, recorded with to whom and when, and pending
-until so recorded (7, 43, 46, 95).
+each of its recipients, as "An end's recipients" gives them: a notice
+through the terminal into the recipient's own pane, recorded with to
+whom and when, and pending until so recorded (7, 43, 46, 95).
 
 #### Scenario: A delivery and its record
 
@@ -104,14 +104,14 @@ terminal the host binds (119, 122, 208; core.13).
 ### Requirement: The inbox collects what is pending
 
 `flume inbox` SHALL give every end pending for a recipient, of every
-place on the host, with what 43 names, and SHALL record each delivered
-to that recipient. Status, a wait's read and an inbox for another
-recipient SHALL mark nothing delivered (43, core.25).
+place on the host, with what 43 names and its key, and SHALL record each
+delivered to that recipient. Status, a wait's read and an inbox for
+another recipient SHALL mark nothing delivered (43, core.25).
 
 #### Scenario: Collected after a restart
 
 - **WHEN** two ends of two places are pending for `ops` while its session is gone, and its restarted session runs `flume inbox` as `ops`
-- **THEN** the answer holds both ends whole, both read delivered to `ops`, and a second `flume inbox` gives nothing
+- **THEN** the answer holds both ends whole, each with its key, both read delivered to `ops`, and a second `flume inbox` gives nothing
 
 ### Requirement: A tidied place's document stays while an end is pending
 
@@ -156,11 +156,11 @@ each recipient (43, 77).
 ### Requirement: An end for a standing address goes into the agent found by its name
 
 At each settle that reads an end pending for a standing address, the
-terminal of the entry's stream SHALL be asked for the session's agents,
-and the end sent through it as a notice to the one agent of the entry's
-name while it asks no question; none, more than one, or a part not read
-SHALL leave it pending; nothing of where the agent was SHALL be kept
-(43, 132, 190, C.7; core.11, core.28).
+terminal of its address's stream SHALL be asked for the session's
+agents, and the end sent through it as a notice to the one agent of the
+entry's name while it asks no question; none, more than one, or a part
+not read SHALL leave it pending; nothing of where the agent was SHALL be
+kept (43, 132, 190, 193, C.7; core.11, core.28).
 
 #### Scenario: A standing agent waiting
 
@@ -189,18 +189,18 @@ SHALL leave it pending; nothing of where the agent was SHALL be kept
 
 #### Scenario: The session from the entry's stream
 
-- **WHEN** the entry gives `agent = "w-planner"` and `stream = "w"`, the stream `w` names `session = "w-main"`, and the fake terminal holds `w-planner` in `w-main`
-- **THEN** the notice reaches it, asked of `w`'s terminal in `w-main` (143, 190, C.7)
+- **WHEN** the entry gives `w/planner` `agent = "w-planner"` and no session, the stream `w` names `session = "w-main"`, and the fake terminal holds `w-planner` in `w-main`
+- **THEN** the notice reaches it, asked of `w`'s terminal in `w-main` (143, 190, 193)
 
 #### Scenario: The default stream's own session
 
-- **WHEN** the entry gives only `agent = "w-planner"`, the default stream names no session, and the fake terminal holds `w-planner` in its own part
-- **THEN** the notice reaches it, asked of the terminal's own part (107, 143, C.7)
+- **WHEN** the entry gives `default/planner` only `agent = "w-planner"`, the default stream names no session, and the fake terminal holds `w-planner` in its own part
+- **THEN** the notice reaches it, asked of the terminal's own part (107, 143, 193)
 
 #### Scenario: A stream the host does not declare
 
-- **WHEN** the entry gives `stream = "gone"`, which the host does not declare
-- **THEN** no terminal is asked, and the end stays pending (143, C.7)
+- **WHEN** the entry gives `gone/planner` an agent, and the host declares no stream `gone`
+- **THEN** no terminal is asked, and the end stays pending (143, 193)
 
 #### Scenario: The inbox collects for a standing address
 
@@ -209,8 +209,8 @@ SHALL leave it pending; nothing of where the agent was SHALL be kept
 
 #### Scenario: A standing agent under herdr through the binary
 
-- **WHEN** under the pinned herdr and the stand-in, a fix names `w/planner` as its recipient, the host's configuration gives it `agent = "w-planner"` and `session = "w"`, and a stand-in runs in `w` under the herdr name `w-planner`
-- **THEN** the fix's end reaches that pane as one notice, and no place of a planner is made (43, 132, C.5)
+- **WHEN** under the pinned herdr and the stand-in, a fix names `w/planner` as its recipient, a scratch source's roles file gives it `agent = "w-planner"` and `session = "w"`, the host declares the stream `w`, and a stand-in runs in `w` under the herdr name `w-planner`
+- **THEN** the fix's end reaches that pane as one notice, and no place of a planner is made (43, 132, 193, C.5)
 
 ### Requirement: A stop-short's end says until when its agent is kept open
 
@@ -233,3 +233,68 @@ an answer never answers the stop-short it answered (43, 198).
 
 - **WHEN** a caller's wait on code delivered its stop-short, the caller answered it in its session, and the caller waits on code again
 - **THEN** the wait does not answer the stop-short as a read, and answers code's next end once it is read (43)
+
+### Requirement: An end's recipients
+
+An end's recipients SHALL be its place's, as its launch took them. A
+stop-short's that named a role SHALL be that address alone, not the
+place's. A stall's SHALL be the place's, the address the stop-short it
+waits on named, of whichever stream, and the answerer behind the
+place's own stream, each once (7, 41, 130, 193).
+
+#### Scenario: A stop-short that named a role
+
+- **WHEN** a construct of a place in `east`, whose recipient is `east/operator`, stops short naming `ops`
+- **THEN** the end stands pending for `east/ops` alone, and none of it for `east/operator` (41, S93)
+
+#### Scenario: A stall of a question for another stream
+
+- **WHEN** a construct of a place in `east`, whose recipient is `east/planner`, stopped short naming `west/design`, `west/operator` stands behind `west`, and the place stalls
+- **THEN** the stall is delivered to `east/planner`, `west/design` and `east/operator`, once each, and not to `west/operator` (130, 193)
+
+### Requirement: The inbox gives what waits on its recipient
+
+`flume inbox` SHALL also give, as `waiting`, every place that waits on
+its caller and that the recipient is a recipient of, was named by the
+stop-short the place waits on, or was given a stall of as the answerer,
+delivered or not, with its kind, name, stream and brief's first line,
+the move and since when, a stop-short's words, needs, key and the
+address it named, and a hold's words, since and bound. It SHALL mark
+nothing for them (43, 130, 193; core.25).
+
+#### Scenario: A question collected, then a restart
+
+- **WHEN** `ops` collected a construct's stop-short by `flume inbox`, did nothing with it, and its restarted session runs `flume inbox` again
+- **THEN** `ends` is empty, and `waiting` gives the place with the retry of construct as its move, since the stop-short, the agent's words and the key `stage/construct/1/ended-short`
+
+#### Scenario: A question addressed to a role
+
+- **WHEN** a place whose recipient is `east/planner` waits on a stop-short that named `east/ops`, and `east/ops`'s run runs `flume inbox`
+- **THEN** `waiting` gives that place, naming `east/ops` as the stop-short's addressee
+
+#### Scenario: The answerer's waiting places
+
+- **WHEN** a pane-launched place stalled and its stall was delivered to the answerer `east/operator`, and the answerer's run runs `flume inbox`
+- **THEN** `waiting` gives that place, though `east/operator` is not among its recipients (193)
+
+#### Scenario: A held question
+
+- **WHEN** a recipient holds the waiting move with words and a bound of one hour
+- **THEN** `waiting` gives the place with the hold's words, since when and its bound, and the next `flume inbox` gives it the same
+
+### Requirement: A notice names the place's brief and the end's key
+
+A notice SHALL stay one line, and SHALL name the place, the first line
+of its brief cut at 60 characters, the end, its key, and the command
+that reads it whole: `flume inbox` for an end the place waits on a move
+for, and `flume status <place>` for any other (43; core.11, core.25).
+
+#### Scenario: A stop-short's notice
+
+- **WHEN** a change whose brief begins "Every question a place asks reaches someone who answers it" ends short needing an answer at construct, and the settle delivers it to a pane
+- **THEN** the fake terminal records one line naming the place, "Every question a place asks reaches someone who answers it" cut at 60 characters, "construct needs an answer", `stage/construct/1/ended-short` and `flume inbox` (S94)
+
+#### Scenario: A delivery's notice
+
+- **WHEN** the same place's construct delivers instead
+- **THEN** the notice names `flume status` and the delivery's key
