@@ -18,9 +18,12 @@
 //! asked of the pinned sluice's equip and its answer read. A base place's
 //! branch is opened and closed by the seam's scenarios, an open of a
 //! branch the policy names no table for refused and a close of a branch a
-//! submission is queued on kept, each in sluice's words (205, 206).
+//! submission is queued on kept, each in sluice's words (205, 206). A
+//! chore submitted with no agent in it lands by the settles of a caller
+//! keeping watch alone, `flume settle --every 1m`, each stepping main
+//! once, with no `sluice run` live (124, 125, 208, S109).
 
-use super::walk::{user_scratch, USER_SCRATCH};
+use super::walk::{stage, user_scratch, Walk, USER_SCRATCH};
 use crate::common::*;
 use flume::profiles::merge_queue::sluice::{for_place, Sluice, EQUIP};
 use flume::profiles::place::git_worktree::{GitWorktree, Login};
@@ -28,7 +31,7 @@ use flume::profiles::place_data;
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::merge_queue::{self, MergeQueueHarness};
 use flume_seams::*;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -1050,4 +1053,148 @@ fn what_the_policy_says_of_a_place() {
         .map(|step| (step.step.as_str(), step.passed))
         .collect();
     assert_eq!(steps, vec![("toolchain", true)], "{readiness:?}");
+}
+
+/// A `sluice` first on the walk's `PATH` that writes each command it is
+/// asked, a line each, to the file it gives, then runs the pinned sluice
+/// as the test's own `PATH` finds it.
+fn counting_sluice(walk: &Walk) -> PathBuf {
+    let pinned = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("sluice"))
+        .find(|path| path.is_file())
+        .expect("the pinned sluice on PATH");
+    let asked = walk.repository.scratch.path("sluice-asked");
+    let program = walk.repository.scratch.path("bin").join("sluice");
+    fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\necho \"$*\" >>'{}'\nexec '{}' \"$@\"\n",
+            asked.display(),
+            pinned.display()
+        ),
+    )
+    .expect("the counting sluice");
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("it runs");
+    asked
+}
+
+/// Waits until no `flume settle <place> --on-quiet` runs: the settle the
+/// agent's Stop hook starts detached, which waits for the agent to be
+/// quiet and settles the place (121), so nothing but the test's own
+/// commands moves the place after it.
+fn until_the_quiet_settle_ends(place: &str) {
+    let quiet = format!("settle {place} --on-quiet");
+    let deadline = Instant::now() + Duration::from_secs(120);
+    loop {
+        let listed = Command::new("ps")
+            .args(["-A", "-o", "args="])
+            .output()
+            .expect("ps runs");
+        if !String::from_utf8_lossy(&listed.stdout).contains(&quiet) {
+            return;
+        }
+        assert!(Instant::now() < deadline, "{quiet} never ended");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// The commands the counting sluice was asked, in order.
+fn asked(at: &Path) -> Vec<String> {
+    fs::read_to_string(at)
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn s109_a_submitted_chore_with_no_agent_lands_by_a_watchs_settles_alone() {
+    // S109: a chore's agent commits and ends, and the settle its quiet
+    // starts submits it; from then on the test runs nothing but a
+    // caller's watch, `flume settle --every 1m`, and no `sluice run` is
+    // live. Each settle while the submission is open steps main once, it
+    // lands with no agent started after its code stage, and the settle
+    // that reads the landing tidies it (121, 124, 125, 208).
+    let walk = Walk::new("watch-chore");
+    let place = walk.launch("chore", "one", &["--brief", "tidy the parser"]);
+    walk.agent(
+        &place,
+        json!([
+            { "write": { "path": "parser.rs", "text": "fn parse() {}\n" } },
+            { "bash": "git add -A && git commit --quiet -m 'tidy the parser'" },
+        ]),
+    );
+    until_the_quiet_settle_ends(&place);
+    let submitted = walk.status(&place);
+    assert_eq!(submitted["submission"]["submits"], 1, "{submitted}");
+    let entry = walk.submissions();
+    assert_eq!(entry.len(), 1, "{entry:?}");
+    assert!(
+        matches!(
+            entry[0]["state"].as_str(),
+            Some("queued" | "testing" | "landing")
+        ),
+        "the chore was decided before the watch: {entry:?}"
+    );
+    let log = counting_sluice(&walk);
+    let steps = |from: usize| {
+        asked(&log)[from..]
+            .iter()
+            .filter(|command| command.starts_with("step main"))
+            .count()
+    };
+    let began = Instant::now();
+    let mut settles: Vec<usize> = vec![];
+    loop {
+        let from = asked(&log).len();
+        walk.flume(&["settle", "--every", "1m"]);
+        settles.push(steps(from));
+        let status = walk.status(&place);
+        if status.is_null() {
+            break;
+        }
+        assert_eq!(stage(&status, "code")["starts"], 1, "{status}");
+        assert!(status["agent"].is_null(), "an agent of the chore: {status}");
+        assert_eq!(
+            walk.host()["watch"],
+            json!({"bound": {"seconds": 60}}),
+            "the host's watch"
+        );
+        assert!(
+            began.elapsed() < Duration::from_secs(120),
+            "the chore never landed: {settles:?} {status}"
+        );
+        std::thread::sleep(Duration::from_millis(300));
+    }
+
+    // Each settle before the one that read the landing stepped main once,
+    // and that one at most once, the round it read having landed at its
+    // own step or at the step before it.
+    let last = settles.len() - 1;
+    assert!(
+        settles[..last].iter().all(|steps| *steps == 1) && settles[last] <= 1,
+        "the steps of each settle: {settles:?}"
+    );
+    assert!(settles.contains(&1), "no settle stepped main: {settles:?}");
+    let asked = asked(&log);
+    assert!(
+        !asked.iter().any(|command| command.starts_with("run")),
+        "a sluice run: {asked:?}"
+    );
+    assert!(
+        !asked.iter().any(|command| command.starts_with("wait")),
+        "a sluice wait: {asked:?}"
+    );
+
+    // sluice landed flume's one submission of the chore on the remote, and
+    // the settle that read it tidied the place and its branch.
+    let submissions = walk.submissions();
+    assert_eq!(submissions.len(), 1, "{submissions:?}");
+    assert_eq!(submissions[0]["state"], "landed", "{submissions:?}");
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+    assert!(!Path::new(&place).exists(), "the place is left");
+    assert!(!walk.has_branch("chore/one"), "the place's branch is left");
 }
