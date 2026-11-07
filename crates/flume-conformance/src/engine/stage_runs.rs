@@ -125,6 +125,26 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_one_way_to_ask,
         },
         Scenario {
+            name: "stop-short: a question naming its own stream's ops by the role alone stands pending for east/ops alone, which the settle wakes, and wakes not the place's recipient",
+            cites: &["41", "43", "132", "193", "S93"],
+            run: a_question_for_its_own_streams_ops,
+        },
+        Scenario {
+            name: "stop-short: a question naming another stream's role by its address stands pending for it alone, its run woken in its own stream",
+            cites: &["41", "43", "132", "143", "193"],
+            run: a_question_for_another_streams_role,
+        },
+        Scenario {
+            name: "stop-short: a name its prompt did not list is refused naming those it did, and the stage goes on",
+            cites: &["41", "132"],
+            run: a_name_outside_the_list,
+        },
+        Scenario {
+            name: "stop-short: one naming no role goes to the place's recipients, as before",
+            cites: &["41", "43"],
+            run: no_address_named,
+        },
+        Scenario {
             name: "stop check: an agent that would stop with nothing made is sent back",
             cites: &["S24", "110", "115", "28"],
             run: s24_sent_back,
@@ -1078,6 +1098,217 @@ fn the_one_way_to_ask(_: &()) -> Outcome {
         );
         ensure_eq!(text.contains(LISTED), listed, "the roles listed");
     }
+    Ok(())
+}
+
+/// A change `plan` launched in `east` for `east/operator`, standing
+/// behind the stream, under [`east_and_west`]'s roles, and begun: the
+/// place, and its construct's identity and secret (7, 41, 193).
+fn construct_in_east(world: &World) -> Result<(PlaceId, String, String), String> {
+    east_and_west(world);
+    world.host.set_role(
+        "east/operator",
+        Some(RoleRun {
+            answerer: true,
+            ..super::role_waking::planner_run(None, None)
+        }),
+    );
+    let mut change = launch("change", "plan", Some("one of two designs"));
+    change.stream = Some("east".into());
+    change.recipients = vec!["east/operator".into()];
+    launched(&world.engine.launch(&change))?;
+    let id = World::id("change", "plan");
+    world.settle(&id);
+    let start = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?;
+    Ok((id, start.identity.to_string(), start.secret.0))
+}
+
+/// The recipients the place's newest end stands pending for.
+fn pending_for(world: &World, id: &PlaceId) -> Result<Vec<String>, String> {
+    let held = world.held(id).ok_or("no place")?;
+    let end = held.ends.last().ok_or("no end")?;
+    Ok(end.pending(&held.place.recipients))
+}
+
+/// The places of every role's run on the host, each with its stream.
+fn role_runs(world: &World) -> Vec<(String, String)> {
+    world
+        .store
+        .places()
+        .into_iter()
+        .filter_map(|id| world.held(&id))
+        .filter_map(|held| held.role.clone().map(|role| (role, held.place.stream.name)))
+        .collect()
+}
+
+/// The stage-runs spec's "A question for its own stream's ops": the
+/// construct of a place in `east`, whose recipient is `east/operator`,
+/// stops short naming `ops`; the stage ends short, its end stands
+/// pending for `east/ops` alone, status gives that address, the settle
+/// wakes `east/ops`, and no run of `east/operator` is launched (41, 43,
+/// 132, 193, S93).
+fn a_question_for_its_own_streams_ops(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, construct, secret) = construct_in_east(&world)?;
+    let words = "Which queue does east run in production?";
+    let answer = world.engine.needs_to(
+        &construct,
+        &secret,
+        words,
+        StopKind::NeedsAnswer,
+        Some("ops"),
+    );
+    ensure!(
+        answer.refusal().is_none(),
+        "the stop-short was refused: {answer:?}"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::EndedShort),
+        "construct"
+    );
+    ensure_eq!(
+        pending_for(&world, &id)?,
+        vec!["east/ops".to_string()],
+        "the end's recipients"
+    );
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.stages[0].end.clone().and_then(|end| end.addressee),
+        Some("east/ops".to_string()),
+        "the address status gives"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        role_runs(&world),
+        vec![("east/ops".to_string(), "east".to_string())],
+        "the runs woken"
+    );
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::NotReached),
+        "code"
+    );
+    Ok(())
+}
+
+/// The stage-runs spec's "A question for another stream's role": the
+/// construct of a place in `east` stops short naming `west/ops`, which
+/// its list gave; its end stands pending for `west/ops` alone, and the
+/// settle wakes `west/ops`, whose run runs in `west` (41, 43, 132, 143,
+/// 193).
+fn a_question_for_another_streams_role(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, construct, secret) = construct_in_east(&world)?;
+    let answer = world.engine.needs_to(
+        &construct,
+        &secret,
+        "Is west's queue on 2.4?",
+        StopKind::NeedsAnswer,
+        Some("west/ops"),
+    );
+    ensure!(
+        answer.refusal().is_none(),
+        "the stop-short was refused: {answer:?}"
+    );
+    ensure_eq!(
+        pending_for(&world, &id)?,
+        vec!["west/ops".to_string()],
+        "the end's recipients"
+    );
+    world.settle(&id);
+    ensure_eq!(
+        role_runs(&world),
+        vec![("west/ops".to_string(), "west".to_string())],
+        "the runs woken"
+    );
+    Ok(())
+}
+
+/// The stage-runs spec's "A name outside the list": a stop-short naming
+/// `south/ops` or `reviewer`, neither listed, is refused naming the roles
+/// and addresses it may name, and the stage goes on; one naming `ops`
+/// where its prompt listed no role is refused saying so (41, 132).
+fn a_name_outside_the_list(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, construct, secret) = construct_in_east(&world)?;
+    for name in ["south/ops", "reviewer"] {
+        let reason = refused(&world.engine.needs_to(
+            &construct,
+            &secret,
+            "who?",
+            StopKind::NeedsAnswer,
+            Some(name),
+        ))?;
+        for listed in ["`design`", "`ops`", "`planner`", "`west/ops`", name] {
+            ensure!(
+                reason.contains(listed),
+                "the refusal of {name} does not name {listed}: {reason}"
+            );
+        }
+        ensure!(
+            world
+                .stage_state(&id, "construct")
+                .is_some_and(StageState::running),
+            "a refused stop-short naming {name} ended the stage"
+        );
+    }
+    let bare = World::new();
+    launched(&bare.engine.launch(&launch("fix", "one", Some("mend it"))))?;
+    let fix = World::id("fix", "one");
+    bare.settle(&fix);
+    let start = bare
+        .held(&fix)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?;
+    let reason = refused(&bare.engine.needs_to(
+        &start.identity.to_string(),
+        &start.secret.0,
+        "who?",
+        StopKind::NeedsAnswer,
+        Some("ops"),
+    ))?;
+    ensure!(
+        reason.contains("listed no role"),
+        "the refusal where none was listed: {reason}"
+    );
+    ensure!(
+        bare.stage_state(&fix, "code")
+            .is_some_and(StageState::running),
+        "a refused stop-short ended the fix's stage"
+    );
+    Ok(())
+}
+
+/// The stage-runs spec's "No address named": the construct stops short
+/// naming none, and its end stands pending for the place's recipient,
+/// `east/operator`, as before (41, 43).
+fn no_address_named(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, construct, secret) = construct_in_east(&world)?;
+    let answer = world
+        .engine
+        .needs(&construct, &secret, "which design?", StopKind::NeedsAnswer);
+    ensure!(
+        answer.refusal().is_none(),
+        "the stop-short was refused: {answer:?}"
+    );
+    ensure_eq!(
+        pending_for(&world, &id)?,
+        vec!["east/operator".to_string()],
+        "the end's recipients"
+    );
+    ensure_eq!(
+        world.status(&id)?.stages[0]
+            .end
+            .clone()
+            .and_then(|end| end.addressee),
+        None,
+        "the address status gives"
+    );
     Ok(())
 }
 

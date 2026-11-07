@@ -277,6 +277,7 @@ fn held() -> HeldState {
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
                 needs: Some(StopKind::FoundWork),
+                addressee: Some("east/planner".into()),
                 last_words: Some("I could not sign in".into()),
                 commits: vec![Revision::new("c3")],
                 screen: Some("Bypass Permissions mode".into()),
@@ -560,10 +561,10 @@ fn ends() -> Vec<EndHeld> {
                 start: 2,
                 state: StageState::Delivered,
                 quiet_from: None,
-                end: StageEnd {
+                end: Box::new(StageEnd {
                     head: Some(Revision::new("c3")),
                     ..StageEnd::default()
-                },
+                }),
             },
             read_at: 140,
             deliveries: vec![
@@ -585,12 +586,12 @@ fn ends() -> Vec<EndHeld> {
                 start: 3,
                 state: StageState::Stuck,
                 quiet_from: Some(160),
-                end: StageEnd {
+                end: Box::new(StageEnd {
                     last_words: Some("I am waiting".into()),
                     commits: vec![Revision::new("c4")],
                     screen: Some("the agent's screen".into()),
                     ..StageEnd::default()
-                },
+                }),
             },
             read_at: 170,
             deliveries: vec![],
@@ -2548,6 +2549,21 @@ fn an_ends_key_and_its_pending_recipients() {
 }
 
 #[test]
+fn a_stop_shorts_end_goes_to_the_role_it_named_alone() {
+    // 41, 43, 132: a stop-short that named a role stands pending for its
+    // address alone, never for the place's recipients.
+    let mut end = ends().remove(0);
+    if let EndOf::Stage { end, .. } = &mut end.of {
+        end.addressee = Some("west/ops".into());
+    }
+    end.deliveries.clear();
+    let recipients = vec!["operator".to_string(), "ops".to_string()];
+    assert_eq!(end.recipients(&recipients), vec!["west/ops".to_string()]);
+    assert!(end.pending_to(&recipients, "west/ops"));
+    assert!(!end.pending_to(&recipients, "operator"));
+}
+
+#[test]
 fn a_stalls_answerer_beside_the_places_recipients() {
     // 130, 132, 193: a stall's answerer is one of its recipients besides
     // the place's, named once, and a stall an earlier flume wrote names
@@ -3091,6 +3107,17 @@ fn an_identity_a_secret_and_a_stop_short() {
         needs: Some(StopKind::FoundWork),
         ..StageEnd::default()
     });
+    // A stop-short naming a role keeps its address whole; one written
+    // before names none, and writes none (41, 132).
+    round_trips(StageEnd {
+        words: Some("which queue is deployed?".into()),
+        needs: Some(StopKind::NeedsAnswer),
+        addressee: Some("west/ops".into()),
+        ..StageEnd::default()
+    });
+    assert!(!serde_json::to_string(&StageEnd::default())
+        .unwrap()
+        .contains("addressee"));
     round_trips(StageEnd {
         head: Some(Revision::new("c4")),
         last_words: Some("Usage limit reached".into()),
@@ -3100,6 +3127,7 @@ fn an_identity_a_secret_and_a_stop_short() {
     });
     let before: StageEnd =
         serde_json::from_str(r#"{"head":"c3","report":null,"words":null}"#).unwrap();
+    assert_eq!(before.addressee, None);
     assert_eq!(before.commits, Vec::<Revision>::new());
     assert_eq!(before.screen, None);
 }

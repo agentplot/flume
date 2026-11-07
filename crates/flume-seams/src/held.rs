@@ -284,9 +284,15 @@ impl EndHeld {
     }
 
     /// The recipients of the end, of a place whose recipients are
-    /// `recipients`: those, then a stall's answerer where it is none of
-    /// them, each once (43, 130, 193).
+    /// `recipients`: for a stop-short that named a role, that role's
+    /// address alone; otherwise those, then a stall's answerer where it is
+    /// none of them, each once (41, 43, 130, 193).
     pub fn recipients(&self, recipients: &[String]) -> Vec<String> {
+        if let EndOf::Stage { end, .. } = &self.of {
+            if let Some(addressee) = &end.addressee {
+                return vec![addressee.clone()];
+            }
+        }
         let mut every = recipients.to_vec();
         if let EndOf::Stall {
             answerer: Some(answerer),
@@ -336,8 +342,9 @@ pub enum EndOf {
         quiet_from: Option<Seconds>,
         /// What was read of it: the head or report, the agent's words and
         /// whether it needs an answer or found work, or what flume read of
-        /// an agent lost, never begun or stuck.
-        end: StageEnd,
+        /// an agent lost, never begun or stuck; boxed, so an end stays
+        /// small beside a submission's or a stall's.
+        end: Box<StageEnd>,
     },
     Submission {
         /// The submit's number (48).
@@ -781,6 +788,11 @@ pub struct StageEnd {
     /// Whether the stop-short needs an answer or found work (41, 131).
     #[serde(default)]
     pub needs: Option<StopKind>,
+    /// The role's address, whole, a stop-short named as the one its words
+    /// are for, which its end goes to in place of the place's recipients;
+    /// none where it named none (41, 43, 132).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addressee: Option<String>,
     /// For a stuck, lost or never-begun end, the agent's last words as
     /// its own record held them (43).
     #[serde(default)]

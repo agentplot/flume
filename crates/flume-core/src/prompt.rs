@@ -41,6 +41,31 @@ pub(crate) fn may_name(
     listed
 }
 
+/// The address a stop-short of a place in `stream` names by `to`: a role
+/// alone that role of `stream`, an address as written (41, 132).
+pub(crate) fn addressed(to: &str, stream: &str) -> String {
+    if to.contains('/') {
+        to.to_string()
+    } else {
+        format!("{stream}/{to}")
+    }
+}
+
+/// The names `listed`, each a role's address whole, gives a stop-short of
+/// a place in `stream`, as its prompt listed them, joined as a refusal
+/// names them (41).
+pub(crate) fn listed_names(listed: &[String], stream: &str) -> String {
+    let names: Vec<String> = listed
+        .iter()
+        .map(|address| format!("`{}`", listed_name(address, stream)))
+        .collect();
+    match names.split_last() {
+        None => String::new(),
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
 /// A role's address as a prompt of a place in `stream` lists it: a role
 /// of `stream` by the role alone, any other stream's whole (28, 41, 132).
 pub(crate) fn listed_name<'a>(address: &'a str, stream: &str) -> &'a str {

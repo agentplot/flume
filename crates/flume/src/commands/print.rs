@@ -1148,6 +1148,9 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
         if let Some(head) = &end.head {
             line.push_str(&format!(", ended at {head}"));
         }
+        if let Some(addressee) = &end.addressee {
+            line.push_str(&format!(", asking {addressee}"));
+        }
         if let Some(words) = &end.words {
             line.push_str(&format!(", saying: {words}"));
         }
@@ -3412,10 +3415,10 @@ mod tests {
                     start: 1,
                     state: StageState::Lost,
                     quiet_from: None,
-                    end: StageEnd {
+                    end: Box::new(StageEnd {
                         left_in_pane: true,
                         ..StageEnd::default()
-                    },
+                    }),
                 },
                 read_at: 54_000,
                 deliveries: vec![],
@@ -3551,6 +3554,33 @@ mod tests {
         assert_eq!(
             stage_lines(&once),
             vec!["  stage code: begun, started 2 times".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_stop_short_with_the_role_it_named() {
+        // 41, 56, 132: the address a stop-short named, whole.
+        let stage = StageStatus {
+            name: "construct".into(),
+            state: flume_seams::StageState::EndedShort,
+            starts: 1,
+            end: Some(StageEnd {
+                words: Some("Which queue is deployed?".into()),
+                needs: Some(flume_seams::StopKind::NeedsAnswer),
+                addressee: Some("west/ops".into()),
+                ..StageEnd::default()
+            }),
+            refused_part: None,
+            refused_setting: None,
+            conversation: false,
+            group: None,
+        };
+        assert_eq!(
+            stage_lines(&stage),
+            vec![
+                "  stage construct: ended_short, started 1 times, asking west/ops, saying: Which queue is deployed?"
+                    .to_string()
+            ]
         );
     }
 

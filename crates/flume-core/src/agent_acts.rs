@@ -1,10 +1,12 @@
 //! What an agent's program asks of flume (41, 42, 110, 115, 131): a
 //! stop-short, taken only under the current start's identity and secret
 //! while its agent is live, saying whether it needs an answer or found
-//! work, and the stop check, which keeps at work an agent that
-//! would go quiet with its deliverable missing and nothing said.
+//! work, and naming, where it names one, the role its words are for among
+//! those its start's prompt listed; and the stop check, which keeps at
+//! work an agent that would go quiet with its deliverable missing and
+//! nothing said.
 
-use crate::prompt::group_text;
+use crate::prompt::{addressed, group_text, listed_names};
 use crate::reading::find_group;
 use crate::start::Starts;
 use crate::{Act, Answer, Engine, Step};
@@ -29,6 +31,24 @@ impl Engine {
     /// except that found work from the kind's last stage starts its fix
     /// round once the agent is quiet (41, 42, 131).
     pub fn needs(&self, identity: &str, secret: &str, words: &str, kind: StopKind) -> Answer {
+        self.needs_to(identity, secret, words, kind, None)
+    }
+
+    /// An agent's stop-short as [`Engine::needs`] takes it, naming by `to`
+    /// the role its words are for, where it names one: a role alone the
+    /// place's own stream's, an address any stream's, and either taken only
+    /// among those its start's prompt listed. Its end records the address
+    /// whole and goes to it alone, in place of the place's recipients. A
+    /// name the prompt did not list is refused, naming those it did, and
+    /// the stage goes on (41, 43, 132).
+    pub fn needs_to(
+        &self,
+        identity: &str,
+        secret: &str,
+        words: &str,
+        kind: StopKind,
+        to: Option<&str>,
+    ) -> Answer {
         self.settle_attended();
         let Some((held, index)) = self.current_start(identity) else {
             return Answer::refused(format!(
@@ -43,6 +63,23 @@ impl Engine {
         let folder = self.store.folder(&held.place.id);
         if self.state_of(agent.as_deref(), &folder, &start) == AgentState::Stopped {
             return Answer::refused(format!("the agent {identity} is not live"));
+        }
+        let stream = &held.place.stream.name;
+        let addressee = to.map(|to| addressed(to, stream));
+        if let Some(addressee) = &addressee {
+            if !start.may_name.contains(addressee) {
+                let to = to.unwrap_or_default();
+                return Answer::refused(if start.may_name.is_empty() {
+                    format!(
+                        "the stop-short names `{to}`, and its prompt listed no role it may name: stop short naming none"
+                    )
+                } else {
+                    format!(
+                        "the stop-short names `{to}`, which its prompt did not list: it may name {}, or none",
+                        listed_names(&start.may_name, stream)
+                    )
+                });
+            }
         }
         let id = held.place.id.clone();
         let made = self.made_since(&id, &start);
@@ -59,6 +96,7 @@ impl Engine {
                 stage.end = Some(StageEnd {
                     words: Some(words.to_string()),
                     needs: Some(kind),
+                    addressee: addressee.clone(),
                     made: made.clone(),
                     group: start.group.clone().map(Box::new),
                     ..StageEnd::default()
