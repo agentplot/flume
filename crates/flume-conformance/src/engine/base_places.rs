@@ -116,6 +116,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["139", "200", "203"],
             run: the_line_of_a_base_place_with_one_place_on_its_branch,
         },
+        Scenario {
+            name: "base places: a base place whose kind names mend the kind of its fixes is launched, holding repo/mend@1 as its launch resolved it from the repository's declaration",
+            cites: &["21", "23", "154", "203"],
+            run: a_base_place_whose_kind_names_mend,
+        },
+        Scenario {
+            name: "base places: a base place's launch whose kind of its fixes resolves to no kind is refused naming it, the merge queue opening nothing and the store holding nothing",
+            cites: &["4", "8", "154", "203"],
+            run: a_fix_kind_that_resolves_to_nothing,
+        },
+        Scenario {
+            name: "base places: a base place's launch whose kind names itself, a kind with no stages, the kind of its fixes is refused, nothing made",
+            cites: &["4", "23", "203"],
+            run: a_fix_kind_with_no_stages,
+        },
     ]
 }
 
@@ -136,6 +151,46 @@ fn train_on(world: &World, name: &str, base: &str) -> Result<PlaceId, String> {
     launch.recipients = vec!["ops".into()];
     launched(&world.engine.launch(&launch))?;
     Ok(World::id("train", name))
+}
+
+/// The repository's kind that lands with one code stage delivering
+/// commits, the kind a base place's kind names for its fixes.
+fn mend() -> Kind {
+    kind(
+        "mend",
+        true,
+        vec![stage("code", Some(Deliverable::Commits), "{{brief}}")],
+    )
+}
+
+/// `train` naming `fix` the kind of its fixes, with `limit` its bound
+/// where one is given (23).
+fn train_naming(fix: &str, limit: Option<u32>) -> Kind {
+    Kind {
+        fix: Some(fix.into()),
+        fix_limit: limit,
+        ..train()
+    }
+}
+
+/// The launch of `train--spring` on `main` for the recipient `ops`.
+fn spring_launch() -> Launch {
+    Launch {
+        recipients: vec!["ops".into()],
+        ..launch("train", "spring", None)
+    }
+}
+
+/// The base place `train--spring` on `main`, its kind naming `mend` the
+/// kind of its fixes with `limit` its bound, the repository declaring
+/// both; its recipient `ops` a session that asks nothing (23, 203).
+fn spring_mended(world: &World, limit: Option<u32>) -> Result<PlaceId, String> {
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world
+        .kinds
+        .set_kinds(REPOSITORY, vec![train_naming("mend", limit), mend()]);
+    launched(&world.engine.launch(&spring_launch()))?;
+    Ok(World::id("train", "spring"))
 }
 
 /// The base place `train--spring` on `main`, its recipient `ops` a
@@ -1066,6 +1121,67 @@ fn the_line_of_a_base_place_with_one_place_on_its_branch(_: &()) -> Outcome {
         listed.waits_on,
         Some(flume_core::WaitsOn::Places),
         "whom it waits on"
+    );
+    Ok(())
+}
+
+fn a_base_place_whose_kind_names_mend(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    let held = world.held(&spring).ok_or("no base place")?;
+    let fixes_as = held.place.fixes_as.ok_or("no kind of its fixes held")?;
+    ensure_eq!(
+        fixes_as.identity.spelled,
+        "repo/mend@1",
+        "the kind its fixes run as"
+    );
+    ensure_eq!(fixes_as.from.source, "repo", "where it came from");
+    ensure!(
+        fixes_as.from.declaration_file.is_some() && fixes_as.from.revision.is_some(),
+        "its declaration's file and revision: {:?}",
+        fixes_as.from
+    );
+    ensure_eq!(held.phase, Phase::Live, "the base place");
+    Ok(())
+}
+
+fn a_fix_kind_that_resolves_to_nothing(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world
+        .kinds
+        .set_kinds(REPOSITORY, vec![train_naming("mend", None)]);
+    let reason = refused(&world.engine.launch(&spring_launch()))?;
+    ensure!(
+        reason.contains("names mend the kind of its fixes") && reason.contains("resolves to no"),
+        "the refusal names neither the kind of its fixes nor that it resolves to none: {reason}"
+    );
+    ensure_eq!(world.queue.log.count("open"), 0, "the merge queue's opens");
+    ensure!(
+        world.store.places().is_empty(),
+        "documents stand: {:?}",
+        world.store.places()
+    );
+    Ok(())
+}
+
+fn a_fix_kind_with_no_stages(_: &()) -> Outcome {
+    let world = World::new();
+    world.terminal.add_session("ops", AgentState::Waiting);
+    world
+        .kinds
+        .set_kinds(REPOSITORY, vec![train_naming("train", None)]);
+    let reason = refused(&world.engine.launch(&spring_launch()))?;
+    ensure!(
+        reason.contains("names train the kind of its fixes")
+            && reason.contains("a kind with no stages runs no fix"),
+        "the refusal names neither the kind of its fixes nor why: {reason}"
+    );
+    ensure_eq!(world.queue.log.count("open"), 0, "the merge queue's opens");
+    ensure!(world.store.places().is_empty(), "documents stand");
+    ensure!(
+        world.git.branch_head(REPOSITORY, "train/spring").is_none(),
+        "the branch was made"
     );
     Ok(())
 }
