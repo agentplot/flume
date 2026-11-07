@@ -244,7 +244,9 @@ pub enum Guarded {
 }
 
 /// What a stop-short says of the stage: it cannot go on without an
-/// answer, or it found work the stage cannot deliver past (41, 92, 131).
+/// answer, or it found work a stage before its own must do again, which
+/// sends the place back only where the kind's fix round is such a stage
+/// and otherwise waits on an answer (41, 92, 131).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StopKind {
@@ -255,7 +257,7 @@ pub enum StopKind {
 
 /// An agent's word that its stage cannot deliver without something, with
 /// its start's identity and secret, and whether it needs an answer or
-/// found work (41, 92).
+/// found work a stage before its own must do again (41, 92).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StopShort {
     pub identity: String,

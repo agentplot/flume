@@ -88,9 +88,9 @@ at one head of the place's branch, or when its agent stops short (24,
 The core SHALL take a stop-short only under the identity of the place's
 current stage's live agent and that start's secret, saying whether it
 needs an answer or found work, SHALL end the stage short with the
-agent's words whole and its kind, and SHALL start no next stage, except
-that found work from the kind's last stage starts the kind's fix round.
-A stop-short after an answer its start took in its session SHALL be an
+agent's words whole and its kind, and SHALL start no next stage but the
+fix round a found from the kind's last stage starts where that round is
+before it. A stop-short after an answer taken in its session SHALL be an
 end of its own, keyed apart from the one answered (41, 42, 43, 131,
 198).
 
