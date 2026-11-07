@@ -708,7 +708,7 @@ fn a_fixs_code_finding_work_waits_on_an_answer_and_its_retry_lands() {
     // going-back (48, 49), and the fix lands.
     let walk = Walk::new("walk-fix-found");
     let place = walk.launch("fix", "found", &["--brief", "fix the parser"]);
-    let findings = "the landing is read from another host's queue, outside this place";
+    let findings = "the landing is read from the queue of another host, outside this place";
     walk.agent(
         &place,
         json!([{ "bash": format!("flume needs --found '{findings}'") }]),
