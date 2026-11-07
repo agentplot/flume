@@ -92,7 +92,7 @@ that the agent found work, with its words (41, 42, 131, 198).
 #### Scenario: A fix's code finds work
 
 - **WHEN** a fix's code agent, its stage naming `code` for a failed submission, stops short having found work, and the place is settled after its agent goes quiet
-- **THEN** no agent starts, code stands ended short having found work, the place's goings-back are none, status gives the move as a retry of code waiting on an answer with the findings, the place's line reads `waiting on an answer`, and the end delivered is `code found work` with the findings (131, 42, 56)
+- **THEN** no agent starts, code stands ended short having found work with its agent kept open for the answer, the place's goings-back are none, status gives the move as a retry of code waiting on an answer with the findings, the place's line reads `waiting on an answer`, and the end delivered is `code found work` with the findings (131, 42, 56, 198)
 
 #### Scenario: A last stage that names no stage for a failed submission
 
@@ -113,11 +113,19 @@ gives them, change@1's last stage naming `code` for a failed submission
 ### Requirement: The retry that answers a found
 
 A caller's retry of a stage that ended short having found work and
-waits on an answer SHALL start it with a fresh agent whose prompt
-carries the findings with the answer, and SHALL count no going-back
-(42, 48, 49).
+waits on an answer SHALL be its answer and SHALL count no going-back:
+while the stage's agent is kept open for it, the retry SHALL hand that
+agent the findings with the answer in its session, the stage carrying
+on under the same start; otherwise it SHALL start the stage with a
+fresh agent whose prompt carries the findings with the answer (42, 48,
+49, 198).
+
+#### Scenario: The retry that answers a fix's found in its session
+
+- **WHEN** a fix's code agent stopped short having found work and is kept open for its answer, and the caller retries code with an answer
+- **THEN** that agent is handed the findings and then the answer, code is begun again under its first start with one agent opened, the goings-back stay none, and once code delivers the place is submitted and lands (42, 48, 49, 198)
 
 #### Scenario: The retry that answers a fix's found
 
-- **WHEN** a fix's code agent stopped short having found work, and the caller retries code with an answer
-- **THEN** code starts once with a fresh agent whose prompt holds the findings and then the answer, the goings-back stay none, and once code delivers the place is submitted and lands (42, 48, 49)
+- **WHEN** a fix's code agent stopped short having found work and is no longer kept open, and the caller retries code with an answer
+- **THEN** code starts once with a fresh agent whose prompt holds the findings and then the answer, the goings-back stay none, and once code delivers the place is submitted and lands (42, 48, 49, 198)
