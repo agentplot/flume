@@ -1,39 +1,40 @@
 # Verify: every-place-waiting-on-the-merge-queue-is-settled-at-every-depth
 
-Read at `f9381310` on `change/every-place-waiting-on-the-merge-queue-is-settled-at-every-depth`,
+Read at `c553fc11` on `change/every-place-waiting-on-the-merge-queue-is-settled-at-every-depth`,
 against main at `b1f6a617` (#147), which the branch holds. main is
 still at `b1f6a617` at origin.
 
 ## Verdict
 
-**Holds: archived.** All 39 tasks are ticked, 7.5 among them. Every
+**Holds: archived.** All 40 tasks are ticked, 7.6 among them. Every
 scenario of the 15 delta specs is held by a test, apart from the one
 design 6 defers. A trial archive leaves `openspec validate --specs
---strict` passing 46 of 46. `sluice exec main` passes 37 of 37 tasks.
+--strict` passing 46 of 46. `sluice exec main` passes 37 of 37 tasks,
+`flume:tools` 130 of 130 among them, S105's test included.
 
-## The merge of #147 (task 7.5)
+## S105's test (task 7.6)
 
-`a2911169` merges main at `b1f6a617`, and `f9381310` takes the change
-back out of the archive so its specs can be applied over main's.
+Main's gate failed `flume:tools` for submission #149 on
+`open_sessions::s105_the_agents_account_spent_within_the_hour_and_a_retry_answers`.
+`fa55ca85` fixes it, and `c553fc11` takes the change back out of the
+archive, its specs main's at `b1f6a617`.
 
-- **Both sides kept in the code.** #147's diff over `9a838ee1` matches
-  what the merge brings into the branch, apart from this change's own
-  lines in context and the three fits task 7.5 names:
-  - a base place's `WaitingOn` gives main's `open_until` and `closed`
-    as none;
-  - `settle --every` reads its bound by main's `read_span`;
-  - the conformance suite's counting terminal passes on main's `sends`.
-
-  No line of #147 is lost. No nudge, lease or terminal's watch comes
-  back, and no core code names a bolt, a unit or a depth.
-- **The clause list.** `clauses.rs` reads blueprints at `9c060ab`, as
-  main does. It names 202 to 206, 208, S109 to S112 and S118 built.
-  193, 209 and S119 are still named unbuilt, by their own changes.
-- **The specs.** #147 and this change both modify only clause-coverage's
-  two requirements. The delta carries both: it names `9c060ab`, and it
-  names 198, S104 and S105 built beside this change's clauses. Every
-  other requirement #147 added or changed is untouched by this change's
-  delta.
+- **The fix.** Code's second start ran its script straight through, so
+  its agent delivered and the place landed and was tidied between two of
+  the test's reads. Its script now opens with the stand-in's
+  `wait_for` act on a signal from `Walk::signal`. The test writes that
+  signal only after it has read the live agent on the pool's second
+  account, `stand-in-2`. The stand-in waits up to two minutes for the
+  file, as its module says, and then goes on, so a test that never writes
+  the signal still ends.
+- **Nothing else moved.** Between the archive at `9ba5e5bb` and
+  `fa55ca85`, the only change is that test's 11 lines. The scenario's
+  assertions are unchanged: the account, the landing, the remote's
+  `notes.md` and the second start's prompts. S105 is still cited (146,
+  198, S105).
+- **The specs.** `openspec/specs` at `c553fc11` is main's at
+  `b1f6a617`, file for file. The trial archive's specs are identical to
+  the archive's at `9ba5e5bb`.
 
 ## What holds
 
@@ -43,15 +44,12 @@ back out of the archive so its specs can be applied over main's.
   valid.
 - The change archived over a copy of `openspec/` (openspec 1.14.3, the
   devenv's): +34, ~12, −8, →1, with `base-places` new. After it,
-  `openspec validate --specs --strict` passes 46 of 46. Each archived
-  spec matches the merge's `openspec/specs` at `a2911169` requirement
-  for requirement, body for body. Only the order of requirements differs,
-  in command-line, kinds-profile, place-status, seam-contracts and
-  seam-fakes. Against main's specs, every difference is one of the
-  delta's own added, modified, removed or renamed requirements.
-- `sluice exec main` at `f9381310` passes 37 of 37 tasks, and sluice
-  recorded the result under its key for `f938131`:
-  - `flume:tools`: 130 of 130;
+  `openspec validate --specs --strict` passes 46 of 46. `diff -r`
+  against `openspec/specs` at `9ba5e5bb` finds no difference.
+- `sluice exec main` at `c553fc11` passes 37 of 37 tasks, and sluice
+  recorded the result under its key for `c553fc1`:
+  - `flume:tools`: 130 of 130, both of `open_sessions`' S105 tests among
+    them;
   - `plugin-herdr:test`: 27 of 27;
   - `root:specs`: 45 of 45, before the archive;
   - `root:changes`: 2 of 2;
@@ -59,11 +57,24 @@ back out of the archive so its specs can be applied over main's.
     and S1 to S119 at `9c060ab` cited by the suite's 794 scenarios, or
     named unbuilt by its change.
 
-### Requirements and scenarios
+### The merge of #147 (task 7.5)
 
-Since the report at `70ec2fc9`, the only code changes are #147's,
-merged in, and the three fits above. That report's account of each spec
-still stands:
+`a2911169` merges main at `b1f6a617` with both sides kept, apart from
+the three fits task 7.5 names:
+
+- a base place's `WaitingOn` gives main's `open_until` and `closed` as
+  none;
+- `settle --every` reads its bound by main's `read_span`;
+- the conformance suite's counting terminal passes on main's `sends`.
+
+No line of #147 is lost. No nudge, lease or terminal's watch comes back,
+and no core code names a bolt, a unit or a depth. `clauses.rs` reads
+blueprints at `9c060ab`, as main does. It names 202 to 206, 208, S109
+to S112 and S118 built. 193, 209 and S119 are still named unbuilt, by
+their own changes. The clause-coverage delta names `9c060ab` and names
+198, S104 and S105 built beside this change's clauses.
+
+### Requirements and scenarios
 
 - **settling**: `engine/settling.rs`, S109 and S118 by name among them.
 - **base-places**: `engine/base_places.rs` holds 20 of the 21
@@ -96,7 +107,9 @@ still stands:
   alone. No terminal profile or plugin settles. #147's keep-open path
   reads whether a terminal hands words (`sends`), and settles nothing
   of its own.
-- **core.19**: the change cites 198, 202 to 206 and 208 where it
+- **core.51**: S105's test waits on a signal in its walk's own scratch.
+  It neither skips nor returns early.
+- **core.19**: the change cites 146, 198, 202 to 206 and 208 where it
   touches them. Record 0051 is accepted. Its amendment, that no
   terminal settles, stays proposed until the user sees it as a record,
   as the record says.
