@@ -149,6 +149,31 @@ impl Harness {
         Revision::new(self.repository.git(&["rev-parse", "main"]))
     }
 
+    /// `path` written with `text` and committed on `branch`, through a
+    /// worktree of its own removed after: the branch's new head.
+    fn on_branch(&self, branch: &str, path: &str, text: &str) -> Revision {
+        let dir = self.repository.dir.join("places/on-branch");
+        let at = dir.to_string_lossy().into_owned();
+        self.repository
+            .git(&["worktree", "add", "--quiet", &at, branch]);
+        std::fs::write(dir.join(path), text).expect("the branch's file written");
+        git(&dir, &["add", "--all"]);
+        git(
+            &dir,
+            &[
+                "-c",
+                "core.hooksPath=/dev/null",
+                "commit",
+                "--quiet",
+                "-m",
+                path,
+            ],
+        );
+        let head = git(&dir, &["rev-parse", "HEAD"]);
+        self.repository.git(&["worktree", "remove", "--force", &at]);
+        Revision::new(head)
+    }
+
     /// sluice run by the test in `dir`, in the scratch home, with no
     /// multiplexer's session: its JSON answer.
     fn sluice(&self, dir: &Path, args: &[&str]) -> Value {
@@ -449,6 +474,20 @@ impl MergeQueueHarness for Harness {
             .repository
             .git(&["branch", "--list", branch, "--format=%(objectname)"]);
         (!head.is_empty()).then(|| Revision::new(head))
+    }
+
+    fn change_on(&self, _repository: &str, branch: &str, file: &str) -> Revision {
+        self.on_branch(branch, file, "the branch's own\n")
+    }
+
+    fn move_base_against(
+        &self,
+        _repository: &str,
+        _base: &str,
+        _branch: &str,
+        file: &str,
+    ) -> Revision {
+        self.on_main(file, "the base's own\n")
     }
 }
 
