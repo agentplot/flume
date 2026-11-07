@@ -38,7 +38,6 @@ rustPlatform.buildRustPackage {
     "flume"
   ];
   doCheck = false;
-  passthru = { inherit rust; };
   meta = {
     description = "Places and their agents";
     homepage = "https://github.com/agentplot/flume";
