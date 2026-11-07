@@ -277,6 +277,8 @@ mod tests {
                 agents: KindSettings::default(),
                 stages: vec![],
                 label: None,
+                fix: None,
+                fix_limit: None,
             },
             declared: Declared::Flume,
             kind_from: None,
@@ -306,6 +308,8 @@ mod tests {
                 name: "one".into(),
                 digest: "d1".into(),
             },
+            fix_of: None,
+            fixes_as: None,
         }
     }
 

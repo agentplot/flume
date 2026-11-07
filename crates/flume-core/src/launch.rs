@@ -725,6 +725,8 @@ impl Engine {
                 recipients_from,
                 stream,
                 intent,
+                fix_of: None,
+                fixes_as: None,
             },
             phase: Phase::Making {
                 by: self.host.command(),
@@ -764,6 +766,8 @@ impl Engine {
             holds: launch_holds(launch, self.host.now()),
             waiting: None,
             stall_after: launch.stall_after.unwrap_or(STALL_AFTER),
+            fixes: vec![],
+            forecast: None,
         };
         let programs = kind
             .stages

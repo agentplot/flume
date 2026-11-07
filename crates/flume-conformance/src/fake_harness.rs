@@ -71,6 +71,8 @@ pub fn flumes_own() -> Vec<Kind> {
             ),
             verify,
         ],
+        fix: None,
+        fix_limit: None,
     };
     let mut repeating = change.clone();
     repeating.version = 2;
@@ -86,6 +88,8 @@ pub fn flumes_own() -> Vec<Kind> {
             agents: KindSettings::default(),
             label: None,
             stages: vec![code.clone()],
+            fix: None,
+            fix_limit: None,
         },
         Kind {
             name: "chore".into(),
@@ -96,6 +100,8 @@ pub fn flumes_own() -> Vec<Kind> {
             agents: KindSettings::default(),
             label: None,
             stages: vec![code],
+            fix: None,
+            fix_limit: None,
         },
         change,
         repeating,

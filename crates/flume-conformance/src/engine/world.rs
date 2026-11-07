@@ -170,6 +170,8 @@ pub fn kind(name: &str, lands: bool, stages: Vec<Stage>) -> Kind {
         agents: KindSettings::default(),
         label: None,
         stages,
+        fix: None,
+        fix_limit: None,
     }
 }
 

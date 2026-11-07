@@ -2205,6 +2205,8 @@ fn kind_at(name: &str, version: u32) -> Kind {
         agents: KindSettings::default(),
         stages: vec![],
         label: None,
+        fix: None,
+        fix_limit: None,
     }
 }
 
@@ -2533,6 +2535,8 @@ fn kind_named(name: &str) -> Kind {
         agents: KindSettings::default(),
         stages: vec![],
         label: None,
+        fix: None,
+        fix_limit: None,
     }
 }
 
