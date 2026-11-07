@@ -391,7 +391,7 @@ fn a_repository_with_no_declaration_declares_no_kind() {
         KindsRead::Read {
             kinds: vec![],
             settings: Default::default(),
-            agents: Settings::default(),
+            agents: Box::default(),
         }
     );
     assert_eq!(
@@ -1216,7 +1216,7 @@ model = "sonnet"
         panic!("the launch's declaration did not read");
     };
     assert_eq!(
-        agents,
+        *agents,
         Settings::default(),
         "a launch's [agents] is not read"
     );
@@ -1243,6 +1243,81 @@ fn a_repositorys_agents_table_naming_a_stage_or_an_environment_refuses_the_launc
         assert!(reason.contains(&format!("{field}:")), "{given}: {reason}");
         launch_refused_naming(&repository, "fix", &[field]);
     }
+}
+
+/// The words a declaration's `keep_open` is refused in (design 1).
+const KEEP_OPEN_REFUSED: &str =
+    "how long an agent is kept open for an answer is the host's or the launch's to give";
+
+#[test]
+fn a_repositorys_keep_open_refuses_the_launch_naming_the_field() {
+    // 4, 158, 198, C.2: the kinds-profile spec's "A repository's
+    // keep_open": `keep_open` in a repository's table for a kind it does
+    // not declare fails the read naming the field and that the host or the
+    // launch gives it, and a launch of a fix is refused with nothing made;
+    // so does one in its table for every kind, and in a kind's own and a
+    // stage's of a kind it declares.
+    for (given, kind, field) in [
+        (
+            "[kinds.fix.agents]\nkeep_open = \"2h\"\n",
+            "fix",
+            "kinds.fix.agents.keep_open",
+        ),
+        ("[agents]\nkeep_open = \"2h\"\n", "fix", "agents.keep_open"),
+        (
+            "[kinds.bump.agents.stages.code]\nkeep_open = \"2h\"\n\n\
+             [[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/bump-code.md\"\n\
+             deliverables = [\"commits\"]\n",
+            "bump",
+            "kinds.bump.agents.stages.code.keep_open",
+        ),
+    ] {
+        let repository = Repository::new("declared-keep-open");
+        repository.write(DECLARATION, given);
+        repository.write(".config/prompts/bump-code.md", "{{brief}}");
+        repository.commit("a keep_open in the declaration");
+        let reason = could_not_read(&repository);
+        assert!(
+            reason.contains(&format!("{field}: {KEEP_OPEN_REFUSED}")),
+            "{given}: {reason}"
+        );
+        launch_refused_naming(&repository, kind, &[field]);
+    }
+}
+
+#[test]
+fn a_packages_keep_open_refuses_the_launch_naming_the_stages_field() {
+    // 4, 158, 198, C.2: the kinds-profile spec's "A kind's keep_open": a
+    // package whose kind's stage gives `keep_open` in its `agents` entry
+    // cannot be read, naming the stage's field, and a launch of that kind
+    // from the host's source is refused with nothing made.
+    let repository = Repository::new("packaged-keep-open");
+    let kinds_dir = repository.scratch.path("kinds/acme");
+    write_package(
+        &kinds_dir,
+        "lint@1",
+        &reviewing("lint", 1, "").replace("agents = [{}]", "agents = [{ keep_open = \"5m\" }]"),
+        &[("prompts/code.md", "{{brief}}")],
+    );
+    let field = "kinds.lint.stages[0].agents[0].keep_open";
+    let reason = package_refused(&kinds_dir, "lint", 1);
+    assert!(
+        reason.contains("acme/lint@1") && reason.contains(&format!("{field}: {KEEP_OPEN_REFUSED}")),
+        "{reason}"
+    );
+    let world = World::new();
+    base_at(&world, &repository.name(), &repository.head());
+    world.host.set_source("acme", &kinds_dir.to_string_lossy());
+    let mut lint = launch("acme/lint@1", "one", Some("x"));
+    lint.repository = repository.name();
+    let reason =
+        refused(&engine(&world, Arc::new(Weir)).launch(&lint)).expect("the launch refused");
+    assert!(
+        reason.contains(field),
+        "the refusal names not {field}: {reason}"
+    );
+    assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
 }
 
 #[test]
@@ -1781,6 +1856,10 @@ fn two_repetitions_prompts_are_equal_up_to_the_group() {
     );
     assert!(stopped.refusal().is_none(), "the stop-short: {stopped:?}");
     world.settle(&id);
+    // The asking agent stopped, so the retry starts a fresh agent rather
+    // than answering its session (51, 198).
+    let ended = world.engine.stop(&id, false);
+    assert!(ended.refusal().is_none(), "the stop: {ended:?}");
     let retried = world.engine.retry(
         &id,
         flume_core::Retry::Stage("code".into()),

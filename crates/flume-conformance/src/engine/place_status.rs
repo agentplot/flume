@@ -11,13 +11,15 @@ use super::account_pools::{
 };
 use super::agent_effort::effort;
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
-use super::agent_settings::for_every_stage;
+use super::agent_settings::{for_every_stage, kept_open};
 use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, talking};
+use super::open_sessions::{asking, code, stops_short, taken, QUESTION};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
     AccountStatus, Act, AddressStatus, AgentStatus, Answer, Cache, EffortStatus, ModeStatus,
-    MoveStatus, PlaceStatus, PoolStatus, Retry, StandingFound, WaitingOn, Waits,
+    MoveStatus, PlaceStatus, PoolStatus, Retry, SessionAnswer, StandingFound, WaitingOn, Waits,
+    KEEP_OPEN,
 };
 use flume_seams::*;
 
@@ -69,9 +71,19 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_place_gone,
         },
         Scenario {
-            name: "status: a place whose construct ended short waits on a retry of construct, since then, with the question whole",
-            cites: &["56", "130", "42", "41"],
+            name: "status: a place whose construct ended short waits on a retry of construct, since then, with the question whole and its agent kept open until an hour after, in the JSON form",
+            cites: &["56", "130", "42", "41", "198"],
             run: waiting_on_an_answer,
+        },
+        Scenario {
+            name: "status: a place whose construct's agent kept open was let go by its time and ended waits on the same move since the stop-short, giving when it was let go, time, and when it was ended, in the JSON form",
+            cites: &["130", "56", "31", "198", "S104"],
+            run: its_agent_let_go,
+        },
+        Scenario {
+            name: "status: a fix whose code took one answer by a retry and one by a tell in its first start's session gives both under code in order, each with its question, its answer, retry or tell, and when it was sent and received, in the JSON form",
+            cites: &["42", "56", "198"],
+            run: two_answers_in_one_session,
         },
         Scenario {
             name: "status: a lost stage, a stopped one and a done round each name the move they wait on",
@@ -152,6 +164,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: an agent that took edits from the host's table gives its mode as written from host-kind, the value its profile passed and that it was read back, in the JSON form",
             cites: &["S66", "56", "162", "169"],
             run: a_mode_from_the_hosts_table,
+        },
+        Scenario {
+            name: "status: an agent whose keep_open only the host's table for every agent gives, 20m, gives it as written from host, in the JSON form",
+            cites: &["32", "56", "198"],
+            run: keep_open_from_the_hosts_table_for_every_agent,
         },
         Scenario {
             name: "status: an agent that took its program's entry of the launch's table gives the table as written from launch, the entry and the value passed",
@@ -656,6 +673,38 @@ fn a_mode_from_the_hosts_table(_: &()) -> Outcome {
     Ok(())
 }
 
+fn keep_open_from_the_hosts_table_for_every_agent(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_every_agent(kept_open("20m"));
+    let (agent, json) = fix_with_a_mode(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(
+        agent.settings.from.get("keep_open"),
+        Some(&Given {
+            layer: Layer::Host,
+            value: "20m".into(),
+            file: None,
+        }),
+        "keep_open as written and its layer"
+    );
+    ensure_eq!(
+        agent.settings.settings.keep_open.as_deref(),
+        Some("20m"),
+        "keep_open among the agent's settings"
+    );
+    ensure_eq!(
+        (
+            json["settings"]["keep_open"].clone(),
+            json["settings"]["from"]["keep_open"].clone()
+        ),
+        (
+            serde_json::json!("20m"),
+            serde_json::json!({"layer": "host", "value": "20m"})
+        ),
+        "keep_open in the JSON form"
+    );
+    Ok(())
+}
+
 fn a_tables_entry(_: &()) -> Outcome {
     let world = World::new();
     the_fakes_map(&world);
@@ -839,8 +888,164 @@ fn waiting_on_an_answer(_: &()) -> Outcome {
             why: Waits::Answer,
             since: Some(asked),
             words: Some(question.into()),
+            open_until: Some(asked + KEEP_OPEN),
+            closed: None,
         }),
         "the move the place waits on"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        (
+            json["waiting_on"]["open_until"].clone(),
+            json["waiting_on"].get("closed").cloned()
+        ),
+        (serde_json::json!(asked + KEEP_OPEN), None),
+        "until when its agent is kept open, in the JSON form"
+    );
+    Ok(())
+}
+
+/// The change `plan` launched, its construct agent stopped short at the
+/// time it gives with [`QUESTION`] and settled.
+fn construct_asking(world: &World) -> Result<(PlaceId, Seconds), String> {
+    let id = World::id("change", "plan");
+    launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    world.settle(&id);
+    let construct = World::identity("change", "plan", "construct", 1);
+    let at = stops_short(world, &id, 0, &construct, QUESTION, StopKind::NeedsAnswer)?;
+    world.settle(&id);
+    Ok((id, at))
+}
+
+fn its_agent_let_go(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, asked) = construct_asking(&world)?;
+    world.host.advance(KEEP_OPEN);
+    let past = world.host.now();
+    world.settle(&id);
+    let waiting = world
+        .status(&id)?
+        .waiting_on
+        .ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (
+            waiting.act,
+            waiting.stage.as_deref(),
+            waiting.why,
+            waiting.since,
+            waiting.words.as_deref()
+        ),
+        (
+            Act::Retry,
+            Some("construct"),
+            Waits::Answer,
+            Some(asked),
+            Some(QUESTION)
+        ),
+        "the move the place waits on"
+    );
+    ensure_eq!(
+        (waiting.open_until, waiting.closed),
+        (
+            None,
+            Some(SessionClosed {
+                at: past,
+                by: ClosedBy::Time,
+                ended_at: Some(past),
+                left_in_pane: false,
+            })
+        ),
+        "its agent kept open, or let go, and when it was ended"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        (
+            json["waiting_on"].get("open_until").cloned(),
+            json["waiting_on"]["closed"].clone()
+        ),
+        (
+            None,
+            serde_json::json!({ "at": past, "by": "time", "ended_at": past })
+        ),
+        "its agent let go, in the JSON form"
+    );
+    Ok(())
+}
+
+fn two_answers_in_one_session(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking(&world, "one")?;
+    let first = world.host.now();
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    world.host.advance(5 * 60);
+    let again = "And its text?";
+    stops_short(
+        &world,
+        &id,
+        0,
+        &code("one", 1),
+        again,
+        StopKind::NeedsAnswer,
+    )?;
+    world.settle(&id);
+    world.host.advance(60);
+    let second = world.host.now();
+    taken(&world.engine.tell(&id, "the first line", None))?;
+    let handed = |at| {
+        Some(Handed {
+            sent_at: at,
+            received_at: at,
+        })
+    };
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.stages[0].answers,
+        vec![
+            SessionAnswer {
+                question: Some(QUESTION.into()),
+                answer: AnswerHeld {
+                    words: "notes.md".into(),
+                    act: Act::Retry,
+                    at: first,
+                    session: handed(first),
+                },
+            },
+            SessionAnswer {
+                question: Some(again.into()),
+                answer: AnswerHeld {
+                    words: "the first line".into(),
+                    act: Act::Tell,
+                    at: second,
+                    session: handed(second),
+                },
+            },
+        ],
+        "the answers code's start took in its session"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["stages"][0]["answers"].clone(),
+        serde_json::json!([
+            {
+                "question": QUESTION,
+                "words": "notes.md",
+                "act": "retry",
+                "at": first,
+                "session": { "sent_at": first, "received_at": first },
+            },
+            {
+                "question": again,
+                "words": "the first line",
+                "act": "tell",
+                "at": second,
+                "session": { "sent_at": second, "received_at": second },
+            },
+        ]),
+        "the answers in the JSON form"
     );
     Ok(())
 }

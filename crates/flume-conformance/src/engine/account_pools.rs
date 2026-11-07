@@ -2684,6 +2684,12 @@ fn a_stage_moved_off_a_threshold(_: &()) -> Outcome {
         ],
     );
     let at = world.host.now();
+    // The asking agent stopped, so the retry starts a fresh agent rather
+    // than answering its session (51, 198).
+    ensure!(
+        world.engine().stop(&id, false).refusal().is_none(),
+        "the stop of the asking agent was refused"
+    );
     let retried = world.engine().retry(
         &id,
         Retry::Stage("code".into()),

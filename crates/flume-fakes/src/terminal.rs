@@ -284,8 +284,9 @@ impl FakeTerminal {
         );
     }
 
-    /// The terminal cannot send to a running agent: every send is
-    /// refused, and every open runs a command carrying its prompt.
+    /// The terminal cannot send to a running agent: it says it sends
+    /// nothing, every send is refused, and every open runs a command
+    /// carrying its prompt (53, 198, C.5).
     pub fn cannot_send(&self) {
         lock(&self.state).sends = false;
     }
@@ -662,6 +663,12 @@ impl Terminal for FakeTerminal {
         }
         state.sent.push((key, text.into()));
         Sent::Sent
+    }
+
+    /// Whether it sends, as scripted: true until [`FakeTerminal::cannot_send`],
+    /// asking nothing, so nothing is logged (198).
+    fn sends(&self) -> bool {
+        lock(&self.state).sends
     }
 
     fn state(&self, agent: &Identity) -> AgentState {

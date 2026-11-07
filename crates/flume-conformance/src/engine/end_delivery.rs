@@ -1293,11 +1293,11 @@ fn talks_lost_end(world: &World, id: &PlaceId) -> Result<(StageEnd, Vec<String>)
                 state: StageState::Lost,
                 end,
                 ..
-            } if stage == "talk" => Some(end.clone()),
+            } if stage == "talk" => Some(StageEnd::clone(end)),
             _ => None,
         })
         .ok_or("no lost end of talk is recorded")?;
-    Ok((*end, world.terminal.notices("ops")))
+    Ok((end, world.terminal.notices("ops")))
 }
 
 fn a_lost_talk_with_a_bare_agent(_: &()) -> Outcome {

@@ -166,7 +166,7 @@ fn code(name: &str, start: u32) -> Identity {
 }
 
 /// The start the stage `stage` of the place `id` last made.
-fn start_of(world: &World, id: &PlaceId, stage: &str) -> Result<StartHeld, String> {
+pub fn start_of(world: &World, id: &PlaceId, stage: &str) -> Result<StartHeld, String> {
     world
         .held(id)
         .ok_or("no held state")?
@@ -179,7 +179,7 @@ fn start_of(world: &World, id: &PlaceId, stage: &str) -> Result<StartHeld, Strin
 
 /// The fake agent carries a stopped start's conversation to the account
 /// at `name`'s home with the session `s-1`.
-fn carries_to(world: &World, name: &str) {
+pub fn carries_to(world: &World, name: &str) {
     world.agent.carry_to(
         &home(name),
         Carry::Yes {
@@ -200,7 +200,7 @@ fn carried_prompt(world: &World, identity: &Identity) -> String {
 
 /// The session the start's command resumes, as the fake terminal opened
 /// it.
-fn resumed(world: &World, identity: &Identity) -> Result<Option<String>, String> {
+pub fn resumed(world: &World, identity: &Identity) -> Result<Option<String>, String> {
     let (command, _) = world
         .terminal
         .opened(identity)
@@ -254,7 +254,7 @@ fn carried(world: &World, id: &PlaceId, start: &StartHeld) -> Outcome {
 
 /// The start carries no conversation: its record names no session, its
 /// command resumes none, and it is no start after a spent agent.
-fn carries_none(world: &World, start: &StartHeld) -> Outcome {
+pub fn carries_none(world: &World, start: &StartHeld) -> Outcome {
     ensure_eq!(
         (
             start.conversation.clone(),
@@ -1090,7 +1090,7 @@ pub fn by_hand() -> LiveProcess {
 /// The words a lost conversation's carried start's agent is sent:
 /// flume's, then `words` where the retry gave any, then the way to stop
 /// short as the fake agent gives it (28, 49).
-fn resumed_prompt(world: &World, identity: &Identity, words: Option<&str>) -> String {
+pub fn resumed_prompt(world: &World, identity: &Identity, words: Option<&str>) -> String {
     let resumed = "Your session was lost and goes on here, with its conversation as it stood. Anything you had running then has stopped: read the place again before you carry on.";
     match words {
         Some(words) => format!(
@@ -1114,7 +1114,7 @@ const UNREADABLE: &str =
 
 /// The talk start `start` carries the conversation of talk's start 1,
 /// lost, resuming `s-1` under `account` of `work`.
-fn carries_lost(world: &World, start: &StartHeld, account: &str) -> Outcome {
+pub fn carries_lost(world: &World, start: &StartHeld, account: &str) -> Outcome {
     ensure_eq!(
         (
             start.conversation.clone(),

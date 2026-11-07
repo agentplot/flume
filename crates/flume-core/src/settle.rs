@@ -166,7 +166,7 @@ impl Engine {
             StageState::Delivered | StageState::Finished | StageState::Repeating => {
                 self.run_over(id) || self.advance(id)
             }
-            StageState::EndedShort => self.found_work(id),
+            StageState::EndedShort => self.found_work(id) || self.close_session(id),
             _ => false,
         }
     }

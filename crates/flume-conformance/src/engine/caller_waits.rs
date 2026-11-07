@@ -192,6 +192,7 @@ fn construct_short_key() -> String {
         start: 1,
         state: StageState::EndedShort,
         quiet_from: None,
+        answered: 0,
         end: Box::default(),
     }
     .key()
@@ -1021,7 +1022,7 @@ fn the_answerer_is_the_recipient(_: &()) -> Outcome {
     ensure_eq!(
         world.terminal.notices("east/operator"),
         vec![
-            "flume: change--plan construct needs an answer; read: flume status change--plan"
+            "flume: change--plan construct needs an answer, its agent kept open for the answer until 1003600; read: flume status change--plan"
                 .to_string(),
             "flume: change--plan stalled: a retry of construct; read: flume status change--plan"
                 .to_string()

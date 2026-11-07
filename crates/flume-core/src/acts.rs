@@ -6,6 +6,7 @@
 //! never ends a working session (35, 50).
 
 use crate::held::refresh_waiting;
+use crate::open_sessions::waits_on_answer;
 use crate::start::{Start, Starts};
 use crate::status::waiting_on;
 use crate::{Act, Answer, Engine, Step, Tidied, POLL, RECEIVED_WITHIN, TELL_BOUND};
@@ -138,7 +139,11 @@ impl Engine {
     /// conversation reported lost ends no agent, forced or not: its stage
     /// waits to carry the lost start's conversation, and its start opens
     /// once no process runs it, its answer naming each that does (30, 49,
-    /// 77, 207).
+    /// 77, 207); so does a retry of a conversation whose agent kept open
+    /// for its answer was let go ended, lost with its terminal or its
+    /// host. A retry with words naming a stage whose agent is kept open
+    /// for its answer is that answer, handed to its session, ending and
+    /// starting no agent (42, 49, 50, 198).
     pub fn retry(
         &self,
         place: &PlaceId,
@@ -167,17 +172,25 @@ impl Engine {
             }
             Retry::Submission => None,
         };
+        // An answer to the agent kept open for it: handed to its session,
+        // which carries the stage on (42, 49, 198).
+        if let (Some(index), Some(words)) = (index, words.as_deref()) {
+            if let Some(kept) = self.kept_open(&held).filter(|kept| kept.index() == index) {
+                return self.answer(place, &kept, words, Act::Retry, None);
+            }
+        }
         if let Some(reason) = self.working(place) {
             return Answer::refused(reason);
         }
-        // A conversation reported lost: its start carries the lost start's
-        // conversation, and no agent of the stage is ended, an agent the
-        // terminal brought back in its pane, and any process that runs its
-        // session, left as they are (30, 49, 77; core.10).
+        // A conversation reported lost, or whose agent kept open for its
+        // answer was lost with its terminal or its host: its start carries
+        // the lost start's conversation, and no agent of the stage is
+        // ended, an agent the terminal brought back in its pane, and any
+        // process that runs its session, left as they are (30, 49, 77,
+        // 198; core.10).
         let lost = index
             .filter(|&index| {
-                held.place.kind.stages[index].conversation
-                    && held.stages[index].state == StageState::Lost
+                held.place.kind.stages[index].conversation && carries_lost(&held.stages[index])
             })
             .and_then(|index| held.stages[index].start.as_ref())
             .map(|start| start.identity.clone());
@@ -522,20 +535,52 @@ impl Engine {
     }
 
     /// Hands the agent of the place's current stage `words` as a prompt
-    /// once it said it started and waits, received or sent once more; refused with nothing
-    /// typed when the place has no live agent, its agent is asking, or the
-    /// words are not delivered within the bound (53 to 55).
+    /// once it said it started and waits, received or sent once more;
+    /// refused with nothing typed when the place has no live agent, its
+    /// agent is asking, or the words are not delivered within the bound.
+    /// A tell to a place whose stage ended short needing an answer is that
+    /// answer while its agent is kept open for it, carrying the stage on
+    /// in its session, and is refused, naming the retry that answers it,
+    /// once its agent is not (42, 53 to 55, 198).
     pub fn tell(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
         self.settle_attended();
         let Some(read) = self.store.read(place) else {
             return Answer::refused(format!("no place {place} stands on this host"));
         };
+        if let Some(stage) = waits_on_answer(&read.state) {
+            return match self.kept_open(&read.state) {
+                Some(kept) => self.answer(place, &kept, words, Act::Tell, bound),
+                None => Answer::refused(format!(
+                    "the stage {stage} of {place} waits on an answer and its agent is no longer kept open; give the answer as a retry: flume retry {place} --words <answer>"
+                )),
+            };
+        }
         let Some((_, start)) = read.state.live_start() else {
             return Answer::refused(format!("the place {place} has no live agent"));
         };
-        let identity = start.identity.clone();
+        match self.hand(place, start, words, bound) {
+            Ok(_) => self.acted(Act::Tell, place),
+            Err(reason) => Answer::refused(reason),
+        }
+    }
+
+    /// Hands the agent of `start` `words` as a prompt, as a tell hands
+    /// them: once it said it started, waits and asks nothing, within the
+    /// bound, ten minutes where none is given, its input cleared by the
+    /// terminal's send, and read received within 60 seconds of each
+    /// sending or sent once more. When it was last sent and read
+    /// received, or the tell's words saying why nothing more was typed
+    /// (37, 38, 53, 54; core.11).
+    pub(crate) fn hand(
+        &self,
+        place: &PlaceId,
+        start: &StartHeld,
+        words: &str,
+        bound: Option<Seconds>,
+    ) -> Result<Handed, String> {
+        let identity = &start.identity;
         let Some(agent) = self.agent(&start.program) else {
-            return Answer::refused(format!(
+            return Err(format!(
                 "no agent profile runs the program {}",
                 start.program
             ));
@@ -544,25 +589,25 @@ impl Engine {
         let deadline = self.host.now() + bound.unwrap_or(TELL_BOUND);
         loop {
             let state = self.state_of(Some(agent.as_ref()), &folder, start);
-            let asking = agent.asking(&folder, &identity);
+            let asking = agent.asking(&folder, identity);
             if state == AgentState::Asking || asking == Reading::Yes {
-                return Answer::refused(format!(
+                return Err(format!(
                     "the agent {identity} is asking a person; nothing was typed"
                 ));
             }
             if state == AgentState::Stopped {
-                return Answer::refused(format!(
+                return Err(format!(
                     "the agent {identity} is not live; nothing was typed"
                 ));
             }
             if state == AgentState::Waiting
                 && asking == Reading::No
-                && agent.started(&folder, &identity) == Reading::Yes
+                && agent.started(&folder, identity) == Reading::Yes
             {
                 break;
             }
             if self.host.now() >= deadline {
-                return Answer::refused(format!(
+                return Err(format!(
                     "the agent {identity} did not wait for input within the bound; nothing was typed"
                 ));
             }
@@ -570,21 +615,24 @@ impl Engine {
         }
         for _ in 0..2 {
             if let Sent::Refused { reason } = self.agent_on(start).send(words) {
-                return Answer::refused(format!("the terminal did not send the words: {reason}"));
+                return Err(format!("the terminal did not send the words: {reason}"));
             }
-            let sent = self.host.now();
+            let sent_at = self.host.now();
             loop {
-                if let Received::Received { .. } = agent.received(&folder, &identity, words) {
-                    return self.acted(Act::Tell, place);
+                if let Received::Received { .. } = agent.received(&folder, identity, words) {
+                    return Ok(Handed {
+                        sent_at,
+                        received_at: self.host.now(),
+                    });
                 }
-                let waited = self.host.now().saturating_sub(sent);
+                let waited = self.host.now().saturating_sub(sent_at);
                 if waited >= RECEIVED_WITHIN {
                     break;
                 }
                 self.host.sleep(POLL.min(RECEIVED_WITHIN - waited));
             }
         }
-        Answer::refused(format!("the agent {identity} did not receive the words"))
+        Err(format!("the agent {identity} did not receive the words"))
     }
 
     /// The answer to an act taken: the place's status as it then stands.
@@ -611,11 +659,32 @@ fn answered(stage: &StageHeld, words: Option<String>) -> Option<String> {
         .filter(|_| stage.state == StageState::EndedShort)
         .and_then(|end| end.words.clone());
     match (question, words) {
-        (Some(question), Some(answer)) => {
-            Some(format!("The question: {question}\n\nThe answer: {answer}"))
-        }
+        (Some(question), Some(answer)) => Some(asked(&question, &answer)),
         (Some(question), None) => Some(format!("The question: {question}")),
         (None, words) => words,
+    }
+}
+
+/// A question a stop-short asked and its answer, as a retry's prompt and
+/// an answer handed to a session give them (42, 49).
+pub(crate) fn asked(question: &str, answer: &str) -> String {
+    format!("The question: {question}\n\nThe answer: {answer}")
+}
+
+/// Whether a retry of a conversation's stage carries its last start's
+/// conversation as a lost one's: the stage reported lost, or its agent
+/// kept open for its answer let go ended, or an agent the terminal brought
+/// back bare left in its pane, either lost with its terminal or its host
+/// (49, 77, 179, 198).
+fn carries_lost(stage: &StageHeld) -> bool {
+    match stage.state {
+        StageState::Lost => true,
+        StageState::EndedShort => stage
+            .end
+            .as_ref()
+            .and_then(|end| end.closed)
+            .is_some_and(|closed| closed.by == ClosedBy::AgentEnded || closed.left_in_pane),
+        _ => false,
     }
 }
 

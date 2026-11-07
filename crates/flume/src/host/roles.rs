@@ -60,7 +60,7 @@ const RUN: &[&str] = &[
 const STANDING: &[&str] = &["agent", "session", "answers", "answerer"];
 
 /// The settings an entry's `agents` table gives, as `--agent` gives them
-/// (7, 32, 107, 162, 195, 197).
+/// (7, 32, 107, 162, 195, 197, 198).
 const AGENTS: &[&str] = &[
     "program",
     "model",
@@ -69,6 +69,7 @@ const AGENTS: &[&str] = &[
     "beside",
     "session",
     "mode",
+    "keep_open",
     "programs",
 ];
 
@@ -383,6 +384,7 @@ fn settings_of(
         beside: entry.name("beside")?,
         session: entry.name("session")?,
         mode,
+        keep_open: super::config::keep_open_of(table, at)?,
         programs,
     })
 }
