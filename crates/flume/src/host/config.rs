@@ -1904,11 +1904,11 @@ mod tests {
         // time for every program, never a table.
         for (text, named) in [
             (
-                "[agents]\nkeep_open = { claude = \"1h\" }\n",
+                "[agents]\nkeep_open = { agent = \"1h\" }\n",
                 "agents.keep_open",
             ),
             (
-                "[repos.\"/r\".kinds.fix.agents.stages.code.keep_open]\nclaude = \"1h\"\n",
+                "[repos.\"/r\".kinds.fix.agents.stages.code.keep_open]\nagent = \"1h\"\n",
                 "repos.\"/r\".kinds.fix.agents.stages.code.keep_open",
             ),
         ] {

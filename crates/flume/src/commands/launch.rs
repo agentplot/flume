@@ -326,7 +326,7 @@ mod tests {
     fn a_programs_keep_open_is_refused() {
         // 7, 198: the command-line spec's "A program's time": one time for
         // every program, never a program's.
-        for words in ["keep_open.claude=1h", "code.keep_open.claude=1h"] {
+        for words in ["keep_open.agent=1h", "code.keep_open.agent=1h"] {
             let refused = given(&[words]).unwrap_err();
             assert!(
                 refused.contains(&format!("--agent {words}:"))
