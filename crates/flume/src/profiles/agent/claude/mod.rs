@@ -626,10 +626,11 @@ impl Agent for Claude {
         }
     }
 
-    /// `flume needs "<words>"` and `flume needs --found "<words>"` (41,
-    /// 92, 131).
+    /// `flume needs "<words>"` and `flume needs --found "<words>"`, a
+    /// found being work a stage before this one must do again: the same
+    /// words for every start of every stage (28, 41, 92, 131; core.31).
     fn stop_short(&self, _agent: &Identity) -> String {
-        "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop.".into()
+        "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work a stage before this one must do again, saying what you found; then stop.".into()
     }
 
     /// `--to <name>` given to `flume needs`, the name as the prompt lists

@@ -875,8 +875,10 @@ impl Agent for FakeAgent {
         }
     }
 
+    /// Both ways to stop short, a found being work a stage before this
+    /// one must do again, the same for every start (41, 92; core.31).
     fn stop_short(&self, _agent: &Identity) -> String {
-        "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work the stage cannot deliver past, run `flume needs --found \"<the work you found>\"`".into()
+        "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work a stage before this one must do again, run `flume needs --found \"<the work you found>\"`".into()
     }
 
     fn stop_short_to(&self) -> String {

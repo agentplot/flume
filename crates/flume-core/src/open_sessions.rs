@@ -345,8 +345,9 @@ fn brought_back_bare(reading: &AgentReading) -> bool {
 }
 
 /// The name of the place's current stage where it ended short waiting on
-/// an answer: needing one, or having found work from a stage before the
-/// kind's last (42, 131).
+/// an answer: needing one, or having found work that sends the place back
+/// nowhere, from a stage before the kind's last or from a last stage that
+/// is its kind's own fix round (42, 131).
 pub(crate) fn waits_on_answer(held: &HeldState) -> Option<&str> {
     let index = held.current?;
     let stage = &held.stages[index];
@@ -354,7 +355,7 @@ pub(crate) fn waits_on_answer(held: &HeldState) -> Option<&str> {
         return None;
     }
     let found = stage.end.as_ref().and_then(|end| end.needs) == Some(StopKind::FoundWork);
-    (!found || index + 1 < held.stages.len()).then_some(stage.name.as_str())
+    (!found || !crate::submit::found_goes_back(held, index)).then_some(stage.name.as_str())
 }
 
 /// When the start `start` of the stage at `index` last took an answer in
