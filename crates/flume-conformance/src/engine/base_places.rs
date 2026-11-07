@@ -186,6 +186,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["S120", "23", "43", "130", "203", "208", "210"],
             run: s120_a_base_place_forecast_in_conflict_launches_its_fix,
         },
+        Scenario {
+            name: "base places: no forecast is asked while a base place's fix is live; the settle after it lands asks one, the base place waits on its caller once it is clear, and the caller's retry submits its branch by name, which lands",
+            cites: &["111", "203", "S120"],
+            run: the_fix_lands_and_the_forecast_is_clear,
+        },
+        Scenario {
+            name: "base places: two settles of every place side by side reading one forecast conflict launch one fix, and the base place holds one",
+            cites: &["17", "75", "203"],
+            run: two_settles_at_once,
+        },
+        Scenario {
+            name: "base places: a fix written onto its base place whose launching command died before it was made is launched by the next settle, the base place holding one fix",
+            cites: &["17", "74", "203"],
+            run: a_launch_that_died_between_its_writing_and_its_making,
+        },
     ]
 }
 
@@ -1693,5 +1708,115 @@ fn s120_a_base_place_forecast_in_conflict_launches_its_fix(_: &()) -> Outcome {
         world.held(&spring).is_none(),
         "the base place did not land and go"
     );
+    Ok(())
+}
+
+fn the_fix_lands_and_the_forecast_is_clear(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.commit("main", &["README.md"]);
+    forecast_conflict(&world, &[])?;
+    world.engine().settle(None);
+    ensure!(
+        world.held(&mend_fix(1)).is_some(),
+        "mend--spring-1 was not launched"
+    );
+    world.queue.log.clear();
+    world.engine().settle(None);
+    mend_lands(&world, 1)?;
+    ensure_eq!(
+        forecasts(&world),
+        Vec::<String>::new(),
+        "the forecasts while the fix was live"
+    );
+    forecast_clear(&world)?;
+    world.engine().settle(None);
+    ensure_eq!(
+        forecasts(&world),
+        vec!["forecast train/spring onto main".to_string()],
+        "the forecasts once it landed"
+    );
+    let status = world.status(&spring)?;
+    ensure_eq!(
+        status.waiting_on.map(|waiting| (waiting.act, waiting.why)),
+        Some((Act::Retry, Waits::Unsubmitted)),
+        "what the base place waits on its caller for"
+    );
+    retry_submission(&world, &spring)?;
+    ensure_eq!(
+        world.queue.log.of("submit").last().cloned(),
+        Some("submit train/spring named".to_string()),
+        "the base place's submit"
+    );
+    world.engine().settle(None);
+    ensure!(
+        world.held(&spring).is_none(),
+        "the base place did not land and go"
+    );
+    Ok(())
+}
+
+fn two_settles_at_once(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.commit("main", &["README.md"]);
+    forecast_conflict(&world, &[])?;
+    let other = world.engine();
+    world.store.before_next_write(move || {
+        other.settle(None);
+    });
+    world.engine().settle(None);
+    let fixes: Vec<HeldState> = world
+        .store
+        .read_every()
+        .into_iter()
+        .map(|read| read.state)
+        .filter(|held| held.place.fix_of.is_some())
+        .collect();
+    ensure_eq!(fixes.len(), 1, "the fixes launched");
+    ensure_eq!(fixes[0].place.id, mend_fix(1), "the fix launched");
+    ensure_eq!(
+        world.held(&spring).ok_or("no base place")?.fixes.len(),
+        1,
+        "the fixes the base place holds"
+    );
+    Ok(())
+}
+
+fn a_launch_that_died_between_its_writing_and_its_making(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring_mended(&world, None)?;
+    world.commit("main", &["README.md"]);
+    let (head, onto) = forecast_conflict(&world, &[])?;
+    let forecast = world.queue.forecast(REPOSITORY, "train/spring", "main");
+    let now = world.host.now();
+    world.engine.update(&spring, |held| {
+        held.forecast = Some(ForecastHeld {
+            at: now,
+            forecast: forecast.clone(),
+        });
+        held.fixes.push(BaseFix {
+            number: 1,
+            name: "spring-1".into(),
+            place: mend_fix(1),
+            cause: FixCause::Forecast {
+                head: head.clone(),
+                onto: onto.clone(),
+            },
+            launched: now,
+            ended: FixEnded::Live,
+        });
+        flume_core::Step::Write(())
+    });
+    ensure!(world.held(&mend_fix(1)).is_none(), "the fix stands");
+    world.engine().settle(None);
+    let brief = brief_of(&world, &mend_fix(1))?;
+    ensure!(
+        brief.ends_with(&conflict_words("main", &onto)),
+        "the fix's brief carries no words of the merge queue's: {brief}"
+    );
+    let held = world.held(&spring).ok_or("no base place")?;
+    ensure_eq!(held.fixes.len(), 1, "the fixes the base place holds");
+    ensure_eq!(held.fixes[0].ended, FixEnded::Live, "the fix's end");
     Ok(())
 }
