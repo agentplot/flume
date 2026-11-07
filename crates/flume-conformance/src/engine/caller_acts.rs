@@ -4,7 +4,7 @@
 use super::carried_conversations::{by_hand, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
-use flume_core::{Act, Answer, Retry, KEEP_OPEN};
+use flume_core::{Act, Answer, Answering, Retry, KEEP_OPEN};
 use flume_seams::*;
 use std::sync::{Arc, Mutex};
 
@@ -104,6 +104,46 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "retry: a lost talk's retry, forced, while its session runs in a pane of the caller's own, is taken and talk waits, flume closing nothing",
             cites: &["49", "207"],
             run: a_session_run_in_a_pane_flume_did_not_make,
+        },
+        Scenario {
+            name: "answer: construct ended short needing an answer naming east/ops, its agent kept open for no time, and the run of east/ops retries construct naming the key stage/construct/1/ended-short with its words: a fresh agent starts with the question then the words, and status gives the end answered by east/ops, with when",
+            cites: &["42", "49", "50", "56"],
+            run: one_answer_taken_by_a_fresh_agent,
+        },
+        Scenario {
+            name: "answer: the same stop-short's agent kept open, the run of east/ops retries construct naming its key within its time: the answer reaches that agent's session, no agent is ended or started, construct carries on under its first start, and status gives the end answered by east/ops, with when",
+            cites: &["42", "49", "53", "198", "S93"],
+            run: one_answer_taken_by_the_agent_kept_open,
+        },
+        Scenario {
+            name: "answer: a retry from the pane ops naming the same key a minute later is refused naming east/ops, its words and when, and no agent is ended or started",
+            cites: &["42", "49", "S93"],
+            run: a_second_answer_to_the_same_question,
+        },
+        Scenario {
+            name: "answer: a tell from the pane ops naming the same key while the agent is still kept open is refused naming east/ops, its words and when, and nothing is typed",
+            cites: &["42", "53", "54"],
+            run: a_tell_naming_an_answered_key,
+        },
+        Scenario {
+            name: "answer: construct, retried with an answer, delivers and code starts; a late retry naming construct's first stop-short's key is refused naming the move the place waits on now, none, and code goes on",
+            cites: &["42", "49", "50"],
+            run: an_answer_after_the_place_moved_on,
+        },
+        Scenario {
+            name: "answer: construct's agent kept open takes an answer in its session and stops short again: the second stop-short's key is stage/construct/1/ended-short/1, a retry naming it is taken, and one naming stage/construct/1/ended-short is refused as answered",
+            cites: &["42", "43", "49", "198"],
+            run: a_second_stop_short_of_one_start,
+        },
+        Scenario {
+            name: "answer: a caller's retry of a stage that ended short, with words and no key, is taken as before, and the end records the answer with no key named",
+            cites: &["42", "49"],
+            run: an_answer_with_no_key,
+        },
+        Scenario {
+            name: "S93: a change launched in east from no session, its recipient east/operator, asks ops; the run of east/ops is woken, collects the question with its key, holds the waiting move and answers by the key within the hour, construct carrying on in its session; a second answer by the key is refused naming ops's and when, and east/operator is woken for none of it",
+            cites: &["S93", "7", "28", "41", "42", "43", "49", "130", "132", "193", "198"],
+            run: s93_a_question_for_ops_answered_once,
         },
     ]
 }
@@ -730,6 +770,461 @@ fn a_session_run_in_a_pane_flume_did_not_make(_: &()) -> Outcome {
         ),
         (0, Some(StageState::WaitingForRoom)),
         "the agents closed and talk after a forced retry"
+    );
+    Ok(())
+}
+
+/// The question construct asks `east/ops` in the answer scenarios.
+const ASKED: &str = "Which queue's settings are live in east?";
+
+/// The answer `east/ops` gives it.
+const READ: &str = "east runs the queue at 2.4, as deployed.";
+
+/// The key of construct's first start ended short after `answered`
+/// answers in its session (42, 43).
+fn construct_key(answered: u32) -> EndKey {
+    EndKey::Stage {
+        stage: "construct".into(),
+        start: 1,
+        state: StageState::EndedShort,
+        answered,
+    }
+}
+
+/// construct's start `start` of the change `plan`.
+fn construct(start: u32) -> Identity {
+    World::identity("change", "plan", "construct", start)
+}
+
+/// An answer naming `key`, given by `by`.
+fn answering(key: Option<EndKey>, by: &str) -> Answering {
+    Answering {
+        key,
+        by: Some(by.into()),
+    }
+}
+
+/// The question then the answer, as a retry's prompt and an answer handed
+/// to a session give them (42, 49).
+fn asked(answer: &str) -> String {
+    format!("The question: {ASKED}\n\nThe answer: {answer}")
+}
+
+/// The change `plan` in `east` whose construct stopped short needing an
+/// answer, naming `ops`, and was settled, its agent kept open for the
+/// launch's `keep_open` where one is given; the place and when it stopped
+/// short (41, 198).
+fn asks_ops(world: &World, keep_open: Option<&str>) -> Result<(PlaceId, Seconds), String> {
+    let (id, identity, secret) = super::stage_runs::construct_in_east_kept(world, keep_open)?;
+    let at = world.host.now();
+    taken(&world.engine.needs_to(
+        &identity,
+        &secret,
+        ASKED,
+        StopKind::NeedsAnswer,
+        Some("ops"),
+    ))?;
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::EndedShort),
+        "construct once it stopped short"
+    );
+    Ok((id, at))
+}
+
+/// The answer the end keyed `key` holds, as status gives it, with the key
+/// status gives that end (42, 56).
+fn answer_on(world: &World, id: &PlaceId, key: &EndKey) -> Result<Option<AnswerHeld>, String> {
+    let status = world.status(id)?;
+    let end = status
+        .ends
+        .iter()
+        .find(|end| end.key == *key)
+        .ok_or_else(|| format!("status gives no end keyed {key}"))?;
+    Ok(end.end.answer.clone())
+}
+
+/// The agents of the change `plan` opened and closed, as the terminal's
+/// log gives them.
+fn plans_agents(world: &World) -> Vec<String> {
+    world
+        .terminal
+        .log
+        .calls()
+        .into_iter()
+        .filter(|call| {
+            (call.starts_with("open") || call.starts_with("close")) && call.contains("change--plan")
+        })
+        .collect()
+}
+
+/// The answer `east/ops` gave by `act` at `at`, naming the key `key`,
+/// handed to a session at `at` where `session`, as held state records it.
+fn by_ops(act: Act, at: Seconds, key: Option<EndKey>, session: bool) -> AnswerHeld {
+    AnswerHeld {
+        words: READ.into(),
+        act,
+        at,
+        session: session.then_some(Handed {
+            sent_at: at,
+            received_at: at,
+        }),
+        by: Some("east/ops".into()),
+        key,
+    }
+}
+
+/// The run of `east/ops` answered construct's stop-short by a retry naming
+/// its key at `at`, construct's agent kept open taking it in its session:
+/// the place, and when.
+fn answered_by_ops(world: &World) -> Result<(PlaceId, Seconds), String> {
+    let (id, _) = asks_ops(world, None)?;
+    world.host.advance(10 * 60);
+    let at = world.host.now();
+    taken(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some(READ.into()),
+        false,
+        &answering(Some(construct_key(0)), "east/ops"),
+    ))?;
+    Ok((id, at))
+}
+
+/// A refusal of a second answer to construct's first stop-short: it names
+/// `east/ops`, its words and when it was taken.
+fn names_ops_answer(reason: &str, at: Seconds) -> Outcome {
+    ensure!(
+        reason.contains("east/ops") && reason.contains(READ) && reason.contains(&at.to_string()),
+        "the refusal names not east/ops, its words and when: {reason}"
+    );
+    Ok(())
+}
+
+fn one_answer_taken_by_a_fresh_agent(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asks_ops(&world, Some("0"))?;
+    let at = world.host.now();
+    taken(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some(READ.into()),
+        false,
+        &answering(Some(construct_key(0)), "east/ops"),
+    ))?;
+    let prompt = world
+        .prompt(&id, &construct(2))
+        .ok_or("no fresh agent of construct")?;
+    ensure!(
+        prompt.contains(&asked(READ)),
+        "the question then the answer are not in {prompt}"
+    );
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(0))?,
+        Some(by_ops(Act::Retry, at, Some(construct_key(0)), false)),
+        "the answer the stop-short's end holds"
+    );
+    Ok(())
+}
+
+fn one_answer_taken_by_the_agent_kept_open(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, at) = answered_by_ops(&world)?;
+    ensure_eq!(
+        world.terminal.sent_to(&construct(1)).last().cloned(),
+        Some(asked(READ)),
+        "the last words construct's agent was sent"
+    );
+    ensure_eq!(
+        plans_agents(&world),
+        vec![format!("open {} {id}", construct(1))],
+        "the place's agents opened and closed"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let stage = &held.stages[0];
+    ensure_eq!(
+        (stage.state, stage.start.as_ref().map(|start| start.n)),
+        (StageState::Begun, Some(1)),
+        "construct and its start"
+    );
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(0))?,
+        Some(by_ops(Act::Retry, at, Some(construct_key(0)), true)),
+        "the answer the stop-short's end holds"
+    );
+    Ok(())
+}
+
+fn a_second_answer_to_the_same_question(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, at) = answered_by_ops(&world)?;
+    world.host.advance(60);
+    let sent = world.terminal.sent_to(&construct(1)).len();
+    let reason = refused(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some("2.3".into()),
+        false,
+        &answering(Some(construct_key(0)), "ops"),
+    ))?;
+    names_ops_answer(&reason, at)?;
+    ensure_eq!(
+        (
+            plans_agents(&world).len(),
+            world.terminal.sent_to(&construct(1)).len()
+        ),
+        (1, sent),
+        "the place's agents opened and closed, and the words sent to construct's agent"
+    );
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(0))?,
+        Some(by_ops(Act::Retry, at, Some(construct_key(0)), true)),
+        "the answer the stop-short's end holds"
+    );
+    Ok(())
+}
+
+fn a_tell_naming_an_answered_key(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, at) = answered_by_ops(&world)?;
+    world.host.advance(60);
+    let sent = world.terminal.sent_to(&construct(1)).len();
+    let reason = refused(&world.engine.tell_answering(
+        &id,
+        "2.3",
+        None,
+        &answering(Some(construct_key(0)), "ops"),
+    ))?;
+    names_ops_answer(&reason, at)?;
+    ensure_eq!(
+        world.terminal.sent_to(&construct(1)).len(),
+        sent,
+        "the words sent to construct's agent"
+    );
+    Ok(())
+}
+
+fn an_answer_after_the_place_moved_on(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = answered_by_ops(&world)?;
+    super::settling::write_change(&world, "plan");
+    world.settle(&id);
+    ensure_eq!(
+        world.stage_state(&id, "construct"),
+        Some(StageState::Delivered),
+        "construct"
+    );
+    let code = World::identity("change", "plan", "code", 1);
+    ensure!(
+        world
+            .stage_state(&id, "code")
+            .is_some_and(StageState::running),
+        "code did not start"
+    );
+    let reason = refused(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some("late".into()),
+        false,
+        &answering(Some(construct_key(0)), "ops"),
+    ))?;
+    ensure!(
+        reason.contains("waits on no move of its caller's now"),
+        "the refusal names not the move the place waits on now: {reason}"
+    );
+    ensure!(
+        world
+            .stage_state(&id, "code")
+            .is_some_and(StageState::running),
+        "code did not go on"
+    );
+    ensure!(
+        !plans_agents(&world).contains(&format!("close {code}")),
+        "code's agent was closed"
+    );
+    Ok(())
+}
+
+fn a_second_stop_short_of_one_start(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, at) = answered_by_ops(&world)?;
+    world.host.advance(5 * 60);
+    let secret = world
+        .held(&id)
+        .and_then(|held| held.stages[0].start.clone())
+        .ok_or("no start")?
+        .secret;
+    taken(&world.engine.needs_to(
+        &construct(1).to_string(),
+        &secret.0,
+        "And west's?",
+        StopKind::NeedsAnswer,
+        Some("ops"),
+    ))?;
+    world.settle(&id);
+    ensure!(
+        answer_on(&world, &id, &construct_key(1))?.is_none(),
+        "the second stop-short is answered already"
+    );
+    ensure_eq!(
+        construct_key(1).to_string(),
+        "stage/construct/1/ended-short/1",
+        "the second stop-short's key"
+    );
+    let reason = refused(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some("2.3".into()),
+        false,
+        &answering(Some(construct_key(0)), "ops"),
+    ))?;
+    names_ops_answer(&reason, at)?;
+    let second = world.host.now();
+    taken(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some(READ.into()),
+        false,
+        &answering(Some(construct_key(1)), "east/ops"),
+    ))?;
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(1))?,
+        Some(by_ops(Act::Retry, second, Some(construct_key(1)), true)),
+        "the answer the second stop-short's end holds"
+    );
+    Ok(())
+}
+
+fn an_answer_with_no_key(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asks_ops(&world, Some("0"))?;
+    let at = world.host.now();
+    taken(&world.engine.retry(
+        &id,
+        Retry::Stage("construct".into()),
+        Some(READ.into()),
+        false,
+    ))?;
+    let prompt = world
+        .prompt(&id, &construct(2))
+        .ok_or("no fresh agent of construct")?;
+    ensure!(
+        prompt.contains(&asked(READ)),
+        "the question then the answer are not in {prompt}"
+    );
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(0))?,
+        Some(AnswerHeld {
+            words: READ.into(),
+            act: Act::Retry,
+            at,
+            session: None,
+            by: None,
+            key: None,
+        }),
+        "the answer the stop-short's end holds, no key named"
+    );
+    Ok(())
+}
+
+/// S93's engine part: no session and no recipient named, the place's
+/// recipient is `east/operator`, standing behind `east`; construct asks
+/// `ops`, whose run is woken in `east`, collects the question with its
+/// key, holds the waiting move and answers by the key within the hour, as
+/// the run's own command's recipient names it; construct carries on in its
+/// session; a second answer by the key a minute later is refused naming
+/// ops's and when; and no run of `east/operator` is launched (7, 28, 41,
+/// 42, 43, 49, 130, 132, 193, 198).
+fn s93_a_question_for_ops_answered_once(_: &()) -> Outcome {
+    let world = World::new();
+    super::launching::from_no_session(&world);
+    let (id, _) = asks_ops(&world, None)?;
+    ensure_eq!(
+        world.held(&id).ok_or("no place")?.place.recipients,
+        vec!["east/operator".to_string()],
+        "the place's recipients"
+    );
+    let ops = World::id("turn", "east-ops");
+    ensure_eq!(
+        world.held(&ops).and_then(|held| held.role),
+        Some("east/ops".to_string()),
+        "the run woken for east/ops"
+    );
+    // The run collects before its notice lands, as a run whose start
+    // collects does (43; core.25).
+    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    let Answer::Inbox { ends, .. } = world.engine.inbox("east/ops") else {
+        return Err("the inbox did not answer".into());
+    };
+    ensure_eq!(
+        ends.iter()
+            .map(|collected| (
+                collected.place.clone(),
+                collected.end.key.clone(),
+                match &collected.end.end.of {
+                    EndOf::Stage { end, .. } => end.words.clone(),
+                    _ => None,
+                }
+            ))
+            .collect::<Vec<_>>(),
+        vec![(id.clone(), construct_key(0), Some(ASKED.to_string()))],
+        "what the run of east/ops collected: the place, the key and the question"
+    );
+    taken(&world.engine.hold(
+        &id,
+        HoldOn::Waiting,
+        "east/ops reads the deployed settings",
+        Some(60 * 60),
+    ))?;
+    world.host.advance(20 * 60);
+    let by = world
+        .engine
+        .recipient(Some(&ops))
+        .ok_or("the run's command names no recipient")?;
+    ensure_eq!(by.as_str(), "east/ops", "the run's command's recipient");
+    let at = world.host.now();
+    taken(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some(READ.into()),
+        false,
+        &Answering {
+            key: Some(construct_key(0)),
+            by: Some(by),
+        },
+    ))?;
+    ensure_eq!(
+        world.terminal.sent_to(&construct(1)).last().cloned(),
+        Some(asked(READ)),
+        "the last words construct's agent was sent"
+    );
+    ensure_eq!(
+        (
+            world.stage_state(&id, "construct"),
+            plans_agents(&world).len()
+        ),
+        (Some(StageState::Begun), 1),
+        "construct, carrying on under its first start, and the place's agents opened and closed"
+    );
+    ensure_eq!(
+        answer_on(&world, &id, &construct_key(0))?,
+        Some(by_ops(Act::Retry, at, Some(construct_key(0)), true)),
+        "the answer status gives on the stop-short"
+    );
+    world.host.advance(60);
+    let reason = refused(&world.engine.retry_answering(
+        &id,
+        Retry::Stage("construct".into()),
+        Some("2.3".into()),
+        false,
+        &answering(Some(construct_key(0)), "pane-7"),
+    ))?;
+    names_ops_answer(&reason, at)?;
+    world.engine().settle(None);
+    ensure!(
+        world.held(&World::id("turn", "east-operator")).is_none(),
+        "a run of east/operator was woken"
     );
     Ok(())
 }

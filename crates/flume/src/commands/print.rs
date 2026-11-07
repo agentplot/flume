@@ -2909,7 +2909,7 @@ mod tests {
                 wakes_nothing: None,
                 stalled: Some(PendingEnd {
                     place: run,
-                    key: "stall 420".into(),
+                    key: "stall/420".parse().unwrap(),
                     what: "stalled: a retry of plan".into(),
                 }),
             }],
@@ -3138,7 +3138,7 @@ mod tests {
             .iter()
             .map(|name| PendingEnd {
                 place: PlaceId(format!("/places/fix--{name}")),
-                key: format!("{name}:code:1"),
+                key: "stage/code/1/delivered".parse().unwrap(),
                 what: "code delivered".into(),
             })
             .collect()
@@ -3521,6 +3521,7 @@ mod tests {
                 deliveries: vec![],
                 answer: None,
             },
+            key: "stage/talk/1/lost".parse().unwrap(),
             pending_for: vec!["ops".into()],
             open_until: None,
         };
@@ -3702,6 +3703,8 @@ mod tests {
                     sent_at: at,
                     received_at: at + 5,
                 }),
+                by: None,
+                key: None,
             },
         };
         let stage = StageStatus {
@@ -3928,6 +3931,7 @@ mod tests {
                 deliveries: vec![],
                 answer: None,
             },
+            key: "stall/3700".parse().unwrap(),
             pending_for: vec!["east/planner".into()],
             open_until: None,
         };

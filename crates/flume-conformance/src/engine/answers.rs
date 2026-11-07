@@ -96,6 +96,8 @@ fn answered() -> AnswerHeld {
             sent_at: 301,
             received_at: 305,
         }),
+        by: Some("east/ops".into()),
+        key: Some("stage/code/1/ended-short".parse().expect("an end's key")),
     }
 }
 
@@ -472,6 +474,7 @@ fn place_status() -> PlaceStatus {
                     }],
                     answer: Some(answered()),
                 },
+                key: "stage/code/2/ended-short".parse().unwrap(),
                 pending_for: vec![],
                 open_until: Some(3720),
             },
@@ -494,6 +497,7 @@ fn place_status() -> PlaceStatus {
                     deliveries: vec![],
                     answer: None,
                 },
+                key: "stall/120".parse().unwrap(),
                 pending_for: vec!["operator".into()],
                 open_until: None,
             },
@@ -511,6 +515,7 @@ fn place_status() -> PlaceStatus {
                     deliveries: vec![],
                     answer: None,
                 },
+                key: "submission/2/landed".parse().unwrap(),
                 pending_for: vec!["operator".into()],
                 open_until: None,
             },
@@ -684,7 +689,7 @@ fn host_status() -> HostStatus {
             run: Some(PlaceId::new("/r/places/planner--planner")),
             pending: vec![PendingEnd {
                 place: PlaceId::new("/r/places/fix--one"),
-                key: "stage verify 1".into(),
+                key: "stage/verify/1/delivered".parse().unwrap(),
                 what: "verify needs an answer".into(),
             }],
             unwoken: Some("the run of madswan/planner was not launched: the kind planner resolves to no declaration".into()),
@@ -698,7 +703,7 @@ fn host_status() -> HostStatus {
             run: None,
             pending: vec![PendingEnd {
                 place: PlaceId::new("/r/places/fix--one"),
-                key: "stage code 1".into(),
+                key: "stage/code/1/ended-short".parse().unwrap(),
                 what: "code delivered".into(),
             }],
             unwoken: None,
@@ -740,7 +745,7 @@ fn host_status() -> HostStatus {
             wakes_nothing: None,
             stalled: Some(PendingEnd {
                 place: PlaceId::new("/r/places/turn--east-operator"),
-                key: "stall 420".into(),
+                key: "stall/420".parse().unwrap(),
                 what: "stalled: a retry of plan".into(),
             }),
         }],
@@ -923,7 +928,7 @@ pub fn full() -> Vec<(&'static str, Answer)> {
                 standing: standing_status(),
                 pending: vec![PendingEnd {
                     place: PlaceId::new("/r/places/fix--one"),
-                    key: "stage code 1".into(),
+                    key: "stage/code/1/ended-short".parse().unwrap(),
                     what: "code delivered".into(),
                 }],
             },

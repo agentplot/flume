@@ -2221,6 +2221,8 @@ fn two_answers() -> HeldState {
                     sent_at: 298,
                     received_at: 300,
                 }),
+                by: None,
+                key: None,
             },
         ),
         stop_short(
@@ -2234,6 +2236,8 @@ fn two_answers() -> HeldState {
                     sent_at: 395,
                     received_at: 400,
                 }),
+                by: None,
+                key: None,
             },
         ),
     ];
@@ -2269,7 +2273,35 @@ fn two_answers_in_one_session() {
         act: Act::Retry,
         at: 300,
         session: None,
+        by: None,
+        key: None,
     });
+}
+
+#[test]
+fn an_answer_with_who_gave_it_and_its_key() {
+    // 42: who gave an answer, as the answering command's recipient named
+    // it, and the key it named, each read back as written; an answer
+    // written before either reads with neither.
+    let answer = AnswerHeld {
+        words: "the queue".into(),
+        act: Act::Retry,
+        at: 300,
+        session: None,
+        by: Some("east/ops".into()),
+        key: Some("stage/construct/1/ended-short".parse().expect("a key")),
+    };
+    round_trips(answer.clone());
+    let json = serde_json::to_value(&answer).expect("the answer as JSON");
+    assert_eq!(json["by"], "east/ops");
+    assert_eq!(json["key"], "stage/construct/1/ended-short");
+    let before: AnswerHeld = serde_json::from_value(serde_json::json!({
+        "words": "the queue",
+        "act": "retry",
+        "at": 300,
+    }))
+    .expect("an answer written before");
+    assert_eq!((before.by, before.key), (None, None));
 }
 
 #[test]

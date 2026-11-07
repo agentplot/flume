@@ -1756,7 +1756,7 @@ fn the_doors_own_run(_: &()) -> Outcome {
     ensure_eq!(operator.run, Some(door.clone()), "the address's run");
     ensure_eq!(
         operator.stalled.map(|stall| (stall.place, stall.key)),
-        Some((door, stall.of.key())),
+        Some((door, stall.of.end_key())),
         "the stall status names under the address"
     );
     Ok(())

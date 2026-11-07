@@ -289,7 +289,7 @@ fn pending_addresses(every: &[HeldState]) -> BTreeMap<String, AddressStatus> {
                     .or_insert_with(|| AddressStatus::of(address.clone()));
                 status.pending.push(PendingEnd {
                     place: held.place.id.clone(),
-                    key: end.of.key(),
+                    key: end.of.end_key(),
                     what: what_ended(&end.of),
                 });
                 if status.unwoken.is_none() {
@@ -323,7 +323,7 @@ fn unheard_stalls(every: &[HeldState]) -> Vec<(String, PendingEnd)> {
                         address,
                         PendingEnd {
                             place: held.place.id.clone(),
-                            key: stall.of.key(),
+                            key: stall.of.end_key(),
                             what: what_ended(&stall.of),
                         },
                     )

@@ -43,7 +43,7 @@ mod wait;
 mod wake;
 
 pub use accounts::{FRESH, THRESHOLD};
-pub use acts::Retry;
+pub use acts::{Answering, Retry};
 pub use agent_acts::ANSWER_RECORDED_WITHIN;
 pub use answer::*;
 pub use ends::{end_words, notice, what_ended};

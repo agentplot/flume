@@ -313,7 +313,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   True
   when `sluice exec main -- moon run seams:test` passes, with a round
   trip of every end's key in `round_trip.rs`.
-- [ ] 7.2 Have `Engine::retry`, and `Engine::tell` where it answers an
+- [x] 7.2 Have `Engine::retry`, and `Engine::tell` where it answers an
   agent kept open (198), take an optional key. It is taken only while
   the place waits on the stop-short the key names, and records in that
   end's answer, `EndHeld::answer` as record 0046's change writes it for

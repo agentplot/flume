@@ -287,6 +287,8 @@ fn answered_in_session(
                 sent_at: at,
                 received_at: at,
             }),
+            by: None,
+            key: None,
         }),
         "the answer the stop-short's end holds"
     );
@@ -1050,6 +1052,8 @@ fn an_answer_taken_before_its_session_ended(_: &()) -> Outcome {
                 sent_at: at,
                 received_at: at + POLL,
             }),
+            by: None,
+            key: None,
         }),
         "the answer the stop-short's end holds"
     );

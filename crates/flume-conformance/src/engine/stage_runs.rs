@@ -1105,6 +1105,15 @@ fn the_one_way_to_ask(_: &()) -> Outcome {
 /// behind the stream, under [`east_and_west`]'s roles, and begun: the
 /// place, and its construct's identity and secret (7, 41, 193).
 fn construct_in_east(world: &World) -> Result<(PlaceId, String, String), String> {
+    construct_in_east_kept(world, None)
+}
+
+/// As [`construct_in_east`], construct's agent kept open for an answer
+/// for the launch's `keep_open` where one is given (198).
+pub fn construct_in_east_kept(
+    world: &World,
+    keep_open: Option<&str>,
+) -> Result<(PlaceId, String, String), String> {
     east_and_west(world);
     world.host.set_role(
         "east/operator",
@@ -1116,6 +1125,12 @@ fn construct_in_east(world: &World) -> Result<(PlaceId, String, String), String>
     let mut change = launch("change", "plan", Some("one of two designs"));
     change.stream = Some("east".into());
     change.recipients = vec!["east/operator".into()];
+    if let Some(keep_open) = keep_open {
+        change.settings.insert(
+            "construct".into(),
+            super::agent_settings::kept_open(keep_open),
+        );
+    }
     launched(&world.engine.launch(&change))?;
     let id = World::id("change", "plan");
     world.settle(&id);

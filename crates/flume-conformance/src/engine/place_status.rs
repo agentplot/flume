@@ -1012,6 +1012,8 @@ fn two_answers_in_one_session(_: &()) -> Outcome {
                     act: Act::Retry,
                     at: first,
                     session: handed(first),
+                    by: None,
+                    key: None,
                 },
             },
             SessionAnswer {
@@ -1021,6 +1023,8 @@ fn two_answers_in_one_session(_: &()) -> Outcome {
                     act: Act::Tell,
                     at: second,
                     session: handed(second),
+                    by: None,
+                    key: None,
                 },
             },
         ],

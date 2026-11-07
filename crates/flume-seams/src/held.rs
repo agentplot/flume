@@ -308,9 +308,9 @@ pub struct EndHeld {
 }
 
 /// An answer to a stop-short: the caller's words, the act they came by,
-/// when flume took them and, where they were handed to the session of the
-/// agent kept open for them, when they were sent and received there (42,
-/// 53, 54, 198).
+/// when flume took them, who gave them and the key they named, and, where
+/// they were handed to the session of the agent kept open for them, when
+/// they were sent and received there (42, 53, 54, 198).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerHeld {
     pub words: String,
@@ -318,6 +318,15 @@ pub struct AnswerHeld {
     pub at: Seconds,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<Handed>,
+    /// Who gave the answer, as the answering command's recipient named
+    /// it; none where it named none, and in an answer written before (42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+    /// The key of the stop-short the answer named, taken only while the
+    /// place waited on it; none where it named none, and in an answer
+    /// written before (42).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<EndKey>,
 }
 
 /// An answer handed to the session of an agent kept open: when it was

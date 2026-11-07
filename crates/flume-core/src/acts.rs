@@ -21,6 +21,16 @@ pub enum Retry {
     Submission,
 }
 
+/// What an answer names beside its words: the key of the stop-short it
+/// answers, taken only while the place waits on that stop-short, and who
+/// gives it, as the answering command's recipient names it; each none
+/// where the caller names none (42, 49, 53).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Answering {
+    pub key: Option<EndKey>,
+    pub by: Option<String>,
+}
+
 impl Engine {
     /// The exact prompt the stage would be sent at its next start,
     /// rendered with nothing started, sent, settled or written (29,
@@ -143,13 +153,36 @@ impl Engine {
     /// for its answer was let go ended, lost with its terminal or its
     /// host. A retry with words naming a stage whose agent is kept open
     /// for its answer is that answer, handed to its session, ending and
-    /// starting no agent (42, 49, 50, 198).
+    /// starting no agent (42, 49, 50, 198). It names no key and no one
+    /// who gives it: [`Engine::retry_answering`] with neither.
     pub fn retry(
         &self,
         place: &PlaceId,
         target: Retry,
         words: Option<String>,
         force: bool,
+    ) -> Answer {
+        self.retry_answering(place, target, words, force, &Answering::default())
+    }
+
+    /// A retry, as [`Engine::retry`] takes one, whose words answer the
+    /// stop-short the place waits on as `answering` names it: one naming a
+    /// key is taken only while the place waits on the stop-short the key
+    /// names, with words, naming that stop-short's stage or the current
+    /// one, and is otherwise refused before anything is ended, started or
+    /// typed, naming the answer that stop-short took, who gave it and
+    /// when, or the move the place waits on now. A retry with words of the
+    /// stage whose stop-short the place waits on records on that
+    /// stop-short's end its words, who gave them, the key it named, none
+    /// where it named none, and when, whether they reach the agent kept
+    /// open for them or a fresh agent (42, 49, 50, 53, 198).
+    pub fn retry_answering(
+        &self,
+        place: &PlaceId,
+        target: Retry,
+        words: Option<String>,
+        force: bool,
+        answering: &Answering,
     ) -> Answer {
         self.settle_attended();
         let Some(read) = self.store.read(place) else {
@@ -172,11 +205,21 @@ impl Engine {
             }
             Retry::Submission => None,
         };
+        // An answer naming its key is taken once, while the place waits on
+        // the stop-short it names, before anything is ended, started or
+        // typed (42, 49).
+        if let Some(key) = &answering.key {
+            let stage =
+                Some(index.map_or("the submission", |index| held.stages[index].name.as_str()));
+            if let Err(reason) = keyed(&held, place, key, stage, words.is_some()) {
+                return Answer::refused(reason);
+            }
+        }
         // An answer to the agent kept open for it: handed to its session,
         // which carries the stage on (42, 49, 198).
         if let (Some(index), Some(words)) = (index, words.as_deref()) {
             if let Some(kept) = self.kept_open(&held).filter(|kept| kept.index() == index) {
-                return self.answer(place, &kept, words, Act::Retry, None);
+                return self.answer(place, &kept, words, Act::Retry, None, answering);
             }
         }
         if let Some(reason) = self.working(place) {
@@ -205,9 +248,34 @@ impl Engine {
             },
             None => HoldOn::Submission,
         };
+        // The answer a fresh agent will carry, recorded on the stop-short
+        // it answers (42, 49).
+        let answer = words.as_ref().and_then(|words| {
+            let key = waited_key(&held).filter(|_| index.is_some() && held.current == index)?;
+            Some((
+                key,
+                AnswerHeld {
+                    words: words.clone(),
+                    act: Act::Retry,
+                    at: self.host.now(),
+                    session: None,
+                    by: answering.by.clone(),
+                    key: answering.key.clone(),
+                },
+            ))
+        });
         self.update(place, |held| {
             held.holds
                 .retain(|hold| hold.on != ends && hold.on != HoldOn::Waiting);
+            if let Some((key, answer)) = &answer {
+                if let Some(end) = held
+                    .ends
+                    .iter_mut()
+                    .find(|end| end.answer.is_none() && end.of.end_key() == *key)
+                {
+                    end.answer = Some(answer.clone());
+                }
+            }
             Step::Write(())
         });
         let Some(index) = index else {
@@ -541,15 +609,38 @@ impl Engine {
     /// A tell to a place whose stage ended short needing an answer is that
     /// answer while its agent is kept open for it, carrying the stage on
     /// in its session, and is refused, naming the retry that answers it,
-    /// once its agent is not (42, 53 to 55, 198).
+    /// once its agent is not (42, 53 to 55, 198). It names no key and no
+    /// one who gives it: [`Engine::tell_answering`] with neither.
     pub fn tell(&self, place: &PlaceId, words: &str, bound: Option<Seconds>) -> Answer {
+        self.tell_answering(place, words, bound, &Answering::default())
+    }
+
+    /// A tell, as [`Engine::tell`] takes one, whose words, where they
+    /// answer the agent kept open, record who gave them and the key they
+    /// named, none where they named none, on the stop-short they answer.
+    /// One naming a key is taken only while the place waits on the
+    /// stop-short the key names, and is otherwise refused with nothing
+    /// typed, naming the answer that stop-short took, who gave it and
+    /// when, or the move the place waits on now (42, 53, 198).
+    pub fn tell_answering(
+        &self,
+        place: &PlaceId,
+        words: &str,
+        bound: Option<Seconds>,
+        answering: &Answering,
+    ) -> Answer {
         self.settle_attended();
         let Some(read) = self.store.read(place) else {
             return Answer::refused(format!("no place {place} stands on this host"));
         };
+        if let Some(key) = &answering.key {
+            if let Err(reason) = keyed(&read.state, place, key, None, true) {
+                return Answer::refused(reason);
+            }
+        }
         if let Some(stage) = waits_on_answer(&read.state) {
             return match self.kept_open(&read.state) {
-                Some(kept) => self.answer(place, &kept, words, Act::Tell, bound),
+                Some(kept) => self.answer(place, &kept, words, Act::Tell, bound, answering),
                 None => Answer::refused(format!(
                     "the stage {stage} of {place} waits on an answer and its agent is no longer kept open; give the answer as a retry: flume retry {place} --words <answer>"
                 )),
@@ -663,6 +754,72 @@ fn answered(stage: &StageHeld, words: Option<String>) -> Option<String> {
         (Some(question), None) => Some(format!("The question: {question}")),
         (None, words) => words,
     }
+}
+
+/// The key of the stop-short the place waits on its caller's answer to,
+/// as its current stage's start records it; none where it waits on none
+/// (42, 43, 131).
+pub(crate) fn waited_key(held: &HeldState) -> Option<EndKey> {
+    let name = waits_on_answer(held)?;
+    let start = held.stages[held.current?].start.as_ref()?;
+    Some(EndKey::Stage {
+        stage: name.to_string(),
+        start: start.n,
+        state: StageState::EndedShort,
+        answered: start.answered,
+    })
+}
+
+/// Whether an answer naming `key` is taken: only while the place waits on
+/// the stop-short `key` names and no answer was recorded on it, where the
+/// answer names a stage or the submission, `stage`, that stop-short's, and
+/// where it gives words; otherwise why not, naming the answer that
+/// stop-short took, who gave it and when, or the move the place waits on
+/// now (42, 49, 53).
+fn keyed(
+    held: &HeldState,
+    place: &PlaceId,
+    key: &EndKey,
+    stage: Option<&str>,
+    words: bool,
+) -> Result<(), String> {
+    let taken = held
+        .ends
+        .iter()
+        .find(|end| end.of.end_key() == *key)
+        .and_then(|end| end.answer.as_ref());
+    if taken.is_some() || waited_key(held).as_ref() != Some(key) {
+        let now = match waiting_on(held) {
+            Some(waiting) => format!("it waits on {} now", waiting.move_words()),
+            None => "it waits on no move of its caller's now".to_string(),
+        };
+        return Err(match taken {
+            Some(answer) => format!(
+                "the stop-short {key} of the place {place} was answered by {} at {}: {}; an answer is taken once, and {now}",
+                answer
+                    .by
+                    .as_deref()
+                    .unwrap_or("a caller that named no recipient"),
+                answer.at,
+                answer.words
+            ),
+            None => format!("the place {place} waits on no answer to the stop-short {key}: {now}"),
+        });
+    }
+    let EndKey::Stage { stage: asked, .. } = key else {
+        unreachable!("the stop-short a place waits on is a stage's end");
+    };
+    if let Some(stage) = stage.filter(|stage| stage != asked) {
+        return Err(format!(
+            "the stop-short {key} of the place {place} is {asked}'s, and the retry names {stage}: retry {asked} with its answer"
+        ));
+    }
+    if !words {
+        return Err(format!(
+            "an answer to the stop-short {key} of the place {place} gives its words: retry with --words <answer>"
+        ));
+    }
+    Ok(())
 }
 
 /// A question a stop-short asked and its answer, as a retry's prompt and

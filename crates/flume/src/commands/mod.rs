@@ -10,7 +10,7 @@ pub mod place;
 mod print;
 
 use clap::{Args, Parser, Subcommand};
-use flume_core::{Answer, Engine, KindsLock, LockOf, Retry, WaitFor};
+use flume_core::{Answer, Answering, Engine, KindsLock, LockOf, Retry, WaitFor};
 use flume_seams::{read_span, AgentState, HoldOn, Launch, PlaceId, Reading, Seconds, StopKind};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -508,7 +508,9 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
         } => {
             let place = named(place)?;
             let within = within.as_deref().map(read_span).transpose()?;
-            build()?.tell(&place, words, within)
+            let core = build()?;
+            let answering = answering(&core);
+            core.tell_answering(&place, words, within, &answering)
         }
         Command::Stop(forced) => build_for(forced, &named, build, Engine::stop)?,
         Command::Finish(forced) => build_for(forced, &named, build, Engine::finish)?,
@@ -527,7 +529,9 @@ fn act(cli: &Cli, build: &dyn Fn() -> Result<Engine, String>) -> Result<Answer, 
                 (None, true) => Retry::Submission,
                 (None, false) => Retry::Current,
             };
-            build()?.retry(&place, target, words.clone(), *force)
+            let core = build()?;
+            let answering = answering(&core);
+            core.retry_answering(&place, target, words.clone(), *force, &answering)
         }
         Command::Hold {
             place,
@@ -632,6 +636,16 @@ fn recipient_of(core: &Engine, named: &Option<String>) -> Result<String, String>
     core.recipient(here.as_ref()).ok_or_else(|| {
         format!("no recipient is named: name one with --recipient or ${}, or run in a terminal's session or a role's run", crate::host::RECIPIENT)
     })
+}
+
+/// What a retry's or a tell's answer names beside its words: who gives
+/// it, the recipient the command acts as where it names none, recorded on
+/// the stop-short it answers; none where no recipient is read (42).
+fn answering(core: &Engine) -> Answering {
+    Answering {
+        key: None,
+        by: recipient_of(core, &None).ok(),
+    }
 }
 
 /// A forced act on the place `forced` names.

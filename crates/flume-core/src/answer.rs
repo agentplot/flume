@@ -509,12 +509,16 @@ pub enum Cache {
 }
 
 /// An end of a place as status gives it: what ended and what was read of
-/// it, the answer that answered a stop-short once one did, each delivery,
-/// and the recipients it stands pending for (42, 43).
+/// it, its key as callers name it, the answer that answered a stop-short
+/// once one did, with who gave it and when, each delivery, and the
+/// recipients it stands pending for (42, 43).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndStatus {
     #[serde(flatten)]
     pub end: EndHeld,
+    /// The end's key as callers name it, by which an answer names the
+    /// stop-short it answers (42, 43).
+    pub key: EndKey,
     pub pending_for: Vec<String>,
     /// For a stop-short's end, the time its agent was kept open for the
     /// answer until when the end was read; none where it was not kept
@@ -529,6 +533,7 @@ impl EndStatus {
     pub fn of(end: &EndHeld, recipients: &[String]) -> EndStatus {
         EndStatus {
             end: end.clone(),
+            key: end.of.end_key(),
             pending_for: end.pending(recipients),
             open_until: match &end.of {
                 EndOf::Stage {
@@ -746,12 +751,12 @@ pub enum StandingFound {
     Unread { reason: String },
 }
 
-/// An end pending for a role's address: the place it is of, its key, and
-/// what ended in a notice's words (43, 132).
+/// An end pending for a role's address: the place it is of, its key as
+/// callers name it, and what ended in a notice's words (42, 43, 132).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingEnd {
     pub place: PlaceId,
-    pub key: String,
+    pub key: EndKey,
     pub what: String,
 }
 
