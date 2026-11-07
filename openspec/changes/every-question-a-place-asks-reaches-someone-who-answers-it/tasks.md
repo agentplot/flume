@@ -380,7 +380,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   the answerer behind a stream (design 1, 4, 7, 8; 7, 41, 42, 49, 61,
   130, 132, 193). True when `sluice exec main -- moon
   run flume:test` passes, with the command-line spec's scenarios.
-- [ ] 9.2 Add to `crates/flume/tests/profiles/tools/walkthroughs.rs`,
+- [x] 9.2 Add to `crates/flume/tests/profiles/tools/walkthroughs.rs`,
   under the pinned herdr with the stand-in, every source, roles file,
   recipient and address a scratch one of the test's own:
   - **S93.** A scratch host declaring the stream `east`, and a scratch
@@ -403,7 +403,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   (41, 42, 43, 130, 132, 191, 193, 198, S93, S94). True when `sluice exec main --
   moon run flume:tools` passes with them, and every existing walkthrough
   passes.
-- [ ] 9.3 Run the checks of the projects this group touched. True when
+- [x] 9.3 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run flume:format flume:lint flume:test
   flume:tools` passes.
 

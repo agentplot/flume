@@ -194,6 +194,20 @@ impl Walk {
         &self.home
     }
 
+    /// The walkthrough's `PATH`: the stand-in, then flume's own folder,
+    /// then the test's.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// The host user's login shell, the walk's own, which gives the walk's
+    /// `PATH` to what a launch runs for a place.
+    pub fn login_shell(&self) -> &Path {
+        self.shell
+            .as_deref()
+            .expect("a walkthrough with the stand-in")
+    }
+
     /// The stand-in for sluice first on `PATH` as `sluice`, so the
     /// first submission is answered decided.
     pub fn sluice_decides_the_first_submit(&self) {
@@ -314,8 +328,22 @@ impl Walk {
 
     /// flume's answer to `words`, as JSON, and whether it refused.
     pub fn flume_ran(&self, words: &[&str]) -> (Value, bool) {
-        let output = self
-            .flume_command(words)
+        Walk::answered(self.flume_command(words), words)
+    }
+
+    /// flume's answer to `words` as [`Walk::flume_ran`] gives it, run with
+    /// `env` beside the walkthrough's and no `$FLUME_RECIPIENT`: a launch
+    /// from the session `env` names, or from none where it names none (7,
+    /// 193).
+    pub fn flume_ran_from(&self, words: &[&str], env: &[(&str, &str)]) -> (Value, bool) {
+        let mut command = self.command(env!("CARGO_BIN_EXE_flume"), &self.repository.dir);
+        command.envs(env.iter().copied());
+        Walk::answered(command, words)
+    }
+
+    /// `command`'s answer to `words`, as JSON, and whether it refused.
+    fn answered(mut command: Command, words: &[&str]) -> (Value, bool) {
+        let output = command
             .args(words)
             .arg("--json")
             .output()
