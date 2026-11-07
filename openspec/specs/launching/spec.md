@@ -160,14 +160,14 @@ each start (8, 21, 32).
 
 ### Requirement: An agent's settings are resolved from eight layers at each start
 
-At each start an agent's program, model, mode, instructions and own
-settings SHALL each come from the first of eight layers that gives it:
-the launch's; the host's for the repository, for its kind then for
-every kind; the host's for the kind, for the stream, for every agent;
-the repository's, for a kind it does not declare then for every kind;
-the kind's; flume's default. The host's four SHALL give no program.
-Within each, a stage's own SHALL come first, each setting taken whole
-(32, 195).
+At each start an agent's program, model, effort, mode, instructions
+and own settings SHALL each come from the first of eight layers that
+gives it: the launch's; the host's for the repository, for its kind,
+then every kind; the host's for the kind, for the stream, for every
+agent; the repository's, for a kind it does not declare, then every
+kind; the kind's; flume's default. The host's four SHALL give no
+program. In each, a stage's own SHALL come first, each setting taken
+whole (32, 195, 197).
 
 #### Scenario: Settings from four layers
 
