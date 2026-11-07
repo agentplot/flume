@@ -256,7 +256,12 @@ let
   # OpenSpec, which root:specs and root:changes validate with and the
   # change profile reads other schemas through: sluice's release, built as
   # nixpkgs builds its older one. Bump the version, then each hash from
-  # the mismatch the build reports.
+  # the mismatch the build reports, then write OpenSpec's Claude Code
+  # skills and commands under .claude/ again, which the tree tracks as
+  # this release writes them (boomdrive's record 0022):
+  # `openspec init --tools claude --profile custom`, its workflows sluice's
+  # ten, propose, explore, new, continue, apply, ff, sync, archive,
+  # bulk-archive and verify.
   openspecVersion = "1.14.3";
   openspec = pkgs.openspec.overrideAttrs (
     finalAttrs: _: {
@@ -383,10 +388,38 @@ in
 
   env.PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers-chromium}";
 
+  # Claude Code's project files (boomdrive's record 0022): .mcp.json from
+  # the servers below and .claude/settings.json, each a link devenv makes
+  # into the store and git ignores. devenv's hosted server searches packages
+  # and devenv's options and starts no process on the host; it is named
+  # because a list of the repository's own replaces devenv's default. Every
+  # server named is approved by name in the settings, so a session in a
+  # trusted folder, a place among them, starts them and asks nothing.
+  claude.code = {
+    enable = true;
+    mcpServers."mcp.devenv.sh" = {
+      type = "http";
+      url = "https://mcp.devenv.sh";
+    };
+    # devenv's own hook, on wherever git-hooks are, runs prek after every
+    # edit. An agent here runs each tool through `devenv shell --`, so prek
+    # is not on its session's PATH and the hook would fail at each edit;
+    # the pre-commit hook runs treefmt and clippy on what is staged.
+    hooks.git-hooks-run.enable = false;
+  };
+  files.${config.claude.code.settingsPath}.json.enabledMcpjsonServers =
+    lib.attrNames config.claude.code.mcpServers;
+
   # moon's task archives (.moon/cache/outputs) are a link into the git common
   # dir, so every worktree shares them. The rest of .moon/cache records the
   # checkout's absolute paths and stays its own.
   enterShell = ''
+    # devenv's files, Claude Code's above, made here as well as by devenv's
+    # own task: a place's readiness is sluice's equip, which sources this
+    # script from `devenv print-dev-env` and runs no task, and the agent
+    # started after it reads them as it starts (boomdrive's record 0022).
+    # Its words go to no output a caller reads the environment from.
+    (cd ${lib.escapeShellArg config.devenv.root} && ${config.tasks."devenv:files".exec}) >/dev/null
     if _moon_root="$(git rev-parse --show-toplevel 2>/dev/null)" &&
       _moon_common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
       _moon_cache="$_moon_root/.moon/cache"
