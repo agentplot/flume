@@ -367,9 +367,11 @@ directory beside its configuration:
 kinds_dir = "~/.local/share/flume/kinds/acme"
 ```
 
-The file's name, less `.toml`, is the source's name. Its one key,
-`kinds_dir`, names the directory that holds the source's packages: an
-absolute path, or one whose leading `~` is your home. flume reads the
+The file's name, less `.toml`, is the source's name. Its key
+`kinds_dir` names the directory that holds the source's packages: an
+absolute path, or one whose leading `~` is your home. Its key `roles`,
+where it gives one, names the file declaring the roles the source
+answers ([roles come from a source](/flume/guides/roles-and-wake/#roles-come-from-a-source)). flume reads the
 sources directory as it stands at each launch, each wake of a role, each
 `flume kinds lock` and each status. It writes nothing in it, or in a
 source's `kinds_dir`.

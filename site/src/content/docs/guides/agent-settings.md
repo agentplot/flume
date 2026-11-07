@@ -196,7 +196,7 @@ The local layer sets only what runs the host's work from hour to hour:
   managed layer's other keys.
 
 The accounts, the pools, a stream's `pool`, `view`, `terminal_app` and
-`title`, `[host]` and `[roles]` are the managed layer's alone. A local
+`title`, and `[host]` are the managed layer's alone. A local
 file that sets any of them, or that is not TOML, is not taken at all.
 flume then reads the managed layer alone, and status names each key the
 file may not set, or its fault, until you mend it. The local layer may name a stream the managed one
@@ -889,8 +889,8 @@ A place's stream is fixed at its launch, from the first of:
 | `default` | `default` |
 
 A launch whose stream the host does not declare is refused, naming the
-stream, with nothing made. A role's run takes `stream` from its
-`[roles."<group>/<role>"]` table.
+stream, with nothing made. A role's run runs in its address's stream,
+`east` for `east/ops` ([roles and wake](/flume/guides/roles-and-wake/#the-run-that-serves-a-role)).
 
 ### The queue across streams
 

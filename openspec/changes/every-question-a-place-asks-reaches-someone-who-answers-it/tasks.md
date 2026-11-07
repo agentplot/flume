@@ -409,7 +409,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
 
 ## 10. The site
 
-- [ ] 10.1 Write the design into the site, to any host's operator,
+- [x] 10.1 Write the design into the site, to any host's operator,
   naming no host, team or word of ours (core.35):
   - `guides/callers-and-holds.md`: who answers a place, a stage's agent
     asking by `flume needs` alone, addressing a role with `flume needs

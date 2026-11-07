@@ -20,7 +20,8 @@ the same answers you do.
 | Landing through sluice, and the place tidied after | ✓ | ✓ |
 | Holds with words, stops short, retries and stalls | ✓ | ✓ |
 | Ends delivered once to each recipient, or kept pending for `flume wait` and `flume inbox` | ✓ | ✓ |
-| Role addresses, woken by a pending end or `flume wake` | ✓ | ✓ |
+| Role addresses, each a role of a stream that a source of the host declares, woken by a pending end or `flume wake`, each run done once it delivers | ✓ | ✓ |
+| A question put to the role it is for, of any stream, the answerer behind a stream told of every stall, a hold on the waiting move with a bound, and an answer taken once by its key | ✓ | ✓ |
 | A role's address held by an agent that already runs, found by its name in its herdr session at each delivery, its ends delivered into it and no run woken | ✓ | ✓ |
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
 | Agent settings in eight layers, each program's own settings among them, given inline or by a settings file | ✓ | ✓ |
