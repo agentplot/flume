@@ -203,12 +203,17 @@ pub(crate) fn refresh_waiting(next: &mut HeldState, now: Seconds) {
 
 /// Reads the place stalled where it has waited on its caller under no
 /// hold's words for its bound, recording the stall as an end once, to
-/// be delivered to each recipient (43, 130; core.24). A hold with words
-/// never stalls, and a stage waiting for room is no move of its
-/// caller's (70).
-pub(crate) fn read_stall(next: &mut HeldState, now: Seconds) {
+/// be delivered to each recipient and to the answerer `answerer` reads
+/// of the place as the stall is recorded (43, 130, 193; core.24). A hold
+/// with words never stalls, and a stage waiting for room is no move of
+/// its caller's (70).
+pub(crate) fn read_stall(
+    next: &mut HeldState,
+    now: Seconds,
+    answerer: &dyn Fn(&HeldState) -> Option<String>,
+) {
     refresh_waiting(next, now);
-    let Some(waiting) = &mut next.waiting else {
+    let Some(waiting) = &next.waiting else {
         return;
     };
     let held = waiting.on.why == Waits::OnHold && waiting.on.words.is_some();
@@ -216,10 +221,15 @@ pub(crate) fn read_stall(next: &mut HeldState, now: Seconds) {
     if waiting.stalled || held || now.saturating_sub(since) < next.stall_after {
         return;
     }
-    waiting.stalled = true;
+    let words = waiting.on.move_words();
+    let answerer = answerer(next);
+    if let Some(waiting) = &mut next.waiting {
+        waiting.stalled = true;
+    }
     let of = EndOf::Stall {
         since,
-        waiting: waiting.on.move_words(),
+        waiting: words,
+        answerer,
     };
     if !next.ends.iter().any(|end| end.same(&of)) {
         next.ends.push(EndHeld {

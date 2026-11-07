@@ -283,13 +283,38 @@ impl EndHeld {
             .any(|delivery| delivery.recipient == recipient)
     }
 
-    /// The recipients of `recipients` it stands pending for (43).
+    /// The recipients of the end, of a place whose recipients are
+    /// `recipients`: those, then a stall's answerer where it is none of
+    /// them, each once (43, 130, 193).
+    pub fn recipients(&self, recipients: &[String]) -> Vec<String> {
+        let mut every = recipients.to_vec();
+        if let EndOf::Stall {
+            answerer: Some(answerer),
+            ..
+        } = &self.of
+        {
+            if !every.contains(answerer) {
+                every.push(answerer.clone());
+            }
+        }
+        every
+    }
+
+    /// The recipients of the end it stands pending for, of a place whose
+    /// recipients are `recipients` (43, 130).
     pub fn pending(&self, recipients: &[String]) -> Vec<String> {
-        recipients
-            .iter()
+        self.recipients(recipients)
+            .into_iter()
             .filter(|recipient| !self.delivered_to(recipient))
-            .cloned()
             .collect()
+    }
+
+    /// Whether the end stands pending for `recipient`, of a place whose
+    /// recipients are `recipients` (43).
+    pub fn pending_to(&self, recipients: &[String], recipient: &str) -> bool {
+        self.pending(recipients)
+            .iter()
+            .any(|pending| pending == recipient)
     }
 }
 
@@ -325,6 +350,14 @@ pub enum EndOf {
         since: Seconds,
         /// The move it waits on.
         waiting: String,
+        /// The answerer behind the place's stream as its sources declared
+        /// it when the stall was read, delivered the stall besides the
+        /// place's recipients: for a role's run, which has none, the one
+        /// it reaches; none where no role stood behind the stream, where
+        /// the place is that answerer's own run, or where an earlier
+        /// flume wrote none (130, 132, 193).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        answerer: Option<String>,
     },
 }
 

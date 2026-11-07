@@ -2361,9 +2361,10 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
 fn a_wake_of_a_roles_address() {
     // 132, 193, C.7: the host's source acme declares the planner's run in
     // its roles file, of its own kind `planner`, locked; `flume wake`
-    // launches it once in its address's stream, answers the run that
-    // stands after, refuses an address no source declares and a name
-    // that is no address, and the run's inbox collects for its address.
+    // launches it once in its address's stream, named `<stream>-<role>`,
+    // answers the run that stands after, refuses an address no source
+    // declares and a name that is no address, each saying why, and the
+    // run's inbox collects for its address.
     let host = Host::new("wake");
     let repository = Repository::new("wake");
     repository.write(
@@ -2378,7 +2379,7 @@ fn a_wake_of_a_roles_address() {
     std::fs::write(
         &roles,
         format!(
-            "[roles.\"madswan/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
+            "[roles.\"east/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
             repository.name()
         ),
     )
@@ -2393,7 +2394,7 @@ fn a_wake_of_a_roles_address() {
         ),
     )
     .expect("the source's file");
-    host.configure("[streams.madswan]\n");
+    host.configure("[streams.east]\n");
     answered(
         &host.flume(
             &repository.dir,
@@ -2404,45 +2405,46 @@ fn a_wake_of_a_roles_address() {
     );
 
     let woke = answered(
-        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        &host.stand_in(&repository.dir, &["wake", "east/planner", "--json"], &[]),
         0,
     );
     assert_eq!(woke["woken"]["woke"], "launched", "{woke}");
-    assert_eq!(woke["woken"]["address"], "madswan/planner", "{woke}");
+    assert_eq!(woke["woken"]["address"], "east/planner", "{woke}");
     let run = &woke["woken"]["place"];
-    assert_eq!(run["role"], "madswan/planner", "{woke}");
+    assert_eq!(run["role"], "east/planner", "{woke}");
     assert_eq!(run["kind"], "planner");
     assert_eq!(run["identity"], "acme/planner@1", "{woke}");
-    assert_eq!(run["stream"]["name"], "madswan", "{woke}");
-    assert_eq!(run["name"], "planner");
+    assert_eq!(run["stream"]["name"], "east", "{woke}");
+    assert_eq!(run["name"], "east-planner", "{woke}");
     assert_eq!(run["base"], "main", "the repository's default branch");
     assert_eq!(run["priority"], 5);
     assert_eq!(run["recipients"], serde_json::json!([]));
-    let place = host.place_of(&repository, "planner--planner");
+    let place = host.place_of(&repository, "planner--east-planner");
     assert_eq!(run["place"], place.as_str());
 
     let again = answered(
-        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        &host.stand_in(&repository.dir, &["wake", "east/planner", "--json"], &[]),
         0,
     );
     assert_ne!(again["woken"]["woke"], "launched", "{again}");
     assert_eq!(again["woken"]["place"]["place"], place.as_str(), "{again}");
-    let person = host.stand_in(&repository.dir, &["wake", "madswan/planner"], &[]);
+    let person = host.stand_in(&repository.dir, &["wake", "east/planner"], &[]);
     assert_eq!(person.code, 0, "{}", person.text);
     assert!(
-        person.text.starts_with("madswan/planner's run"),
+        person.text.starts_with("east/planner's run"),
         "{}",
         person.text
     );
 
     let unnamed = answered(
-        &host.stand_in(&repository.dir, &["wake", "madswan/ops", "--json"], &[]),
+        &host.stand_in(&repository.dir, &["wake", "east/ops", "--json"], &[]),
         1,
     );
     assert!(
         unnamed["refused"]["refusal"]["reason"]
             .as_str()
-            .is_some_and(|reason| reason.contains("names no role for madswan/ops")),
+            .is_some_and(|reason| reason
+                == "east/ops wakes nothing: no source of the host declares east/ops"),
         "{unnamed}"
     );
     let no_address = answered(
@@ -2452,7 +2454,7 @@ fn a_wake_of_a_roles_address() {
     assert!(
         no_address["refused"]["refusal"]["reason"]
             .as_str()
-            .is_some_and(|reason| reason.contains("<partition>/<role>")),
+            .is_some_and(|reason| reason.contains("<stream>/<role>")),
         "{no_address}"
     );
 
@@ -2464,7 +2466,37 @@ fn a_wake_of_a_roles_address() {
         ),
         0,
     );
-    assert_eq!(inbox["inbox"]["recipient"], "madswan/planner", "{inbox}");
+    assert_eq!(inbox["inbox"]["recipient"], "east/planner", "{inbox}");
+}
+
+#[test]
+fn the_wakes_help_names_a_stream_and_a_role() {
+    // 132, 143, 193; core.35: an address is a role a source declares for
+    // a stream the host declares, and the host's configuration names
+    // none.
+    let host = Host::new("wake-help");
+    let ran = host.flume(&outside(&host, "elsewhere"), &["wake", "--help"], &[]);
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    let words = ran.text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for said in [
+        "Wake a role's address, `<stream>/<role>`: a role a source of the host declares in its roles file, for a stream the host declares",
+        "launched in the address's stream where none stands",
+        "An address carried to another host, declared by no source or by two, or whose stream the host does not declare is refused, saying why",
+        "<ADDRESS> The role's address, `<stream>/<role>`",
+    ] {
+        assert!(
+            words.contains(said),
+            "the help says not {said:?}: {}",
+            ran.text
+        );
+    }
+    for unsaid in ["partition", "[roles]"] {
+        assert!(
+            !words.contains(unsaid),
+            "the help says {unsaid:?}: {}",
+            ran.text
+        );
+    }
 }
 
 /// The directory the host's source `source` holds its packages in, a

@@ -662,14 +662,18 @@ pub struct PlaceClues {
     pub shown_at: ShownAt,
 }
 
-/// A role's address with ends pending for it, or one a source gives a
-/// standing agent, pending or not (132, 193): the run a source declares
+/// A role's address with ends pending for it, one a source gives a
+/// standing agent, pending or not, or one whose run's stall reached no
+/// one (130, 132, 193): the run a source declares
 /// for it, none where it declares none; its run where one stands; each
 /// end pending for it; why the last settle did not wake it, none for a
 /// standing address; for a standing address, where it lives; for a
 /// carried one, its entry; and, where no source declares anything for
-/// it, why, so it wakes nothing: each read at the ask, and none in a
-/// status written before (56, 190, 191, 193; core.14, core.15).
+/// it, why, so it wakes nothing; and, where its run stalled and its
+/// stall reached no one, its run being its own stream's answerer or no
+/// role standing behind its stream, that stall, so status names what no
+/// one was told: each read at the ask, and none in a status written
+/// before (56, 130, 190, 191, 193; core.14, core.15).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressStatus {
     pub address: String,
@@ -683,6 +687,8 @@ pub struct AddressStatus {
     pub carried: Option<CarriedRole>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wakes_nothing: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stalled: Option<PendingEnd>,
 }
 
 /// Where a role's address a standing agent holds lives, read at the ask

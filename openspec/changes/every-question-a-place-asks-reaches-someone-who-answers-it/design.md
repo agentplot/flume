@@ -1611,9 +1611,13 @@ crew's roles file on the place's host declares the address carried:
 lists it for `--to` by its whole address, and keeps its ends pending for
 the tool that carries them. The role's host's runner wakes the run
 there, and the run answers by `crew answer`, which the place's host's
-runner carries to `flume retry`. Status says the address is carried. On
-deneb, crew's file carries wldn's roles, whose stream runs on
-chuck-herdr-alpha.
+runner carries to `flume retry`. Status says the address is carried. A
+settle records nothing of a carried address as unwoken, as it records
+nothing of a standing one, and a `flume wake` of it on the place's host
+is refused, saying its source declares it carried, its run on another
+host: the code stage's own reading, since the wake belongs on the
+role's host. On deneb, crew's file carries wldn's roles, whose stream
+runs on chuck-herdr-alpha.
 
 #### 11.5 `flume serve`: no purpose left
 

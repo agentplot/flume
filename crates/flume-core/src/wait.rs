@@ -115,11 +115,10 @@ impl Engine {
             return Ok(None);
         };
         let id = held.place.id.clone();
-        let pending = held.place.recipients.iter().any(|named| named == recipient)
-            && held
-                .ends
-                .iter()
-                .any(|end| end.of.key() == key && !end.delivered_to(recipient));
+        let pending = held
+            .ends
+            .iter()
+            .any(|end| end.of.key() == key && end.pending_to(&held.place.recipients, recipient));
         let mut delivered = false;
         let mut answered = held;
         if pending {
@@ -184,8 +183,10 @@ impl Engine {
         let mut ends = vec![];
         for read in self.store.read_every() {
             let held = read.state;
-            if !held.place.recipients.iter().any(|named| named == recipient)
-                || held.ends.iter().all(|end| end.delivered_to(recipient))
+            if !held
+                .ends
+                .iter()
+                .any(|end| end.pending_to(&held.place.recipients, recipient))
             {
                 continue;
             }
@@ -193,8 +194,9 @@ impl Engine {
             let collected = self
                 .update(&held.place.id, |held| {
                     let mut collected = vec![];
+                    let recipients = held.place.recipients.clone();
                     for end in &mut held.ends {
-                        if end.delivered_to(recipient) {
+                        if !end.pending_to(&recipients, recipient) {
                             continue;
                         }
                         end.deliveries.push(Delivery {

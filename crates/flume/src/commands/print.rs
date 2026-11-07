@@ -1268,6 +1268,12 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         if let Some(unwoken) = &address.unwoken {
             lines.push(format!("    not woken: {unwoken}"));
         }
+        if let Some(stall) = &address.stalled {
+            lines.push(format!(
+                "    its run {} {}, which reached no one",
+                stall.place, stall.what
+            ));
+        }
     }
     lines.push(match host.watch {
         Watch::Bound { seconds } => format!(
@@ -2756,6 +2762,7 @@ mod tests {
             standing: None,
             carried,
             wakes_nothing: wakes_nothing.map(str::to_string),
+            stalled: None,
         };
         let lines = host_lines(&HostStatus {
             addresses: vec![
@@ -2782,6 +2789,38 @@ mod tests {
                 "    /places/fix--one: code delivered",
                 "  1 ends pending for east/planner, no run; it wakes nothing: no source of the host declares east/planner",
                 "    /places/fix--one: code delivered",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_doors_run_whose_stall_reached_no_one() {
+        // 130, 132, 193: the run of its stream's own answerer, stalled
+        // with no one to reach, named under the host's addresses.
+        let run = PlaceId::new("/places/turn--east-operator");
+        let lines = host_lines(&HostStatus {
+            addresses: vec![AddressStatus {
+                address: "east/operator".into(),
+                role: None,
+                run: Some(run.clone()),
+                pending: vec![],
+                unwoken: None,
+                standing: None,
+                carried: None,
+                wakes_nothing: None,
+                stalled: Some(PendingEnd {
+                    place: run,
+                    key: "stall 420".into(),
+                    what: "stalled: a retry of plan".into(),
+                }),
+            }],
+            ..HostStatus::default()
+        });
+        assert_eq!(
+            lines[1..lines.len() - 1],
+            [
+                "  0 ends pending for east/operator, its run /places/turn--east-operator",
+                "    its run /places/turn--east-operator stalled: a retry of plan, which reached no one",
             ]
         );
     }
@@ -3020,6 +3059,7 @@ mod tests {
                 standing: Some(standing),
                 carried: None,
                 wakes_nothing: None,
+                stalled: None,
             }],
             ..HostStatus::default()
         });

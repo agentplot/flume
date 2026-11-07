@@ -38,8 +38,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: every_answer_reads_back,
         },
         Scenario {
-            name: "answers: a role's address written before the host gave where a standing agent lives, that it is carried or why it wakes nothing reads with none of them",
-            cites: &["61", "132"],
+            name: "answers: a role's address written before the host gave where a standing agent lives, that it is carried, why it wakes nothing or its run's stall that reached no one reads with none of them",
+            cites: &["61", "132", "130"],
             run: an_address_before_standing,
         },
     ]
@@ -432,6 +432,7 @@ fn place_status() -> PlaceStatus {
                     of: EndOf::Stall {
                         since: 120,
                         waiting: "a retry of code".into(),
+                        answerer: Some("east/operator".into()),
                     },
                     read_at: 420,
                     deliveries: vec![],
@@ -630,6 +631,7 @@ fn host_status() -> HostStatus {
             standing: None,
             carried: None,
             wakes_nothing: None,
+            stalled: None,
         }, AddressStatus {
             address: "madswan/ops".into(),
             role: None,
@@ -643,6 +645,7 @@ fn host_status() -> HostStatus {
             standing: Some(standing_status()),
             carried: None,
             wakes_nothing: None,
+            stalled: None,
         }, AddressStatus {
             address: "north/planner".into(),
             role: None,
@@ -655,6 +658,7 @@ fn host_status() -> HostStatus {
                 answers: Some("The work's scope.".into()),
             }),
             wakes_nothing: None,
+            stalled: None,
         }, AddressStatus {
             address: "east/planner".into(),
             role: None,
@@ -664,6 +668,21 @@ fn host_status() -> HostStatus {
             standing: None,
             carried: None,
             wakes_nothing: Some("no source of the host declares east/planner".into()),
+            stalled: None,
+        }, AddressStatus {
+            address: "east/operator".into(),
+            role: None,
+            run: Some(PlaceId::new("/r/places/turn--east-operator")),
+            pending: vec![],
+            unwoken: None,
+            standing: None,
+            carried: None,
+            wakes_nothing: None,
+            stalled: Some(PendingEnd {
+                place: PlaceId::new("/r/places/turn--east-operator"),
+                key: "stall 420".into(),
+                what: "stalled: a retry of plan".into(),
+            }),
         }],
         watch: Watch::Bound { seconds: 30 },
         terminals: vec![TerminalStatus {
@@ -1054,12 +1073,13 @@ fn an_address_before_standing(_: &()) -> Outcome {
         address.remove("standing").ok_or("no standing")?;
         address.remove("carried");
         address.remove("wakes_nothing");
+        address.remove("stalled");
     }
     let back: Answer = serde_json::from_value(json).map_err(|error| error.to_string())?;
     let Answer::Status { host, .. } = back else {
         return Err(format!("read back as {back:?}"));
     };
-    ensure_eq!(host.addresses.len(), 4, "the addresses read");
+    ensure_eq!(host.addresses.len(), 5, "the addresses read");
     for address in &host.addresses {
         let name = &address.address;
         ensure_eq!(address.standing, None, format!("{name}'s standing"));
@@ -1069,6 +1089,7 @@ fn an_address_before_standing(_: &()) -> Outcome {
             None,
             format!("why {name} wakes nothing")
         );
+        ensure_eq!(address.stalled, None, format!("{name}'s run's stall"));
     }
     Ok(())
 }
@@ -1122,6 +1143,10 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.addresses[].standing.session.from",
             "status.host.addresses[].standing.session.name",
             "status.host.addresses[].standing.stream",
+            "status.host.addresses[].stalled",
+            "status.host.addresses[].stalled.key",
+            "status.host.addresses[].stalled.place",
+            "status.host.addresses[].stalled.what",
             "status.host.addresses[].standing.terminal",
             "status.host.addresses[].unwoken",
             "status.host.addresses[].wakes_nothing",

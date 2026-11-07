@@ -641,6 +641,7 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
         EndOf::Stall {
             since: asked,
             waiting: "a retry of construct".into(),
+            answerer: None,
         },
         "the stall"
     );

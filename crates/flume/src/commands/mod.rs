@@ -197,14 +197,18 @@ enum Command {
         #[arg(long)]
         recipient: Option<String>,
     },
-    /// Wake a role's address, `<partition>/<role>`: its run, the kind the
-    /// host's `[roles]` table names for it, launched where none stands,
-    /// and otherwise nothing made, the answer saying the run is live or
-    /// waits. An address the table gives a standing agent launches
-    /// nothing, the answer saying where that agent lives, what was found
-    /// of it and the ends pending for it (132).
+    /// Wake a role's address, `<stream>/<role>`: a role a source of the
+    /// host declares in its roles file, for a stream the host declares.
+    /// Its run, as the source's entry gives it, is launched in the
+    /// address's stream where none stands, and otherwise nothing is made,
+    /// the answer saying the run is live or waits. An address its source
+    /// gives a standing agent launches nothing, the answer saying where
+    /// that agent lives, what was found of it and the ends pending for
+    /// it. An address carried to another host, declared by no source or
+    /// by two, or whose stream the host does not declare is refused,
+    /// saying why (132, 143, 193).
     Wake {
-        /// The role's address, `<partition>/<role>`.
+        /// The role's address, `<stream>/<role>`.
         address: String,
     },
     /// Show a session of a stream's terminal in the stream's view, by the

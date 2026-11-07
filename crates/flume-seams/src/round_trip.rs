@@ -614,6 +614,7 @@ fn ends() -> Vec<EndHeld> {
             of: EndOf::Stall {
                 since: 190,
                 waiting: "a retry of code".into(),
+                answerer: Some("east/operator".into()),
             },
             read_at: 490,
             deliveries: vec![],
@@ -2537,9 +2538,45 @@ fn an_ends_key_and_its_pending_recipients() {
     let recipients = vec!["operator".to_string(), "ops".to_string()];
     assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
     assert_eq!(ends[1].pending(&recipients), recipients);
+    assert!(ends[1].pending_to(&recipients, "ops"));
+    assert!(!ends[0].pending_to(&recipients, "operator"));
+}
+
+#[test]
+fn a_stalls_answerer_beside_the_places_recipients() {
+    // 130, 132, 193: a stall's answerer is one of its recipients besides
+    // the place's, named once, and a stall an earlier flume wrote names
+    // none.
+    let stall = ends().pop().expect("the stall");
+    let recipients = vec!["operator".to_string()];
+    assert_eq!(
+        stall.recipients(&recipients),
+        vec!["operator".to_string(), "east/operator".to_string()]
+    );
+    assert_eq!(
+        stall.recipients(&["east/operator".to_string()]),
+        vec!["east/operator".to_string()]
+    );
+    assert_eq!(stall.pending(&[]), vec!["east/operator".to_string()]);
+    let before: EndOf =
+        serde_json::from_str(r#"{"of":"stall","since":190,"waiting":"a retry of code"}"#)
+            .expect("a stall written before");
+    assert_eq!(
+        before,
+        EndOf::Stall {
+            since: 190,
+            waiting: "a retry of code".into(),
+            answerer: None,
+        }
+    );
     assert_eq!(
         held().pending_for(),
-        vec!["operator".to_string(), "role:planner".to_string()]
+        vec![
+            "operator".to_string(),
+            "role:planner".to_string(),
+            "east/operator".to_string()
+        ],
+        "the stall's answerer among the recipients pending"
     );
 }
 

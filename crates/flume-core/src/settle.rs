@@ -5,8 +5,9 @@
 //! terminal's watch, or by a caller, and waits on no merge queue (120,
 //! core.13). Each end it or an act reads is recorded once as it is
 //! written, and the settle delivers each end pending for a recipient,
-//! then wakes each role's address one stands pending for with no run
-//! (43, 132, core.25).
+//! then wakes each role's address one stands pending for with no run;
+//! a role's run is done once its last stage delivers, with no caller's
+//! word (43, 114, 132, 193; core.25, core.28).
 
 use crate::held::read_stall;
 use crate::{Answer, Engine, Step, Tidied};
@@ -80,9 +81,22 @@ impl Engine {
             if held.phase != Phase::Live {
                 return Step::Keep(());
             }
-            read_stall(held, now);
+            read_stall(held, now, &|held| self.stall_answerer(held));
             Step::Write(())
         });
+    }
+
+    /// Whom a stall of the place reaches besides its recipients, read from
+    /// the sources as the stall is recorded: for a role's run, which has
+    /// no recipient, the answerer behind its stream, never the run's own
+    /// address, so the door's own run's stall reaches no one; none for
+    /// any other place (130, 132, 193; design 2, 6).
+    fn stall_answerer(&self, held: &HeldState) -> Option<String> {
+        let role = held.role.as_deref()?;
+        match self.host.answerer(&held.place.stream.name)? {
+            StreamAnswerer::Stands(by) if by.address != role => Some(by.address),
+            _ => None,
+        }
     }
 
     /// Shows the place's clues where they changed since last shown: its
@@ -148,7 +162,7 @@ impl Engine {
             StageState::NeverBegun => self.begun_after(id),
             StageState::Begun | StageState::Stuck | StageState::Lost => self.read_end(id),
             StageState::Delivered | StageState::Finished | StageState::Repeating => {
-                self.advance(id)
+                self.run_over(id) || self.advance(id)
             }
             StageState::EndedShort => self.found_work(id),
             _ => false,
@@ -203,6 +217,39 @@ impl Engine {
             }
             None => false,
         }
+    }
+
+    /// A role's run whose last stage delivered or finished, its agent
+    /// ended, declared done with no caller's word, as its caller's done
+    /// would declare it, so the steps after tidy it and the next end
+    /// pending for its address wakes another run; a role's run whose kind
+    /// lands is submitted as any place's (114, 132, 193; design 2). The
+    /// place is read again in the update, so a settle beside this one
+    /// that moved it on is not undone (75).
+    fn run_over(&self, id: &PlaceId) -> bool {
+        self.update(id, |held| {
+            let last = held.stages.len().checked_sub(1);
+            let delivered = last
+                .filter(|last| held.current == Some(*last))
+                .is_some_and(|last| {
+                    let stage = &held.stages[last];
+                    matches!(stage.state, StageState::Delivered | StageState::Finished)
+                        && !stage.start.as_ref().is_some_and(|start| start.live)
+                });
+            if held.role.is_none()
+                || held.place.kind.lands
+                || held.phase != Phase::Live
+                || !delivered
+            {
+                return Step::Keep(false);
+            }
+            held.phase = Phase::Over {
+                over: Over::Done,
+                kept: None,
+            };
+            Step::Write(true)
+        })
+        .unwrap_or(false)
     }
 
     /// A place whose launching command is gone while it was made: what
