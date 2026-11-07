@@ -74,6 +74,18 @@ name, and none holding it SHALL be not found (7, 43, 95, 190).
 - **WHEN** the host's own fake terminal names no calling session, `trial`'s names `caller-1`, and a fix is launched naming no recipient
 - **THEN** the fix's recipient is `caller-1`, and its end is sent to `caller-1` through `trial`'s terminal (7, 43, 190)
 
+### Requirement: flume runs attended while any terminal it binds keeps no watch
+
+The terminals the host binds SHALL be its own and each declared
+stream's that a profile carries, each once; where any keeps no watch,
+every command that acts on places SHALL settle every place first, and a
+wait SHALL drive its settles (119, 122, 190).
+
+#### Scenario: One stream under a terminal with no watch
+
+- **WHEN** the host's own fake terminal keeps a watch, `trial`'s keeps none, and a caller drops a place on `work`
+- **THEN** the drop settles every place first (119, S91)
+
 ### Requirement: A stream whose multiplexer names no profile is refused alone
 
 A stream whose `multiplexer` names a terminal profile the resolver does
@@ -103,21 +115,3 @@ person's (56, 190; core.14).
 
 - **WHEN** status is asked of the host of two streams under two terminals, each running a fix
 - **THEN** `work` gives `fake` from `host` and `trial` `other` from `stream`, each agent gives its terminal, and the host's terminals list `fake` and `other`, each with its watch (56, 190, S91)
-
-### Requirement: No terminal decides whether flume runs attended
-
-The terminals the host binds, its own and each declared stream's that a
-profile carries, SHALL settle nothing and decide nothing of whether
-flume runs attended: while no caller keeps watch, every command that
-acts on places SHALL settle every place first, and a wait SHALL drive
-its settles, under every terminal alike (119, 122, 190, 208).
-
-#### Scenario: One stream under another terminal
-
-- **WHEN** a caller keeps watch, the host's terminal is `fake`, `trial`'s is `other`, and a caller drops a place on `work`
-- **THEN** the drop settles nothing first, and `trial`'s places move at the caller's settles (190, 208, S91)
-
-#### Scenario: Two terminals and no watch
-
-- **WHEN** no caller keeps watch, the host's terminal is `fake` and `trial`'s is `other`
-- **THEN** a caller's drop settles every place first, under either terminal (119, 208)
