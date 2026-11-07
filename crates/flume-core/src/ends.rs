@@ -155,8 +155,9 @@ impl Engine {
 
     /// The document of a place whose worktree and branch are gone, kept
     /// apart from a live place's under its id and the tidy's time while an
-    /// end of it stands pending, naming the recipients it waits on; none
-    /// kept where nothing is pending (43, 62).
+    /// end of it stands pending, naming the recipients it waits on, and
+    /// holding no line of what its stages made; none kept where nothing
+    /// is pending (43, 62, 129).
     pub(crate) fn keep_for_ends(&self, held: &HeldState, over: &Over) -> Option<PlaceId> {
         let pending = held.pending_for();
         if pending.is_empty() {
@@ -174,9 +175,14 @@ impl Engine {
             at,
             pending_for: pending,
         };
+        // The made lines go with the place's folder, so the document kept
+        // for its ends holds none of them (62, 129; core.23).
         for stage in &mut kept.stages {
             if let Some(start) = stage.start.as_mut() {
                 start.live = false;
+            }
+            if let Some(end) = stage.end.as_mut() {
+                end.made.clear();
             }
         }
         match self.store.write(&id, None, Some(&kept)) {
