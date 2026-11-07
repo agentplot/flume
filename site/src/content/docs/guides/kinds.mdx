@@ -165,7 +165,29 @@ complete and flume tidies it.
 | `starts_unready` | the first stage starts in a place that could not be made ready | `false` |
 | `lands` | flume submits the place once the last stage delivers | `false` |
 | `agents` | settings for every stage's agent, and for the stages named under `agents.stages.<stage>` | none |
-| `stages` | the stages, at least one, in order | refused |
+| `stages` | the stages, in order: at least one, or `stages = []` for a kind that lands with no stages ([a kind with no stages](#a-kind-with-no-stages)) | refused |
+
+### A kind with no stages
+
+A kind that lands may declare `stages = []`. Its place is a base place:
+a branch other places land on, which lands in its turn. It runs no
+agent, has no worktree, and is submitted only when you retry its
+submission once every place on its branch is over:
+
+```toml
+[kinds.train]
+branch = "train"
+lands = true
+stages = []
+```
+
+A kind that does not land and declares `stages = []` refuses the
+launch, naming its stages. A table that leaves `stages` out is no
+kind: it gives settings to a kind declared elsewhere
+([settings](#settings)). flume carries no kind with no stages; a
+repository, a source on the host or a launch declares one. [Branches that land on
+branches](/flume/guides/merge-queue/#branches-that-land-on-branches)
+follows a base place from its launch to its tidy.
 
 ### A stage's fields
 

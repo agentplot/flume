@@ -40,6 +40,7 @@ $XDG_STATE_HOME/flume/              ~/.local/state/flume by default
     <place>@<time>.json             a tidied place's document, kept while an end of it is pending
   accounts/<pool>/<account>.json    an account's spent time
   intents/<digest>.json             an intent's affinity
+  watch.json                        the host's watch: when a caller's newest flume settle --every began, and its bound
   terminal/herdr/                   flume's records of the herdr panes, tabs and workspaces it made
     <identity>.json                 an agent's pane: its id, server and herdr name
     tabs/<digest>.json              a place's tab
@@ -63,7 +64,7 @@ layers give a key. It is never a file a layer named.
 
 ### The host's own documents
 
-Beside the places lie two documents of the host's own. flume writes
+Beside the places lie three documents of the host's own. flume writes
 each whole the same way, under a lock of its own, by compare-and-set on
 its version, readable by the host's user alone (mode `0600`). Every
 flume process on the host reads them.
@@ -72,6 +73,7 @@ flume process on the host reads them.
 |---|---|
 | `accounts/<pool>/<account>.json` | the account spent: `until`, the time it is spent until; `words`, the usage limit's words; `recorded_at`, when flume recorded it; and `unread`, `true` where flume read no reset in the words, so `until` is an hour after `recorded_at`, left out otherwise. A later time already recorded stands. |
 | `intents/<digest>.json` | the intent's affinity: its `stream`; `accounts`, for each program its agents run, keyed by the program as an account's `program` names it, the `pool` and `account` the first of them on that program started on, as moved since; each move between accounts, with `on` `intent`, `program`, the program whose account moved, `from`, `to`, `why`, `spent`, `threshold` or `full`, `at`, and, where `why` is `threshold`, `window` and `until`, the window that held the account and until when; and `gone`, when its last place went. flume removes it on a read an hour after `gone`. |
+| `watch.json` | the host's watch: `began`, when the newest `flume settle --every` began, by the host's clock, in seconds; and `bound`, the bound it stated, in seconds. Each `flume settle --every` writes it before it settles. A caller keeps watch while `began` is less than twice `bound` ago, and flume runs attended once it is not, or where no `watch.json` stands. flume never removes it. |
 
 `<digest>` is the SHA-256, in hex, of `name:<name>` for an intent the
 launch named, else of `base:<repository id>:<base>`.
@@ -143,7 +145,7 @@ it.
 | `$XDG_CONFIG_HOME/flume/flume.lock` | the host's lock of kinds, written by `flume kinds lock --host` ([the locks of kinds](/flume/reference/configuration/#the-locks-of-kinds)) |
 | `$XDG_DATA_HOME/flume/kinds/<source>/` | where a program that fetches a source's packages may put them, each at `<name>@<version>/`; flume reads them and never writes them |
 | `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>/` | the Claude Code plugin flume hands its agents, written once per version and binary |
-| `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>/` | a place, a worktree of its repository outside the repository's own directory; `<id>` is the repository's, as its agents' identities carry it |
+| `$XDG_DATA_HOME/flume/places/<id>/<kind>--<name>/` | a place, a worktree of its repository outside the repository's own directory; `<id>` is the repository's, as its agents' identities carry it. A base place, whose kind lands with no stages, takes its name from its location, and nothing stands there |
 | the file an account's `usage` names | the account's reading, which something of the host's writes whole and flume reads at each choice of an account and whenever status is asked, and never writes, keeps or renews ([an account's reading](/flume/guides/agent-settings/#an-accounts-reading)) |
 | `$XDG_STATE_HOME/herdr/plugins/agentplot.flume/` | the herdr plugin's `setup.json`, its server's socket and what herdr's configuration lacks for the plugin, and `startup.log`, one directory per herdr server |
 
@@ -154,8 +156,12 @@ a working copy's `.config/flume.lock` where you run it there, which you
 commit. A place is a worktree on a branch of its own,
 under flume's data directory, inside no working tree or directory of
 the repository, whether the repository is a clone or a bare repository
-beside its worktrees. It holds only what its agents commit. flume writes no record into a repository's tree or onto
-a branch.
+beside its worktrees. It holds only what its agents commit. A base
+place has no worktree: it is its branch, which the merge queue makes
+and removes at flume's asking, and the state flume holds of it
+([branches that land on
+branches](/flume/guides/merge-queue/#branches-that-land-on-branches)).
+flume writes no record into a repository's tree or onto a branch.
 
 ## The file made.jsonl
 
@@ -197,7 +203,7 @@ Each place:
 | `stages` | each stage: `name`, `state`, `starts`, `end`, `conversation`, and the part or setting it was refused for. A lost conversation's `end` holds `left_in_pane`, `true` where flume left the agent the terminal brought back in its pane, left out otherwise |
 | `current` | the current stage's name |
 | `agent` | the current agent: `identity`, `stage`, `program`, `settings` with `from`, the layer of each, each variable `env.<NAME>` from `account` as `<set>`; in `settings`, `programs` with the agent's program's entry alone, and in `from` each of its own settings, `programs.<program>.settings.<key>`, with its `layer`, its `value` as written and its `file` where it came from one; `own`, where a layer gave its program own settings, with `passed`, the arguments that named the file its start wrote, `read_back`, `false`, and `files`, each file a layer named with its `layer`, `written`, `read` and `left_out`, each key left out with its `key` and its `owner`; `account`, its `pool`, `name` and `from`, `affinity`, the intent's affinity for the agent's `program`, `strategy`, or `conversation`, the account a lost conversation's start ran under, which holds it; `mode`, where a layer gave one, with `passed`, the value its program was given, `entry`, the program whose entry of a table it took, and `read_back`, whether its program's word reads the mode back; `state`, `started`, `asking`, `own_work`, `past_limit`, `screen`, `dialog`, the words of a dialog it shows before it takes its prompt, `printed`, `last_words` and `notes`; `session`, the herdr session it opened in, `name`, `null` for the terminal's own, and `from`: `launch`, `stream-stage`, the session its stream names for its kind's stage, `stream-kind`, the one its stream names for its kind, `stream`, `stream-name` or `own`, none where it opened beside a pane; `terminal`, the multiplexer it opened in, `profile` and `from`: `stream`, `host` or `neither`, `null` for a start an earlier release wrote, whose agent is in the host's; `left_in_pane`, `true` for an agent the terminal brought back in a lost conversation's pane, which flume left there and sends nothing, left out otherwise; and, for the agent of a start after a spent agent or a lost conversation's retry, `conversation`: `from`, the start whose conversation it carries, `cause`, `lost` where that start's conversation was reported lost and left out where its agent was spent, `carried`, and `why` where it was not carried, naming a variable and never a path |
-| `head` | the place's branch head |
+| `head` | the place's branch head; a base place's as the merge queue reads its branch, nothing read at its location |
 | `delivered` | whether the current stage's deliverable exists |
 | `tasks` | a change's tasks ticked and in all |
 | `submission` | `read`, what the merge queue holds; `request`, the pull request flume's last submit opened or updated where the base takes them, and `read`'s entry names it once taken in; `submits`; `send_backs`; `verdict`; `waiting`, why the place waits on its submission; `held` |
@@ -205,7 +211,10 @@ Each place:
 | `cannot_read` | each fact flume could not read when asked; among them, each branch the merge queue could not read, in its words, which flume reads past unless it is the place's base, where the place's own submission is |
 | `failures` | each act that failed, in flume's words |
 | `recipients` | the place's recipients |
-| `waiting_on`, `stalled` | what the place waits on its caller for, since when and in whose words, or, with `act` `answer` and `why` `dialog`, on a person to answer its agent's dialog, in the dialog's words; whether it is stalled |
+| `waiting_on`, `stalled` | what the place waits on its caller for, since when and in whose words, or, with `act` `answer` and `why` `dialog`, on a person to answer its agent's dialog, in the dialog's words; for a base place with no place on its branch live, `act` `retry` and `why` `unsubmitted`, or `submission` with the merge queue's words where its submission failed, conflicted or was withdrawn; whether it is stalled |
+| `waits_on` | whom a live place waits on, as the list gives it: `caller`, `host`, `session`, `merge_queue`, or `places`, a base place's while a place on its branch is live, which is never stalled; left out where it waits on nobody |
+| `worktree` | `false`, for a base place alone, which has no worktree; left out for every other place |
+| `on_branch` | for a base place alone, the places being made or live whose base is its branch, by their locations; left out for every other place |
 | `waits_on_session` | the stage waiting on its session, as its line says `waiting on its session`: `stage`; `processes`, each process that runs the conversation its start would carry, by its `pid` and `started`; or `unread`, what flume could not read, naming a variable or the host's processes and never a path; and `since`, when it began waiting. It is never stalled. Left out where no stage waits so |
 | `holds`, `hold_words` | each hold and its words |
 | `priority` | the place's priority |
@@ -216,8 +225,8 @@ Each place:
 | `unsettled` | each start whose agent began without its settings: `stage`, `start`, `at`, the variables `missing` and `different` by name, `program`, whether the program differed, `session`, `true` where it came up in another session than the one its start resumes, and `mode`, where the mode did, with `asked` and `began` |
 | `uncarried` | each start that carried a conversation, a spent agent's or a lost one's, and did not begin: `stage`, `start`, `at` and `words`, what happened; its stage started afresh after it |
 | `ends` | each end, with whom it was delivered to, when and by what, `notice`, `wait` or `inbox`, and whom it is pending for |
-| `clues` | the display hints: the stage, the state, the pane's title and name, and where herdr shows them |
-| `line` | the place's one line: `name`, `<kind>--<name>`; `kind`, `<kind>@<version>`; `stage`, the current stage with a repeating stage's group, as `code 1/2`; `run`, how many times that stage started; `tasks`, the change's tasks ticked at the head, as `2/5`; `state`, the place's state in words; `full`, the parts joined by ` · `; and `short`, `full` less `name` and `kind`, as the herdr sidebar shows it. `stage`, `run` and `tasks` are `null` where the place has none, and `full` and `short` leave them out. It is the line `flume status --line` gives, read from the place's held state, its change and its agent's own record alone ([the status line](/flume/guides/claude-code/#the-status-line) lists the states) |
+| `clues` | the display hints: the stage, the state, the pane's title and name, and where herdr shows them. The settles that change them show the terminal these with the line's `short` beside them, which herdr gives the agent's pane as its `flume` token, the sidebar's row |
+| `line` | the place's one line: `name`, `<kind>--<name>`; `kind`, `<kind>@<version>`; `stage`, the current stage with a repeating stage's group, as `code 1/2`; `run`, how many times that stage started; `tasks`, the change's tasks ticked at the head, as `2/5`; `state`, the place's state in words; `full`, the parts joined by ` · `; and `short`, `full` less `name` and `kind`, as the herdr sidebar shows it. A base place's `state` is `<n> on its branch · open` while places on its branch are live, then `waiting on its caller`, `submitted` and the rest as any place's. `stage`, `run` and `tasks` are `null` where the place has none, and `full` and `short` leave them out. It is the line `flume status --line` gives, read from the place's held state, its change and its agent's own record alone ([the status line](/flume/guides/claude-code/#the-status-line) lists the states) |
 
 A stage's `state` is one of `not_reached`, `waiting_on_readiness`,
 `on_hold`, `waiting_for_room`, `starting`, `started`, `begun`, `delivered`,
@@ -234,8 +243,10 @@ The host:
 | `queue` | the stages waiting for room, in the order they start, each with its stream, its `label`, its priority and the room it wants. That room, by `room`, is the host's, `host`; its stream's, `stream`, at its `bound`; its stream's past what other labels keep free, `kept-free`, naming those `labels`; or a usable account of its pool, `pool`, with `until`, the soonest time an account of the pool is neither spent nor past its threshold, `null` where each is only at its bound. A stage whose pool holds no account of its program waits for none: it is refused ([a pool that cannot run a stage](/flume/guides/agent-settings/#a-pool-that-cannot-run-a-stage)). |
 | `streams` | each stream: `name`, `session`, the herdr session its agents open in with `from`, `stream`, `stream-name` or `own`; `multiplexer` and `terminal_app`, each its `profile` and `from`, `stream`, `host` or `neither`; `view`, its `view`, `terminal` or `app`, and `from`; `title`, its `title` and `from`, `stream` or `stream-name`; `priority`, `running`, `bound`, `room` and `queue`, `bound` and `room` `null` where the stream has no bound of its own; `labels`, each with its `name`, `reserve`, `keep_free`, `running` and `waiting`; `sessions`, each session it names for its kinds and their stages, `name`, `kinds` and `stages`, each `name`, the kind or `<kind>.<stage>`, and `layer`, `managed` or `local`, `kinds` or `stages` left out where it names the session for none; `faults`, each of its tables for a kind or a stage that refuses the starts that read it, `table`, its dotted key, and `refused`, the refusal's words; `reserves`, `held`, `passed-over` where the stream states no bound, or `none` where it gives no label a share; `refused`, why its labels, its multiplexer or its terminal app refuse it, `null` where none does; and `view_refused`, the terminal app's refusal alone, which refuses its `flume open` and none of its stages, left out where it holds none |
 | `pools` | each pool: `name`, `strategy`, `threshold`, `90` where the pool states none, and `accounts`, each account's `name`, `program`, `running`, `bound` and `spent_until`, `null` where it is not spent; `spent_unread`, while it is spent for an hour because flume read no reset in its agent's words, those words; `reading`, where the account names a `usage`; and `past`, while it is past its threshold, `window`, the window that holds it, and `until`, when that window resets, or, for a window that names no reset, when its reading stops being fresh. A `reading` is `read_at`, when the host read the allowance, `fresh`, whether that was less than fifteen minutes ago, and `windows`, each with its `name`, `used`, the percentage the reading gives, `resets_at` where it gives one, and `past`, whether that window holds the account past its threshold now; or `unread`, why there is none, naming no path |
-| `watch` | the host's own multiplexer's watch, `{"bound":{"seconds":…}}`, or `none` with no herdr plugin running |
-| `terminals` | each multiplexer the host binds, the host's own first, then each stream's by the stream's name, each once: `profile`, `kept`, what a tidy kept there, and `watch`. Where any keeps no watch, every command of flume's that acts settles every place first |
+| `watch` | the watch a caller keeps over the host, `{"bound":{"seconds":…}}`, the bound its newest `flume settle --every` stated; or `none` where no caller keeps watch, and every command of flume's that acts settles every place first |
+| `watch_settled` | when the newest `flume settle --every` began, by the host's clock; left out where the host holds no watch |
+| `watch_lapsed` | when the watch lapsed, twice its bound after its newest settle began, given while flume runs attended after one; left out while a caller keeps watch or where none ever has |
+| `terminals` | each multiplexer the host binds, the host's own first, then each stream's by the stream's name, each once: `profile`, `kept`, what a tidy kept there, and `watch`, `none` for every one, since no multiplexer keeps watch or settles |
 | `bases` | for each repository and base, its places running, asking, waiting on their caller and stalled, and the line shown in herdr |
 | `addresses` | each role's address with ends pending, and every address the host's configuration gives an agent that already runs, pending or not: `address`; `role`, the run's entry, `null` for an agent's address; `run`, the place of its run that stands; `pending`, each end with its `place`, `key` and `what`; `unwoken`, why its run was not woken, `null` for an agent's address; and `standing`, `null` for a run's address, else `agent`, the name the multiplexer knows it by, `stream`, `session`, its `name`, left out for the multiplexer's own, and `from`: `role`, the entry's own, `stream`, `stream-name` or `own`, `terminal`, the profile the stream's multiplexer names, `null` where the host declares no such stream, and `found`, what the multiplexer found when asked: `{"one":{"at":…,"state":…}}`, the agent at the session name a notice reaches it by with its state, `working`, `waiting`, `asking`, `stopped` or `unknown`; `"none"`; `{"several":{"count":…}}`; or `{"unread":{"reason":…}}`, in the multiplexer's words or flume's |
 | `terminal_kept` | what a tidy kept in the host's own multiplexer because something flume did not make holds it |
@@ -276,7 +287,7 @@ the stream has none of is left out. Each place, by repository, then by
 | `kind` | `<kind>@<version>` |
 | `stage` | the stage the place's line names, without a repeating stage's group; left out for a place that is not live |
 | `state` | the place's state in its line's words |
-| `waits_on` | whom the place waits on: `caller`, `host`, `session`, a process that runs the conversation its waiting stage's start would carry, or `merge_queue` |
+| `waits_on` | whom the place waits on: `caller`, `host`, `session`, a process that runs the conversation its waiting stage's start would carry, `merge_queue`, or `places`, a base place's while a place on its branch is live |
 | `kept` | what keeps a place whose work is over, in its line's words: `kept by <step>`, `kept holding work`, `kept holding a lock`, `kept holding work and a lock`, `kept while its agent runs`, `kept while its session runs`, `kept unread`, `being tidied` or `tidied` |
 | `line` | the parts joined by ` · `, as `flume list` prints it |
 
