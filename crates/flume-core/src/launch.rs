@@ -620,7 +620,8 @@ impl Engine {
         )?;
         let kind = self.own_checked_declaration(&kind)?;
         let intent = self.intent_of(launch);
-        let stream = self.stream_of(launch, &kind.name, &intent)?;
+        let named_as = self.repository_name(repository);
+        let stream = self.stream_of(launch, &named_as, &kind.name, &intent)?;
         // A stream whose multiplexer names a terminal profile the resolver
         // does not carry runs no agent: the launch is refused before
         // anything is made (4, 190; core.8).
@@ -702,7 +703,7 @@ impl Engine {
             place: PlaceRecord {
                 id: id.clone(),
                 repository: repository.clone(),
-                address: None,
+                address: named_as.address,
                 kind: kind.clone(),
                 declared,
                 kind_from: Some(from),
@@ -901,12 +902,14 @@ impl Engine {
     /// The stream a launch's place runs in, chosen once (8, 143): the
     /// launch's, else the stream of its intent's affinity where one
     /// stands (147), else the one the host's configuration names for the
-    /// repository and `kind`, for the repository or for `kind`, else
-    /// `default`; a stream the host does not declare refuses the launch
-    /// naming it (4).
+    /// repository, by `name`, and `kind`, for the repository or for
+    /// `kind`, else `default`; a stream the host does not declare refuses
+    /// the launch naming it, and the repository by its address where it
+    /// has one (4).
     fn stream_of(
         &self,
         launch: &Launch,
+        name: &RepositoryName,
         kind: &str,
         intent: &IntentKey,
     ) -> Result<StreamHeld, String> {
@@ -922,7 +925,7 @@ impl Engine {
                 },
                 None => self
                     .host
-                    .stream_for(&RepositoryName::of_folder(&launch.repository), kind)
+                    .stream_for(name, kind)
                     .unwrap_or_else(|| StreamHeld {
                         name: DEFAULT_STREAM.into(),
                         from: StreamFrom::Default,
@@ -932,7 +935,7 @@ impl Engine {
         if self.host.streams().contains_key(&stream.name) {
             return Ok(stream);
         }
-        let repository = &launch.repository;
+        let repository = name.address.as_deref().unwrap_or(&name.folder);
         let named = match stream.from {
             StreamFrom::Launch => "the launch names".to_string(),
             StreamFrom::HostRepositoryKind => {
@@ -949,6 +952,20 @@ impl Engine {
             "the stream {} {named} is not declared by the host's configuration (143)",
             stream.name
         ))
+    }
+
+    /// The repository in `folder` as the host's configuration names it:
+    /// its address, read from its clone's origin and the URL dropped, else
+    /// its folder alone (143, C.7; record 0055; core.30).
+    pub(crate) fn repository_name(&self, folder: &str) -> RepositoryName {
+        RepositoryName {
+            address: self
+                .history
+                .origin_url(folder)
+                .as_deref()
+                .and_then(crate::address::of_origin),
+            folder: folder.to_string(),
+        }
     }
 
     /// The intent a launch's place serves: the launch's name, else the

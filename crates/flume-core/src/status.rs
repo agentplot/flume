@@ -376,6 +376,7 @@ impl Engine {
         PlaceStatus {
             place: place.id.clone(),
             repository: place.repository.clone(),
+            address: place.address.clone(),
             kind: place.kind.name.clone(),
             version: place.kind.version,
             declared: place.declared,
