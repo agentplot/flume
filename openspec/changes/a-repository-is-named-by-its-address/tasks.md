@@ -10,7 +10,7 @@ the change's verify stage runs once (record 0054).
 
 ## 1. The address
 
-- [ ] 1.1 Add `crates/flume-core/src/address.rs`, declared in `crates/flume-core/src/lib.rs`, with `pub fn of_origin(url: &str) -> Option<String>` as design 1 gives it: an scp-like URL or one of the schemes `ssh`, `git+ssh`, `ssh+git`, `git`, `http` and `https`, any user and password and port dropped, the path's trailing `/` and then one trailing `.git` dropped, `Some("<owner>/<name>")` only for exactly two segments, neither empty, `.`, `..` nor beginning with `~`, its case kept; and its unit tests `an_origin_on_a_forge_gives_its_address`, over the launching spec's "Each form of a forge origin", and `an_origin_on_no_forge_gives_none`, over its "No forge origin" (143). Check: `devenv shell -- cargo test -p flume-core address::`.
+- [x] 1.1 Add `crates/flume-core/src/address.rs`, declared in `crates/flume-core/src/lib.rs`, with `pub fn of_origin(url: &str) -> Option<String>` as design 1 gives it: an scp-like URL or one of the schemes `ssh`, `git+ssh`, `ssh+git`, `git`, `http` and `https`, any user and password and port dropped, the path's trailing `/` and then one trailing `.git` dropped, `Some("<owner>/<name>")` only for exactly two segments, neither empty, `.`, `..` nor beginning with `~`, its case kept; and its unit tests `an_origin_on_a_forge_gives_its_address`, over the launching spec's "Each form of a forge origin", and `an_origin_on_no_forge_gives_none`, over its "No forge origin" (143). Check: `devenv shell -- cargo test -p flume-core address::`.
 
 ## 2. The origin read through git
 

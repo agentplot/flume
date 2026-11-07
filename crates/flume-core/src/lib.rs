@@ -9,6 +9,7 @@
 
 mod accounts;
 mod acts;
+pub mod address;
 mod agent_acts;
 mod answer;
 mod base;
