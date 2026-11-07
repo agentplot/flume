@@ -4,7 +4,9 @@
 //! (core.4). The format's fields are mapped onto the seam's types, every
 //! section the format does not name is ignored (23), and a declaration
 //! weir refuses is answered as could not be read, naming every field that
-//! fails (84). A kind's `agents` table, and a `[kinds.<kind>]` table that
+//! fails (84). A kind that lands and declares `stages = []` is mapped to a
+//! kind with no stages, which weir refuses on a kind that does not land
+//! (18, 202; weir 51, 57). A kind's `agents` table, and a `[kinds.<kind>]` table that
 //! gives settings to a kind declared elsewhere, are weir's too: each is
 //! mapped onto the seam's settings for every stage and for each stage it
 //! names, the latter returned apart from the kinds (32, C.2; weir 52,
@@ -171,7 +173,7 @@ impl Kinds for Weir {
                 return KindsRead::Read {
                     kinds: vec![],
                     settings: BTreeMap::new(),
-                    agents: Settings::default(),
+                    agents: Box::default(),
                 }
             }
             Err(reason) => return KindsRead::CouldNotRead { reason },
@@ -685,7 +687,7 @@ fn read(text: &str, whose: Whose, beside: Reader) -> KindsRead {
         KindsRead::Read {
             kinds,
             settings,
-            agents,
+            agents: Box::new(agents),
         }
     } else {
         KindsRead::CouldNotRead {
@@ -850,17 +852,23 @@ fn map_agents(
 }
 
 /// An agent's settings, its table as written: `program`, `model`,
-/// `instructions`, `beside`, `mode` and `programs` (32, 107, 162, 195),
-/// the mode one of flume's four or a table of programs, read as the
+/// `effort`, `instructions`, `beside`, `mode` and `programs` (32, 107,
+/// 162, 195, 197), the effort its program's own word, kept as written
+/// for the agent's profile to take or refuse, any other value, a table
+/// of programs among it, failing it naming the field (197, C.2), the
+/// mode one of flume's four or a table of programs, read as the
 /// host's configuration reads it, any other failing it naming the field
 /// (169, C.2), and `programs` each program's own settings, read by
 /// flume's one reader of them, a file an entry names read by `beside` as
 /// a prompt is, so never outside the repository or the package, any part
 /// not as it reads them failing it naming the field (157, 195, C.2;
 /// core.34); an `env` fails it, naming the field, since an agent's
-/// environment is its account's alone (144, C.2), and so does a program
-/// named by a location, a `/` in it, since a location is the host's
-/// (158); every other key is the runner's, and ignored.
+/// environment is its account's alone (144, C.2), and so does a
+/// `keep_open`, since how long an agent is kept open for an answer trades
+/// the host's room and its accounts' and is the host's or the launch's to
+/// give (158, 198, C.2), and a program named by a location, a `/` in it,
+/// since a location is the host's (158); every other key is the runner's,
+/// and ignored.
 fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>) -> Settings {
     let mut text = |name: &str| match agent.get(name) {
         None => None,
@@ -872,6 +880,7 @@ fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>
     };
     let program = text("program");
     let model = text("model");
+    let effort = text("effort");
     let instructions = text("instructions");
     let pane = text("beside");
     let mode = agent.get("mode").and_then(|mode| {
@@ -892,6 +901,11 @@ fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>
             "{at}.env: an agent's environment is its account's to give, and no declaration gives one"
         ));
     }
+    if agent.contains_key("keep_open") {
+        problems.push(format!(
+            "{at}.keep_open: how long an agent is kept open for an answer is the host's or the launch's to give, and no declaration gives one"
+        ));
+    }
     if let Some(program) = program.as_deref().filter(|program| program.contains('/')) {
         problems.push(format!(
             "{at}.program: `{program}` names a program by a location, which is the host's, and a declaration names its program by name"
@@ -900,11 +914,15 @@ fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>
     Settings {
         program,
         model,
+        effort,
         instructions,
         beside: pane,
         mode,
         // A kind names nothing a host owns, a session among it (158).
         session: None,
         programs,
+        // Nor how long an agent is kept open for an answer, refused above
+        // (158, 198).
+        keep_open: None,
     }
 }

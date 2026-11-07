@@ -1,8 +1,8 @@
 use crate::{lock, FakeTerminal, Log};
 use flume_seams::{
-    Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Live, LiveProcess, Mode, ModeBegan,
-    ModeEntry, Offered, PlaceRef, Reading, Received, Reserved, Secret, Settings, Spent, Unsettled,
-    NO_OWN, READS_NO_SESSION,
+    no_effort, Agent, AgentCommand, Carry, FolderTrust, Guarded, Identity, Live, LiveProcess, Mode,
+    ModeBegan, ModeEntry, Offered, PlaceRef, Reading, Received, Reserved, Secret, Settings, Spent,
+    Unsettled, NO_OWN, READS_NO_SESSION,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -29,7 +29,13 @@ use std::sync::{Arc, Mutex};
 /// them, its command lists them as one JSON object in a file under the
 /// place's own folder, [`FakeAgent::own_file`], and names it by `--own
 /// <file>`, and every command given own settings logs their keys (195,
-/// 196).
+/// 196). It takes no effort until the words it takes are scripted,
+/// refusing every word in the seam's default words, and names no
+/// variable read over the effort until scripted to; its command passes
+/// the effort its settings give as `--effort <word>`, and each effort
+/// asked of it is logged (197). An agent scripted to end its session
+/// after a stop-short reads stopped and ended once a test says it
+/// stopped short (96, 134).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     /// The other terminals its agents may open in, a stream's (190).
@@ -73,6 +79,10 @@ struct AgentModel {
     /// The file its command lists its own settings in where scripted
     /// apart from its own under the place's folder (196).
     own_at: Option<String>,
+    /// The words the program takes as its effort, as scripted (197).
+    efforts: Vec<String>,
+    /// The variable the program reads over its effort, as scripted (197).
+    effort_variable: Option<&'static str>,
 }
 
 #[derive(Clone)]
@@ -94,6 +104,8 @@ struct Record {
     /// The session the agent's word that it started names, as scripted
     /// (161, 179).
     session: Option<String>,
+    /// Its session ends once it stops short, as scripted (96, 134).
+    ends_after_stop_short: bool,
 }
 
 impl Default for Record {
@@ -113,6 +125,7 @@ impl Default for Record {
             started_without: None,
             began_in: None,
             session: None,
+            ends_after_stop_short: false,
         }
     }
 }
@@ -192,6 +205,28 @@ impl FakeAgent {
     /// Whether the agent's record shows its session ended (134).
     pub fn set_ended(&self, agent: &Identity, reading: Reading) {
         self.with(agent, |record| record.ended = reading);
+    }
+
+    /// The agent's session ends once it stops short, as a program's does
+    /// that runs nothing after its stop-short, or whose host restarted
+    /// while it waited for its answer: from [`FakeAgent::stopped_short`]
+    /// on, its terminal reads it stopped and its record its session ended
+    /// (96, 134).
+    pub fn ends_after_stop_short(&self, agent: &Identity) {
+        self.with(agent, |record| record.ends_after_stop_short = true);
+    }
+
+    /// The agent stopped short, as a test says once flume took its words:
+    /// where it is scripted to end its session after, its terminal reads
+    /// it stopped and its record its session ended from now on, logged
+    /// `session ended <agent>`; otherwise nothing changes (96, 134).
+    pub fn stopped_short(&self, agent: &Identity) {
+        if !self.record(agent).ends_after_stop_short {
+            return;
+        }
+        self.log.push(format!("session ended {agent}"));
+        self.on(agent).kill(agent);
+        self.set_ended(agent, Reading::Yes);
     }
 
     /// Whether the agent says it started, in place of its word once opened
@@ -375,6 +410,18 @@ impl FakeAgent {
         )
     }
 
+    /// The program takes `words` as its effort, each passed as written,
+    /// and refuses any other naming it and them (197).
+    pub fn take_efforts(&self, words: &[&str]) {
+        lock(&self.state).efforts = words.iter().map(|word| word.to_string()).collect();
+    }
+
+    /// The program reads the variable `name` of its environment over the
+    /// effort its command passes (197).
+    pub fn read_effort_over(&self, name: &'static str) {
+        lock(&self.state).effort_variable = Some(name);
+    }
+
     /// The program keeps `names` from every process it starts (161).
     pub fn withhold(&self, names: &[&str]) {
         lock(&self.state).withheld = names.iter().map(|name| name.to_string()).collect();
@@ -524,6 +571,9 @@ impl Agent for FakeAgent {
         let mut args = vec![];
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
+        }
+        if let Some(effort) = &settings.effort {
+            args.extend(["--effort".to_string(), effort.clone()]);
         }
         if let Some(mode) = mode {
             args.extend(["--mode".to_string(), mode.to_string()]);
@@ -776,6 +826,28 @@ impl Agent for FakeAgent {
         }
     }
 
+    /// Each word scripted taken, any other refused naming it and the
+    /// words taken, and every word refused in the seam's default words
+    /// where none is scripted, each asking logged (197).
+    fn effort(&self, word: &str) -> Result<(), String> {
+        self.log.push(format!("effort {word}"));
+        let state = lock(&self.state);
+        if state.efforts.is_empty() {
+            Err(no_effort(word))
+        } else if state.efforts.iter().any(|taken| taken == word) {
+            Ok(())
+        } else {
+            Err(format!(
+                "`{word}` is no effort the fake agent takes, which are {}",
+                state.efforts.join(", ")
+            ))
+        }
+    }
+
+    fn effort_variable(&self) -> Option<&'static str> {
+        lock(&self.state).effort_variable
+    }
+
     fn mode_read_back(&self) -> Offered {
         if lock(&self.state).mode_read_back {
             Offered::Offered
@@ -807,6 +879,10 @@ impl Agent for FakeAgent {
     /// one must do again, the same for every start (41, 92; core.31).
     fn stop_short(&self, _agent: &Identity) -> String {
         "to stop short needing an answer, run `flume needs \"<what you need>\"`; having found work a stage before this one must do again, run `flume needs --found \"<the work you found>\"`".into()
+    }
+
+    fn stop_short_to(&self) -> String {
+        "add `--to <name>` to `flume needs`".into()
     }
 
     fn send_back(&self) -> Offered {

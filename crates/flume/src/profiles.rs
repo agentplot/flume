@@ -590,7 +590,8 @@ pub fn hook_reads_input(event: &str) -> bool {
 
 /// What the agent program's hook for `event` answers to `input`, in the
 /// agent this process's environment names, the core built by `build`
-/// where the hook needs it: nothing outside an agent flume started (C.4;
+/// where the hook needs it: outside an agent flume started, nothing but
+/// SessionStart's, what waits on the session the terminal names (43, C.4;
 /// design 14).
 pub fn hook(event: &str, input: &str, build: &dyn Fn() -> Result<Engine, String>) -> String {
     let binary = std::env::current_exe()

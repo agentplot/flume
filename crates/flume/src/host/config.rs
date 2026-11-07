@@ -11,9 +11,12 @@
 //! `[kinds.<kind>.agents]` and `[repos."<repository>".kinds.<kind>.agents]`
 //! tables, each naming one stage's by a further `.stages.<stage>` table,
 //! give a kind's agents in every repository and in one their `model`,
-//! `instructions` and `mode`, each kept as written, a mode one of
-//! flume's four or a table of programs whose entries are strings (32,
-//! 162, 169, C.7; records 0017, 0020, 0024); a
+//! `effort`, `instructions`, `mode` and `keep_open`, each kept as
+//! written, an effort its program's own word, a mode one of flume's four
+//! or a table of programs whose entries are strings, and `keep_open`, how
+//! long an agent is kept open for an answer, one time for every program,
+//! `<n>`, `<n>s`, `<n>m` or `<n>h` (32, 162, 169, 197, 198, C.7; records
+//! 0017, 0020, 0024, 0044, 0046); a
 //! repository's key has a leading `~` read as the home, so it names the
 //! repository by its location as a launch does. Its
 //! `[repos."<repository>".agents]` gives the same for every kind in one
@@ -26,11 +29,9 @@
 //! read on the host with the configuration, absolute, under `~/` read as
 //! the home as a repository's key is, or relative to the configuration's
 //! own directory, where a link leads, and never with a `$VAR` read (195,
-//! C.7; core.30). Its
-//! `[roles."<partition>/<role>"]` tables are the runs the host wakes for
-//! each role's address, with `repository`, `kind`, `priority`, `base`,
-//! `brief` and `stream`, an address it names nothing for woken by nothing
-//! (132, C.7). Its `[streams.<stream>]` tables declare the host's streams,
+//! C.7; core.30). It gives no `[roles]` table: a source declares each
+//! role, and a configuration giving one is unreadable, naming it (193,
+//! C.7). Its `[streams.<stream>]` tables declare the host's streams,
 //! each with `agents`, `priority`, `pool`, `session`, `multiplexer`,
 //! `view`, `terminal_app`, `title`, its labels' shares in
 //! `[streams.<stream>.labels.<label>]`, and the session it names for a
@@ -59,20 +60,22 @@
 //! a link to one, whose name ends in `.toml` and begins with no `.`
 //! declares the source its name less `.toml` names; every other entry is
 //! ignored, so a source written beside as `.acme.toml.tmp` and renamed
-//! over `acme.toml` is never read half written. Its one key, `kinds_dir`,
-//! is the directory holding the source's packages, absolute or under `~`,
-//! read as the home. A file that is not TOML, gives no `kinds_dir`, one
-//! neither absolute nor under `~` or any other key, or takes a name the
-//! kinds profile refuses for a source, is that source's fault alone, kept
+//! over `acme.toml` is never read half written. Its key `kinds_dir` is the
+//! directory holding the source's packages, and its key `roles`, where it
+//! gives one, the file in which the source declares its roles, which
+//! `roles.rs` reads at each ask; each absolute or under `~`, read as the
+//! home. A file that is not TOML, gives no `kinds_dir`, a path neither
+//! absolute nor under `~` or any other key, or takes a name the kinds
+//! profile refuses for a source, is that source's fault alone, kept
 //! with it and failing nothing else of the configuration; no `sources/`
 //! is no source, and one that cannot be listed fails the configuration as
 //! a `config.toml` that cannot be read does. flume writes nothing there.
 
 use crate::profiles::kinds::weir::source_fault;
 use flume_seams::{
-    is_address, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
+    read_span, Account, ConfigLayer, ConfigValue, HostConfiguration, HostSource, HostSourceRead,
     KindSessions, KindSettings, LabelFrom, LabelHeld, LocalLayer, NamedBy, PinnedKey, Pool,
-    PoolFrom, PoolNamed, ProfileHeld, RoleRun, Settings, Share, StageSession, Strategy, Stream,
+    PoolFrom, PoolNamed, ProfileHeld, Settings, Share, StageSession, Strategy, Stream,
     StreamDisplay, StreamFrom, StreamHeld, View, ViewHeld, DEFAULT_STREAM, SET,
 };
 use std::collections::BTreeMap;
@@ -177,8 +180,6 @@ pub struct HostConfig {
     pub streams_agents: BTreeMap<String, Settings>,
     /// The settings given every agent on the host, its `[agents]` (32).
     pub every_agent: Settings,
-    /// The run woken for each role's address, by the address (132, C.7).
-    pub roles: BTreeMap<String, RoleRun>,
     /// The streams declared, by name, `default` among them always (143).
     pub streams: BTreeMap<String, Stream>,
     /// The streams named for places, by repository and kind, by
@@ -239,7 +240,6 @@ impl Default for HostConfig {
             repos_agents: BTreeMap::new(),
             streams_agents: BTreeMap::new(),
             every_agent: Settings::default(),
-            roles: BTreeMap::new(),
             streams: BTreeMap::from([(DEFAULT_STREAM.to_string(), Stream::default())]),
             streams_named: StreamsNamed::default(),
             labels_named: LabelsNamed::default(),
@@ -458,8 +458,11 @@ impl HostConfig {
                     .insert(location, kinds_settings(kinds, &at, directory)?);
             }
         }
-        if let Some(roles) = table.get("roles") {
-            config.roles = role_runs(roles)?;
+        if table.contains_key("roles") {
+            return Err(
+                "[roles] is no table of the host's configuration: a source declares each role, in the roles file its file in sources/ names (193, C.7)"
+                    .into(),
+            );
         }
         if let Some(pools) = table.get("pools") {
             config.pools = pools_declared(pools)?;
@@ -958,7 +961,7 @@ pub fn read_sources(dir: &Path) -> Result<BTreeMap<String, HostSource>, String> 
             continue;
         }
         let read = match source_of(name, &path) {
-            Ok(kinds_dir) => HostSourceRead::Read { kinds_dir },
+            Ok((kinds_dir, roles)) => HostSourceRead::Read { kinds_dir, roles },
             Err(reason) => HostSourceRead::CouldNotRead { reason },
         };
         sources.insert(
@@ -973,8 +976,9 @@ pub fn read_sources(dir: &Path) -> Result<BTreeMap<String, HostSource>, String> 
 }
 
 /// The directory a source's file at `path` declares the source `name`'s
-/// packages in, or every fault of the file (154, 191, C.7).
-fn source_of(name: &str, path: &Path) -> Result<String, String> {
+/// packages in, and the file it declares its roles in where it names one;
+/// or every fault of the file (154, 191, 193, C.7).
+fn source_of(name: &str, path: &Path) -> Result<(String, Option<String>), String> {
     let mut faults: Vec<String> = source_fault(name).into_iter().collect();
     let read = std::fs::read_to_string(path)
         .map_err(|error| format!("could not be read: {error}"))
@@ -989,40 +993,45 @@ fn source_of(name: &str, path: &Path) -> Result<String, String> {
             return Err(faults.join("; "));
         }
     };
-    for key in table.keys().filter(|key| *key != "kinds_dir") {
+    for key in table
+        .keys()
+        .filter(|key| !matches!(key.as_str(), "kinds_dir" | "roles"))
+    {
         faults.push(format!(
-            "`{key}` is no key of a source's file, which gives `kinds_dir` alone"
+            "`{key}` is no key of a source's file, which gives `kinds_dir` and `roles`"
         ));
     }
-    let kinds_dir = match table.get("kinds_dir") {
-        None => {
-            faults.push("gives no `kinds_dir`, the directory holding the source's packages".into());
-            None
-        }
+    let mut path_of = |key: &str, what: &str| match table.get(key) {
+        None => None,
         Some(Value::String(given)) => {
             let read = home(given);
             if Path::new(&read).is_absolute() {
                 Some(read)
             } else {
                 faults.push(format!(
-                    "`kinds_dir` is `{given}`, which is neither absolute nor under `~`"
+                    "`{key}` is `{given}`, which is neither absolute nor under `~`"
                 ));
                 None
             }
         }
         Some(_) => {
-            faults.push("`kinds_dir` is not a path".into());
+            faults.push(format!("`{key}` is not a path to {what}"));
             None
         }
     };
+    let kinds_dir = path_of("kinds_dir", "the directory holding the source's packages");
+    let roles = path_of("roles", "the file declaring the source's roles");
+    if !table.contains_key("kinds_dir") {
+        faults.push("gives no `kinds_dir`, the directory holding the source's packages".into());
+    }
     match kinds_dir {
-        Some(kinds_dir) if faults.is_empty() => Ok(kinds_dir),
+        Some(kinds_dir) if faults.is_empty() => Ok((kinds_dir, roles)),
         _ => Err(faults.join("; ")),
     }
 }
 
 /// A key as TOML writes it in a table's name.
-fn quoted(key: &str) -> String {
+pub(crate) fn quoted(key: &str) -> String {
     if !key.is_empty()
         && key
             .chars()
@@ -1035,7 +1044,7 @@ fn quoted(key: &str) -> String {
 }
 
 /// A repository's location with a leading `~` read as `$HOME`.
-fn home(location: &str) -> String {
+pub(crate) fn home(location: &str) -> String {
     match (location.strip_prefix('~'), std::env::var("HOME")) {
         (Some(rest), Ok(home)) if rest.is_empty() || rest.starts_with('/') => {
             format!("{home}{rest}")
@@ -1461,58 +1470,6 @@ fn env_of(table: &Table, at: &str) -> Result<BTreeMap<String, String>, String> {
     Ok(env)
 }
 
-/// The `roles` table: each address's run, its repository and kind named,
-/// its priority zero, its base the repository's default branch and its
-/// brief none where the table gives none; a key that is no address, or a
-/// key the run does not know, refused naming it (132, C.7).
-fn role_runs(roles: &Value) -> Result<BTreeMap<String, RoleRun>, String> {
-    let roles = roles
-        .as_table()
-        .ok_or("[roles] is not a table of addresses".to_string())?;
-    let mut runs = BTreeMap::new();
-    for (address, table) in roles {
-        let at = format!("roles.{}", quoted(address));
-        if !is_address(address) {
-            return Err(format!(
-                "[{at}] names no role's address, which is <partition>/<role>"
-            ));
-        }
-        let table = table.as_table().ok_or(format!("[{at}] is not a table"))?;
-        if let Some(unknown) = table.keys().find(|key| {
-            !matches!(
-                key.as_str(),
-                "repository" | "kind" | "priority" | "base" | "brief" | "stream"
-            )
-        }) {
-            return Err(format!("[{at}] {unknown} is no word of a role's run"));
-        }
-        let text = |name: &str| match table.get(name) {
-            None => Ok(None),
-            Some(Value::String(value)) => Ok(Some(value.clone())),
-            Some(_) => Err(format!("[{at}] {name} is not a string")),
-        };
-        let named = |name: &str| text(name)?.ok_or(format!("[{at}] names no {name}"));
-        let priority = match table.get("priority") {
-            None => 0,
-            Some(value) => value
-                .as_integer()
-                .ok_or(format!("[{at}] priority is not a whole number"))?,
-        };
-        runs.insert(
-            address.clone(),
-            RoleRun {
-                repository: home(&named("repository")?),
-                kind: named("kind")?,
-                priority,
-                base: text("base")?,
-                brief: text("brief")?,
-                stream: text("stream")?,
-            },
-        );
-    }
-    Ok(runs)
-}
-
 /// The host's `[agents]`, its settings for every agent, and each of its
 /// `[agents.streams.<stream>]`, every agent's in a stream `streams`
 /// declares, by the stream's name; a `program`, an `env`, a `beside` or a
@@ -1586,11 +1543,13 @@ fn refuse(table: &Table, at: &str, whose: &str, names: &[&str]) -> Result<(), St
     ))
 }
 
-/// One agents table's `model`, `instructions`, `mode` and `programs`,
-/// each as written, the mode read as a declaration's is (162, 169), and
-/// `programs` by flume's one reader of them, a file read by
-/// [`host_file`] (195); any other key, `stages` among them, is not a
-/// setting of the host's (32, C.7; record 0020).
+/// One agents table's `model`, `effort`, `instructions`, `mode`,
+/// `keep_open` and `programs`, each as written, the effort a string, its
+/// program's own word, which the agent's profile takes or refuses (197),
+/// the mode read as a declaration's is (162, 169), `keep_open` by
+/// [`keep_open_of`] (198), and `programs` by flume's one reader of them, a
+/// file read by [`host_file`] (195); any other key, `stages` among them,
+/// is not a setting of the host's (32, C.7; record 0020).
 fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings, String> {
     let text = |name: &str| match table.get(name) {
         None => Ok(None),
@@ -1609,11 +1568,34 @@ fn agent_settings(table: &Table, at: &str, directory: &Path) -> Result<Settings,
         .unwrap_or_default();
     Ok(Settings {
         model: text("model")?,
+        effort: text("effort")?,
         instructions: text("instructions")?,
         mode,
         programs,
+        keep_open: keep_open_of(table, at)?,
         ..Settings::default()
     })
+}
+
+/// An agents table's `keep_open` at `at`, how long its agents are kept
+/// open for an answer: a string [`read_span`] takes, kept as written,
+/// none where the table gives none; any other value, a table of programs
+/// among them, refused naming the table and the key, since it is flume's
+/// one time for every program (32, 198, C.7).
+pub(super) fn keep_open_of(table: &Table, at: &str) -> Result<Option<String>, String> {
+    match table.get("keep_open") {
+        None => Ok(None),
+        Some(Value::String(written)) => read_span(written)
+            .map(|_| Some(written.clone()))
+            .map_err(|reason| format!("{at}.keep_open: {reason}")),
+        Some(Value::Table(_)) => Err(format!(
+            "{at}.keep_open is one time for every program, never a table of programs: \
+             it is <n>, <n>s, <n>m or <n>h"
+        )),
+        Some(_) => Err(format!(
+            "{at}.keep_open is not a string: it is <n>, <n>s, <n>m or <n>h"
+        )),
+    }
 }
 
 /// A settings file a host's agents table names at `written`, read on the
@@ -1764,6 +1746,68 @@ mod tests {
     }
 
     #[test]
+    fn an_effort_for_a_kind_and_one_for_a_repositorys_stage() {
+        // 32, 197, C.7: an effort for a kind at the host-kind layer, and
+        // one for a repository's stage at the host-repository layer, each
+        // its program's own word kept as written.
+        let config = HostConfig::parse(
+            "[kinds.fix.agents]\neffort = \"high\"\n\
+             [repos.\"/r\".kinds.fix.agents.stages.code]\neffort = \"xhigh\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            config.kinds["fix"].every_stage.effort.as_deref(),
+            Some("high")
+        );
+        let repository = &config.repos["/r"]["fix"];
+        assert_eq!(repository.every_stage, Settings::default());
+        assert_eq!(repository.stages["code"].effort.as_deref(), Some("xhigh"));
+        let scratch = Scratch::new("effort-layers");
+        let host = super::super::RealHost::new(scratch.0.join("state"), config, None);
+        let settings = flume_seams::Host::settings(&host, "/r", "fix", "default");
+        assert_eq!(
+            settings.kind.every_stage.effort.as_deref(),
+            Some("high"),
+            "the host-kind layer"
+        );
+        assert_eq!(
+            settings.repository.for_stage("code").effort.as_deref(),
+            Some("xhigh"),
+            "the host-repository layer"
+        );
+    }
+
+    #[test]
+    fn an_effort_that_is_no_word_is_refused_naming_the_table_and_effort() {
+        // 197, C.7: a number, and a table of programs until the model's
+        // is built with it, in a kind's table and every other.
+        for text in [
+            "[kinds.fix.agents]\neffort = 3\n",
+            "[kinds.fix.agents]\neffort = { agent = \"high\" }\n",
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains("kinds.fix.agents") && refused.contains("effort"),
+                "{text}: {refused}"
+            );
+        }
+        for (text, table) in [
+            ("[agents]\neffort = 3\n", "[agents]"),
+            (
+                "[streams.work]\n[agents.streams.work]\neffort = 3\n",
+                "[agents.streams.work]",
+            ),
+            ("[repos.\"/r\".agents]\neffort = 3\n", "agents]"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains(table) && refused.contains("effort"),
+                "{text}: {refused}"
+            );
+        }
+    }
+
+    #[test]
     fn a_setting_that_is_no_string_is_refused() {
         let refused = HostConfig::parse("[kinds.change.agents]\nmodel = 4\n").unwrap_err();
         assert!(
@@ -1773,85 +1817,156 @@ mod tests {
     }
 
     #[test]
-    fn a_role_named() {
-        let config = HostConfig::parse(
-            "[roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\npriority = 5\n",
+    fn a_keep_open_for_a_kind_and_for_one_stage() {
+        // 32, 198, C.7: the store-profile spec's "A time for a kind and
+        // for one stage", each kept as written, in the managed layer and
+        // the local one over it.
+        let text = "[kinds.change.agents]\nkeep_open = \"30m\"\n\
+             [kinds.change.agents.stages.verify]\nkeep_open = \"0\"\n";
+        let config = HostConfig::parse(text).unwrap();
+        let change = &config.kinds["change"];
+        assert_eq!(change.every_stage.keep_open.as_deref(), Some("30m"));
+        assert_eq!(change.stages["verify"].keep_open.as_deref(), Some("0"));
+        let config = HostConfig::layers(
+            text,
+            Some("[kinds.change.agents.stages.verify]\nkeep_open = \"90s\"\n"),
         )
         .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        let change = &config.kinds["change"];
+        assert_eq!(change.every_stage.keep_open.as_deref(), Some("30m"));
+        assert_eq!(change.stages["verify"].keep_open.as_deref(), Some("90s"));
         assert_eq!(
-            config.roles["madswan/planner"],
-            RoleRun {
-                repository: "/r".into(),
-                kind: "planner".into(),
-                priority: 5,
-                base: None,
-                brief: None,
-                stream: None,
-            },
-            "no base, the repository's default branch, no brief and no stream"
+            value_at(&config, "kinds.change.agents.stages.verify.keep_open"),
+            Some(("\"90s\"".into(), ConfigLayer::Local))
         );
     }
 
     #[test]
-    fn a_role_with_a_base_and_a_brief() {
+    fn a_keep_open_for_a_stream_and_for_every_agent() {
+        // 32, 143, 198, C.7: the store-profile spec's "A time for a stream
+        // and for every agent", and a repository's for every kind and for
+        // one kind, each as written.
         let config = HostConfig::parse(
-            "[roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\npriority = 5\n\
-             base = \"next\"\nbrief = \"Read the records and plan the next unit.\"\n",
+            "[streams.work]\n\
+             [agents.streams.work]\nkeep_open = \"10m\"\n\
+             [agents]\nkeep_open = \"45m\"\n\
+             [repos.\"/r\".agents]\nkeep_open = \"2h\"\n\
+             [repos.\"/r\".kinds.fix.agents.stages.code]\nkeep_open = \"5m\"\n",
         )
         .unwrap();
-        let run = &config.roles["madswan/planner"];
-        assert_eq!(run.base.as_deref(), Some("next"));
         assert_eq!(
-            run.brief.as_deref(),
-            Some("Read the records and plan the next unit.")
+            config.streams_agents["work"].keep_open.as_deref(),
+            Some("10m")
+        );
+        assert_eq!(config.every_agent.keep_open.as_deref(), Some("45m"));
+        assert_eq!(config.repos_agents["/r"].keep_open.as_deref(), Some("2h"));
+        assert_eq!(
+            config.repos["/r"]["fix"].stages["code"]
+                .keep_open
+                .as_deref(),
+            Some("5m")
+        );
+        let config = HostConfig::layers(
+            "[streams.work]\n[agents]\nkeep_open = \"45m\"\n",
+            Some("[agents]\nkeep_open = \"15m\"\n[agents.streams.work]\nkeep_open = \"1h\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.configuration.local, LocalLayer::Taken);
+        assert_eq!(config.every_agent.keep_open.as_deref(), Some("15m"));
+        assert_eq!(
+            config.streams_agents["work"].keep_open.as_deref(),
+            Some("1h")
         );
     }
 
     #[test]
-    fn two_roles() {
-        let config = HostConfig::parse(
-            "[host]\nagents = 2\n\
-             [roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\npriority = 5\n\
-             [roles.\"madswan/ops\"]\nrepository = \"/s\"\nkind = \"ops\"\n",
-        )
-        .unwrap();
-        assert_eq!(config.agents, Some(2));
-        assert_eq!(
-            config.roles.keys().collect::<Vec<_>>(),
-            vec!["madswan/ops", "madswan/planner"]
-        );
-        assert_eq!(config.roles["madswan/ops"].repository, "/s");
-        assert_eq!(config.roles["madswan/ops"].priority, 0, "none given");
-    }
-
-    #[test]
-    fn no_role_named() {
-        let config = HostConfig::parse("[host]\nagents = 2\n").unwrap();
-        assert!(config.roles.is_empty());
-        assert_eq!(config.roles.get("madswan/planner"), None);
-    }
-
-    #[test]
-    fn a_role_the_table_cannot_run_is_refused() {
+    fn a_keep_open_in_another_form_is_refused() {
+        // C.7: the store-profile spec's "A time in another form", named by
+        // its table and key with the forms it takes; a local one so
+        // refused leaves the local layer untaken, naming why.
+        let forms = "<n>, <n>s, <n>m or <n>h";
         for (text, named) in [
             (
-                "[roles.planner]\nrepository = \"/r\"\nkind = \"planner\"\n",
-                "address",
-            ),
-            ("[roles.\"a/b\"]\nkind = \"planner\"\n", "repository"),
-            ("[roles.\"a/b\"]\nrepository = \"/r\"\n", "kind"),
-            (
-                "[roles.\"a/b\"]\nrepository = \"/r\"\nkind = \"k\"\npriority = \"high\"\n",
-                "priority",
+                "[kinds.fix.agents]\nkeep_open = \"an hour\"\n",
+                "kinds.fix.agents.keep_open",
             ),
             (
-                "[roles.\"a/b\"]\nrepository = \"/r\"\nkind = \"k\"\nbranch = \"main\"\n",
-                "branch",
+                "[kinds.fix.agents.stages.code]\nkeep_open = \"+5m\"\n",
+                "kinds.fix.agents.stages.code.keep_open",
+            ),
+            ("[agents]\nkeep_open = 3600\n", "agents.keep_open"),
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains(named) && refused.contains(forms),
+                "{text}: {refused}"
+            );
+        }
+        let config = HostConfig::layers(
+            "[agents]\nkeep_open = \"1h\"\n",
+            Some("[kinds.fix.agents]\nkeep_open = \"an hour\"\n"),
+        )
+        .unwrap();
+        let LocalLayer::NotTaken { fault, .. } = &config.configuration.local else {
+            panic!("the local layer taken: {:?}", config.configuration.local);
+        };
+        let fault = fault.as_deref().unwrap_or_default();
+        assert!(fault.contains("kinds.fix.agents.keep_open"), "{fault}");
+        assert_eq!(config.every_agent.keep_open.as_deref(), Some("1h"));
+        assert!(!config.kinds.contains_key("fix"), "the managed layer alone");
+    }
+
+    #[test]
+    fn a_keep_open_table_of_programs_is_refused() {
+        // 198, C.7: the store-profile spec's "A table of programs": one
+        // time for every program, never a table.
+        for (text, named) in [
+            (
+                "[agents]\nkeep_open = { agent = \"1h\" }\n",
+                "agents.keep_open",
+            ),
+            (
+                "[repos.\"/r\".kinds.fix.agents.stages.code.keep_open]\nagent = \"1h\"\n",
+                "repos.\"/r\".kinds.fix.agents.stages.code.keep_open",
             ),
         ] {
             let refused = HostConfig::parse(text).unwrap_err();
-            assert!(refused.contains(named), "{refused}");
+            assert!(
+                refused.contains(named) && refused.contains("one time for every program"),
+                "{text}: {refused}"
+            );
         }
+    }
+
+    /// role-waking, "The roles in the host's configuration" (193, C.7).
+    #[test]
+    fn a_roles_table_makes_the_configuration_unreadable() {
+        for text in [
+            "[roles.\"east/planner\"]\nrepository = \"/r\"\nkind = \"turn\"\n",
+            "[roles.\"east/planner\"]\nagent = \"east-planner\"\n",
+        ] {
+            let refused = HostConfig::parse(text).unwrap_err();
+            assert!(
+                refused.contains("[roles]") && refused.contains("a source declares each role"),
+                "{refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_roles_table_in_the_local_layer_is_not_taken() {
+        // C.7, core.45: the local layer sets no `[roles]`, which is no
+        // key of its list.
+        let config = HostConfig::layers(
+            "",
+            Some("[roles.\"east/planner\"]\nagent = \"east-planner\"\n"),
+        )
+        .unwrap();
+        let LocalLayer::NotTaken { keys, .. } = config.configuration.local else {
+            panic!("the local layer taken");
+        };
+        assert_eq!(keys, vec!["roles.\"east/planner\""]);
     }
 
     /// C.7's example, as the statement writes it at fa40c94, its program
@@ -2468,18 +2583,6 @@ label = "inception"
     }
 
     #[test]
-    fn a_role_in_its_stream() {
-        let config = HostConfig::parse(
-            "[roles.\"madswan/planner\"]\nrepository = \"/r\"\nkind = \"planner\"\nstream = \"work\"\n",
-        )
-        .unwrap();
-        assert_eq!(
-            config.roles["madswan/planner"].stream.as_deref(),
-            Some("work")
-        );
-    }
-
-    #[test]
     fn a_configuration_that_refuses_names_the_key() {
         let account = "accounts = [{ name = \"w\", program = \"agent\" }]";
         for (text, named) in [
@@ -2710,6 +2813,25 @@ label = "inception"
             value_at(&config, "kinds.change.agents.instructions"),
             Some(("\"be brief\"".into(), ConfigLayer::Managed))
         );
+    }
+
+    #[test]
+    fn an_effort_for_every_agent_set_locally() {
+        // 32, 197, C.7: the local layer's effort for every agent over
+        // the managed layer's, the configuration naming the local layer
+        // as where it came from.
+        let config = HostConfig::layers(
+            "[agents]\neffort = \"medium\"\nmodel = \"opus\"\n",
+            Some("[agents]\neffort = \"high\"\n"),
+        )
+        .unwrap();
+        assert_eq!(config.every_agent.effort.as_deref(), Some("high"));
+        assert_eq!(config.every_agent.model.as_deref(), Some("opus"));
+        assert_eq!(
+            value_at(&config, "agents.effort"),
+            Some(("\"high\"".into(), ConfigLayer::Local))
+        );
+        assert_eq!(config.configuration.passed_over, vec![]);
     }
 
     #[test]

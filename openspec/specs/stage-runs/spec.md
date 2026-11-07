@@ -88,10 +88,11 @@ at one head of the place's branch, or when its agent stops short (24,
 The core SHALL take a stop-short only under the identity of the place's
 current stage's live agent and that start's secret, saying whether it
 needs an answer or found work, SHALL end the stage short with the
-agent's words whole and its kind, and SHALL start no next stage, except
-that found work from the kind's last stage starts the kind's fix round
-where it is a stage before that last stage, and any other found work is
-taken as needing an answer (41, 42, 131).
+agent's words whole and its kind, and SHALL start no next stage but the
+fix round a found from the kind's last stage starts where that round is
+before it. A stop-short after an answer taken in its session SHALL be an
+end of its own, keyed apart from the one answered (41, 42, 43, 131,
+198).
 
 #### Scenario: A construct stops short
 
@@ -102,6 +103,11 @@ taken as needing an answer (41, 42, 131).
 
 - **WHEN** a stop-short carries the place's identity and the secret of an earlier start
 - **THEN** it is refused and the stage goes on (41)
+
+#### Scenario: A second stop-short in one session
+
+- **WHEN** a code agent answered in its session stops short again with other words
+- **THEN** a second end of code's first start is recorded under its own key and delivered once to each recipient, the first staying delivered, and the agent is kept open for `keep_open` from the second stop-short (43, 74, 198)
 
 ### Requirement: The stop check
 
@@ -120,13 +126,20 @@ naming the deliverable and the way to stop short (110, 115).
 A stage SHALL read stuck once its agent has been quiet past its limit,
 30 minutes where none is declared, with nothing delivered or said; lost
 once its agent stopped with nothing delivered or said; and its agent
-working past its limit when it works that long with nothing delivered.
-The core SHALL end no agent on any of these accounts (44, 45, 118).
+working past its limit when it works that long with nothing delivered,
+from the latest of the stage's beginning, its last answer's receipt in
+its session and the place's last head move. The core SHALL end no agent
+on any of these accounts (44, 45, 118, 198).
 
 #### Scenario: Stuck under a program with no send-back
 
 - **WHEN** the fake agent gives no way to send back and stays quiet past the limit with nothing delivered
 - **THEN** status reports the stage stuck naming it and the agent, the agent is not ended, and after a tell wakes it and it ticks the last task the stage ends at its deliverable (S17)
+
+#### Scenario: Limits after an answer
+
+- **WHEN** a code stage began two hours before its agent received an answer in its session, and the agent then works 20 minutes with nothing delivered under a 30-minute limit
+- **THEN** it is not read working past its limit, and it is read so once it has worked 30 minutes since the answer (44, 118)
 
 ### Requirement: A conversation ends on its caller's finish
 
@@ -188,16 +201,22 @@ and SHALL send it no prompt (35, 43, 94; record 0018).
 ### Requirement: The terminal's clues follow each stage
 
 The core SHALL call the terminal's `show` at each settle that changes
-the place's current stage's state, or the count of the places of its
-repository on its base, with the stage, its state and that count of
-places running, asking, waiting on their caller and stalled; a show
-that fails SHALL be logged on the host and fail nothing, and nothing
-the core decides SHALL read a clue back (139; record 0018).
+the place's current stage's state, the short form of its line, or the
+count of the places of its repository on its base, with the stage, its
+state, that short form, read from the facts the settle read, and that
+count of places running, asking, waiting on their caller and stalled;
+a show that fails SHALL be logged on the host and fail nothing, and
+nothing the core decides SHALL read a clue back (139; record 0018).
 
 #### Scenario: Titles follow a stage
 
 - **WHEN** a code stage's agent starts, waits, works and asks, a settle between each
 - **THEN** show is called once at each, its state starting, waiting, working and asking, and a show that fails is logged while the settle goes on (S49)
+
+#### Scenario: The line alone changes
+
+- **WHEN** a change place's code stage keeps working while the change at its head goes from 2 tasks ticked of 5 to 3, a settle running at each
+- **THEN** show is called once more, with the line's short form ending `tasks 3/5 · working`, and not again at a settle that changes nothing (139)
 
 ### Requirement: The terminal tidies with the place
 
@@ -237,3 +256,197 @@ and, for never begun, the terminal's screen (43; record 0016).
 
 - **WHEN** a code stage is reported stuck after two commits, the agent's last message asking nothing
 - **THEN** the notice carries that message and both commits
+
+### Requirement: An asking agent is kept open for its answer
+
+Where the terminal of its start hands a running agent words, the core
+SHALL keep the agent of a stage ended short needing an answer live and
+kept open for that answer until the stop-short's time plus its
+settings' `keep_open`, one hour where no layer gives one, and SHALL
+record that time on the stage's end; where the terminal does not, the
+core SHALL keep no agent open (32, 42, 53, 95, 198).
+
+#### Scenario: An hour by default
+
+- **WHEN** a code agent stops short needing an answer at a time t, on a terminal that hands a running agent words, with no layer giving `keep_open`
+- **THEN** its agent stays live, and its end records it kept open until t plus one hour (198)
+
+#### Scenario: A host's time for a stream
+
+- **WHEN** the host gives `[agents.streams.work] keep_open = "10m"`, and a code agent of a place in the stream `work` stops short needing an answer
+- **THEN** its agent is kept open until ten minutes after the stop-short (32, 198, S104)
+
+#### Scenario: Kept open for no time
+
+- **WHEN** the launch gives `--agent keep_open=0`, and code's agent stops short needing an answer and goes quiet
+- **THEN** the settle its going quiet runs lets it go by its time and ends it, and code waits on its answer (198)
+
+#### Scenario: Not kept open under a terminal that hands no words
+
+- **WHEN** the fake terminal hands no words to a running agent, and a code agent stops short needing an answer
+- **THEN** its end holds no time kept open, and its agent is left as a stop-short leaves it under that terminal today (198, C.5)
+
+#### Scenario: Found work from a stage before the last
+
+- **WHEN** a construct agent stops short having found work, construct not the kind's last stage
+- **THEN** its agent is kept open for an answer, as for a question (131, 198)
+
+### Requirement: An agent let go is ended
+
+The core SHALL read an agent kept open let go at a settle once its time
+has passed, it is read stopped or its session ended, or its account is
+spent, recording when and why; SHALL then end the agent once it is
+quiet, never forced, freeing its room and its account; and the stage
+SHALL keep waiting on its answer under the same move and since, a later
+answer being a retry with a fresh agent (31, 42, 70, 96, 130, 134, 146,
+198).
+
+#### Scenario: The time passing
+
+- **WHEN** an hour passes on the fake clock after a code agent stopped short needing an answer, the agent quiet, with another place's stage waiting for room on a host at its bound, and a settle runs
+- **THEN** the agent reads let go by its time and is ended through the terminal, code still reads ended short waiting on its answer since the stop-short, and the other place's stage starts (70, 130, 198, S104)
+
+#### Scenario: Not quiet once its time has passed
+
+- **WHEN** the asking agent works on once its time has passed
+- **THEN** it reads let go, and it is not ended until a settle reads it quiet (31, 198)
+
+#### Scenario: The agent dying within its time
+
+- **WHEN** the asking agent's pane is gone within its hour
+- **THEN** the next settle records it let go, ended, and the stage waits on its answer with no agent (96, 198, S105)
+
+#### Scenario: The account spent within its time
+
+- **WHEN** another agent of the asking agent's account reaches the account's usage limit within the hour
+- **THEN** the next settle records the agent let go by its account spent, and ends it once it is quiet (146, 198, S105)
+
+#### Scenario: Past its pool's threshold within its time
+
+- **WHEN** the asking agent's account passes its pool's threshold within the hour, and is not spent
+- **THEN** the agent stays kept open (185, 198)
+
+#### Scenario: A late answer
+
+- **WHEN** a code agent was let go by its time and ended, and its caller retries code with "notes.md"
+- **THEN** code's second start is a fresh agent whose prompt carries the question, then the answer (42, 49, S104)
+
+#### Scenario: Two settles at once
+
+- **WHEN** two settles read an agent let go at once
+- **THEN** it is recorded let go once, and its agent is closed once (74, 75)
+
+### Requirement: A conversation's asking agent lost is carried at its answer
+
+The core SHALL read an agent kept open let go `agent_ended` where the
+agent in its pane is not its start's, as a restart leaves one brought
+back bare, leaving that agent in a conversation's pane and ending it
+once quiet elsewhere, and `stopped` where a caller's stop ended it; and
+a retry with words of a conversation's stage so let go `agent_ended`
+SHALL carry its conversation as a retry of one reported lost does, the
+question and the answer its words (45, 49, 51, 77, 179, 198, 207).
+
+#### Scenario: Brought back bare in a conversation's pane
+
+- **WHEN** a research talk's agent, kept open for its answer, is brought back bare in its pane by the terminal after a restart, and a settle runs
+- **THEN** it reads let go, `agent_ended`, the agent left in its pane, sent nothing and not ended, and talk still waits on its answer (77, 198; core.10)
+
+#### Scenario: Brought back bare in another stage
+
+- **WHEN** a code agent kept open for its answer is brought back bare in its pane after a restart, quiet, and a settle runs
+- **THEN** it reads let go, `agent_ended`, and the bare agent is ended (77, 198, S116)
+
+#### Scenario: The answer carries the conversation
+
+- **WHEN** the caller retries that talk with "notes.md" while the bare agent runs its conversation, and the bare agent then ends
+- **THEN** talk waits while the bare agent runs, status naming its process, and the next settle after it ends starts talk resuming the session on the account its lost start ran under, its prompt flume's words then the question and the answer (49, 179, 198, 207)
+
+#### Scenario: Stopped by its caller
+
+- **WHEN** a caller stops a talk's agent kept open, and then retries talk with "notes.md"
+- **THEN** the next settle reads it let go, `stopped`, and the retry starts a fresh agent carrying no conversation, its prompt carrying the question and the answer (49, 51, 198)
+
+### Requirement: A fresh start carries what its stage was told
+
+A fresh start the core makes on its own of a stage, after a spent
+account its program carries no conversation from or after a start
+begun without its settings, SHALL carry after flume's own words the
+words its earlier start was given and each answer that start took in
+its session, in order (42, 146, 161).
+
+#### Scenario: Spent after an answer
+
+- **WHEN** a code agent answered "notes.md" in its session then stops at its account's usage limit, its program carrying no conversation
+- **THEN** code's fresh start on the pool's next account carries flume's words, then the question and the answer (42, 146)
+
+#### Scenario: Unsettled after a retry
+
+- **WHEN** code's second start, its words a question and its answer, begins without the settings it recorded
+- **THEN** the fresh start after it carries flume's words, then the question and the answer (42, 161)
+
+### Requirement: The way to stop short lists the roles an agent may address
+
+The way to stop short in a stage's prompt SHALL list, with its
+source's `answers` words, every address the host's sources declare with
+`answers`, but a role's run's own: the place's own stream's first, by
+the role alone, then every other stream's, by the whole address. It
+SHALL be read at each start, and placed after every part the stage's
+repetitions share (28, 41, 132, 193; core.31).
+
+#### Scenario: A place of the stream's work
+
+- **WHEN** a place in the stream `east` names `east/planner`, a source declares runs for `east/planner`, `east/design`, `east/ops` and `west/ops`, each with its `answers`, and a stage's prompt is rendered
+- **THEN** the way to stop short names `design`, `ops` and `planner` first, each with its source's words, then `west/ops` with its words, after the rest of the prompt
+
+#### Scenario: A role's own run
+
+- **WHEN** a stage of the run of `east/ops` is rendered under the same sources
+- **THEN** the way to stop short names `design` and `planner`, then `west/ops`, and not `ops`
+
+#### Scenario: No roles
+
+- **WHEN** a place's recipient is a pane and no source declares a role with `answers`
+- **THEN** the way to stop short names no role
+
+### Requirement: The way to stop short is the agent's one way to ask
+
+The way to stop short in every stage's prompt SHALL say that a
+stop-short is the agent's one way to ask for what its stage needs, and
+that the agent writes no card and no message to a person, since
+whoever answers the question decides whether it is a person's (28, 41,
+69, 72).
+
+#### Scenario: A change's construct
+
+- **WHEN** a construct's prompt is rendered, with roles listed or none
+- **THEN** its way to stop short says the agent asks by it alone, and writes no card and no message to a person
+
+### Requirement: A stop-short may name the role it is for
+
+A stop-short SHALL take an optional role or address, `flume needs
+[--found] --to <role or address> "<words>"`, among those the stage's
+prompt listed: a role alone names that role of the place's own stream,
+and an address names a role of any stream. Its end SHALL be delivered
+to that address alone and not to the place's recipients, and status
+SHALL give the whole address it named. A name outside the list SHALL be
+refused, naming the list, and the stage SHALL go on (41, 43, 56, 132).
+
+#### Scenario: A question for its own stream's ops
+
+- **WHEN** a construct of a place in `east`, whose recipient is `east/operator`, stops short naming `ops`, and no run of `east/ops` stands
+- **THEN** the stage ends short, the end stands pending for `east/ops` alone, the settle wakes `east/ops`, and `east/operator` is woken for none of it (S93)
+
+#### Scenario: A question for another stream's role
+
+- **WHEN** a construct of a place in `east` stops short naming `west/ops`, which its list gave
+- **THEN** the end stands pending for `west/ops` alone, and the settle wakes `west/ops`, whose run runs in `west`
+
+#### Scenario: A name outside the list
+
+- **WHEN** an agent stops short naming `south/ops` or `reviewer`, neither in its list
+- **THEN** the stop-short is refused naming the roles and addresses it may name, and the stage goes on
+
+#### Scenario: No address named
+
+- **WHEN** an agent stops short naming none
+- **THEN** the end goes to the place's recipients, as before

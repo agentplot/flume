@@ -31,9 +31,9 @@ The host's configuration SHALL be read from
 `$XDG_CONFIG_HOME/flume/config.toml` at every start: `[host]` `agents`,
 `terminal` and `pool`; `[streams.<stream>]`; `[pools.<pool>]`; agents'
 model, mode and instructions by kind and by repository and kind, each
-with `.stages.<stage>`; `stream` where C.7 names it; and `[roles]`. A
-key left out SHALL be no bound, the printed command, no stream, pool or
-settings (32, 70, 105, 143, 144, 162, C.7).
+with `.stages.<stage>`; and `stream` where C.7 names it, and no
+`[roles]` (193). A key left out SHALL be no bound, the printed command,
+no stream, pool or settings (32, 70, 105, 143, 144, 162, C.7).
 
 #### Scenario: A bound stated
 
@@ -146,10 +146,10 @@ that name no path (184, C.7).
 
 The host's configuration SHALL read `[agents]`, settings for every
 agent, and `[agents.streams.<stream>]`, for every agent in one stream,
-each giving `model`, `mode`, `instructions` and `programs` as the kind
-tables do. A `program`, `env`, `beside` or `stages` there, or a stream
+each giving `model`, `effort`, `mode`, `instructions` and `programs`
+as the kind tables do. A `program`, `env`, `beside` or `stages` there, or a stream
 the host does not declare, SHALL refuse the configuration naming the
-table and the key (32, 143, 195, C.7).
+table and the key (32, 143, 195, 197, C.7).
 
 #### Scenario: Settings for every agent and for a stream
 
@@ -196,10 +196,10 @@ configuration naming the file (195, C.7).
 
 The host's configuration SHALL read `[repos."<repository>".agents]`,
 settings for every agent of every kind in that repository, by its
-location as `[repos."<repository>"]` is, giving `model`, `mode`,
-`instructions` and `programs` as the host's kind tables do. A
+location as `[repos."<repository>"]` is, giving `model`, `effort`,
+`mode`, `instructions` and `programs` as the host's kind tables do. A
 `program`, `env`, `beside`, `stages` or `streams` there SHALL refuse
-the configuration naming the table and the key (32, 195, C.7).
+the configuration naming the table and the key (32, 195, 197, C.7).
 
 #### Scenario: A fork's table for every kind
 
@@ -210,3 +210,55 @@ the configuration naming the table and the key (32, 195, C.7).
 
 - **WHEN** the configuration gives `[repos."/r".agents.stages.code] model = "opus"`, or `[repos."/r".agents] program = "claude"`
 - **THEN** every launch and start is refused naming `repos."/r".agents` and the key (C.7)
+
+### Requirement: An effort in the host's agents tables
+
+An effort in an agents table of the host's configuration SHALL be read
+as a string, kept as written, in every agents table the host's
+configuration holds, and as a key the local layer may set over the
+managed one; any other value SHALL refuse the configuration naming the
+table and `effort` (32, 197, C.7).
+
+#### Scenario: An effort for a kind and one for a repository's stage
+
+- **WHEN** the configuration gives `[kinds.fix.agents] effort = "high"` and `[repos."/r".kinds.fix.agents.stages.code] effort = "xhigh"`
+- **THEN** the host's settings for fix@1 in `/r` read `high` for the kind at the host-kind layer and `xhigh` for code at the host-repository layer (32, 197, C.7)
+
+#### Scenario: An effort for every agent from the local layer
+
+- **WHEN** the managed layer gives `[agents] effort = "medium"` and the local layer gives `[agents] effort = "high"`
+- **THEN** the host's settings for every agent read `high` at the host layer, and status names the local layer as where it came from (32, 197, C.7)
+
+#### Scenario: An effort that is no word
+
+- **WHEN** the configuration gives `[kinds.fix.agents] effort = 3`
+- **THEN** every launch and start is refused naming `kinds.fix.agents` and `effort` (197, C.7)
+
+### Requirement: keep_open in the host's agents tables
+
+The host's configuration SHALL read `keep_open` in every agents table it
+reads, for a repository, a kind, a stream and every agent, and in each
+`.stages.<stage>` table, in its managed layer and its local one over
+it, as a string `<n>`, `<n>s`, `<n>m` or `<n>h`, kept as written, and
+SHALL refuse any other value, a table of programs among them, naming
+the table and the key (32, 198, C.7).
+
+#### Scenario: A time for a kind and for one stage
+
+- **WHEN** the configuration gives `[kinds.change.agents] keep_open = "30m"` and `[kinds.change.agents.stages.verify] keep_open = "0"`
+- **THEN** it reads `30m` for change's agents and `0` for verify's, each as written (32, C.7)
+
+#### Scenario: A time for a stream and for every agent
+
+- **WHEN** the configuration gives `[agents.streams.work] keep_open = "10m"` and `[agents] keep_open = "45m"`
+- **THEN** it reads `10m` for the stream `work`'s agents and `45m` for every agent, each as written (32, C.7)
+
+#### Scenario: A time in another form
+
+- **WHEN** the configuration gives `[kinds.fix.agents] keep_open = "an hour"`
+- **THEN** the configuration is refused naming `kinds.fix.agents.keep_open` and the forms it takes (C.7)
+
+#### Scenario: A table of programs
+
+- **WHEN** the configuration gives `[agents] keep_open = { claude = "1h" }`
+- **THEN** the configuration is refused naming `agents.keep_open` and that it is one time for every program (198, C.7)

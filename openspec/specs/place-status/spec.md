@@ -46,13 +46,20 @@ which names the file holding its environment and holds no value of it
 
 Status SHALL give a stop-short's words and whether it needs an answer or
 found work, or a failed submission's words, and, for a place waiting on
-its caller, the move it waits on and since when, a hold's words among it
-(56, 130).
+its caller, the move it waits on and since when, a hold's words among
+it, and, for an answer, whether its agent is kept open for it and until
+when, or when and why it was let go and whether it is ended (56, 130,
+198).
 
 #### Scenario: A place waiting on an answer
 
-- **WHEN** status is asked of a place whose construct ended short needing an answer
-- **THEN** it gives the move waited on as a retry of construct, since when, and the question whole (56, 130)
+- **WHEN** status is asked of a place whose construct ended short needing an answer at a time t, its agent kept open
+- **THEN** it gives the move waited on as a retry of construct, since t, the question whole, and its agent kept open until t plus its `keep_open`, in the JSON form and the person's (56, 130)
+
+#### Scenario: Its agent let go
+
+- **WHEN** status is asked of that place once its agent was let go by its time and ended
+- **THEN** it gives the same move since t, and its agent let go with when, `time`, and when it was ended (130, 198, S104)
 
 ### Requirement: Status reads where each fact lives and writes nothing
 
@@ -389,3 +396,149 @@ it there (49, 56, 77, 207; core.30).
 
 - **WHEN** status is asked of a place whose talk reads lost while the fake terminal holds its agent brought back bare
 - **THEN** the agent gives `left_in_pane`, and the person's form says the terminal brought it back and flume left it in its pane (56, 77, S113)
+
+### Requirement: Status says where each standing address lives
+
+The host's status SHALL give every address a source gives a standing
+agent, pending or not, with its agent, stream, session and where that
+came from, the stream's terminal, and what the terminal found at the
+ask: one agent with its state, none, more than one, or why it could not
+read; each terminal and session read once per status, and nothing kept
+(56, 132, 190, 193; core.14, core.15).
+
+#### Scenario: An agent found
+
+- **WHEN** the host's status is asked while `madswan/planner`'s standing agent waits in `madswan` and two ends are pending for it
+- **THEN** the address gives `madswan-planner`, the stream `madswan` from its address, the session `madswan` from `role`, the agent found waiting, and the two pending ends (56, 132)
+
+#### Scenario: None of the name
+
+- **WHEN** the fake terminal holds no `madswan-planner` in `madswan`
+- **THEN** the address's standing says none found, and its pending ends stand beneath (132)
+
+#### Scenario: More than one
+
+- **WHEN** the fake terminal holds two `madswan-planner` in `madswan`
+- **THEN** the address's standing says two found (132)
+
+#### Scenario: A part not read
+
+- **WHEN** the fake terminal refuses to read `madswan`'s agents with its words
+- **THEN** the address's standing says it could not read, with those words (132)
+
+#### Scenario: Nothing pending
+
+- **WHEN** a source gives `madswan/ops` a standing agent and no end is pending for it
+- **THEN** the host's status still gives `madswan/ops` with its standing (56)
+
+#### Scenario: Two addresses in one session
+
+- **WHEN** `madswan/planner` and `madswan/ops` each name an agent in `madswan`, and the host's status is asked
+- **THEN** the fake terminal is asked for `madswan`'s agents once (core.15)
+
+#### Scenario: The fields kept
+
+- **WHEN** the suite's field list is read after this change
+- **THEN** it holds each address's standing with its agent, stream, session and its `from`, terminal and what was found, and the wake's held answer, and an answer lacking one fails the suite (61; core.14)
+
+### Requirement: Status gives an agent's effort
+
+Status SHALL give the current agent's effort as its layer wrote it,
+with the layer it came from, the value its profile passed, and that it
+was not read back; an agent whose settings give no effort SHALL be given
+none. Where the agent's account's environment names the variable its
+program reads over the effort, status SHALL name that variable as
+outranking it, never its value, in the JSON form and the person's (56,
+197; core.30).
+
+#### Scenario: An effort from the launch
+
+- **WHEN** status is asked of a place whose agent took `xhigh` from `--agent effort=xhigh`
+- **THEN** the agent's settings give the effort `xhigh` from `launch`, passed and not read back, in the JSON and the person's form (S103, 56)
+
+#### Scenario: An account's variable that outranks it
+
+- **WHEN** status is asked of a place whose agent took `high` from `host-kind` and whose account's `env` names the variable the fake names as read over its effort
+- **THEN** the agent's effort names that variable as outranking it, and no value of it (56, 197)
+
+#### Scenario: No effort
+
+- **WHEN** status is asked of a place whose agent's settings give no effort
+- **THEN** the agent's settings give no effort, and the JSON form holds no `effort` for it (197)
+
+### Requirement: Status gives each answer a session took
+
+Status SHALL give, with each stage, every answer its current start took
+in its session, in order, with its question, the act it came by, and
+when it was sent and received, in the JSON form and the person's (42,
+56).
+
+#### Scenario: Two answers in one session
+
+- **WHEN** status is asked of a fix whose code took one answer by a retry and one by a tell in its first start's session
+- **THEN** code gives both in order, each with its question, its answer, `retry` or `tell`, and when it was sent and received (42, 56)
+
+### Requirement: Status gives keep_open with its layer
+
+Status SHALL give an agent's `keep_open` with its settings, as written,
+with the layer it came from, flume's own one hour named `default`
+(32, 56, 198).
+
+#### Scenario: From the host's table for every agent
+
+- **WHEN** the host gives `[agents] keep_open = "20m"` and no other layer gives one
+- **THEN** status gives the agent's `keep_open` `20m` from `host` (32, 56)
+
+### Requirement: Status gives the host's watch
+
+Status SHALL give, for the host, the watch a caller keeps: its bound in
+the host's `watch`, a bound or none, when its newest settle began as
+`watch_settled`, and, while flume runs attended after a watch lapsed,
+when it lapsed as `watch_lapsed`. The person's form SHALL say whether a
+caller keeps watch, with its bound and when it last settled, or since
+when none has (56, 61, 119, 208; core.14).
+
+#### Scenario: A watched host and an unwatched one
+
+- **WHEN** a caller settled every place with a bound of two minutes one minute ago, and status is asked; then five minutes pass with no such settle, and status is asked again
+- **THEN** the first gives `watch` with 120 seconds and `watch_settled`, and the person's form prints `a caller keeps watch: every place settles every 2m, last at <time>`; the second gives `watch_lapsed` four minutes after that settle began, and prints `no caller keeps watch since <time>: every place settles at each command of flume's that acts` (119, 208, S118)
+
+### Requirement: Status gives no terminal a watch
+
+Each terminal's answer in status SHALL keep its `watch` field, given
+none for every terminal, and nothing of a terminal SHALL decide the
+host's `watch` (61, 122, 208; core.14).
+
+#### Scenario: The terminals' answers in status
+
+- **WHEN** a caller keeps watch, the host binds the fake terminal and `trial` names `other`, and status is asked
+- **THEN** each terminal's answer gives `watch` none, and the host's `watch` gives the caller's bound (61, 122, 208)
+
+### Requirement: Status gives who answers a place
+
+Status SHALL give each place's recipients, each with where it came
+from; the role a stop-short named; each end's key, and a stop-short's
+answer with who gave it and when; and a hold on the waiting move with
+its words, since when, its bound or that it lapsed (56, 130, 193).
+
+#### Scenario: Recipients and their sources
+
+- **WHEN** one place names `ops` at its launch and another took its stream's answerer `east/operator`
+- **THEN** status gives the first `ops` from the launch and the second `east/operator` from the stream's answerer, declared by the source `acme`, in the JSON form and the person's
+
+#### Scenario: An answered question
+
+- **WHEN** a construct's stop-short in `east`, naming `ops`, was answered by a retry naming its key from the run of `east/ops`
+- **THEN** status gives the end's key, `east/ops` as its addressee, and the answer's words with `east/ops` and when
+
+### Requirement: Status gives the roles a host wakes
+
+Status SHALL give, for each stream, its answerer with the source that
+declares it; each source's roles, or why they cannot be read; and for
+each address an end stands pending for, its run, or that it is carried
+or wakes nothing and why (56, 132, 191, 193).
+
+#### Scenario: An address that wakes nothing
+
+- **WHEN** an end stands pending for `east/planner`, which no source declares, on a place whose stream's answerer is `east/operator`
+- **THEN** status gives the address with no run and that no source declares it, and the stream's answerer `east/operator`

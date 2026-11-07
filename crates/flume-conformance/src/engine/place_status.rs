@@ -1,20 +1,25 @@
 //! Status (43, 56 to 62, 69): every fact read where it lives when asked,
 //! at one head per place, from one core, and nothing written, sent or
-//! started.
+//! started. The host's part gives every role's address a standing agent
+//! holds, pending or not, with what its terminal found at the ask, each
+//! terminal and part read once (132, 190).
 
 use super::account_pools::{
     account, account_at_home, account_of, begun_fix, code_delivered, fill_first_at_homes, fix_in,
     fix_of, home, host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent,
     stops_at_limit, two_programs, window, UNREACHED,
 };
+use super::agent_effort::effort;
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
-use super::agent_settings::for_every_stage;
+use super::agent_settings::{for_every_stage, kept_open};
 use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, talking};
+use super::open_sessions::{asking, code, stops_short, taken, QUESTION};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
-    AccountStatus, Act, AgentStatus, Answer, Cache, ModeStatus, MoveStatus, PlaceStatus,
-    PoolStatus, Retry, WaitingOn, Waits,
+    AccountStatus, Act, AddressStatus, AgentStatus, Answer, Cache, EffortStatus, ModeStatus,
+    MoveStatus, PlaceStatus, PoolStatus, Retry, SessionAnswer, StandingFound, WaitingOn, Waits,
+    KEEP_OPEN,
 };
 use flume_seams::*;
 
@@ -66,9 +71,19 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_place_gone,
         },
         Scenario {
-            name: "status: a place whose construct ended short waits on a retry of construct, since then, with the question whole",
-            cites: &["56", "130", "42", "41"],
+            name: "status: a place whose construct ended short waits on a retry of construct, since then, with the question whole and its agent kept open until an hour after, in the JSON form",
+            cites: &["56", "130", "42", "41", "198"],
             run: waiting_on_an_answer,
+        },
+        Scenario {
+            name: "status: a place whose construct's agent kept open was let go by its time and ended waits on the same move since the stop-short, giving when it was let go, time, and when it was ended, in the JSON form",
+            cites: &["130", "56", "31", "198", "S104"],
+            run: its_agent_let_go,
+        },
+        Scenario {
+            name: "status: a fix whose code took one answer by a retry and one by a tell in its first start's session gives both under code in order, each with its question, its answer, retry or tell, and when it was sent and received, in the JSON form",
+            cites: &["42", "56", "198"],
+            run: two_answers_in_one_session,
         },
         Scenario {
             name: "status: a lost stage, a stopped one and a done round each name the move they wait on",
@@ -76,8 +91,8 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_moves_waited_on,
         },
         Scenario {
-            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another",
-            cites: &["56", "130", "43"],
+            name: "status: a place stalled on a retry of construct gives the move, since when, stalled, and its end delivered to one recipient and pending for another and for the answerer behind its stream",
+            cites: &["56", "130", "43", "193"],
             run: a_stalled_place_with_a_pending_end,
         },
         Scenario {
@@ -151,6 +166,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_mode_from_the_hosts_table,
         },
         Scenario {
+            name: "status: an agent whose keep_open only the host's table for every agent gives, 20m, gives it as written from host, in the JSON form",
+            cites: &["32", "56", "198"],
+            run: keep_open_from_the_hosts_table_for_every_agent,
+        },
+        Scenario {
             name: "status: an agent that took its program's entry of the launch's table gives the table as written from launch, the entry and the value passed",
             cites: &["56", "169"],
             run: a_tables_entry,
@@ -201,6 +221,36 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_source_and_a_fault,
         },
         Scenario {
+            name: "status: a standing address whose agent waits in its session gives the agent, the session from the entry, the agent found waiting and its two pending ends",
+            cites: &["56", "132"],
+            run: a_standing_agent_found,
+        },
+        Scenario {
+            name: "status: a standing address whose session holds no agent of its name says none found, its pending ends beneath",
+            cites: &["132", "56"],
+            run: none_of_the_name,
+        },
+        Scenario {
+            name: "status: a standing address whose session holds two agents of its name says two found",
+            cites: &["132"],
+            run: more_than_one_of_the_name,
+        },
+        Scenario {
+            name: "status: a standing address whose part the terminal cannot read says so in the terminal's words",
+            cites: &["132"],
+            run: a_part_not_read,
+        },
+        Scenario {
+            name: "status: a standing address with nothing pending is still given with its standing",
+            cites: &["56", "132"],
+            run: a_standing_address_with_nothing_pending,
+        },
+        Scenario {
+            name: "status: two standing addresses whose agents live in one session ask the terminal for that session's agents once",
+            cites: &["58", "132"],
+            run: two_addresses_in_one_session,
+        },
+        Scenario {
             name: "status: a place whose talk start 2 carries the conversation of start 1, lost, under work-1 gives its agent's conversation from start 1, lost and carried",
             cites: &["S113", "49", "56"],
             run: a_lost_talk_carried,
@@ -219,6 +269,36 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: a place whose talk reads lost while the fake terminal holds its agent brought back bare gives that agent left in its pane",
             cites: &["S113", "56", "77"],
             run: a_bare_agent_left,
+        },
+        Scenario {
+            name: "status: one place names ops at its launch and another took its stream's answerer east/operator; status gives each with where it came from, the answerer's source acme, in the JSON form",
+            cites: &["7", "56", "193"],
+            run: recipients_and_their_sources,
+        },
+        Scenario {
+            name: "status: a construct's stop-short in east, naming ops, answered by a retry naming its key from the run of east/ops, gives the end's key, east/ops as its addressee, and the answer's words with east/ops and when, in the JSON form",
+            cites: &["56", "42", "41", "193"],
+            run: an_answered_question,
+        },
+        Scenario {
+            name: "status: an end pending for east/planner, which no source declares, gives the address with no run and that no source declares it, and the stream's answerer east/operator",
+            cites: &["56", "132", "193"],
+            run: an_address_that_wakes_nothing,
+        },
+        Scenario {
+            name: "status: a place whose agent took xhigh from --agent effort=xhigh gives the effort xhigh from launch, passed and not read back, in the JSON form",
+            cites: &["S103", "56", "197"],
+            run: an_effort_from_the_launch,
+        },
+        Scenario {
+            name: "status: a place whose agent took high from host-kind on an account whose env names the variable the fake reads over its effort gives that variable as outranking it, and no value of it",
+            cites: &["56", "197"],
+            run: an_effort_outranked_by_the_account,
+        },
+        Scenario {
+            name: "status: a place whose agent's settings give no effort, on an account whose env names the variable the fake reads over one, gives no effort, its JSON form holding no effort for the agent",
+            cites: &["56", "197"],
+            run: no_effort_in_status,
         },
     ]
 }
@@ -515,6 +595,10 @@ fn a_source_and_a_fault(_: &()) -> Outcome {
                 kinds_dir: Some("/kinds/acme".into()),
                 kinds: vec!["acme/review@1".into(), "acme/review@2".into()],
                 cannot_read: None,
+                roles_file: None,
+                roles: vec![],
+                roles_refused: vec![],
+                roles_cannot_read: None,
             },
             flume_core::SourceStatus {
                 name: "bad".into(),
@@ -522,6 +606,10 @@ fn a_source_and_a_fault(_: &()) -> Outcome {
                 kinds_dir: None,
                 kinds: vec![],
                 cannot_read: Some("it gives no kinds_dir, the directory of its packages".into()),
+                roles_file: None,
+                roles: vec![],
+                roles_refused: vec![],
+                roles_cannot_read: None,
             },
         ],
         "the host's sources"
@@ -586,6 +674,38 @@ fn a_mode_from_the_hosts_table(_: &()) -> Outcome {
             serde_json::json!({"passed": "edit-files", "entry": null, "read_back": true})
         ),
         "the mode in the JSON form"
+    );
+    Ok(())
+}
+
+fn keep_open_from_the_hosts_table_for_every_agent(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_every_agent(kept_open("20m"));
+    let (agent, json) = fix_with_a_mode(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(
+        agent.settings.from.get("keep_open"),
+        Some(&Given {
+            layer: Layer::Host,
+            value: "20m".into(),
+            file: None,
+        }),
+        "keep_open as written and its layer"
+    );
+    ensure_eq!(
+        agent.settings.settings.keep_open.as_deref(),
+        Some("20m"),
+        "keep_open among the agent's settings"
+    );
+    ensure_eq!(
+        (
+            json["settings"]["keep_open"].clone(),
+            json["settings"]["from"]["keep_open"].clone()
+        ),
+        (
+            serde_json::json!("20m"),
+            serde_json::json!({"layer": "host", "value": "20m"})
+        ),
+        "keep_open in the JSON form"
     );
     Ok(())
 }
@@ -773,8 +893,168 @@ fn waiting_on_an_answer(_: &()) -> Outcome {
             why: Waits::Answer,
             since: Some(asked),
             words: Some(question.into()),
+            open_until: Some(asked + KEEP_OPEN),
+            closed: None,
         }),
         "the move the place waits on"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        (
+            json["waiting_on"]["open_until"].clone(),
+            json["waiting_on"].get("closed").cloned()
+        ),
+        (serde_json::json!(asked + KEEP_OPEN), None),
+        "until when its agent is kept open, in the JSON form"
+    );
+    Ok(())
+}
+
+/// The change `plan` launched, its construct agent stopped short at the
+/// time it gives with [`QUESTION`] and settled.
+fn construct_asking(world: &World) -> Result<(PlaceId, Seconds), String> {
+    let id = World::id("change", "plan");
+    launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
+    world.settle(&id);
+    let construct = World::identity("change", "plan", "construct", 1);
+    let at = stops_short(world, &id, 0, &construct, QUESTION, StopKind::NeedsAnswer)?;
+    world.settle(&id);
+    Ok((id, at))
+}
+
+fn its_agent_let_go(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, asked) = construct_asking(&world)?;
+    world.host.advance(KEEP_OPEN);
+    let past = world.host.now();
+    world.settle(&id);
+    let waiting = world
+        .status(&id)?
+        .waiting_on
+        .ok_or("the place waits on nobody")?;
+    ensure_eq!(
+        (
+            waiting.act,
+            waiting.stage.as_deref(),
+            waiting.why,
+            waiting.since,
+            waiting.words.as_deref()
+        ),
+        (
+            Act::Retry,
+            Some("construct"),
+            Waits::Answer,
+            Some(asked),
+            Some(QUESTION)
+        ),
+        "the move the place waits on"
+    );
+    ensure_eq!(
+        (waiting.open_until, waiting.closed),
+        (
+            None,
+            Some(SessionClosed {
+                at: past,
+                by: ClosedBy::Time,
+                ended_at: Some(past),
+                left_in_pane: false,
+            })
+        ),
+        "its agent kept open, or let go, and when it was ended"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        (
+            json["waiting_on"].get("open_until").cloned(),
+            json["waiting_on"]["closed"].clone()
+        ),
+        (
+            None,
+            serde_json::json!({ "at": past, "by": "time", "ended_at": past })
+        ),
+        "its agent let go, in the JSON form"
+    );
+    Ok(())
+}
+
+fn two_answers_in_one_session(_: &()) -> Outcome {
+    let world = World::new();
+    let (id, _) = asking(&world, "one")?;
+    let first = world.host.now();
+    taken(
+        &world
+            .engine
+            .retry(&id, Retry::Current, Some("notes.md".into()), false),
+    )?;
+    world.host.advance(5 * 60);
+    let again = "And its text?";
+    stops_short(
+        &world,
+        &id,
+        0,
+        &code("one", 1),
+        again,
+        StopKind::NeedsAnswer,
+    )?;
+    world.settle(&id);
+    world.host.advance(60);
+    let second = world.host.now();
+    taken(&world.engine.tell(&id, "the first line", None))?;
+    let handed = |at| {
+        Some(Handed {
+            sent_at: at,
+            received_at: at,
+        })
+    };
+    let status = world.status(&id)?;
+    ensure_eq!(
+        status.stages[0].answers,
+        vec![
+            SessionAnswer {
+                question: Some(QUESTION.into()),
+                answer: AnswerHeld {
+                    words: "notes.md".into(),
+                    act: Act::Retry,
+                    at: first,
+                    session: handed(first),
+                    by: None,
+                    key: None,
+                },
+            },
+            SessionAnswer {
+                question: Some(again.into()),
+                answer: AnswerHeld {
+                    words: "the first line".into(),
+                    act: Act::Tell,
+                    at: second,
+                    session: handed(second),
+                    by: None,
+                    key: None,
+                },
+            },
+        ],
+        "the answers code's start took in its session"
+    );
+    let json = status_json(&world, &id)?;
+    ensure_eq!(
+        json["stages"][0]["answers"].clone(),
+        serde_json::json!([
+            {
+                "question": QUESTION,
+                "words": "notes.md",
+                "act": "retry",
+                "at": first,
+                "session": { "sent_at": first, "received_at": first },
+            },
+            {
+                "question": again,
+                "words": "the first line",
+                "act": "tell",
+                "at": second,
+                "session": { "sent_at": second, "received_at": second },
+            },
+        ]),
+        "the answers in the JSON form"
     );
     Ok(())
 }
@@ -1104,6 +1384,7 @@ fn a_place_gone(_: &()) -> Outcome {
 fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Working);
+    super::role_waking::answerer_behind(&world, DEFAULT_STREAM);
     let (id, asked) =
         super::caller_waits::construct_asks(&world, "plan", &["ops", "madswan/planner"], None)?;
     world.host.advance(STALL_AFTER);
@@ -1139,7 +1420,10 @@ fn a_stalled_place_with_a_pending_end(_: &()) -> Outcome {
     );
     ensure_eq!(
         stall.pending_for,
-        vec!["madswan/planner".to_string()],
+        vec![
+            "madswan/planner".to_string(),
+            "default/operator".to_string()
+        ],
         "pending for"
     );
     Ok(())
@@ -1707,6 +1991,226 @@ fn a_carried_start_that_did_not_begin(_: &()) -> Outcome {
     Ok(())
 }
 
+const PLANNER: &str = "madswan/planner";
+
+/// A source gives `address` the standing agent `agent` in the session
+/// `madswan`, the stream its address names declared.
+fn stands_in_madswan(world: &World, address: &str, agent: &str) {
+    world
+        .host
+        .set_stream(stream_of(address), Some(Stream::default()));
+    world.host.set_standing(
+        address,
+        Some(StandingAgent {
+            source: "acme".into(),
+            agent: agent.into(),
+            session: Some("madswan".into()),
+            answers: None,
+            answerer: false,
+        }),
+    );
+}
+
+/// Two fixes for the planner delivered, their submissions held, while no
+/// agent of its name stands, so both ends stand pending for it.
+fn two_pending_for_the_planner(world: &World) -> Result<Vec<PlaceId>, String> {
+    stands_in_madswan(world, PLANNER, "madswan-planner");
+    world
+        .queue
+        .plan_submits(vec![flume_fakes::Plan::Hold, flume_fakes::Plan::Hold]);
+    let mut places = vec![];
+    for name in ["one", "two"] {
+        let mut launch = launch("fix", name, Some("mend it"));
+        launch.recipients = vec![PLANNER.into()];
+        launched(&world.engine.launch(&launch))?;
+        let id = World::id("fix", name);
+        world.settle(&id);
+        super::settling::deliver_fix(world, &id);
+        world.settle(&id);
+        places.push(id);
+    }
+    Ok(places)
+}
+
+/// The host's addresses as status gives them, by the address.
+fn host_addresses(world: &World) -> Result<Vec<AddressStatus>, String> {
+    match world.engine().status(None) {
+        Answer::Status { host, .. } => Ok(host.addresses),
+        other => Err(format!("status answered {other:?}")),
+    }
+}
+
+/// The address `address` as status gives it.
+fn address_status(world: &World, address: &str) -> Result<AddressStatus, String> {
+    host_addresses(world)?
+        .into_iter()
+        .find(|status| status.address == address)
+        .ok_or_else(|| format!("status gives no {address}"))
+}
+
+/// What the terminal found of the address's standing agent.
+fn found(status: &AddressStatus) -> Result<StandingFound, String> {
+    status
+        .standing
+        .as_ref()
+        .map(|standing| standing.found.clone())
+        .ok_or_else(|| format!("{} has no standing", status.address))
+}
+
+fn a_standing_agent_found(_: &()) -> Outcome {
+    let world = World::new();
+    let places = two_pending_for_the_planner(&world)?;
+    let at = world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    let status = address_status(&world, PLANNER)?;
+    let standing = status.standing.clone().ok_or("no standing")?;
+    ensure_eq!(standing.agent, "madswan-planner", "the agent");
+    ensure_eq!(standing.stream, "madswan", "the stream, its address's");
+    ensure_eq!(
+        standing.session,
+        SessionHeld {
+            name: Some("madswan".into()),
+            from: SessionFrom::Role,
+        },
+        "the session"
+    );
+    ensure_eq!(standing.terminal.as_deref(), Some("fake"), "the terminal");
+    ensure_eq!(
+        standing.found,
+        StandingFound::One {
+            at,
+            state: AgentState::Waiting,
+        },
+        "found"
+    );
+    ensure_eq!(
+        status
+            .pending
+            .iter()
+            .map(|end| (end.place.clone(), end.what.clone()))
+            .collect::<Vec<_>>(),
+        places
+            .into_iter()
+            .map(|id| (id, "code delivered".to_string()))
+            .collect::<Vec<_>>(),
+        "the ends pending"
+    );
+    ensure_eq!(status.role, None, "its run's entry");
+    ensure_eq!(status.unwoken, None, "why it was not woken");
+    ensure!(
+        world.terminal.every_notice().is_empty(),
+        "status sent a notice"
+    );
+    Ok(())
+}
+
+fn none_of_the_name(_: &()) -> Outcome {
+    let world = World::new();
+    two_pending_for_the_planner(&world)?;
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-ops", AgentState::Waiting);
+    let status = address_status(&world, PLANNER)?;
+    ensure_eq!(found(&status)?, StandingFound::None, "found");
+    ensure_eq!(status.pending.len(), 2, "the ends pending");
+    Ok(())
+}
+
+fn more_than_one_of_the_name(_: &()) -> Outcome {
+    let world = World::new();
+    two_pending_for_the_planner(&world)?;
+    for _ in 0..2 {
+        world
+            .terminal
+            .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    }
+    let status = address_status(&world, PLANNER)?;
+    ensure_eq!(
+        found(&status)?,
+        StandingFound::Several { count: 2 },
+        "found"
+    );
+    Ok(())
+}
+
+fn a_part_not_read(_: &()) -> Outcome {
+    let world = World::new();
+    stands_in_madswan(&world, PLANNER, "madswan-planner");
+    world
+        .terminal
+        .refuse_agents_in(Some("madswan"), "the part madswan answered nothing");
+    let status = address_status(&world, PLANNER)?;
+    ensure_eq!(
+        found(&status)?,
+        StandingFound::Unread {
+            reason: "the part madswan answered nothing".into(),
+        },
+        "found"
+    );
+    Ok(())
+}
+
+fn a_standing_address_with_nothing_pending(_: &()) -> Outcome {
+    let world = World::new();
+    stands_in_madswan(&world, "madswan/ops", "madswan-ops");
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-ops", AgentState::Working);
+    let status = address_status(&world, "madswan/ops")?;
+    ensure_eq!(status.pending.len(), 0, "the ends pending");
+    let standing = status.standing.ok_or("no standing")?;
+    ensure_eq!(standing.agent, "madswan-ops", "the agent");
+    ensure!(
+        matches!(
+            standing.found,
+            StandingFound::One {
+                state: AgentState::Working,
+                ..
+            }
+        ),
+        "found: {:?}",
+        standing.found
+    );
+    Ok(())
+}
+
+fn two_addresses_in_one_session(_: &()) -> Outcome {
+    let world = World::new();
+    stands_in_madswan(&world, PLANNER, "madswan-planner");
+    stands_in_madswan(&world, "madswan/ops", "madswan-ops");
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-planner", AgentState::Waiting);
+    world
+        .terminal
+        .add_agent(Some("madswan"), "madswan-ops", AgentState::Asking);
+    world.terminal.log.clear();
+    let addresses = host_addresses(&world)?;
+    ensure_eq!(
+        addresses
+            .iter()
+            .map(|status| status.address.as_str())
+            .collect::<Vec<_>>(),
+        vec!["madswan/ops", PLANNER],
+        "the addresses"
+    );
+    for status in &addresses {
+        ensure!(
+            matches!(found(status)?, StandingFound::One { .. }),
+            "{} found: {:?}",
+            status.address,
+            status.standing
+        );
+    }
+    ensure_eq!(
+        world.terminal.log.of("agents_in"),
+        vec!["agents_in madswan".to_string()],
+        "the parts the terminal was asked for"
+    );
+    Ok(())
+}
+
 /// The fake agent carries a lost start's conversation to the account at
 /// `name`'s home with the session `s-1`.
 fn carries_lost_to(world: &World, name: &str) {
@@ -1817,6 +2321,279 @@ fn a_bare_agent_left(_: &()) -> Outcome {
         json["agent"]["left_in_pane"],
         serde_json::json!(true),
         "left_in_pane in the JSON form"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "An answered question": status gives the
+/// stop-short's end with its key as callers name it, the address it
+/// named, and the answer's words with who gave them, the key they named
+/// and when, in the JSON form (41, 42, 56, 193; core.14).
+fn an_answered_question(_: &()) -> Outcome {
+    use super::caller_acts::{answered_by_ops, construct_key, READ};
+    let world = World::new();
+    let (id, at) = answered_by_ops(&world)?;
+    let key = construct_key(0).to_string();
+    let json = status_json(&world, &id)?;
+    let end = json["ends"]
+        .as_array()
+        .ok_or("status gives no ends")?
+        .iter()
+        .find(|end| end["key"] == key.as_str())
+        .ok_or_else(|| format!("status gives no end keyed {key}: {}", json["ends"]))?;
+    ensure_eq!(
+        (
+            end["end"]["addressee"].clone(),
+            end["answer"]["words"].clone(),
+            end["answer"]["by"].clone(),
+            end["answer"]["key"].clone(),
+            end["answer"]["at"].clone()
+        ),
+        (
+            serde_json::json!("east/ops"),
+            serde_json::json!(READ),
+            serde_json::json!("east/ops"),
+            serde_json::json!(key),
+            serde_json::json!(at)
+        ),
+        "the end's addressee, and its answer's words, who gave them, the key they named and when"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "Recipients and their sources": the place
+/// `one` names `ops` at its launch, and `two`, launched from no session
+/// in `east`, takes the answerer acme declares behind it; status gives
+/// each with where it came from, in the JSON form (7, 56, 193; core.14).
+fn recipients_and_their_sources(_: &()) -> Outcome {
+    use super::launching::{declares, from_no_session};
+    let world = World::new();
+    from_no_session(&world);
+    declares(&world, "acme", "east/operator", true);
+    launched(&world.engine.launch(&Launch {
+        recipients: vec!["ops".into()],
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    launched(&world.engine().launch(&Launch {
+        stream: Some("east".into()),
+        ..launch("fix", "two", Some("x"))
+    }))?;
+    for (name, recipient, from, source) in [
+        ("one", "ops", "launch", None),
+        ("two", "east/operator", "answerer", Some("acme")),
+    ] {
+        let status = world.status(&World::id("fix", name))?;
+        let json = serde_json::to_value(&status).map_err(|error| error.to_string())?;
+        ensure_eq!(
+            json["recipients"],
+            serde_json::json!([recipient]),
+            format!("{name}'s recipients")
+        );
+        ensure_eq!(
+            json["recipients_from"]["from"],
+            from,
+            format!("where {name}'s recipients came from")
+        );
+        ensure_eq!(
+            json["recipients_from"]["source"].as_str(),
+            source,
+            format!("the source of {name}'s answerer")
+        );
+    }
+    Ok(())
+}
+
+/// The place-status spec's "An address that wakes nothing": an end
+/// stands pending for `east/planner`, which no source declares, on a
+/// place in `east`, whose answerer is acme's `east/operator`; status
+/// gives the address with no run and why it wakes nothing, the
+/// stream's answerer with its source, and each source's roles or why
+/// they cannot be read (56, 132, 191, 193; core.15).
+fn an_address_that_wakes_nothing(_: &()) -> Outcome {
+    use super::launching::declares;
+    let world = World::new();
+    world.host.set_source("acme", "/kinds/acme");
+    world.host.set_source("beta", "/kinds/beta");
+    world
+        .host
+        .set_roles_unread("beta", Some(("/state/beta/roles.toml", "no such file")));
+    declares(&world, "acme", "east/operator", true);
+    launched(&world.engine.launch(&Launch {
+        stream: Some("east".into()),
+        recipients: vec!["east/planner".into()],
+        ..launch("fix", "one", Some("x"))
+    }))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    let Answer::Status { host, .. } = world.engine().status(None) else {
+        return Err("status answered no status".into());
+    };
+    let planner = host
+        .addresses
+        .iter()
+        .find(|address| address.address == "east/planner")
+        .ok_or("status names no east/planner")?;
+    ensure_eq!(planner.pending.len(), 1, "the ends pending for it");
+    ensure_eq!(
+        (&planner.role, &planner.run, &planner.carried),
+        (&None, &None, &None),
+        "its run, standing or carried"
+    );
+    ensure_eq!(
+        planner.wakes_nothing.as_deref(),
+        Some("no source of the host declares east/planner"),
+        "why it wakes nothing"
+    );
+    let east = host
+        .streams
+        .iter()
+        .find(|stream| stream.name == "east")
+        .ok_or("status names no stream east")?;
+    ensure_eq!(
+        east.answerer,
+        Some(StreamAnswerer::Stands(DeclaredBy {
+            address: "east/operator".into(),
+            source: "acme".into(),
+        })),
+        "east's answerer"
+    );
+    let roles_of = |name: &str| {
+        host.sources
+            .iter()
+            .find(|source| source.name == name)
+            .map(|source| (source.roles.clone(), source.roles_cannot_read.clone()))
+    };
+    ensure_eq!(
+        roles_of("acme"),
+        Some((vec!["east/operator".to_string()], None)),
+        "acme's roles"
+    );
+    ensure_eq!(
+        roles_of("beta"),
+        Some((vec![], Some("no such file".to_string()))),
+        "beta's roles"
+    );
+    Ok(())
+}
+
+/// The variable the fake reads over the effort its command passes, and
+/// the value the account `work-1` gives it, which status never holds.
+const EFFORT_VARIABLE: &str = "AGENT_EFFORT";
+const EFFORT_VALUE: &str = "effort-from-the-account";
+
+/// The host's pool `work` of one account, `work-1`, whose `env` names the
+/// variable the fake reads over its effort, and the fake taking `words`.
+fn on_an_account_naming_the_variable(world: &World, words: &[&str]) {
+    world.agent.take_efforts(words);
+    world.agent.read_effort_over(EFFORT_VARIABLE);
+    let mut work_1 = account("work-1", None);
+    work_1
+        .env
+        .insert(EFFORT_VARIABLE.into(), EFFORT_VALUE.into());
+    pool(world, "work", Strategy::FillFirst, vec![work_1]);
+    world.host.set_host_pool(Some("work"));
+}
+
+/// The fix `one` launched as `fix` gives it and settled once: its agent's
+/// status, and the same in the JSON form.
+fn effort_in_status(
+    world: &World,
+    fix: &Launch,
+) -> Result<(AgentStatus, serde_json::Value), String> {
+    launched(&world.engine.launch(fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let json = status_json(world, &id)?;
+    let agent = world.status(&id)?.agent.ok_or("status gives no agent")?;
+    Ok((agent, json["agent"].clone()))
+}
+
+fn an_effort_from_the_launch(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.take_efforts(&["xhigh"]);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.every_stage = effort("xhigh");
+    let (agent, json) = effort_in_status(&world, &fix)?;
+    ensure_eq!(
+        agent.effort,
+        Some(EffortStatus {
+            word: "xhigh".into(),
+            layer: Layer::Launch,
+            passed: "xhigh".into(),
+            read_back: false,
+            outranked_by: None,
+        }),
+        "the agent's effort"
+    );
+    ensure_eq!(
+        (
+            json["settings"]["effort"].clone(),
+            json["settings"]["from"]["effort"].clone(),
+            json["effort"].clone()
+        ),
+        (
+            serde_json::json!("xhigh"),
+            serde_json::json!({"layer": "launch", "value": "xhigh"}),
+            serde_json::json!({"word": "xhigh", "layer": "launch", "passed": "xhigh", "read_back": false})
+        ),
+        "the effort in the JSON form"
+    );
+    Ok(())
+}
+
+fn an_effort_outranked_by_the_account(_: &()) -> Outcome {
+    let world = World::new();
+    on_an_account_naming_the_variable(&world, &["high"]);
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(effort("high")));
+    let (agent, json) = effort_in_status(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(
+        agent.effort,
+        Some(EffortStatus {
+            word: "high".into(),
+            layer: Layer::HostKind,
+            passed: "high".into(),
+            read_back: false,
+            outranked_by: Some(EFFORT_VARIABLE.into()),
+        }),
+        "the agent's effort"
+    );
+    ensure_eq!(
+        json["effort"]["outranked_by"].clone(),
+        serde_json::json!(EFFORT_VARIABLE),
+        "the variable that outranks it in the JSON form"
+    );
+    let text = json.to_string();
+    ensure!(
+        !text.contains(EFFORT_VALUE),
+        "the variable's value in status: {text}"
+    );
+    Ok(())
+}
+
+fn no_effort_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    on_an_account_naming_the_variable(&world, &["high"]);
+    let (agent, json) = effort_in_status(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(agent.effort, None, "the agent's effort");
+    ensure_eq!(
+        agent.settings.settings.effort,
+        None,
+        "the effort its settings give"
+    );
+    ensure!(
+        json.get("effort").is_none()
+            && json["settings"].get("effort").is_none()
+            && json["settings"]["from"].get("effort").is_none(),
+        "an effort in the JSON form: {json}"
+    );
+    ensure!(
+        !json.to_string().contains(EFFORT_VALUE),
+        "the variable's value in status: {json}"
     );
     Ok(())
 }

@@ -1,5 +1,6 @@
 //! The merge queue seam's scenarios (B.6, 99, 101, 117, 125, 126, 133),
-//! and where the base lives (9).
+//! where the base lives (9), and a base place's branch opened, closed
+//! and submitted by name (203, 205, 206).
 
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_seams::*;
@@ -53,6 +54,10 @@ pub trait MergeQueueHarness {
     /// read from now on, as one refuses a branch whose policy it can no
     /// longer read: its name.
     fn refuse_another(&self, place: &PlaceRef) -> String;
+
+    /// The revision `branch` of the repository stands at, none where it
+    /// has no such branch.
+    fn branch_head(&self, repository: &str, branch: &str) -> Option<Revision>;
 }
 
 fn found(read: impl Into<ReadAcross>) -> Result<Submission, String> {
@@ -70,7 +75,8 @@ fn submitted<H: MergeQueueHarness>(
     place: &PlaceRef,
     head: &Revision,
 ) -> Result<Submission, String> {
-    match harness.seam().submit(place, head) {
+    let head = SubmitHead::Worktree { head: head.clone() };
+    match harness.seam().submit(place, &head) {
         Submitted::Submitted { submission } => Ok(submission),
         other => Err(format!("submit answered {other:?}")),
     }
@@ -514,6 +520,135 @@ fn unreadable_says_so<H: MergeQueueHarness>(harness: &H) -> Outcome {
             SubmissionRead::CouldNotRead { .. }
         ),
         "an unreadable merge queue was read"
+    );
+    Ok(())
+}
+
+// ---- a base place's branch: run over each profile that opens, closes and submits by name ----
+
+/// The scenarios of a base place's branch: opened at its base's revision
+/// and closed, an open refused, and a submission of it by name (203, 205,
+/// 206).
+pub fn base_place_scenarios<H: MergeQueueHarness>() -> Vec<Scenario<H>> {
+    vec![
+        Scenario {
+            name: "merge queue: open makes a branch at its base's current revision, close removes it into the base, and a second close answers it gone",
+            cites: &["205", "206"],
+            run: open_then_close::<H>,
+        },
+        Scenario {
+            name: "merge queue: open of a branch already present is refused in the merge queue's words, the branch as it was",
+            cites: &["205"],
+            run: open_refused::<H>,
+        },
+        Scenario {
+            name: "merge queue: a branch submitted by name at its revision, from the repository, is held with no wait and read-submission of it gives it",
+            cites: &["99", "117", "203"],
+            run: a_submit_by_name::<H>,
+        },
+    ]
+}
+
+/// The branch the scenarios open, beside the place's.
+const OPENED: &str = "train/a";
+
+/// A base place on `OPENED` of the place's repository and base, named by
+/// a location beside the place's where nothing stands.
+fn base_place(place: &PlaceRef) -> PlaceRef {
+    PlaceRef {
+        repository: place.repository.clone(),
+        location: std::path::Path::new(&place.location)
+            .with_file_name("train--a")
+            .to_string_lossy()
+            .into_owned(),
+        branch: OPENED.into(),
+        base: place.base.clone(),
+    }
+}
+
+/// `OPENED` made from the place's base, at the revision it was made at.
+fn opened<H: MergeQueueHarness>(harness: &H, place: &PlaceRef) -> Result<Revision, String> {
+    match harness.seam().open(&place.repository, OPENED, &place.base) {
+        BranchOpened::Made { revision } => Ok(revision),
+        other => Err(format!("open answered {other:?}")),
+    }
+}
+
+fn open_then_close<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, _) = harness.place();
+    let BaseRevision::At { revision: base } =
+        harness.seam().base_revision(&place.repository, &place.base)
+    else {
+        return Err(format!("{} has no revision to open from", place.base));
+    };
+    ensure_eq!(opened(harness, &place)?, base, "the revision opened at");
+    ensure_eq!(
+        harness.branch_head(&place.repository, OPENED),
+        Some(base),
+        "the branch opened"
+    );
+    ensure_eq!(
+        harness.seam().close(&place.repository, OPENED, &place.base),
+        BranchClosed::Removed,
+        "a close with nothing landed on the branch"
+    );
+    ensure_eq!(
+        harness.branch_head(&place.repository, OPENED),
+        None,
+        "the branch closed"
+    );
+    ensure_eq!(
+        harness.seam().close(&place.repository, OPENED, &place.base),
+        BranchClosed::Gone,
+        "a second close"
+    );
+    Ok(())
+}
+
+fn open_refused<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, head) = harness.place();
+    match harness
+        .seam()
+        .open(&place.repository, &place.branch, &place.base)
+    {
+        BranchOpened::Refused { reason } => {
+            ensure!(!reason.trim().is_empty(), "an open refused with no words")
+        }
+        other => return Err(format!("open of a branch present answered {other:?}")),
+    }
+    ensure_eq!(
+        harness.branch_head(&place.repository, &place.branch),
+        Some(head),
+        "the branch an open was refused"
+    );
+    Ok(())
+}
+
+fn a_submit_by_name<H: MergeQueueHarness>(harness: &H) -> Outcome {
+    let (place, _) = harness.place();
+    let revision = opened(harness, &place)?;
+    let base_place = base_place(&place);
+    harness.will_hold();
+    let submission = match harness.seam().submit(
+        &base_place,
+        &SubmitHead::Branch {
+            branch: OPENED.into(),
+            revision,
+        },
+    ) {
+        Submitted::Submitted { submission } => submission,
+        other => return Err(format!("submit by name answered {other:?}")),
+    };
+    ensure_eq!(submission.branch, OPENED, "the branch submitted");
+    ensure_eq!(submission.target, place.base, "the target");
+    ensure!(
+        submission.state.open(),
+        "submit by name waited on the verdict: {submission:?}"
+    );
+    ensure_eq!(
+        found(harness.seam().read_submission(&place.repository, OPENED))?.id,
+        submission.id,
+        "the submission read by its branch"
     );
     Ok(())
 }

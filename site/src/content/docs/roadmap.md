@@ -20,7 +20,9 @@ the same answers you do.
 | Landing through sluice, and the place tidied after | ✓ | ✓ |
 | Holds with words, stops short, retries and stalls | ✓ | ✓ |
 | Ends delivered once to each recipient, or kept pending for `flume wait` and `flume inbox` | ✓ | ✓ |
-| Role addresses, woken by a pending end or `flume wake` | ✓ | ✓ |
+| Role addresses, each a role of a stream that a source of the host declares, woken by a pending end or `flume wake`, each run done once it delivers | ✓ | ✓ |
+| A question put to the role it is for, of any stream, the answerer behind a stream told of every stall, a hold on the waiting move with a bound, and an answer taken once by its key | ✓ | ✓ |
+| A role's address held by an agent that already runs, found by its name in its herdr session at each delivery, its ends delivered into it and no run woken | ✓ | ✓ |
 | The host's bound on agents running, with a queue by priority | ✓ | ✓ |
 | Agent settings in eight layers, each program's own settings among them, given inline or by a settings file | ✓ | ✓ |
 | Streams, each with its own bound and priority, under the host's | ✓ | ✓ |
@@ -34,7 +36,7 @@ the same answers you do.
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
 | Each stream's agents under a multiplexer of its own, the host's where it names none | ✓ | ✓ |
 | `flume open`: a stream's agents in a window titled as the stream declares, or the line to run | Ghostty, Terminal.app | Ghostty |
-| The herdr plugin's watch, sidebar rows and popup | ✓ | ✓ |
+| The herdr plugin's sidebar rows and popup | ✓ | ✓ |
 | The Claude Code plugin's `/launch` and status over MCP | ✓ | ✓ |
 | Release binaries | Apple silicon | x86-64, ARM64 |
 
@@ -110,16 +112,6 @@ the rest of this site says.
   label, `label` in its table, which the host's configuration can
   override. It waits on the kind format's reader taking the field.
   Until then only the host's configuration gives a place a label.
-
-- **A standing agent holds a role's address**
-  ([record 0013](https://github.com/agentplot/flume/blob/main/docs/adr/0013-a-waiter-may-be-a-roles-address-and-an-end-untold-to-it-wakes-the-role.md),
-  as amended 2026-11-06). The host's configuration may give a role's
-  address an agent that already runs, `[roles."<partition>/<role>"]`
-  with `agent`, the name the terminal knows it by, and an optional
-  `session`. Each end for the address then goes into that agent as a
-  notice and wakes no run, and status says where the address lives.
-  Until then an end for an address with no run stays pending, and the
-  agent collects it with `flume inbox --recipient <address>`.
 
 - **An MCP server's labels.** The host's configuration declares each
   MCP server its agents may have, under `[mcp.<server>]`, with the

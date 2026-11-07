@@ -7,25 +7,78 @@
 //! send, as a prompt's sending is, so two settles at once send one
 //! notice (75); a recipient asking, unread or not found, or a send
 //! refused, leaves the end pending for a later settle, a wait or the
-//! inbox. A place whose work is over and whose worktree is gone keeps
+//! inbox. A recipient the host's configuration gives a standing agent is
+//! reached in that agent alone, found by its name in its stream's
+//! terminal and session at each delivery, none or more than one of the
+//! name leaving the end pending with nothing claimed (132, 190, C.7;
+//! core.28). A place whose work is over and whose worktree is gone keeps
 //! its document alone, apart from a live place's, while an end of it
 //! stands pending, and it goes once every end is delivered or its caller
 //! drops it (3, 62).
 
 use crate::prompt::group_name;
-use crate::terminals::HeldIn;
+use crate::standing::Reached;
 use crate::{Engine, Step};
 use flume_seams::*;
 use std::collections::BTreeMap;
 
-/// The one line a notice is: the place, what ended, and the command that
-/// reads it whole (43, design 2).
-pub fn notice(place: &PlaceRecord, of: &EndOf) -> String {
+/// How much of a brief's first line a notice gives (43; design 9).
+pub const NOTICE_BRIEF: usize = 60;
+
+/// The one line a notice is: the place, its brief's first line cut at
+/// [`NOTICE_BRIEF`] characters, what ended, until when a stop-short's
+/// agent is kept open for its answer, the end's key, and the command that
+/// reads it whole: `flume inbox` where the place, as `held` gives it when
+/// the notice is sent, waits on a move of its caller's, which gives the
+/// question and how to answer it, and `flume status <place>` otherwise.
+/// It names no fact to act on blindly, and no question's words, which
+/// are many lines (43, 198; core.11, core.25; design 9).
+pub fn notice(held: &HeldState, of: &EndOf) -> String {
+    let place = &held.place;
     let short = place.short();
+    let brief = place
+        .brief_line()
+        .map(|line| format!(" ({})", cut(line, NOTICE_BRIEF)))
+        .unwrap_or_default();
+    let read = if held.waiting.is_some() {
+        "flume inbox".to_string()
+    } else {
+        format!("flume status {short}")
+    };
     format!(
-        "flume: {short} {}; read: flume status {short}",
-        what_ended(of)
+        "flume: {short}{brief} {} [{}]; read: {read}",
+        end_words(of),
+        of.end_key()
     )
+}
+
+/// `line` cut at `at` characters, an ellipsis saying where it was cut.
+fn cut(line: &str, at: usize) -> String {
+    let mut chars = line.chars();
+    let head: String = chars.by_ref().take(at).collect();
+    if chars.next().is_none() {
+        head
+    } else {
+        format!("{}…", head.trim_end())
+    }
+}
+
+/// What ended, in the words a notice and the inbox give it: what ended,
+/// and for a stop-short whose agent was kept open for its answer when it
+/// was read, until when (43, 198).
+pub fn end_words(of: &EndOf) -> String {
+    let what = what_ended(of);
+    match of {
+        EndOf::Stage {
+            state: StageState::EndedShort,
+            end,
+            ..
+        } => match end.open_until {
+            Some(until) => format!("{what}, its agent kept open for the answer until {until}"),
+            None => what,
+        },
+        _ => what,
+    }
 }
 
 /// What ended, in the words a notice gives it, a repetition's end naming
@@ -76,19 +129,31 @@ pub fn what_ended(of: &EndOf) -> String {
 impl Engine {
     /// Sends each end of the place pending for a recipient whose session
     /// asks no question, once, through the first terminal the host binds
-    /// that holds the session, claimed before the send and released where
-    /// the send was not made (43, 75, 190, core.11).
+    /// that holds the session, or, for a recipient the host's standing
+    /// entries name, read once, into the one agent of the entry's name in
+    /// its stream's terminal and session; claimed before the send and
+    /// released where the send was not made, and claimed not at all where
+    /// no one agent asking no question is found (43, 75, 132, 190, C.7;
+    /// core.11, core.28).
     pub(crate) fn deliver_ends(&self, id: &PlaceId) {
         let Some(read) = self.store.read(id) else {
             return;
         };
         let held = read.state;
-        let mut states: BTreeMap<String, Option<HeldIn>> = BTreeMap::new();
+        let mut standing = None;
+        let mut states: BTreeMap<String, Option<Reached>> = BTreeMap::new();
         for end in &held.ends {
             for recipient in end.pending(&held.place.recipients) {
-                let Some((terminal, AgentState::Working | AgentState::Waiting)) = states
+                let Some(Reached {
+                    terminal,
+                    state: AgentState::Working | AgentState::Waiting,
+                    at,
+                }) = states
                     .entry(recipient.clone())
-                    .or_insert_with(|| self.recipient_terminal(&recipient))
+                    .or_insert_with(|| {
+                        let standing = standing.get_or_insert_with(|| self.standing());
+                        self.reached(standing, &recipient)
+                    })
                     .clone()
                 else {
                     continue;
@@ -114,9 +179,9 @@ impl Engine {
                 if !claimed {
                     continue;
                 }
-                let why = match terminal.send_to(&recipient, &notice(&held.place, &end.of)) {
+                let why = match terminal.send_to(&at, &notice(&held, &end.of)) {
                     ToSession::Sent => continue,
-                    ToSession::NotFound => format!("no session is named {recipient}"),
+                    ToSession::NotFound => format!("no session is named {at}"),
                     ToSession::Refused { reason } => reason,
                 };
                 states.insert(recipient.clone(), None);
@@ -139,8 +204,9 @@ impl Engine {
 
     /// The document of a place whose worktree and branch are gone, kept
     /// apart from a live place's under its id and the tidy's time while an
-    /// end of it stands pending, naming the recipients it waits on; none
-    /// kept where nothing is pending (43, 62).
+    /// end of it stands pending, naming the recipients it waits on, and
+    /// holding no line of what its stages made; none kept where nothing
+    /// is pending (43, 62, 129).
     pub(crate) fn keep_for_ends(&self, held: &HeldState, over: &Over) -> Option<PlaceId> {
         let pending = held.pending_for();
         if pending.is_empty() {
@@ -158,9 +224,14 @@ impl Engine {
             at,
             pending_for: pending,
         };
+        // The made lines go with the place's folder, so the document kept
+        // for its ends holds none of them (62, 129; core.23).
         for stage in &mut kept.stages {
             if let Some(start) = stage.start.as_mut() {
                 start.live = false;
+            }
+            if let Some(end) = stage.end.as_mut() {
+                end.made.clear();
             }
         }
         match self.store.write(&id, None, Some(&kept)) {
