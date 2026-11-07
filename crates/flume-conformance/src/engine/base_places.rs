@@ -101,6 +101,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["3", "67", "206", "52"],
             run: the_merge_queue_keeps_the_branch,
         },
+        Scenario {
+            name: "base places: an hour after its launch, a base place with two changes on its branch gives worktree false, waits on its places, names them, its head where the merge queue says its branch lives, no stall, and a line ending 2 on its branch · open; a change gives neither worktree nor on_branch",
+            cites: &["56", "61", "80", "126", "130", "203"],
+            run: waiting_on_its_places,
+        },
+        Scenario {
+            name: "base places: once the changes on its branch landed, a base place waits on its caller for its submission since the settle that read none live, is stalled after six minutes, and each recipient is delivered the stall once",
+            cites: &["43", "130", "203"],
+            run: waiting_on_its_caller,
+        },
+        Scenario {
+            name: "base places: the list gives a base place with one change on its branch a line ending 1 on its branch · open",
+            cites: &["139", "200", "203"],
+            run: the_line_of_a_base_place_with_one_place_on_its_branch,
+        },
     ]
 }
 
@@ -901,6 +916,134 @@ fn the_merge_queue_keeps_the_branch(_: &()) -> Outcome {
     ensure!(
         reason.contains("train/spring"),
         "the refusal names no branch: {reason}"
+    );
+    Ok(())
+}
+
+fn waiting_on_its_places(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    let one = change_working(&world, "one", "train/spring")?;
+    let two = change_working(&world, "two", "train/spring")?;
+    world.host.advance(3600);
+    world.engine().settle(None);
+    let status = world.status(&spring)?;
+    ensure_eq!(status.worktree, Some(false), "worktree");
+    ensure_eq!(
+        status.waits_on,
+        Some(flume_core::WaitsOn::Places),
+        "whom it waits on"
+    );
+    let mut on_branch = status.on_branch.clone().ok_or("no on_branch")?;
+    on_branch.sort();
+    ensure_eq!(on_branch, vec![one.clone(), two.clone()], "on_branch");
+    ensure_eq!(
+        status.head,
+        world.git.branch_head(REPOSITORY, "train/spring"),
+        "the head"
+    );
+    ensure!(
+        world
+            .queue
+            .log
+            .of("base_revision")
+            .contains(&format!("base_revision {REPOSITORY} train/spring")),
+        "the head was not read where the merge queue says the branch lives"
+    );
+    ensure!(
+        !status.stalled && status.waiting_on.is_none(),
+        "it waits on its caller: {:?}, stalled {}",
+        status.waiting_on,
+        status.stalled
+    );
+    ensure!(
+        !status
+            .ends
+            .iter()
+            .any(|end| matches!(end.end.of, EndOf::Stall { .. })),
+        "a stall was read"
+    );
+    ensure!(
+        status.line.full.ends_with("2 on its branch · open"),
+        "its line: {}",
+        status.line.full
+    );
+    ensure!(
+        !world
+            .place
+            .log
+            .calls()
+            .iter()
+            .any(|call| call.split(' ').any(|word| word == spring.to_string())),
+        "its location was read"
+    );
+    let change = world.status(&one)?;
+    ensure_eq!(
+        (change.worktree, change.on_branch),
+        (None, None),
+        "a change's worktree and on_branch"
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&world.engine().status(Some(&one)).to_json())
+            .map_err(|error| error.to_string())?;
+    ensure!(
+        json["status"]["places"][0].get("worktree").is_none()
+            && json["status"]["places"][0].get("on_branch").is_none(),
+        "a change's status gives worktree or on_branch"
+    );
+    Ok(())
+}
+
+fn waiting_on_its_caller(_: &()) -> Outcome {
+    let world = World::new();
+    let spring = spring(&world)?;
+    change_working(&world, "one", "train/spring")?;
+    change_working(&world, "two", "train/spring")?;
+    change_lands(&world, "one")?;
+    change_lands(&world, "two")?;
+    let read_none = world.host.now();
+    world.engine().settle(None);
+    world.host.advance(6 * 60);
+    world.engine().settle(None);
+    world.engine().settle(None);
+    let status = world.status(&spring)?;
+    let waiting = status.waiting_on.clone().ok_or("waits on nobody")?;
+    ensure_eq!(
+        (waiting.act, waiting.stage, waiting.why, waiting.since),
+        (Act::Retry, None, Waits::Unsubmitted, Some(read_none)),
+        "the move it waits on its caller for"
+    );
+    ensure!(status.stalled, "not stalled");
+    ensure_eq!(status.line.short, "stalled", "its line");
+    ensure_eq!(
+        world.terminal.notices("ops"),
+        vec![notice("spring", "stalled: a retry of the submission")],
+        "the notices to ops"
+    );
+    Ok(())
+}
+
+fn the_line_of_a_base_place_with_one_place_on_its_branch(_: &()) -> Outcome {
+    let world = World::new();
+    spring(&world)?;
+    change_working(&world, "one", "train/spring")?;
+    let places = match world.engine().list(false) {
+        flume_core::Answer::List { places, .. } => places,
+        other => return Err(format!("the list answered {other:?}")),
+    };
+    let listed = places
+        .iter()
+        .find(|listed| listed.name == "train--spring")
+        .ok_or("no line of train--spring")?;
+    ensure!(
+        listed.line.ends_with("1 on its branch · open"),
+        "its line: {}",
+        listed.line
+    );
+    ensure_eq!(
+        listed.waits_on,
+        Some(flume_core::WaitsOn::Places),
+        "whom it waits on"
     );
     Ok(())
 }

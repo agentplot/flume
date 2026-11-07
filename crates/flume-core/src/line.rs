@@ -293,3 +293,137 @@ pub(crate) fn state_words(
         None => word(&StageState::NotReached),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{json, to_value};
+    use std::collections::BTreeMap;
+
+    /// A base place `train--spring` on `main`, live, its kind landing
+    /// with no stages (202).
+    fn spring() -> HeldState {
+        let place = PlaceRecord {
+            id: PlaceId::new("/d/places/1/train--spring"),
+            repository: "/r".into(),
+            kind: Kind {
+                name: "train".into(),
+                version: 1,
+                branch_prefix: "train".into(),
+                starts_unready: false,
+                lands: true,
+                agents: KindSettings::default(),
+                stages: vec![],
+                label: None,
+            },
+            declared: Declared::Repository,
+            kind_from: None,
+            name: "spring".into(),
+            branch: "train/spring".into(),
+            base: "main".into(),
+            base_revision: Revision::new("c1"),
+            base_from: None,
+            location: "/d/places/1/train--spring".into(),
+            binding: Binding::default(),
+            brief: None,
+            mark: None,
+            settings: BTreeMap::new(),
+            every_stage: Settings::default(),
+            repository_settings: KindSettings::default(),
+            repository_agents: Settings::default(),
+            hold: vec![],
+            hold_submission: false,
+            hold_words: BTreeMap::new(),
+            recipients: vec![],
+            stream: StreamHeld {
+                name: DEFAULT_STREAM.into(),
+                from: StreamFrom::Default,
+            },
+            intent: IntentKey::Launch {
+                name: "spring".into(),
+                digest: "d1".into(),
+            },
+        };
+        serde_json::from_value(json!({
+            "place": to_value(place).unwrap(),
+            "phase": to_value(Phase::Live).unwrap(),
+            "readiness": to_value(Readiness::default()).unwrap(),
+            "stages": [],
+            "current": null,
+            "submission": to_value(SubmissionHeld::default()).unwrap(),
+            "failures": [],
+            "moves": [],
+            "unsettled": [],
+        }))
+        .unwrap()
+    }
+
+    /// The base place's line with `on_branch` places live on its branch.
+    fn line(held: &HeldState, on_branch: usize) -> PlaceLine {
+        Engine::place_line(held, None, false, Some(on_branch), None)
+    }
+
+    #[test]
+    fn a_base_places_line_counts_the_places_on_its_branch() {
+        // 139, 200, 203: `<n> on its branch · open` while places on its
+        // branch are live, whatever the last settle wrote of its wait.
+        let mut held = spring();
+        held.waiting = Some(Waiting {
+            on: WaitingOn {
+                act: Act::Retry,
+                stage: None,
+                why: Waits::Unsubmitted,
+                since: Some(10),
+                words: None,
+            },
+            stalled: true,
+        });
+        let two = line(&held, 2);
+        assert_eq!(two.short, "2 on its branch · open");
+        assert_eq!(two.full, "train--spring · train@1 · 2 on its branch · open");
+        assert_eq!((two.stage, two.run, two.tasks), (None, None, None));
+        assert_eq!(line(&held, 1).short, "1 on its branch · open");
+    }
+
+    #[test]
+    fn a_base_place_with_none_on_its_branch_waits_on_its_caller() {
+        // 130, 203: with no place on its branch live and no submission
+        // made it waits on its caller; stalled once a settle read it so.
+        let mut held = spring();
+        assert_eq!(line(&held, 0).short, "waiting on its caller");
+        held.waiting = Some(Waiting {
+            on: WaitingOn {
+                act: Act::Retry,
+                stage: None,
+                why: Waits::Unsubmitted,
+                since: Some(10),
+                words: None,
+            },
+            stalled: true,
+        });
+        assert_eq!(line(&held, 0).short, "stalled");
+    }
+
+    #[test]
+    fn a_base_places_submission_reads_as_any_places() {
+        // 111, 112, 203: submitted while its submission is open, its
+        // failure's words as a refused submission's, and landed once
+        // over.
+        let mut held = spring();
+        held.submission.submits = 1;
+        assert_eq!(line(&held, 0).short, "submitted");
+        held.submission.verdict = Some(Verdict::Failed {
+            words: "test failed".into(),
+        });
+        held.submission.waiting = Some("the submission failed: test failed".into());
+        assert_eq!(line(&held, 0).short, "submission refused");
+        assert_eq!(line(&held, 1).short, "1 on its branch · open");
+        held.phase = Phase::Over {
+            over: Over::Landed {
+                commit: Revision::new("c9"),
+            },
+            kept: None,
+        };
+        assert_eq!(line(&held, 0).short, "landed");
+    }
+}
