@@ -702,6 +702,7 @@ impl Engine {
             place: PlaceRecord {
                 id: id.clone(),
                 repository: repository.clone(),
+                address: None,
                 kind: kind.clone(),
                 declared,
                 kind_from: Some(from),

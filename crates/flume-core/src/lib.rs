@@ -269,6 +269,7 @@ mod tests {
         PlaceRecord {
             id: PlaceId::new("/r/places/fix--one"),
             repository: "/r".into(),
+            address: None,
             kind: Kind {
                 name: "fix".into(),
                 version: 1,
