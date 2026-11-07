@@ -1,7 +1,35 @@
 ## RENAMED Requirements
 
 - FROM: `### Requirement: Found work from another stage needs an answer`
-- TO: `### Requirement: Found work no stage before it can do again needs an answer
+- TO: `### Requirement: Found work no stage before it can do again needs an answer`
+
+## MODIFIED Requirements
+
+### Requirement: The fix round
+
+A failed or conflicting submission SHALL start the stage the kind's last
+stage names for a failed submission, that last stage where it names
+none, with a fresh agent and the outcome's words; found work from the
+kind's last stage SHALL start it with the findings as its words where it
+is a stage before that last stage. The stages after it SHALL run again
+in order and the place SHALL be submitted again (23, 48, 112, 131).
+
+#### Scenario: A blamed test, then a landing
+
+- **WHEN** the fake merge queue fails a change's first submission with its words and lands its second
+- **THEN** code starts with the words, code and verify deliver again, the place is submitted again and its work is over (S35)
+
+#### Scenario: Verify finds work
+
+- **WHEN** a change's verify agent stops short having found work
+- **THEN** code starts at once with the findings as its words, and verify runs again after it (S35, 48, 131)
+
+#### Scenario: A fix's failed submission
+
+- **WHEN** the fake merge queue fails a fix's submission with its words, the fix's code naming `code` for a failed submission
+- **THEN** code starts again with a fresh agent and the words, the place's goings-back are one, and once code delivers the place is submitted again (23, 112, 131)
+
+### Requirement: Found work no stage before it can do again needs an answer
 
 Found work from any stage but the kind's last, and from a last stage
 that is the stage the kind names for a failed submission, or names none,
