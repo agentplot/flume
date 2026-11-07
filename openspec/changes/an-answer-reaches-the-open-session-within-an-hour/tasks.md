@@ -62,4 +62,4 @@ of the test's own.
 ## 9. Coverage and the gate
 
 - [x] 9.1 Bring the suite's clause list to the blueprints main revision that holds 198, S104 and S105, the one task 1.1 read or a later one, in the same commit, and cite 198, S104 and S105 from `engine/open_sessions.rs` (clause-coverage spec; 106; core.19). True when `sluice exec main -- moon run conformance:test conformance:coverage` passes.
-- [ ] 9.2 Run the checks of the projects this change touched. True when `sluice exec main` passes, `seams`, `fakes`, `core`, `conformance`, `flume`, `site` and `root` among the projects it runs, `flume:tools` and `conformance:coverage` among their tasks.
+- [x] 9.2 Run the checks of the projects this change touched. True when `sluice exec main` passes, `seams`, `fakes`, `core`, `conformance`, `flume`, `site` and `root` among the projects it runs, `flume:tools` and `conformance:coverage` among their tasks.
