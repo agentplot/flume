@@ -1,8 +1,9 @@
 #!/bin/sh
 # shellcheck disable=SC2016 # jq programs name their own $variables.
-# The herdr plugin's scripts against stand-in `herdr` and `flume` on PATH
-# (tests/fake): the status the stand-in flume answers in, the herdr and
-# flume calls made checked. Nothing here reaches a running herdr, the
+# The herdr plugin's scripts against stand-in `herdr`, `flume` and `ps` on
+# PATH (tests/fake): the status the stand-in flume answers in, the herdr
+# and flume calls made checked, and a process's start where no /proc
+# gives it the one the test recorded (tests/fake/ps). Nothing here reaches a running herdr, the
 # user's flume, a network or a credential. FLUME_HERDR_SH names the shell
 # every script runs under as `sh`, as herdr runs them: dash, as Debian's
 # /bin/sh is, or the system's.
@@ -209,10 +210,13 @@ pass
 # An earlier release's watch on this server: a process of the test's
 # own, its lease naming its pid and identity as that release wrote it.
 # Started from a shell that exits at once, so the system reaps it once it
-# ends.
+# ends. Where no /proc gives its start, the stand-in ps answers the one
+# recorded here.
 old_watch() {
   old=$(sh -c 'sleep 600 </dev/null >/dev/null 2>&1 & echo $!')
   olds="$olds $old"
+  mkdir -p "$FAKE/starts"
+  echo "Sat Nov  7 01:00:00 2026" >"$FAKE/starts/$old"
   printf '%s %s\n%s\n%s\n%s\n%s\n' "$old" "$(date +%s)" "$(sh -c '. "$1" && identity "$2"' _ "$plugin/lib/procs.sh" "$old")" \
     "$plugin" "0.0.0" "77" >"$S/watch.lease"
 }
@@ -228,7 +232,10 @@ left=$(plugin_processes)
 pass
 
 fresh 'startup: a lease whose pid another process holds ends no process, and is removed (record 0016)'
-# The lease names this shell's pid, alive, with another start time.
+# The lease names this shell's pid, alive, with another start time than
+# its own, which the stand-in ps answers where no /proc gives it.
+mkdir -p "$FAKE/starts"
+echo "Sat Nov  7 01:00:00 2026" >"$FAKE/starts/$$"
 printf '%s %s\n%s\n%s\n%s\n\n' $$ "$(date +%s)" "start:Thu Jan  1 00:00:00 1970" "$plugin" "0.0.0" >"$S/watch.lease"
 startup
 kill -0 $$ 2>/dev/null || fail "the process holding the pid was ended"
