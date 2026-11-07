@@ -29,9 +29,12 @@
 //! refuses as an argument started from the agent profile by a file, a
 //! role run's pane reached by its
 //! address after a move, and a recipient on another server reached
-//! through its own socket; and what flume's herdr plugin's own watch
-//! writes herdr's configuration lacks, given by status while its lease
-//! is fresh. Under a scratch home of herdr's named sessions: two
+//! through its own socket; what flume's herdr plugin's startup writes
+//! herdr's configuration lacks, given by status while its server runs;
+//! the pane's row following its place's line at a settle; and flume
+//! unattended by the host's watch alone, whatever the plugin's state, no
+//! herdr command run to decide it. Under a scratch
+//! home of herdr's named sessions: two
 //! streams' sessions (S82), a session name herdr refuses, a place tidied
 //! in two sessions, records written before they were kept by server, and
 //! attach: a stream's session started for a window's command, a client
@@ -54,6 +57,7 @@ use flume_conformance::engine::world::{kind, stage, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
 use flume_core::{Answer, Engine, Retry};
+use flume_fakes::FakeChange;
 use flume_seams::*;
 use serde_json::Value;
 use std::cell::RefCell;
@@ -644,6 +648,10 @@ impl TerminalHarness for Harness {
         &self.seam
     }
 
+    fn shared(&self) -> Arc<dyn Terminal> {
+        Arc::new(self.seam.clone())
+    }
+
     fn place(&self) -> PlaceRef {
         self.server.place("fix--one")
     }
@@ -826,22 +834,16 @@ impl TerminalHarness for Harness {
 
     /// The plugin's watch on this server, its lease renewed now, having
     /// written that herdr's configuration binds no key to the popup.
+    /// What the plugin's startup on the test's server writes it lacks,
+    /// in setup.json with the server's socket, which is present (122,
+    /// C.5).
     fn setup(&self) -> Vec<String> {
         let words = "herdr's configuration, /h/config.toml, binds no key to flume's places";
-        let watched = self.server.scratch.path("plugin/servers/1");
-        fs::create_dir_all(&watched).expect("the plugin's server state");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("the clock")
-            .as_secs();
+        let server = self.server.scratch.path("plugin/servers/1");
+        fs::create_dir_all(&server).expect("the plugin's server state");
         fs::write(
-            watched.join("watch.lease"),
-            format!("{} {now}\n", std::process::id()),
-        )
-        .expect("the lease");
-        fs::write(
-            watched.join("setup.json"),
-            serde_json::json!([words]).to_string(),
+            server.join("setup.json"),
+            serde_json::json!({ "socket": self.server.socket, "lacking": [words] }).to_string(),
         )
         .expect("setup.json");
         vec![words.to_string()]
@@ -1616,6 +1618,7 @@ fn s49_titles_follow_the_stage_and_a_clue_that_fails_fails_nothing() {
             running: 1,
             ..BaseCount::default()
         },
+        line: format!("code · run 1 · {state}"),
     };
     for state in ["starting", "waiting", "working", "asking"] {
         assert_eq!(profile.show(&place, &clues(state)), Shown::Shown, "{state}");
@@ -1626,6 +1629,11 @@ fn s49_titles_follow_the_stage_and_a_clue_that_fails_fails_nothing() {
             "the pane's title"
         );
         assert_eq!(got["pane"]["display_agent"].as_str(), Some("fix--one"));
+        assert_eq!(
+            got["pane"]["tokens"]["flume"].as_str(),
+            Some(format!("code · run 1 · {state}").as_str()),
+            "the pane's row, {got}"
+        );
     }
     let (workspace, _) = profile.workspace(&place).expect("the workspace");
     let got = server.herdr(&["workspace", "get", &workspace]);
@@ -2338,6 +2346,131 @@ fn begun(server: &TestServer, world: &World, repository: &str) -> PlaceId {
 }
 
 #[test]
+fn the_row_follows_the_line() {
+    // The terminal-profiles spec's "The row follows the line" (139, C.5):
+    // a change's repeating code stage keeps working while the change at
+    // its head goes from 2 tasks ticked of 5 to 3; the settle then
+    // reports the pane's title and its row as the token `flume`, the
+    // short form of the place's line, against the pinned herdr's server,
+    // and the next settle, with nothing changed, reports nothing.
+    const FIVE: &[(&str, &str, usize)] = &[("1", "One", 4), ("2", "Two", 1)];
+    let server = TestServer::start("herdr-row");
+    let world = World::new();
+    let mut code = stage(
+        "code",
+        Some(Deliverable::TasksTicked),
+        "{{brief}} {{needs}}",
+    );
+    code.repeats = true;
+    let repository = bound(&server, &world, vec![code]);
+    // Launched with code held, its change written on its branch, then
+    // code started at the head that holds it, at its first group.
+    let answer = engine(&server, &world).launch(&Launch {
+        repository: repository.clone(),
+        kind: "two".into(),
+        name: "one".into(),
+        base: "main".into(),
+        brief: Some("build it".into()),
+        hold: vec!["code".into()],
+        ..Launch::default()
+    });
+    assert!(answer.refusal().is_none(), "the launch: {answer:?}");
+    let id = place_of(&world, &repository);
+    let at = world
+        .git
+        .commit(&repository, "two/one", &["plans/one/tasks.md"]);
+    world
+        .change
+        .set(&repository, &at, "one", FakeChange::groups(FIVE, 2));
+    let retried = engine(&server, &world).retry(&id, Retry::Stage("code".into()), None, false);
+    assert!(retried.refusal().is_none(), "the retry: {retried:?}");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while stage_state(&server, &world, &id, "code") != StageState::Begun {
+        assert!(
+            Instant::now() < deadline,
+            "the code stage did not begin: {:?}",
+            stage_state(&server, &world, &id, "code")
+        );
+        engine(&server, &world).settle(Some(&id));
+    }
+    let who = Identity {
+        repository: flume_core::repository_id(&format!("{repository}/.git")),
+        place: "two--one".into(),
+        stage: "code".into(),
+        start: 1,
+    };
+    let pane = server.profile().pane(&who).expect("the pane recorded");
+    server.report(&pane, "working");
+    let calls = server.scratch.path("calls");
+    let logging = server.scratch.path("logging-herdr");
+    fs::write(
+        &logging,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec herdr \"$@\"\n",
+            calls.display()
+        ),
+    )
+    .expect("the logging herdr");
+    fs::set_permissions(&logging, fs::Permissions::from_mode(0o755))
+        .expect("the logging herdr made executable");
+    let state = server.scratch.path("state/flume");
+    let settle = || {
+        let herdr: Arc<dyn Terminal> = Arc::new(server.profile().with_program(&logging));
+        world.resolver.with_terminal(NAME, herdr.clone());
+        Engine::new(
+            world.resolver.clone(),
+            herdr,
+            Arc::new(StateDir::at(&state)),
+            world.history.clone(),
+            Arc::new(RealHost::new(
+                &state,
+                HostConfig {
+                    terminal: Some(NAME.into()),
+                    ..HostConfig::default()
+                },
+                None,
+            )),
+            world.defaults.clone(),
+        )
+        .settle(Some(&id));
+        let reports: Vec<String> = fs::read_to_string(&calls)
+            .unwrap_or_default()
+            .lines()
+            .filter(|call| call.contains("report-metadata"))
+            .map(String::from)
+            .collect();
+        let _ = fs::remove_file(&calls);
+        reports
+    };
+    settle();
+    let head = world
+        .git
+        .commit(&repository, "two/one", &["plans/one/tasks.md"]);
+    world
+        .change
+        .set(&repository, &head, "one", FakeChange::groups(FIVE, 3));
+    let row = "code 1/2 · run 1 · tasks 3/5 · working";
+    let reports = settle();
+    assert!(
+        reports.contains(&format!(
+            "pane report-metadata {} --source flume --title code 1/2 · working --display-agent two--one --token flume={row}",
+            pane.id
+        )),
+        "the settle's reports: {reports:?}"
+    );
+    assert_eq!(
+        server.herdr(&["pane", "get", &pane.id])["pane"]["tokens"]["flume"].as_str(),
+        Some(row),
+        "the pane's row"
+    );
+    assert_eq!(
+        settle(),
+        Vec::<String>::new(),
+        "the reports of a settle that changed nothing"
+    );
+}
+
+#[test]
 fn a_quiet_pane_with_nothing_delivered_is_not_ended() {
     let server = TestServer::start("herdr-quiet");
     let world = World::new();
@@ -2690,19 +2823,6 @@ fn an_agent_that_began_after_its_start_read_never_begun_is_begun_and_a_retry_lea
     );
 }
 
-/// flume's herdr plugin's own watch, run on a server of the test's own,
-/// ended with the test.
-struct PluginWatch(Child);
-
-impl Drop for PluginWatch {
-    fn drop(&mut self) {
-        // SAFETY: a signal to the watch this test started, whose trap
-        // ends its renewer and removes its lease.
-        unsafe { libc::kill(self.0.id() as libc::pid_t, libc::SIGTERM) };
-        let _ = self.0.wait();
-    }
-}
-
 /// `flume status --json` under the scratch host, the herdr terminal
 /// bound, its terminal setup.
 fn terminal_setup(server: &TestServer, flume: &Path) -> Value {
@@ -2730,13 +2850,14 @@ fn terminal_setup(server: &TestServer, flume: &Path) -> Value {
 }
 
 #[test]
-fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
-    // 122, C.5, design 8: the plugin's watch, on the pinned herdr's
-    // server, reads a herdr configuration that binds no key to the popup
-    // and names no row of flume's, and writes what it lacks beside its
-    // lease; `flume status --json` gives those words as the host's
-    // terminal setup, and none once the watch has stopped.
-    let server = TestServer::start("setup");
+fn a_startups_setup_is_given_by_status_while_its_server_runs() {
+    // 122, C.5: the plugin's startup, run as herdr runs it at the pinned
+    // herdr's server's start, reads a herdr configuration that binds no
+    // key to the popup and names no row of flume's, writes what it lacks
+    // into setup.json with the server's socket, and exits; `flume status
+    // --json` gives those words as the host's terminal setup while the
+    // server runs, and none once it has stopped.
+    let mut server = TestServer::start("setup");
     let flume = Path::new(env!("CARGO_BIN_EXE_flume"));
     let plugin = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../plugins/herdr")
@@ -2760,7 +2881,6 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
         flume.parent().expect("flume's folder").display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let log = server.scratch.path("log/watch.log");
     let mut command = Command::new("sh");
     for (name, _) in std::env::vars_os() {
         let name = name.to_string_lossy().into_owned();
@@ -2768,39 +2888,39 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
             command.env_remove(name);
         }
     }
-    let watch = PluginWatch(
-        command
-            .arg(plugin.join("bin/watch.sh"))
-            .current_dir(server.scratch.path("home"))
-            .env("PATH", path)
-            .env("HOME", server.scratch.path("home"))
-            .env("XDG_STATE_HOME", server.scratch.path("state"))
-            .env("XDG_CONFIG_HOME", server.scratch.path("config"))
-            .env("XDG_DATA_HOME", server.scratch.path("data"))
-            .env("HERDR_PLUGIN_ROOT", &plugin)
-            .env("HERDR_PLUGIN_STATE_DIR", &plugin_state)
-            .env("HERDR_SOCKET_PATH", &server.socket)
-            .env("HERDR_BIN_PATH", herdr_program())
-            .env("HERDR_CONFIG_PATH", &herdr_config)
-            .env("FLUME_HERDR_TICK", "1")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(fs::File::create(&log).expect("the watch's log"))
-            .spawn()
-            .expect("the watch starts"),
+    let ran = command
+        .arg(plugin.join("bin/startup.sh"))
+        .current_dir(server.scratch.path("home"))
+        .env("PATH", path)
+        .env("HOME", server.scratch.path("home"))
+        .env("XDG_STATE_HOME", server.scratch.path("state"))
+        .env("XDG_CONFIG_HOME", server.scratch.path("config"))
+        .env("XDG_DATA_HOME", server.scratch.path("data"))
+        .env("HERDR_PLUGIN_ROOT", &plugin)
+        .env("HERDR_PLUGIN_STATE_DIR", &plugin_state)
+        .env("HERDR_SOCKET_PATH", &server.socket)
+        .env("HERDR_BIN_PATH", herdr_program())
+        .env("HERDR_CONFIG_PATH", &herdr_config)
+        .stdin(Stdio::null())
+        .output()
+        .expect("the startup runs");
+    assert!(
+        ran.status.success(),
+        "the startup: {}",
+        String::from_utf8_lossy(&ran.stderr)
     );
-    let written = || -> Option<Value> {
-        let servers = fs::read_dir(plugin_state.join("servers")).ok()?;
-        servers
-            .filter_map(Result::ok)
-            .find(|server| server.path().join("watch.lease").exists())
-            .and_then(|server| fs::read_to_string(server.path().join("setup.json")).ok())
-            .and_then(|text| serde_json::from_str(&text).ok())
-    };
-    server.within("the watch wrote no setup.json beside its lease", || {
-        written().is_some()
-    });
-    let lacking = written().expect("setup.json");
+    let written: Value = fs::read_dir(plugin_state.join("servers"))
+        .expect("the plugin's servers")
+        .filter_map(Result::ok)
+        .find_map(|server| fs::read_to_string(server.path().join("setup.json")).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .expect("setup.json");
+    assert_eq!(
+        written["socket"].as_str(),
+        Some(server.socket.to_string_lossy().as_ref()),
+        "the server's socket in setup.json"
+    );
+    let lacking = written["lacking"].clone();
     let file = herdr_config.display().to_string();
     let words: Vec<&str> = lacking
         .as_array()
@@ -2808,12 +2928,7 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
         .iter()
         .filter_map(Value::as_str)
         .collect();
-    assert_eq!(
-        words.len(),
-        2,
-        "{lacking}; the watch logged: {}",
-        fs::read_to_string(&log).unwrap_or_default()
-    );
+    assert_eq!(words.len(), 2, "{lacking}");
     assert!(
         words[0].contains(&file) && words[0].contains("binds no key to flume's places"),
         "{}",
@@ -2825,8 +2940,98 @@ fn a_watchs_setup_is_given_by_status_while_its_lease_is_fresh() {
         words[1]
     );
     assert_eq!(terminal_setup(&server, flume), lacking);
-    drop(watch);
+    server.stop();
     assert_eq!(terminal_setup(&server, flume), Value::Array(vec![]));
+}
+
+/// A lease an earlier release's watch kept on server `1` under `plugin`,
+/// renewed `ago` seconds before now by this process, as that watch wrote
+/// it; this release reads none.
+fn lease_renewed(plugin: &Path, ago: u64) {
+    let server = plugin.join("servers/1");
+    fs::create_dir_all(&server).expect("the plugin's server state");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock")
+        .as_secs();
+    fs::write(
+        server.join("watch.lease"),
+        format!("{} {}\n", std::process::id(), now - ago),
+    )
+    .expect("the lease");
+}
+
+/// The host's watch and when it lapsed, as status gives them.
+fn watch_and_lapse(engine: &Engine) -> (Watch, Option<Seconds>) {
+    match engine.status(None) {
+        Answer::Status { host, .. } => (host.watch, host.watch_lapsed),
+        other => panic!("status answered {other:?}"),
+    }
+}
+
+#[test]
+fn unattended_by_the_hosts_watch_alone() {
+    // The terminal-profiles spec's "Unattended by the host's watch
+    // alone" (119, 122, 208, C.5): the herdr profile bound against the
+    // pinned herdr's server, the plugin's state holding an earlier
+    // release's fresh lease beside it, every herdr command it runs
+    // logged; a caller keeping watch with a bound of a minute keeps flume
+    // unattended, three minutes with no such settle let it run attended,
+    // and no herdr command was run to decide either.
+    let server = TestServer::start("watch");
+    let world = World::new();
+    let plugin = server.scratch.path("plugin");
+    lease_renewed(&plugin, 0);
+    let calls = server.scratch.path("calls");
+    let logging = server.scratch.path("logging-herdr");
+    fs::write(
+        &logging,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec herdr \"$@\"\n",
+            calls.display()
+        ),
+    )
+    .expect("the logging herdr");
+    fs::set_permissions(&logging, fs::Permissions::from_mode(0o755))
+        .expect("the logging herdr made executable");
+    let herdr = server
+        .profile()
+        .with_plugin(Some(plugin))
+        .with_program(&logging);
+    let terminal: Arc<dyn Terminal> = Arc::new(herdr);
+    world.resolver.with_terminal(NAME, terminal.clone());
+    let engine = Engine::new(
+        world.resolver.clone(),
+        terminal,
+        Arc::new(StateDir::at(server.scratch.path("state/flume"))),
+        world.history.clone(),
+        world.host.clone(),
+        world.defaults.clone(),
+    );
+    assert_eq!(
+        watch_and_lapse(&engine),
+        (Watch::None, None),
+        "no caller keeping watch beside a fresh lease: flume runs attended"
+    );
+    let settled = engine.settle_every(60);
+    assert!(settled.refusal().is_none(), "{settled:?}");
+    let began = world.host.now();
+    assert_eq!(
+        watch_and_lapse(&engine),
+        (Watch::Bound { seconds: 60 }, None),
+        "a caller keeping watch: flume runs unattended"
+    );
+    world.host.advance(180);
+    assert_eq!(
+        watch_and_lapse(&engine),
+        (Watch::None, Some(began + 120)),
+        "three minutes with no settle of the watch's: flume runs attended"
+    );
+    assert_eq!(
+        fs::read_to_string(&calls).unwrap_or_default(),
+        "",
+        "herdr's calls"
+    );
 }
 
 /// The longer of the two sockets the pinned herdr binds in a named

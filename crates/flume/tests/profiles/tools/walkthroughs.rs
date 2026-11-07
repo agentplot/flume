@@ -758,9 +758,9 @@ fn a_bound_host_queues_launches_and_starts_them_by_priority() {
 #[test]
 fn a_stage_waiting_for_room_starts_at_the_next_command_once_the_host_gives_room() {
     // On deneb a stage waiting for room still waited once the host's
-    // configuration gave it room, until a settle by hand: the printed
-    // command keeps no watch, so a place moves on only when a command of
-    // flume's acts or an agent goes quiet (119). Status says so and
+    // configuration gave it room, until a settle by hand: no caller keeps
+    // watch, so a place moves on only when a command of flume's acts or an
+    // agent goes quiet (119, 208). Status says so and
     // settles nothing; the next command that acts, a launch here, reads
     // the configuration as it stands and starts the waiting stage before
     // its own (46, 57, 70).
@@ -780,7 +780,7 @@ fn a_stage_waiting_for_room_starts_at_the_next_command_once_the_host_gives_room(
     let said = walk.person(&["status"]);
     assert!(
         said.contains(
-            "the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+            "no caller keeps watch: every place settles at each command of flume's that acts"
         ),
         "{said}"
     );

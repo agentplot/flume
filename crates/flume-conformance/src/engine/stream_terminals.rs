@@ -71,18 +71,23 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_caller_under_a_streams_terminal,
         },
         Scenario {
-            name: "stream terminals: one stream under a terminal that keeps no watch has a caller's act settle every place first, and a wait drive its settles",
-            cites: &["119", "122", "S91"],
-            run: one_stream_under_a_terminal_with_no_watch,
+            name: "stream terminals: under a caller's watch, the host's terminal fake and a stream's other, a caller's act on another stream settles nothing first, and the stream's places move at the caller's settles",
+            cites: &["119", "122", "190", "208", "S91"],
+            run: one_stream_under_another_terminal,
         },
         Scenario {
-            name: "stream terminals: S91, a stream under a terminal of its own beside the host's, flume attended while it keeps no watch, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
-            cites: &["S91", "4", "119", "143", "190"],
+            name: "stream terminals: with no caller keeping watch, the host's terminal fake and a stream's other, a caller's act settles every place first under either, and a wait drives its settles",
+            cites: &["119", "122", "190", "208"],
+            run: two_terminals_and_no_watch,
+        },
+        Scenario {
+            name: "stream terminals: S91, a stream under a terminal of its own beside the host's, which decides nothing of whether flume runs attended, its next stage in the terminal it is set to while its agent stays, and a stream naming rex refused while every other runs",
+            cites: &["S91", "4", "119", "143", "190", "208"],
             run: s91_a_stream_under_its_own_terminal,
         },
         Scenario {
-            name: "stream terminals: status gives each stream's multiplexer with where it came from, each agent's terminal, and each terminal the host binds with what it keeps and its watch, in the JSON form",
-            cites: &["56", "190", "S91"],
+            name: "stream terminals: status gives each stream's multiplexer with where it came from, each agent's terminal, and each terminal the host binds with what it keeps and its watch none, in the JSON form",
+            cites: &["56", "122", "190", "S91"],
             run: the_terminals_in_status,
         },
     ]
@@ -518,10 +523,13 @@ fn a_caller_under_a_streams_terminal(_: &()) -> Outcome {
     Ok(())
 }
 
-fn one_stream_under_a_terminal_with_no_watch(_: &()) -> Outcome {
+/// The stream-terminals spec's "Two terminals and no watch": no caller
+/// keeps watch, the host's terminal is `fake` and `trial`'s `other`; a
+/// caller's act settles every place first under either, and a wait drives
+/// its settles (119, 122, 190, 208).
+fn two_terminals_and_no_watch(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
-    work_and_trial(&world);
+    let other = work_and_trial(&world);
     world.terminal.add_session("ops", AgentState::Working);
     let id = World::id("fix", "one");
     launched(&world.engine.launch(&Launch {
@@ -529,7 +537,7 @@ fn one_stream_under_a_terminal_with_no_watch(_: &()) -> Outcome {
         recipients: vec!["ops".into()],
         ..launch("fix", "one", Some("x"))
     }))?;
-    fix_on(&world, "work", "two")?;
+    let trial = fix_on(&world, "trial", "two")?;
     world
         .terminal
         .kill(&World::identity("fix", "one", "code", 1));
@@ -548,14 +556,12 @@ fn one_stream_under_a_terminal_with_no_watch(_: &()) -> Outcome {
         Some(StageState::Lost),
         "the stage once the wait settled it"
     );
-    world
-        .terminal
-        .kill(&World::identity("fix", "two", "code", 1));
+    other.kill(&trial);
     let two = World::id("fix", "two");
     ensure_eq!(
         world.status(&two)?.stages[0].state,
         StageState::Begun,
-        "the second stage before a command acts"
+        "the trial stage, under other, before a command acts"
     );
     let dropped = world.engine.drop_place(&id, true);
     ensure!(
@@ -565,14 +571,14 @@ fn one_stream_under_a_terminal_with_no_watch(_: &()) -> Outcome {
     ensure_eq!(
         world.status(&two)?.stages[0].state,
         StageState::Lost,
-        "the second stage once a command acted"
+        "the trial stage, under other, once a command acted"
     );
     Ok(())
 }
 
 fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let other = work_and_trial(&world);
     let work = fix_on(&world, "work", "one")?;
     ensure_eq!(
@@ -604,8 +610,14 @@ fn s91_a_stream_under_its_own_terminal(_: &()) -> Outcome {
     );
     ensure_eq!(
         world.stage_state(&World::id("fix", "one"), "code"),
+        Some(StageState::Begun),
+        "the work fix's stage once a caller acted under the watch, trial nudging nothing"
+    );
+    world.engine.settle_every(30);
+    ensure_eq!(
+        world.stage_state(&World::id("fix", "one"), "code"),
         Some(StageState::Lost),
-        "the work fix's stage once a caller acted, trial keeping no watch"
+        "the work fix's stage at the caller's settle"
     );
     world.host.set_display("trial", Some("fake"), None, None);
     write_change(&world, "two");
@@ -663,7 +675,6 @@ fn host_stream(world: &World, name: &str) -> Result<flume_core::StreamStatus, St
 
 fn the_terminals_in_status(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
     work_and_trial(&world);
     fix_on(&world, "work", "one")?;
     fix_on(&world, "trial", "two")?;
@@ -701,7 +712,7 @@ fn the_terminals_in_status(_: &()) -> Outcome {
             flume_core::TerminalStatus {
                 profile: Some("fake".into()),
                 kept: vec![],
-                watch: Watch::Bound { seconds: 30 },
+                watch: Watch::None,
             },
             flume_core::TerminalStatus {
                 profile: Some("other".into()),
@@ -715,9 +726,10 @@ fn the_terminals_in_status(_: &()) -> Outcome {
     ensure_eq!(
         (
             json["terminals"][1]["profile"].as_str(),
-            json["terminals"][0]["watch"]["bound"]["seconds"].as_u64()
+            json["terminals"][0]["watch"].as_str(),
+            json["terminals"][0].as_object().map(|answer| answer.len())
         ),
-        (Some("other"), Some(30)),
+        (Some("other"), Some("none"), Some(3)),
         "the host's terminals in the JSON form"
     );
     Ok(())
@@ -766,6 +778,39 @@ fn a_stage_retried_in_another_terminal(_: &()) -> Outcome {
         other.made(),
         (vec![], vec![]),
         "what other still holds of the place"
+    );
+    Ok(())
+}
+
+/// The stream-terminals spec's "One stream under another terminal": no
+/// terminal decides whether flume runs attended, so under a caller's
+/// watch a drop on `work` settles nothing first, and `trial`'s place,
+/// under `other`, moves at the caller's next settle (119, 122, 190, 208,
+/// S91).
+fn one_stream_under_another_terminal(_: &()) -> Outcome {
+    let world = World::new();
+    let other = work_and_trial(&world);
+    let trial = fix_on(&world, "trial", "one")?;
+    fix_on(&world, "work", "two")?;
+    world.engine.settle_every(30);
+    other.kill(&trial);
+    let one = World::id("fix", "one");
+    let dropped = world.engine.drop_place(&World::id("fix", "two"), true);
+    ensure!(
+        dropped.refusal().is_none(),
+        "the drop was refused: {dropped:?}"
+    );
+    ensure_eq!(
+        world.stage_state(&one, "code"),
+        Some(StageState::Begun),
+        "the trial stage once a caller dropped a place on work under the watch"
+    );
+    world.host.advance(30);
+    world.engine.settle_every(30);
+    ensure_eq!(
+        world.stage_state(&one, "code"),
+        Some(StageState::Lost),
+        "the trial stage at the caller's settle"
     );
     Ok(())
 }

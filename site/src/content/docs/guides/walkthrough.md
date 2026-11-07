@@ -12,8 +12,9 @@ of flume against a scratch repository, with its path shortened to
 
 This run uses the printed command, the terminal flume uses when the
 host names none: flume prints each agent's command and you run it.
-Under herdr, flume opens each agent in a pane itself and a watch
-settles every place as its agent changes state, so every `flume settle`
+Under herdr, flume opens each agent in a pane itself, and each agent's
+Stop hook settles its place as it goes quiet. With a caller keeping
+watch over the host by `flume settle --every`, every `flume settle`
 below happens with no command of yours.
 [Places and herdr](/flume/guides/places-and-herdr/) says how to set
 that up.

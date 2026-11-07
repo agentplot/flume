@@ -102,6 +102,15 @@ fn the_fake_merge_queue_passes_the_merge_queue_scenarios() {
 }
 
 #[test]
+fn the_fake_merge_queue_passes_the_base_place_scenarios() {
+    pass_all(
+        "merge queue",
+        &merge_queue::base_place_scenarios(),
+        FakeMergeQueueHarness::default,
+    );
+}
+
+#[test]
 fn the_fake_store_passes_the_store_scenarios() {
     pass_all("store", &store::scenarios(), FakeStoreHarness::default);
 }

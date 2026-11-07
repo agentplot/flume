@@ -121,8 +121,8 @@ pub struct Listed {
 }
 
 /// Whom a waiting place waits on: its caller for a move 130 names, the
-/// host for room (70), or the merge queue for its submission's outcome
-/// (111).
+/// host for room (70), the merge queue for its submission's outcome
+/// (111), or, for a base place, the places on its branch (203).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WaitsOn {
@@ -132,6 +132,10 @@ pub enum WaitsOn {
     /// carry, or flume could not read whether one does (49, 207).
     Session,
     MergeQueue,
+    /// A base place whose branch a place is live on, which lands there
+    /// before the base place is submitted; never stalled for it (130,
+    /// 203).
+    Places,
 }
 
 impl WaitsOn {
@@ -142,6 +146,7 @@ impl WaitsOn {
             WaitsOn::Host => "waits on the host",
             WaitsOn::Session => "waits on its session",
             WaitsOn::MergeQueue => "waits on the merge queue",
+            WaitsOn::Places => "waits on the places on its branch",
         }
     }
 }
@@ -407,6 +412,19 @@ pub struct PlaceStatus {
     /// line asked alone (56, 60; S14).
     #[serde(default)]
     pub line: PlaceLine,
+    /// Whom a live place waits on, as the list gives it, the places on
+    /// its branch among them for a base place; none where it waits on
+    /// nobody (56, 130, 200, 203; core.14).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waits_on: Option<WaitsOn>,
+    /// Whether the place has a worktree, given for a base place alone,
+    /// which has none (9, 56, 202).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<bool>,
+    /// The places being made or live whose base is a base place's
+    /// branch, given for a base place alone (56, 130, 203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_branch: Option<Vec<PlaceId>>,
 }
 
 /// A stage waiting for room while a process runs the conversation its
@@ -575,12 +593,23 @@ pub struct HostStatus {
     /// woken, and where a standing agent lives (132, 190; core.28).
     #[serde(default)]
     pub addresses: Vec<AddressStatus>,
-    /// The watch the terminal keeps, with its bound, or none (122).
+    /// The watch a caller keeps over the host, with the bound it stated,
+    /// or none while none is kept (56, 119, 208).
     #[serde(default = "no_watch")]
     pub watch: Watch,
+    /// When the newest settle a caller asked as its watch began, by the
+    /// host's clock; none where the host holds no watch (56, 208).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch_settled: Option<Seconds>,
+    /// When the watch lapsed, twice its bound after its newest settle
+    /// began, given while flume runs attended after one; none while a
+    /// watch is kept or none was ever held (56, 119, 208).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch_lapsed: Option<Seconds>,
     /// Each terminal the host binds, its own first, then each stream's
     /// by the stream's name, each once: its profile, what it made and
-    /// keeps for what it did not make, and its watch (56, 119, 190).
+    /// keeps for what it did not make, and its watch, none (56, 122,
+    /// 190).
     #[serde(default)]
     pub terminals: Vec<TerminalStatus>,
     /// Each repository's base a live place stands on, with the count of
@@ -636,6 +665,8 @@ impl Default for HostStatus {
             terminal_kept: vec![],
             addresses: vec![],
             watch: Watch::None,
+            watch_settled: None,
+            watch_lapsed: None,
             terminals: vec![],
             bases: vec![],
             terminal_setup: vec![],
@@ -874,7 +905,9 @@ pub enum TitleFrom {
 /// A terminal the host binds (119, 190): the profile a stream takes it
 /// by, none for the host's own where no profile flume carries is it,
 /// what it made and keeps for what it did not make, each named with what
-/// holds it, and the watch it keeps.
+/// holds it, and its watch, none since no terminal keeps one or
+/// settles; nothing of a terminal decides the host's watch (61, 122,
+/// 208).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalStatus {
     pub profile: Option<String>,
@@ -1303,9 +1336,14 @@ pub struct KeptPlace {
     pub why: Kept,
 }
 
+/// A branch a tidy kept, named once: the commits it holds whose change
+/// its base lacks, or, for a base place's branch the merge queue kept at
+/// its close, the merge queue's words (67, 206).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BranchKept {
     pub place: PlaceId,
     pub branch: String,
     pub commits: Vec<Revision>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }

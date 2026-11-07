@@ -601,7 +601,7 @@ fn stalled_after_five_minutes(_: &()) -> Outcome {
     let world = World::new();
     world.terminal.add_session("ops", AgentState::Working);
     world.terminal.add_session("lead", AgentState::Waiting);
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let (id, asked) = construct_asks(&world, "plan", &["ops", "lead"], None)?;
     for _ in 0..9 {
         world.host.advance(30);

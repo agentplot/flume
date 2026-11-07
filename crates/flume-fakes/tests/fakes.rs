@@ -973,6 +973,11 @@ fn the_terminals_states_follow_the_fake_clock() {
     assert_eq!(terminal.session().as_deref(), Some("pane-3"));
 }
 
+/// What a place submits from its worktree at `head`.
+fn worktree(head: Revision) -> SubmitHead {
+    SubmitHead::Worktree { head }
+}
+
 fn submitted(answer: Submitted) -> Submission {
     match answer {
         Submitted::Submitted { submission } => submission,
@@ -994,7 +999,7 @@ fn submit_holds_no_wait_and_a_step_decides() {
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     let submission = submitted(queue.submit(&at, &head));
     assert!(submission.state.open());
     assert_eq!(outcomes(queue.inbox(&at)), vec![]);
@@ -1023,7 +1028,7 @@ fn the_merge_queues_outcomes_are_planned() {
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     queue.plan_submits(vec![
         Plan::Fail("test x".into()),
         Plan::Conflict(vec!["a".into()], "conflicts with main".into()),
@@ -1104,7 +1109,7 @@ fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     queue.plan_submits(vec![Plan::ConflictAtSubmit(
         vec!["a".into()],
         "conflict on main: a with #1".into(),
@@ -1133,13 +1138,99 @@ fn a_conflict_at_submit_is_answered_and_never_in_the_inbox() {
 }
 
 #[test]
+fn a_base_places_open_and_close_are_scripted() {
+    // The seam-fakes spec's "Scripted open and close": open and close
+    // answer as a test scripts them, and the log names each ask (205,
+    // 206).
+    let git = FakeGit::new();
+    git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    let refused = BranchOpened::Refused {
+        reason: "train/x is not a branch the policy lands on".into(),
+    };
+    let kept = BranchClosed::Kept {
+        reason: "train/y has submission #3 open".into(),
+    };
+    queue.answer_open("/r", "train/x", refused.clone());
+    queue.answer_close("/r", "train/y", kept.clone());
+    assert_eq!(queue.open("/r", "train/x", "main"), refused);
+    assert!(
+        !git.branch_exists("/r", "train/x"),
+        "a refused open made it"
+    );
+    assert!(matches!(
+        queue.open("/r", "train/y", "main"),
+        BranchOpened::Made { .. }
+    ));
+    assert_eq!(queue.close("/r", "train/y", "main"), kept);
+    assert!(git.branch_exists("/r", "train/y"), "a kept branch removed");
+    assert_eq!(
+        queue.log.calls(),
+        vec![
+            "open train/x from main",
+            "open train/y from main",
+            "close train/y into main",
+        ]
+    );
+}
+
+#[test]
+fn a_submission_by_name_is_decided_in_the_record() {
+    // The seam-fakes spec's "A submission by name decided in the
+    // record": a branch the fake opened is one it lands on, a submission
+    // of it by name is logged so and decided in its record alone, and
+    // the inbox gives nothing for any place (133, 203).
+    let git = FakeGit::new();
+    let base = git.init("/r", "main");
+    let queue = FakeMergeQueue::new(git.clone());
+    assert_eq!(
+        queue.open("/r", "train/z", "main"),
+        BranchOpened::Made {
+            revision: base.clone()
+        }
+    );
+    let work = git.commit("/r", "train/z", &["a"]);
+    let base_place = PlaceRef {
+        repository: "/r".into(),
+        location: "/r/places/train--z".into(),
+        branch: "train/z".into(),
+        base: "main".into(),
+    };
+    queue.plan_submits(vec![Plan::Land]);
+    let submission = submitted(queue.submit(
+        &base_place,
+        &SubmitHead::Branch {
+            branch: "train/z".into(),
+            revision: work.clone(),
+        },
+    ));
+    assert_eq!(submission.branch, "train/z");
+    assert!(submission.state.open(), "submit waited on the verdict");
+    assert_eq!(queue.step("/r", "main"), Stepped::Stepped);
+    assert!(matches!(
+        queue.read_submission("/r", "train/z").read,
+        SubmissionRead::Found { submission }
+            if matches!(submission.state, SubmissionState::Landed { .. })
+    ));
+    assert!(
+        git.lacking("/r", "train/z", "main").is_empty(),
+        "not landed"
+    );
+    assert_eq!(outcomes(queue.inbox(&base_place)), vec![]);
+    assert_eq!(outcomes(queue.inbox(&place_ref())), vec![]);
+    assert_eq!(queue.log.of("submit"), vec!["submit train/z named"]);
+    assert_eq!(queue.close("/r", "train/z", "main"), BranchClosed::Removed);
+    assert_eq!(queue.close("/r", "train/z", "main"), BranchClosed::Gone);
+}
+
+#[test]
 fn a_request_is_an_entry_only_once_taken_in_and_its_outcome_goes_to_the_request() {
     let git = FakeGit::new();
     let base = git.init("/r", "main");
     let queue = FakeMergeQueue::new(git.clone());
     let at = place_ref();
     git.set_branch("/r", "fix/one", &base);
-    let head = git.commit("/r", "fix/one", &["a"]);
+    let head = worktree(git.commit("/r", "fix/one", &["a"]));
     let request = |then, to_place| Plan::Request {
         then: Box::new(then),
         to_place,
@@ -1274,6 +1365,53 @@ fn the_kinds_and_change_are_set() {
         change.read_change("/r", &later, "one"),
         ChangeRead::CouldNotRead { .. }
     ));
+}
+
+#[test]
+fn the_store_keeps_the_hosts_watch_and_the_clock_lets_it_lapse() {
+    // The seam-fakes spec's "A watch the clock lets lapse": the fake
+    // store holds the host's watch as any host document, by
+    // compare-and-set, so a watch written at the fake clock's time lapses
+    // once the clock passes twice its bound and is kept again by the next
+    // one written; the fake terminal answers nothing of a watch (106,
+    // 119, 122, 208).
+    let host = Arc::new(FakeHost::default());
+    let store = FakeStore::default();
+    assert!(store.read_host(&HostKey::Watch).is_none());
+    let first = Watched {
+        began: host.now(),
+        bound: 30,
+    };
+    let Written::Written { version } =
+        store.write_host(&HostKey::Watch, None, Some(&HostDocument::Watch(first)))
+    else {
+        panic!("the first watch was not written");
+    };
+    assert!(first.kept(host.now()));
+    host.advance(61);
+    assert!(!first.kept(host.now()), "a watch kept past twice its bound");
+    assert_eq!(
+        store.write_host(&HostKey::Watch, None, Some(&HostDocument::Watch(first))),
+        Written::Moved,
+        "a second first write"
+    );
+    let next = Watched {
+        began: host.now(),
+        bound: 30,
+    };
+    assert!(matches!(
+        store.write_host(
+            &HostKey::Watch,
+            Some(version),
+            Some(&HostDocument::Watch(next))
+        ),
+        Written::Written { .. }
+    ));
+    assert_eq!(
+        store.host_document(&HostKey::Watch),
+        Some(HostDocument::Watch(next))
+    );
+    assert!(next.kept(host.now()));
 }
 
 #[test]
@@ -2627,6 +2765,37 @@ fn the_hosts_labels_shares_and_layers_are_scripted() {
     host.set_configuration(configuration.clone());
     assert_eq!(host.configuration(), configuration);
     assert_eq!(host.log.count("configuration"), 3);
+}
+
+#[test]
+fn shows_clues_in_the_log() {
+    // The seam-fakes spec's "Show's clues in the log": the fake terminal
+    // logs the place, its stage and state, its line's short form and its
+    // base's count, and keeps the clues as given (139).
+    let terminal = FakeTerminal::new(Arc::new(FakeHost::default()));
+    let clues = Clues {
+        stage: "code 1/2".into(),
+        state: "working".into(),
+        agent: Some(identity("code", 1)),
+        base: BaseCount {
+            running: 1,
+            ..BaseCount::default()
+        },
+        line: "code 1/2 · run 1 · tasks 2/5 · working".into(),
+    };
+    assert_eq!(terminal.show(&place_ref(), &clues), Shown::Shown);
+    assert_eq!(
+        terminal.log.of("show"),
+        vec![
+            "show /r/places/fix--one code 1/2 · working; code 1/2 · run 1 · tasks 2/5 · working; \
+             1 running · 0 asking · 0 waiting on caller · 0 stalled"
+                .to_string()
+        ]
+    );
+    assert_eq!(
+        terminal.shown(),
+        vec![("/r/places/fix--one".to_string(), clues)]
+    );
 }
 
 #[test]

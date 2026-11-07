@@ -8,6 +8,9 @@
 //! place whose held state keeps neither, its `declared` then saying its
 //! source (19, 21).
 
+use crate::base::{base_place, submission_open};
+use crate::held::waiting_now;
+use crate::list::waits_on;
 use crate::live::waits_on_session;
 use crate::reading::{find_group, reads_change};
 use crate::settings::program_name;
@@ -186,10 +189,27 @@ impl Engine {
         let with_start = current.filter(|index| {
             held.stages[*index].start.is_some() && !place.kind.stages[*index].conversation
         });
+        let base = base_place(&place.kind);
         let facts = bound
             .as_ref()
-            .filter(|_| read_facts)
+            .filter(|_| read_facts && !base)
             .map(|bound| self.facts(held, bound, with_start));
+        // A base place's head is read where the merge queue says its
+        // branch lives, and nothing at its location (80, 126, 203).
+        let base_head = match bound.as_ref().and_then(|bound| bound.merge_queue.as_ref()) {
+            Some(queue) if read_facts && base => {
+                match self.base_place_head(place, queue.as_ref()) {
+                    Ok(head) => Some(head),
+                    Err(reason) => {
+                        cannot_read.push(format!("the head of {}: {reason}", place.branch));
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+        let on_branch = base.then(|| self.on_branch(place));
+        let on_branch_count = on_branch.as_ref().map(Vec::len);
         let change = match facts.as_ref().and_then(|facts| facts.change.as_ref()) {
             Some(ChangeRead::Read { facts }) => Some(facts),
             _ => None,
@@ -297,7 +317,9 @@ impl Engine {
         let asking = agent
             .as_ref()
             .is_some_and(|agent| agent.asking == Reading::Yes);
-        let line = Engine::place_line(held, change, asking, None);
+        let line = Engine::place_line(held, change, asking, on_branch_count, None);
+        let waiting = waiting_now(held, on_branch_count);
+        let waits_on = waits_on(held, &line.state, on_branch_count);
         let submission = match (&bound, place.kind.lands) {
             (Some(bound), true) if read_facts => bound.merge_queue.as_ref().map(|queue| {
                 let across = submission
@@ -373,7 +395,7 @@ impl Engine {
             stages,
             current: current.map(|index| held.stages[index].name.clone()),
             agent,
-            head: facts.as_ref().map(|facts| facts.head.clone()),
+            head: facts.as_ref().map(|facts| facts.head.clone()).or(base_head),
             delivered: with_start.and(facts.as_ref().map(|facts| facts.delivered)),
             tasks,
             submission,
@@ -382,8 +404,8 @@ impl Engine {
             failures: held.failures.clone(),
             recipients: place.recipients.clone(),
             hold_words: place.hold_words.clone(),
-            waiting_on: held.waiting.as_ref().map(|waiting| waiting.on.clone()),
-            stalled: held.waiting.as_ref().is_some_and(|waiting| waiting.stalled),
+            waiting_on: waiting.as_ref().map(|waiting| waiting.on.clone()),
+            stalled: waiting.as_ref().is_some_and(|waiting| waiting.stalled),
             waits_on_session: session_wait(held),
             holds: held.holds.clone(),
             priority: held.priority,
@@ -401,6 +423,9 @@ impl Engine {
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),
             line,
+            waits_on,
+            worktree: base.then_some(false),
+            on_branch,
         }
     }
 }
@@ -571,12 +596,17 @@ pub(crate) fn session_wait(held: &HeldState) -> Option<SessionWait> {
 /// them, and for an answer whether its agent is kept open for it and
 /// until when, or when and why it was let go and whether it is ended;
 /// none where it waits on nobody, its next step being flume's or an
-/// agent's, or the host's room (34, 35, 56, 70, 130, 198).
-pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
+/// agent's, or the host's room (34, 35, 56, 70, 130, 198). A base place's
+/// is read from its submission and `on_branch`, the count of the live
+/// places on its branch (203).
+pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<WaitingOn> {
     if held.phase != Phase::Live {
         return None;
     }
     let place = &held.place;
+    if base_place(&place.kind) {
+        return base_waiting_on(held, on_branch.unwrap_or(0));
+    }
     let stages = &place.kind.stages;
     let last = held.stages.len().checked_sub(1)?;
     let waits = |act, stage: Option<usize>, why, since, words| {
@@ -704,4 +734,44 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
         }
         _ => None,
     }
+}
+
+/// The move a live base place waits on its caller for: none while a
+/// place on its branch is live, since it waits on them and is never
+/// stalled for it, or while its submission is open, since it waits on
+/// the merge queue; else a retry of its submission, with the merge
+/// queue's words where its last submission failed, conflicted, was
+/// withdrawn or refused, with a hold's words where its submission is
+/// held, and otherwise since the settle that read none live (47, 112,
+/// 130, 203).
+fn base_waiting_on(held: &HeldState, on_branch: usize) -> Option<WaitingOn> {
+    let submission = &held.submission;
+    let waits = |why, since, words| {
+        Some(WaitingOn {
+            act: Act::Retry,
+            stage: None,
+            why,
+            since,
+            words,
+            open_until: None,
+            closed: None,
+        })
+    };
+    if on_branch > 0 {
+        return None;
+    }
+    if let Some(words) = &submission.waiting {
+        return waits(
+            Waits::Submission,
+            submission.waiting_since,
+            Some(words.clone()),
+        );
+    }
+    if let Some(hold) = held.submission_hold() {
+        return waits(Waits::OnHold, Some(hold.since), hold.words.clone());
+    }
+    if submission_open(held) {
+        return None;
+    }
+    waits(Waits::Unsubmitted, None, None)
 }

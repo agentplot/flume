@@ -6,6 +6,7 @@ pub mod agent_effort;
 pub mod agent_modes;
 pub mod agent_settings;
 pub mod answers;
+pub mod base_places;
 pub mod caller_acts;
 pub mod caller_waits;
 pub mod carried_conversations;
@@ -77,6 +78,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
     every.extend(open::scenarios());
     every.extend(list::scenarios());
     every.extend(own_settings::scenarios());
+    every.extend(base_places::scenarios());
     every.extend(open_sessions::scenarios());
     every
 }

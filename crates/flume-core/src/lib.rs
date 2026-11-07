@@ -11,6 +11,7 @@ mod accounts;
 mod acts;
 mod agent_acts;
 mod answer;
+mod base;
 mod clues;
 mod deliver;
 mod end;

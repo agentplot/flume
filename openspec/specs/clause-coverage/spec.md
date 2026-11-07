@@ -19,7 +19,7 @@ change this list in the commit that adopts it.
 #### Scenario: The clauses listed
 
 - **WHEN** the suite's list is read
-- **THEN** it names the revision of agentplot/blueprints main that holds 198, S104, S105 and 207 among it, or the later one of main the build read; Parts A and B hold every clause that revision states, 198 in Part A; the scenarios run as that revision holds them, S104 and S105 among them; and it names as unbuilt what it named before this change but 198, S104 and S105, and each clause and scenario of that revision another change has not yet built, by that change, and nothing of 198, S104 or S105
+- **THEN** it names the revision of agentplot/blueprints main that holds record 0051 as amended, 202 to 206 and 208 and S109 to S112 and S118 among it and 122 saying the terminal settles nothing, 9c060ab or the later one of main the build read; Parts A and B hold every clause that revision states, 202 to 204 and 208 in Part A and 205 and 206 in Part B; the scenarios run as that revision holds them, S109 to S112 and S118 among them; and it names as unbuilt what it named before this change but 202 to 206 and 208, S109 to S112 and S118, and each clause and scenario of that revision another change has not yet built, by that change, and nothing of 202 to 206 and 208, S109 to S112 and S118, 198, S104 and S105, 197 and S103, or 207 and S113 to S117, whose changes have landed
 
 ### Requirement: Every scenario cites its clauses
 
@@ -48,7 +48,7 @@ and SHALL fail naming any of those a scenario cites.
 #### Scenario: The suite as this change leaves it
 
 - **WHEN** the coverage check runs over the suite as this change lands it
-- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 198, S104 and S105 by this change's scenarios
+- **THEN** it passes: every clause of Parts A and B, I1 to I8 and every scenario the list holds but those named as unbuilt is cited, 202 to 206 and 208 and S109 to S112 and S118 by this change's scenarios
 
 ### Requirement: Seam scenarios run against any profile
 

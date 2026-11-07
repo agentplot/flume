@@ -4,13 +4,20 @@
 //! view the terminal offers (187), whether a part runs (201), and
 //! whether the terminal hands a running agent words (95).
 
+use crate::engine::world::World;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
+use flume_core::Engine;
 use flume_seams::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 pub trait TerminalHarness {
     type Seam: Terminal + ?Sized;
 
     fn seam(&self) -> &Self::Seam;
+
+    /// The same terminal as `seam`, shared as the engine holds one.
+    fn shared(&self) -> Arc<dyn Terminal>;
 
     fn place(&self) -> PlaceRef;
 
@@ -178,9 +185,9 @@ pub fn scenarios<H: TerminalHarness>() -> Vec<Scenario<H>> {
             run: close_never_lies::<H>,
         },
         Scenario {
-            name: "terminal: watch states its bound, or that it keeps none",
-            cites: &["122", "119"],
-            run: watch_states_its_bound::<H>,
+            name: "terminal: the engine reads whether it runs attended the same under the fake terminal and this one, from the host's watch held, calling no terminal operation",
+            cites: &["122", "208", "119"],
+            run: the_same_reading_under_every_terminal::<H>,
         },
         Scenario {
             name: "terminal: session names the session a command runs in, or none",
@@ -660,6 +667,7 @@ fn show_gives_clues<H: TerminalHarness>(harness: &H) -> Outcome {
             running: 1,
             ..BaseCount::default()
         },
+        line: "code · run 1 · tasks 2/5 · working".into(),
     };
     let shown = harness.seam().show(&harness.place(), &clues);
     if harness.shows_clues() {
@@ -822,12 +830,150 @@ fn setup_gives_what_is_lacking<H: TerminalHarness>(harness: &H) -> Outcome {
     Ok(())
 }
 
-fn watch_states_its_bound<H: TerminalHarness>(harness: &H) -> Outcome {
-    match harness.seam().watch() {
-        Watch::Bound { seconds } => {
-            ensure!(seconds > 0, "a watch with no bound");
-            Ok(())
-        }
-        Watch::None => Ok(()),
+/// A terminal that counts every call made of it, passing each on.
+struct Counted {
+    terminal: Arc<dyn Terminal>,
+    calls: Arc<AtomicUsize>,
+}
+
+impl Counted {
+    fn call(&self) -> &dyn Terminal {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.terminal.as_ref()
     }
+}
+
+impl Terminal for Counted {
+    fn open(
+        &self,
+        place: &PlaceRef,
+        folder: &str,
+        command: &AgentCommand,
+        identity: &Identity,
+        at: &OpenIn,
+        session: Option<&str>,
+    ) -> Opened {
+        self.call()
+            .open(place, folder, command, identity, at, session)
+    }
+
+    fn send(&self, agent: &Identity, text: &str) -> Sent {
+        self.call().send(agent, text)
+    }
+
+    fn sends(&self) -> bool {
+        self.call().sends()
+    }
+
+    fn state(&self, agent: &Identity) -> AgentState {
+        self.call().state(agent)
+    }
+
+    fn send_to(&self, session: &str, text: &str) -> ToSession {
+        self.call().send_to(session, text)
+    }
+
+    fn session_state(&self, session: &str) -> Option<AgentState> {
+        self.call().session_state(session)
+    }
+
+    fn screen(&self, agent: &Identity) -> Option<String> {
+        self.call().screen(agent)
+    }
+
+    fn answer_trust(&self, agent: &Identity) -> bool {
+        self.call().answer_trust(agent)
+    }
+
+    fn close(&self, agent: &Identity) -> Closed {
+        self.call().close(agent)
+    }
+
+    fn tidy(&self, place: &PlaceRef) -> TerminalTidy {
+        self.call().tidy(place)
+    }
+
+    fn kept(&self) -> Vec<String> {
+        self.call().kept()
+    }
+
+    fn show(&self, place: &PlaceRef, clues: &Clues) -> Shown {
+        self.call().show(place, clues)
+    }
+
+    fn shown_at(&self, place: &PlaceRef, agent: Option<&Identity>) -> ShownAt {
+        self.call().shown_at(place, agent)
+    }
+
+    fn setup(&self) -> Vec<String> {
+        self.call().setup()
+    }
+
+    fn session(&self) -> Option<String> {
+        self.call().session()
+    }
+
+    fn attach(&self, session: Option<&str>, view: View) -> Attached {
+        self.call().attach(session, view)
+    }
+
+    fn runs(&self, sessions: &[Option<&str>]) -> Vec<SessionRuns> {
+        self.call().runs(sessions)
+    }
+}
+
+/// Whether the engine runs attended under `terminal`, with no watch held,
+/// a watch of a minute just written, and that watch three minutes on,
+/// over one host's store and clock; and how many calls were made of the
+/// terminal to read them.
+fn readings(terminal: Arc<dyn Terminal>) -> (Vec<bool>, usize) {
+    let world = World::new();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counted: Arc<dyn Terminal> = Arc::new(Counted {
+        terminal,
+        calls: calls.clone(),
+    });
+    let engine = Engine::new(
+        world.resolver.clone(),
+        counted,
+        world.store.clone(),
+        world.history.clone(),
+        world.host.clone(),
+        world.defaults.clone(),
+    );
+    let mut read = vec![engine.attended()];
+    let watched = Watched {
+        began: world.host.now(),
+        bound: 60,
+    };
+    world
+        .store
+        .write_host(&HostKey::Watch, None, Some(&HostDocument::Watch(watched)));
+    read.push(engine.attended());
+    world.host.advance(3 * 60);
+    read.push(engine.attended());
+    (read, calls.load(Ordering::SeqCst))
+}
+
+/// The seam-contracts spec's "The same reading under every terminal":
+/// the engine asked whether it runs attended under the fake terminal,
+/// then under this one, with the same host's watch held, answers the
+/// same, read from the host's watch alone, and no terminal operation is
+/// called to answer it (119, 122, 208).
+fn the_same_reading_under_every_terminal<H: TerminalHarness>(harness: &H) -> Outcome {
+    let world = World::new();
+    let (fake, fake_calls) = readings(world.terminal.clone());
+    let (this, these_calls) = readings(harness.shared());
+    ensure_eq!(
+        fake,
+        vec![true, false, true],
+        "attended under the fake terminal: no watch, a watch kept, a watch lapsed"
+    );
+    ensure_eq!(this, fake, "attended under this terminal");
+    ensure_eq!(
+        (fake_calls, these_calls),
+        (0, 0),
+        "calls made of the terminals to read it"
+    );
+    Ok(())
 }

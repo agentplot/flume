@@ -81,9 +81,10 @@ $ flume wait fix--the-parser-reads-tabs --submission --recipient me
 It exits `0` for a stage delivered or finished or a submission landed,
 `2` for any other end, and `3` for still waiting when the timeout
 passes. flume keys a wait by the place, never by a process or a pane, so
-a caller whose session restarted waits again and loses nothing. Under
-herdr's watch the wait only reads; without a watch it settles every
-place before each reading after its first.
+a caller whose session restarted waits again and loses nothing. While
+a caller keeps watch over the host, `flume settle --every`, the wait
+only reads; while none does, it settles every place before each
+reading after its first.
 
 ## flume inbox
 

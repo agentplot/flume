@@ -35,7 +35,7 @@ the same answers you do.
 | Agents in herdr panes, one workspace per base, or a printed command | ✓ | ✓ |
 | Each stream's agents under a multiplexer of its own, the host's where it names none | ✓ | ✓ |
 | `flume open`: a stream's agents in a window titled as the stream declares, or the line to run | Ghostty, Terminal.app | Ghostty |
-| The herdr plugin's watch, sidebar rows and popup | ✓ | ✓ |
+| The herdr plugin's sidebar rows and popup | ✓ | ✓ |
 | The Claude Code plugin's `/launch` and status over MCP | ✓ | ✓ |
 | Release binaries | Apple silicon | x86-64, ARM64 |
 

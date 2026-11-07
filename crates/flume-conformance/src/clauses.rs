@@ -105,12 +105,6 @@ pub const ORIGIN: &str =
 pub const QUESTIONS: &str =
     "every-question-a-place-asks-reaches-someone-who-answers-it, record 0039";
 
-/// The change that builds record 0051: every place waiting on the merge
-/// queue settled at every depth, a caller keeping watch over the host
-/// and a base place's branch.
-pub const SETTLES: &str =
-    "every-place-waiting-on-the-merge-queue-is-settled-at-every-depth, record 0051";
-
 /// The change that builds record 0053: a repository whose clone moved
 /// renamed in flume by one act.
 pub const RENAME: &str = "record 0053's change, a repository renamed by one act, once accepted";
@@ -150,15 +144,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
     let questions = std::iter::once("193".to_string())
         .chain([93, 94, 98, 99].map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, QUESTIONS));
-    let settles = (202..=206)
-        .chain([208])
-        .map(|clause| clause.to_string())
-        .chain(
-            (109..=112)
-                .chain([118])
-                .map(|scenario| format!("S{scenario}")),
-        )
-        .map(|clause| (clause, SETTLES));
     let rename = std::iter::once(("209".to_string(), RENAME));
     let change_3 = std::iter::once(("S119".to_string(), CHANGE_3));
     standing
@@ -169,7 +154,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(mcp_servers)
         .chain(origin)
         .chain(questions)
-        .chain(settles)
         .chain(rename)
         .chain(change_3)
         .collect()
@@ -233,10 +217,7 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(
-            unbuilt.len(),
-            3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 5 + 11 + 1 + 1
-        );
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 5 + 1 + 1);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
@@ -246,7 +227,8 @@ mod tests {
             "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
             "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "199", "S106", "S107",
             "207", "S113", "S114", "S115", "S116", "S117", "195", "196", "S100", "S101", "S102",
-            "197", "S103", "198", "S104", "S105",
+            "197", "S103", "198", "S104", "S105", "202", "203", "204", "205", "206", "208", "S109",
+            "S110", "S111", "S112", "S118",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

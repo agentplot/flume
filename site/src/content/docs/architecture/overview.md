@@ -38,8 +38,9 @@ act is safe to repeat.
 
 A **settle** is the one act that moves places on: it reads every fact
 of a place again and takes each step that is then allowed. It runs
-inside a command, started by an agent going quiet, by herdr's watch,
-or by a caller, and flume runs no process of its own between commands.
+inside a command, started by an agent going quiet, by a caller keeping
+watch over the host, or by any other caller, never by a terminal or a
+plugin of one, and flume runs no process of its own between commands.
 
 ## The seams
 
@@ -49,7 +50,7 @@ or by a caller, and flume runs no process of its own between commands.
 | **the kinds** | the kinds a repository declares at a revision, a launch's file declares, and flume's own; the repository's binding of its tools | the kind format, read from `.config/flume.toml`, a launch's `--kinds` file and the binary |
 | **the change** | a change's facts at a revision: written, its tasks ticked, archived | `openspec`: OpenSpec's files, read with git |
 | **the agent** | the command that starts an agent; whether it started, received a prompt, is asking, has work of its own running, ended; its last words; the way it stops short | `claude`: Claude Code with flume's plugin, read through its hooks' records and its transcript |
-| **the terminal** | open an agent in a place; send it text; read its state and screen; close it; deliver a notice to a session; tidy what it made; show hints; keep a watch | `herdr`, and `printed`, a command printed for a person to run |
+| **the terminal** | open an agent in a place; send it text; read its state and screen; close it; deliver a notice to a session; tidy what it made; show a place's clues, its stage and state as the agent's title, the short form of its line as the agent's row, and its base's count | `herdr`, and `printed`, a command printed for a person to run |
 | **the merge queue** | where the base lives; submit a place; collect its outcomes; read the submission of a branch; one round of the base's queue | `sluice` |
 | **the store** | a place's held state with its version; a write from that version; the place's own folder | the host's state directory |
 
@@ -82,13 +83,18 @@ as the readiness and `sluice release` as the teardown, and reads no
 
 Beside them, `plugins/claude` is the Claude Code plugin, which the
 binary carries and writes for each agent, and `plugins/herdr` the herdr
-plugin, a watch and a popup in shell.
+plugin in shell: a startup that writes what herdr's configuration lacks
+and exits, and a popup that reads status when a person opens it and
+after each key that acts. It keeps no process and runs no settle; the
+rows herdr's sidebar shows are clues flume's settles show. A caller
+keeps watch over the host with `flume settle --every`, and flume runs
+attended where none does.
 
 ## Surfaces
 
 Every surface answers from the one core through one form: the command
-line's `--json`, the MCP server's `status`, and what the herdr plugin
-reads from `flume status --json`. The form only ever gains fields, and
+line's `--json`, the MCP server's `status`, and what the herdr plugin's
+popup reads from `flume status --json`. The form only ever gains fields, and
 no surface computes a stage's end, a status, a submission or a tidy of
 its own.
 

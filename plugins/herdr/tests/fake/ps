@@ -1,0 +1,27 @@
+#!/bin/sh
+# A stand-in ps, for lib/procs.sh where no /proc gives a process's start,
+# as on macOS, whose ps is setuid and which sluice's sandbox refuses to
+# start: `-o lstart= -p <pid>` answers the start the test recorded for
+# that pid in $FAKE/starts/<pid>, and nothing for any other pid; a
+# listing of every process's command line and a parent answer nothing,
+# so a pid the test recorded no start for is known by its pid alone
+# (record 0016).
+pid=
+lstart=
+while [ "$#" -gt 0 ]; do
+  case $1 in
+  -p)
+    pid=$2
+    shift
+    ;;
+  -o)
+    [ "$2" = "lstart=" ] && lstart=1
+    shift
+    ;;
+  esac
+  shift
+done
+if [ -n "$lstart" ] && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+  cat "$FAKE/starts/$pid" 2>/dev/null
+fi
+exit 0

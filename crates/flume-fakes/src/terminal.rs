@@ -2,15 +2,15 @@ use crate::{lock, FakeHost, Log};
 use flume_seams::{
     AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, Host, Identity, NamedAgent,
     OpenIn, Opened, PlaceRef, Seconds, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy,
-    ToSession, View, ViewCommand, Watch,
+    ToSession, View, ViewCommand,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 /// The terminal seam: the agents it runs by identity, each one's state
 /// as set or as scheduled by the fake clock, what each shows and holds
-/// typed, what was sent to each, and whether it sends, closes and
-/// watches. A send clears what the agent holds typed before it types.
+/// typed, what was sent to each, and whether it sends and closes; it
+/// settles nothing and keeps no watch (122). A send clears what the agent holds typed before it types.
 /// Each open is logged with where it was asked to open, beside a pane,
 /// in a session or in the terminal's own. An open not beside a pane
 /// makes a tab for its place in a workspace for its repository and base,
@@ -48,7 +48,6 @@ struct TerminalState {
     sends: bool,
     open_refusal: Option<String>,
     close_refused: BTreeSet<String>,
-    watch: Watch,
     sent: Vec<(String, String)>,
     session: Option<String>,
     opens_as: OpensAs,
@@ -216,7 +215,6 @@ impl FakeTerminal {
                 sends: true,
                 open_refusal: None,
                 close_refused: BTreeSet::new(),
-                watch: Watch::None,
                 sent: vec![],
                 session: None,
                 opens_as: OpensAs::Running,
@@ -456,10 +454,6 @@ impl FakeTerminal {
 
     pub fn allow_close(&self, agent: &Identity) {
         lock(&self.state).close_refused.remove(&agent.to_string());
-    }
-
-    pub fn set_watch(&self, watch: Watch) {
-        lock(&self.state).watch = watch;
     }
 
     /// What the terminal's configuration lacks for flume's plugin, each
@@ -831,7 +825,10 @@ impl Terminal for FakeTerminal {
     }
 
     fn show(&self, place: &PlaceRef, clues: &Clues) -> Shown {
-        self.log.push(format!("show {}", place.location));
+        self.log.push(format!(
+            "show {} {} · {}; {}; {}",
+            place.location, clues.stage, clues.state, clues.line, clues.base
+        ));
         let mut state = lock(&self.state);
         if state.shows_fail {
             return Shown::Failed {
@@ -887,10 +884,6 @@ impl Terminal for FakeTerminal {
                 .map(|made| format!("workspace {}", made.named()))
                 .collect(),
         }
-    }
-
-    fn watch(&self) -> Watch {
-        lock(&self.state).watch
     }
 
     /// What was scripted, logged so a reading that asks none is seen to.

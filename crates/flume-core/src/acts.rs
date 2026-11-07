@@ -5,6 +5,8 @@
 //! (31); a retry ends none whose stage it started or began under, so it
 //! never ends a working session (35, 50).
 
+use crate::base::base_place;
+use crate::launch::and_list;
 use crate::open_sessions::waits_on_answer;
 use crate::start::{Start, Starts};
 use crate::{Act, Answer, Engine, Step, Tidied, POLL, RECEIVED_WITHIN, TELL_BOUND};
@@ -154,6 +156,24 @@ impl Engine {
         let held = read.state;
         if held.phase != Phase::Live {
             return Answer::refused(format!("the work of the place {place} is over"));
+        }
+        // A base place has no stage, and its submission waits on the
+        // places on its branch, which land there first (49, 203).
+        if base_place(&held.place.kind) {
+            if target != Retry::Submission {
+                return Answer::refused(format!(
+                    "the base place {place} has no stage; a retry names its submission"
+                ));
+            }
+            let on_branch = self.on_branch(&held.place);
+            if !on_branch.is_empty() {
+                return Answer::refused(format!(
+                    "the base place {place} is submitted once no place on its branch {} is live, and {} {} (203)",
+                    held.place.branch,
+                    and_list(on_branch.iter().map(ToString::to_string).collect()),
+                    if on_branch.len() == 1 { "is" } else { "are" }
+                ));
+            }
         }
         let index = match &target {
             Retry::Current => Some(held.current.unwrap_or(0)),
@@ -397,8 +417,25 @@ impl Engine {
     }
 
     /// Gives up the place's work: its agent ended, nothing more started,
-    /// and the place tidied (52, 63).
+    /// and the place tidied (52, 63); a base place's refused while a
+    /// place on its branch is live, since those land there and are
+    /// dropped first (204).
     pub fn drop_place(&self, place: &PlaceId, force: bool) -> Answer {
+        if let Some(read) = self.store.read(place) {
+            let held = read.state;
+            if base_place(&held.place.kind) && held.phase == Phase::Live {
+                let on_branch = self.on_branch(&held.place);
+                if !on_branch.is_empty() {
+                    return Answer::refused(format!(
+                        "the base place {place}'s branch {} is the base of {}, which {} live; drop {} first (52, 204)",
+                        held.place.branch,
+                        and_list(on_branch.iter().map(ToString::to_string).collect()),
+                        if on_branch.len() == 1 { "is" } else { "are" },
+                        if on_branch.len() == 1 { "it" } else { "them" }
+                    ));
+                }
+            }
+        }
         let live = self
             .store
             .read(place)

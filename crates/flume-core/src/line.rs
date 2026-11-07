@@ -8,7 +8,9 @@
 //! 58, 60; S14; core.14, core.15). Nothing here writes, sends or starts
 //! anything (57; core.16).
 
+use crate::base::submission_open;
 use crate::clues::word;
+use crate::held::waiting_now;
 use crate::reading::reads_change;
 use crate::start::Starts;
 use crate::status::{group_status, session_wait};
@@ -61,15 +63,22 @@ impl Engine {
 
     /// The place's line from what it reads itself: the held state given,
     /// the change at the place's head once where its kind reads a change
-    /// and the place is live, and the live agent's asking mark from its
-    /// profile; no terminal operation, no merge-queue operation and no
-    /// host reading (57, 58, 90).
-    fn line_of(&self, held: &HeldState, identity: Option<&Identity>) -> PlaceLine {
+    /// and the place is live, the live agent's asking mark from its
+    /// profile, and, for a base place, the held state of the places on
+    /// its branch; no terminal operation, no merge-queue operation and no
+    /// host reading (57, 58, 90, 203).
+    pub(crate) fn line_of(&self, held: &HeldState, identity: Option<&Identity>) -> PlaceLine {
         let change = match held.phase {
             Phase::Live => self.change_at_head(held),
             _ => None,
         };
-        Engine::place_line(held, change.as_ref(), self.asking(held), identity)
+        Engine::place_line(
+            held,
+            change.as_ref(),
+            self.asking(held),
+            self.on_branch_count(held),
+            identity,
+        )
     }
 
     /// Whether the live agent's profile reads it asking a person, from
@@ -117,13 +126,15 @@ impl Engine {
 
     /// The place's line from facts already read: its held state, the
     /// change at its head where it was read, whether the live agent's
-    /// profile reads it asking a person, and the identity of the session
-    /// asking where one asks. It reads nothing itself, so status and the
-    /// line asked alone give one line from one place's facts (60; S14).
+    /// profile reads it asking a person, for a base place how many places
+    /// are live on its branch, and the identity of the session asking
+    /// where one asks. It reads nothing itself, so status and the line
+    /// asked alone give one line from one place's facts (60, 203; S14).
     pub fn place_line(
         held: &HeldState,
         change: Option<&ChangeFacts>,
         asking: bool,
+        on_branch: Option<usize>,
         identity: Option<&Identity>,
     ) -> PlaceLine {
         let place = &held.place;
@@ -141,7 +152,7 @@ impl Engine {
             let ticked = facts.tasks.iter().filter(|task| task.ticked).count();
             format!("{ticked}/{}", facts.tasks.len())
         });
-        let state = state_words(held, at, asking);
+        let state = state_words(held, at, asking, on_branch);
         let short = [
             stage.clone(),
             run.map(|run| format!("run {run}")),
@@ -197,8 +208,17 @@ fn its_agent(held: &HeldState, identity: &Identity) -> bool {
 /// 51, 63, 70, 90, 112, 114, 118, 130); a stage waiting for room while a
 /// process runs the conversation its start would carry reads `waiting on
 /// its session`, as the last settle left its wait (49, 207); the list
-/// gives a place the same words (200; core.14).
-pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> String {
+/// gives a place the same words (200; core.14). A base place's, with
+/// `on_branch` the count of the live places on its branch, is `<n> on its
+/// branch · open` while any is live and its submission is not open, and
+/// `waiting on its caller` while it waits for its submission's retry
+/// under no hold or failure (130, 139, 200, 203).
+pub(crate) fn state_words(
+    held: &HeldState,
+    at: Option<usize>,
+    asking: bool,
+    on_branch: Option<usize>,
+) -> String {
     match &held.phase {
         Phase::Making { .. } => return "being made".into(),
         Phase::Over { over, .. } | Phase::Gone { over, .. } | Phase::Tidied { over, .. } => {
@@ -211,7 +231,12 @@ pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> 
         }
         Phase::Live => {}
     }
-    if let Some(waiting) = &held.waiting {
+    if let Some(count) = on_branch.filter(|count| *count > 0) {
+        if !submission_open(held) {
+            return format!("{count} on its branch{SEPARATOR}open");
+        }
+    }
+    if let Some(waiting) = &waiting_now(held, on_branch) {
         if waiting.stalled {
             return "stalled".into();
         }
@@ -227,6 +252,7 @@ pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> 
             Waits::PastBound => "past its bound",
             Waits::Submission => "submission refused",
             Waits::Delivered => "waiting on done",
+            Waits::Unsubmitted => "waiting on its caller",
         }
         .into();
     }
@@ -265,5 +291,143 @@ pub(crate) fn state_words(held: &HeldState, at: Option<usize>, asking: bool) -> 
     match at {
         Some(index) => word(&held.stages[index].state),
         None => word(&StageState::NotReached),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{json, to_value};
+    use std::collections::BTreeMap;
+
+    /// A base place `train--spring` on `main`, live, its kind landing
+    /// with no stages (202).
+    fn spring() -> HeldState {
+        let place = PlaceRecord {
+            id: PlaceId::new("/d/places/1/train--spring"),
+            repository: "/r".into(),
+            kind: Kind {
+                name: "train".into(),
+                version: 1,
+                branch_prefix: "train".into(),
+                starts_unready: false,
+                lands: true,
+                agents: KindSettings::default(),
+                stages: vec![],
+                label: None,
+            },
+            declared: Declared::Repository,
+            kind_from: None,
+            name: "spring".into(),
+            branch: "train/spring".into(),
+            base: "main".into(),
+            base_revision: Revision::new("c1"),
+            base_from: None,
+            location: "/d/places/1/train--spring".into(),
+            binding: Binding::default(),
+            brief: None,
+            mark: None,
+            settings: BTreeMap::new(),
+            every_stage: Settings::default(),
+            repository_settings: KindSettings::default(),
+            repository_agents: Settings::default(),
+            hold: vec![],
+            hold_submission: false,
+            hold_words: BTreeMap::new(),
+            recipients: vec![],
+            stream: StreamHeld {
+                name: DEFAULT_STREAM.into(),
+                from: StreamFrom::Default,
+            },
+            intent: IntentKey::Launch {
+                name: "spring".into(),
+                digest: "d1".into(),
+            },
+        };
+        serde_json::from_value(json!({
+            "place": to_value(place).unwrap(),
+            "phase": to_value(Phase::Live).unwrap(),
+            "readiness": to_value(Readiness::default()).unwrap(),
+            "stages": [],
+            "current": null,
+            "submission": to_value(SubmissionHeld::default()).unwrap(),
+            "failures": [],
+            "moves": [],
+            "unsettled": [],
+        }))
+        .unwrap()
+    }
+
+    /// The base place's line with `on_branch` places live on its branch.
+    fn line(held: &HeldState, on_branch: usize) -> PlaceLine {
+        Engine::place_line(held, None, false, Some(on_branch), None)
+    }
+
+    #[test]
+    fn a_base_places_line_counts_the_places_on_its_branch() {
+        // 139, 200, 203: `<n> on its branch · open` while places on its
+        // branch are live, whatever the last settle wrote of its wait.
+        let mut held = spring();
+        held.waiting = Some(Waiting {
+            on: WaitingOn {
+                act: Act::Retry,
+                stage: None,
+                why: Waits::Unsubmitted,
+                since: Some(10),
+                words: None,
+                open_until: None,
+                closed: None,
+            },
+            stalled: true,
+        });
+        let two = line(&held, 2);
+        assert_eq!(two.short, "2 on its branch · open");
+        assert_eq!(two.full, "train--spring · train@1 · 2 on its branch · open");
+        assert_eq!((two.stage, two.run, two.tasks), (None, None, None));
+        assert_eq!(line(&held, 1).short, "1 on its branch · open");
+    }
+
+    #[test]
+    fn a_base_place_with_none_on_its_branch_waits_on_its_caller() {
+        // 130, 203: with no place on its branch live and no submission
+        // made it waits on its caller; stalled once a settle read it so.
+        let mut held = spring();
+        assert_eq!(line(&held, 0).short, "waiting on its caller");
+        held.waiting = Some(Waiting {
+            on: WaitingOn {
+                act: Act::Retry,
+                stage: None,
+                why: Waits::Unsubmitted,
+                since: Some(10),
+                words: None,
+                open_until: None,
+                closed: None,
+            },
+            stalled: true,
+        });
+        assert_eq!(line(&held, 0).short, "stalled");
+    }
+
+    #[test]
+    fn a_base_places_submission_reads_as_any_places() {
+        // 111, 112, 203: submitted while its submission is open, its
+        // failure's words as a refused submission's, and landed once
+        // over.
+        let mut held = spring();
+        held.submission.submits = 1;
+        assert_eq!(line(&held, 0).short, "submitted");
+        held.submission.verdict = Some(Verdict::Failed {
+            words: "test failed".into(),
+        });
+        held.submission.waiting = Some("the submission failed: test failed".into());
+        assert_eq!(line(&held, 0).short, "submission refused");
+        assert_eq!(line(&held, 1).short, "1 on its branch · open");
+        held.phase = Phase::Over {
+            over: Over::Landed {
+                commit: Revision::new("c9"),
+            },
+            kept: None,
+        };
+        assert_eq!(line(&held, 0).short, "landed");
     }
 }

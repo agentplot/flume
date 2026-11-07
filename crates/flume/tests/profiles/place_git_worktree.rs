@@ -5,21 +5,25 @@
 //! its worktrees as for a clone, a place an earlier flume made inside a
 //! clone's main worktree or beside a bare repository's worktrees read and
 //! removed where it stands (record 0027), a place readied at the revision
-//! its launch read through the resolver over a stand-in for sluice, and
-//! nothing of a readiness kept in the place's git directory. No sluice
-//! runs here: the pinned one equips a place in the tools layer.
+//! its launch read through the resolver over a stand-in for sluice,
+//! nothing of a readiness kept in the place's git directory, and a base
+//! place launched and tidied through the core with only its location
+//! asked of the profile. No sluice runs here: the pinned one equips a
+//! place in the tools layer.
 
+use crate::common::engine::{base_at, PLACE_PROFILE};
 use crate::common::*;
 use flume::profiles::merge_queue::sluice::{equipped, EQUIP};
 use flume::profiles::place::git_worktree::{GitWorktree, Login, PlaceData, Step};
 use flume::profiles::{place_data, BuiltIn};
+use flume_conformance::engine::world::{kind, launch, launched, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::place::{self, Pinned, PlaceHarness};
 use flume_seams::*;
 use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// The login environment the profile's steps run with here: nothing of
 /// the host user's, a home of the scratch's own.
@@ -900,4 +904,164 @@ fn the_main_worktree_is_never_removed() {
     };
     assert!(matches!(profile.remove(&main), Removed::Refused { .. }));
     assert!(repository.dir.join("README").is_file());
+}
+
+/// The profile, each call of the place seam named in `asked` before it
+/// is passed on.
+struct Asked {
+    profile: GitWorktree,
+    asked: Mutex<Vec<&'static str>>,
+}
+
+impl Asked {
+    fn ask(&self, call: &'static str) -> &GitWorktree {
+        self.asked.lock().unwrap().push(call);
+        &self.profile
+    }
+}
+
+impl Place for Asked {
+    fn location(&self, repository: &str, place: &str) -> Result<String, String> {
+        self.ask("location").location(repository, place)
+    }
+
+    fn make(
+        &self,
+        repository: &str,
+        revision: &Revision,
+        branch: &str,
+        location: &str,
+    ) -> MakeOutcome {
+        self.ask("make")
+            .make(repository, revision, branch, location)
+    }
+
+    fn ready(&self, place: &PlaceRef, revision: &Revision) -> Readiness {
+        self.ask("ready").ready(place, revision)
+    }
+
+    fn read(&self, place: &PlaceRef) -> PlaceRead {
+        self.ask("read").read(place)
+    }
+
+    fn remove(&self, place: &PlaceRef) -> Removed {
+        self.ask("remove").remove(place)
+    }
+
+    fn remove_branch(&self, repository: &str, branch: &str, base: &str) -> BranchRemoved {
+        self.ask("remove_branch")
+            .remove_branch(repository, branch, base)
+    }
+}
+
+#[test]
+fn a_base_place_is_given_its_location_and_nothing_is_made_there() {
+    // A base place launched and then tidied through the core over a
+    // scratch repository whose fake merge queue opens and closes its
+    // branch: the profile gives its location under flume's own data
+    // directory as any place's, and is asked nothing else, so nothing
+    // stands there, git lists no worktree for it, and no hook, readiness
+    // or teardown runs (3, 66, 78, 202, C.1).
+    let repository = Repository::new("base-place");
+    let name = repository.name();
+    let marks = repository.scratch.path("ran");
+    std::fs::create_dir_all(&marks).expect("the marks' folder");
+    let mark = |step: &str| marks.join(step);
+    let hook = repository.dir.join(".git/hooks/post-checkout");
+    std::fs::write(
+        &hook,
+        format!("#!/bin/sh\ntouch '{}'\n", mark("hook").display()),
+    )
+    .expect("the hook");
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
+        .expect("the hook made executable");
+    let data = PlaceData {
+        readiness: vec![Step::run(
+            "ready",
+            &format!("touch '{}'", mark("ready").display()),
+        )],
+        teardown: vec![Step::run(
+            "teardown",
+            &format!("touch '{}'", mark("teardown").display()),
+        )],
+        base_remote: None,
+    };
+    let seam = Arc::new(Asked {
+        profile: profile(data, &repository.scratch),
+        asked: Mutex::default(),
+    });
+    let world = World::new();
+    base_at(&world, &name, &repository.head());
+    world.kinds.set_binding(
+        &name,
+        Binding {
+            place: Some(PLACE_PROFILE.into()),
+            change: None,
+            merge_queue: Some("queue".into()),
+        },
+    );
+    world
+        .kinds
+        .set_kinds(&name, vec![kind("train", true, vec![])]);
+    world.resolver.bind_place(PLACE_PROFILE, seam.clone());
+
+    let mut train = launch("train", "spring", None);
+    train.repository = name.clone();
+    let status = launched(&world.engine().launch(&train)).expect("the base place launched");
+    let location = status.place.0.clone();
+    let id = flume_core::repository_id(&repository.dir.join(".git").to_string_lossy());
+    assert_eq!(
+        Path::new(&location),
+        own(&repository.scratch)
+            .join("places")
+            .join(&id)
+            .join("train--spring"),
+        "the base place's location"
+    );
+    assert_eq!(
+        world.queue.log.of("open"),
+        vec!["open train/spring from main".to_string()],
+        "the merge queue's opens"
+    );
+    let stands = |when: &str| {
+        assert!(
+            !Path::new(&location).exists(),
+            "something stands at {location} {when}"
+        );
+        let listed = repository.git(&["worktree", "list", "--porcelain"]);
+        assert_eq!(
+            listed
+                .lines()
+                .filter(|line| line.starts_with("worktree "))
+                .count(),
+            1,
+            "a worktree beside the main one {when}: {listed}"
+        );
+    };
+    stands("once launched");
+    world.engine().settle(None);
+    stands("once settled");
+
+    match world.engine().drop_place(&status.place, false) {
+        flume_core::Answer::Acted {
+            tidy: Some(tidy), ..
+        } => assert_eq!(tidy.removed, vec![status.place.clone()], "the tidy"),
+        other => panic!("the drop answered {other:?}"),
+    }
+    world.engine().settle(None);
+    assert!(world.held(&status.place).is_none(), "the held state stays");
+    assert_eq!(
+        world.queue.log.of("close"),
+        vec!["close train/spring into main".to_string()],
+        "the merge queue's closes"
+    );
+    stands("once tidied");
+    let asked = seam.asked.lock().unwrap().clone();
+    assert!(
+        !asked.is_empty() && asked.iter().all(|call| *call == "location"),
+        "the profile was asked {asked:?}"
+    );
+    for step in ["hook", "ready", "teardown"] {
+        assert!(!mark(step).exists(), "the {step} ran");
+    }
 }

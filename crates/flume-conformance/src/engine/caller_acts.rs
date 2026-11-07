@@ -590,7 +590,7 @@ fn a_drop_repeated(_: &()) -> Outcome {
 
 fn two_starts_at_once(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let id = World::id("change", "plan");
     launched(&world.engine.launch(&launch("change", "plan", Some("x"))))?;
     world.settle(&id);

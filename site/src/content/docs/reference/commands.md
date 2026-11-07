@@ -20,7 +20,7 @@ sidebar:
 | `flume done <place>` | Declare complete the work of a place whose kind does not land, and tidy it. |
 | `flume priority <place> <n>` | Set the place's priority in the host's queue. |
 | `flume tidy [<place>]` | Remove what is over, for one place or every place. |
-| `flume settle [<place>]` | Move a place, or every place, on. |
+| `flume settle [<place>]` | Move a place, or every place, on; with `--every <time>`, every place as a watch over the host. |
 | `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
 | `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
 | `flume wake <address>` | Wake a role's address: launch its run where none stands, and nothing where an agent already holds it. |
@@ -61,8 +61,8 @@ error. `flume wait` has exits of its own.
 **Settling first.** Every command that acts, `launch`, `tell`,
 `hold`, `retry`, `stop`, `finish`, `drop`, `done`, `priority`, `tidy`,
 `wait`, `inbox` and `wake`, settles every place on the host first,
-unless every multiplexer the host binds keeps a watch, as herdr's plugin
-does. `flume status`, `flume list`, `flume prompt` and `flume mcp`
+unless a caller keeps watch over the host with `flume settle --every`.
+`flume status`, `flume list`, `flume prompt` and `flume mcp`
 only read, `flume status --line` and `flume hook status-line` among
 them. `flume open` settles nothing, and `flume kinds lock` writes its
 lock and settles nothing.
@@ -173,13 +173,14 @@ the kinds it holds or why it cannot be read, each base's count and the
 role addresses with ends pending. Every address an agent already holds
 is there too, with its agent, its session and where that came from, and
 what the multiplexer found there when asked. Each multiplexer the host binds gives
-its watch and what a tidy kept there. Last comes the host's
-configuration: whether its local layer was taken, each value it set and
-each key passed over with its pin. Where a multiplexer keeps no watch, it says so: places
-then move on only at flume's commands and when their agents go quiet.
-Under the line naming the watch, it gives what the terminal's own
-configuration lacks for flume's plugin there, such as herdr's key for
-the popup, in words you can act on.
+what a tidy kept there. Then comes the host's configuration: whether
+its local layer was taken, each value it set and each key passed over
+with its pin. Last comes the host's watch: a caller keeping it, with
+the bound it stated and when its newest settle began, or no caller
+keeping it, and since when where one did. With none, places move on at
+flume's commands and when their agents go quiet. Under that line it gives what the terminal's own configuration
+lacks for flume's plugin there, such as herdr's key for the popup, in
+words you can act on.
 
 **`--line`** gives each place's one line and nothing else, reading only
 what a line holds: the place's held state, the change at its head and
@@ -292,8 +293,8 @@ each of its sessions runs, all of them in one reading. It reads no worktree, hea
 submission, asks no merge queue, and starts no session. None of a
 place's long words, a stop-short's, a hold's, a failure's or a
 teardown's, is in its lines or its JSON. It says what the last settle
-left: where a multiplexer keeps no watch, places move on only at
-flume's commands. It settles, starts, sends and writes nothing.
+left: where no caller keeps watch over the host, places move on only
+at flume's commands and their agents' quiet. It settles, starts, sends and writes nothing.
 
 With `--json` the answer is `{"list":{"places":[…],"streams":[…]}}`,
 the same lines and their parts. The [state
@@ -439,6 +440,7 @@ closed the tab chore--tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a
 
 ```sh
 flume settle [<place>] [--on-quiet]
+flume settle --every <time>
 ```
 
 Moves a place, or every place, on. It reads each stage's deliverable,
@@ -446,8 +448,28 @@ starts the next stage or the waiting ones there is room for, and
 submits. It collects the merge queue's outcomes, delivers pending
 ends, wakes roles and tidies. Safe to repeat. `--on-quiet` first reads the place's
 agent until it is quiet, for up to sixty seconds; the Stop hook runs it.
-herdr's watch runs `flume settle` whenever an agent changes state,
-comes up or goes.
+No multiplexer and no plugin of one runs it.
+
+`--every <time>` settles every place as a watch over the host. `<time>`
+is the bound its runs come within, as `flume wait --timeout` takes one:
+`<n>`, `<n>s`, `<n>m` or `<n>h`. flume records in the host's state when
+the settle began and the bound, then settles every place, an agent in
+it or none, and steps each open submission's base. Run it on that bound
+from a timer of the host's or whatever else keeps time there. Every
+place then moves on within the bound with no command of yours, a place
+whose submission waits on the merge queue among them. While the newest such
+settle began less than twice its bound ago, a caller keeps watch and
+flume runs unattended: the commands that act settle no place first, and
+`flume wait` leaves the settling to the watch. Once its runs stop, the
+watch lapses and flume runs attended again. `flume status` gives the
+watch, its bound and when it last settled, or since when none is kept.
+`--every` beside a place's name, or with a bound that is no positive
+duration, is refused before anything is read:
+
+```console
+$ flume settle fix--one --every 2m
+refused: --every settles every place as a caller's watch over the host, and takes no place: fix--one was named
+```
 
 ## `flume wait`
 

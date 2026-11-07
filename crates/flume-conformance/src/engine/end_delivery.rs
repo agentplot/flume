@@ -8,7 +8,9 @@
 //! a launch of the same name going on beside it (3, 62). A wait by place
 //! answers an end pending for its recipient and delivers it, reads one
 //! already delivered, and otherwise follows the host's state under its
-//! timeout, settling nothing under a watch (119, 122); the inbox collects
+//! timeout, settling nothing while a caller keeps watch over the host
+//! and every place before each reading while none does, whatever
+//! terminal the host binds (119, 122, 208); the inbox collects
 //! every end pending for a recipient, each delivered once (75). An end
 //! for a role's address the host's configuration gives a standing agent
 //! goes into the one agent of its name the terminal finds in the session
@@ -103,13 +105,13 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_wait_reads_an_end_delivered,
         },
         Scenario {
-            name: "end delivery: under a terminal that keeps watch a wait calls no seam but the store, and the place moves on only by the watch's settles",
-            cites: &["43", "119", "122", "120"],
+            name: "end delivery: while a caller keeps watch a wait calls no seam but the store, and the place moves on only by the caller's settles",
+            cites: &["43", "119", "120", "208"],
             run: a_wait_under_a_watch,
         },
         Scenario {
-            name: "end delivery: under a terminal that keeps no watch a wait settles every place before each reading",
-            cites: &["43", "119"],
+            name: "end delivery: while no caller keeps watch, under any terminal, a wait settles every place before each reading",
+            cites: &["43", "119", "122", "208"],
             run: a_wait_attended,
         },
         Scenario {
@@ -745,7 +747,7 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
     let world = World::new();
     world.queue.plan_submits(vec![Plan::Hold]);
     let id = fix_for_ops(&world, "one")?;
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     deliver_fix(&world, &id);
     clear_calls(&world);
     let first = world
@@ -763,7 +765,7 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
         Some(StageState::Begun),
         "code moved without the watch"
     );
-    world.settle(&id);
+    world.engine.settle_every(30);
     clear_calls(&world);
     let second = world
         .engine()
@@ -788,6 +790,9 @@ fn a_wait_under_a_watch(_: &()) -> Outcome {
     Ok(())
 }
 
+/// The end-delivery spec's "Attended under any terminal": no caller
+/// keeps watch, so a wait settles every place before each reading (119,
+/// 208).
 fn a_wait_attended(_: &()) -> Outcome {
     let world = World::new();
     world.queue.plan_submits(vec![Plan::Hold]);
@@ -860,7 +865,7 @@ fn collected_after_a_restart(_: &()) -> Outcome {
         collected(&world.engine().inbox("planner"))?.is_empty(),
         "another recipient's inbox collected"
     );
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     world.terminal.add_session("ops", AgentState::Working);
     let answer = world.engine().inbox("ops");
     ensure_eq!(
@@ -907,7 +912,7 @@ fn collected_after_a_restart(_: &()) -> Outcome {
 fn two_inboxes_at_once(_: &()) -> Outcome {
     let world = World::new();
     two_pending(&world)?;
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     let other = Arc::new(Mutex::new(None));
     let engine = world.engine();
     let into = other.clone();

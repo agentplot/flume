@@ -33,6 +33,16 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_refusal_is_an_answer,
         },
         Scenario {
+            name: "answers: status gives the host's watch, a caller's bound and when its newest settle began, and once it lapsed since when none is kept",
+            cites: &["56", "61", "119", "208", "S118"],
+            run: a_watched_host_and_an_unwatched_one,
+        },
+        Scenario {
+            name: "answers: under a caller's watch, each terminal's answer in status gives its watch none, the host's own and a stream's, and the host's watch gives the caller's bound",
+            cites: &["61", "122", "208"],
+            run: the_terminals_answers_in_status,
+        },
+        Scenario {
             name: "answers: every answer reads back as it was written",
             cites: &["61", "60"],
             run: every_answer_reads_back,
@@ -504,6 +514,9 @@ fn place_status() -> PlaceStatus {
             },
         }),
         line: line(),
+        waits_on: Some(WaitsOn::Places),
+        worktree: Some(false),
+        on_branch: Some(vec![PlaceId::new("/r/places/change--two")]),
     }
 }
 
@@ -668,10 +681,12 @@ fn host_status() -> HostStatus {
             standing: Some(standing_status()),
         }],
         watch: Watch::Bound { seconds: 30 },
+        watch_settled: Some(47_400),
+        watch_lapsed: Some(47_460),
         terminals: vec![TerminalStatus {
             profile: Some("fake".into()),
             kept: vec!["the workspace r main, held by the pane w1:p3".into()],
-            watch: Watch::Bound { seconds: 30 },
+            watch: Watch::None,
         }],
         bases: vec![BaseClues {
             repository: "/r".into(),
@@ -731,11 +746,20 @@ fn tidied() -> Tidied {
                 },
             },
         ],
-        branches_kept: vec![BranchKept {
-            place: place.clone(),
-            branch: "fix/one".into(),
-            commits: vec![Revision::new("c4")],
-        }],
+        branches_kept: vec![
+            BranchKept {
+                place: place.clone(),
+                branch: "fix/one".into(),
+                commits: vec![Revision::new("c4")],
+                reason: None,
+            },
+            BranchKept {
+                place: place.clone(),
+                branch: "train/spring".into(),
+                commits: vec![],
+                reason: Some("train/spring holds c5 that main lacks".into()),
+            },
+        ],
         not_over: vec![place.clone()],
         terminal: vec![TerminalTidied {
             place,
@@ -1217,12 +1241,12 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.host.watch",
             "status.host.watch.bound",
             "status.host.watch.bound.seconds",
+            "status.host.watch_lapsed",
+            "status.host.watch_settled",
             "status.host.terminals",
             "status.host.terminals[].kept",
             "status.host.terminals[].profile",
             "status.host.terminals[].watch",
-            "status.host.terminals[].watch.bound",
-            "status.host.terminals[].watch.bound.seconds",
             "status.places",
             "status.places[].agent",
             "status.places[].agent.account",
@@ -1490,6 +1514,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "status.places[].waits_on_session.since",
             "status.places[].waits_on_session.stage",
             "status.places[].waits_on_session.unread",
+            "status.places[].on_branch",
+            "status.places[].waits_on",
+            "status.places[].worktree",
         ],
     ),
     (
@@ -1720,6 +1747,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "launched.place.waits_on_session.since",
             "launched.place.waits_on_session.stage",
             "launched.place.waits_on_session.unread",
+            "launched.place.on_branch",
+            "launched.place.waits_on",
+            "launched.place.worktree",
         ],
     ),
     (
@@ -1940,6 +1970,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.tidy.branches_kept[].branch",
             "acted.tidy.branches_kept[].commits",
             "acted.tidy.branches_kept[].place",
+            "acted.tidy.branches_kept[].reason",
             "acted.tidy.kept",
             "acted.tidy.kept[].place",
             "acted.tidy.kept[].why",
@@ -1963,6 +1994,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "acted.status.waits_on_session.since",
             "acted.status.waits_on_session.stage",
             "acted.status.waits_on_session.unread",
+            "acted.status.on_branch",
+            "acted.status.waits_on",
+            "acted.status.worktree",
             "acted.tidy.kept[].why.session_runs",
             "acted.tidy.kept[].why.session_runs.processes",
             "acted.tidy.kept[].why.session_runs.processes[].pid",
@@ -1980,6 +2014,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "settled.tidy.branches_kept[].branch",
             "settled.tidy.branches_kept[].commits",
             "settled.tidy.branches_kept[].place",
+            "settled.tidy.branches_kept[].reason",
             "settled.tidy.kept",
             "settled.tidy.kept[].place",
             "settled.tidy.kept[].why",
@@ -2009,6 +2044,7 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "tidied.tidy.branches_kept[].branch",
             "tidied.tidy.branches_kept[].commits",
             "tidied.tidy.branches_kept[].place",
+            "tidied.tidy.branches_kept[].reason",
             "tidied.tidy.kept",
             "tidied.tidy.kept[].place",
             "tidied.tidy.kept[].why",
@@ -2313,6 +2349,9 @@ pub const FIELDS: &[(&str, &[&str])] = &[
             "woken.place.waits_on_session.since",
             "woken.place.waits_on_session.stage",
             "woken.place.waits_on_session.unread",
+            "woken.place.on_branch",
+            "woken.place.waits_on",
+            "woken.place.worktree",
         ],
     ),
     (
@@ -2398,3 +2437,93 @@ pub const FIELDS: &[(&str, &[&str])] = &[
         ],
     ),
 ];
+
+/// The host's part of status as the engine gives it now.
+fn host_now(world: &super::world::World) -> Result<HostStatus, String> {
+    match world.engine().status(None) {
+        Answer::Status { host, .. } => Ok(host),
+        other => Err(format!("status answered {other:?}")),
+    }
+}
+
+/// The place-status spec's "A watched host and an unwatched one": a
+/// caller's settle with a bound of two minutes, status asked a minute
+/// later, then five minutes on with no such settle (56, 119, 208).
+fn a_watched_host_and_an_unwatched_one(_: &()) -> Outcome {
+    let world = super::world::World::new();
+    let before = host_now(&world)?;
+    ensure_eq!(
+        (before.watch, before.watch_settled, before.watch_lapsed),
+        (Watch::None, None, None),
+        "the watch on a host where none was kept"
+    );
+    let began = world.host.now();
+    world.engine.settle_every(120);
+    world.host.advance(60);
+    let watched = host_now(&world)?;
+    ensure_eq!(
+        (watched.watch, watched.watch_settled, watched.watch_lapsed),
+        (Watch::Bound { seconds: 120 }, Some(began), None),
+        "the watch a minute after the caller's settle"
+    );
+    let json = serde_json::to_value(&watched).map_err(|error| error.to_string())?;
+    ensure_eq!(
+        (
+            json["watch"]["bound"]["seconds"].as_u64(),
+            json["watch_settled"].as_u64(),
+            json.get("watch_lapsed").is_none()
+        ),
+        (Some(120), Some(began), true),
+        "the watch in the JSON form"
+    );
+    world.host.advance(5 * 60);
+    let lapsed = host_now(&world)?;
+    ensure_eq!(
+        (lapsed.watch, lapsed.watch_settled, lapsed.watch_lapsed),
+        (Watch::None, Some(began), Some(began + 4 * 60)),
+        "the watch five minutes on, lapsed four minutes after its settle began"
+    );
+    Ok(())
+}
+
+/// The place-status spec's "The terminals' answers in status": a caller
+/// keeps watch, the host binds the fake terminal and `trial` names
+/// `other`; each terminal's answer gives its watch none, and the host's
+/// watch gives the caller's bound (61, 122, 208).
+fn the_terminals_answers_in_status(_: &()) -> Outcome {
+    let world = super::world::World::new();
+    world.other_terminal("other");
+    world.host.set_host_display(Some("fake"), None, None);
+    world.host.set_display("trial", Some("other"), None, None);
+    world.engine.settle_every(120);
+    let host = host_now(&world)?;
+    ensure_eq!(
+        host.terminals
+            .iter()
+            .map(|terminal| (terminal.profile.clone(), terminal.watch))
+            .collect::<Vec<_>>(),
+        vec![
+            (Some("fake".to_string()), Watch::None),
+            (Some("other".to_string()), Watch::None),
+        ],
+        "each terminal's answer"
+    );
+    ensure_eq!(
+        host.watch,
+        Watch::Bound { seconds: 120 },
+        "the host's watch beside the terminals"
+    );
+    let json = serde_json::to_value(&host).map_err(|error| error.to_string())?;
+    for at in 0..2 {
+        let keys: Vec<&str> = json["terminals"][at]
+            .as_object()
+            .map(|answer| answer.keys().map(String::as_str).collect())
+            .unwrap_or_default();
+        ensure_eq!(
+            (json["terminals"][at]["watch"].as_str(), keys),
+            (Some("none"), vec!["kept", "profile", "watch"]),
+            format!("the terminal {at}'s answer in the JSON form")
+        );
+    }
+    Ok(())
+}

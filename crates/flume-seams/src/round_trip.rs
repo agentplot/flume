@@ -713,6 +713,7 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         Waits::PastBound,
         Waits::Submission,
         Waits::Delivered,
+        Waits::Unsubmitted,
     ] {
         round_trips(why);
     }
@@ -2790,6 +2791,44 @@ fn an_affinity_written_before() {
 }
 
 #[test]
+fn the_hosts_watch() {
+    // The seam-contracts spec's round trips: the host's watch, its key
+    // and its document read back as written, and a host's state written
+    // before, which holds no watch, reading unchanged (73, 153, 208).
+    round_trips(HostKey::Watch);
+    assert_eq!(
+        serde_json::to_value(HostKey::Watch).unwrap(),
+        serde_json::json!({"of": "watch"})
+    );
+    let watched = Watched {
+        began: 47_400,
+        bound: 120,
+    };
+    round_trips(watched);
+    round_trips(HostVersioned {
+        version: 2,
+        document: HostDocument::Watch(watched),
+    });
+    assert!(watched.kept(47_400 + 239));
+    assert!(!watched.kept(47_400 + 240));
+    assert_eq!(watched.lapses(), 47_640);
+    // A host's state written before holds an account's and an intent's
+    // documents alone, each reading as it did.
+    let before: HostVersioned = serde_json::from_value(serde_json::json!({
+        "version": 3,
+        "document": {
+            "of": "account",
+            "until": 54_000,
+            "words": null,
+            "recorded_at": 47_400,
+        },
+    }))
+    .expect("a host document written before");
+    assert!(matches!(before.document, HostDocument::Account(_)));
+    round_trips(before);
+}
+
+#[test]
 fn a_versioned_held_state() {
     round_trips(Versioned {
         version: 4,
@@ -3366,6 +3405,32 @@ fn submit_holds_no_wait() {
 }
 
 #[test]
+fn what_a_submission_sends() {
+    round_trips(SubmitHead::Worktree {
+        head: Revision::new("c5"),
+    });
+    round_trips(SubmitHead::Branch {
+        branch: "train/a".into(),
+        revision: Revision::new("c6"),
+    });
+}
+
+#[test]
+fn a_base_places_branch_opened_and_closed() {
+    round_trips(BranchOpened::Made {
+        revision: Revision::new("c1"),
+    });
+    round_trips(BranchOpened::Refused {
+        reason: "train/a already exists".into(),
+    });
+    round_trips(BranchClosed::Removed);
+    round_trips(BranchClosed::Kept {
+        reason: "train/a holds c7 that main lacks".into(),
+    });
+    round_trips(BranchClosed::Gone);
+}
+
+#[test]
 fn the_inbox_and_its_outcomes() {
     let outcomes = vec![
         SubmissionOutcome::Landed {
@@ -3523,6 +3588,9 @@ fn the_place_seams_answers() {
     round_trips(BranchRemoved::Gone);
     round_trips(BranchRemoved::Kept {
         commits: vec![Revision::new("c4")],
+    });
+    round_trips(BranchRemoved::Refused {
+        reason: "train/a has submission #4 open".into(),
     });
 }
 
@@ -3732,7 +3800,19 @@ fn the_terminal_seams_answers() {
             waiting_on_caller: 1,
             stalled: 0,
         },
+        line: "code 1/2 · run 1 · tasks 2/5 · working".into(),
     });
+    assert_eq!(
+        serde_json::from_value::<Clues>(serde_json::json!({
+            "stage": "code",
+            "state": "working",
+            "base": BaseCount::default(),
+        }))
+        .unwrap()
+        .line,
+        "",
+        "clues written before the line"
+    );
     assert_eq!(
         BaseCount {
             running: 3,
