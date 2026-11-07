@@ -1120,8 +1120,8 @@ pub struct AgentSettings {
     pub settings: Settings,
     pub env: BTreeMap<String, String>,
     /// Each setting's layer and value as written, by `program`, `model`,
-    /// `instructions` or `env.<NAME>`, an environment variable's value
-    /// [`flume_seams::SET`] and its layer `account`.
+    /// `instructions`, `mode`, `keep_open` or `env.<NAME>`, an environment
+    /// variable's value [`flume_seams::SET`] and its layer `account`.
     #[serde(default)]
     pub from: BTreeMap<String, Given>,
 }

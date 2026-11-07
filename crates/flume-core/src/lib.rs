@@ -64,6 +64,15 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// A stage's quiet limit where its declaration sets none (44).
 pub const QUIET_LIMIT: Seconds = 30 * 60;
 
+/// How long an agent that stopped short is kept open for its answer
+/// where no layer gives a `keep_open`: flume's own one hour, the default
+/// layer's, written in whole hours (32, 198).
+pub const KEEP_OPEN: Seconds = 60 * 60;
+const _: () = assert!(
+    KEEP_OPEN.is_multiple_of(60 * 60),
+    "KEEP_OPEN is whole hours"
+);
+
 /// How long after each sending flume reads whether a prompt was
 /// received (38).
 pub const RECEIVED_WITHIN: Seconds = 60;

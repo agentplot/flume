@@ -8,7 +8,7 @@ use super::account_pools::{
     stops_at_limit, two_programs, window, UNREACHED,
 };
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
-use super::agent_settings::for_every_stage;
+use super::agent_settings::{for_every_stage, kept_open};
 use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
@@ -149,6 +149,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: an agent that took edits from the host's table gives its mode as written from host-kind, the value its profile passed and that it was read back, in the JSON form",
             cites: &["S66", "56", "162", "169"],
             run: a_mode_from_the_hosts_table,
+        },
+        Scenario {
+            name: "status: an agent whose keep_open only the host's table for every agent gives, 20m, gives it as written from host, in the JSON form",
+            cites: &["32", "56"],
+            run: keep_open_from_the_hosts_table_for_every_agent,
         },
         Scenario {
             name: "status: an agent that took its program's entry of the launch's table gives the table as written from launch, the entry and the value passed",
@@ -586,6 +591,38 @@ fn a_mode_from_the_hosts_table(_: &()) -> Outcome {
             serde_json::json!({"passed": "edit-files", "entry": null, "read_back": true})
         ),
         "the mode in the JSON form"
+    );
+    Ok(())
+}
+
+fn keep_open_from_the_hosts_table_for_every_agent(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_every_agent(kept_open("20m"));
+    let (agent, json) = fix_with_a_mode(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(
+        agent.settings.from.get("keep_open"),
+        Some(&Given {
+            layer: Layer::Host,
+            value: "20m".into(),
+            file: None,
+        }),
+        "keep_open as written and its layer"
+    );
+    ensure_eq!(
+        agent.settings.settings.keep_open.as_deref(),
+        Some("20m"),
+        "keep_open among the agent's settings"
+    );
+    ensure_eq!(
+        (
+            json["settings"]["keep_open"].clone(),
+            json["settings"]["from"]["keep_open"].clone()
+        ),
+        (
+            serde_json::json!("20m"),
+            serde_json::json!({"layer": "host", "value": "20m"})
+        ),
+        "keep_open in the JSON form"
     );
     Ok(())
 }
