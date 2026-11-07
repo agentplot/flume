@@ -164,7 +164,7 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   True when `sluice exec main -- moon run core:test conformance:test`
   passes, with the role-waking spec's *A role configured* in
   `engine/role_waking.rs`.
-- [ ] 2.4 Run the checks of the projects this group touched. True when
+- [x] 2.4 Run the checks of the projects this group touched. True when
   `sluice exec main -- moon run seams:format seams:lint seams:test
   fakes:format fakes:lint fakes:test core:format core:lint core:test
   conformance:format conformance:lint conformance:test flume:format
