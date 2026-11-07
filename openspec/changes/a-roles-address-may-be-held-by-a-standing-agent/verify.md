@@ -1,33 +1,38 @@
 # Verify: a-roles-address-may-be-held-by-a-standing-agent
 
-Read on 2026-11-06 at `e16381e`, the head of the branch
+Read on 2026-11-07 at `59c5881`, the head of the branch
 `change/a-roles-address-may-be-held-by-a-standing-agent`. The check
 covers the change's proposal, design, six delta specs and tasks. The
-branch holds flume's main at `c591179` (#128), merged by task 1.1.
+branch holds flume's main at `5668b5d` (#130 to #138), merged by task
+7.1 at `2b7060d`, after the merge queue found the branch conflicting
+with it in eight files.
 
 ## Verdict
 
 **Holds; archived.**
 
-- Every task of groups 1 to 6 is ticked: 18 of 18.
+- Every task of groups 1 to 7 is ticked: 19 of 19.
 - Every requirement of the six delta specs is built, and each of their
   36 scenarios is held by a test that asserts its THEN (below).
-- `openspec validate a-roles-address-may-be-held-by-a-standing-agent
-  --strict` passes.
-- `sluice exec main` at `e16381e` passes all 23 of the check tasks the
-  head affects, flume:tools 111 of 111 among them (below).
-- The statement the change cites is on agentplot/blueprints main:
-  `6d322be` and `1c89abc` are both ancestors of its main, and C.5's
-  herdr table holds the standing row as the design gives it.
-
-Two things stand beside the verdict, neither a shortfall of the change
-against itself (below): flume's main has moved past `c591179`, and a
-trial merge conflicts in four files; and the statement has moved past
-`1c89abc`, its C.7 now reading a role's entry from a source's file.
+- The merge of `5668b5d` keeps both sides in each of the eight
+  contested files: against main, the branch adds lines to them and
+  removes none but the lines it rewrites to hold both (below).
+- `openspec/specs/` is main's at `5668b5d`, byte for byte, so the delta
+  specs apply to what main holds. `openspec validate
+  a-roles-address-may-be-held-by-a-standing-agent --strict` passes, and
+  a trial `openspec archive` over a copy of `openspec/` adds 13
+  requirements across the six specs and leaves `openspec validate
+  --specs --strict` passing 44 of 44.
+- `sluice exec main` at `59c5881`, against main at `e189da4`, passes
+  all 23 of the check tasks the head affects, flume:tools 114 of 114
+  among them (below).
+- origin's main is at `e189da4`, one landing past `5668b5d`, #140,
+  which changes one record's text (record 0053 rejected). A trial
+  merge (`git merge-tree`) of `59c5881` and `e189da4` is clean.
 
 ## The tasks
 
-All 18 are ticked, each by a commit that names its check:
+All 19 are ticked, each by a commit that names its check:
 
 - 1.1 by `51c4bdb`, after the merge of `c591179` at `44473ed`.
 - 2.1 by `67990f2`, 2.2 to 2.4 by `1203bb0`.
@@ -36,6 +41,34 @@ All 18 are ticked, each by a commit that names its check:
   `5df46c5`.
 - 5.1 and 5.4 by `59246fa`, 5.2 and 5.3 by `9f5bdbb`, 5.5 by `cd862be`.
 - 6.1 by `09d1ec1`, 6.2 by `e16381e`.
+- 7.1 by `59c5881`, after the merge of `5668b5d` at `2b7060d`.
+
+## The merge of main at 5668b5d
+
+`2b7060d` resolves the eight files the merge queue found conflicting,
+each with both kept:
+
+- `crates/flume-conformance/src/engine/end_delivery.rs` and
+  `engine/place_status.rs`: #130's lost talks stand beside the standing
+  address's scenarios. Against main, the only lines removed are each
+  module's doc sentence, rewritten to go on naming the standing
+  address, and place-status's `flume_core` import, rewritten to add
+  `AddressStatus` and `StandingFound`.
+- `crates/flume/src/commands/print.rs`: the import holds `SessionWait`
+  beside `StandingFound` and `StandingStatus`, and the test module's
+  import likewise; nothing of #130's printing is removed.
+- `crates/flume/tests/profiles/tools/walkthroughs.rs`: the module's doc
+  names #130's lost-talk walkthroughs and this change's standing agent
+  under herdr; the walkthrough
+  `a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary`
+  follows #130's.
+- end-delivery's, place-status's, seam-contracts' and seam-fakes'
+  specs: `59c5881` moves the change out of the archive and leaves
+  `openspec/specs/` as main's at `5668b5d`, so each holds #130's
+  requirements, and this change's are applied again only by its
+  archive.
+
+Every test named in the tables below stands at `59c5881`.
 
 ## The specs, scenario by scenario
 
@@ -125,7 +158,8 @@ read as unread in its words (`agents_in_of_a_herdr_that_refuses_or_does_not_answ
 - **Delivery** (`ends.rs`) reads the entries once per place's delivery,
   sends `send_to(at, notice)` only to the one agent working or waiting,
   and claims nothing otherwise. Nothing of `at` is written to held
-  state (design 4; core.11, core.28).
+  state (design 4; core.11, core.28). #130's lines in `ends.rs` merged
+  without a conflict, as design 11 foresaw.
 - **The wake** (`wake.rs`): `wake_roles` passes over a standing address,
   recording nothing in `unwoken`; `Engine::wake` settles, launches
   nothing and answers `Answer::Held` (design 5; core.13).
@@ -138,65 +172,43 @@ read as unread in its words (`agents_in_of_a_herdr_that_refuses_or_does_not_answ
   the same `status_state` the state row uses; every call with `HERDR_*`
   stripped (design 8; core.29). The printed command keeps the seam's
   default.
-- **The rules.** No module outside a profile names herdr (core.1;
-  `f0e58ac` fixed the print tests that did). Record 0013 gains the
-  construct's section and cites `6d322be` and `1c89abc`; core.28's
-  details rule out a standing agent's pane kept and an agent sought in
-  another terminal. The site names no host or team of ours (core.35),
-  and the roadmap's item moves to what flume does.
+- **The rules.** No module outside a profile names herdr (core.1).
+  Record 0013 gains the construct's section and cites `6d322be` and
+  `1c89abc`; core.28's details rule out a standing agent's pane kept
+  and an agent sought in another terminal. The site names no host or
+  team of ours (core.35), and the roadmap's item moves to what flume
+  does.
 - `crates/flume/tests/profiles/tools/open.rs` loses 134 lines: its
   short-link host under herdr moved to `walk.rs` as `UnderHerdr`, shared
   with the walkthrough, unchanged in what it does (core.51).
 
 ## The checks
 
-`sluice exec main` at `e16381e` ran the gate's layers, `#check-fast`
-and `#check-tools`, over the projects the branch affects. It passed 23
-check tasks with none failing, in 5m 18s:
+`sluice exec main` at `59c5881` ran the gate's layers, `#check-fast`
+and `#check-tools`, over the projects the head affects, against main
+at `e189da4`. After a wait for the host's bound, it passed 23 check
+tasks with none failing, in 5m 40s:
 
 - `seams`, `fakes`, `core` and `conformance`: format, lint and test,
   and `conformance:coverage`.
-- `flume`: format, lint, test (163, 207, 48, 19, 2 and 2 tests in its
-  suites) and tools (111 of 111, the walkthrough
+- `flume`: format, lint, test (216, 168, 48, 19, 2 and 2 tests in its
+  suites) and tools (114 of 114: #130's lost-talk walkthroughs, the
+  walkthrough
   `a_standing_agent_under_herdr_takes_a_fixs_end_through_the_binary`
   and the herdr profile's run of the terminal scenarios among them).
-- `plugin-claude:test`, `site:prose`, `site:build`, `root:format`,
-  `root:changes` and `root:adrs`.
+- `plugin-claude:test`, `site:prose` (no error or warning),
+  `site:build`, `root:format`, `root:changes` (2 of 2) and `root:adrs`.
 
-sluice did not record the pass under its key. The worktree held this
+sluice did not record the pass under its key: the worktree held this
 report, not yet committed, beside the head when the run ended. The
-merge queue runs the checks again at the submission in any case, since
-main trusts only a confined or sandboxed run's record.
+merge queue runs the checks again at the submission in any case.
 
-The archive at `4f67237` applies 13 requirements added across the six
-specs. Over the specs it writes, `root:specs` passes 44 of 44,
-`root:changes` 1 of 1 and `root:format` cleanly. They ran directly in
-the devenv shell, since the host's sluice bound was full and their run
-through sluice had waited 40 minutes for a turn. `openspec validate
---specs --strict` passes 44 of 44 too.
+`root:specs` was not among the tasks the head affects, since
+`openspec/specs/` at `59c5881` is main's. The trial archive above
+stands in for it: over the specs it writes, `openspec validate --specs
+--strict` passes 44 of 44.
 
 ## Beside the verdict
-
-### flume's main has moved
-
-origin's main is at `5668b5d`, nine landings past `c591179`, #130
-`change/a-lost-conversation-resumes-its-session` among them. A trial
-merge (`git merge-tree`) of `e16381e` and `5668b5d` conflicts in four
-files:
-
-- `crates/flume-conformance/src/engine/end_delivery.rs`
-- `crates/flume-conformance/src/engine/place_status.rs`
-- `crates/flume/src/commands/print.rs`
-- `crates/flume/tests/profiles/tools/walkthroughs.rs`
-
-`ends.rs`, `answer.rs` and the rest merge without one, as design 11
-foresaw for #130. No task of the change asks for main past `c591179`,
-so the change holds against itself, and the merge queue reads the
-conflict at the submission and sends it to the kind's stage for a
-failed submission with its words (core.27). The path not taken was
-stopping short to have the code stage merge main first: it is the same
-stage the conflict reaches, and the archive's own lines in
-`openspec/specs/` are part of what that merge fits.
 
 ### The statement has moved
 
@@ -213,7 +225,7 @@ standing row, which this change builds.
 flume's code still reads `[roles]` from the host's configuration for a
 run as for a standing agent. Moving both to a source's file is the
 change `every-question-a-place-asks-reaches-someone-who-answers-it`,
-whose tasks at `773e8fa` move this change's standing entry from
-`[roles]` to the roles file, its stream its address's, once this change
-has landed, as this change's design 11 left it to do. So no clause is
-worked around here (core.19).
+not yet on flume's main, whose tasks move this change's standing entry
+from `[roles]` to the roles file, its stream its address's, once this
+change has landed, as this change's design 11 left it to do. So no
+clause is worked around here (core.19).
