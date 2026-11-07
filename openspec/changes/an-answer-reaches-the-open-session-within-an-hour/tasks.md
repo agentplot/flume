@@ -56,8 +56,8 @@ of the test's own.
 
 ## 8. The site
 
-- [ ] 8.1 Write the agent kept open and `keep_open` into the pages design 11 names: `guides/callers-and-holds.md`, `guides/agent-settings.md`, `guides/places-and-herdr.mdx`, `reference/configuration.md`, `reference/commands.md` and `reference/state.md`, to any host's operator, naming no host, team or word of ours (design 11; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
-- [ ] 8.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
+- [x] 8.1 Write the agent kept open and `keep_open` into the pages design 11 names: `guides/callers-and-holds.md`, `guides/agent-settings.md`, `guides/places-and-herdr.mdx`, `reference/configuration.md`, `reference/commands.md` and `reference/state.md`, to any host's operator, naming no host, team or word of ours (design 11; core.35). True when `sluice exec main -- moon run site:prose site:build` passes.
+- [x] 8.2 Run the checks of the project this group touched. True when `sluice exec main -- moon run site:prose site:build root:format` passes.
 
 ## 9. Coverage and the gate
 
