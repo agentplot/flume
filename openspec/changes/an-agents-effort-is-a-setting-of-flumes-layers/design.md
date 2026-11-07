@@ -311,10 +311,12 @@ no agent, until a retry (27, 32).
 `AgentStatus` gains `effort`, an object only where a layer gave one:
 the word, its layer, `passed` as the profile passed it, `read_back:
 false`, and `outranked_by` naming the account's variable where design 7
-finds it. The person's form prints it on the agent's line,
-`effort xhigh (launch), passed, not read back`, adding "the account's
-`CLAUDE_CODE_EFFORT_LEVEL` outranks it" where it does. The JSON form
-only gains fields (56; core.14).
+finds it. The person's form prints it on the agent's line in the words
+it gives the mode, `at the effort xhigh (from launch) passed as xhigh,
+not read back`, adding `; the account's CLAUDE_CODE_EFFORT_LEVEL
+outranks it` where it does, and the setting's own line,
+`effort = xhigh (from launch)`, among the agent's settings. The JSON
+form only gains fields (56; core.14).
 
 ### 10. The start's record
 
