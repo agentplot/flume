@@ -321,8 +321,12 @@ fn the_stand_in_under_herdr_takes_its_later_prompt_and_reports_its_state() {
     assert!(!printed().contains("took the prompt"), "{}", printed());
 
     server.prompt(&pane, "the first\nprompt");
-    until_it("the first run working", || reads("working"));
-    assert!(work.join("first.txt").is_file(), "{}", printed());
+    // The stand-in reports working before it makes the run's acts, so
+    // herdr can read it working before first.txt is written: wait for
+    // both, which hold together while the run waits on the signal.
+    until_it("the first run working, its first act made", || {
+        reads("working") && work.join("first.txt").is_file()
+    });
     std::fs::write(&midway, "").expect("the signal");
     until_it("the first turn ended", || {
         printed().contains("the turn ended") && reads("idle")
