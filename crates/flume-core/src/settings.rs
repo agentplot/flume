@@ -29,7 +29,7 @@ use crate::own::{fold, Table};
 use crate::{Engine, KEEP_OPEN};
 use flume_seams::{
     Account, Agent, Deliverable, Given, Kind, KindSettings, Layer, Mode, ModeEntry, OwnFile,
-    PlaceRecord, ProgramSettings, Settings, Stage,
+    PlaceRecord, ProgramSettings, RepositoryName, Settings, Stage,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -314,9 +314,11 @@ impl Engine {
     /// configuration is read here, at each start, and nowhere else, its
     /// own settings checked as they stand, or the refusal (32, 195, C.7).
     fn layers(&self, place: &PlaceRecord, stage: &Stage) -> Result<Vec<Tables>, String> {
-        let host = self
-            .host
-            .settings(&place.repository, &place.kind.name, &place.stream.name);
+        let host = self.host.settings(
+            &RepositoryName::of_folder(&place.repository),
+            &place.kind.name,
+            &place.stream.name,
+        );
         let name = &stage.name;
         let own_of =
             |settings: &KindSettings| settings.stages.get(name).cloned().unwrap_or_default();

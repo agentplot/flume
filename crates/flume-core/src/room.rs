@@ -818,7 +818,10 @@ impl Engine {
     /// none (21, 32, 180).
     pub(crate) fn label_of(&self, place: &PlaceRecord) -> Option<LabelHeld> {
         self.host
-            .label_for(&place.repository, &place.kind.name)
+            .label_for(
+                &RepositoryName::of_folder(&place.repository),
+                &place.kind.name,
+            )
             .or_else(|| {
                 place.kind.label.as_ref().map(|name| LabelHeld {
                     name: name.clone(),

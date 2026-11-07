@@ -921,7 +921,7 @@ impl Engine {
                 },
                 None => self
                     .host
-                    .stream_for(&launch.repository, kind)
+                    .stream_for(&RepositoryName::of_folder(&launch.repository), kind)
                     .unwrap_or_else(|| StreamHeld {
                         name: DEFAULT_STREAM.into(),
                         from: StreamFrom::Default,

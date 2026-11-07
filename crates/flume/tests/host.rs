@@ -1162,7 +1162,7 @@ fn a_child_process_reads_the_hosts_layers() {
             "configuration": host.configuration(),
             "bound": host.bound(),
             "streams": host.streams(),
-            "label": host.label_for("/r", "fix"),
+            "label": host.label_for(&RepositoryName::of_folder("/r"), "fix"),
         }),
         Err(refused) => serde_json::json!({ "refused": refused }),
     };
