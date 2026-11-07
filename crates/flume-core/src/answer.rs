@@ -1071,6 +1071,28 @@ pub struct AgentStatus {
     /// program an entry (56, 195).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own: Option<OwnStatus>,
+    /// Its effort as its start passed it, with its layer, and the
+    /// account's variable that outranks it; none where no layer gave one
+    /// (56, 197).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<EffortStatus>,
+}
+
+/// An agent's effort at its start: `word`, as its layer wrote it, and
+/// `layer`, the first of the eight that gave it; `passed`, the value its
+/// profile passed, which takes its program's words as written; `read_back`,
+/// whether its program read it back, which no profile does; and
+/// `outranked_by`, the variable its program reads over the effort where
+/// the agent's account's environment names it, by its name and never its
+/// value, none otherwise (56, 197; core.30).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EffortStatus {
+    pub word: String,
+    pub layer: Layer,
+    pub passed: String,
+    pub read_back: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outranked_by: Option<String>,
 }
 
 /// An agent's own settings at its start beyond their keys: `passed`, its

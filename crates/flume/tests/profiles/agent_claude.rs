@@ -4,7 +4,8 @@
 //! command for a code stage, its instructions in a file of the start's
 //! own, and for a stage in a mode; the command for a stage with no
 //! effort and at `xhigh`, the five efforts it takes and two the release
-//! reads otherwise; the command for a stage with own
+//! reads otherwise, and status naming the account's variable over an
+//! effort the host gave; the command for a stage with own
 //! settings and with none, the keys the profile reserves, a people's
 //! settings file named by the host through the core, `effortLevel` in
 //! the host's table and in its named file, the keys it takes
@@ -32,7 +33,7 @@ use flume::profiles::agent::claude::{carry, effort, live, mode, settings, transc
 use flume::profiles::{core_over, BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::agent::{self, AgentHarness, Efforts, Modes, OwnWay};
-use flume_core::Answer;
+use flume_core::{Answer, EffortStatus};
 use flume_seams::*;
 use serde_json::{json, Value};
 use std::cell::RefCell;
@@ -1188,6 +1189,41 @@ fn effort_level_in_a_named_file() {
                 owner: "flume's `effort`".into(),
             }]
         )]
+    );
+}
+
+#[test]
+fn an_effort_the_accounts_variable_outranks() {
+    // The host's `[agents]` giving `xhigh` to an agent whose account's
+    // `env` names `CLAUDE_CODE_EFFORT_LEVEL`: the command passes
+    // `--effort xhigh`, and status gives the effort from `host`, passed
+    // and not read back, outranked by the variable named and never its
+    // value (56, 197; core.30).
+    let (_repository, answer) = survey_under(
+        "effort-outranked",
+        "[host]\npool = \"work\"\n\n[agents]\neffort = \"xhigh\"\n\n[pools.work]\nstrategy = \"fill-first\"\naccounts = [{ name = \"work-1\", program = \"claude\", env = { CLAUDE_CODE_EFFORT_LEVEL = \"medium\" } }]\n",
+        &[],
+    );
+    let json = answer.to_json();
+    let Answer::Launched { place } = answer else {
+        panic!("the launch answered otherwise: {answer:?}");
+    };
+    let agent = place.agent.expect("the stage's agent");
+    let printed = agent.printed.clone().expect("the command printed");
+    assert!(printed.contains("--effort xhigh"), "{printed}");
+    assert_eq!(
+        agent.effort,
+        Some(EffortStatus {
+            word: "xhigh".into(),
+            layer: Layer::Host,
+            passed: "xhigh".into(),
+            read_back: false,
+            outranked_by: Some(effort::VARIABLE.into()),
+        })
+    );
+    assert!(
+        !json.contains("medium") && !printed.contains("medium"),
+        "the variable's value in status: {json}"
     );
 }
 

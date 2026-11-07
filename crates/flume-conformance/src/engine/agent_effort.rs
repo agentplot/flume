@@ -70,7 +70,7 @@ pub fn scenarios() -> Vec<Scenario<()>> {
 }
 
 /// Settings giving the effort `word`.
-fn effort(word: &str) -> Settings {
+pub(super) fn effort(word: &str) -> Settings {
     Settings {
         effort: Some(word.into()),
         ..Settings::default()
