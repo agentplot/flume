@@ -2399,3 +2399,78 @@ fn the_hosts_labels_shares_and_layers_are_scripted() {
     assert_eq!(host.configuration(), configuration);
     assert_eq!(host.log.count("configuration"), 3);
 }
+
+#[test]
+fn a_fake_terminal_that_hands_no_words() {
+    // The seam-fakes spec's first scenario: scripted to hand no words to a
+    // running agent, it says it cannot, and a send to it is refused with
+    // nothing typed (53, 198).
+    let host = Arc::new(FakeHost::default());
+    let terminal = FakeTerminal::new(host);
+    assert!(terminal.sends(), "a fake terminal sends unless scripted");
+    let who = identity("code", 1);
+    terminal.open(
+        &place_ref(),
+        "/state/fix--one",
+        &AgentCommand::default(),
+        &who,
+        &OpenIn::Own,
+        None,
+    );
+    terminal.cannot_send();
+    assert!(!terminal.sends());
+    assert!(matches!(
+        terminal.send(&who, "notes.md"),
+        Sent::Refused { .. }
+    ));
+    assert!(terminal.sent_to(&who).is_empty(), "words were sent");
+    assert_eq!(
+        terminal.typed(&who),
+        Some((String::new(), 0)),
+        "words typed"
+    );
+    assert!(
+        !terminal.log.calls().iter().any(|call| call == "sends"),
+        "asking whether it sends asks nothing"
+    );
+}
+
+#[test]
+fn a_fake_agents_session_ended_after_its_stop_short() {
+    // The seam-fakes spec's second scenario: scripted to end its session
+    // after a stop-short, the agent reads stopped and its session ended
+    // from then on; one not so scripted reads as it did (96, 134).
+    let host = Arc::new(FakeHost::default());
+    let terminal = Arc::new(FakeTerminal::new(host.clone()));
+    let agent = FakeAgent::new(terminal.clone());
+    let folder = "/state/fix--one";
+    let (asking, other) = (identity("code", 1), identity("review", 1));
+    for who in [&asking, &other] {
+        terminal.open(
+            &place_ref(),
+            folder,
+            &AgentCommand::default(),
+            who,
+            &OpenIn::Own,
+            None,
+        );
+        terminal.set_state(who, AgentState::Waiting);
+    }
+    agent.ends_after_stop_short(&asking);
+    assert_eq!(terminal.state(&asking), AgentState::Waiting, "before");
+    assert_eq!(agent.ended(folder, &asking), Reading::No, "before");
+    agent.stopped_short(&asking);
+    agent.stopped_short(&other);
+    host.advance(3600);
+    assert_eq!(terminal.state(&asking), AgentState::Stopped);
+    assert_eq!(agent.ended(folder, &asking), Reading::Yes);
+    assert_eq!(terminal.state(&other), AgentState::Waiting);
+    assert_eq!(agent.ended(folder, &other), Reading::No);
+    let ended: Vec<String> = agent
+        .log
+        .calls()
+        .into_iter()
+        .filter(|call| call.starts_with("session ended"))
+        .collect();
+    assert_eq!(ended, vec![format!("session ended {asking}")]);
+}

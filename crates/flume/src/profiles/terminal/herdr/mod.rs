@@ -1975,6 +1975,12 @@ impl Terminal for Herdr {
         Sent::Sent
     }
 
+    /// herdr types into a running agent's pane by `agent prompt`, so an
+    /// agent is kept open for an answer under it (53, 95, 198, C.5).
+    fn sends(&self) -> bool {
+        true
+    }
+
     fn state(&self, agent: &Identity) -> AgentState {
         match self.found(agent) {
             Found::At(pane) => self.pane_state(&pane),
@@ -2629,6 +2635,16 @@ mod tests {
         )
         .unwrap();
         write_json(&server.join("setup.json"), &json!(lacking)).unwrap();
+    }
+
+    #[test]
+    fn herdr_hands_a_running_agent_words() {
+        // The seam-contracts spec's herdr scenario: the profile says it
+        // types into a running agent, asking herdr nothing to say so (53,
+        // 95, 198, C.5).
+        let (herdr, _, ran) = over_plugin("sends");
+        assert!(herdr.sends());
+        assert!(!ran.exists(), "a herdr command was run");
     }
 
     const KEY: &str = "herdr's configuration, /h/config.toml, binds no key to flume's places";

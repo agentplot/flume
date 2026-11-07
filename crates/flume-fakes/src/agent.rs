@@ -29,7 +29,8 @@ use std::sync::{Arc, Mutex};
 /// them, its command lists them as one JSON object in a file under the
 /// place's own folder, [`FakeAgent::own_file`], and names it by `--own
 /// <file>`, and every command given own settings logs their keys (195,
-/// 196).
+/// 196). An agent scripted to end its session after a stop-short reads
+/// stopped and ended once a test says it stopped short (96, 134).
 pub struct FakeAgent {
     terminal: Arc<FakeTerminal>,
     /// The other terminals its agents may open in, a stream's (190).
@@ -94,6 +95,8 @@ struct Record {
     /// The session the agent's word that it started names, as scripted
     /// (161, 179).
     session: Option<String>,
+    /// Its session ends once it stops short, as scripted (96, 134).
+    ends_after_stop_short: bool,
 }
 
 impl Default for Record {
@@ -113,6 +116,7 @@ impl Default for Record {
             started_without: None,
             began_in: None,
             session: None,
+            ends_after_stop_short: false,
         }
     }
 }
@@ -192,6 +196,28 @@ impl FakeAgent {
     /// Whether the agent's record shows its session ended (134).
     pub fn set_ended(&self, agent: &Identity, reading: Reading) {
         self.with(agent, |record| record.ended = reading);
+    }
+
+    /// The agent's session ends once it stops short, as a program's does
+    /// that runs nothing after its stop-short, or whose host restarted
+    /// while it waited for its answer: from [`FakeAgent::stopped_short`]
+    /// on, its terminal reads it stopped and its record its session ended
+    /// (96, 134).
+    pub fn ends_after_stop_short(&self, agent: &Identity) {
+        self.with(agent, |record| record.ends_after_stop_short = true);
+    }
+
+    /// The agent stopped short, as a test says once flume took its words:
+    /// where it is scripted to end its session after, its terminal reads
+    /// it stopped and its record its session ended from now on, logged
+    /// `session ended <agent>`; otherwise nothing changes (96, 134).
+    pub fn stopped_short(&self, agent: &Identity) {
+        if !self.record(agent).ends_after_stop_short {
+            return;
+        }
+        self.log.push(format!("session ended {agent}"));
+        self.on(agent).kill(agent);
+        self.set_ended(agent, Reading::Yes);
     }
 
     /// Whether the agent says it started, in place of its word once opened

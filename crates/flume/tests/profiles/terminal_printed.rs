@@ -1,10 +1,11 @@
 //! The terminal profile that prints the command (C.5; design 12): the
 //! terminal seam's scenarios against it, its refusals among them, a tell
-//! refused with nothing typed, the command status gives, the same
-//! command printed whatever session its stream names (107), an agent
-//! read stopped once its record says its session ended (134), attach
-//! refused for either view with nothing run (187), and runs holding no
-//! part, in attach's words, with nothing run (201).
+//! refused with nothing typed, its saying it hands a running agent no
+//! words (198), the command status gives, the same command printed
+//! whatever session its stream names (107), an agent read stopped once
+//! its record says its session ended (134), attach refused for either
+//! view with nothing run (187), and runs holding no part, in attach's
+//! words, with nothing run (201).
 
 use crate::common::window::StandIn;
 use crate::common::*;
@@ -376,6 +377,46 @@ fn a_session_names_nothing_in_the_printed_command() {
         }),
         "the agent's session"
     );
+}
+
+#[test]
+fn the_printed_command_hands_a_running_agent_no_words() {
+    // The seam-contracts spec's printed command scenario: it says it
+    // cannot, and its send to an agent it printed a command for is refused
+    // with nothing typed and nothing written (53, 95, 198, C.5).
+    let scratch = Scratch::new("printed-sends");
+    let harness = Harness {
+        scratch,
+        seam: Printed,
+    };
+    assert!(!Printed.sends());
+    let who = Identity {
+        repository: "0123456789ab".into(),
+        place: "fix--one".into(),
+        stage: "code".into(),
+        start: 1,
+    };
+    assert!(matches!(
+        Printed.open(
+            &harness.place(),
+            &harness.folder(),
+            &harness.command(),
+            &who,
+            &OpenIn::Own,
+            None,
+        ),
+        Opened::Opened { .. }
+    ));
+    let state = harness.scratch.path("state");
+    let before = files_under(&state);
+    assert_eq!(
+        Printed.send(&who, "notes.md"),
+        Sent::Refused {
+            reason: "the printed command sends nothing to a running agent; nothing was typed"
+                .into()
+        }
+    );
+    assert_eq!(files_under(&state), before, "the printed command's marks");
 }
 
 #[test]
