@@ -547,7 +547,10 @@ Each runs with every multiplexer's session stripped and
 `sluice inbox` runs for a base place. The pinned sluice, 0.67.0, takes
 `--head` only with `--check`, and records the worktree it runs in as a
 submitter. The submit by name waits on sluice's follow-up S1, and the
-profile's test of it on the pin that carries it.
+profile's test of it on the pin that carries it. Until each is built the
+profile answers it in its own words as not yet built: open refused, a
+submit by name refused, and close kept, since a close that cannot run
+leaves the branch where it is.
 
 The git worktree place profile (C.1) is asked only for a base place's
 location, which it gives as for any place; it makes, reads and removes
@@ -578,6 +581,17 @@ unattended or not by the host's watch:
 `engine.settle_every(seconds)` keeps it, and the fake clock passing
 twice its bound lets it lapse. The fake kinds hold a kind with no
 stages as any kind. The fake place logs nothing for a base place.
+
+A test scripts the fake merge queue's open and close by the answer it
+gives for a branch, touching nothing. Unscripted, open makes the branch
+where the fake says the base lives and refuses a branch already present
+or a base it cannot read; close keeps a branch with a submission open on
+it or a commit its base lacks, in words naming them, answers gone where
+there is no branch, and otherwise removes it, as sluice's protection
+judges (sluice 106). The seam's base-place scenarios, open then close, an
+open refused and a submit by name, are a list of their own beside the
+merge queue's others, run over the fakes, so a profile runs them once it
+opens, closes and submits by name (106).
 
 ### 14. How it is held
 
