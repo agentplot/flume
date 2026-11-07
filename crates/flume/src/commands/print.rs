@@ -2549,7 +2549,7 @@ mod tests {
                 name: Some("madswan".into()),
                 from,
             },
-            terminal: Some("herdr".into()),
+            terminal: Some("fake".into()),
             found,
         }
     }
@@ -2595,7 +2595,7 @@ mod tests {
                     "madswan-planner",
                     SessionFrom::Role,
                     StandingFound::One {
-                        at: "herdr:w1:p1@/s".into(),
+                        at: "fake:1@w".into(),
                         state: AgentState::Waiting,
                     },
                 ),
@@ -2674,7 +2674,7 @@ mod tests {
                     "madswan-planner",
                     SessionFrom::Role,
                     StandingFound::One {
-                        at: "herdr:w1:p1@/s".into(),
+                        at: "fake:1@w".into(),
                         state: AgentState::Working,
                     },
                 ),
@@ -2694,7 +2694,7 @@ mod tests {
                 "madswan-planner",
                 SessionFrom::Role,
                 StandingFound::One {
-                    at: "herdr:w1:p1@/s".into(),
+                    at: "fake:1@w".into(),
                     state: AgentState::Asking,
                 },
             ),
