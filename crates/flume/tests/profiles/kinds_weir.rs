@@ -803,6 +803,103 @@ agents = [{ mode = { claude = "auto" } }]
 }
 
 #[test]
+fn an_effort_for_every_stage_and_one_for_a_stage() {
+    // 23, 197, C.2: a kind's agents table gives an effort for every
+    // stage, and a stage's agents another, each its program's own word
+    // kept as written.
+    let repository = Repository::new("declared-effort");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.bump.agents]
+effort = "high"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ effort = "xhigh" }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("an effort for bump and one for its code");
+    let revision = Revision::new(repository.head());
+    let KindsRead::Read { kinds, .. } = Weir.read_kinds(&repository.name(), &revision) else {
+        panic!("the declaration did not read");
+    };
+    let bump = &kinds[0];
+    assert_eq!(bump.agents.every_stage.effort.as_deref(), Some("high"));
+    assert_eq!(bump.stages[0].agents[0].effort.as_deref(), Some("xhigh"));
+}
+
+#[test]
+fn an_effort_for_every_kind_of_a_repository() {
+    // 32, 197, C.2: the repository's `[agents]` gives an effort for every
+    // kind, apart from its table for fix, which gives its own.
+    let repository = Repository::new("every-kind-effort");
+    repository.write(
+        DECLARATION,
+        r#"[agents]
+effort = "medium"
+
+[kinds.fix.agents]
+effort = "high"
+"#,
+    );
+    let revision = Revision::new(repository.commit("the repository's efforts"));
+    let KindsRead::Read {
+        settings, agents, ..
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
+        panic!("the declaration did not read");
+    };
+    assert_eq!(agents.effort.as_deref(), Some("medium"));
+    assert_eq!(settings["fix"].every_stage.effort.as_deref(), Some("high"));
+}
+
+#[test]
+fn an_effort_that_is_no_word_refuses_the_launch_naming_the_field() {
+    // 4, 197, C.2: a number and a table of programs each fail the read,
+    // naming the table's `effort`, in a repository's table for every kind,
+    // in its table for a kind it does not declare, in a stage's of a
+    // kind's own and in its agents; the launch is refused with nothing
+    // made.
+    let repository = Repository::new("declared-bad-effort");
+    repository.write(
+        DECLARATION,
+        r#"[agents]
+effort = { claude = "high" }
+
+[kinds.change.agents]
+effort = 3
+
+[kinds.bump.agents.stages.code]
+effort = { claude = "high" }
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ effort = 3 }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("efforts that are no word");
+    let reason = could_not_read(&repository);
+    for field in [
+        "agents.effort:",
+        "kinds.change.agents.effort",
+        "kinds.bump.agents.stages.code.effort",
+        "kinds.bump.stages[0].agents[0].effort",
+    ] {
+        assert!(
+            reason.contains(field),
+            "the read names not {field}: {reason}"
+        );
+    }
+    launch_refused_naming(&repository, "change", &["kinds.change.agents.effort"]);
+}
+
+#[test]
 fn a_session_in_an_agents_table_gives_no_setting() {
     // 32, 158, C.2: a kind names nothing a host owns, a session among
     // it: `session` in an agents table, for every stage and for one, in
@@ -1273,6 +1370,11 @@ makes = ["preview"]
         }]
     );
     assert_eq!(kind.stages[0].agents[0].program.as_deref(), Some("agent"));
+    assert_eq!(
+        kind.stages[0].agents[0].effort.as_deref(),
+        Some("high"),
+        "the stage's effort, read as written (197)"
+    );
     assert_eq!(kind.stages[0].prompt, "{{brief}}\n\n{{needs}}");
 }
 

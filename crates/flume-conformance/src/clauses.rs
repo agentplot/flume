@@ -99,10 +99,6 @@ pub const MCP_SERVERS: &str =
 pub const ORIGIN: &str =
     "a-place-is-cut-from-origins-copy-of-its-base, record 0041, landed before the list held S92";
 
-/// The change that builds record 0044: an agent's effort, a setting of
-/// flume's layers.
-pub const EFFORT: &str = "an-agents-effort-is-a-setting-of-flumes-layers, record 0044";
-
 /// The change that builds record 0046: an agent that stops short needing
 /// an answer kept open for it, `keep_open` one of flume's layers.
 pub const KEEP_OPEN: &str = "an-answer-reaches-the-open-session-within-an-hour, record 0046";
@@ -135,9 +131,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
     let origin = std::iter::once(("S92".to_string(), ORIGIN));
-    let effort = ["197".to_string(), "S103".to_string()]
-        .into_iter()
-        .map(|clause| (clause, EFFORT));
     let keep_open = std::iter::once("198".to_string())
         .chain((104..=105).map(|scenario| format!("S{scenario}")))
         .map(|clause| (clause, KEEP_OPEN));
@@ -148,7 +141,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(statechart)
         .chain(mcp_servers)
         .chain(origin)
-        .chain(effort)
         .chain(keep_open)
         .collect()
 }
@@ -212,7 +204,7 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 2 + 3);
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 3);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
@@ -223,6 +215,7 @@ mod tests {
             "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "199", "S106", "S107",
             "207", "S113", "S114", "S115", "S116", "S117", "195", "196", "S100", "S101", "S102",
             "202", "203", "204", "205", "206", "208", "S109", "S110", "S111", "S112", "S118",
+            "197", "S103",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

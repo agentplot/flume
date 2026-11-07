@@ -9,14 +9,15 @@ use super::account_pools::{
     fix_of, home, host, of_the_surfaces, on, pool, pool_at, reading_at, reads, spent,
     stops_at_limit, two_programs, window, UNREACHED,
 };
+use super::agent_effort::effort;
 use super::agent_modes::{in_mode, in_programs, the_fakes_map};
 use super::agent_settings::for_every_stage;
 use super::carried_conversations::{by_hand, lost_with_host, retry_talk, talk, talking};
 use super::world::*;
 use crate::{ensure, ensure_eq, Outcome, Scenario};
 use flume_core::{
-    AccountStatus, Act, AddressStatus, AgentStatus, Answer, Cache, ModeStatus, MoveStatus,
-    PlaceStatus, PoolStatus, Retry, StandingFound, WaitingOn, Waits,
+    AccountStatus, Act, AddressStatus, AgentStatus, Answer, Cache, EffortStatus, ModeStatus,
+    MoveStatus, PlaceStatus, PoolStatus, Retry, StandingFound, WaitingOn, Waits,
 };
 use flume_seams::*;
 
@@ -251,6 +252,21 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             name: "status: a place whose talk reads lost while the fake terminal holds its agent brought back bare gives that agent left in its pane",
             cites: &["S113", "56", "77"],
             run: a_bare_agent_left,
+        },
+        Scenario {
+            name: "status: a place whose agent took xhigh from --agent effort=xhigh gives the effort xhigh from launch, passed and not read back, in the JSON form",
+            cites: &["S103", "56", "197"],
+            run: an_effort_from_the_launch,
+        },
+        Scenario {
+            name: "status: a place whose agent took high from host-kind on an account whose env names the variable the fake reads over its effort gives that variable as outranking it, and no value of it",
+            cites: &["56", "197"],
+            run: an_effort_outranked_by_the_account,
+        },
+        Scenario {
+            name: "status: a place whose agent's settings give no effort, on an account whose env names the variable the fake reads over one, gives no effort, its JSON form holding no effort for the agent",
+            cites: &["56", "197"],
+            run: no_effort_in_status,
         },
     ]
 }
@@ -2064,6 +2080,125 @@ fn a_bare_agent_left(_: &()) -> Outcome {
         json["agent"]["left_in_pane"],
         serde_json::json!(true),
         "left_in_pane in the JSON form"
+    );
+    Ok(())
+}
+
+/// The variable the fake reads over the effort its command passes, and
+/// the value the account `work-1` gives it, which status never holds.
+const EFFORT_VARIABLE: &str = "AGENT_EFFORT";
+const EFFORT_VALUE: &str = "effort-from-the-account";
+
+/// The host's pool `work` of one account, `work-1`, whose `env` names the
+/// variable the fake reads over its effort, and the fake taking `words`.
+fn on_an_account_naming_the_variable(world: &World, words: &[&str]) {
+    world.agent.take_efforts(words);
+    world.agent.read_effort_over(EFFORT_VARIABLE);
+    let mut work_1 = account("work-1", None);
+    work_1
+        .env
+        .insert(EFFORT_VARIABLE.into(), EFFORT_VALUE.into());
+    pool(world, "work", Strategy::FillFirst, vec![work_1]);
+    world.host.set_host_pool(Some("work"));
+}
+
+/// The fix `one` launched as `fix` gives it and settled once: its agent's
+/// status, and the same in the JSON form.
+fn effort_in_status(
+    world: &World,
+    fix: &Launch,
+) -> Result<(AgentStatus, serde_json::Value), String> {
+    launched(&world.engine.launch(fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    let json = status_json(world, &id)?;
+    let agent = world.status(&id)?.agent.ok_or("status gives no agent")?;
+    Ok((agent, json["agent"].clone()))
+}
+
+fn an_effort_from_the_launch(_: &()) -> Outcome {
+    let world = World::new();
+    world.agent.take_efforts(&["xhigh"]);
+    let mut fix = launch("fix", "one", Some("mend it"));
+    fix.every_stage = effort("xhigh");
+    let (agent, json) = effort_in_status(&world, &fix)?;
+    ensure_eq!(
+        agent.effort,
+        Some(EffortStatus {
+            word: "xhigh".into(),
+            layer: Layer::Launch,
+            passed: "xhigh".into(),
+            read_back: false,
+            outranked_by: None,
+        }),
+        "the agent's effort"
+    );
+    ensure_eq!(
+        (
+            json["settings"]["effort"].clone(),
+            json["settings"]["from"]["effort"].clone(),
+            json["effort"].clone()
+        ),
+        (
+            serde_json::json!("xhigh"),
+            serde_json::json!({"layer": "launch", "value": "xhigh"}),
+            serde_json::json!({"word": "xhigh", "layer": "launch", "passed": "xhigh", "read_back": false})
+        ),
+        "the effort in the JSON form"
+    );
+    Ok(())
+}
+
+fn an_effort_outranked_by_the_account(_: &()) -> Outcome {
+    let world = World::new();
+    on_an_account_naming_the_variable(&world, &["high"]);
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(effort("high")));
+    let (agent, json) = effort_in_status(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(
+        agent.effort,
+        Some(EffortStatus {
+            word: "high".into(),
+            layer: Layer::HostKind,
+            passed: "high".into(),
+            read_back: false,
+            outranked_by: Some(EFFORT_VARIABLE.into()),
+        }),
+        "the agent's effort"
+    );
+    ensure_eq!(
+        json["effort"]["outranked_by"].clone(),
+        serde_json::json!(EFFORT_VARIABLE),
+        "the variable that outranks it in the JSON form"
+    );
+    let text = json.to_string();
+    ensure!(
+        !text.contains(EFFORT_VALUE),
+        "the variable's value in status: {text}"
+    );
+    Ok(())
+}
+
+fn no_effort_in_status(_: &()) -> Outcome {
+    let world = World::new();
+    on_an_account_naming_the_variable(&world, &["high"]);
+    let (agent, json) = effort_in_status(&world, &launch("fix", "one", Some("mend it")))?;
+    ensure_eq!(agent.effort, None, "the agent's effort");
+    ensure_eq!(
+        agent.settings.settings.effort,
+        None,
+        "the effort its settings give"
+    );
+    ensure!(
+        json.get("effort").is_none()
+            && json["settings"].get("effort").is_none()
+            && json["settings"]["from"].get("effort").is_none(),
+        "an effort in the JSON form: {json}"
+    );
+    ensure!(
+        !json.to_string().contains(EFFORT_VALUE),
+        "the variable's value in status: {json}"
     );
     Ok(())
 }

@@ -852,8 +852,11 @@ fn map_agents(
 }
 
 /// An agent's settings, its table as written: `program`, `model`,
-/// `instructions`, `beside`, `mode` and `programs` (32, 107, 162, 195),
-/// the mode one of flume's four or a table of programs, read as the
+/// `effort`, `instructions`, `beside`, `mode` and `programs` (32, 107,
+/// 162, 195, 197), the effort its program's own word, kept as written
+/// for the agent's profile to take or refuse, any other value, a table
+/// of programs among it, failing it naming the field (197, C.2), the
+/// mode one of flume's four or a table of programs, read as the
 /// host's configuration reads it, any other failing it naming the field
 /// (169, C.2), and `programs` each program's own settings, read by
 /// flume's one reader of them, a file an entry names read by `beside` as
@@ -874,6 +877,7 @@ fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>
     };
     let program = text("program");
     let model = text("model");
+    let effort = text("effort");
     let instructions = text("instructions");
     let pane = text("beside");
     let mode = agent.get("mode").and_then(|mode| {
@@ -902,6 +906,7 @@ fn map_agent(agent: &Table, at: &str, beside: Reader, problems: &mut Vec<String>
     Settings {
         program,
         model,
+        effort,
         instructions,
         beside: pane,
         mode,

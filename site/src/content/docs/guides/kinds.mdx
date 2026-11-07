@@ -249,12 +249,29 @@ none of the lines once the place is tidied.
 ### Settings
 
 A kind's `agents` table, and a stage's one agent table, give the
-agent's `program`, `model` and `instructions`, `beside` for where its
-pane opens, `mode` and `programs`. The mode says how far the agent may
-act without asking a person: one of `plan`, `ask`, `edits` and `full`,
-or a table of programs such as `{ claude = "auto" }`
+agent's `program`, `model`, `effort` and `instructions`, `beside` for
+where its pane opens, `mode` and `programs`. The mode says how far the
+agent may act without asking a person: one of `plan`, `ask`, `edits`
+and `full`, or a table of programs such as `{ claude = "auto" }`
 ([the mode](/flume/guides/agent-settings/#the-mode)).
 A `mode` that is neither refuses the launch, naming the field.
+
+The effort says how hard the agent's model works on each turn, as its
+program's own word, such as Claude Code's `xhigh`
+([the effort](/flume/guides/agent-settings/#the-effort)). A kind that
+runs a deep stage harder than the rest gives that stage its own:
+
+```toml
+[[kinds.spike.stages]]
+name = "explore"
+prompt = "prompts/spike.md"
+deliverables = ["committed:notes/spike.md"]
+agents = [{ effort = "xhigh" }]
+```
+
+An `effort` that is not a string refuses the launch, naming the field,
+and a word the agent's program does not take refuses it naming the
+word, the stage and the program.
 
 `programs` gives each program's own settings, in that program's own
 words: a settings file the table names, `file`, and keys it gives

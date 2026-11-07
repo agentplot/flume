@@ -37,11 +37,11 @@ const PERSON: &str = "a person, who alone accepts the warning it records";
 /// Each key 2.1.296's settings hold that the profile reserves, by its
 /// path, with its owner and its declaration in the release's settings
 /// schema past its name, through the opening of its description: the
-/// account's environment, flume's model and mode, the account's
+/// account's environment, flume's model, effort and mode, the account's
 /// credential helpers and sign-in, the hooks of flume's plugin, which the
 /// start's ack, the guard and the stop check are read from, and the two
-/// acceptances of a person's (35, 144, 162, 172; design 6).
-const RESERVED: [(&str, &str, &str); 13] = [
+/// acceptances of a person's (35, 144, 162, 172, 197; design 6).
+const RESERVED: [(&str, &str, &str); 14] = [
     (
         "env",
         ACCOUNT,
@@ -51,6 +51,11 @@ const RESERVED: [(&str, &str, &str); 13] = [
         "model",
         "flume's `model`",
         "()=>o().optional().describe(\"Override the default model used by Claude Code\")",
+    ),
+    (
+        "effortLevel",
+        "flume's `effort`",
+        "()=>U([\"low\",\"medium\",\"high\",\"xhigh\"]).optional().catch(void 0).describe(\"Persisted effort level for supported models.\")",
     ),
     (
         "permissions.defaultMode",
@@ -110,7 +115,7 @@ const RESERVED: [(&str, &str, &str); 13] = [
 ];
 
 /// The keys the profile reserves, by their paths, each with its owner
-/// (195, 196; design 6).
+/// (195, 196, 197; design 6).
 pub fn reserved() -> Vec<Reserved> {
     RESERVED
         .iter()
@@ -197,6 +202,7 @@ mod tests {
                 r#"if(Array.isArray(e)&&Array.isArray(n)){if(s==="fallbackModel")return n;return D([...e,...n])}"#,
                 r#"env:()=>Ae(()=>Lg()).describe("Environment variables to set for Claude Code sessions")"#,
                 r#"model:()=>o().optional().describe("Override the default model used by Claude Code")"#,
+                r#"effortLevel:()=>U(["low","medium","high","xhigh"]).optional().catch(void 0).describe("Persisted effort level for supported models.")"#,
                 r#"defaultMode:pa(rh,U([...CH,...Ho(e)])).optional().describe("Default permission mode when Claude Code needs access"#,
                 r#"apiKeyHelper:()=>o().optional().describe("Path to a script that outputs authentication values")"#,
                 r#"awsAuthRefresh:()=>o().optional().describe("Path to a script that refreshes AWS authentication")"#,
