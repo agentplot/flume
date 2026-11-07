@@ -10,7 +10,7 @@ is passed by moon to the task's `cargo test`.
 
 ## 1. The planning rules
 
-- [ ] 1.1 In `openspec/config.yaml`'s `rules.tasks`, replace the first rule and the last with design 8's two rules, the narrowest check per task and no task running the whole checks or a group's, keeping the three rules between them as they are (kit:specs.3; record 0054). Check: `devenv shell -- treefmt --ci openspec/config.yaml`.
+- [x] 1.1 In `openspec/config.yaml`'s `rules.tasks`, replace the first rule and the last with design 8's two rules, the narrowest check per task and no task running the whole checks or a group's, keeping the three rules between them as they are (kit:specs.3; record 0054). Check: `devenv shell -- treefmt --ci openspec/config.yaml`.
 - [ ] 1.2 In `CLAUDE.md`'s paragraph under "Checks", say that `sluice exec main` runs the gate's checks, which a change's verify stage runs once and no task of a change runs, and that a task's own check runs as the task names it, beside `cargo check` and one unit test, as design 8 has it (record 0054). Check: `devenv shell -- treefmt --ci CLAUDE.md`.
 
 ## 2. change@3 built in
