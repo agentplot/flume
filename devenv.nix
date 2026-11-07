@@ -265,6 +265,10 @@ let
   statixVersion = "0.5.8-unstable-2026-07-17";
   deadnixVersion = "1.3.2";
 
+  # The flake's inputs as flake.lock locks them, fetched by this shell
+  # outside the gate's sandbox (nix/inputs.nix).
+  flakeInputs = import ./nix/inputs.nix { };
+
   # OpenSpec, which root:specs and root:changes validate with and the
   # change profile reads other schemas through: sluice's release, built as
   # nixpkgs builds its older one. Bump the version, then each hash from
@@ -423,6 +427,11 @@ in
   # shims, and the hook config the shell links into a worktree.
   env.FLUME_HOOKS = "${hookShims}";
   env.FLUME_HOOKS_CONFIG = "${config.git-hooks.configFile}";
+
+  # The flake's inputs, fetched by this shell outside the gate's sandbox and
+  # given to nix:typecheck and nix:test by their store paths, which they
+  # read with no network and no nix daemon (nix/check.sh).
+  env.FLUME_FLAKE_INPUTS = builtins.toJSON flakeInputs.paths;
 
   env.PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers-chromium}";
 

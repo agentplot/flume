@@ -23,6 +23,20 @@ tasks:
     inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock']
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
+  # Every package of every system evaluates, and each module in a system of
+  # its platform, against no store (nix/check.sh).
+  typecheck:
+    command: 'sh nix/check.sh typecheck'
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock', '/Cargo.toml', '/Cargo.lock', '/.prototools', '/crates/**/*']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
+  # The evaluated cases of the change's specs, under nix/tests, and the
+  # scripts' cases, nix/tests/scripts.sh.
+  test:
+    command: 'sh nix/check.sh test'
+    inputs: ['/flake.nix', '/flake.lock', '/nix/**/*', '/devenv.nix', '/devenv.lock', '/Cargo.toml', '/Cargo.lock', '/.prototools', '/crates/**/*']
+    tags: [check-fast]
+    options: {runFromWorkspaceRoot: true}
   # In no layer: the package built for the host's system, which needs the
   # nix daemon and the network the gate's sandbox denies. CI's flake job
   # runs it on Linux and macOS, in the devenv shell.
