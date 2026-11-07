@@ -24,8 +24,8 @@ use std::sync::Arc;
 pub fn scenarios() -> Vec<Scenario<()>> {
     vec![
         Scenario {
-            name: "run through: under a terminal that keeps watch a fix runs from its launch to its landing on the watch's and its agent's settles alone, the landing delivered to its recipient and the place tidied",
-            cites: &["119", "122", "131", "I8", "43"],
+            name: "run through: under a caller's watch a fix runs from its launch to its landing on the watch's and its agent's settles alone, the landing delivered to its recipient and the place tidied",
+            cites: &["119", "131", "I8", "43", "208"],
             run: a_fix_runs_unattended,
         },
         Scenario {
@@ -94,8 +94,13 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: a_fixs_code_finds_work,
         },
         Scenario {
-            name: "fix round: a caller's retry of a fix's code that found work starts code once with a fresh agent, its prompt holding the findings and then the answer, counting no going-back, and the fix lands once code delivers",
-            cites: &["42", "48", "49", "131"],
+            name: "fix round: a caller's retry of a fix's code that found work, while code's agent is kept open, hands that agent the findings and then the answer in its session, code begun again under its first start, counting no going-back, and the fix lands once code delivers",
+            cites: &["42", "48", "49", "131", "198"],
+            run: the_retry_that_answers_a_fixs_found_in_its_session,
+        },
+        Scenario {
+            name: "fix round: a caller's retry of a fix's code that found work, once code's agent is no longer kept open, starts code once with a fresh agent, its prompt holding the findings and then the answer, counting no going-back, and the fix lands once code delivers",
+            cites: &["42", "48", "49", "131", "198"],
             run: the_retry_that_answers_a_fixs_found,
         },
         Scenario {
@@ -608,8 +613,8 @@ fn released_in_conflict(world: &World, findings: u32) -> Result<PlaceId, String>
     Ok(id)
 }
 
-/// Two settles of the place at once, as the terminal's watch and an
-/// agent going quiet settle it together: the second runs whole just
+/// Two settles of the place at once, as a caller's watch and an agent
+/// going quiet settle it together: the second runs whole just
 /// before the first's first write, which then reads again.
 fn two_settles_at_once(world: &World, id: &PlaceId) -> Outcome {
     let other = world.engine();
@@ -816,7 +821,7 @@ fn construct_finds_work(_: &()) -> Outcome {
 
 fn a_fix_runs_unattended(_: &()) -> Outcome {
     let world = World::new();
-    world.terminal.set_watch(Watch::Bound { seconds: 30 });
+    world.engine.settle_every(30);
     world.terminal.add_session("ops", AgentState::Waiting);
     let id = World::id("fix", "one");
     let mut fix = launch("fix", "one", Some("mend it"));
@@ -824,7 +829,7 @@ fn a_fix_runs_unattended(_: &()) -> Outcome {
     launched(&world.engine.launch(&fix))?;
     // From here only the watch settles every place on its bound, and the
     // agent's going quiet settles its own; no caller acts.
-    world.engine().settle(None);
+    world.engine().settle_every(30);
     ensure_eq!(
         world.stage_state(&id, "code"),
         Some(StageState::Begun),
@@ -834,7 +839,7 @@ fn a_fix_runs_unattended(_: &()) -> Outcome {
     world.settle(&id);
     for _ in 0..3 {
         world.host.advance(30);
-        world.engine().settle(None);
+        world.engine().settle_every(30);
     }
     ensure!(world.held(&id).is_none(), "the place's document stands");
     ensure!(!world.place.exists(&id.0), "the place's worktree stands");
@@ -913,6 +918,10 @@ fn a_fixs_code_finds_work(_: &()) -> Outcome {
         "the move the place waits on"
     );
     ensure_eq!(waiting.words.as_deref(), Some(findings), "the words");
+    ensure!(
+        waiting.open_until.is_some() && waiting.closed.is_none(),
+        "code's agent is not kept open for the answer: {waiting:?}"
+    );
     let line = world.engine().line(&id, None).ok_or("no line")?;
     ensure_eq!(
         line.state.as_str(),
@@ -929,11 +938,8 @@ fn a_fixs_code_finds_work(_: &()) -> Outcome {
         status.ends
     );
     ensure!(
-        world
-            .terminal
-            .notices("ops")
-            .iter()
-            .any(|notice| notice.contains("fix--one code found work")),
+        world.terminal.notices("ops").iter().any(|notice| notice
+            .contains("fix--one (mend it) code found work, its agent kept open for the answer")),
         "the notices to ops: {:?}",
         world.terminal.notices("ops")
     );
@@ -951,36 +957,82 @@ fn a_fixs_code_finds_work(_: &()) -> Outcome {
     Ok(())
 }
 
-fn the_retry_that_answers_a_fixs_found(_: &()) -> Outcome {
-    let world = World::new();
-    let findings = "The landing is read from another host's queue, outside this place.";
-    let id = a_fixs_code_found(&world, findings)?;
-    let answer = "Read it from this host's queue alone; the other host's is not ours.";
-    let retried = world
-        .engine
-        .retry(&id, Retry::Stage("code".into()), Some(answer.into()), false);
+/// The findings and the answer to them a fix's code is handed or a fresh
+/// start's prompt carries, and the caller's retry of code with that
+/// answer, taken (42, 49).
+const FIX_FINDINGS: &str = "The landing is read from another host's queue, outside this place.";
+const FIX_ANSWER: &str = "Read it from this host's queue alone; the other host's is not ours.";
+
+fn retried_with_the_answer(world: &World, id: &PlaceId) -> Outcome {
+    let retried = world.engine.retry(
+        id,
+        Retry::Stage("code".into()),
+        Some(FIX_ANSWER.into()),
+        false,
+    );
     ensure!(
         retried.refusal().is_none(),
         "the retry was refused: {retried:?}"
     );
+    Ok(())
+}
+
+/// The fix `id`, its code having taken its answer, delivered, settled
+/// with no going-back counted, and landed once.
+fn lands_with_no_going_back(world: &World, id: &PlaceId) -> Outcome {
+    ensure_eq!(
+        world.held(id).map(|held| held.submission.send_backs),
+        Some(0),
+        "goings-back"
+    );
+    deliver_fix(world, id);
+    world.settle(id);
+    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
+    ensure!(world.held(id).is_none(), "the landed place is kept");
+    Ok(())
+}
+
+fn the_retry_that_answers_a_fixs_found_in_its_session(_: &()) -> Outcome {
+    let world = World::new();
+    let id = a_fixs_code_found(&world, FIX_FINDINGS)?;
+    retried_with_the_answer(&world, &id)?;
+    let first = World::identity("fix", "one", "code", 1);
+    ensure_eq!(
+        world.terminal.sent_to(&first).last().cloned(),
+        Some(format!(
+            "The question: {FIX_FINDINGS}\n\nThe answer: {FIX_ANSWER}"
+        )),
+        "the last words code's agent was sent"
+    );
+    let held = world.held(&id).ok_or("no held state")?;
+    let stage = &held.stages[0];
+    ensure_eq!(
+        (
+            stage.state,
+            stage.starts,
+            stage.start.as_ref().map(|start| (start.n, start.live)),
+            world.terminal.log.count("open"),
+        ),
+        (StageState::Begun, 1, Some((1, true)), 1),
+        "code, its starts, its start and whether it is live, and the agents opened"
+    );
+    lands_with_no_going_back(&world, &id)
+}
+
+fn the_retry_that_answers_a_fixs_found(_: &()) -> Outcome {
+    let world = World::new();
+    let id = a_fixs_code_found(&world, FIX_FINDINGS)?;
+    world.host.advance(flume_core::KEEP_OPEN);
+    retried_with_the_answer(&world, &id)?;
     world.settle(&id);
     ensure_eq!(world.terminal.log.count("open"), 2, "agents opened");
     let code = World::identity("fix", "one", "code", 2);
     let prompt = world.prompt(&id, &code).ok_or("code did not start again")?;
-    match (prompt.find(findings), prompt.find(answer)) {
+    match (prompt.find(FIX_FINDINGS), prompt.find(FIX_ANSWER)) {
         (Some(question), Some(answered)) if question < answered => {}
         _ => return Err(format!("the findings then the answer are not in {prompt}")),
     }
-    ensure_eq!(
-        world.held(&id).map(|held| held.submission.send_backs),
-        Some(0),
-        "goings-back"
-    );
-    deliver_fix(&world, &id);
-    world.settle(&id);
-    ensure_eq!(world.queue.log.count("submit"), 1, "submissions");
-    ensure!(world.held(&id).is_none(), "the landed place is kept");
-    Ok(())
+    lands_with_no_going_back(&world, &id)
 }
 
 fn a_last_stage_naming_none_finds_work(_: &()) -> Outcome {

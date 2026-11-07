@@ -249,3 +249,110 @@ otherwise; its log SHALL name each `live` it answers (106, 207).
 
 - **WHEN** a test scripts the session `s-1` live as process 4242, asks live, then scripts it ended and asks again
 - **THEN** live answers runs with process 4242, then none, and the fake's log shows both readings (207)
+
+### Requirement: The fake host scripts standing agents
+
+The fake host SHALL give each address a test gives a standing agent, as
+the test sets it at the time of each call, and none for an address a
+test takes it from (132).
+
+#### Scenario: An entry set and taken away
+
+- **WHEN** a test gives `madswan/planner` a standing agent, reads the host's standing entries, takes it away and reads them again
+- **THEN** the first read holds it and the second does not
+
+### Requirement: The fake terminal scripts named agents in a part
+
+The fake terminal SHALL hold agents a test adds by name in a part, each
+under a session key of its own that its sends and state reach, two of
+one name among them, give them to the seam's operation, record what is
+sent to each, and answer a part a test refuses as not read (132).
+
+#### Scenario: An agent added, removed and refused
+
+- **WHEN** a test adds `w-planner` waiting in `w`, sends to its key, removes it, then refuses `w` with words
+- **THEN** the first read lists it waiting, its key holds the notice, the second read lists none, and the third answers not read with those words
+
+#### Scenario: Two of one name
+
+- **WHEN** a test adds `w-planner` twice in `w`
+- **THEN** the part's agents list two named `w-planner`, each under its own key
+
+### Requirement: The fake agent scripts the efforts it takes
+
+The fake agent SHALL script the words it takes as an effort and the
+variable it names as read over them, each passing the agent seam's
+scenarios; its command SHALL pass `--effort <word>` where the settings
+give one, and its log SHALL name each `effort` it is asked, so a test
+reads what the profile was given (106, 197).
+
+#### Scenario: A scripted effort taken and passed
+
+- **WHEN** a test scripts the fake agent to take `low` and `high`, and a fix launches with `--agent effort=high`
+- **THEN** the fake's log shows `effort` asked of `high` at the launch and at the start, and the start's command passing `--effort high` (88, 197)
+
+### Requirement: The fake terminal scripts whether it hands words
+
+The fake terminal SHALL script whether it can type into a running
+agent, and the fake agent SHALL script a session that ends after a
+stop-short, so the engine's scenarios read each (53, 96, 134, 198).
+
+#### Scenario: A fake terminal that hands no words
+
+- **WHEN** the fake terminal is scripted to hand no words to a running agent
+- **THEN** it says it cannot, and a send to it is refused with nothing typed (53)
+
+#### Scenario: A fake agent's session ended after its stop-short
+
+- **WHEN** the fake agent is scripted to end its session after a stop-short
+- **THEN** the fake reads the agent stopped and its session ended from then on (96, 134)
+
+### Requirement: The fake host runs another process while a command sleeps
+
+The fake host SHALL take what another process does while a command of
+flume's sleeps on its clock, and run it once, at the next sleep, after
+the clock moves, so the engine's scenarios place a settle an agent's
+quiet started inside an act's wait (121, 198).
+
+#### Scenario: Another process at the next sleep
+
+- **WHEN** a test gives the fake host what another process does, advances its clock, then a command sleeps twice
+- **THEN** it runs once, at the first sleep, after that sleep moved the clock, and not before
+
+### Requirement: The fakes script a base place's branch
+
+The fake merge queue SHALL answer open and close as scripted, by
+default making the branch at its base's revision and removing it, and
+log each as `open <branch> from <base>` and `close <branch> into
+<base>`; a branch it opened SHALL be one it lands on. It SHALL log a
+submit by name as `submit <branch> named`, and decide such a
+submission in its record alone, its inbox giving nothing for it (106,
+133, 202, 205, 206).
+
+#### Scenario: Scripted open and close
+
+- **WHEN** a test scripts the fake merge queue to refuse `open train/x from main` with words, and to keep `train/y` at its close with words
+- **THEN** open of `train/x` answers refused with them, close of `train/y` answers kept with them, and the log names each ask (205, 206)
+
+#### Scenario: A submission by name decided in the record
+
+- **WHEN** a test submits `train/z` by name and scripts the fake merge queue to land it
+- **THEN** read-submission of `train/z` gives it landed, and the inbox gives nothing for any place (133, 203)
+
+### Requirement: The fakes keep the host's watch and settle nothing
+
+The fake store SHALL hold the host's watch as any host document, so a
+test makes flume watched by settling with a bound and lets the watch
+lapse by the fake clock; the fake terminal SHALL settle nothing and
+answer nothing of a watch, and SHALL log the clues show gives it, the
+line's short form among them (106, 122, 139, 208).
+
+#### Scenario: A watch the clock lets lapse
+
+- **WHEN** a test settles every place with a bound of thirty seconds and moves the fake clock past a minute
+- **THEN** the engine reads attended, and reads unattended again after the test's next settle with a bound (119, 208)
+
+#### Scenario: Show's clues in the log
+
+- **WHEN** a settle shows a place's clues to the fake terminal
+- **THEN** its log names the place, its stage and state, its line's short form and its base's count (139)

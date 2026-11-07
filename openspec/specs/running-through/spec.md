@@ -75,14 +75,19 @@ Found work from any stage but the kind's last, and from a last stage
 that is the stage the kind names for a failed submission, or names none,
 SHALL be taken as needing an answer: the stage SHALL end short with the
 agent's words and the kind it said, no stage SHALL start, no going-back
-SHALL be counted, and the place SHALL wait on a retry of that stage,
-status saying it waits on an answer and that the agent found work, with
-its words (41, 42, 131).
+SHALL be counted, and the place SHALL wait on its answer, its agent kept
+open for it as for a question, status saying it waits on an answer and
+that the agent found work, with its words (41, 42, 131, 198).
 
 #### Scenario: Construct says it found work
 
 - **WHEN** a construct agent stops short with `found work`
-- **THEN** no stage starts, the place waits on an answer, and status says the agent found work with its words
+- **THEN** no stage starts, the place waits on an answer with its agent kept open for it, and status says the agent found work with its words
+
+#### Scenario: Found work from the last stage keeps no agent open
+
+- **WHEN** a verify agent, the kind's last stage, stops short having found work
+- **THEN** its agent is kept open for nothing, it is ended once quiet, and the kind's fix round starts with the findings (131)
 
 #### Scenario: A fix's code finds work
 

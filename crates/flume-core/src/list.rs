@@ -10,6 +10,8 @@
 //! resolved; it takes no lock, writes nothing, settles nothing and
 //! refuses nothing (57; core.13, core.16, core.17).
 
+use crate::base::submission_open;
+use crate::held::waiting_now;
 use crate::line::{stage_at, state_words, SEPARATOR};
 use crate::room::StreamRoom;
 use crate::status::session_wait;
@@ -56,15 +58,21 @@ impl Engine {
             .then(|| stage_at(held))
             .flatten();
         let stage = at.map(|index| label(&held.stages[index].name, None));
-        let state = state_words(held, at, self.asking(held));
-        let waits_on = waits_on(held, &state);
+        let on_branch = self.on_branch_count(held);
+        let state = state_words(held, at, self.asking(held), on_branch);
+        let waits_on = waits_on(held, &state, on_branch);
         let kept = kept_words(&held.phase);
         let name = place.short();
+        // A base place waiting on the places on its branch says so in its
+        // state's words, `<n> on its branch · open`, which its line ends
+        // with (200, 203).
         let line = joined(&[
             Some(name.as_str()),
             stage.as_deref(),
             Some(state.as_str()),
-            waits_on.map(WaitsOn::words),
+            waits_on
+                .filter(|waits_on| *waits_on != WaitsOn::Places)
+                .map(WaitsOn::words),
             kept.as_deref(),
         ]);
         Listed {
@@ -168,17 +176,22 @@ fn landed_or_dropped(phase: &Phase) -> bool {
     }
 }
 
-/// Whom a live place waits on, from its held state alone: its caller
-/// where it waits on its caller's move, stalled or not (130); the host
-/// where a stage waits for room and nothing waits on its caller (70), or
-/// its session where that stage waits while a process runs the
-/// conversation its start would carry, as the last settle read it, asking
-/// no agent program (49, 207); the merge queue where it is `submitted`
-/// (111); and nobody for an agent's own question in its pane (90).
-fn waits_on(held: &HeldState, state: &str) -> Option<WaitsOn> {
+/// Whom a live place waits on, from its held state alone and, for a
+/// base place, `on_branch`, the count of the live places on its branch:
+/// the places on its branch while any is live and its submission is not
+/// open (203); its caller where it waits on its caller's move, stalled or
+/// not (130); the host where a stage waits for room and nothing waits on
+/// its caller (70), or its session where that stage waits while a process
+/// runs the conversation its start would carry, as the last settle read
+/// it, asking no agent program (49, 207); the merge queue where it is
+/// `submitted` (111); and nobody for an agent's own question in its pane
+/// (90). Status gives the same (core.14).
+pub(crate) fn waits_on(held: &HeldState, state: &str, on_branch: Option<usize>) -> Option<WaitsOn> {
     if held.phase != Phase::Live {
         None
-    } else if held.waiting.is_some() {
+    } else if on_branch.is_some_and(|count| count > 0) && !submission_open(held) {
+        Some(WaitsOn::Places)
+    } else if waiting_now(held, on_branch).is_some() {
         Some(WaitsOn::Caller)
     } else if session_wait(held).is_some() {
         Some(WaitsOn::Session)

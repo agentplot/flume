@@ -33,6 +33,11 @@ fn the_fake_agent_passes_the_agent_scenarios() {
         &agent::scenarios(),
         FakeAgentHarness::taking_no_own,
     );
+    pass_all(
+        "agent",
+        &agent::scenarios(),
+        FakeAgentHarness::taking_no_effort,
+    );
 }
 
 #[test]
@@ -92,6 +97,15 @@ fn the_fake_merge_queue_passes_the_merge_queue_scenarios() {
     pass_all(
         "merge queue",
         &merge_queue::scenarios(),
+        FakeMergeQueueHarness::default,
+    );
+}
+
+#[test]
+fn the_fake_merge_queue_passes_the_base_place_scenarios() {
+    pass_all(
+        "merge queue",
+        &merge_queue::base_place_scenarios(),
         FakeMergeQueueHarness::default,
     );
 }

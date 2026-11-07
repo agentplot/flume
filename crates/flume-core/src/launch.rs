@@ -12,8 +12,11 @@
 //! with the host's configuration as it stands, so a program no agent
 //! profile runs refuses the launch (4, 32). Its recipients are the launch's, or the
 //! one the caller's environment names, or the session the terminal says
-//! launched it (7, 8), and a role's run has none, its agents' session
-//! named by its address (132). The newest submission the merge queue
+//! launched it, or the answerer behind its stream, with where they came
+//! from kept, and a launch that finds none, or names an address that
+//! wakes nothing where no answerer stands behind its stream, is refused
+//! (7, 8, 193); a role's run has none, its agents' session named by its
+//! address (132). The newest submission the merge queue
 //! holds of the branch at the launch is an earlier place's of the same
 //! name, kept so it is never read as this place's (3, 99). A refusal
 //! after the place's held state
@@ -23,7 +26,13 @@
 //! its kind, else `default`, and one the host does not declare, or whose
 //! multiplexer names a terminal profile flume does not carry, refuses
 //! the launch (4, 8, 143, 190); its intent is the launch's name, else its
-//! repository and base (147).
+//! repository and base (147). A base place, whose kind lands and has
+//! no stages, is launched as any place until its held state is written,
+//! and then has its branch opened by the merge queue and nothing else
+//! made: no worktree, no readiness and no start (202, 205); and a launch
+//! on the branch of a place that stands is refused unless that place is
+//! a base place whose submission is not open and whose work is not over
+//! (10, 204).
 
 use crate::own::Table;
 use crate::reading::reads_change;
@@ -88,7 +97,7 @@ impl Engine {
                 kinds,
                 settings,
                 agents,
-            } => (kinds, settings, agents),
+            } => (kinds, settings, *agents),
             KindsRead::CouldNotRead { reason } => {
                 return Err(format!(
                     "the kinds {} declares at {revision} could not be read: {reason}",
@@ -329,7 +338,7 @@ impl Engine {
                 "the kind {} names the source {source}, whose file {} cannot be read: {reason} (4, 191)",
                 named.spelled, sources[source].file
             )),
-            Some(HostSourceRead::Read { kinds_dir }) => Ok(SourceAt {
+            Some(HostSourceRead::Read { kinds_dir, .. }) => Ok(SourceAt {
                 name: source.into(),
                 file: sources[source].file.clone(),
                 kinds_dir: kinds_dir.clone(),
@@ -462,7 +471,7 @@ impl Engine {
         let kinds = self.resolver.kinds();
         let mut hosted = vec![];
         for (source, declared) in self.host.sources() {
-            if let HostSourceRead::Read { kinds_dir } = declared.read {
+            if let HostSourceRead::Read { kinds_dir, .. } = declared.read {
                 if let SourceRead::Read { kinds } = kinds.read_source(&source, &kinds_dir) {
                     hosted.extend(
                         kinds
@@ -521,10 +530,11 @@ impl Engine {
             .ok_or_else(|| format!("{repository} has no base {base}"))
     }
 
-    /// Refuses a kind that asks for more than flume runs (4, 23).
+    /// Refuses a kind that asks for more than flume runs (4, 23): a kind
+    /// with no stages runs only where it lands, as a base place's (202).
     fn runs(kind: &Kind, identity: &KindIdentity) -> Result<(), String> {
         let named = format!("the kind {identity}");
-        if kind.stages.is_empty() {
+        if kind.stages.is_empty() && !kind.lands {
             return Err(format!("{named} has no stage"));
         }
         for stage in &kind.stages {
@@ -578,6 +588,7 @@ impl Engine {
         } = self
             .bind(repository, &binding)
             .map_err(|reason| format!("{repository}'s binding: {reason}"))?;
+        self.on_a_places_branch(repository, &launch.base)?;
         let (base_revision, base_from) =
             self.base_now(repository, &launch.base, merge_queue.as_deref())?;
         let Resolved {
@@ -686,17 +697,7 @@ impl Engine {
             },
             _ => None,
         };
-        let recipients = if role.is_some() {
-            vec![]
-        } else if launch.recipients.is_empty() {
-            self.host
-                .recipient()
-                .or_else(|| self.caller_session())
-                .into_iter()
-                .collect()
-        } else {
-            launch.recipients.clone()
-        };
+        let (recipients, recipients_from) = self.recipients_of(launch, role, &stream.name)?;
         let held = HeldState {
             place: PlaceRecord {
                 id: id.clone(),
@@ -721,6 +722,7 @@ impl Engine {
                 hold_submission: launch.hold_submission,
                 hold_words: launch.hold_words.clone(),
                 recipients,
+                recipients_from,
                 stream,
                 intent,
             },
@@ -777,6 +779,9 @@ impl Engine {
         if self.create(&held).is_none() {
             return Err(format!("the place {id} already stands"));
         }
+        if let (true, Some(queue)) = (crate::base::base_place(&kind), &merge_queue) {
+            return self.open_base_place(&held, queue.as_ref());
+        }
         let refused = match place_seam.make(repository, &base_revision, &branch, &location) {
             MakeOutcome::Made => None,
             MakeOutcome::BranchExists => Some(format!("the branch {branch} already exists")),
@@ -818,6 +823,80 @@ impl Engine {
 }
 
 impl Engine {
+    /// A launch's recipients and where they came from, the first of
+    /// these that gives any: the recipients it names, `FLUME_RECIPIENT`
+    /// in the launching command's environment, the session the launching
+    /// command runs in as the terminal names it, or the answerer behind
+    /// the place's stream as the host's sources declare it; a role's run
+    /// has none (7, 132, 190, 193). Refused, before anything is made, a
+    /// launch that finds none of the four, one whose stream two roles
+    /// stand behind where it comes to the fourth, and one whose recipients
+    /// hold a role's address no source declares, or two declare, where no
+    /// answerer stands behind its stream; an address a source declares
+    /// carried, or gives a standing agent, is taken (4, 8, 132, 193;
+    /// core.8, core.54). The sources' roles are read once, and only where
+    /// a step needs them.
+    fn recipients_of(
+        &self,
+        launch: &Launch,
+        role: Option<&str>,
+        stream: &str,
+    ) -> Result<(Vec<String>, Option<RecipientsFrom>), String> {
+        if role.is_some() {
+            return Ok((vec![], None));
+        }
+        let read = std::cell::OnceCell::new();
+        let roles = || read.get_or_init(|| self.host.roles());
+        let (recipients, from) = if !launch.recipients.is_empty() {
+            (launch.recipients.clone(), RecipientsFrom::Launch)
+        } else if let Some(recipient) = self.host.recipient() {
+            (vec![recipient], RecipientsFrom::Environment)
+        } else if let Some(session) = self.caller_session() {
+            (vec![session], RecipientsFrom::Session)
+        } else {
+            match roles().answerer(stream) {
+                Some(StreamAnswerer::Stands(by)) => (
+                    vec![by.address.clone()],
+                    RecipientsFrom::Answerer {
+                        source: by.source.clone(),
+                    },
+                ),
+                Some(StreamAnswerer::Contested { roles }) => {
+                    return Err(format!(
+                        "the launch names no recipient, and no one role stands behind the stream \
+                         {stream} to answer it: {} each stand behind it; name a recipient by \
+                         --recipient",
+                        roles
+                            .iter()
+                            .map(|by| format!("{}, declared by {}", by.address, by.source))
+                            .collect::<Vec<_>>()
+                            .join(" and ")
+                    ))
+                }
+                None => {
+                    return Err(format!(
+                        "the launch finds no one to answer it: it names no --recipient, \
+                         $FLUME_RECIPIENT is unset, the terminal names no session it runs in, \
+                         and no source of the host declares a role standing behind the stream \
+                         {stream}; give it one of the four"
+                    ))
+                }
+            }
+        };
+        for address in recipients.iter().filter(|name| is_address(name)) {
+            let Err(reason) = roles().declared(address) else {
+                continue;
+            };
+            if !matches!(roles().answerer(stream), Some(StreamAnswerer::Stands(_))) {
+                return Err(format!(
+                    "the recipient {address} wakes nothing: {reason}; and no role stands behind \
+                     the stream {stream} to take its questions"
+                ));
+            }
+        }
+        Ok((recipients, Some(from)))
+    }
+
     /// The stream a launch's place runs in, chosen once (8, 143): the
     /// launch's, else the stream of its intent's affinity where one
     /// stands (147), else the one the host's configuration names for the
@@ -913,6 +992,8 @@ fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
             },
             words: launch.hold_words.get(stage).cloned(),
             since: now,
+            bound: None,
+            lapsed: None,
         })
         .collect();
     if launch.hold_submission {
@@ -920,6 +1001,8 @@ fn launch_holds(launch: &Launch, now: Seconds) -> Vec<Hold> {
             on: HoldOn::Submission,
             words: None,
             since: now,
+            bound: None,
+            lapsed: None,
         });
     }
     holds

@@ -36,14 +36,26 @@ on readiness or waiting for room, never on an agent (2, 6, 8, 9, 70).
 ### Requirement: A launch's recipients
 
 A launch naming no recipient SHALL take `$FLUME_RECIPIENT`, or else the
-session that launched it as the terminal names it, or none, and SHALL
-record the place with its priority, its recipients and its holds' words,
-which nothing after the launch changes (7, 8, 43, 70).
+session that launched it as the terminal names it, or else the answerer
+behind the place's stream, the role a source of the host declares to
+stand behind it, and SHALL record the place with its priority, its
+recipients, where each came from, and its holds' words, which nothing
+after the launch changes (7, 8, 43, 70, 193).
 
 #### Scenario: Recipients at the launch
 
 - **WHEN** one launch names two recipients, another names none with `FLUME_RECIPIENT` set, and a third names none from a session the fake terminal names
 - **THEN** status gives the first place both, the second the variable's, the third that session, and nothing after the launch changes them (7, 8)
+
+#### Scenario: A launch from no session takes its stream's answerer
+
+- **WHEN** a launch in the stream `east` names no recipient, `FLUME_RECIPIENT` is unset, the fake terminal names no session, and the scratch source `acme` declares `east/operator` with a run, standing behind `east`
+- **THEN** the place's one recipient is `east/operator`, and status gives it as from the stream's answerer, declared by `acme` (7, 193, S93)
+
+#### Scenario: Each stream its own answerer
+
+- **WHEN** `acme` also declares `west/operator` standing behind the stream `west`, and a like launch names `west`
+- **THEN** the place's one recipient is `west/operator` (143, 193)
 
 ### Requirement: Readiness that fails
 
@@ -160,14 +172,14 @@ each start (8, 21, 32).
 
 ### Requirement: An agent's settings are resolved from eight layers at each start
 
-At each start an agent's program, model, mode, instructions and own
-settings SHALL each come from the first of eight layers that gives it:
-the launch's; the host's for the repository, for its kind then for
-every kind; the host's for the kind, for the stream, for every agent;
-the repository's, for a kind it does not declare then for every kind;
-the kind's; flume's default. The host's four SHALL give no program.
-Within each, a stage's own SHALL come first, each setting taken whole
-(32, 195).
+At each start an agent's program, model, effort, mode, instructions
+and own settings SHALL each come from the first of eight layers that
+gives it: the launch's; the host's for the repository, for its kind,
+then every kind; the host's for the kind, for the stream, for every
+agent; the repository's, for a kind it does not declare, then every
+kind; the kind's; flume's default. The host's four SHALL give no
+program. In each, a stage's own SHALL come first, each setting taken
+whole (32, 195, 197).
 
 #### Scenario: Settings from four layers
 
@@ -294,3 +306,91 @@ launch, nothing made. The place SHALL keep where its base was read (9,
 
 - **WHEN** a fix is launched in a clone whose merge queue lands `main` at a revision other than origin's
 - **THEN** the place is cut where the merge queue says, origin's `main` never read for it, and status gives `base_from` `merge-queue` (9, 126)
+
+### Requirement: How long an agent is kept open is the launch's or the host's
+
+An agent's `keep_open` SHALL be resolved at its start as clause 32
+resolves every setting, taken whole from the first that gives it of the
+launch's settings, the host's for the repository and kind, then for the
+repository's every kind, the host's for the kind, the host's for the
+place's stream, and the host's for every agent, a stage's own first in
+each, else flume's own one hour; a repository's settings and a kind's
+declaration SHALL give none (32, 158, 198).
+
+#### Scenario: From the host's kind
+
+- **WHEN** the host gives `[kinds.fix.agents] keep_open = "10m"`
+- **THEN** a fix place's code agent starts with `keep_open` `10m` from `host-kind` (32)
+
+#### Scenario: The host's kind over its stream
+
+- **WHEN** the host gives `[kinds.fix.agents] keep_open = "10m"` and `[agents.streams.work] keep_open = "2h"`, and a fix runs in the stream `work`
+- **THEN** its code agent starts with `10m` from `host-kind` (32)
+
+#### Scenario: The launch over the host
+
+- **WHEN** a launch gives `--agent code.keep_open=0` over the host's `10m`
+- **THEN** code's agent starts with `0` from `launch`, and once it stops short needing an answer it is ended once quiet (32, 198)
+
+#### Scenario: No layer gives one
+
+- **WHEN** no layer gives `keep_open`
+- **THEN** the agent starts with `1h` from `default` (32, 198)
+
+#### Scenario: A host change after the launch
+
+- **WHEN** the host's `[agents] keep_open` changes from `1h` to `15m` while a place's first stage runs
+- **THEN** that stage's agent keeps `1h`, and the place's next stage's agent starts with `15m` (8, 32)
+
+### Requirement: A recipient a launch names
+
+A recipient the launch names SHALL be a session's name, or a role's
+address of any stream written whole, `<stream>/<role>`, and SHALL be
+recorded as from the launch, whatever the place's own stream
+(7, 132, 193).
+
+#### Scenario: Another stream's role named
+
+- **WHEN** a launch in the stream `east` names the recipient `west/planner`, which the scratch source `acme` declares
+- **THEN** the place's one recipient is `west/planner`, from the launch
+
+### Requirement: A launch no one would answer is refused
+
+A launch that finds no recipient, no `$FLUME_RECIPIENT`, no session and
+no answerer behind its stream SHALL be refused, naming `--recipient`,
+`$FLUME_RECIPIENT`, a session and a stream a role stands behind, and
+SHALL make nothing. So SHALL such a launch into a stream two roles stand
+behind, naming both (4, 7, 193; core.8).
+
+#### Scenario: A launch from a shell into a stream no role stands behind
+
+- **WHEN** a launch in the stream `default` names no recipient, `FLUME_RECIPIENT` is unset, the fake terminal names no session, and no source declares a role standing behind `default`
+- **THEN** the launch is refused naming the four ways to give a recipient, and no branch, worktree or held state is made
+
+#### Scenario: Two roles behind one stream
+
+- **WHEN** the sources `acme` and `beta` each declare a role of `east` standing behind it, and a launch from no session names `east` and no recipient
+- **THEN** the launch is refused naming both roles and their sources, and nothing is made (193)
+
+### Requirement: A launch naming an address that wakes nothing
+
+A launch whose recipients hold a role's address that no source of the
+host declares, or that two declare, SHALL be refused, naming the
+address and making nothing, where no answerer stands behind its stream,
+and SHALL be taken where one does. An address a source declares
+carried SHALL be taken (4, 132, 193; core.8).
+
+#### Scenario: An address that wakes nothing, with no answerer
+
+- **WHEN** a launch in `default` names `east/planner`, no source declares it, and no role stands behind `default`
+- **THEN** the launch is refused naming `east/planner`, and nothing is made
+
+#### Scenario: An address that wakes nothing, behind an answerer
+
+- **WHEN** the same launch is made in `east`, behind which a source declares `east/operator`, with a run
+- **THEN** the launch is taken, its recipient `east/planner`, and status says the address wakes nothing
+
+#### Scenario: A carried address
+
+- **WHEN** a launch names `north/planner`, which a source declares carried, in a stream no role stands behind
+- **THEN** the launch is taken, its recipient `north/planner`

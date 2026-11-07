@@ -7,8 +7,9 @@
 //! The launches run through this test binary re-run as flume: the same
 //! commands over the profiles built in, beside a stand-in agent program
 //! bound by its name, which reads its start and its end from marks the
-//! test writes in the place's folder, and a stand-in merge queue for the
-//! one scenario that needs a kind that lands. Every answer read back is
+//! test writes in the place's folder, and stand-in merge queues for the
+//! scenarios that need a kind that lands, one of them holding each
+//! submission and recording each step for a caller's watch. Every answer read back is
 //! read through flume's own binary where the scenario allows.
 
 mod common;
@@ -32,8 +33,31 @@ use std::sync::Arc;
 /// The stand-in agent program's name.
 const STAND_IN: &str = "stand-in";
 
+/// The recipient a launch's environment names, `$FLUME_RECIPIENT`, where
+/// the test gives none of its own: a launch from no session that names
+/// none and finds no role behind its stream is refused (7, 193).
+const CALLER: &str = "caller";
+
+/// `env` for the command `words`: a launch's names `$FLUME_RECIPIENT` as
+/// `CALLER` where `env` names none, and every other command's is `env`.
+fn launch_env<'a>(words: &[&str], env: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+    let mut env = env.to_vec();
+    if words.contains(&"launch") && !env.iter().any(|(name, _)| *name == "FLUME_RECIPIENT") {
+        env.push(("FLUME_RECIPIENT", CALLER));
+    }
+    env
+}
+
 /// The stand-in merge queue's name.
 const STAND_IN_QUEUE: &str = "stand-in-queue";
+
+/// The holding stand-in merge queue's name.
+const HOLDING_QUEUE: &str = "stand-in-holding-queue";
+
+/// The variable naming the file the holding stand-in merge queue keeps
+/// its record in, one line for each submit and each step, across the
+/// commands' processes.
+const QUEUE_LOG: &str = "FLUME_TEST_QUEUE_LOG";
 
 /// The variable that makes this test binary run as flume, the command's
 /// words in it as a JSON list.
@@ -47,8 +71,9 @@ const UNSTARTED: &str = "stand-in-unstarted";
 /// received its prompt at once, never asks or keeps own work, and reads
 /// its session ended once the test writes the mark
 /// `stand-in/<stage>-<start>` in the place's folder. It maps each mode to
-/// its own word and reads none back, and takes its program's own
-/// settings, passing them nowhere (195).
+/// its own word and reads none back, takes its program's own settings,
+/// passing them nowhere (195), and takes every effort, passing it as
+/// `--effort <word>` (197).
 struct StandInAgent {
     says_started: bool,
 }
@@ -76,6 +101,9 @@ impl Agent for StandInAgent {
         let mut args = vec![];
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
+        }
+        if let Some(effort) = &settings.effort {
+            args.extend(["--effort".to_string(), effort.clone()]);
         }
         if let Some(instructions) = &settings.instructions {
             args.extend(["--instructions".to_string(), instructions.clone()]);
@@ -121,11 +149,18 @@ impl Agent for StandInAgent {
     fn stop_short(&self, _agent: &Identity) -> String {
         "flume needs \"<words>\"".into()
     }
+    fn stop_short_to(&self) -> String {
+        "flume needs --to <role>".into()
+    }
     /// Each of flume's four as its word, and an own value as written.
     fn mode(&self, entry: &ModeEntry) -> Result<String, String> {
         Ok(entry.to_string())
     }
     fn own(&self, _given: &BTreeMap<String, serde_json::Value>) -> Result<(), String> {
+        Ok(())
+    }
+    /// Every word, passed as written.
+    fn effort(&self, _word: &str) -> Result<(), String> {
         Ok(())
     }
     fn send_back(&self) -> Offered {
@@ -144,7 +179,7 @@ impl Agent for StandInAgent {
 struct StandInQueue;
 
 impl MergeQueue for StandInQueue {
-    fn submit(&self, _place: &PlaceRef, _head: &Revision) -> Submitted {
+    fn submit(&self, _place: &PlaceRef, _head: &SubmitHead) -> Submitted {
         Submitted::Refused {
             reason: "the stand-in queue takes nothing".into(),
         }
@@ -171,6 +206,92 @@ impl MergeQueue for StandInQueue {
             },
             Err(reason) => BaseRevision::Refused { reason },
         }
+    }
+    fn open(&self, _repository: &str, _branch: &str, _base: &str) -> BranchOpened {
+        BranchOpened::Refused {
+            reason: "the stand-in queue opens nothing".into(),
+        }
+    }
+    fn close(&self, _repository: &str, _branch: &str, _into: &str) -> BranchClosed {
+        BranchClosed::Gone
+    }
+}
+
+/// The holding stand-in merge queue: each submission held open through
+/// every round, each submit and each step a line of the file
+/// `$FLUME_TEST_QUEUE_LOG`, `submit <branch>` and `step <base>`; a step
+/// runs its round, deciding nothing.
+struct HoldingQueue;
+
+impl HoldingQueue {
+    fn log() -> PathBuf {
+        PathBuf::from(std::env::var(QUEUE_LOG).expect("the holding queue's record"))
+    }
+
+    fn record(line: &str) {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(Self::log())
+            .expect("the holding queue's record");
+        writeln!(file, "{line}").expect("the holding queue's record written");
+    }
+
+    fn submission(branch: &str) -> Submission {
+        Submission {
+            id: format!("held-{branch}"),
+            branch: branch.into(),
+            target: "main".into(),
+            state: SubmissionState::Waiting,
+            request: None,
+        }
+    }
+}
+
+impl MergeQueue for HoldingQueue {
+    fn submit(&self, place: &PlaceRef, _head: &SubmitHead) -> Submitted {
+        Self::record(&format!("submit {}", place.branch));
+        Submitted::Submitted {
+            submission: Self::submission(&place.branch),
+        }
+    }
+    fn inbox(&self, _place: &PlaceRef) -> Inbox {
+        Inbox::Outcomes {
+            outcomes: vec![],
+            passed_over: vec![],
+        }
+    }
+    fn read_submissions(&self, _repository: &str, branches: &[&str]) -> Vec<ReadAcross> {
+        let record = std::fs::read_to_string(Self::log()).unwrap_or_default();
+        branches
+            .iter()
+            .map(|branch| {
+                if record
+                    .lines()
+                    .any(|line| line == format!("submit {branch}"))
+                {
+                    SubmissionRead::Found {
+                        submission: Self::submission(branch),
+                    }
+                    .into()
+                } else {
+                    SubmissionRead::None.into()
+                }
+            })
+            .collect()
+    }
+    fn step(&self, _repository: &str, base: &str) -> Stepped {
+        Self::record(&format!("step {base}"));
+        Stepped::Stepped
+    }
+    fn base_revision(&self, repository: &str, base: &str) -> BaseRevision {
+        StandInQueue.base_revision(repository, base)
+    }
+    fn open(&self, repository: &str, branch: &str, base: &str) -> BranchOpened {
+        StandInQueue.open(repository, branch, base)
+    }
+    fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed {
+        StandInQueue.close(repository, branch, into)
     }
 }
 
@@ -234,6 +355,7 @@ impl Resolver for StandIn {
     fn merge_queue(&self, profile: &str) -> Option<Arc<dyn MergeQueue>> {
         match profile {
             STAND_IN_QUEUE => Some(Arc::new(StandInQueue)),
+            HOLDING_QUEUE => Some(Arc::new(HoldingQueue)),
             _ => self.0.merge_queue(profile),
         }
     }
@@ -379,8 +501,9 @@ impl Host {
 
     /// flume's own binary.
     fn flume(&self, dir: &Path, words: &[&str], env: &[(&str, &str)]) -> Ran {
+        let env = launch_env(words, env);
         let output = self
-            .command(Path::new(env!("CARGO_BIN_EXE_flume")), dir, env)
+            .command(Path::new(env!("CARGO_BIN_EXE_flume")), dir, &env)
             .args(words)
             .output()
             .expect("flume runs");
@@ -393,8 +516,9 @@ impl Host {
     /// This test binary as flume, with the stand-ins.
     fn stand_in(&self, dir: &Path, words: &[&str], env: &[(&str, &str)]) -> Ran {
         let me = std::env::current_exe().expect("the test binary");
+        let env = launch_env(words, env);
         let output = self
-            .command(&me, dir, env)
+            .command(&me, dir, &env)
             .env(AS_FLUME, serde_json::to_string(words).expect("words"))
             .args([
                 "--exact",
@@ -771,6 +895,144 @@ fn a_refusal() {
 }
 
 #[test]
+fn a_watch_over_a_scratch_repository() {
+    // The command-line spec's "A watch over a scratch repository": a
+    // caller's settle with a bound steps the submitted place's base once,
+    // and status gives the host's watch with its bound and when that
+    // settle began (56, 208).
+    let host = Host::new("settle-every");
+    let repository = repository("settle-every", Some(HOLDING_QUEUE));
+    let kinds = kinds_file(&host, true);
+    let log = host.scratch.path("queue.log");
+    let log = log.to_string_lossy();
+    let env = [(QUEUE_LOG, log.as_ref())];
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &env,
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    commit_in(&place, "code.txt");
+    host.end_agent(&place, "code", 1);
+    let settled = host.stand_in(&repository.dir, &["settle", &place, "--json"], &env);
+    assert_eq!(settled.code, 0, "{}", settled.text);
+    let record = || std::fs::read_to_string(host.scratch.path("queue.log")).unwrap_or_default();
+    assert!(
+        record().lines().any(|line| line == "submit fix/one"),
+        "the place was not submitted: {}",
+        record()
+    );
+    let steps = || {
+        record()
+            .lines()
+            .filter(|line| line.starts_with("step "))
+            .count()
+    };
+    let before = steps();
+    let began = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock")
+        .as_secs();
+    let watched = host.stand_in(
+        &repository.dir,
+        &["settle", "--every", "2m", "--json"],
+        &env,
+    );
+    assert_eq!(watched.code, 0, "{}", watched.text);
+    assert_eq!(steps(), before + 1, "the watch's steps: {}", record());
+    assert!(record().ends_with("step main\n"), "{}", record());
+    let status = host.stand_in(&repository.dir, &["status", "--json"], &env);
+    assert_eq!(status.code, 0, "{}", status.text);
+    let watch = &status.json()["status"]["host"];
+    assert_eq!(
+        watch["watch"],
+        json!({"bound": {"seconds": 120}}),
+        "{watch}"
+    );
+    let settled_at = watch["watch_settled"].as_u64().expect("watch_settled");
+    assert!(
+        (began..began + 60).contains(&settled_at),
+        "the watch settled at {settled_at}, the settle began at {began}"
+    );
+    assert!(watch.get("watch_lapsed").is_none(), "{watch}");
+    let person = host.stand_in(&repository.dir, &["status"], &env);
+    assert!(
+        person
+            .text
+            .contains("a caller keeps watch: every place settles every 2m, last at "),
+        "{}",
+        person.text
+    );
+}
+
+#[test]
+fn a_watch_with_a_place_named() {
+    // The command-line spec's "A watch with a place named": refused
+    // naming `--every` and the place, nothing settled and no watch
+    // recorded; a bound that is no positive duration refused the same
+    // (208).
+    let host = Host::new("settle-every-named");
+    let repository = repository("settle-every-named", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch", "--kind", "fix", "--name", "one", "--kinds", &kinds, "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "fix--one");
+    let store = StateDir::at(host.state());
+    let version = store
+        .read(&PlaceId::new(&place))
+        .expect("the place's document")
+        .version;
+    let ran = host.stand_in(
+        &repository.dir,
+        &["settle", "fix--one", "--every", "2m", "--json"],
+        &[],
+    );
+    assert_eq!(ran.code, 1, "{}", ran.text);
+    let reason = ran
+        .answer()
+        .refusal()
+        .map(str::to_string)
+        .expect("a refusal");
+    assert!(
+        reason.contains("--every") && reason.contains("fix--one"),
+        "{reason}"
+    );
+    for bound in ["0", "0m", "soon"] {
+        let ran = host.stand_in(
+            &repository.dir,
+            &["settle", "--every", bound, "--json"],
+            &[],
+        );
+        assert_eq!(ran.code, 1, "--every {bound}: {}", ran.text);
+        let reason = ran
+            .answer()
+            .refusal()
+            .map(str::to_string)
+            .expect("a refusal");
+        assert!(reason.contains(bound), "--every {bound}: {reason}");
+    }
+    assert_eq!(
+        store.read(&PlaceId::new(&place)).map(|read| read.version),
+        Some(version),
+        "the place's document after the refusals"
+    );
+    assert!(
+        store.read_host(&HostKey::Watch).is_none(),
+        "a watch recorded by a refused settle"
+    );
+    assert!(!host.state().join("watch.json").exists());
+}
+
+#[test]
 fn needs_from_outside_an_agent() {
     // 41, C.4: no FLUME_AGENT, so nothing is asked of the core.
     let host = Host::new("needs");
@@ -816,6 +1078,7 @@ fn holds_and_recipients_at_the_launch() {
     let host = Host::new("holds");
     let repository = repository("holds", None);
     let kinds = kinds_file(&host, false);
+    carried_by_acme(&host, &["madswan/planner", "madswan/conductor"]);
     let first = host.stand_in(
         &repository.dir,
         &[
@@ -848,6 +1111,7 @@ fn holds_and_recipients_at_the_launch() {
         .answer();
     let one = the_place(&one);
     assert_eq!(one.recipients, vec!["madswan/planner".to_string()]);
+    assert_eq!(one.recipients_from, Some(RecipientsFrom::Launch));
     assert_eq!(
         one.hold_words,
         BTreeMap::from([("verify".to_string(), "after review".to_string())])
@@ -857,6 +1121,7 @@ fn holds_and_recipients_at_the_launch() {
         .answer();
     let two = the_place(&two);
     assert_eq!(two.recipients, vec!["madswan/conductor".to_string()]);
+    assert_eq!(two.recipients_from, Some(RecipientsFrom::Environment));
     assert!(two.hold_words.is_empty());
 }
 
@@ -983,8 +1248,9 @@ fn one_account(host: &Host, env: &str, more: &str) {
 
 #[test]
 fn agent_settings_at_the_launch() {
-    // 7, 32: every stage's model and one stage's over it, each at the
-    // launch layer; a variable is no setting the launch gives.
+    // 7, 32, 198: every stage's model and one stage's over it, each at the
+    // launch layer, and one stage's keep_open, the others flume's own hour
+    // from the default layer; a variable is no setting the launch gives.
     let host = Host::new("agent-settings");
     let repository = repository("agent-settings", None);
     let kinds = kinds_file(&host, false);
@@ -1002,28 +1268,41 @@ fn agent_settings_at_the_launch() {
             "model=opus",
             "--agent",
             "verify.model=sonnet",
+            "--agent",
+            "code.keep_open=15m",
             "--json",
         ],
         &[],
     );
     assert_eq!(launched.code, 0, "{}", launched.text);
     let place = host.place_of(&repository, "change--one");
-    let launch = |model: &str| {
+    let launch = |model: &str, keep_open: serde_json::Value| {
         serde_json::json!({
             "model": {"layer": "launch", "value": model},
             "program": {"layer": "kind", "value": STAND_IN},
+            "keep_open": keep_open,
         })
     };
-    for (stage, model) in [
-        ("construct", "opus"),
-        ("code", "opus"),
-        ("verify", "sonnet"),
+    let default = serde_json::json!({"layer": "default", "value": "1h"});
+    let launched = serde_json::json!({"layer": "launch", "value": "15m"});
+    for (stage, model, keep_open) in [
+        ("construct", "opus", default.clone()),
+        ("code", "opus", launched),
+        ("verify", "sonnet", default),
     ] {
         let agent = current_agent(&host, &repository.dir, &place);
         assert_eq!(agent["stage"], stage, "{agent}");
         assert_eq!(agent["settings"]["model"], model, "{agent}");
         assert_eq!(agent["settings"]["env"], serde_json::json!({}), "{agent}");
-        assert_eq!(agent["settings"]["from"], launch(model), "{agent}");
+        assert_eq!(
+            agent["settings"]["keep_open"], keep_open["value"],
+            "{agent}"
+        );
+        assert_eq!(
+            agent["settings"]["from"],
+            launch(model, keep_open),
+            "{agent}"
+        );
         if stage != "verify" {
             deliver(&host, &repository.dir, &place, stage);
         }
@@ -1096,6 +1375,53 @@ fn a_session_for_every_stage_and_for_one_at_the_launch() {
 }
 
 #[test]
+fn an_effort_for_every_stage_and_for_one_at_the_launch() {
+    // 7, 32, 197: `--agent effort=high` for every stage and
+    // `verify.effort=max` for one, each kept as written at the launch's
+    // layer in the place's held settings, and each agent given its effort
+    // from the launch.
+    let host = Host::new("agent-effort");
+    let repository = repository("agent-effort", None);
+    let kinds = kinds_file(&host, false);
+    let launched = host.stand_in(
+        &repository.dir,
+        &[
+            "launch",
+            "--kind",
+            "change",
+            "--name",
+            "one",
+            "--kinds",
+            &kinds,
+            "--agent",
+            "effort=high",
+            "--agent",
+            "verify.effort=max",
+            "--json",
+        ],
+        &[],
+    );
+    assert_eq!(launched.code, 0, "{}", launched.text);
+    let place = host.place_of(&repository, "change--one");
+    let held = held_of(&host, &place).state.place;
+    assert_eq!(held.every_stage.effort.as_deref(), Some("high"));
+    assert_eq!(held.settings["verify"].effort.as_deref(), Some("max"));
+    for (stage, effort) in [("construct", "high"), ("code", "high"), ("verify", "max")] {
+        let agent = current_agent(&host, &repository.dir, &place);
+        assert_eq!(agent["stage"], stage, "{agent}");
+        assert_eq!(agent["settings"]["effort"], effort, "{agent}");
+        assert_eq!(
+            agent["settings"]["from"]["effort"],
+            serde_json::json!({"layer": "launch", "value": effort}),
+            "{agent}"
+        );
+        if stage != "verify" {
+            deliver(&host, &repository.dir, &place, stage);
+        }
+    }
+}
+
+#[test]
 fn the_settings_agent_gives_are_named_in_its_refusal() {
     // 7, 32: a field no setting names is refused, the words naming
     // session among the settings `--agent` gives, and nothing launched.
@@ -1120,7 +1446,9 @@ fn the_settings_agent_gives_are_named_in_its_refusal() {
     );
     assert_eq!(refused.code, 1, "{}", refused.text);
     assert!(
-        refused.text.contains("colour") && refused.text.contains("session"),
+        refused.text.contains("colour")
+            && refused.text.contains("session")
+            && refused.text.contains("effort"),
         "{}",
         refused.text
     );
@@ -1130,6 +1458,11 @@ fn the_settings_agent_gives_are_named_in_its_refusal() {
     assert!(
         help.text.contains("session"),
         "--help names no session: {}",
+        help.text
+    );
+    assert!(
+        help.text.contains("effort"),
+        "--help names no effort: {}",
         help.text
     );
 }
@@ -1668,8 +2001,16 @@ fn a_place_made_in_the_repositorys_directory_is_read_and_tidied_where_it_stands(
         assert_eq!(git(&dir, &["branch", "--list", "fix/one"]), "");
     }
     assert!(!host.data().join("places").exists(), "a place was moved");
+    // Each place's document alone is kept, tidied, for its ends pending for
+    // the recipient its launch took (43, 62).
     let every = host.flume(&clone.dir, &["status", "--json"], &[]);
-    assert_eq!(every.json()["status"]["places"], serde_json::json!([]));
+    let places = every.json()["status"]["places"].clone();
+    assert!(
+        places.as_array().is_some_and(|places| places
+            .iter()
+            .all(|place| place["phase"]["tidied"]["pending_for"] == json!([CALLER]))),
+        "{places}"
+    );
 }
 
 /// Every file under `dir` and its bytes.
@@ -2179,6 +2520,7 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
     let host = Host::new("recipients");
     let repository = repository("recipients", None);
     let kinds = kinds_file(&host, false);
+    carried_by_acme(&host, &["madswan/planner"]);
     for (name, recipient) in [("one", "ops"), ("two", "madswan/planner")] {
         let launched = host.stand_in(
             &repository.dir,
@@ -2285,64 +2627,92 @@ fn the_recipient_a_wait_and_an_inbox_default_to() {
 
 #[test]
 fn a_wake_of_a_roles_address() {
-    // 132, C.7: the host's [roles] table names the planner's run, a kind
-    // the repository declares; `flume wake` launches it once, answers the
-    // run that stands after, refuses an address the table names nothing
-    // for and a name that is no address, and the run's inbox collects for
-    // its address.
+    // 132, 193, C.7: the host's source acme declares the planner's run in
+    // its roles file, of its own kind `planner`, locked; `flume wake`
+    // launches it once in its address's stream, named `<stream>-<role>`,
+    // answers the run that stands after, refuses an address no source
+    // declares and a name that is no address, each saying why, and the
+    // run's inbox collects for its address.
     let host = Host::new("wake");
     let repository = Repository::new("wake");
     repository.write(
         ".config/flume.toml",
-        &format!(
-            "[profiles]\nplace = \"git-worktree\"\n\n[kinds.planner]\nversion = 1\nbranch = \"planner\"\nstarts_unready = false\nlands = false\n\n[[kinds.planner.stages]]\nname = \"plan\"\nprompt = \"prompts/plan.md\"\ndeliverables = [\"commits\"]\nagents = [{{ program = \"{STAND_IN}\" }}]\n"
-        ),
+        "[profiles]\nplace = \"git-worktree\"\n",
     );
-    repository.write(".config/prompts/plan.md", "Read what is pending for you.\n");
-    repository.commit("the binding and the planner");
-    host.configure(&format!(
-        "[roles.\"madswan/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
-        repository.name()
-    ));
+    repository.commit("the binding");
+    let acme = kinds_dir_of(&host, "acme");
+    write_package(&acme, "planner", 1, false, "Read what is pending for you");
+    let roles = host.scratch.path("state/acme/roles.toml");
+    std::fs::create_dir_all(roles.parent().unwrap()).expect("the roles file's directory");
+    std::fs::write(
+        &roles,
+        format!(
+            "[roles.\"east/planner\"]\nrepository = \"{}\"\nkind = \"planner\"\npriority = 5\n",
+            repository.name()
+        ),
+    )
+    .expect("the roles file");
+    std::fs::create_dir_all(sources_of(&host)).expect("the sources directory");
+    std::fs::write(
+        sources_of(&host).join("acme.toml"),
+        format!(
+            "kinds_dir = \"{}\"\nroles = \"{}\"\n",
+            acme.display(),
+            roles.display()
+        ),
+    )
+    .expect("the source's file");
+    host.configure("[streams.east]\n");
+    answered(
+        &host.flume(
+            &repository.dir,
+            &["kinds", "lock", "--host", "acme/planner@1", "--json"],
+            &[],
+        ),
+        0,
+    );
 
     let woke = answered(
-        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        &host.stand_in(&repository.dir, &["wake", "east/planner", "--json"], &[]),
         0,
     );
     assert_eq!(woke["woken"]["woke"], "launched", "{woke}");
-    assert_eq!(woke["woken"]["address"], "madswan/planner", "{woke}");
+    assert_eq!(woke["woken"]["address"], "east/planner", "{woke}");
     let run = &woke["woken"]["place"];
-    assert_eq!(run["role"], "madswan/planner", "{woke}");
+    assert_eq!(run["role"], "east/planner", "{woke}");
     assert_eq!(run["kind"], "planner");
-    assert_eq!(run["name"], "planner");
+    assert_eq!(run["identity"], "acme/planner@1", "{woke}");
+    assert_eq!(run["stream"]["name"], "east", "{woke}");
+    assert_eq!(run["name"], "east-planner", "{woke}");
     assert_eq!(run["base"], "main", "the repository's default branch");
     assert_eq!(run["priority"], 5);
     assert_eq!(run["recipients"], serde_json::json!([]));
-    let place = host.place_of(&repository, "planner--planner");
+    let place = host.place_of(&repository, "planner--east-planner");
     assert_eq!(run["place"], place.as_str());
 
     let again = answered(
-        &host.stand_in(&repository.dir, &["wake", "madswan/planner", "--json"], &[]),
+        &host.stand_in(&repository.dir, &["wake", "east/planner", "--json"], &[]),
         0,
     );
     assert_ne!(again["woken"]["woke"], "launched", "{again}");
     assert_eq!(again["woken"]["place"]["place"], place.as_str(), "{again}");
-    let person = host.stand_in(&repository.dir, &["wake", "madswan/planner"], &[]);
+    let person = host.stand_in(&repository.dir, &["wake", "east/planner"], &[]);
     assert_eq!(person.code, 0, "{}", person.text);
     assert!(
-        person.text.starts_with("madswan/planner's run"),
+        person.text.starts_with("east/planner's run"),
         "{}",
         person.text
     );
 
     let unnamed = answered(
-        &host.stand_in(&repository.dir, &["wake", "madswan/ops", "--json"], &[]),
+        &host.stand_in(&repository.dir, &["wake", "east/ops", "--json"], &[]),
         1,
     );
     assert!(
         unnamed["refused"]["refusal"]["reason"]
             .as_str()
-            .is_some_and(|reason| reason.contains("names no role for madswan/ops")),
+            .is_some_and(|reason| reason
+                == "east/ops wakes nothing: no source of the host declares east/ops"),
         "{unnamed}"
     );
     let no_address = answered(
@@ -2352,7 +2722,7 @@ fn a_wake_of_a_roles_address() {
     assert!(
         no_address["refused"]["refusal"]["reason"]
             .as_str()
-            .is_some_and(|reason| reason.contains("<partition>/<role>")),
+            .is_some_and(|reason| reason.contains("<stream>/<role>")),
         "{no_address}"
     );
 
@@ -2364,7 +2734,188 @@ fn a_wake_of_a_roles_address() {
         ),
         0,
     );
-    assert_eq!(inbox["inbox"]["recipient"], "madswan/planner", "{inbox}");
+    assert_eq!(inbox["inbox"]["recipient"], "east/planner", "{inbox}");
+}
+
+#[test]
+fn the_wakes_help_names_a_stream_and_a_role() {
+    // 132, 143, 193; core.35: an address is a role a source declares for
+    // a stream the host declares, and the host's configuration names
+    // none.
+    let host = Host::new("wake-help");
+    let ran = host.flume(&outside(&host, "elsewhere"), &["wake", "--help"], &[]);
+    assert_eq!(ran.code, 0, "{}", ran.text);
+    let words = ran.text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for said in [
+        "Wake a role's address, `<stream>/<role>`: a role a source of the host declares in its roles file, for a stream the host declares",
+        "launched in the address's stream where none stands",
+        "An address carried to another host, declared by no source or by two, or whose stream the host does not declare is refused, saying why",
+        "<ADDRESS> The role's address, `<stream>/<role>`",
+    ] {
+        assert!(
+            words.contains(said),
+            "the help says not {said:?}: {}",
+            ran.text
+        );
+    }
+    for unsaid in ["partition", "[roles]"] {
+        assert!(
+            !words.contains(unsaid),
+            "the help says {unsaid:?}: {}",
+            ran.text
+        );
+    }
+}
+
+#[test]
+fn needs_to_a_role_and_to_another_streams() {
+    // 41, 132, design 4: the command-line spec's "A stop-short addressed
+    // by its role" and "A stop-short addressed to another stream". The
+    // host's source acme carries east/ops and west/ops, each with the
+    // words of what it answers, so a stage's prompt lists them with no run
+    // to wake; `flume needs --to ops` from a place in east names east/ops,
+    // `--to west/ops` names west/ops, each in its answer, and a name the
+    // prompt did not list is refused naming those it did, the stage going
+    // on.
+    let host = Host::new("needs-to");
+    let repository = repository("needs-to", None);
+    let kinds = kinds_file(&host, false);
+    host.configure("[streams.east]\n");
+    carried_answering(
+        &host,
+        &[
+            ("east/ops", "east's live systems"),
+            ("west/ops", "west's live systems"),
+        ],
+    );
+    for name in ["one", "two"] {
+        let launched = host.stand_in(
+            &repository.dir,
+            &[
+                "launch", "--kind", "change", "--name", name, "--kinds", &kinds, "--stream",
+                "east", "--json",
+            ],
+            &[],
+        );
+        assert_eq!(launched.code, 0, "{}", launched.text);
+    }
+    let needs = |place: &str, to: &str, json: bool| {
+        let start = held_of(&host, place).state.stages[0]
+            .start
+            .clone()
+            .expect("construct's start");
+        let mut words = vec!["needs", "--to", to, "which queue's settings are live?"];
+        if json {
+            words.push("--json");
+        }
+        host.stand_in(
+            &repository.dir,
+            &words,
+            &[
+                ("FLUME_AGENT", &start.identity.to_string()),
+                ("FLUME_SECRET", &start.secret.0),
+            ],
+        )
+    };
+    let addressee = |answer: &Value| {
+        answer["acted"]["status"]["ends"]
+            .as_array()
+            .and_then(|ends| ends.last())
+            .map(|end| end["end"]["addressee"].clone())
+            .unwrap_or_default()
+    };
+
+    let one = host.place_of(&repository, "change--one");
+    let unlisted = answered(&needs(&one, "design", true), 1);
+    let reason = unlisted["refused"]["refusal"]["reason"].to_string();
+    assert!(
+        reason.contains("`ops`") && reason.contains("`west/ops`"),
+        "{reason}"
+    );
+    let by_role = answered(&needs(&one, "ops", true), 0);
+    assert_eq!(addressee(&by_role), "east/ops", "{by_role}");
+
+    let two = host.place_of(&repository, "change--two");
+    let person = needs(&two, "west/ops", false);
+    assert_eq!(person.code, 0, "{}", person.text);
+    assert!(person.text.contains("asking west/ops"), "{}", person.text);
+    let status = host.flume(&repository.dir, &["status", "change--two", "--json"], &[]);
+    let ends = &status.json()["status"]["places"][0]["ends"];
+    assert_eq!(
+        ends.as_array()
+            .and_then(|ends| ends.last())
+            .map(|end| end["end"]["addressee"].clone()),
+        Some(json!("west/ops")),
+        "{ends}"
+    );
+}
+
+#[test]
+fn the_helps_of_needs_hold_retry_tell_and_launch() {
+    // 7, 41, 42, 49, 53, 130, 132, 193; core.35: needs --to's help says a
+    // role alone is the place's own stream's, hold's names the waiting
+    // move and its bound, retry's and tell's the key an answer names, and
+    // launch --recipient's a role's address of any stream and the answerer
+    // behind the place's stream.
+    let host = Host::new("helps");
+    let help = |command: &str| {
+        let ran = host.flume(&outside(&host, "elsewhere"), &[command, "--help"], &[]);
+        assert_eq!(ran.code, 0, "{}", ran.text);
+        ran.text.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
+    for (command, said) in [
+        ("needs", "--to <ROLE OR ADDRESS>"),
+        ("needs", "a role alone, `<role>`, is the place's own stream's, and an address, `<stream>/<role>`, any stream's"),
+        ("needs", "in place of the place's recipients"),
+        ("hold", "--waiting"),
+        ("hold", "--for <TIME>"),
+        ("hold", "hold the move the place waits on its caller for"),
+        ("hold", "once it passes, the hold lapses and the place stalls at once"),
+        ("retry", "--answers <KEY>"),
+        ("retry", "taken only while the place waits on that stop-short and only once"),
+        ("tell", "--answers <KEY>"),
+        ("tell", "its agent kept open for its answer"),
+        ("launch", "a role's address, `<stream>/<role>`, of any stream"),
+        ("launch", "the answerer behind the place's stream"),
+    ] {
+        let words = help(command);
+        assert!(
+            words.contains(said),
+            "{command}'s help says not {said:?}: {words}"
+        );
+    }
+    for command in ["needs", "hold", "retry", "tell", "launch"] {
+        let words = help(command);
+        assert!(
+            !words.contains("partition"),
+            "{command}'s help says partition: {words}"
+        );
+    }
+}
+
+/// The host's source acme carrying each of `addresses` with the words of
+/// what it answers, in its roles file: addresses a stage's prompt lists
+/// that wake no run on this host (132, 191; design 11.4).
+fn carried_answering(host: &Host, addresses: &[(&str, &str)]) {
+    let roles = host.scratch.path("state/acme/roles.toml");
+    std::fs::create_dir_all(roles.parent().unwrap()).expect("the roles file's directory");
+    let entries: String = addresses
+        .iter()
+        .map(|(address, answers)| {
+            format!("[roles.\"{address}\"]\ncarried = true\nanswers = \"{answers}\"\n")
+        })
+        .collect();
+    std::fs::write(&roles, entries).expect("the roles file");
+    std::fs::create_dir_all(sources_of(host)).expect("the sources directory");
+    std::fs::write(
+        sources_of(host).join("acme.toml"),
+        format!(
+            "kinds_dir = \"{}\"\nroles = \"{}\"\n",
+            kinds_dir_of(host, "acme").display(),
+            roles.display()
+        ),
+    )
+    .expect("the source's file");
 }
 
 /// The directory the host's source `source` holds its packages in, a
@@ -2376,6 +2927,29 @@ fn kinds_dir_of(host: &Host, source: &str) -> PathBuf {
 /// The host's sources directory, beside its configuration (191, C.7).
 fn sources_of(host: &Host) -> PathBuf {
     host.scratch.path("config/flume/sources")
+}
+
+/// The host's source acme declares each of `addresses` carried to another
+/// host in its roles file, so a launch naming one is taken, its ends left
+/// pending, in a stream no role stands behind (132, 193, C.7).
+fn carried_by_acme(host: &Host, addresses: &[&str]) {
+    let roles = host.scratch.path("state/acme/roles.toml");
+    std::fs::create_dir_all(roles.parent().unwrap()).expect("the roles file's directory");
+    let entries: String = addresses
+        .iter()
+        .map(|address| format!("[roles.\"{address}\"]\ncarried = true\n"))
+        .collect();
+    std::fs::write(&roles, entries).expect("the roles file");
+    std::fs::create_dir_all(sources_of(host)).expect("the sources directory");
+    std::fs::write(
+        sources_of(host).join("acme.toml"),
+        format!(
+            "kinds_dir = \"{}\"\nroles = \"{}\"\n",
+            kinds_dir_of(host, "acme").display(),
+            roles.display()
+        ),
+    )
+    .expect("the source's file");
 }
 
 /// The host's lock of kinds, beside its configuration (155, C.7).

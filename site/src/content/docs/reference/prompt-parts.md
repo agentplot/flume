@@ -25,7 +25,7 @@ anything.
 | `{{report}}` | the path of the stage's report: for `report:<path>`, the path in the place, or in the place's own folder where it starts `{{state}}`; for `committed:<path>`, the path | refused for a stage with neither deliverable |
 | `{{words}}` | the words the stage was started with: a retry's question and answer, or a failed submission's or a finding's words | refused; put it inside `{{#words}}…{{/words}}` |
 | `{{unready}}` | what readiness came to: the step that failed and what it printed, that it passed, or that the repository declares none | always filled |
-| `{{needs}}` | the way to stop short, `flume needs` and `flume needs --found` | always filled |
+| `{{needs}}` | the way to stop short, `flume needs` and `flume needs --found`, and that it is the agent's one way to ask | always filled |
 | `{{made}}` | the path of the place's `made.jsonl` | refused for a stage that declares no `makes` |
 
 A part refused at a start leaves the stage refused, naming the part in
@@ -62,7 +62,8 @@ The answer: The root's README.
 
 ## What flume adds
 
-flume adds two things to a prompt that does not place them itself:
+flume adds three things to a prompt, the first two only where the
+template does not place them itself:
 
 - **The way to stop short.** Every prompt carries it. Where the
   template has no `{{needs}}`, flume appends it at the end:
@@ -71,12 +72,23 @@ flume adds two things to a prompt that does not place them itself:
   run `flume needs "<words>"` when you cannot go on without an answer,
   saying what you need, or `flume needs --found "<words>"` when you found
   work a stage before this one must do again, saying what you found;
-  then stop.
+  then stop. Stopping short is your one way to ask for what your stage
+  needs: write no card and no message to a person yourself, since
+  whoever answers your question decides whether it is a person's.
   ```
 
 - **A failed readiness.** A kind's first stage, started in a place
   whose readiness failed, carries what `{{unready}}` gives. Where the
   template has no `{{unready}}`, flume appends it.
 
+- **The roles it may ask.** Where a source of the host declares roles
+  with words of what they answer, flume appends, after everything else,
+  each role the agent may name with `flume needs --to`: the place's own
+  stream's by the role alone, then every other stream's by its address,
+  each with its source's words. It reads them from the sources at each
+  start, so the list comes after every part a stage's repetitions share
+  ([asking a role](/flume/guides/callers-and-holds/#asking-a-role)).
+
 flume adds nothing between a prompt's parts, and nothing that differs
-from start to start beyond what the parts fill.
+from start to start beyond what the parts fill and the roles a source
+declares at that start.

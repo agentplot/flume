@@ -1,7 +1,8 @@
 //! The fix and change walkthroughs of the check-tools layer with the
 //! pinned Claude Code under herdr in place of the stand-in, a code stage
 //! waiting on its suite with its pane quiet (39, S3), a fix begun in
-//! the mode its host gives (162, S66), a fix whose code agent stops at
+//! the mode its host gives (162, S66), the fix launched at the effort
+//! `low` (197, S103), a fix whose code agent stops at
 //! its account's usage limit going on in its own conversation under the
 //! pool's other account (S78), a fix whose code agent's pane holds the
 //! place's line under its prompt (56, 60, C.4), and a fix whose host's own
@@ -37,23 +38,43 @@ fn workspace(live: &Live) -> String {
 fn a_fix_lands_under_herdr_with_claude_code() {
     // S1: the agent commits; flume submits the place, sluice lands it on
     // the remote, and flume tidies the place, its branch, and its tab and
-    // workspace in herdr.
+    // workspace in herdr. S103, 197, C.4: the launch gives
+    // `--agent effort=low`, which the start passes as `--effort low`; its
+    // started ack is taken, status naming `low` from `launch`, passed and
+    // not read back.
     let live = Live::new("live-fix");
-    let place = live.walk.launch(
+    let launched = live.walk.flume(&[
+        "launch",
+        "--kind",
         "fix",
+        "--name",
         "one",
-        &[
-            "--brief",
-            "Create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
-        ],
+        "--brief",
+        "Create the file parser.rs at the repository's root holding exactly the line `fn parse() {}`, and commit it with git.",
+        "--agent",
+        "effort=low",
+    ]);
+    let place = launched["launched"]["place"]["place"]
+        .as_str()
+        .expect("the place's location")
+        .to_string();
+    // Read from the launch's own answer, which no landing can outrun.
+    let effort = json!({ "word": "low", "layer": "launch", "passed": "low", "read_back": false });
+    let agent = &launched["launched"]["place"]["agent"];
+    assert_eq!(
+        (&agent["settings"]["from"]["effort"], &agent["effort"]),
+        (&json!({ "layer": "launch", "value": "low" }), &effort),
+        "{launched}"
     );
     // The agent's Stop hook settles the place the moment it is quiet, so
     // a trivial fix can be submitted, landed and tidied between two of
-    // these reads: begun or already tidied both answer.
+    // these reads: begun or already tidied both answer, and a landing too
+    // says the start's ack was taken.
     let begun = live.until(&place, "its code stage begun or tidied", 5, |status| {
         status.is_null() || status["agent"]["started"] == "yes"
     });
     if !begun.is_null() {
+        assert_eq!(begun["agent"]["effort"], effort, "{begun}");
         // The workspace stands while the place does; read the place again
         // after the workspaces, so a tidy between the two is no failure.
         let workspaces = live.workspaces();

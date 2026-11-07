@@ -1,4 +1,5 @@
-//! The merge queue seam's answers (99, 101, 117, 125, 126, 133, 9).
+//! The merge queue seam's answers (99, 101, 117, 125, 126, 133, 9), and
+//! the branches it opens and closes for base places (205, 206).
 
 use crate::Revision;
 use serde::{Deserialize, Serialize};
@@ -203,14 +204,47 @@ pub enum BaseRevision {
     Unlanded,
 }
 
+/// What a submission sends: the place's worktree head, from the place,
+/// or a branch the merge queue lands on, named with its revision, from
+/// the repository, with no worktree as its submitter (117, 203).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubmitHead {
+    Worktree { head: Revision },
+    Branch { branch: String, revision: Revision },
+}
+
+/// open: the branch made at its base's current revision as one the
+/// merge queue lands on, and the revision it was made at; or why the
+/// merge queue would not make it, in its words, nothing made (205).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BranchOpened {
+    Made { revision: Revision },
+    Refused { reason: String },
+}
+
+/// close: the branch removed into the branch its work landed in; or kept,
+/// in the merge queue's words, a submission open on it or work of it its
+/// base lacks among them; or already gone (204, 206).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BranchClosed {
+    Removed,
+    Kept { reason: String },
+    Gone,
+}
+
 /// The merge queue seam (B.6), bound once for each repository. The
 /// guarantee: landed is said only of a submission of that branch that
 /// the merge queue itself landed, never inferred from what the base
 /// holds, and the merge queue removes nothing of a place (101, 113).
 pub trait MergeQueue: Send + Sync {
-    /// The place's branch at `head` submitted to its base, answered once
-    /// the merge queue holds it, with no wait on its verdict (117).
-    fn submit(&self, place: &crate::PlaceRef, head: &Revision) -> Submitted;
+    /// What `head` names submitted to the place's base, answered once the
+    /// merge queue holds it, with no wait on its verdict: the place's
+    /// branch at its worktree's head, from the place, or a branch named
+    /// at its revision, from the repository (117, 203).
+    fn submit(&self, place: &crate::PlaceRef, head: &SubmitHead) -> Submitted;
 
     /// The outcomes of the place's submissions pending for it, each
     /// given once (133).
@@ -243,4 +277,12 @@ pub trait MergeQueue: Send + Sync {
     /// Where `base`'s current revision lives, where work lands on it, or
     /// that the merge queue lands no such base (9, 126, core.7).
     fn base_revision(&self, repository: &str, base: &str) -> BaseRevision;
+
+    /// `branch` made at `base`'s current revision as a branch the merge
+    /// queue lands on, or refused in its words (205).
+    fn open(&self, repository: &str, branch: &str, base: &str) -> BranchOpened;
+
+    /// `branch`, one the merge queue lands on, removed into `into`, the
+    /// branch its work landed in; or kept in its words, or gone (206).
+    fn close(&self, repository: &str, branch: &str, into: &str) -> BranchClosed;
 }

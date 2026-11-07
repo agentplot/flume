@@ -71,7 +71,7 @@ printf '[profiles]\nplace = "git-worktree"\n' >"$repo/.config/flume.toml"
 git -C "$repo" add -A
 git -C "$repo" commit --quiet -m "the binding"
 (cd "$repo" && "$flume" launch --kind fix --name one --brief "fix the parser" \
-  --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch"
+  --kinds "$fixtures/kinds.toml" --recipient caller --json >/dev/null) || fail "the launch"
 # The place, named by its kind and name where flume made it: under its
 # data directory, as every place is (record 0027).
 located() {
@@ -104,7 +104,9 @@ grep -q "\"command\": \"$flume\"" "$plugin/hooks/hooks.json" ||
   fail "the plugin's hooks do not name the binary by its path"
 
 # A session the operator started: no FLUME_* in its environment. Each hook
-# allows what it was asked, writes nothing and exits 0.
+# allows what it was asked, writes nothing and exits 0; SessionStart, which
+# there runs the inbox as the session the terminal names, finds none under
+# the printed command and gives nothing.
 before=$(state)
 for pair in session-start:session-start.json user-prompt-submit:user-prompt-submit.json \
   pre-tool-use:pre-tool-use-push.json pre-tool-use:pre-tool-use-ask.json \
@@ -212,7 +214,7 @@ strategy = "fill-first"
 accounts = [{ name = "work-1", program = "claude", env = { CLAUDE_CONFIG_DIR = "$scratch/account-1" } }]
 TOML
 (cd "$repo" && "$flume" launch --kind fix --name two --brief "fix the lexer" \
-  --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch under an account"
+  --kinds "$fixtures/kinds.toml" --recipient caller --json >/dev/null) || fail "the launch under an account"
 place=$(located fix--two)
 printed=$(status | jq -r '.agent.printed')
 envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
@@ -258,7 +260,7 @@ jq -e '.program == true' "$(unsettled)" >/dev/null || fail "the record does not 
 # the mode asked and the mode begun, `default` read as `manual` (161, 162,
 # S67).
 (cd "$repo" && "$flume" launch --kind fix --name three --brief "fix the reader" \
-  --kinds "$fixtures/kinds.toml" --agent mode=full --json >/dev/null) || fail "the launch in full"
+  --kinds "$fixtures/kinds.toml" --recipient caller --agent mode=full --json >/dev/null) || fail "the launch in full"
 place=$(located fix--three)
 [ "$(status | jq -r .agent.mode.passed)" = bypassPermissions ] ||
   fail "the start does not record bypassPermissions: $(status | jq -c .agent.mode)"
@@ -300,7 +302,7 @@ accounts = [
 ]
 TOML
 (cd "$repo" && "$flume" launch --kind fix --name four --brief "fix the writer" \
-  --kinds "$fixtures/kinds.toml" --json >/dev/null) || fail "the launch on a pool of two"
+  --kinds "$fixtures/kinds.toml" --recipient caller --json >/dev/null) || fail "the launch on a pool of two"
 place=$(located fix--four)
 printed=$(status | jq -r '.agent.printed')
 envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
@@ -338,6 +340,63 @@ word_file=$(find "$XDG_STATE_HOME" -path "*fix--four*" -name unsettled.json | he
 jq -e '.session == true and .different == [] and .missing == [] and .program == false' \
   "${word_file:-/dev/null}" >/dev/null || fail "the record does not say another session: $(cat "${word_file:-/dev/null}")"
 grep -q 4e3c05c8-51c4-4449-8577-4f7038e394bf "${word_file:-/dev/null}" && fail "the record names the resumed session"
+
+# A session flume did not start, begun again in herdr's pane w1-p2 on a
+# server nothing listens on, which herdr's environment alone names: its
+# SessionStart runs `flume inbox` as that pane, never as the environment's
+# recipient, and gives the agent, as the session's added context, the place
+# waiting on it with its stop-short's words, its key and the three ways on;
+# nothing where nothing waits on the session or flume cannot be reached;
+# and it always exits 0 (43, C.4; design 9). It runs on a state of its own,
+# so the places above are not settled under herdr.
+export XDG_STATE_HOME=$scratch/state-pane XDG_CONFIG_HOME=$scratch/config-pane \
+  XDG_DATA_HOME=$scratch/data-pane
+mkdir -p "$XDG_STATE_HOME" "$XDG_CONFIG_HOME/flume" "$XDG_DATA_HOME"
+socket=$scratch/no-herdr.sock
+session="herdr:w1-p2@$socket"
+(cd "$repo" && "$flume" launch --kind fix --name five --brief "fix the reader" \
+  --kinds "$fixtures/kinds.toml" --recipient "$session" --json >/dev/null) || fail "the launch for the pane"
+place=$(located fix--five)
+printed=$(status | jq -r '.agent.printed')
+envfile=$(printf '%s\n' "$printed" | tr ' ' '\n' | tr -d "'" | grep '\.env$' | head -n 1)
+plugin=$(printf '%s\n' "$printed" | tr ' ' '\n' | sed -n '/^--plugin-dir$/{n;p;}')
+five=(FLUME_AGENT="$(word FLUME_AGENT)" FLUME_SECRET="$(word FLUME_SECRET)"
+FLUME_PLACE="$(word FLUME_PLACE)" FLUME_STAGE="$(word FLUME_STAGE)"
+CLAUDE_PLUGIN_ROOT="$plugin" PATH="$hookpath")
+hook session-start session-start.json "${five[@]}" >/dev/null || fail "session-start exited non-zero"
+prompt=$(cd "$repo" && "$flume" prompt "$place" code --json | jq -r .prompt.text)
+jq -c --arg prompt "$prompt" --arg transcript "$scratch/transcript.jsonl" --arg cwd "$place" \
+  '.prompt = $prompt | .transcript_path = $transcript | .cwd = $cwd' \
+  "$fixtures/user-prompt-submit.json" | env "${five[@]}" "$flume" hook user-prompt-submit
+(cd "$repo" && env "${five[@]}" "$flume" needs "Which file holds the log?" --json >/dev/null) ||
+  fail "the stop-short"
+(cd "$repo" && "$flume" settle "$place" >/dev/null) || fail "the settle of the stop-short"
+(cd "$repo" && "$flume" inbox --recipient "$session" --json >/dev/null) || fail "the pane's inbox"
+printf '[host]\nterminal = "herdr"\n' >"$XDG_CONFIG_HOME/flume/config.toml"
+out=$(hook session-start session-start-another-session.json HERDR_PANE_ID=w1-p2 HERDR_SOCKET_PATH="$socket")
+code=$?
+[ "$code" -eq 0 ] || fail "SessionStart in the restarted pane exited $code"
+words=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // empty')
+for said in "fix--five (fix the reader)" "waits on a retry of code" "Which file holds the log?" \
+  "flume retry fix--five --stage code --answers stage/code/1/ended-short" \
+  "flume hold fix--five" "leave it"; do
+  case $words in
+  *"$said"*) ;;
+  *) fail "SessionStart in the restarted pane does not give '$said': $out" ;;
+  esac
+done
+# Another pane, though the environment names the place's recipient: nothing.
+out=$(hook session-start session-start-another-session.json HERDR_PANE_ID=w9-p9 \
+  HERDR_SOCKET_PATH="$socket" FLUME_RECIPIENT="$session")
+code=$?
+[ "$code" -eq 0 ] || fail "SessionStart in another pane exited $code"
+[ -z "$out" ] || fail "SessionStart in another pane gave: $out"
+# flume cannot be reached: a configuration that cannot be read.
+printf '[host\n' >"$XDG_CONFIG_HOME/flume/config.toml"
+out=$(hook session-start session-start-another-session.json HERDR_PANE_ID=w1-p2 HERDR_SOCKET_PATH="$socket")
+code=$?
+[ "$code" -eq 0 ] || fail "SessionStart with flume unreachable exited $code"
+[ -z "$out" ] || fail "SessionStart with flume unreachable gave: $out"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures of the plugin's hook checks failed" >&2
