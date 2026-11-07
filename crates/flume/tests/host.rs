@@ -750,9 +750,10 @@ fn a_standing_agent_and_a_carried_address() {
 
 /// role-waking, "An entry that names a stream", "A stream the host does
 /// not declare", "Another source's kind", "A standing agent beside a
-/// kind" and the other faults of an entry: each declares nothing for its
-/// address, named with why, and every other entry of the file is
-/// declared (4, 132, 143, 191, 193, C.7; core.30).
+/// kind", "Points in a role's entry" and the other faults of an entry:
+/// each declares nothing for its address, named with why, and every other
+/// entry of the file is declared (4, 132, 143, 165, 191, 193, C.7;
+/// core.30).
 #[test]
 fn an_entry_at_fault_declares_nothing_for_its_address() {
     let scratch = Scratch::new("roles-faults");
@@ -1009,6 +1010,7 @@ fn the_roles_a_host_answers_with() {
             "[roles.\"east/planner\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswers = \"The work's scope.\"\n\
              [roles.\"east/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswers = \"A live system.\"\n\
              [roles.\"west/ops\"]\nrepository = \"/r\"\nkind = \"turn\"\nanswers = \"A live system.\"\n\
+             [roles.\"east/design\"]\nagent = \"east-design\"\nanswers = \"A screen's look.\"\n\
              [roles.\"north/design\"]\ncarried = true\nanswers = \"A decision.\"\n\
              [roles.\"east/reviewer\"]\nrepository = \"/r\"\nkind = \"turn\"\n",
         )],
@@ -1024,6 +1026,7 @@ fn the_roles_a_host_answers_with() {
     assert_eq!(
         answering,
         [
+            role("east/design", "east", "A screen's look."),
             role("east/ops", "east", "A live system."),
             role("east/planner", "east", "The work's scope."),
             role("north/design", "north", "A decision."),

@@ -1,5 +1,34 @@
 ## MODIFIED Requirements
 
+### Requirement: The settle delivers each end once to each recipient
+
+The settle that reads a stage's end, a stage lost, never begun or
+stuck, a submission's outcome or a stall SHALL record it on the place
+as an end, with what flume read, and SHALL deliver each end once to
+each of its recipients, as "An end's recipients" gives them: a notice
+through the terminal into the recipient's own pane, recorded with to
+whom and when, and pending until so recorded (7, 43, 46, 95).
+
+#### Scenario: A delivery and its record
+
+- **WHEN** a fix's code stage delivers at a head and the settle reads it, with the session `ops` waiting in the fake terminal
+- **THEN** the fake terminal records one notice to `ops` naming the place and the end, and status gives the end delivered to `ops` with when
+
+#### Scenario: Settled twice
+
+- **WHEN** the same place is settled again after the end was delivered
+- **THEN** the fake terminal records no second notice to `ops` (74)
+
+#### Scenario: An agent killed
+
+- **WHEN** a code stage's agent is killed with nothing delivered and the watch's settle reads the stage lost
+- **THEN** each recipient gets one notice that the stage is lost, and the end carries what flume read of it (43, 45, S28)
+
+#### Scenario: A landing and a failure
+
+- **WHEN** the merge queue's inbox gives the place's submission failed, and later landed
+- **THEN** each outcome is an end delivered once to each recipient, the failure with the merge queue's words and the landing with the commit it landed as (43, 133)
+
 ### Requirement: The inbox collects what is pending
 
 `flume inbox` SHALL give every end pending for a recipient, of every
@@ -72,6 +101,24 @@ kept (43, 132, 190, 193, C.7; core.11, core.28).
 - **THEN** the fix's end reaches that pane as one notice, and no place of a planner is made (43, 132, 193, C.5)
 
 ## ADDED Requirements
+
+### Requirement: An end's recipients
+
+An end's recipients SHALL be its place's, as its launch took them. A
+stop-short's that named a role SHALL be that address alone, not the
+place's. A stall's SHALL be the place's, the address the stop-short it
+waits on named, of whichever stream, and the answerer behind the
+place's own stream, each once (7, 41, 130, 193).
+
+#### Scenario: A stop-short that named a role
+
+- **WHEN** a construct of a place in `east`, whose recipient is `east/operator`, stops short naming `ops`
+- **THEN** the end stands pending for `east/ops` alone, and none of it for `east/operator` (41, S93)
+
+#### Scenario: A stall of a question for another stream
+
+- **WHEN** a construct of a place in `east`, whose recipient is `east/planner`, stopped short naming `west/design`, `west/operator` stands behind `west`, and the place stalls
+- **THEN** the stall is delivered to `east/planner`, `west/design` and `east/operator`, once each, and not to `west/operator` (130, 193)
 
 ### Requirement: The inbox gives what waits on its recipient
 

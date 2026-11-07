@@ -465,3 +465,40 @@ name no program, no terminal, no queue and no caller's tool (core.1).
   every-question-a-place-asks-reaches-someone-who-answers-it --yes` over
   a copy of `openspec/` leaves `openspec validate --specs --strict`
   passing, and `sluice exec main` passes.
+
+## 12. What verify found, mended
+
+- [x] 12.1 Bring the specs verify found contradicting each other under
+  the change: claude-code-plugin's "SessionStart compares the start's
+  record before it acks" MODIFIED, its scenario of a session flume did
+  not start running the inbox; end-delivery's "The settle delivers each
+  end once to each recipient" MODIFIED to each end's recipients, which
+  "An end's recipients", added beside it under the strict check's
+  length, gives for a stop-short naming a role and a stall; role-waking's
+  "A role's entry gives its run" and "A fault in a source's roles stays
+  its own" refusing `points`, with "Points in a role's entry"; and
+  history-and-host's "The roles a host answers with" naming a standing
+  agent's, its scenario and `the_roles_a_host_answers_with` holding one
+  (verify at b024d079, items 1, 2, 3 and 6; 41, 43, 130, 132, 165, 193,
+  C.4). True when `openspec validate
+  every-question-a-place-asks-reaches-someone-who-answers-it --strict`
+  passes, an archive over a copy of `openspec/` leaves `openspec
+  validate --specs --strict` passing, and `sluice exec main -- moon run
+  flume:test conformance:test` passes.
+- [x] 12.2 Amend core.54's rule and details, core.24's details and
+  core.28's rule and details to give a role's run as core.28 and 132
+  give it: no recipient, its stall to the answerer behind its stream
+  and never its own address, the answerer's own run's stall to no one,
+  and a run whose kind lands submitted at its delivery; mirror core.54
+  and core.28 on the site's rules page (verify's item 4; 114, 130, 132,
+  193; core.19). True when `sluice exec main -- moon run root:format
+  site:prose site:build` passes.
+- [x] 12.3 Write into design 2 and role-waking's "A role's run is over at
+  its delivery" that a run whose kind lands is submitted as any place
+  is and tidied once it lands or is dropped, with "A run whose kind
+  lands" in `engine/role_waking.rs`, and design 2's reading of points
+  until 165 is built; write the exception for 132 on agentplot/blueprints'
+  branch `design/flume-a-roles-run-whose-kind-lands`, unpushed, for the
+  orchestrator (verify's items 3 and 5; 63, 111, 114, 132, 165;
+  core.19). True when `sluice exec main -- moon run conformance:test`
+  passes and the branch holds the commit.

@@ -177,6 +177,11 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             run: the_next_end,
         },
         Scenario {
+            name: "role waking: a role's run whose kind lands, its one stage delivered and its agent quiet, is submitted through the merge queue and declared nothing done, and is tidied once its submission lands",
+            cites: &["63", "114", "132"],
+            run: a_run_whose_kind_lands,
+        },
+        Scenario {
             name: "role waking: the run of east/planner lost and left five minutes stalls to east/operator, the answerer behind east, whose run is woken, and never to its own address",
             cites: &["130", "132", "193"],
             run: a_planners_run_is_lost,
@@ -293,8 +298,13 @@ fn deliver_turn(world: &World, run: &PlaceId) {
 /// records; the host declares the stream `address` names; and acme
 /// declares `run` for `address` (132, 155, 193).
 fn declare_turn(world: &World, address: &str, plan: Stage, run: RoleRun) {
+    declare_turn_landing(world, address, plan, run, false);
+}
+
+/// As `declare_turn`, `turn` landing where `lands` (63, 114).
+fn declare_turn_landing(world: &World, address: &str, plan: Stage, run: RoleRun, lands: bool) {
     use crate::seams::kinds::{entry, hash_of};
-    let mut turn = kind("turn", false, vec![plan]);
+    let mut turn = kind("turn", lands, vec![plan]);
     turn.version = 1;
     turn.label = Some("planning".into());
     world.host.set_source(ACME, ACME_KINDS);
@@ -1618,6 +1628,53 @@ fn the_next_end(_: &()) -> Outcome {
         Some(StageState::Begun),
         "the new run's stage"
     );
+    Ok(())
+}
+
+/// The role-waking spec's "A run whose kind lands" (63, 114, 132): a
+/// done is refused a place whose kind lands (114), so the run is
+/// submitted as any place's at its delivery, and tidied at its landing.
+fn a_run_whose_kind_lands(_: &()) -> Outcome {
+    let world = World::new();
+    world.keep_watch();
+    let plan = stage(
+        "plan",
+        Some(Deliverable::Report {
+            path: "{{state}}/turn.md".into(),
+        }),
+        "Read what is pending for you; write {{report}}.",
+    );
+    declare_turn_landing(&world, PLANNER, plan, planner_run(None, None), true);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    let (woke, _) = woken(&world.engine.wake(PLANNER))?;
+    ensure_eq!(woke, Woke::Launched, "the wake");
+    world.settle(&planner_id());
+    deliver_turn(&world, &planner_id());
+    let held = world
+        .held(&planner_id())
+        .ok_or("the run is gone before its landing")?;
+    ensure_eq!(
+        held.phase,
+        Phase::Making { by: String::new() },
+        "the run once submitted"
+    );
+    let branch = held.place.branch.clone();
+    ensure_eq!(
+        world.queue.submissions(REPOSITORY, &branch).len(),
+        1,
+        "the run's submissions"
+    );
+    ensure_eq!(runs(&world), vec![planner_id()], "runs while it is open");
+    world
+        .queue
+        .decide(REPOSITORY, &branch, flume_fakes::Plan::Land);
+    world.settle(&planner_id());
+    ensure!(
+        world.held(&planner_id()).is_none(),
+        "the landed run's held state stands: {:?}",
+        world.held(&planner_id()).map(|held| held.phase)
+    );
+    ensure_eq!(runs(&world), Vec::<PlaceId>::new(), "runs once it landed");
     Ok(())
 }
 

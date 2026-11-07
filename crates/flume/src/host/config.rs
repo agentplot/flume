@@ -1816,7 +1816,6 @@ mod tests {
         );
     }
 
-    /// role-waking, "The roles in the host's configuration" (193, C.7).
     #[test]
     fn a_keep_open_for_a_kind_and_for_one_stage() {
         // 32, 198, C.7: the store-profile spec's "A time for a kind and
@@ -1940,6 +1939,7 @@ mod tests {
         }
     }
 
+    /// role-waking, "The roles in the host's configuration" (193, C.7).
     #[test]
     fn a_roles_table_makes_the_configuration_unreadable() {
         for text in [

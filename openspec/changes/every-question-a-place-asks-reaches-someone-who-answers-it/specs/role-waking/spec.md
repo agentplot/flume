@@ -186,14 +186,20 @@ recipient's name of any other form SHALL be a session's (4, 7, 132,
 An entry SHALL give its address's run: a kind of its own source's, its
 version the locks'; its repository by its location on the host; its
 priority; its base, else the repository's default branch; and an
-optional brief, points, name, intent, `agents`, `answers` and
-`answerer`. The run's settings SHALL be taken as a launch's, in their
-layers (7, 32, 70, 147, 155, 193, C.7).
+optional brief, name, intent, `agents`, `answers` and `answerer`. The
+run's settings SHALL be taken as a launch's, in their layers. An entry
+that gives `points` SHALL declare nothing for its address, since this
+flume takes points for no place (7, 32, 70, 147, 155, 165, 193, C.7).
 
 #### Scenario: The run's intent and settings
 
 - **WHEN** the entry gives `east/planner` the intent `east-planner` and, under `agents`, `model = "opus"`
 - **THEN** the woken place serves the intent `east-planner`, and its agent starts with the model `opus`, which status gives as from the launch (32, 147)
+
+#### Scenario: Points in a role's entry
+
+- **WHEN** `acme`'s file gives `east/planner` a run's keys and `points = 3`
+- **THEN** `east/planner` wakes nothing, and status names the entry and that `points` is no word of a role's run, since this flume takes a place's points from nothing (165)
 
 ### Requirement: A source may declare a standing agent for an address
 
@@ -241,13 +247,13 @@ keep its ends pending (132, 193).
 ### Requirement: A fault in a source's roles stays its own
 
 A roles file that cannot be read SHALL declare no role. An entry that
-names a kind not its source's, an `env`, a pool, an account or a
-`stream`, whose address names a stream the host does not declare and
-that is not carried, that gives `agent` beside `kind` or a run's other
-keys, or that gives `carried` beside a run's keys, `agent` or
-`answerer`, SHALL declare nothing for its address. Status SHALL name
-each, and every other role and launch SHALL go on (3, 4, 56, 132, 191,
-193; core.30).
+names a kind not its source's, an `env`, a pool, an account, a `stream`
+or `points`, whose address names a stream the host does not declare and
+is not carried, that gives `agent` beside `kind` or a run's keys, or
+that gives `carried` beside a run's keys, `agent` or `answerer`, SHALL
+declare nothing for its address. Status SHALL name each, and every
+other role and launch SHALL go on (3, 4, 56, 132, 165, 191, 193;
+core.30).
 
 #### Scenario: A roles file that is not TOML
 
@@ -285,7 +291,9 @@ and status SHALL name both (3, 4, 132, 193).
 
 Once a role's run's last stage delivers, the settle that reads it SHALL
 declare the run done, with no caller's word, and tidy it, so a later end
-pending for the address wakes another run (114, 132).
+pending for the address wakes another run. A run whose kind lands SHALL
+instead be submitted as any place is, never declared done, and tidied
+once it lands or is dropped (63, 114, 132).
 
 #### Scenario: A turn delivers
 
@@ -296,6 +304,11 @@ pending for the address wakes another run (114, 132).
 
 - **WHEN** an end for `east/planner` comes after that run was tidied
 - **THEN** the settle that reads it launches a new run (S99)
+
+#### Scenario: A run whose kind lands
+
+- **WHEN** acme's `turn` lands, and the run of `east/planner` delivers its one stage's report, its agent quiet
+- **THEN** the settle submits the run through the merge queue and declares nothing done, and once its submission lands the run is tidied and no run of `east/planner` stands (63, 114)
 
 ### Requirement: A role's run's stall reaches the answerer behind it
 

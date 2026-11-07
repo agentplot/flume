@@ -975,6 +975,11 @@ fn the_role_a_question_named(_: &()) -> Outcome {
     Ok(())
 }
 
+/// The caller-waits spec's "Another stream's role named", and the
+/// end-delivery spec's "A stall of a question for another stream": the
+/// stall reaches the place's recipient, the role its stop-short named in
+/// another stream and the answerer behind the place's own stream, once
+/// each, and not the answerer behind the named role's stream (130, 193).
 fn another_streams_role_named(_: &()) -> Outcome {
     let world = World::new();
     east_and_west(&world);

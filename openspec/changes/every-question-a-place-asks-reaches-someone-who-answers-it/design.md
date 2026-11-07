@@ -793,6 +793,19 @@ reads its last stage delivered, with no caller's word, and tidies it
 start takes what came since (crew's Decision 7). This is the runner's
 R3, done where the run is launched.
 
+A role's run whose kind lands, the code stage's own reading, is not
+declared done: 114 refuses a done on a place whose kind lands, so the
+settle that reads its last stage delivered submits it as any place's
+(111), and it is tidied once it lands or is dropped (63, 66). The next
+end for its address wakes another run once it is tidied. crew's roles'
+kinds land nothing, so no run of theirs takes this way; the path not
+taken was to refuse a landing kind in a role's entry, which would have
+the reader open each kind's package to read whether it lands. Statement
+132 says a run is declared done once its last stage delivers, with no
+exception. The exception is written for 132 on agentplot/blueprints'
+branch `design/flume-a-roles-run-whose-kind-lands`, for the
+orchestrator to land (core.19).
+
 **A run's own stall goes to the door.** A role's run has no recipient.
 Where it waits on its caller, lost, never begun or stopped short, its
 stall goes to the answerer behind its stream, and never to its own
@@ -813,7 +826,10 @@ naming it (191):
   C.7 has the entry name the kind and the locks give the version, and
   one that gives `points`, which this flume takes for no place, as it
   refuses a stream's `points` (165), rather than one taken and its
-  points dropped unread;
+  points dropped unread. Statement 132 and C.7 list points among what a
+  source declares for a run. That holds once 165 is built, when an
+  entry's points are taken as a launch's; until then the entry is
+  refused, as a stream's points are;
 - an address two entries declare, of one source or two, and two
   addresses whose runs would be one place, of one repository, kind and
   name, are declared by neither, and status names both;
@@ -2383,6 +2399,13 @@ each partition its own (decision 10, *Which Inbox*).
 - **Clause 132 has a role's run launched by flume and never ended.** Its
   kind lands nothing, and nothing gives the `flume done` that 114 waits
   for. crew's runner did it. Decision 2 makes it flume's.
+- **Clause 132, as amended, declares every role's run done at its last
+  stage's delivery**, and 114 refuses a done on a place whose kind
+  lands. Decision 2 submits a run whose kind lands as any place's, and
+  the exception is written for 132 on agentplot/blueprints' branch
+  `design/flume-a-roles-run-whose-kind-lands`.
+- **Clause 132 and C.7 give a role's entry points**, and 165 is not
+  built. Decision 2 refuses an entry that gives `points` until it is.
 - **core.35 rules out a partition in a command's help, output or
   refusal.** `flume wake`'s help and its refusal, and the configuration
   reader's refusal of a key, say `<partition>/<role>` (`commands/mod.rs`,
@@ -2492,7 +2515,12 @@ each partition its own (decision 10, *Which Inbox*).
   is (decision 13).
 - **A session's start costs a flume call.** Every session the user
   starts runs `flume inbox` under a 20 seconds' bound, and prints
-  nothing when nothing waits.
+  nothing when nothing waits. The inbox settles every place first while
+  no caller keeps watch. Where Claude Code ends the hook after the inbox
+  collected and before it printed, the ends it collected stand
+  delivered by the inbox and that session is not told them; the places
+  that wait on it survive, since `waiting` marks nothing, and the next
+  `flume inbox` gives them.
 - **A hold's bound is a timer read at settles.** Under a terminal that
   keeps no watch, a hold lapses only at the next acting command (119).
   Under herdr, the watch reads it within its bound (122).

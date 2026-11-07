@@ -26,10 +26,11 @@ and keep nothing between asks (143, 191, 193, C.7).
 ### Requirement: The roles a host answers with
 
 The host's facts SHALL give every address a source declares with
-`answers`, a run's or a carried one's, each with its stream and its
-words, as the sources stand when asked (28, 41, 132, 193).
+`answers`, a run's, a standing agent's or a carried one's, each with
+its stream and its words, as the sources stand when asked (28, 41, 132,
+193).
 
 #### Scenario: The host's roles
 
-- **WHEN** `acme`'s roles file declares runs for `east/planner`, `east/ops` and `west/ops`, each with its `answers`, carries `north/design` with its `answers`, and declares `east/reviewer` with no `answers`
-- **THEN** the host gives `east/ops` and `east/planner` for `east`, `west/ops` for `west` and `north/design` for `north`, each with its words, and not `east/reviewer`
+- **WHEN** `acme`'s roles file declares runs for `east/planner`, `east/ops` and `west/ops`, each with its `answers`, gives `east/design` a standing agent with its `answers`, carries `north/design` with its `answers`, and declares `east/reviewer` with no `answers`
+- **THEN** the host gives `east/design`, `east/ops` and `east/planner` for `east`, `west/ops` for `west` and `north/design` for `north`, each with its words, and not `east/reviewer`

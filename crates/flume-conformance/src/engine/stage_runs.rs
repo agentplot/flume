@@ -1159,7 +1159,8 @@ fn role_runs(world: &World) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The stage-runs spec's "A question for its own stream's ops": the
+/// The stage-runs spec's "A question for its own stream's ops", and the
+/// end-delivery spec's "A stop-short that named a role": the
 /// construct of a place in `east`, whose recipient is `east/operator`,
 /// stops short naming `ops`; the stage ends short, its end stands
 /// pending for `east/ops` alone, status gives that address, the settle
