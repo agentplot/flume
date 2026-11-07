@@ -114,6 +114,8 @@ pub fn bump(agents: usize) -> Kind {
             makes: vec![],
             repeats: false,
         }],
+        fix: None,
+        fix_limit: None,
     }
 }
 

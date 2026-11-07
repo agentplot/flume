@@ -16,6 +16,7 @@ mod clues;
 mod deliver;
 mod end;
 mod ends;
+mod fixes;
 mod held;
 mod kinds_lock;
 mod launch;
@@ -48,6 +49,7 @@ pub use acts::{Answering, Retry};
 pub use agent_acts::ANSWER_RECORDED_WITHIN;
 pub use answer::*;
 pub use ends::{end_words, notice, what_ended};
+pub use fixes::cause_words;
 pub use held::Step;
 pub use kinds_lock::{KindsLock, LockOf};
 pub use line::NOT_ITS_AGENT;
@@ -264,7 +266,7 @@ mod tests {
     use flume_seams::{Binding, Declared, Kind, KindSettings, PlaceId, Readiness, Revision};
     use std::collections::BTreeMap;
 
-    fn record(binding: Binding) -> PlaceRecord {
+    pub(crate) fn record(binding: Binding) -> PlaceRecord {
         PlaceRecord {
             id: PlaceId::new("/r/places/fix--one"),
             repository: "/r".into(),
@@ -277,6 +279,8 @@ mod tests {
                 agents: KindSettings::default(),
                 stages: vec![],
                 label: None,
+                fix: None,
+                fix_limit: None,
             },
             declared: Declared::Flume,
             kind_from: None,
@@ -306,6 +310,8 @@ mod tests {
                 name: "one".into(),
                 digest: "d1".into(),
             },
+            fix_of: None,
+            fixes_as: None,
         }
     }
 

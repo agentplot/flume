@@ -4,9 +4,9 @@
 //! (58); a stage's end keeps only what was reported at that moment (43).
 
 use crate::{
-    Binding, Declared, Given, Holds, Identity, Kind, KindFrom, KindSettings, LabelHeld, PassedOver,
-    PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness, Revision, Seconds, Secret, SessionHeld,
-    Settings, StopKind, StreamHeld, Unsettled, Verdict,
+    Binding, Declared, Forecast, Given, Holds, Identity, Kind, KindFrom, KindIdentity,
+    KindSettings, LabelHeld, PassedOver, PlaceId, PlaceRef, ProfileHeld, Prompt, Readiness,
+    Revision, Seconds, Secret, SessionHeld, Settings, StopKind, StreamHeld, Unsettled, Verdict,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -84,6 +84,83 @@ pub struct HeldState {
     /// written before, whose stages' starts say theirs (137, 190).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub terminals: Vec<ProfileHeld>,
+    /// For a base place whose kind names a fix, the newest forecast a
+    /// settle read of its branch against its base, and when, written only
+    /// where its outcome, its head or its base's revision changed; none
+    /// for any other place, and in a held state written before (56, 203,
+    /// 210).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forecast: Option<ForecastHeld>,
+    /// For a base place, each fix flume launched for it, in order of its
+    /// number, each written before its launch and its end written by the
+    /// fix's own settle; none for any other place, and in a held state
+    /// written before (203).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixes: Vec<BaseFix>,
+}
+
+/// The newest forecast a settle read of a base place's branch, and when
+/// (56, 203, 210).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForecastHeld {
+    pub at: Seconds,
+    pub forecast: Forecast,
+}
+
+/// Why flume launched a base place's fix: a forecast in conflict with
+/// its base, by the head and the base's revision it was formed on; or a
+/// failed or conflicting submission, by the merge queue's id. Each is
+/// acted on once (203).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FixCause {
+    Forecast { head: Revision, onto: Revision },
+    Failed { submission: String },
+    Conflicted { submission: String },
+}
+
+/// How a base place's fix ended, as its own settle wrote it onto its base
+/// place: live while it stands, landed with its commit, dropped, or its
+/// launch refused with the refusal's words (203).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "ended", rename_all = "snake_case")]
+pub enum FixEnded {
+    Live,
+    Landed { commit: Revision },
+    Dropped,
+    Refused { reason: String },
+}
+
+/// One fix flume launched for a base place: its number from 1, its
+/// place's name, its place, why, when it was written to be launched, and
+/// how it ended (203).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BaseFix {
+    pub number: u32,
+    pub name: String,
+    pub place: PlaceId,
+    pub cause: FixCause,
+    pub launched: Seconds,
+    #[serde(flatten)]
+    pub ended: FixEnded,
+}
+
+/// The kind a base place's fixes run as, as its launch resolved the name
+/// its kind gives, and where it came from; written once, at the launch,
+/// and never resolved again (21, 23, 203).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FixKind {
+    pub identity: KindIdentity,
+    pub from: KindFrom,
+}
+
+/// The base place flume launched a fix for, the fix's number and why
+/// (203).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FixOf {
+    pub place: PlaceId,
+    pub number: u32,
+    pub cause: FixCause,
 }
 
 /// A start whose agent began without the settings its start recorded:
@@ -779,7 +856,12 @@ pub enum RecipientsFrom {
     Launch,
     Environment,
     Session,
-    Answerer { source: String },
+    Answerer {
+        source: String,
+    },
+    /// A base place's fix takes its base place's recipients, who asked for
+    /// the work (43, 203; core.54).
+    BasePlace,
 }
 
 /// Where a launch read its base's revision (9, 56, 126, C.1).
@@ -861,6 +943,15 @@ pub struct PlaceRecord {
     /// The intent the place serves, as its launch named it or its
     /// repository and base give it (147).
     pub intent: IntentKey,
+    /// For a base place whose kind names a fix, the kind its fixes run
+    /// as, resolved at its launch; none for any other place, and in a
+    /// record written before (21, 23, 203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixes_as: Option<FixKind>,
+    /// For a place flume launched as a base place's fix, that base place,
+    /// the fix's number and why; none for any other place (203).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_of: Option<FixOf>,
 }
 
 /// An intent's key: the name a launch gave it, else the repository and

@@ -1,8 +1,8 @@
 use crate::{lock, FakeGit, Log};
 use flume_seams::{
-    BaseRevision, BranchClosed, BranchOpened, Inbox, MergeQueue, PassedOver, PlaceRef, ReadAcross,
-    Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState, SubmitHead,
-    Submitted,
+    BaseRevision, BranchClosed, BranchOpened, Forecast, Inbox, MergeQueue, PassedOver, PlaceRef,
+    ReadAcross, Revision, Stepped, Submission, SubmissionOutcome, SubmissionRead, SubmissionState,
+    SubmitHead, Submitted,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -60,6 +60,11 @@ struct Requested {
 /// nothing of the others; the outcomes of submissions to it stay pending
 /// until it reads again (99, 133). It removes nothing of a place (113).
 ///
+/// It forecasts a branch against its base as a test scripts it, each
+/// answer standing until scripted again, or else clear at the base's
+/// revision, logged as `forecast <branch> onto <base>`, adding no
+/// submission (210).
+///
 /// It opens and closes the branches it lands on for base places, as a
 /// test scripts it or else by its own reading of the fake git, logged as
 /// `open <branch> from <base>` and `close <branch> into <base>`; a branch
@@ -95,6 +100,9 @@ struct QueueState {
     /// The answer scripted for each branch's close, by repository and
     /// branch.
     closes: BTreeMap<(String, String), BranchClosed>,
+    /// The answer scripted for each branch's forecast, by repository and
+    /// branch.
+    forecasts: BTreeMap<(String, String), Forecast>,
     next: u64,
     next_request: u64,
 }
@@ -169,6 +177,16 @@ impl FakeMergeQueue {
     pub fn answer_close(&self, repository: &str, branch: &str, answer: BranchClosed) {
         lock(&self.state)
             .closes
+            .insert((repository.into(), branch.into()), answer);
+    }
+
+    /// Forecast of `branch` answers `answer` at every ask from now on,
+    /// until scripted again, adding no submission; unscripted, it is clear
+    /// at its base's revision, the branch's head as the fake git holds it
+    /// (210).
+    pub fn answer_forecast(&self, repository: &str, branch: &str, answer: Forecast) {
+        lock(&self.state)
+            .forecasts
             .insert((repository.into(), branch.into()), answer);
     }
 
@@ -659,5 +677,38 @@ impl MergeQueue for FakeMergeQueue {
         }
         self.git.delete_branch(repository, branch);
         BranchClosed::Removed
+    }
+
+    fn forecast(&self, repository: &str, branch: &str, base: &str) -> Forecast {
+        self.log.push(format!("forecast {branch} onto {base}"));
+        {
+            let queue = lock(&self.state);
+            if let Some(reason) = &queue.unreadable {
+                return Forecast::CouldNotRead {
+                    reason: reason.clone(),
+                };
+            }
+            if let Some(answer) = queue
+                .forecasts
+                .get(&(repository.to_string(), branch.to_string()))
+            {
+                return answer.clone();
+            }
+        }
+        let Some(head) = self.git.branch_head(repository, branch) else {
+            return Forecast::CouldNotRead {
+                reason: format!("no branch {branch} in {repository}"),
+            };
+        };
+        match self.where_base(repository, base) {
+            BaseRevision::At { revision } => Forecast::Clear {
+                head,
+                onto: revision,
+            },
+            BaseRevision::Refused { reason } => Forecast::CouldNotRead { reason },
+            BaseRevision::Unlanded => Forecast::CouldNotRead {
+                reason: format!("the merge queue lands no {base} in {repository}"),
+            },
+        }
     }
 }

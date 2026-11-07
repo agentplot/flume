@@ -105,6 +105,8 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
             makes: vec![],
             repeats: false,
         }],
+        fix: None,
+        fix_limit: None,
     };
     HeldState {
         place: PlaceRecord {
@@ -139,6 +141,8 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
                 name: "one".into(),
                 digest: "d1".into(),
             },
+            fix_of: None,
+            fixes_as: None,
         },
         ends: vec![],
         role: None,
@@ -169,5 +173,7 @@ pub fn sample_held(id: &PlaceId, repository: &str) -> HeldState {
         failures: vec![],
         priority: 0,
         shown: None,
+        fixes: vec![],
+        forecast: None,
     }
 }

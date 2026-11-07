@@ -11,11 +11,11 @@ use flume_core::{
 };
 use flume_seams::{
     AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
-    Conversation, EndOf, Given, Hold, HoldOn, HostConfiguration, IntentKey, Kept, KindFrom,
-    LabelHeld, LiveProcess, LocalLayer, Made, NamedBy, NamedSession, Phase, ProfileHeld, Readiness,
-    RecipientsFrom, Seconds, SessionFrom, SessionHeld, StopKind, StreamAnswerer, StreamHeld,
-    SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE,
-    OWN_SOURCE, REPO_SOURCE,
+    Conversation, EndOf, FixEnded, Forecast, Given, Hold, HoldOn, HostConfiguration, IntentKey,
+    Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer, Made, NamedBy, NamedSession, Phase,
+    ProfileHeld, Readiness, RecipientsFrom, Seconds, SessionFrom, SessionHeld, StopKind,
+    StreamAnswerer, StreamHeld, SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits,
+    Watch, LAUNCH_SOURCE, OWN_SOURCE, REPO_SOURCE,
 };
 use serde_json::{json, Value};
 
@@ -359,6 +359,7 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             place.on_branch.as_deref().unwrap_or_default(),
         ));
     }
+    lines.extend(fix_lines(place));
     if let Some(waiting) = &place.waiting_on {
         lines.push(waiting_line(waiting, place.stalled));
         lines.extend(kept_open_line(waiting));
@@ -507,6 +508,7 @@ fn recipients_from_words(from: &RecipientsFrom) -> String {
         RecipientsFrom::Answerer { source } => {
             format!("from the stream's answerer, declared by {source}")
         }
+        RecipientsFrom::BasePlace => "from the base place it fixes".into(),
     }
 }
 
@@ -545,6 +547,82 @@ fn base_place_line(on_branch: &[flume_seams::PlaceId]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     )
+}
+
+/// A base place's fixes in the person's form: the kind they run as, with
+/// where it came from, and how many of its bound were launched; the
+/// newest forecast a settle held; and each fix with its cause and how it
+/// ended; and, for a fix, the base place flume launched it for (56, 203).
+fn fix_lines(place: &PlaceStatus) -> Vec<String> {
+    let mut lines = vec![];
+    if let Some(fix_kind) = &place.fix_kind {
+        let kind = kind_line(Some(&fix_kind.from))
+            .and_then(|line| line.strip_prefix("  kind ").map(str::to_string))
+            .unwrap_or_else(|| fix_kind.identity.spelled.clone());
+        let bound = place
+            .fix_limit
+            .map(|limit| format!(", {} of {limit} fixes", place.fixes.len()))
+            .unwrap_or_default();
+        lines.push(format!("  fix kind {kind}{bound}"));
+    }
+    if let Some(held) = &place.forecast {
+        let forecast = match &held.forecast {
+            Forecast::Clear { onto, .. } => format!("forecast clear at {onto}"),
+            Forecast::Conflict {
+                onto, files, with, ..
+            } if with.is_empty() => format!(
+                "forecast conflicts on {} with {} at {onto}",
+                files.join(", "),
+                place.base
+            ),
+            Forecast::Conflict {
+                onto, files, with, ..
+            } => format!(
+                "forecast conflicts on {} with {} queued ahead, {} at {onto}",
+                files.join(", "),
+                with.join(", "),
+                place.base
+            ),
+            Forecast::CouldNotRead { reason } => format!("forecast unread: {reason}"),
+        };
+        lines.push(format!("  {forecast}, read at {}", held.at));
+    }
+    let kind = place
+        .fix_kind
+        .as_ref()
+        .map(|fix_kind| fix_kind.identity.name.as_str());
+    for fix in &place.fixes {
+        let name = kind.map_or_else(
+            || fix.place.to_string(),
+            |kind| format!("{kind}--{}", fix.name),
+        );
+        let ended = match &fix.ended {
+            FixEnded::Live => "live".to_string(),
+            FixEnded::Landed { commit } => format!("landed as {commit}"),
+            FixEnded::Dropped => "dropped".to_string(),
+            FixEnded::Refused { reason } => format!("not launched: {reason}"),
+        };
+        lines.push(format!(
+            "  fix {} {name}, for {}, launched at {}: {ended}",
+            fix.number,
+            flume_core::cause_words(&fix.cause),
+            fix.launched
+        ));
+    }
+    if let Some(of) = &place.fix_of {
+        let base = std::path::Path::new(&of.place.to_string())
+            .file_name()
+            .map_or_else(
+                || of.place.to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+        lines.push(format!(
+            "  launched by flume for {base} (fix {}, {})",
+            of.number,
+            flume_core::cause_words(&of.cause)
+        ));
+    }
+    lines
 }
 
 /// What a place waits on its caller for, since when, and its words; a
@@ -1711,10 +1789,11 @@ mod tests {
         StreamStatus, TitleFrom, TitleHeld, WindowStatus,
     };
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, AnswerHeld, Declared, EndHeld, EndOf,
-        Given, Handed, Layer, ModeBegan, MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld,
-        Reading, ReadyStep, Reserved, SessionClosed, SessionRuns, StageEnd, StageState,
-        StopShortWaited, Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
+        AccountFrom, AccountHeld, AccountMove, AgentState, AnswerHeld, BaseFix, Declared, EndHeld,
+        EndOf, FixCause, FixKind, FixOf, ForecastHeld, Given, Handed, Layer, ModeBegan, MoveOn,
+        MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep, Reserved, SessionClosed,
+        SessionRuns, StageEnd, StageState, StopShortWaited, Strategy, StreamFrom, StreamHeld,
+        Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -3561,6 +3640,11 @@ mod tests {
             waits_on: None,
             worktree: None,
             on_branch: None,
+            fix_kind: None,
+            fix_limit: None,
+            forecast: None,
+            fixes: vec![],
+            fix_of: None,
         }
     }
 
@@ -4018,6 +4102,81 @@ mod tests {
         assert!(!place_lines(&a_place())
             .iter()
             .any(|line| line.contains("worktree")));
+    }
+
+    #[test]
+    fn a_fix_landed_in_the_persons_form() {
+        // The place-status spec's "A fix landed, in the person's form": a
+        // base place whose kind names mend gives the kind of its fixes with
+        // where it came from and 1 of 2 fixes, its forecast clear at main's
+        // revision, and fix 1 landed as abc123; the JSON the same fix
+        // landed with its commit (56, 61, 203).
+        let mend = KindFrom {
+            declaration_file: Some(".config/flume.toml".into()),
+            revision: Some(flume_seams::Revision::new("c1")),
+            ..kind_from("repo", "mend", 1)
+        };
+        let base = PlaceStatus {
+            worktree: Some(false),
+            on_branch: Some(vec![]),
+            fix_kind: Some(FixKind {
+                identity: mend.identity.clone(),
+                from: mend,
+            }),
+            fix_limit: Some(2),
+            forecast: Some(ForecastHeld {
+                at: 300,
+                forecast: Forecast::Clear {
+                    head: flume_seams::Revision::new("aaa222"),
+                    onto: flume_seams::Revision::new("c0ffee"),
+                },
+            }),
+            fixes: vec![BaseFix {
+                number: 1,
+                name: "spring-1".into(),
+                place: PlaceId::new("/d/places/1/mend--spring-1"),
+                cause: FixCause::Forecast {
+                    head: flume_seams::Revision::new("aaa111"),
+                    onto: flume_seams::Revision::new("beef00"),
+                },
+                launched: 120,
+                ended: FixEnded::Landed {
+                    commit: flume_seams::Revision::new("abc123"),
+                },
+            }],
+            ..a_place()
+        };
+        let lines = place_lines(&base);
+        for line in [
+            "  fix kind repo/mend@1 from the repository at c1, 1 of 2 fixes",
+            "  forecast clear at c0ffee, read at 300",
+            "  fix 1 mend--spring-1, for a forecast conflict, launched at 120: landed as abc123",
+        ] {
+            assert!(
+                lines.contains(&line.to_string()),
+                "{line} not in {lines:#?}"
+            );
+        }
+        let json = serde_json::to_value(&base).expect("status as JSON");
+        assert_eq!(json["fixes"][0]["ended"], "landed");
+        assert_eq!(json["fixes"][0]["commit"], "abc123");
+        let fix = PlaceStatus {
+            fix_of: Some(FixOf {
+                place: PlaceId::new("/d/places/1/train--spring"),
+                number: 1,
+                cause: FixCause::Forecast {
+                    head: flume_seams::Revision::new("aaa111"),
+                    onto: flume_seams::Revision::new("beef00"),
+                },
+            }),
+            ..a_place()
+        };
+        assert!(place_lines(&fix).contains(
+            &"  launched by flume for train--spring (fix 1, a forecast conflict)".to_string()
+        ));
+        assert!(!place_lines(&a_place())
+            .iter()
+            .any(|line| line.contains("fix kind") || line.contains("forecast")));
     }
 
     #[test]

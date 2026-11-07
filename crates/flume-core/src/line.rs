@@ -315,6 +315,8 @@ mod tests {
                 agents: KindSettings::default(),
                 stages: vec![],
                 label: None,
+                fix: None,
+                fix_limit: None,
             },
             declared: Declared::Repository,
             kind_from: None,
@@ -344,6 +346,8 @@ mod tests {
                 name: "spring".into(),
                 digest: "d1".into(),
             },
+            fix_of: None,
+            fixes_as: None,
         };
         serde_json::from_value(json!({
             "place": to_value(place).unwrap(),

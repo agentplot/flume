@@ -766,6 +766,8 @@ fn map_kind(kind: &weir_kinds::Kind, beside: Reader, problems: &mut Vec<String>)
             .map(|(n, stage)| map_stage(stage, &format!("{at}.stages[{n}]"), beside, problems))
             .collect(),
         label: None,
+        fix: None,
+        fix_limit: None,
     }
 }
 

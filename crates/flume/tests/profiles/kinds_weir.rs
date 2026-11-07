@@ -547,6 +547,8 @@ fn bump(version: u32, stages: &[&str]) -> Kind {
                 repeats: false,
             })
             .collect(),
+        fix: None,
+        fix_limit: None,
     }
 }
 
