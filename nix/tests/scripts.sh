@@ -43,3 +43,30 @@ expect "$named" "check.sh test with FLUME_FLAKE_INPUTS unset exits $status" \
   [ "$status" -ne 0 ]
 expect "$named" "check.sh test with FLUME_FLAKE_INPUTS unset says \"$err\", not that the devenv shell sets it" \
   says "$err" "FLUME_FLAKE_INPUTS is not set: the devenv shell sets it"
+
+# `nix eval` of nix/tests/fails.nix's `$1` as nix/check.sh runs it: its
+# status and its error.
+fails() {
+  status=0
+  (cd "$nix/.." && nix eval --raw --offline --read-only --impure \
+    --store 'dummy://?store=/flume-check/store' \
+    --extra-experimental-features nix-command \
+    --file nix/tests/fails.nix "$1") >"$dir/out" 2>"$dir/err" || status=$?
+  err=$(cat "$dir/err")
+}
+
+named="A mistyped declared key"
+fresh
+fails mistyped
+expect "$named" 'settings.streams.work.agents = "five" evaluates' [ "$status" -ne 0 ]
+expect "$named" "its failure names no services.flume.settings.streams.work.agents: $err" \
+  says "$err" "services.flume.settings.streams.work.agents"
+
+named="A path value"
+fresh
+fails path
+expect "$named" "settings holding a path evaluate" [ "$status" -ne 0 ]
+expect "$named" "its failure names no services.flume.settings.kinds.change.agents.programs.claude.file: $err" \
+  says "$err" "services.flume.settings.kinds.change.agents.programs.claude.file"
+expect "$named" "its failure names not the values the file takes: $err" \
+  says "$err" "strings, booleans, integers, floats, lists and tables"
