@@ -799,22 +799,16 @@ impl TerminalHarness for Harness {
 
     /// The plugin's watch on this server, its lease renewed now, having
     /// written that herdr's configuration binds no key to the popup.
+    /// What the plugin's startup on the test's server writes it lacks,
+    /// in setup.json with the server's socket, which is present (122,
+    /// C.5).
     fn setup(&self) -> Vec<String> {
         let words = "herdr's configuration, /h/config.toml, binds no key to flume's places";
-        let watched = self.server.scratch.path("plugin/servers/1");
-        fs::create_dir_all(&watched).expect("the plugin's server state");
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("the clock")
-            .as_secs();
+        let server = self.server.scratch.path("plugin/servers/1");
+        fs::create_dir_all(&server).expect("the plugin's server state");
         fs::write(
-            watched.join("watch.lease"),
-            format!("{} {now}\n", std::process::id()),
-        )
-        .expect("the lease");
-        fs::write(
-            watched.join("setup.json"),
-            serde_json::json!([words]).to_string(),
+            server.join("setup.json"),
+            serde_json::json!({ "socket": self.server.socket, "lacking": [words] }).to_string(),
         )
         .expect("setup.json");
         vec![words.to_string()]
@@ -2907,8 +2901,9 @@ fn a_startups_setup_is_given_by_status_while_its_server_runs() {
     assert_eq!(terminal_setup(&server, flume), Value::Array(vec![]));
 }
 
-/// The plugin's lease on its server `1` under `plugin`, renewed `ago`
-/// seconds before now by this process, as the watch writes it.
+/// A lease an earlier release's watch kept on server `1` under `plugin`,
+/// renewed `ago` seconds before now by this process, as that watch wrote
+/// it; this release reads none.
 fn lease_renewed(plugin: &Path, ago: u64) {
     let server = plugin.join("servers/1");
     fs::create_dir_all(&server).expect("the plugin's server state");
