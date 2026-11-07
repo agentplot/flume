@@ -10,7 +10,8 @@
 //! lie, the repository's lock at a revision, a lock written and read
 //! back, and the packages refused at another identity, naming a part
 //! outside them, an environment or a program by a location (155 to 160,
-//! 192; S63).
+//! 192; S63); and a kind that lands with no stages beside one that does
+//! not and a table of settings (18, 202; weir 51, 57).
 
 use crate::common::engine::{base_at, engine, PLACE_PROFILE};
 use crate::common::*;
@@ -392,7 +393,7 @@ fn a_repository_with_no_declaration_declares_no_kind() {
         KindsRead::Read {
             kinds: vec![],
             settings: Default::default(),
-            agents: Settings::default(),
+            agents: Box::default(),
         }
     );
     assert_eq!(
@@ -467,6 +468,57 @@ agents = [{ instructions = "keep it short" }]
         Some("keep it short"),
         "the stage's own beside the kind's"
     );
+}
+
+#[test]
+fn a_kind_that_lands_with_no_stages_beside_one_that_does_not_and_settings() {
+    // The kinds-profile spec's "Three tables over a scratch repository":
+    // weir's crate reads `stages = []` on a kind that lands as a kind with
+    // no stages, refuses it on one that does not, naming its stages, and
+    // reads a table that leaves `stages` out and holds `agents` alone as
+    // settings for a kind declared elsewhere, flume's own fix; a refusal
+    // refuses the declaration whole (18, 23, 57, 202; weir 51, 57; core.4).
+    let repository = Repository::new("no-stages");
+    let declared = "[kinds.train]\nbranch = \"train\"\nlands = true\nstages = []\n\n\
+                    [kinds.fix.agents]\nmodel = \"opus\"\n";
+    repository.write(DECLARATION, declared);
+    let revision = Revision::new(repository.commit("a kind that lands with no stages"));
+    let KindsRead::Read {
+        kinds, settings, ..
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
+        panic!("a kind that lands with no stages did not read");
+    };
+    assert_eq!(
+        kinds
+            .iter()
+            .map(|kind| (kind.name.as_str(), kind.lands, kind.stages.len()))
+            .collect::<Vec<_>>(),
+        vec![("train", true, 0)],
+        "train, a kind that lands with no stages"
+    );
+    assert_eq!(kinds[0].branch_prefix, "train");
+    assert_eq!(
+        settings.keys().collect::<Vec<_>>(),
+        vec!["fix"],
+        "fix's table, settings for a kind declared elsewhere"
+    );
+    assert_eq!(settings["fix"].every_stage.model.as_deref(), Some("opus"));
+    repository.write(
+        DECLARATION,
+        &format!("{declared}\n[kinds.idle]\nlands = false\nstages = []\n"),
+    );
+    let revision = Revision::new(repository.commit("a kind that does not land with none"));
+    match Weir.read_kinds(&repository.name(), &revision) {
+        KindsRead::CouldNotRead { reason } => {
+            assert!(reason.contains("kinds.idle.stages"), "{reason}");
+            assert!(
+                !reason.contains("kinds.train") && !reason.contains("kinds.fix"),
+                "a table that reads named in {reason}"
+            );
+        }
+        other => panic!("a kind that does not land with no stages read as {other:?}"),
+    }
 }
 
 /// A one-stage kind `bump` of the repository's at `version`, not landing.
@@ -748,6 +800,103 @@ agents = [{ mode = { claude = "auto" } }]
             "auto".to_string()
         )])))
     );
+}
+
+#[test]
+fn an_effort_for_every_stage_and_one_for_a_stage() {
+    // 23, 197, C.2: a kind's agents table gives an effort for every
+    // stage, and a stage's agents another, each its program's own word
+    // kept as written.
+    let repository = Repository::new("declared-effort");
+    repository.write(
+        DECLARATION,
+        r#"[kinds.bump.agents]
+effort = "high"
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ effort = "xhigh" }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("an effort for bump and one for its code");
+    let revision = Revision::new(repository.head());
+    let KindsRead::Read { kinds, .. } = Weir.read_kinds(&repository.name(), &revision) else {
+        panic!("the declaration did not read");
+    };
+    let bump = &kinds[0];
+    assert_eq!(bump.agents.every_stage.effort.as_deref(), Some("high"));
+    assert_eq!(bump.stages[0].agents[0].effort.as_deref(), Some("xhigh"));
+}
+
+#[test]
+fn an_effort_for_every_kind_of_a_repository() {
+    // 32, 197, C.2: the repository's `[agents]` gives an effort for every
+    // kind, apart from its table for fix, which gives its own.
+    let repository = Repository::new("every-kind-effort");
+    repository.write(
+        DECLARATION,
+        r#"[agents]
+effort = "medium"
+
+[kinds.fix.agents]
+effort = "high"
+"#,
+    );
+    let revision = Revision::new(repository.commit("the repository's efforts"));
+    let KindsRead::Read {
+        settings, agents, ..
+    } = Weir.read_kinds(&repository.name(), &revision)
+    else {
+        panic!("the declaration did not read");
+    };
+    assert_eq!(agents.effort.as_deref(), Some("medium"));
+    assert_eq!(settings["fix"].every_stage.effort.as_deref(), Some("high"));
+}
+
+#[test]
+fn an_effort_that_is_no_word_refuses_the_launch_naming_the_field() {
+    // 4, 197, C.2: a number and a table of programs each fail the read,
+    // naming the table's `effort`, in a repository's table for every kind,
+    // in its table for a kind it does not declare, in a stage's of a
+    // kind's own and in its agents; the launch is refused with nothing
+    // made.
+    let repository = Repository::new("declared-bad-effort");
+    repository.write(
+        DECLARATION,
+        r#"[agents]
+effort = { claude = "high" }
+
+[kinds.change.agents]
+effort = 3
+
+[kinds.bump.agents.stages.code]
+effort = { claude = "high" }
+
+[[kinds.bump.stages]]
+name = "code"
+prompt = "prompts/bump-code.md"
+deliverables = ["commits"]
+agents = [{ effort = 3 }]
+"#,
+    );
+    repository.write(".config/prompts/bump-code.md", "{{brief}}");
+    repository.commit("efforts that are no word");
+    let reason = could_not_read(&repository);
+    for field in [
+        "agents.effort:",
+        "kinds.change.agents.effort",
+        "kinds.bump.agents.stages.code.effort",
+        "kinds.bump.stages[0].agents[0].effort",
+    ] {
+        assert!(
+            reason.contains(field),
+            "the read names not {field}: {reason}"
+        );
+    }
+    launch_refused_naming(&repository, "change", &["kinds.change.agents.effort"]);
 }
 
 #[test]
@@ -1120,7 +1269,7 @@ model = "sonnet"
         panic!("the launch's declaration did not read");
     };
     assert_eq!(
-        agents,
+        *agents,
         Settings::default(),
         "a launch's [agents] is not read"
     );
@@ -1147,6 +1296,81 @@ fn a_repositorys_agents_table_naming_a_stage_or_an_environment_refuses_the_launc
         assert!(reason.contains(&format!("{field}:")), "{given}: {reason}");
         launch_refused_naming(&repository, "fix", &[field]);
     }
+}
+
+/// The words a declaration's `keep_open` is refused in (design 1).
+const KEEP_OPEN_REFUSED: &str =
+    "how long an agent is kept open for an answer is the host's or the launch's to give";
+
+#[test]
+fn a_repositorys_keep_open_refuses_the_launch_naming_the_field() {
+    // 4, 158, 198, C.2: the kinds-profile spec's "A repository's
+    // keep_open": `keep_open` in a repository's table for a kind it does
+    // not declare fails the read naming the field and that the host or the
+    // launch gives it, and a launch of a fix is refused with nothing made;
+    // so does one in its table for every kind, and in a kind's own and a
+    // stage's of a kind it declares.
+    for (given, kind, field) in [
+        (
+            "[kinds.fix.agents]\nkeep_open = \"2h\"\n",
+            "fix",
+            "kinds.fix.agents.keep_open",
+        ),
+        ("[agents]\nkeep_open = \"2h\"\n", "fix", "agents.keep_open"),
+        (
+            "[kinds.bump.agents.stages.code]\nkeep_open = \"2h\"\n\n\
+             [[kinds.bump.stages]]\nname = \"code\"\nprompt = \"prompts/bump-code.md\"\n\
+             deliverables = [\"commits\"]\n",
+            "bump",
+            "kinds.bump.agents.stages.code.keep_open",
+        ),
+    ] {
+        let repository = Repository::new("declared-keep-open");
+        repository.write(DECLARATION, given);
+        repository.write(".config/prompts/bump-code.md", "{{brief}}");
+        repository.commit("a keep_open in the declaration");
+        let reason = could_not_read(&repository);
+        assert!(
+            reason.contains(&format!("{field}: {KEEP_OPEN_REFUSED}")),
+            "{given}: {reason}"
+        );
+        launch_refused_naming(&repository, kind, &[field]);
+    }
+}
+
+#[test]
+fn a_packages_keep_open_refuses_the_launch_naming_the_stages_field() {
+    // 4, 158, 198, C.2: the kinds-profile spec's "A kind's keep_open": a
+    // package whose kind's stage gives `keep_open` in its `agents` entry
+    // cannot be read, naming the stage's field, and a launch of that kind
+    // from the host's source is refused with nothing made.
+    let repository = Repository::new("packaged-keep-open");
+    let kinds_dir = repository.scratch.path("kinds/acme");
+    write_package(
+        &kinds_dir,
+        "lint@1",
+        &reviewing("lint", 1, "").replace("agents = [{}]", "agents = [{ keep_open = \"5m\" }]"),
+        &[("prompts/code.md", "{{brief}}")],
+    );
+    let field = "kinds.lint.stages[0].agents[0].keep_open";
+    let reason = package_refused(&kinds_dir, "lint", 1);
+    assert!(
+        reason.contains("acme/lint@1") && reason.contains(&format!("{field}: {KEEP_OPEN_REFUSED}")),
+        "{reason}"
+    );
+    let world = World::new();
+    base_at(&world, &repository.name(), &repository.head());
+    world.host.set_source("acme", &kinds_dir.to_string_lossy());
+    let mut lint = launch("acme/lint@1", "one", Some("x"));
+    lint.repository = repository.name();
+    let reason =
+        refused(&engine(&world, Arc::new(Weir)).launch(&lint)).expect("the launch refused");
+    assert!(
+        reason.contains(field),
+        "the refusal names not {field}: {reason}"
+    );
+    assert_eq!(world.place.log.count("make"), 0, "places made");
+    assert!(world.store.places().is_empty(), "held state was left");
 }
 
 #[test]
@@ -1221,6 +1445,11 @@ makes = ["preview"]
         }]
     );
     assert_eq!(kind.stages[0].agents[0].program.as_deref(), Some("agent"));
+    assert_eq!(
+        kind.stages[0].agents[0].effort.as_deref(),
+        Some("high"),
+        "the stage's effort, read as written (197)"
+    );
     assert_eq!(kind.stages[0].prompt, "{{brief}}\n\n{{needs}}");
 }
 
@@ -1861,6 +2090,10 @@ fn two_repetitions_prompts_are_equal_up_to_the_group() {
     );
     assert!(stopped.refusal().is_none(), "the stop-short: {stopped:?}");
     world.settle(&id);
+    // The asking agent stopped, so the retry starts a fresh agent rather
+    // than answering its session (51, 198).
+    let ended = world.engine.stop(&id, false);
+    assert!(ended.refusal().is_none(), "the stop: {ended:?}");
     let retried = world.engine.retry(
         &id,
         flume_core::Retry::Stage("code".into()),

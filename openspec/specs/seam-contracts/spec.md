@@ -683,3 +683,249 @@ before SHALL read with none (49, 64, 207).
 
 - **WHEN** a held state whose talk waits on process 4242, and a place kept while its session runs, are written and read
 - **THEN** each reads back unchanged (49, 64, 207)
+
+### Requirement: The host gives the addresses standing agents hold
+
+The host SHALL give, as its sources stand at each call, each address a
+source gives a standing agent, with the source, the agent's name, the
+`session` the entry gives where it gives one, the words of what the
+role answers and whether it stands behind its address's stream; its
+stream SHALL be its address's; and it SHALL give no run for such an
+address (132, 193, C.7).
+
+#### Scenario: Standing and run apart
+
+- **WHEN** the fake host is given a standing agent for `madswan/planner` and a run for `madswan/ops`
+- **THEN** its standing entries hold `madswan/planner` alone, and its role for `madswan/planner` is none (132)
+
+### Requirement: The terminal seam gives a session's agents by name
+
+The terminal seam SHALL give the agents a part holds, by part name or
+its own, each carrying a name, with that name, the session name a send
+reaches it by, and its state; a part that does not run holds none and
+is not started; a part it cannot read is answered so, in its words
+(132, C.5; core.13).
+
+#### Scenario: An agent by its name
+
+- **WHEN** the terminal scenarios start an agent under a name in a part, then ask for that part's agents
+- **THEN** the agent is listed by its name with its state, a send to its session name reaches it, and a name no agent carries is not listed (95, 132)
+
+### Requirement: The types of a standing agent
+
+The seams SHALL pass one type each for a standing agent's entry, a
+part's named agents, and an address's standing as status gives it with
+what was found, and `SessionFrom` SHALL take `role`; each SHALL
+serialize to JSON and back unchanged (56, 132; core.14).
+
+#### Scenario: A standing address round-trips
+
+- **WHEN** a standing entry, a part's agents, and an address's standing found one, none, several and unread, with a session from `role`, are written and read
+- **THEN** each reads back unchanged, and an address written before this change reads with no standing (core.14)
+
+### Requirement: The agent seam takes an effort or refuses it
+
+The agent seam SHALL say whether its program takes an effort's word,
+with words naming the effort, the program and the words it takes where
+it does not, refusing every word by default; SHALL name the variable
+its program reads over the effort, none by default; and its command
+SHALL pass the settings' effort as its profile's way gives it, and none
+where the settings give none (88, 170, 197).
+
+#### Scenario: A profile that names no way to give an effort
+
+- **WHEN** an agent profile that keeps the seam's defaults is asked of `high`
+- **THEN** it refuses with words naming `high`, and names no variable read over it (197)
+
+#### Scenario: The fake's efforts over the seam's scenarios
+
+- **WHEN** the agent seam's scenarios run against the fake agent scripted to take `low` and `high` and to name `FAKE_EFFORT` as read over them
+- **THEN** `low` and `high` are taken, any other word is refused naming it and both words, the variable read is `FAKE_EFFORT`, and the fake's command passes the effort taken (88, 197)
+
+### Requirement: The settings carry an effort
+
+`Settings` SHALL carry an optional effort, taken whole by
+`Settings::under` as the model is, serialized to JSON and back
+unchanged, and a held state written before it SHALL read with none
+(32, 197).
+
+#### Scenario: A held state with an effort
+
+- **WHEN** a held state whose launch gives verify the effort `max` and whose kind gives every stage `high` is written and read
+- **THEN** it reads back unchanged, and the same state written without any effort reads with none (32, 197)
+
+### Requirement: The terminal says whether it hands a running agent words
+
+The terminal seam SHALL say whether it can type words into a running
+agent's input: the herdr profile SHALL say it can, the printed command
+SHALL say it cannot, and the core SHALL keep no agent open for an
+answer under a terminal that cannot (53, 95, 198, C.5).
+
+#### Scenario: The printed command
+
+- **WHEN** the printed command's profile is asked whether it hands a running agent words
+- **THEN** it says it cannot, and its send is refused with nothing typed (53, C.5)
+
+#### Scenario: herdr
+
+- **WHEN** the herdr profile is asked whether it hands a running agent words
+- **THEN** it says it can (53, C.5)
+
+### Requirement: The types of an agent kept open
+
+The held state SHALL hold a stage end's `open_until` and `closed`, with
+when, why, one of `time`, `stopped`, `agent_ended` and `account_spent`,
+when its agent was ended and whether a bare agent was left in its pane,
+and a setting's `keep_open` as written, each read with a default so
+state written before reads with none (56, 75, 77, 198).
+
+#### Scenario: An agent let go
+
+- **WHEN** held state with an agent let go by `account_spent` and ended is written and read back
+- **THEN** it reads back equal, each field as written (75)
+
+### Requirement: The types of an answer taken in a session
+
+The held state SHALL hold an end's `answer`, with its words, the act it
+came by, when it was taken and, where it was handed to a session, when
+it was sent and received; each start's count of the answers it took in
+its session; and an end's count of the answers its start took before
+it, each read with a default so state written before reads with none.
+An end's key SHALL count the answers only where there are some (42, 43,
+75).
+
+#### Scenario: Two answers
+
+- **WHEN** held state with a start whose two ended-short ends each hold an answer, one by `retry` and one by `tell`, is written and read back
+- **THEN** it reads back equal, each field as written, and the two ends key apart (43, 75)
+
+#### Scenario: State written before
+
+- **WHEN** held state written before this change is read
+- **THEN** it reads with no agent kept open, no close, no answers and no `keep_open`, and each of its ends keys as it did (75)
+
+### Requirement: The merge queue's open and close
+
+The merge-queue seam SHALL give open, a branch made at its base's
+current revision as one the merge queue lands on, answering the
+revision, or refused with its words; and close, a branch it lands on
+removed into the branch its work landed in, or kept with its words, or
+gone (205, 206; core.2).
+
+#### Scenario: Open, then close
+
+- **WHEN** the seam's scenarios ask a profile to open `train/a` from `main`, then to close `train/a` into `main` with nothing landed on it
+- **THEN** open answers the revision `main` stood at, and close answers the branch removed; a second close answers it gone (205, 206)
+
+#### Scenario: Open refused
+
+- **WHEN** a profile is asked to open a branch already present
+- **THEN** it answers refused with the merge queue's words, and the branch is as it was (205)
+
+### Requirement: A submit by name
+
+Submit SHALL take what it sends as the place's worktree head, from the
+place, or a branch the merge queue lands on named with its revision,
+from the repository with no worktree as its submitter, and answer
+either as it answers a submission today; read-submission SHALL give a
+submission by name's outcome with its words (99, 117, 203; core.2).
+
+#### Scenario: A submit by name
+
+- **WHEN** a base place submits the branch `train/a`, named, at its revision, to `main`
+- **THEN** the seam answers the submission it made with `train/a` as its branch, held with no wait, and read-submission of `train/a` gives it (99, 117, 203)
+
+### Requirement: The terminal seam starts no settle
+
+The terminal seam SHALL offer no operation that settles, keeps watch
+over the host, nudges a settle at an agent's change, or answers a
+bound on which the terminal settles; whether flume runs attended SHALL
+be read from the host's watch alone, whatever terminal is bound (119,
+122, 208; core.2, core.13).
+
+#### Scenario: The same reading under every terminal
+
+- **WHEN** the engine is asked whether it runs attended under the fake terminal, then under each terminal profile the tree carries, with the same host's watch held
+- **THEN** it answers the same under each, and no terminal operation was called to answer it (122, 208)
+
+### Requirement: The store holds the host's watch
+
+The store seam's host documents SHALL hold the host's watch, when the
+newest settle a caller asked as its watch began and the bound it
+stated, written by compare-and-set on its version as every host
+document is, a host state written before reading as holding none (73,
+153, 208).
+
+#### Scenario: Two watches at once
+
+- **WHEN** two settles with a bound write the host's watch from the same version
+- **THEN** one write takes and the other is refused, and the one that read again writes over it (73, 208)
+
+### Requirement: The types of a base place and the watch
+
+`flume-seams` SHALL hold `SubmitHead`, `BranchOpened`, `BranchClosed`,
+`BranchRemoved::Refused`, `HostKey::Watch`, `Watched` and the line
+`Clues` carries, each written and read back by its round trip, a
+document written before reading as it did (61, 139, 202 to 206 and
+208).
+
+#### Scenario: Round trips
+
+- **WHEN** `round_trip.rs` writes each new type and each new variant and reads it back
+- **THEN** each reads as written, and a held state and a host's state written before this change read unchanged (61)
+
+### Requirement: The clues a terminal shows
+
+The clues the terminal seam's show takes SHALL be a place's current
+stage and that stage's state, the short form of its line and the count
+of the places of its repository on its base; a terminal that shows no
+clues SHALL answer so, and no terminal SHALL read them back (139).
+
+#### Scenario: A place's clues shown
+
+- **WHEN** the terminal seam is asked to show a place whose code stage is working, its line's short form `code · run 1 · tasks 2/5 · working`, with one place of its repository running on its base
+- **THEN** a terminal that shows clues answers shown, one that shows none answers so, and nothing is read back (139)
+
+### Requirement: The host gives what its sources declare of roles
+
+The host SHALL give, as its sources stand at each call and keeping
+nothing between calls, each address one entry declares with that
+entry, a run's, a standing agent's or a carried one's; each entry that
+declares nothing for its address, with its source and why; and each
+source whose roles file cannot be read, with the file and why (132,
+191, 193, C.7).
+
+#### Scenario: What a source declares round-trips
+
+- **WHEN** a run's entry with every key and with none it may leave out, a standing agent's, a carried address's, an entry refused and a roles file not read are written and read
+- **THEN** each reads back unchanged, and a run written before sources reads with no source (core.14)
+
+### Requirement: The host answers from what its sources declare
+
+From what its sources declare, the host SHALL give what is declared for
+an address or why nothing is, the answerer behind a stream, and the
+answering roles, each type serializing to JSON and back unchanged (28,
+132, 143, 193; core.14).
+
+#### Scenario: An address's answer, a stream's answerer and the answering roles
+
+- **WHEN** the seams' roles hold a standing agent, a carried address and a run standing behind `east`, and an entry refused for `east/ops`
+- **THEN** `east/ops` is answered with the entry's reason, an address no entry names with no source declaring it, `east`'s answerer is the run's address with its source, `north` has none, and the answering roles give each address with words and its stream
+
+#### Scenario: An address's stream
+
+- **WHEN** the seams read `madswan/planner` and `slc-2/ops.1`
+- **THEN** each is an address, its stream `madswan` and `slc-2` and its role `planner` and `ops.1`, and a name of any other form is a session's (132, 143, 193)
+
+### Requirement: A stop-short's end holds the answer being taken
+
+A stop-short's end SHALL hold the answer being taken for it, while one
+is: who gives it and the key it named, as its command names them, when
+it was claimed and until when the claim holds, past which a later
+answer may take the stop-short. An end written before SHALL read as
+claimed by none (42, 75).
+
+#### Scenario: A claim read back
+
+- **WHEN** held state whose stop-short's end is claimed by an answer of `east/ops` naming its key is written and read back, and an end written before with no claim is read
+- **THEN** it reads back equal, the claim's `by`, `key`, `at` and `until` as written, and the end written before reads claimed by none (42, 75)

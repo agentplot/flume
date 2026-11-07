@@ -5,13 +5,15 @@
 
 use flume_core::{
     group_name, percentage, AgentStatus, Answer, HostStatus, OwnStatus, PlaceStatus, PoolStatus,
-    Queued, ReadingStatus, Reserves, SessionWait, SourceStatus, StageStatus, StreamOpened,
-    StreamStatus, Tidied, TitleFrom, WindowOutcome, Woke,
+    Queued, ReadingStatus, Reserves, SessionAnswer, SessionWait, SourceStatus, StageStatus,
+    StandingFound, StandingStatus, StreamOpened, StreamStatus, Tidied, TitleFrom, WaitingPlace,
+    WindowOutcome, Woke,
 };
 use flume_seams::{
-    AccountFrom, Act, BaseFrom, CarryCause, ConfigLayer, ConfigValue, Conversation, Given, HoldOn,
-    HostConfiguration, IntentKey, Kept, KindFrom, LabelHeld, LiveProcess, LocalLayer, Made,
-    NamedBy, NamedSession, Phase, ProfileHeld, Readiness, SessionFrom, SessionHeld, StreamHeld,
+    AccountFrom, Act, AnswerHeld, BaseFrom, CarryCause, ClosedBy, ConfigLayer, ConfigValue,
+    Conversation, EndOf, Given, Hold, HoldOn, HostConfiguration, IntentKey, Kept, KindFrom,
+    LabelHeld, LiveProcess, LocalLayer, Made, NamedBy, NamedSession, Phase, ProfileHeld, Readiness,
+    RecipientsFrom, Seconds, SessionFrom, SessionHeld, StopKind, StreamAnswerer, StreamHeld,
     SubmissionRead, UncarriedStart, UnsettledStart, WaitingOn, Waits, Watch, LAUNCH_SOURCE,
     OWN_SOURCE, REPO_SOURCE,
 };
@@ -91,18 +93,26 @@ pub fn person(answer: &Answer) -> String {
                 )
             }
         }),
-        Answer::Inbox { recipient, ends } => {
+        Answer::Inbox {
+            recipient,
+            ends,
+            waiting,
+        } => {
             if ends.is_empty() {
                 lines.push(format!("nothing pending for {recipient}"));
             }
             for collected in ends {
                 lines.push(format!(
-                    "{}--{} {}; read: flume status {}",
+                    "{}--{} {} [{}]; read: flume status {}",
                     collected.kind,
                     collected.name,
-                    flume_core::what_ended(&collected.end.end.of),
+                    flume_core::end_words(&collected.end.end.of),
+                    collected.end.key,
                     collected.place
                 ));
+            }
+            for place in waiting {
+                lines.extend(waiting_place_lines(recipient, place));
             }
         }
         Answer::Woken {
@@ -116,6 +126,20 @@ pub fn person(answer: &Answer) -> String {
                 Woke::Waiting => format!("{address}'s run {} waits; nothing made", place.place),
             });
             lines.extend(place_lines(place));
+        }
+        Answer::Held {
+            address,
+            standing,
+            pending,
+        } => {
+            lines.push(format!(
+                "{address} is held by {}, so nothing was launched; {}",
+                standing_words(standing),
+                pending_words(pending.len())
+            ));
+            for end in pending {
+                lines.push(format!("  {}: {}", end.place, end.what));
+            }
         }
         Answer::Locked {
             lock_file,
@@ -330,31 +354,45 @@ fn place_lines(place: &PlaceStatus) -> Vec<String> {
             lines.push(format!("    waiting: {waiting}"));
         }
     }
+    if place.worktree == Some(false) {
+        lines.push(base_place_line(
+            place.on_branch.as_deref().unwrap_or_default(),
+        ));
+    }
     if let Some(waiting) = &place.waiting_on {
         lines.push(waiting_line(waiting, place.stalled));
+        lines.extend(kept_open_line(waiting));
     }
     if let Some(wait) = &place.waits_on_session {
         lines.push(session_wait_line(wait));
     }
     for hold in &place.holds {
-        let what = match &hold.on {
-            HoldOn::Stage { stage } => stage.as_str(),
-            HoldOn::Submission => "the submission",
-        };
-        let mut line = format!("  {what} on hold since {}", hold.since);
-        if let Some(words) = &hold.words {
-            line.push_str(&format!(": {words}"));
-        }
-        lines.push(line);
+        lines.push(hold_line(hold));
     }
     if let Some(role) = &place.role {
         lines.push(format!("  the run of {role}"));
     }
     if !place.recipients.is_empty() {
-        lines.push(format!("  recipients: {}", place.recipients.join(", ")));
+        let from = place
+            .recipients_from
+            .as_ref()
+            .map(|from| format!(", {}", recipients_from_words(from)))
+            .unwrap_or_default();
+        lines.push(format!(
+            "  recipients: {}{from}",
+            place.recipients.join(", ")
+        ));
     }
     for end in &place.ends {
-        let mut line = format!("  ended: {}", flume_core::what_ended(&end.end.of));
+        let mut line = format!(
+            "  ended {}: {}",
+            end.key,
+            flume_core::what_ended(&end.end.of)
+        );
+        line.push_str(&stall_words(&end.end.of));
+        if let Some(answer) = &end.end.answer {
+            line.push_str(&format!("; {}", answered_words(answer)));
+        }
         let delivered: Vec<&str> = end
             .end
             .deliveries
@@ -424,7 +462,7 @@ fn kind_line(from: Option<&KindFrom>) -> Option<String> {
 /// A source the host declares: its file and its directory, then the
 /// kinds it holds by identity, or why the file or the directory cannot be
 /// read (56, 191; design 9).
-fn source_line(source: &SourceStatus) -> String {
+fn source_lines(source: &SourceStatus) -> Vec<String> {
     let mut line = format!("  source {} ({})", source.name, source.source_file);
     if let Some(kinds_dir) = &source.kinds_dir {
         line.push_str(&format!(" at {kinds_dir}"));
@@ -434,7 +472,79 @@ fn source_line(source: &SourceStatus) -> String {
         None if source.kinds.is_empty() => line.push_str(": holds no kind"),
         None => line.push_str(&format!(": {}", source.kinds.join(", "))),
     }
-    line
+    let mut lines = vec![line];
+    let file = source
+        .roles_file
+        .as_ref()
+        .map(|file| format!(" ({file})"))
+        .unwrap_or_default();
+    match &source.roles_cannot_read {
+        Some(fault) => lines.push(format!("    its roles{file}: cannot be read: {fault}")),
+        None if !source.roles.is_empty() => {
+            lines.push(format!("    its roles{file}: {}", source.roles.join(", ")))
+        }
+        None if source.roles_file.is_some() => {
+            lines.push(format!("    its roles{file}: declares none"))
+        }
+        None => {}
+    }
+    for refused in &source.roles_refused {
+        lines.push(format!(
+            "    declares nothing for {}: {}",
+            refused.address, refused.reason
+        ));
+    }
+    lines
+}
+
+/// Where a launch took a place's recipients from, as the person's form
+/// gives it (7, 56, 193).
+fn recipients_from_words(from: &RecipientsFrom) -> String {
+    match from {
+        RecipientsFrom::Launch => "from the launch".into(),
+        RecipientsFrom::Environment => "from $FLUME_RECIPIENT".into(),
+        RecipientsFrom::Session => "from the session that launched it".into(),
+        RecipientsFrom::Answerer { source } => {
+            format!("from the stream's answerer, declared by {source}")
+        }
+    }
+}
+
+/// Who stands behind a stream, the one role with its source or the roles
+/// that each declare to; none where no role does (143, 193).
+fn answerer_line(answerer: &StreamAnswerer) -> String {
+    match answerer {
+        StreamAnswerer::Stands(by) => {
+            format!(
+                "    its answerer: {}, declared by {}",
+                by.address, by.source
+            )
+        }
+        StreamAnswerer::Contested { roles } => format!(
+            "    no one answerer: {} each stand behind it",
+            roles
+                .iter()
+                .map(|by| format!("{}, declared by {}", by.address, by.source))
+                .collect::<Vec<_>>()
+                .join(" and ")
+        ),
+    }
+}
+
+/// A base place's line: it has no worktree, and the places live on its
+/// branch, which it waits on while any is (56, 202, 203).
+fn base_place_line(on_branch: &[flume_seams::PlaceId]) -> String {
+    if on_branch.is_empty() {
+        return "  no worktree; no place on its branch is live".into();
+    }
+    format!(
+        "  no worktree; waits on the places on its branch: {}",
+        on_branch
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 /// What a place waits on its caller for, since when, and its words; a
@@ -481,6 +591,127 @@ fn waiting_line(waiting: &WaitingOn, stalled: bool) -> String {
         _ => {}
     }
     line
+}
+
+/// A place the inbox gives as waiting on `recipient`: the place, its
+/// brief's first line and its stream, then the move it waits on and since
+/// when, the stop-short the move answers by its key, whether it needs an
+/// answer or found work and the address it named, its agent kept open or
+/// let go, and the hold on the move (43, 130, 193; design 9).
+fn waiting_place_lines(recipient: &str, place: &WaitingPlace) -> Vec<String> {
+    let brief = place
+        .brief
+        .as_ref()
+        .map(|brief| format!(" ({brief})"))
+        .unwrap_or_default();
+    let mut lines = vec![
+        format!(
+            "{}--{}{brief}, in {}, waits on {recipient}; read: flume status {}",
+            place.kind, place.name, place.stream, place.place
+        ),
+        waiting_line(&place.waiting_on, false),
+    ];
+    if let Some(stop_short) = &place.stop_short {
+        let needs = match stop_short.needs {
+            Some(StopKind::FoundWork) => "found work",
+            _ => "needs an answer",
+        };
+        let mut line = format!("  its stop-short {} {needs}", stop_short.key);
+        if let Some(addressee) = &stop_short.addressee {
+            line.push_str(&format!(", asking {addressee}"));
+        }
+        match &stop_short.words {
+            Some(words) if place.waiting_on.words.as_ref() != Some(words) => {
+                line.push_str(&format!(": {words}"));
+            }
+            _ => {}
+        }
+        lines.push(line);
+    }
+    lines.extend(kept_open_line(&place.waiting_on));
+    lines.extend(place.hold.as_ref().map(hold_line));
+    lines
+}
+
+/// A hold's line: what it holds, since when and its words; for the move
+/// the place waits on, the bound it holds for and when it lapsed, a
+/// lapsed hold holding nothing (47, 56, 130).
+fn hold_line(hold: &Hold) -> String {
+    let what = match &hold.on {
+        HoldOn::Stage { stage } => stage.as_str(),
+        HoldOn::Submission => "the submission",
+        HoldOn::Waiting => "the move it waits on",
+    };
+    let mut line = format!("  {what} on hold since {}", hold.since);
+    if let Some(bound) = hold.bound {
+        line.push_str(&format!(", for {bound} seconds"));
+    }
+    if let Some(lapsed) = hold.lapsed {
+        line.push_str(&format!(", lapsed at {lapsed}"));
+    }
+    if let Some(words) = &hold.words {
+        line.push_str(&format!(": {words}"));
+    }
+    line
+}
+
+/// What a stall carries beside the move, for its line: the words of the
+/// hold whose lapse stalled it, and the stop-short the place waits on,
+/// whether it needs an answer or found work, the role it named and its
+/// words; nothing for any other end (41, 56, 130, 193).
+fn stall_words(of: &EndOf) -> String {
+    let EndOf::Stall {
+        stop_short, lapsed, ..
+    } = of
+    else {
+        return String::new();
+    };
+    let mut words = String::new();
+    if let Some(lapsed) = lapsed {
+        words.push_str(&format!(", its hold lapsed: {lapsed}"));
+    }
+    if let Some(stop_short) = stop_short {
+        let needs = match stop_short.needs {
+            Some(StopKind::FoundWork) => "found work",
+            _ => "needs an answer",
+        };
+        words.push_str(&format!("; its stop-short {needs}"));
+        if let Some(addressee) = &stop_short.addressee {
+            words.push_str(&format!(", asking {addressee}"));
+        }
+        if let Some(said) = &stop_short.words {
+            words.push_str(&format!(", saying: {said}"));
+        }
+    }
+    words
+}
+
+/// For a place waiting on an answer, its agent kept open for it and until
+/// when, or when and why it was let go and whether it is ended, left in
+/// its pane or to be ended once quiet; none for any other move, and for
+/// an answer whose agent was never kept open (130, 198).
+fn kept_open_line(waiting: &WaitingOn) -> Option<String> {
+    if let Some(until) = waiting.open_until {
+        return Some(format!(
+            "    its agent kept open for the answer until {until}: retry with --words, or tell it"
+        ));
+    }
+    let closed = waiting.closed?;
+    let why = match closed.by {
+        ClosedBy::Time => "its time passed",
+        ClosedBy::AgentEnded => "its agent ended",
+        ClosedBy::AccountSpent => "its account spent",
+        ClosedBy::Stopped => "its caller stopped it",
+    };
+    let ended = match (closed.ended_at, closed.left_in_pane) {
+        (Some(at), _) => format!("and ended at {at}"),
+        (None, true) => "and left in its pane".to_string(),
+        (None, false) => "and ended once quiet".to_string(),
+    };
+    Some(format!(
+        "    its agent let go at {}, {why}, {ended}: retry with --words",
+        closed.at
+    ))
 }
 
 /// A stage waiting for room while a process runs the conversation its
@@ -728,9 +959,11 @@ fn own_lines(own: &OwnStatus) -> Vec<String> {
 /// The current agent's line: its identity, program, account and state,
 /// the account from the intent's affinity for the agent's program, the
 /// strategy, or the account a lost conversation's start ran under, its
-/// conversation's, and its mode as written with its layer, the entry it took of
-/// a table and the value passed, where a layer gave one (56, 145, 147,
-/// 169).
+/// conversation's, its mode as written with its layer, the entry it took of
+/// a table and the value passed, where a layer gave one, and its effort
+/// as written with its layer, the value passed and the account's variable
+/// that outranks it, by its name alone, where a layer gave one (56, 145,
+/// 147, 169, 197).
 fn agent_line(agent: &AgentStatus) -> String {
     let mut line = format!("  agent {} ({})", agent.identity, agent.program);
     if let Some(account) = &agent.account {
@@ -760,6 +993,20 @@ fn agent_line(agent: &AgentStatus) -> String {
         line.push_str(&format!(" passed as {}", mode.passed));
         if !mode.read_back {
             line.push_str(", not read back");
+        }
+    }
+    if let Some(effort) = &agent.effort {
+        line.push_str(&format!(
+            ", at the effort {} (from {}) passed as {}",
+            effort.word,
+            word(json!(effort.layer)),
+            effort.passed
+        ));
+        if !effort.read_back {
+            line.push_str(", not read back");
+        }
+        if let Some(variable) = &effort.outranked_by {
+            line.push_str(&format!("; the account's {variable} outranks it"));
         }
     }
     line
@@ -903,6 +1150,50 @@ fn and_list(items: &[String]) -> String {
     }
 }
 
+/// Where a standing agent lives and what its stream's terminal found of
+/// it: `the standing agent madswan-planner in the session madswan (the
+/// entry's), found waiting`; none of its name there, several, or why the
+/// terminal could not read (56, 132, 190).
+fn standing_words(standing: &StandingStatus) -> String {
+    let session = match &standing.session.name {
+        Some(name) => {
+            let from = match standing.session.from {
+                SessionFrom::Role => "the entry's".to_string(),
+                SessionFrom::Stream => format!("the stream {}'s", standing.stream),
+                SessionFrom::StreamName => format!("the stream {}'s name", standing.stream),
+                from => session_from(from).to_string(),
+            };
+            format!("the session {name} ({from})")
+        }
+        None => format!(
+            "the terminal's own session (the stream {}'s)",
+            standing.stream
+        ),
+    };
+    let found = match &standing.found {
+        StandingFound::One { state, .. } => format!("found {}", word(json!(state))),
+        StandingFound::None => "none of that name there".to_string(),
+        StandingFound::Several { count } => {
+            format!("{count} of that name there, so none takes a notice")
+        }
+        StandingFound::Unread { reason } => format!("not read: {reason}"),
+    };
+    format!(
+        "the standing agent {} in {session}, {found}",
+        standing.agent
+    )
+}
+
+/// How many ends stand pending for an address: `nothing pending`, `1 end
+/// pending`, `3 ends pending` (56, 132).
+fn pending_words(count: usize) -> String {
+    match count {
+        0 => "nothing pending".to_string(),
+        1 => "1 end pending".to_string(),
+        count => format!("{count} ends pending"),
+    }
+}
+
 /// Where a session's name came from (56, 107, 143, 199).
 fn session_from(from: SessionFrom) -> &'static str {
     match from {
@@ -912,6 +1203,7 @@ fn session_from(from: SessionFrom) -> &'static str {
         SessionFrom::Stream => "the stream's",
         SessionFrom::StreamName => "the stream's name",
         SessionFrom::Own => "the terminal's own",
+        SessionFrom::Role => "the entry's",
     }
 }
 
@@ -1009,6 +1301,9 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
         if let Some(head) = &end.head {
             line.push_str(&format!(", ended at {head}"));
         }
+        if let Some(addressee) = &end.addressee {
+            line.push_str(&format!(", asking {addressee}"));
+        }
         if let Some(words) = &end.words {
             line.push_str(&format!(", saying: {words}"));
         }
@@ -1020,6 +1315,9 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
         line.push_str(&format!(", refused: {setting}"));
     }
     let mut lines = vec![line];
+    for answer in &stage.answers {
+        lines.push(answer_line(answer));
+    }
     for made in stage.end.iter().flat_map(|end| &end.made) {
         let line = match made {
             Made::Thing(thing) => json!(thing).to_string(),
@@ -1028,6 +1326,51 @@ fn stage_lines(stage: &StageStatus) -> Vec<String> {
         lines.push(format!("    made: {line}"));
     }
     lines
+}
+
+/// An answer a stage's start took in its session: the act it came by,
+/// who gave it where it named one, when it was received, and the question
+/// then the answer (42, 56).
+fn answer_line(answer: &SessionAnswer) -> String {
+    let from = answer
+        .answer
+        .by
+        .as_ref()
+        .map(|by| format!(" from {by}"))
+        .unwrap_or_default();
+    let received = answer
+        .answer
+        .session
+        .map(|handed| format!(", received at {}", handed.received_at))
+        .unwrap_or_default();
+    format!(
+        "    answered by {}{from}{received}: asked {}; answered {}",
+        word(json!(answer.answer.act)),
+        answer.question.as_deref().unwrap_or_default(),
+        answer.answer.words
+    )
+}
+
+/// A stop-short's answer on its end's line: when it was taken, who gave
+/// it where it named one, the act it came by, whether it named the key,
+/// and its words (42, 56).
+fn answered_words(answer: &AnswerHeld) -> String {
+    let by = answer
+        .by
+        .as_ref()
+        .map(|by| format!(" by {by}"))
+        .unwrap_or_default();
+    let keyed = if answer.key.is_some() {
+        " naming its key"
+    } else {
+        ""
+    };
+    format!(
+        "answered at {}{by}, by a {}{keyed}: {}",
+        answer.at,
+        word(json!(answer.act)),
+        answer.words
+    )
 }
 
 /// The host's facts, what its terminal's configuration lacks for flume's
@@ -1061,6 +1404,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         ));
         lines.extend(named_lines(stream));
         lines.push(display_line(stream));
+        lines.extend(stream.answerer.as_ref().map(answerer_line));
         lines.extend(label_lines(stream));
         for queued in &stream.queue {
             lines.push(format!("    {}", queued_line(queued)));
@@ -1070,7 +1414,7 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         lines.extend(pool_lines(pool));
     }
     for source in &host.sources {
-        lines.push(source_line(source));
+        lines.extend(source_lines(source));
     }
     lines.extend(configuration_lines(&host.configuration));
     for kept in &host.terminal_kept {
@@ -1081,20 +1425,36 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         for kept in &terminal.kept {
             lines.push(format!("  the terminal {name} keeps {kept}"));
         }
-        lines.push(match terminal.watch {
-            Watch::Bound { seconds } => {
-                format!("  the terminal {name} keeps watch every {seconds} seconds")
-            }
-            Watch::None => format!(
-                "  the terminal {name} keeps no watch, so every place settles at each command of flume's that acts"
-            ),
-        });
     }
     for address in &host.addresses {
-        let run = match (&address.run, &address.role) {
-            (Some(run), _) => format!("its run {run}"),
-            (None, Some(role)) => format!("no run; it wakes {} in {}", role.kind, role.repository),
-            (None, None) => "no role configured".to_string(),
+        if let Some(standing) = &address.standing {
+            lines.push(format!(
+                "  {}: {}; {}",
+                address.address,
+                standing_words(standing),
+                pending_words(address.pending.len())
+            ));
+            for end in &address.pending {
+                lines.push(format!("    {}: {}", end.place, end.what));
+            }
+            continue;
+        }
+        let run = match (&address.run, &address.role, &address.carried) {
+            (Some(run), _, _) => format!("its run {run}"),
+            (None, Some(role), _) => {
+                format!(
+                    "no run; it wakes {} in {}",
+                    role.run.kind, role.run.repository
+                )
+            }
+            (None, None, Some(carried)) => format!(
+                "no run; {} declares it carried, its run on another host",
+                carried.source
+            ),
+            (None, None, None) => match &address.wakes_nothing {
+                Some(why) => format!("no run; it wakes nothing: {why}"),
+                None => "no run; no source declares it".to_string(),
+            },
         };
         lines.push(format!(
             "  {} ends pending for {}, {run}",
@@ -1107,17 +1467,49 @@ fn host_lines(host: &HostStatus) -> Vec<String> {
         if let Some(unwoken) = &address.unwoken {
             lines.push(format!("    not woken: {unwoken}"));
         }
+        if let Some(stall) = &address.stalled {
+            lines.push(format!(
+                "    its run {} {}, which reached no one",
+                stall.place, stall.what
+            ));
+        }
     }
-    lines.push(match host.watch {
-        Watch::Bound { seconds } => format!(
-            "  the terminal keeps watch: every place settles every {seconds} seconds and when an agent's state changes"
-        ),
-        Watch::None => "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".into(),
-    });
+    lines.push(watch_line(host));
     for setup in &host.terminal_setup {
         lines.push(format!("    {setup}"));
     }
     lines
+}
+
+/// Whether a caller keeps watch over the host, with its bound and when
+/// its newest settle began, or since when none has (56, 119, 208).
+fn watch_line(host: &HostStatus) -> String {
+    match (host.watch, host.watch_lapsed) {
+        (Watch::Bound { seconds }, _) => format!(
+            "  a caller keeps watch: every place settles every {}, last at {}",
+            duration(seconds),
+            host.watch_settled
+                .map_or_else(|| "an unknown time".to_string(), |at| at.to_string())
+        ),
+        (Watch::None, Some(lapsed)) => format!(
+            "  no caller keeps watch since {lapsed}: every place settles at each command of flume's that acts"
+        ),
+        (Watch::None, None) => {
+            "  no caller keeps watch: every place settles at each command of flume's that acts"
+                .into()
+        }
+    }
+}
+
+/// A duration in its largest whole unit, as `flume wait --timeout` and
+/// `flume settle --every` take one: `2m`, `1h`, `90s`.
+fn duration(seconds: Seconds) -> String {
+    match seconds {
+        0 => "0s".into(),
+        _ if seconds.is_multiple_of(3600) => format!("{}h", seconds / 3600),
+        _ if seconds.is_multiple_of(60) => format!("{}m", seconds / 60),
+        _ => format!("{seconds}s"),
+    }
 }
 
 /// A start whose agent began without its settings, each variable by its
@@ -1278,12 +1670,18 @@ fn tidy_lines(tidy: &Tidied) -> Vec<String> {
         });
     }
     for branch in &tidy.branches_kept {
-        lines.push(format!(
-            "kept the branch {} of {}, {} commits not landed",
-            branch.branch,
-            branch.place,
-            branch.commits.len()
-        ));
+        lines.push(match &branch.reason {
+            Some(reason) => format!(
+                "kept the branch {} of {}, the merge queue keeping it: {reason}",
+                branch.branch, branch.place
+            ),
+            None => format!(
+                "kept the branch {} of {}, {} commits not landed",
+                branch.branch,
+                branch.place,
+                branch.commits.len()
+            ),
+        });
     }
     for place in &tidy.not_over {
         lines.push(format!("{place}'s work is not over"));
@@ -1308,15 +1706,15 @@ mod tests {
     use super::*;
     use flume_core::EndStatus;
     use flume_core::{
-        AccountStatus, AgentSettings, Listed, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus,
-        Past, PlaceLine, RoomWanted, StreamListed, StreamStatus, TitleFrom, TitleHeld,
-        WindowStatus,
+        AccountStatus, AddressStatus, AgentSettings, EffortStatus, Listed, ModeStatus, MoveStatus,
+        OwnFileStatus, OwnStatus, Past, PendingEnd, PlaceLine, RoomWanted, StreamListed,
+        StreamStatus, TitleFrom, TitleHeld, WindowStatus,
     };
     use flume_seams::{
-        AccountFrom, AccountHeld, AccountMove, AgentState, Declared, EndHeld, EndOf, Given, Layer,
-        ModeBegan, MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld, Reading, ReadyStep,
-        Reserved, SessionRuns, StageEnd, StageState, Strategy, StreamFrom, StreamHeld, Unsettled,
-        View, ViewHeld,
+        AccountFrom, AccountHeld, AccountMove, AgentState, AnswerHeld, Declared, EndHeld, EndOf,
+        Given, Handed, Layer, ModeBegan, MoveOn, MoveWhy, NamedBy, Phase, PlaceId, ProfileHeld,
+        Reading, ReadyStep, Reserved, SessionClosed, SessionRuns, StageEnd, StageState,
+        StopShortWaited, Strategy, StreamFrom, StreamHeld, Unsettled, View, ViewHeld,
     };
     use std::collections::BTreeMap;
 
@@ -1348,6 +1746,7 @@ mod tests {
             session: None,
             terminal: None,
             own: None,
+            effort: None,
         };
         assert_eq!(
             agent_line(&agent),
@@ -1595,6 +1994,7 @@ mod tests {
             reserves: Reserves::None,
             refused: refused.map(str::to_string),
             view_refused: view_refused.map(str::to_string),
+            answerer: None,
         };
         let kitty = "the stream office names the terminal app kitty, and no window profile is named kitty; the window profiles there are: printed";
         let fault = "the label ops of the stream office holds pool, which no label takes";
@@ -1656,6 +2056,7 @@ mod tests {
             reserves: Reserves::None,
             refused: None,
             view_refused: None,
+            answerer: None,
         };
         let two = stream(
             vec![
@@ -1834,6 +2235,7 @@ mod tests {
             session: None,
             terminal: None,
             own: None,
+            effort: None,
         }
     }
 
@@ -2029,6 +2431,112 @@ mod tests {
         assert_eq!(
             agent_line(&agent),
             "  agent flume:r:fix--one:code:1 (agent): working, in the mode edits (from kind) passed as edit-files, not read back"
+        );
+    }
+
+    /// An agent whose layer `layer` gave the effort `word`, none where it
+    /// is none, on an account whose `env` names `CLAUDE_CODE_EFFORT_LEVEL`
+    /// where `outranked`, as the core gives it: the variable by its name
+    /// alone (56, 197; core.30).
+    fn with_effort(word: Option<&str>, layer: Layer, outranked: bool) -> AgentStatus {
+        let variable = "CLAUDE_CODE_EFFORT_LEVEL";
+        let mut from = BTreeMap::new();
+        let mut env = BTreeMap::new();
+        if outranked {
+            env.insert(variable.to_string(), flume_seams::SET.to_string());
+            from.insert(
+                format!("env.{variable}"),
+                Given {
+                    layer: Layer::Account,
+                    value: flume_seams::SET.into(),
+                    file: None,
+                },
+            );
+        }
+        if let Some(word) = word {
+            from.insert(
+                "effort".to_string(),
+                Given {
+                    layer,
+                    value: word.into(),
+                    file: None,
+                },
+            );
+        }
+        AgentStatus {
+            settings: AgentSettings {
+                settings: flume_seams::Settings {
+                    effort: word.map(str::to_string),
+                    ..flume_seams::Settings::default()
+                },
+                env,
+                from,
+            },
+            mode: None,
+            effort: word.map(|word| EffortStatus {
+                word: word.into(),
+                layer,
+                passed: word.into(),
+                read_back: false,
+                outranked_by: outranked.then(|| variable.to_string()),
+            }),
+            ..in_mode(
+                "edits",
+                Layer::Kind,
+                ModeStatus {
+                    passed: "edit-files".into(),
+                    entry: None,
+                    read_back: false,
+                },
+            )
+        }
+    }
+
+    #[test]
+    fn an_effort_from_the_launch() {
+        // S103: the launch's `xhigh`, on the agent's line with its layer,
+        // passed and not read back, and among its settings (56, 197).
+        let agent = with_effort(Some("xhigh"), Layer::Launch, false);
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working, at the effort xhigh (from launch) passed as xhigh, not read back"
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            ["    effort = xhigh (from launch)"]
+        );
+    }
+
+    #[test]
+    fn an_effort_the_accounts_variable_outranks() {
+        // The account's variable named as outranking the effort, by its
+        // name, its value never in the answer (56, 197; core.30).
+        let agent = with_effort(Some("high"), Layer::HostKind, true);
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working, at the effort high (from host-kind) passed as high, not read back; the account's CLAUDE_CODE_EFFORT_LEVEL outranks it"
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            [
+                "    effort = high (from host-kind)",
+                "    env.CLAUDE_CODE_EFFORT_LEVEL = <set> (from account)",
+            ]
+        );
+    }
+
+    #[test]
+    fn no_effort() {
+        // No layer gave an effort: the line names none, and the account's
+        // variable is a variable like any other (197).
+        let agent = with_effort(None, Layer::Launch, true);
+        assert_eq!(
+            agent_line(&agent),
+            "  agent flume:r:fix--one:code:1 (agent): working"
+        );
+        assert_eq!(
+            agent_lines(&agent, "work", "fix")[2..],
+            ["    env.CLAUDE_CODE_EFFORT_LEVEL = <set> (from account)"]
         );
     }
 
@@ -2272,7 +2780,7 @@ mod tests {
                     .to_string(),
                 "      spent an hour: no reset read in \"You've hit your weekly limit \u{b7} resets Nov 8, 12am (UTC)\""
                     .to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }
@@ -2355,6 +2863,200 @@ mod tests {
     }
 
     #[test]
+    fn recipients_with_where_they_came_from() {
+        // 7, 56, 193: each place's recipients with where its launch took
+        // them, the answerer with its source; a place launched before
+        // flume kept it gives them alone.
+        let line = |recipients: &[&str], from: Option<RecipientsFrom>| {
+            place_lines(&PlaceStatus {
+                recipients: recipients.iter().map(|name| name.to_string()).collect(),
+                recipients_from: from,
+                ..a_place()
+            })
+            .into_iter()
+            .find(|line| line.starts_with("  recipients: "))
+        };
+        assert_eq!(
+            line(&["ops"], Some(RecipientsFrom::Launch)).as_deref(),
+            Some("  recipients: ops, from the launch")
+        );
+        assert_eq!(
+            line(
+                &["east/operator"],
+                Some(RecipientsFrom::Answerer {
+                    source: "acme".into()
+                })
+            )
+            .as_deref(),
+            Some("  recipients: east/operator, from the stream's answerer, declared by acme")
+        );
+        assert_eq!(
+            line(&["conductor"], Some(RecipientsFrom::Environment)).as_deref(),
+            Some("  recipients: conductor, from $FLUME_RECIPIENT")
+        );
+        assert_eq!(
+            line(&["pane-7"], Some(RecipientsFrom::Session)).as_deref(),
+            Some("  recipients: pane-7, from the session that launched it")
+        );
+        assert_eq!(line(&["ops"], None).as_deref(), Some("  recipients: ops"));
+        assert_eq!(line(&[], None), None);
+    }
+
+    #[test]
+    fn a_streams_answerer() {
+        // 143, 193: the one role standing behind a stream with its
+        // source, or the roles that each declare to.
+        let by = |address: &str, source: &str| flume_seams::DeclaredBy {
+            address: address.into(),
+            source: source.into(),
+        };
+        assert_eq!(
+            answerer_line(&StreamAnswerer::Stands(by("east/operator", "acme"))),
+            "    its answerer: east/operator, declared by acme"
+        );
+        assert_eq!(
+            answerer_line(&StreamAnswerer::Contested {
+                roles: vec![by("east/door", "beta"), by("east/operator", "acme")]
+            }),
+            "    no one answerer: east/door, declared by beta and east/operator, declared by acme each stand behind it"
+        );
+    }
+
+    #[test]
+    fn a_sources_roles() {
+        // 56, 191, 193: each source's roles file with the addresses it
+        // declares, none, or why it cannot be read, and each entry that
+        // declares nothing with why.
+        let source = |roles: &[&str], file: Option<&str>, fault: Option<&str>| SourceStatus {
+            name: "acme".into(),
+            source_file: "/c/flume/sources/acme.toml".into(),
+            kinds_dir: Some("/k/acme".into()),
+            kinds: vec!["acme/turn@1".into()],
+            cannot_read: None,
+            roles_file: file.map(str::to_string),
+            roles: roles.iter().map(|role| role.to_string()).collect(),
+            roles_refused: vec![],
+            roles_cannot_read: fault.map(str::to_string),
+        };
+        let first = "  source acme (/c/flume/sources/acme.toml) at /k/acme: acme/turn@1";
+        assert_eq!(
+            source_lines(&source(
+                &["east/operator", "east/ops"],
+                Some("/s/acme/roles.toml"),
+                None
+            )),
+            [
+                first,
+                "    its roles (/s/acme/roles.toml): east/operator, east/ops"
+            ]
+        );
+        assert_eq!(
+            source_lines(&source(&[], Some("/s/acme/roles.toml"), None)),
+            [first, "    its roles (/s/acme/roles.toml): declares none"]
+        );
+        assert_eq!(
+            source_lines(&source(&[], None, Some("/s/acme/roles.toml: no such file"))),
+            [
+                first,
+                "    its roles: cannot be read: /s/acme/roles.toml: no such file"
+            ]
+        );
+        assert_eq!(source_lines(&source(&[], None, None)), [first]);
+        let refused = SourceStatus {
+            roles_refused: vec![flume_seams::RoleRefused {
+                address: "east/ops".into(),
+                source: "acme".into(),
+                reason: "its kind beta/ops is not acme's".into(),
+            }],
+            ..source(&["east/operator"], Some("/s/acme/roles.toml"), None)
+        };
+        assert_eq!(
+            source_lines(&refused),
+            [
+                first,
+                "    its roles (/s/acme/roles.toml): east/operator",
+                "    declares nothing for east/ops: its kind beta/ops is not acme's"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_address_carried_or_waking_nothing() {
+        // 56, 132, 193: an address with ends pending that a source
+        // declares carried, or that no source declares, with why.
+        let address = |name: &str, carried, wakes_nothing: Option<&str>| AddressStatus {
+            address: name.into(),
+            role: None,
+            run: None,
+            pending: pending(1),
+            unwoken: None,
+            standing: None,
+            carried,
+            wakes_nothing: wakes_nothing.map(str::to_string),
+            stalled: None,
+        };
+        let lines = host_lines(&HostStatus {
+            addresses: vec![
+                address(
+                    "north/planner",
+                    Some(flume_seams::CarriedRole {
+                        source: "acme".into(),
+                        answers: None,
+                    }),
+                    None,
+                ),
+                address(
+                    "east/planner",
+                    None,
+                    Some("no source of the host declares east/planner"),
+                ),
+            ],
+            ..HostStatus::default()
+        });
+        assert_eq!(
+            lines[1..lines.len() - 1],
+            [
+                "  1 ends pending for north/planner, no run; acme declares it carried, its run on another host",
+                "    /places/fix--one: code delivered",
+                "  1 ends pending for east/planner, no run; it wakes nothing: no source of the host declares east/planner",
+                "    /places/fix--one: code delivered",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_doors_run_whose_stall_reached_no_one() {
+        // 130, 132, 193: the run of its stream's own answerer, stalled
+        // with no one to reach, named under the host's addresses.
+        let run = PlaceId::new("/places/turn--east-operator");
+        let lines = host_lines(&HostStatus {
+            addresses: vec![AddressStatus {
+                address: "east/operator".into(),
+                role: None,
+                run: Some(run.clone()),
+                pending: vec![],
+                unwoken: None,
+                standing: None,
+                carried: None,
+                wakes_nothing: None,
+                stalled: Some(PendingEnd {
+                    place: run,
+                    key: "stall/420".parse().unwrap(),
+                    what: "stalled: a retry of plan".into(),
+                }),
+            }],
+            ..HostStatus::default()
+        });
+        assert_eq!(
+            lines[1..lines.len() - 1],
+            [
+                "  0 ends pending for east/operator, its run /places/turn--east-operator",
+                "    its run /places/turn--east-operator stalled: a retry of plan, which reached no one",
+            ]
+        );
+    }
+
+    #[test]
     fn the_hosts_sources_with_a_fault() {
         // S96, 56, 191: acme with its file, its directory and the kinds
         // it holds, an empty source, a directory that cannot be read, and
@@ -2366,6 +3068,10 @@ mod tests {
                 kinds_dir: kinds_dir.map(str::to_string),
                 kinds: kinds.iter().map(|kind| kind.to_string()).collect(),
                 cannot_read: fault.map(str::to_string),
+                roles_file: None,
+                roles: vec![],
+                roles_refused: vec![],
+                roles_cannot_read: None,
             }
         };
         let host = HostStatus {
@@ -2400,7 +3106,7 @@ mod tests {
                 "  source bad (/c/flume/sources/bad.toml): cannot be read: gives no `kinds_dir`, the directory holding the source's packages".to_string(),
                 "  source beta (/c/flume/sources/beta.toml) at /k/beta: holds no kind".to_string(),
                 "  source gamma (/c/flume/sources/gamma.toml) at /k/gamma: cannot be read: /k/gamma, the directory of the source gamma, does not exist".to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }
@@ -2539,20 +3245,216 @@ mod tests {
         };
         assert_eq!(
             person(&status),
-            "no place stands on this host\nhost: 0 agents running, no bound\n  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet"
+            "no place stands on this host\nhost: 0 agents running, no bound\n  no caller keeps watch: every place settles at each command of flume's that acts"
+        );
+    }
+
+    /// The standing agent `agent` in the session `madswan`, its name from
+    /// `from`, sought in the stream `madswan`, and what was found of it.
+    fn standing(agent: &str, from: SessionFrom, found: StandingFound) -> StandingStatus {
+        StandingStatus {
+            agent: agent.into(),
+            stream: "madswan".into(),
+            session: SessionHeld {
+                name: Some("madswan".into()),
+                from,
+            },
+            terminal: Some("fake".into()),
+            found,
+        }
+    }
+
+    /// `count` ends pending, of the fixes `one`, `two` and so on.
+    fn pending(count: usize) -> Vec<PendingEnd> {
+        ["one", "two", "three"][..count]
+            .iter()
+            .map(|name| PendingEnd {
+                place: PlaceId(format!("/places/fix--{name}")),
+                key: "stage/code/1/delivered".parse().unwrap(),
+                what: "code delivered".into(),
+            })
+            .collect()
+    }
+
+    /// The host's lines for the one address `address`, held by `standing`
+    /// with `count` ends pending, the host's first line and its watch's
+    /// left out.
+    fn standing_lines(address: &str, standing: StandingStatus, count: usize) -> Vec<String> {
+        let lines = host_lines(&HostStatus {
+            addresses: vec![AddressStatus {
+                address: address.into(),
+                role: None,
+                run: None,
+                pending: pending(count),
+                unwoken: None,
+                standing: Some(standing),
+                carried: None,
+                wakes_nothing: None,
+                stalled: None,
+            }],
+            ..HostStatus::default()
+        });
+        lines[1..lines.len() - 1].to_vec()
+    }
+
+    #[test]
+    fn a_standing_address_found_waiting() {
+        // 56, 132, design 7: the agent, its session with where it came
+        // from, what was found and how many ends wait, each beneath.
+        assert_eq!(
+            standing_lines(
+                "madswan/planner",
+                standing(
+                    "madswan-planner",
+                    SessionFrom::Role,
+                    StandingFound::One {
+                        at: "fake:1@w".into(),
+                        state: AgentState::Waiting,
+                    },
+                ),
+                3,
+            ),
+            [
+                "  madswan/planner: the standing agent madswan-planner in the session madswan (the entry's), found waiting; 3 ends pending",
+                "    /places/fix--one: code delivered",
+                "    /places/fix--two: code delivered",
+                "    /places/fix--three: code delivered",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_standing_address_with_none_of_its_name() {
+        // 132, design 7: the session the stream's name gives it.
+        assert_eq!(
+            standing_lines(
+                "madswan/ops",
+                standing("madswan-ops", SessionFrom::StreamName, StandingFound::None),
+                1,
+            ),
+            [
+                "  madswan/ops: the standing agent madswan-ops in the session madswan (the stream madswan's name), none of that name there; 1 end pending",
+                "    /places/fix--one: code delivered",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_standing_address_with_two_of_its_name() {
+        // 132: two of one name take no notice.
+        assert_eq!(
+            standing_lines(
+                "madswan/planner",
+                standing(
+                    "madswan-planner",
+                    SessionFrom::Stream,
+                    StandingFound::Several { count: 2 },
+                ),
+                1,
+            )[0],
+            "  madswan/planner: the standing agent madswan-planner in the session madswan (the stream madswan's), 2 of that name there, so none takes a notice; 1 end pending"
+        );
+    }
+
+    #[test]
+    fn a_standing_address_not_read() {
+        // 132, 190: why the terminal could not read, in its words, and the
+        // terminal's own session where the default stream names none.
+        let mut gone = standing(
+            "w-planner",
+            SessionFrom::Own,
+            StandingFound::Unread {
+                reason: "the host declares no stream gone".into(),
+            },
+        );
+        gone.session.name = None;
+        gone.stream = "gone".into();
+        gone.terminal = None;
+        assert_eq!(
+            standing_lines("w/planner", gone, 2)[0],
+            "  w/planner: the standing agent w-planner in the terminal's own session (the stream gone's), not read: the host declares no stream gone; 2 ends pending"
+        );
+    }
+
+    #[test]
+    fn a_standing_address_with_nothing_pending() {
+        // 56, design 7: the entry read and the agent found, with no end
+        // beneath.
+        assert_eq!(
+            standing_lines(
+                "madswan/planner",
+                standing(
+                    "madswan-planner",
+                    SessionFrom::Role,
+                    StandingFound::One {
+                        at: "fake:1@w".into(),
+                        state: AgentState::Working,
+                    },
+                ),
+                0,
+            ),
+            ["  madswan/planner: the standing agent madswan-planner in the session madswan (the entry's), found working; nothing pending"]
+        );
+    }
+
+    #[test]
+    fn a_wake_of_a_standing_address_is_held() {
+        // 132, design 5: the agent, its session, what was found, nothing
+        // launched, and each end pending beneath.
+        let answer = Answer::Held {
+            address: "madswan/planner".into(),
+            standing: standing(
+                "madswan-planner",
+                SessionFrom::Role,
+                StandingFound::One {
+                    at: "fake:1@w".into(),
+                    state: AgentState::Asking,
+                },
+            ),
+            pending: pending(2),
+        };
+        assert_eq!(
+            person(&answer),
+            "madswan/planner is held by the standing agent madswan-planner in the session madswan (the entry's), found asking, so nothing was launched; 2 ends pending\n  /places/fix--one: code delivered\n  /places/fix--two: code delivered"
         );
     }
 
     #[test]
     fn a_host_under_a_watch() {
+        // The place-status spec's watched host: a caller's bound and when
+        // its newest settle began (56, 208).
         let host = HostStatus {
-            watch: Watch::Bound { seconds: 30 },
+            watch: Watch::Bound { seconds: 120 },
+            watch_settled: Some(47_400),
             ..HostStatus::default()
         };
         assert_eq!(
             host_lines(&host)[1],
-            "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes"
+            "  a caller keeps watch: every place settles every 2m, last at 47400"
         );
+    }
+
+    #[test]
+    fn a_host_whose_watch_lapsed() {
+        // The place-status spec's unwatched host: since when no caller
+        // keeps watch, the watch's lapse (119, 208).
+        let host = HostStatus {
+            watch_settled: Some(47_400),
+            watch_lapsed: Some(47_640),
+            ..HostStatus::default()
+        };
+        assert_eq!(
+            host_lines(&host)[1],
+            "  no caller keeps watch since 47640: every place settles at each command of flume's that acts"
+        );
+    }
+
+    #[test]
+    fn a_duration_in_its_largest_whole_unit() {
+        assert_eq!(duration(120), "2m");
+        assert_eq!(duration(90), "90s");
+        assert_eq!(duration(3600), "1h");
+        assert_eq!(duration(30), "30s");
     }
 
     #[test]
@@ -2561,6 +3463,7 @@ mod tests {
         let key = "the terminal's /t/config.toml binds no key to flume's places".to_string();
         let host = HostStatus {
             watch: Watch::Bound { seconds: 30 },
+            watch_settled: Some(100),
             terminal_setup: vec![key.clone()],
             ..HostStatus::default()
         };
@@ -2568,7 +3471,7 @@ mod tests {
         assert_eq!(
             lines[lines.len() - 2..],
             [
-                "  the terminal keeps watch: every place settles every 30 seconds and when an agent's state changes".to_string(),
+                "  a caller keeps watch: every place settles every 30s, last at 100".to_string(),
                 format!("    {key}"),
             ]
         );
@@ -2632,6 +3535,7 @@ mod tests {
             cannot_read: vec![],
             failures: vec![],
             recipients: vec![],
+            recipients_from: None,
             hold_words: BTreeMap::new(),
             waiting_on: None,
             stalled: false,
@@ -2654,6 +3558,9 @@ mod tests {
             role: None,
             clues: None,
             line: a_line("fix--one", "code · run 1 · working"),
+            waits_on: None,
+            worktree: None,
+            on_branch: None,
         }
     }
 
@@ -2766,15 +3673,20 @@ mod tests {
                     start: 1,
                     state: StageState::Lost,
                     quiet_from: None,
-                    end: StageEnd {
+                    answered: 0,
+                    end: Box::new(StageEnd {
                         left_in_pane: true,
                         ..StageEnd::default()
-                    },
+                    }),
                 },
                 read_at: 54_000,
                 deliveries: vec![],
+                answer: None,
+                claim: None,
             },
+            key: "stage/talk/1/lost".parse().unwrap(),
             pending_for: vec!["ops".into()],
+            open_until: None,
         };
         let place = PlaceStatus {
             agent: Some(AgentStatus {
@@ -2798,7 +3710,7 @@ mod tests {
             "{lines:#?}"
         );
         assert!(lines.contains(
-            &"  ended: talk lost, and flume left the agent the terminal brought back in its pane; pending for ops".to_string()
+            &"  ended stage/talk/1/lost: talk lost, and flume left the agent the terminal brought back in its pane; pending for ops".to_string()
         ));
         let inbox = Answer::Inbox {
             recipient: "ops".into(),
@@ -2808,10 +3720,338 @@ mod tests {
                 name: "one".into(),
                 end,
             }],
+            waiting: vec![],
         };
         assert_eq!(
             person(&inbox),
-            "research--one talk lost, and flume left the agent the terminal brought back in its pane; read: flume status /d/places/1/research--one"
+            "research--one talk lost, and flume left the agent the terminal brought back in its pane [stage/talk/1/lost]; read: flume status /d/places/1/research--one"
+        );
+    }
+
+    /// A place waiting on a retry of code for its answer since 1000, the
+    /// question asked, its agent kept open until `open_until` or let go
+    /// as `closed` records.
+    fn asking(open_until: Option<u64>, closed: Option<SessionClosed>) -> PlaceStatus {
+        PlaceStatus {
+            waiting_on: Some(WaitingOn {
+                act: Act::Retry,
+                stage: Some("code".into()),
+                why: Waits::Answer,
+                since: Some(1000),
+                words: Some("Which file holds the log?".into()),
+                open_until,
+                closed,
+            }),
+            ..a_place()
+        }
+    }
+
+    /// The lines of `place` from its move's on.
+    fn from_the_move(place: &PlaceStatus) -> Vec<String> {
+        let lines = place_lines(place);
+        let at = lines
+            .iter()
+            .position(|line| line.starts_with("  waits on its caller"))
+            .expect("the move's line");
+        lines[at..].iter().take(2).cloned().collect()
+    }
+
+    const ASKS: &str =
+        "  waits on its caller to retry code (answer) since 1000: Which file holds the log?";
+
+    #[test]
+    fn an_agent_kept_open() {
+        // 130, 198: the move's line, then until when its agent is kept
+        // open for the answer and how to give it.
+        assert_eq!(
+            from_the_move(&asking(Some(4600), None)),
+            vec![
+                ASKS.to_string(),
+                "    its agent kept open for the answer until 4600: retry with --words, or tell it"
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_agent_let_go_and_ended() {
+        // 130, 198, S104: let go by its time, ended in the same settle.
+        let closed = SessionClosed {
+            at: 4600,
+            by: ClosedBy::Time,
+            ended_at: Some(4600),
+            left_in_pane: false,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed))),
+            vec![
+                ASKS.to_string(),
+                "    its agent let go at 4600, its time passed, and ended at 4600: retry with --words"
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_agent_let_go_and_to_be_ended_once_quiet() {
+        // 31, 146, 198: let go by its account spent while it works, to be
+        // ended once a settle reads it quiet.
+        let closed = SessionClosed {
+            at: 2200,
+            by: ClosedBy::AccountSpent,
+            ended_at: None,
+            left_in_pane: false,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed)))[1],
+            "    its agent let go at 2200, its account spent, and ended once quiet: retry with --words"
+        );
+    }
+
+    #[test]
+    fn an_agent_stopped_by_its_caller() {
+        // 51, 198: a caller's stop lets it go, its agent ended by the stop.
+        let closed = SessionClosed {
+            at: 1500,
+            by: ClosedBy::Stopped,
+            ended_at: Some(1500),
+            left_in_pane: false,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed)))[1],
+            "    its agent let go at 1500, its caller stopped it, and ended at 1500: retry with --words"
+        );
+    }
+
+    #[test]
+    fn a_bare_agent_left_in_its_pane() {
+        // 77, 198; core.10: a conversation's agent brought back bare in its
+        // pane lets it go as ended, and is left there.
+        let closed = SessionClosed {
+            at: 1800,
+            by: ClosedBy::AgentEnded,
+            ended_at: None,
+            left_in_pane: true,
+        };
+        assert_eq!(
+            from_the_move(&asking(None, Some(closed)))[1],
+            "    its agent let go at 1800, its agent ended, and left in its pane: retry with --words"
+        );
+    }
+
+    #[test]
+    fn a_move_with_no_agent_kept_open_gives_no_line_for_one() {
+        // 130: a stop-short whose terminal hands a running agent no words
+        // gives its move alone.
+        let place = asking(None, None);
+        let lines = place_lines(&place);
+        assert!(lines.contains(&ASKS.to_string()), "{lines:#?}");
+        assert!(
+            !lines.iter().any(|line| line.contains("its agent")),
+            "{lines:#?}"
+        );
+    }
+
+    #[test]
+    fn two_answers() {
+        // 42, 56: each answer code's start took in its session on a line of
+        // its own beneath the stage, by its act, when it was received, the
+        // question and the answer.
+        let answer = |question: &str, words: &str, act, at| SessionAnswer {
+            question: Some(question.into()),
+            answer: AnswerHeld {
+                words: words.into(),
+                act,
+                at,
+                session: Some(Handed {
+                    sent_at: at,
+                    received_at: at + 5,
+                }),
+                by: None,
+                key: None,
+            },
+        };
+        let stage = StageStatus {
+            name: "code".into(),
+            state: StageState::Begun,
+            starts: 1,
+            end: None,
+            refused_part: None,
+            refused_setting: None,
+            conversation: false,
+            group: None,
+            answers: vec![
+                answer("Which file holds the log?", "notes.md", Act::Retry, 1200),
+                answer("Which test covers it?", "the walkthrough", Act::Tell, 2400),
+            ],
+        };
+        assert_eq!(
+            stage_lines(&stage),
+            vec![
+                "  stage code: begun, started 1 times".to_string(),
+                "    answered by retry, received at 1205: asked Which file holds the log?; answered notes.md".to_string(),
+                "    answered by tell, received at 2405: asked Which test covers it?; answered the walkthrough".to_string(),
+            ]
+        );
+        // 42: who gave an answer, where it named one.
+        let mut from_ops = stage;
+        from_ops.answers[1].answer.by = Some("east/ops".into());
+        assert_eq!(
+            stage_lines(&from_ops)[2],
+            "    answered by tell from east/ops, received at 2405: asked Which test covers it?; answered the walkthrough"
+        );
+    }
+
+    #[test]
+    fn a_stop_shorts_end_kept_open_in_the_inbox() {
+        // 43, 198: the inbox gives a stop-short's end in the notice's
+        // words, until when its agent is kept open among them.
+        let end = EndHeld {
+            of: EndOf::Stage {
+                stage: "code".into(),
+                start: 1,
+                state: StageState::EndedShort,
+                quiet_from: None,
+                answered: 0,
+                end: Box::new(StageEnd {
+                    words: Some("Which file holds the log?".into()),
+                    open_until: Some(4600),
+                    ..StageEnd::default()
+                }),
+            },
+            read_at: 1000,
+            deliveries: vec![],
+            answer: None,
+            claim: None,
+        };
+        let inbox = Answer::Inbox {
+            recipient: "ops".into(),
+            ends: vec![flume_core::Collected {
+                place: PlaceId::new("/d/places/1/fix--one"),
+                kind: "fix".into(),
+                name: "one".into(),
+                end: EndStatus::of(&end, &["ops".to_string()]),
+            }],
+            waiting: vec![],
+        };
+        assert_eq!(
+            person(&inbox),
+            "fix--one code needs an answer, its agent kept open for the answer until 4600 [stage/code/1/ended-short]; read: flume status /d/places/1/fix--one"
+        );
+    }
+
+    #[test]
+    fn a_place_waiting_in_the_inbox() {
+        // 43, 130, 193, design 9: the inbox gives a place waiting on its
+        // recipient with its brief's first line and stream, the move and
+        // since when, the stop-short by its key and the role it asked, its
+        // agent kept open, and the hold on the move.
+        let inbox = Answer::Inbox {
+            recipient: "east/ops".into(),
+            ends: vec![],
+            waiting: vec![WaitingPlace {
+                place: PlaceId::new("/d/places/1/change--plan"),
+                kind: "change".into(),
+                name: "plan".into(),
+                stream: "east".into(),
+                brief: Some("one of two designs".into()),
+                waiting_on: WaitingOn {
+                    act: Act::Retry,
+                    stage: Some("construct".into()),
+                    why: Waits::Answer,
+                    since: Some(100),
+                    words: Some("Which design does the brief mean?".into()),
+                    open_until: Some(3700),
+                    closed: None,
+                },
+                stop_short: Some(StopShortWaited {
+                    words: Some("Which design does the brief mean?".into()),
+                    needs: Some(StopKind::NeedsAnswer),
+                    key: "stage/construct/1/ended-short".parse().unwrap(),
+                    addressee: Some("east/ops".into()),
+                }),
+                hold: Some(Hold {
+                    on: HoldOn::Waiting,
+                    words: Some("east-planner has it".into()),
+                    since: 160,
+                    bound: Some(3600),
+                    lapsed: None,
+                }),
+            }],
+        };
+        assert_eq!(
+            person(&inbox),
+            [
+                "nothing pending for east/ops",
+                "change--plan (one of two designs), in east, waits on east/ops; read: flume status /d/places/1/change--plan",
+                "  waits on its caller to retry construct (answer) since 100: Which design does the brief mean?",
+                "  its stop-short stage/construct/1/ended-short needs an answer, asking east/ops",
+                "    its agent kept open for the answer until 3700: retry with --words, or tell it",
+                "  the move it waits on on hold since 160, for 3600 seconds: east-planner has it",
+            ]
+            .join("\n")
+        );
+    }
+
+    #[test]
+    fn a_base_place_says_it_has_no_worktree_and_what_is_on_its_branch() {
+        // 56, 202, 203: a base place's status in the person's form; any
+        // other place's says nothing of a worktree.
+        let base = PlaceStatus {
+            worktree: Some(false),
+            on_branch: Some(vec![
+                PlaceId::new("/d/places/1/change--one"),
+                PlaceId::new("/d/places/1/change--two"),
+            ]),
+            ..a_place()
+        };
+        assert!(place_lines(&base).contains(
+            &"  no worktree; waits on the places on its branch: /d/places/1/change--one, /d/places/1/change--two"
+                .to_string()
+        ));
+        let alone = PlaceStatus {
+            on_branch: Some(vec![]),
+            ..base
+        };
+        assert!(place_lines(&alone)
+            .contains(&"  no worktree; no place on its branch is live".to_string()));
+        assert!(!place_lines(&a_place())
+            .iter()
+            .any(|line| line.contains("worktree")));
+    }
+
+    #[test]
+    fn a_base_places_branch_the_merge_queue_kept() {
+        // 67, 206: a branch the merge queue keeps at a base place's tidy
+        // is named once with its words; a place's with its commits.
+        let place = PlaceId::new("/d/places/1/train--spring");
+        let tidy = Tidied {
+            removed: vec![place.clone()],
+            kept: vec![],
+            branches_kept: vec![
+                flume_core::BranchKept {
+                    place: place.clone(),
+                    branch: "train/spring".into(),
+                    commits: vec![],
+                    reason: Some("work main lacks".into()),
+                },
+                flume_core::BranchKept {
+                    place: PlaceId::new("/d/places/1/fix--one"),
+                    branch: "fix/one".into(),
+                    commits: vec![flume_seams::Revision::new("c4")],
+                    reason: None,
+                },
+            ],
+            not_over: vec![],
+            terminal: vec![],
+        };
+        assert_eq!(
+            tidy_lines(&tidy),
+            [
+                "removed /d/places/1/train--spring",
+                "kept the branch train/spring of /d/places/1/train--spring, the merge queue keeping it: work main lacks",
+                "kept the branch fix/one of /d/places/1/fix--one, 1 commits not landed",
+            ]
         );
     }
 
@@ -2893,6 +4133,7 @@ mod tests {
                 number: Some("2".into()),
                 title: Some("Two".into()),
             }),
+            answers: vec![],
         };
         assert_eq!(
             stage_lines(&stage),
@@ -2905,6 +4146,211 @@ mod tests {
         assert_eq!(
             stage_lines(&once),
             vec!["  stage code: begun, started 2 times".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_hold_on_the_waiting_move_and_its_lapse() {
+        // 56, 130: a hold on the move the place waits on, with its words,
+        // since when and its bound, and, once lapsed, when it lapsed; in
+        // the person's form, and in the JSON form as fields.
+        let holding = Hold {
+            on: HoldOn::Waiting,
+            words: Some("east-planner has it".into()),
+            since: 100,
+            bound: Some(3600),
+            lapsed: None,
+        };
+        let lapsed = Hold {
+            lapsed: Some(3700),
+            ..holding.clone()
+        };
+        let place = PlaceStatus {
+            holds: vec![holding.clone()],
+            ..a_place()
+        };
+        assert!(place_lines(&place).contains(
+            &"  the move it waits on on hold since 100, for 3600 seconds: east-planner has it"
+                .to_string()
+        ));
+        assert_eq!(
+            hold_line(&lapsed),
+            "  the move it waits on on hold since 100, for 3600 seconds, lapsed at 3700: east-planner has it"
+        );
+        assert_eq!(
+            hold_line(&Hold {
+                bound: None,
+                ..holding.clone()
+            }),
+            "  the move it waits on on hold since 100: east-planner has it"
+        );
+        let json = serde_json::to_value(PlaceStatus {
+            holds: vec![lapsed],
+            ..a_place()
+        })
+        .expect("status as JSON");
+        assert_eq!(
+            json["holds"],
+            json!([{"on": "waiting", "words": "east-planner has it", "since": 100, "bound": 3600, "lapsed": 3700}])
+        );
+    }
+
+    #[test]
+    fn a_stall_with_its_stop_short_and_lapsed_hold() {
+        // 41, 56, 130, 193: a stall's line names the hold whose lapse
+        // stalled it and the stop-short the place waits on, with the role
+        // it named and its words; in the JSON form as fields.
+        let stall = EndStatus {
+            end: EndHeld {
+                of: EndOf::Stall {
+                    since: 3700,
+                    waiting: "a retry of construct".into(),
+                    answerer: Some("east/operator".into()),
+                    stop_short: Some(Box::new(flume_seams::StopShortWaited {
+                        words: Some("Which design does the brief mean?".into()),
+                        needs: Some(StopKind::NeedsAnswer),
+                        key: "stage/construct/1/ended-short".parse().unwrap(),
+                        addressee: Some("west/design".into()),
+                    })),
+                    answerer_read: true,
+                    lapsed: Some("on the user's card".into()),
+                },
+                read_at: 3700,
+                deliveries: vec![],
+                answer: None,
+                claim: None,
+            },
+            key: "stall/3700".parse().unwrap(),
+            pending_for: vec!["east/planner".into()],
+            open_until: None,
+        };
+        let place = PlaceStatus {
+            ends: vec![stall.clone()],
+            ..a_place()
+        };
+        assert!(place_lines(&place).contains(
+            &"  ended stall/3700: stalled: a retry of construct, its hold lapsed: on the user's card; its stop-short needs an answer, asking west/design, saying: Which design does the brief mean?; pending for east/planner"
+                .to_string()
+        ), "{:?}", place_lines(&place));
+        let json = serde_json::to_value(&stall).expect("the end as JSON");
+        assert_eq!(json["answerer"], json!("east/operator"));
+        assert_eq!(json["lapsed"], json!("on the user's card"));
+        assert_eq!(
+            json["stop_short"],
+            json!({
+                "words": "Which design does the brief mean?",
+                "needs": "needs_answer",
+                "key": "stage/construct/1/ended-short",
+                "addressee": "west/design"
+            })
+        );
+    }
+
+    #[test]
+    fn an_answered_question_with_its_key() {
+        // 41, 42, 56: an end's line opens with its key as callers name it,
+        // and a stop-short's answer gives when, who gave it, the act and
+        // whether it named the key; in the JSON form as fields.
+        let answered = EndStatus {
+            end: EndHeld {
+                of: EndOf::Stage {
+                    stage: "construct".into(),
+                    start: 1,
+                    state: flume_seams::StageState::EndedShort,
+                    quiet_from: None,
+                    answered: 0,
+                    end: Box::new(StageEnd {
+                        words: Some("Which queue's settings are live in east?".into()),
+                        needs: Some(StopKind::NeedsAnswer),
+                        addressee: Some("east/ops".into()),
+                        ..StageEnd::default()
+                    }),
+                },
+                read_at: 1000,
+                deliveries: vec![],
+                answer: Some(AnswerHeld {
+                    words: "2.4, as deployed".into(),
+                    act: Act::Retry,
+                    at: 1600,
+                    session: None,
+                    by: Some("east/ops".into()),
+                    key: Some("stage/construct/1/ended-short".parse().unwrap()),
+                }),
+                claim: None,
+            },
+            key: "stage/construct/1/ended-short".parse().unwrap(),
+            pending_for: vec![],
+            open_until: None,
+        };
+        let place = PlaceStatus {
+            ends: vec![answered.clone()],
+            ..a_place()
+        };
+        assert!(
+            place_lines(&place).contains(
+                &"  ended stage/construct/1/ended-short: construct needs an answer; answered at 1600 by east/ops, by a retry naming its key: 2.4, as deployed"
+                    .to_string()
+            ),
+            "{:?}",
+            place_lines(&place)
+        );
+        let json = serde_json::to_value(&answered).expect("the end as JSON");
+        assert_eq!(json["key"], json!("stage/construct/1/ended-short"));
+        assert_eq!(
+            json["answer"],
+            json!({
+                "words": "2.4, as deployed",
+                "act": "retry",
+                "at": 1600,
+                "by": "east/ops",
+                "key": "stage/construct/1/ended-short"
+            })
+        );
+        // An answer that named no key and no one: its line says neither.
+        let mut unnamed = answered;
+        if let Some(answer) = unnamed.end.answer.as_mut() {
+            answer.by = None;
+            answer.key = None;
+        }
+        let place = PlaceStatus {
+            ends: vec![unnamed],
+            ..a_place()
+        };
+        assert!(
+            place_lines(&place).contains(
+                &"  ended stage/construct/1/ended-short: construct needs an answer; answered at 1600, by a retry: 2.4, as deployed"
+                    .to_string()
+            ),
+            "{:?}",
+            place_lines(&place)
+        );
+    }
+
+    #[test]
+    fn a_stop_short_with_the_role_it_named() {
+        // 41, 56, 132: the address a stop-short named, whole.
+        let stage = StageStatus {
+            name: "construct".into(),
+            state: flume_seams::StageState::EndedShort,
+            starts: 1,
+            end: Some(StageEnd {
+                words: Some("Which queue is deployed?".into()),
+                needs: Some(flume_seams::StopKind::NeedsAnswer),
+                addressee: Some("west/ops".into()),
+                ..StageEnd::default()
+            }),
+            refused_part: None,
+            refused_setting: None,
+            conversation: false,
+            group: None,
+            answers: vec![],
+        };
+        assert_eq!(
+            stage_lines(&stage),
+            vec![
+                "  stage construct: ended_short, started 1 times, asking west/ops, saying: Which queue is deployed?"
+                    .to_string()
+            ]
         );
     }
 
@@ -2967,6 +4413,7 @@ mod tests {
                     reserves: Reserves::None,
                     refused: None,
                     view_refused: None,
+                    answerer: None,
                 },
                 StreamStatus {
                     name: "personal".into(),
@@ -3001,6 +4448,7 @@ mod tests {
                     reserves: Reserves::None,
                     refused: None,
                     view_refused: None,
+                    answerer: None,
                 },
                 StreamStatus {
                     name: "default".into(),
@@ -3035,6 +4483,7 @@ mod tests {
                     reserves: Reserves::None,
                     refused: None,
                     view_refused: None,
+                    answerer: None,
                 },
             ],
             ..HostStatus::default()
@@ -3060,7 +4509,7 @@ mod tests {
                 "  stream default, priority 0: 0 agents running, no bound of its own".to_string(),
                 "    its agents open in the terminal's own session".to_string(),
                 "    multiplexer printed (the host's), view terminal (the default), terminal app printed (the default), title \"default\" (the stream's name)".to_string(),
-                "  the terminal keeps no watch: places move on when a command of flume's acts or an agent goes quiet".to_string(),
+                "  no caller keeps watch: every place settles at each command of flume's that acts".to_string(),
             ]
         );
     }
@@ -3175,6 +4624,7 @@ mod tests {
             reserves,
             refused: refused.map(str::to_string),
             view_refused: None,
+            answerer: None,
         };
         let host = HostStatus {
             streams: vec![
@@ -3338,6 +4788,8 @@ mod tests {
             why: Waits::OnHold,
             since: Some(54_000),
             words: Some("Wait until the release is cut.".into()),
+            open_until: None,
+            closed: None,
         };
         assert_eq!(
             waiting_line(&held, false),
@@ -3366,6 +4818,8 @@ mod tests {
                 "New MCP server found in .mcp.json: docs\n\u{1b}[1m\u{276f} 1. Use this and all future MCP servers\u{1b}[0m"
                     .into(),
             ),
+            open_until: None,
+            closed: None,
         };
         assert_eq!(
             waiting_line(&dialog, false),

@@ -1,10 +1,12 @@
 //! The terminal profile that prints the command (C.5; design 12): the
 //! terminal seam's scenarios against it, its refusals among them, a tell
-//! refused with nothing typed, the command status gives, the same
-//! command printed whatever session its stream names (107), an agent
-//! read stopped once its record says its session ended (134), attach
-//! refused for either view with nothing run (187), and runs holding no
-//! part, in attach's words, with nothing run (201).
+//! refused with nothing typed, its saying it hands a running agent no
+//! words (198), the command status gives, the same command printed
+//! whatever session its stream names (107), an agent read stopped once
+//! its record says its session ended (134), attach refused for either
+//! view with nothing run (187), runs holding no part, in attach's words,
+//! with nothing run (201), and agents in a part not read, in the seam's
+//! words, with nothing run (132, C.5).
 
 use crate::common::window::StandIn;
 use crate::common::*;
@@ -15,7 +17,7 @@ use flume::profiles::window::terminal::TerminalApp;
 use flume_conformance::engine::world::{launch, launched, World};
 use flume_conformance::scenario::pass_all;
 use flume_conformance::seams::terminal::{self, TerminalHarness};
-use flume_core::{Answer, Engine, StreamListed};
+use flume_core::{Answer, Engine, StandingFound, StreamListed};
 use flume_seams::*;
 use std::sync::Arc;
 
@@ -29,6 +31,10 @@ impl TerminalHarness for Harness {
 
     fn seam(&self) -> &Printed {
         &self.seam
+    }
+
+    fn shared(&self) -> Arc<dyn Terminal> {
+        Arc::new(self.seam)
     }
 
     fn place(&self) -> PlaceRef {
@@ -302,6 +308,57 @@ fn runs_under_the_printed_command_holds_no_part_and_runs_nothing() {
     assert_eq!(files_under(&state), before, "the printed command's marks");
 }
 
+#[test]
+fn agents_under_the_printed_command_are_not_read_and_nothing_is_run() {
+    // The terminal-profiles spec's "Agents under the printed command"
+    // (132, C.5): `madswan` and its own part each answered not read, in
+    // the seam's words; and a standing agent in `madswan` found so by
+    // status, nothing written where the printed command keeps the
+    // commands it prints.
+    for part in [Some("madswan"), None] {
+        assert_eq!(
+            Printed.agents_in(part),
+            AgentsIn::Unread {
+                reason: NO_NAMED_AGENTS.into()
+            },
+            "the agents of {part:?}"
+        );
+    }
+    let scratch = Scratch::new("printed-agents");
+    let world = World::new();
+    world.host.set_stream("madswan", Some(Stream::default()));
+    world.host.set_standing(
+        "madswan/planner",
+        Some(StandingAgent {
+            source: "acme".into(),
+            agent: "madswan-planner".into(),
+            session: Some("madswan".into()),
+            answers: None,
+            answerer: false,
+        }),
+    );
+    let engine = printed(&world, &scratch);
+    let state = scratch.path("state");
+    let before = files_under(&state);
+    let Answer::Status { host, .. } = engine.status(None) else {
+        panic!("status answered otherwise");
+    };
+    let found = host
+        .addresses
+        .iter()
+        .find(|address| address.address == "madswan/planner")
+        .and_then(|address| address.standing.as_ref())
+        .map(|standing| standing.found.clone());
+    assert_eq!(
+        found,
+        Some(StandingFound::Unread {
+            reason: NO_NAMED_AGENTS.into()
+        }),
+        "the standing agent under the printed command"
+    );
+    assert_eq!(files_under(&state), before, "the printed command's marks");
+}
+
 /// An engine over `world`'s fakes with the printed command for its
 /// terminal, the host's multiplexer and the resolver's `printed`, and the
 /// store in `scratch`'s state directory, where the printed command keeps
@@ -376,6 +433,46 @@ fn a_session_names_nothing_in_the_printed_command() {
         }),
         "the agent's session"
     );
+}
+
+#[test]
+fn the_printed_command_hands_a_running_agent_no_words() {
+    // The seam-contracts spec's printed command scenario: it says it
+    // cannot, and its send to an agent it printed a command for is refused
+    // with nothing typed and nothing written (53, 95, 198, C.5).
+    let scratch = Scratch::new("printed-sends");
+    let harness = Harness {
+        scratch,
+        seam: Printed,
+    };
+    assert!(!Printed.sends());
+    let who = Identity {
+        repository: "0123456789ab".into(),
+        place: "fix--one".into(),
+        stage: "code".into(),
+        start: 1,
+    };
+    assert!(matches!(
+        Printed.open(
+            &harness.place(),
+            &harness.folder(),
+            &harness.command(),
+            &who,
+            &OpenIn::Own,
+            None,
+        ),
+        Opened::Opened { .. }
+    ));
+    let state = harness.scratch.path("state");
+    let before = files_under(&state);
+    assert_eq!(
+        Printed.send(&who, "notes.md"),
+        Sent::Refused {
+            reason: "the printed command sends nothing to a running agent; nothing was typed"
+                .into()
+        }
+    );
+    assert_eq!(files_under(&state), before, "the printed command's marks");
 }
 
 #[test]

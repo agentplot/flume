@@ -1060,6 +1060,8 @@ impl Engine {
         let queue = self.queue();
         let declared = self.host.streams();
         let configuration = self.host.configuration();
+        // The sources' roles are read once for the whole status (core.15).
+        let roles = self.host.roles();
         let queued: Vec<Queued> = queue
             .waiting
             .iter()
@@ -1097,6 +1099,7 @@ impl Engine {
                 faults: stream.faults(name, &queue.streams),
                 refused: self.stream_refused(name, stream.fault.as_ref(), &display),
                 view_refused: self.view_refused(name, &display),
+                answerer: roles.answerer(name),
                 multiplexer: display.multiplexer,
                 view: display.view,
                 terminal_app: display.terminal_app,
@@ -1159,6 +1162,7 @@ impl Engine {
                     .collect(),
             })
             .collect();
+        let (watch, watch_settled, watch_lapsed) = self.watch_status();
         HostStatus {
             running: queue.running,
             bound: queue.bound,
@@ -1167,13 +1171,15 @@ impl Engine {
             streams,
             pools,
             terminal_kept: self.terminal.kept(),
-            addresses: self.addresses(),
-            watch: self.terminal.watch(),
+            addresses: self.addresses(&roles),
+            watch,
+            watch_settled,
+            watch_lapsed,
             terminals: self.terminals_status(),
             bases: self.bases(agents),
             terminal_setup: self.terminal.setup(),
             configuration,
-            sources: self.host_sources(),
+            sources: self.host_sources(&roles),
         }
     }
 

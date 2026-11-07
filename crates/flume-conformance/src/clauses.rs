@@ -4,7 +4,7 @@
 
 /// The revision of `design/flume/requirements.md` in agentplot/blueprints
 /// the list was read at.
-pub const REVISION: &str = "9371cda";
+pub const REVISION: &str = "9c060ab";
 
 /// Part A: what flume decides.
 pub fn part_a() -> Vec<u32> {
@@ -65,8 +65,8 @@ pub const SCENARIOS: u32 = 119;
 
 /// The numbers section 11 skips at the revision, which designs the
 /// statement does not hold yet keep for their own scenarios: none at
-/// 9371cda.
-pub const SKIPPED: [u32; 0] = [];
+/// this revision.
+pub const SKIPPED: &[u32] = &[];
 
 /// The change that builds record 0021: the standing prompt in layers and
 /// cache use in status.
@@ -100,26 +100,9 @@ pub const MCP_SERVERS: &str =
 pub const ORIGIN: &str =
     "a-place-is-cut-from-origins-copy-of-its-base, record 0041, landed before the list held S92";
 
-/// The change that builds record 0044: an agent's effort, a setting of
-/// flume's layers.
-pub const EFFORT: &str = "an-agents-effort-is-a-setting-of-flumes-layers, record 0044";
-
-/// The change that builds record 0046: an agent that stops short needing
-/// an answer kept open for it, `keep_open` one of flume's layers.
-pub const KEEP_OPEN: &str = "an-answer-reaches-the-open-session-within-an-hour, record 0046";
-
-/// The change that builds record 0039: a role a source declares at its
-/// address on a stream, and the answerer behind a stream.
-pub const ROLES: &str =
-    "record 0039's change, every question a place asks reaches someone who answers it";
-
-/// The change that builds record 0051: a base place, its branch opened
-/// and closed by the merge queue, and the host's watch.
-pub const BASE_PLACES: &str = "record 0051's change, base places and the host's watch";
-
-/// The change that builds record 0053: a repository whose clone moved,
+/// The change that builds record 0053: a repository whose clone moved
 /// renamed in flume by one act.
-pub const RENAME: &str = "record 0053's change, a moved clone renamed in flume";
+pub const RENAME: &str = "record 0053's change, a repository renamed by one act, once accepted";
 
 /// Each clause or scenario no change has built yet, with the change that
 /// builds it: no scenario of the suite cites one, and the coverage check
@@ -149,24 +132,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .map(|clause| (clause, STATECHART));
     let mcp_servers = std::iter::once(("183".to_string(), MCP_SERVERS));
     let origin = std::iter::once(("S92".to_string(), ORIGIN));
-    let effort = ["197".to_string(), "S103".to_string()]
-        .into_iter()
-        .map(|clause| (clause, EFFORT));
-    let keep_open = std::iter::once("198".to_string())
-        .chain((104..=105).map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, KEEP_OPEN));
-    let roles = std::iter::once("193".to_string())
-        .chain([93, 94, 98, 99].map(|scenario| format!("S{scenario}")))
-        .map(|clause| (clause, ROLES));
-    let base_places = (202..=206)
-        .chain([208])
-        .map(|clause| clause.to_string())
-        .chain(
-            (109..=112)
-                .chain([118])
-                .map(|scenario| format!("S{scenario}")),
-        )
-        .map(|clause| (clause, BASE_PLACES));
     let rename = std::iter::once(("209".to_string(), RENAME));
     standing
         .chain(plan)
@@ -175,10 +140,6 @@ pub fn unbuilt() -> Vec<(String, &'static str)> {
         .chain(statechart)
         .chain(mcp_servers)
         .chain(origin)
-        .chain(effort)
-        .chain(keep_open)
-        .chain(roles)
-        .chain(base_places)
         .chain(rename)
         .collect()
 }
@@ -211,20 +172,18 @@ mod tests {
         );
         assert_eq!(all().len(), 206 + 8 + 119);
         assert!(all().contains(&"S64".to_string()), "S64 is not listed");
-        for gap in SKIPPED.map(|scenario| format!("S{scenario}")) {
-            assert!(!all().contains(&gap), "{gap} is listed");
-        }
+        assert!(SKIPPED.is_empty(), "{SKIPPED:?} are skipped");
         for scenario in [
-            "S91", "S92", "S95", "S96", "S97", "S100", "S103", "S104", "S105", "S106", "S107",
-            "S108", "S113", "S114", "S115", "S116", "S117", "S93", "S94", "S98", "S99", "S109",
-            "S110", "S111", "S112", "S118", "S119",
+            "S91", "S92", "S93", "S94", "S95", "S96", "S97", "S98", "S99", "S100", "S103", "S104",
+            "S105", "S106", "S107", "S108", "S109", "S110", "S111", "S112", "S113", "S114", "S115",
+            "S116", "S117", "S118", "S119",
         ] {
             assert!(
                 all().contains(&scenario.to_string()),
                 "{scenario} is not listed"
             );
         }
-        assert_eq!(REVISION, "9371cda");
+        assert_eq!(REVISION, "9c060ab");
         for clause in [
             129, 130, 131, 132, 137, 140, 141, 142, 148, 154, 155, 156, 157, 158, 159, 161, 162,
             163, 165, 168, 169, 173, 175, 176, 177, 180, 181, 182, 183, 184, 185, 186, 190, 191,
@@ -243,37 +202,8 @@ mod tests {
     #[test]
     fn the_clauses_unbuilt_are_named_by_the_changes_that_build_them() {
         let unbuilt = unbuilt();
-        assert_eq!(
-            unbuilt.len(),
-            3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 2 + 3 + 5 + 11 + 1
-        );
+        assert_eq!(unbuilt.len(), 3 + 2 + 3 + 6 + 10 + 6 + 1 + 1 + 1);
         assert!(unbuilt.iter().all(|(clause, _)| all().contains(clause)));
-        for (left, change) in [
-            ("193", ROLES),
-            ("S93", ROLES),
-            ("S94", ROLES),
-            ("S98", ROLES),
-            ("S99", ROLES),
-            ("202", BASE_PLACES),
-            ("203", BASE_PLACES),
-            ("204", BASE_PLACES),
-            ("205", BASE_PLACES),
-            ("206", BASE_PLACES),
-            ("208", BASE_PLACES),
-            ("S109", BASE_PLACES),
-            ("S110", BASE_PLACES),
-            ("S111", BASE_PLACES),
-            ("S112", BASE_PLACES),
-            ("S118", BASE_PLACES),
-            ("209", RENAME),
-        ] {
-            assert!(
-                unbuilt
-                    .iter()
-                    .any(|(clause, named)| clause == left && *named == change),
-                "{left} is not named unbuilt by {change}"
-            );
-        }
         for built in [
             "140", "141", "142", "143", "144", "145", "146", "147", "151", "153", "154", "157",
             "161", "162", "169", "179", "S50", "S51", "S52", "S53", "S54", "S55", "S56", "S64",
@@ -282,7 +212,8 @@ mod tests {
             "S89", "S90", "S91", "155", "156", "158", "159", "160", "191", "192", "S59", "S60",
             "S61", "S62", "S63", "S95", "S96", "S97", "200", "201", "S108", "199", "S106", "S107",
             "207", "S113", "S114", "S115", "S116", "S117", "195", "196", "S100", "S101", "S102",
-            "S119",
+            "197", "S103", "198", "S104", "S105", "202", "203", "204", "205", "206", "208", "S109",
+            "S110", "S111", "S112", "S118", "193", "S93", "S94", "S98", "S99", "S119",
         ] {
             assert!(
                 unbuilt.iter().all(|(clause, _)| clause != built),

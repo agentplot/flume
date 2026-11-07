@@ -8,18 +8,44 @@
 //! place whose held state keeps neither, its `declared` then saying its
 //! source (19, 21).
 
+use crate::base::{base_place, submission_open};
+use crate::held::waiting_now;
+use crate::list::waits_on;
 use crate::live::waits_on_session;
 use crate::reading::{find_group, reads_change};
 use crate::settings::program_name;
 use crate::start::Starts;
 use crate::{
-    side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EndStatus, Engine, GroupStatus,
-    ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionWait, SourceStatus,
-    StageStatus, SubmissionStatus, WaitingOn, Waits,
+    side_by_side, Act, AgentSettings, AgentStatus, Answer, Bound, EffortStatus, EndStatus, Engine,
+    GroupStatus, ModeStatus, MoveStatus, OwnFileStatus, OwnStatus, PlaceStatus, SessionAnswer,
+    SessionWait, SourceStatus, StageStatus, SubmissionStatus, WaitingOn, Waits,
 };
 use flume_seams::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+
+/// The effort `start` passed, with its layer, and `variable`, the one its
+/// program reads over it, where its account's environment names it, by
+/// its name alone; none where no layer gave an effort (56, 197; core.30).
+fn effort_status(start: &StartHeld, variable: Option<&'static str>) -> Option<EffortStatus> {
+    let word = start.settings.effort.as_ref()?;
+    let given = start.from.get("effort")?;
+    let outranked_by = variable
+        .filter(|name| {
+            start
+                .from
+                .get(&format!("env.{name}"))
+                .is_some_and(|given| given.layer == Layer::Account)
+        })
+        .map(str::to_string);
+    Some(EffortStatus {
+        word: word.clone(),
+        layer: given.layer,
+        passed: word.clone(),
+        read_back: false,
+        outranked_by,
+    })
+}
 
 /// Whether status reads a place's facts where they live: not for a place
 /// being made, gone or tidied (56, 62).
@@ -163,10 +189,27 @@ impl Engine {
         let with_start = current.filter(|index| {
             held.stages[*index].start.is_some() && !place.kind.stages[*index].conversation
         });
+        let base = base_place(&place.kind);
         let facts = bound
             .as_ref()
-            .filter(|_| read_facts)
+            .filter(|_| read_facts && !base)
             .map(|bound| self.facts(held, bound, with_start));
+        // A base place's head is read where the merge queue says its
+        // branch lives, and nothing at its location (80, 126, 203).
+        let base_head = match bound.as_ref().and_then(|bound| bound.merge_queue.as_ref()) {
+            Some(queue) if read_facts && base => {
+                match self.base_place_head(place, queue.as_ref()) {
+                    Ok(head) => Some(head),
+                    Err(reason) => {
+                        cannot_read.push(format!("the head of {}: {reason}", place.branch));
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+        let on_branch = base.then(|| self.on_branch(place));
+        let on_branch_count = on_branch.as_ref().map(Vec::len);
         let change = match facts.as_ref().and_then(|facts| facts.change.as_ref()) {
             Some(ChangeRead::Read { facts }) => Some(facts),
             _ => None,
@@ -187,6 +230,7 @@ impl Engine {
             let mut notes = vec![];
             let mut read_back = false;
             let mut reserved = vec![];
+            let mut effort_variable = None;
             if let Some(agent) = self.agent(&start.program) {
                 if let Guarded::Refused { acts } = agent.guard(&folder, &start.identity) {
                     refused_acts.extend(acts);
@@ -195,6 +239,7 @@ impl Engine {
                 notes = agent.notes(&folder, &start.identity);
                 read_back = agent.mode_read_back() == Offered::Offered;
                 reserved = agent.reserved();
+                effort_variable = agent.effort_variable();
             }
             let own = start.own.as_ref().map(|own| OwnStatus {
                 passed: own.passed.clone(),
@@ -229,6 +274,7 @@ impl Engine {
                     .then(|| program_name(&start.program).to_string()),
                 read_back,
             });
+            let effort = effort_status(start, effort_variable);
             let starting = held.stages[index].state == StageState::Starting;
             AgentStatus {
                 identity: start.identity.to_string(),
@@ -264,13 +310,16 @@ impl Engine {
                     .as_ref()
                     .is_some_and(|end| end.left_in_pane),
                 own,
+                effort,
             }
         });
         let agent_state = agent.as_ref().map(|agent| agent.state);
         let asking = agent
             .as_ref()
             .is_some_and(|agent| agent.asking == Reading::Yes);
-        let line = Engine::place_line(held, change, asking, None);
+        let line = Engine::place_line(held, change, asking, on_branch_count, None);
+        let waiting = waiting_now(held, on_branch_count);
+        let waits_on = waits_on(held, &line.state, on_branch_count);
         let submission = match (&bound, place.kind.lands) {
             (Some(bound), true) if read_facts => bound.merge_queue.as_ref().map(|queue| {
                 let across = submission
@@ -320,6 +369,7 @@ impl Engine {
                 refused_setting: stage.refused_setting.clone(),
                 conversation: declared.conversation,
                 group: change.and_then(|change| group_status(held, index, change)),
+                answers: session_answers(held, index),
             })
             .collect();
         let group = current.and_then(|index| stages[index].group.clone());
@@ -345,7 +395,7 @@ impl Engine {
             stages,
             current: current.map(|index| held.stages[index].name.clone()),
             agent,
-            head: facts.as_ref().map(|facts| facts.head.clone()),
+            head: facts.as_ref().map(|facts| facts.head.clone()).or(base_head),
             delivered: with_start.and(facts.as_ref().map(|facts| facts.delivered)),
             tasks,
             submission,
@@ -353,9 +403,10 @@ impl Engine {
             cannot_read,
             failures: held.failures.clone(),
             recipients: place.recipients.clone(),
+            recipients_from: place.recipients_from.clone(),
             hold_words: place.hold_words.clone(),
-            waiting_on: held.waiting.as_ref().map(|waiting| waiting.on.clone()),
-            stalled: held.waiting.as_ref().is_some_and(|waiting| waiting.stalled),
+            waiting_on: waiting.as_ref().map(|waiting| waiting.on.clone()),
+            stalled: waiting.as_ref().is_some_and(|waiting| waiting.stalled),
             waits_on_session: session_wait(held),
             holds: held.holds.clone(),
             priority: held.priority,
@@ -368,14 +419,14 @@ impl Engine {
             ends: held
                 .ends
                 .iter()
-                .map(|end| EndStatus {
-                    end: end.clone(),
-                    pending_for: end.pending(&place.recipients),
-                })
+                .map(|end| EndStatus::of(end, &place.recipients))
                 .collect(),
             role: held.role.clone(),
             clues: self.place_clues(held, agent_state, group.as_ref()),
             line,
+            waits_on,
+            worktree: base.then_some(false),
+            on_branch,
         }
     }
 }
@@ -383,36 +434,65 @@ impl Engine {
 impl Engine {
     /// Each source the host declares as it stands when asked, by name: its
     /// file, its packages' directory and every identity that directory
-    /// holds, or why its file or its directory cannot be read (56, 159,
-    /// 191; core.15).
-    pub(crate) fn host_sources(&self) -> Vec<SourceStatus> {
+    /// holds, or why its file or its directory cannot be read; and its
+    /// roles as `roles`, read once for the status, give them: its roles
+    /// file, each address it declares, each entry that declares nothing,
+    /// with why, or why the file cannot be read (56, 159, 191, 193;
+    /// core.15).
+    pub(crate) fn host_sources(&self, roles: &HostRoles) -> Vec<SourceStatus> {
         let kinds = self.resolver.kinds();
         self.host
             .sources()
             .into_iter()
-            .map(|(name, source)| match source.read {
-                HostSourceRead::Read { kinds_dir } => {
-                    let (kinds, cannot_read) = match kinds.read_source(&name, &kinds_dir) {
-                        SourceRead::Read { kinds } => {
-                            (kinds.into_iter().map(|kind| kind.spelled).collect(), None)
+            .map(|(name, source)| {
+                let declared = roles
+                    .declared
+                    .iter()
+                    .filter(|(_, entry)| entry.source() == name)
+                    .map(|(address, _)| address.clone())
+                    .collect();
+                let roles_refused = roles
+                    .refused
+                    .iter()
+                    .filter(|refused| refused.source == name)
+                    .cloned()
+                    .collect();
+                let roles_cannot_read = roles.unread.get(&name).map(|unread| unread.reason.clone());
+                match source.read {
+                    HostSourceRead::Read {
+                        kinds_dir,
+                        roles: roles_file,
+                    } => {
+                        let (kinds, cannot_read) = match kinds.read_source(&name, &kinds_dir) {
+                            SourceRead::Read { kinds } => {
+                                (kinds.into_iter().map(|kind| kind.spelled).collect(), None)
+                            }
+                            SourceRead::CouldNotRead { reason } => (vec![], Some(reason)),
+                        };
+                        SourceStatus {
+                            name,
+                            source_file: source.file,
+                            kinds_dir: Some(kinds_dir),
+                            kinds,
+                            cannot_read,
+                            roles_file,
+                            roles: declared,
+                            roles_refused,
+                            roles_cannot_read,
                         }
-                        SourceRead::CouldNotRead { reason } => (vec![], Some(reason)),
-                    };
-                    SourceStatus {
+                    }
+                    HostSourceRead::CouldNotRead { reason } => SourceStatus {
                         name,
                         source_file: source.file,
-                        kinds_dir: Some(kinds_dir),
-                        kinds,
-                        cannot_read,
-                    }
+                        kinds_dir: None,
+                        kinds: vec![],
+                        cannot_read: Some(reason),
+                        roles_file: None,
+                        roles: declared,
+                        roles_refused,
+                        roles_cannot_read,
+                    },
                 }
-                HostSourceRead::CouldNotRead { reason } => SourceStatus {
-                    name,
-                    source_file: source.file,
-                    kinds_dir: None,
-                    kinds: vec![],
-                    cannot_read: Some(reason),
-                },
             })
             .collect()
     }
@@ -484,6 +564,39 @@ pub(crate) fn group_status(
     })
 }
 
+/// Each answer the current start of the stage at `index` took in its
+/// session, in the order it took them, each with the question it
+/// answered, as the ends `held` records give them; none for a stage with
+/// no start (42, 56, 198).
+pub(crate) fn session_answers(held: &HeldState, index: usize) -> Vec<SessionAnswer> {
+    let stage = &held.stages[index];
+    let Some(start) = &stage.start else {
+        return vec![];
+    };
+    held.ends
+        .iter()
+        .filter_map(|end| match &end.of {
+            EndOf::Stage {
+                stage: name,
+                start: n,
+                state: StageState::EndedShort,
+                end: ended,
+                ..
+            } if *name == stage.name && *n == start.n => {
+                let answer = end
+                    .answer
+                    .clone()
+                    .filter(|answer| answer.session.is_some())?;
+                Some(SessionAnswer {
+                    question: ended.words.clone(),
+                    answer,
+                })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// The stage of a live place that waits for room while a process runs
 /// the conversation its start would carry, or flume could not read
 /// whether one does, with what the last settle's live read and since
@@ -510,13 +623,20 @@ pub(crate) fn session_wait(held: &HeldState) -> Option<SessionWait> {
 /// The move a live place waits on its caller for, why, since when and
 /// with what words, read from its held state alone, a person's answer to
 /// the dialog its agent's program shows before it takes its prompt among
-/// them; none where it waits on nobody, its next step being flume's or an
-/// agent's, or the host's room (34, 35, 56, 70, 130).
-pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
+/// them, and for an answer whether its agent is kept open for it and
+/// until when, or when and why it was let go and whether it is ended;
+/// none where it waits on nobody, its next step being flume's or an
+/// agent's, or the host's room (34, 35, 56, 70, 130, 198). A base place's
+/// is read from its submission and `on_branch`, the count of the live
+/// places on its branch (203).
+pub(crate) fn waiting_on(held: &HeldState, on_branch: Option<usize>) -> Option<WaitingOn> {
     if held.phase != Phase::Live {
         return None;
     }
     let place = &held.place;
+    if base_place(&place.kind) {
+        return base_waiting_on(held, on_branch.unwrap_or(0));
+    }
     let stages = &place.kind.stages;
     let last = held.stages.len().checked_sub(1)?;
     let waits = |act, stage: Option<usize>, why, since, words| {
@@ -526,6 +646,8 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
             why,
             since,
             words,
+            open_until: None,
+            closed: None,
         })
     };
     let submission = &held.submission;
@@ -606,7 +728,14 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
             if found && index == last {
                 return None;
             }
-            retry(Waits::Answer, end.and_then(|end| end.words.clone()))
+            let closed = end.and_then(|end| end.closed);
+            retry(Waits::Answer, end.and_then(|end| end.words.clone())).map(|on| WaitingOn {
+                open_until: end
+                    .and_then(|end| end.open_until)
+                    .filter(|_| closed.is_none()),
+                closed,
+                ..on
+            })
         }
         StageState::Lost => retry(Waits::Lost, None),
         StageState::NeverBegun => retry(Waits::NeverBegun, None),
@@ -635,4 +764,44 @@ pub(crate) fn waiting_on(held: &HeldState) -> Option<WaitingOn> {
         }
         _ => None,
     }
+}
+
+/// The move a live base place waits on its caller for: none while a
+/// place on its branch is live, since it waits on them and is never
+/// stalled for it, or while its submission is open, since it waits on
+/// the merge queue; else a retry of its submission, with the merge
+/// queue's words where its last submission failed, conflicted, was
+/// withdrawn or refused, with a hold's words where its submission is
+/// held, and otherwise since the settle that read none live (47, 112,
+/// 130, 203).
+fn base_waiting_on(held: &HeldState, on_branch: usize) -> Option<WaitingOn> {
+    let submission = &held.submission;
+    let waits = |why, since, words| {
+        Some(WaitingOn {
+            act: Act::Retry,
+            stage: None,
+            why,
+            since,
+            words,
+            open_until: None,
+            closed: None,
+        })
+    };
+    if on_branch > 0 {
+        return None;
+    }
+    if let Some(words) = &submission.waiting {
+        return waits(
+            Waits::Submission,
+            submission.waiting_since,
+            Some(words.clone()),
+        );
+    }
+    if let Some(hold) = held.submission_hold() {
+        return waits(Waits::OnHold, Some(hold.since), hold.words.clone());
+    }
+    if submission_open(held) {
+        return None;
+    }
+    waits(Waits::Unsubmitted, None, None)
 }

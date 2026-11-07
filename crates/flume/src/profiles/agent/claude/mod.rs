@@ -10,11 +10,13 @@
 //! `devenv.nix` pins, 2.1.296: its hook events and their inputs, its
 //! transcript's records, its folder-trust dialog and the keys that answer
 //! it, the words of its usage limits, its permission modes ([`mode`]),
+//! the efforts it takes and the variable it reads over them ([`effort`]),
 //! where it keeps a session and how it resumes one ([`carry`]), and how it
 //! takes its own settings and which of them another setting owns
 //! ([`settings`]).
 
 pub mod carry;
+pub mod effort;
 pub mod guard;
 pub mod hook;
 pub mod limit;
@@ -263,14 +265,15 @@ impl Claude {
 
 impl Agent for Claude {
     /// `claude --plugin-dir <plugin> [--settings <file>] [--resume
-    /// <session>] [--model <m>] [--permission-mode <mode>]
-    /// [--append-system-prompt-file <file>]` in the place, the agent's
+    /// <session>] [--model <m>] [--effort <word>] [--permission-mode
+    /// <mode>] [--append-system-prompt-file <file>]` in the place, the agent's
     /// resolved own settings written as one JSON object to the file it
     /// lists beside the start's record and named by `--settings`, nothing
     /// passed and no file listed where they are empty, and never a file a
     /// layer named (195, 196; [`settings`]), the session resumed where the
-    /// start carries one (179), the mode passed where one is given and none
-    /// where it is none (162), the instructions in the start's own file
+    /// start carries one (179), the effort passed as written where one is
+    /// given and none where it is none (197; [`effort`]), the mode passed
+    /// where one is given and none where it is none (162), the instructions in the start's own file
     /// beside its record, since herdr 0.9.5 types no argument holding a
     /// newline (148, C.5), the program the settings name by name or path,
     /// or the program it runs where it is a nix wrapper, with the variables
@@ -311,6 +314,9 @@ impl Agent for Claude {
         }
         if let Some(model) = &settings.model {
             args.extend(["--model".to_string(), model.clone()]);
+        }
+        if let Some(word) = &settings.effort {
+            args.extend([effort::FLAG.to_string(), word.clone()]);
         }
         if let Some(mode) = mode {
             args.extend([mode::FLAG.to_string(), mode.to_string()]);
@@ -560,6 +566,18 @@ impl Agent for Claude {
         mode::map(entry).map(str::to_string)
     }
 
+    /// Each of 2.1.296's five `--effort` words, and any other refused
+    /// naming it, `claude` and the five ([`effort`]; 197, C.4).
+    fn effort(&self, word: &str) -> Result<(), String> {
+        effort::take(word)
+    }
+
+    /// `CLAUDE_CODE_EFFORT_LEVEL`, which 2.1.296 reads over `--effort`
+    /// ([`effort::VARIABLE`]; 197, C.4).
+    fn effort_variable(&self) -> Option<&'static str> {
+        Some(effort::VARIABLE)
+    }
+
     /// The start's first prompt's UserPromptSubmit input names the mode
     /// the session runs in (161).
     fn mode_read_back(&self) -> Offered {
@@ -612,6 +630,12 @@ impl Agent for Claude {
     /// 92, 131).
     fn stop_short(&self, _agent: &Identity) -> String {
         "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop.".into()
+    }
+
+    /// `--to <name>` given to `flume needs`, the name as the prompt lists
+    /// it (41, 92, 132).
+    fn stop_short_to(&self) -> String {
+        "name it with `--to`, as `flume needs --to <name> \"<words>\"` or `flume needs --found --to <name> \"<words>\"`, the name written as listed here".into()
     }
 
     fn send_back(&self) -> Offered {

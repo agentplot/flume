@@ -91,6 +91,13 @@ pub struct Reserved {
 /// program's own settings given it, which it refuses (195, 196).
 pub const NO_OWN: &str = "its agent profile passes no settings of its program's own";
 
+/// What a profile that keeps the agent seam's default says of the effort
+/// `word` asked of it, which it refuses, since it names no way to give
+/// its program an effort (170, 197).
+pub fn no_effort(word: &str) -> String {
+    format!("its agent profile names no way to give an effort, `{word}` among them")
+}
+
 /// A yes or no the agent's own record may not give (93).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -268,10 +275,13 @@ pub trait Agent: Send + Sync {
     /// `folder` is the place's own folder, under which each file the
     /// command lists lies (128, 196); `mode` is the value [`Agent::mode`]
     /// mapped, passed as its program's setting, and nothing is passed
-    /// where it is none (162, 169); `own` is its program's own settings as
-    /// the layers resolved them, its program's alone and taken by
-    /// [`Agent::own`], passed its program's way, and nothing is passed
-    /// where they are empty (195, 196); `resume` is the session the start
+    /// where it is none (162, 169); `settings.effort` is a word
+    /// [`Agent::effort`] took, passed as its profile gives its program an
+    /// effort, and nothing is passed where it is none (88, 197); `own` is
+    /// its program's own settings as the layers resolved them, its
+    /// program's alone and taken by [`Agent::own`], passed its program's
+    /// way, and nothing is passed where they are empty (195, 196);
+    /// `resume` is the session the start
     /// resumes, which [`Agent::carry`] answered yes with, so a profile
     /// that answers no yes is never given one (88, 179); what the start
     /// carries by a file, such as a standing prompt no terminal can type
@@ -378,6 +388,23 @@ pub trait Agent: Send + Sync {
         ))
     }
 
+    /// Whether the agent's program takes `word` as its effort, which its
+    /// command passes as written; words naming the effort, the program
+    /// and the words it takes where it does not, and every word refused by
+    /// default, in [`no_effort`]'s words, since a profile that names no way
+    /// to give an effort refuses one (88, 170, 197).
+    fn effort(&self, word: &str) -> Result<(), String> {
+        Err(no_effort(word))
+    }
+
+    /// The variable of the agent's environment its program reads over the
+    /// effort its command passes, which status names where an account's
+    /// environment sets it, never its value (56, 197; core.30); none by
+    /// default.
+    fn effort_variable(&self) -> Option<&'static str> {
+        None
+    }
+
     /// Whether the program's word at its start, its word that it started
     /// or at its start's first prompt, names the mode it began in, so its
     /// start is compared with the mode it asked (161, 169); not by
@@ -429,6 +456,12 @@ pub trait Agent: Send + Sync {
     /// between starts, so a repetition's prompt matches the one before it
     /// up to its group (141; core.31).
     fn stop_short(&self, agent: &Identity) -> String;
+
+    /// How the way to stop short names the role its words are for, one
+    /// of the names its prompt lists after these words, a role of the
+    /// place's own stream by the role alone and any other stream's by its
+    /// address: the same for every start (41, 92, 132; core.31).
+    fn stop_short_to(&self) -> String;
 
     /// Whether the program lets flume keep an agent about to go quiet at
     /// work, with words naming its deliverable (115).

@@ -12,8 +12,9 @@ of flume against a scratch repository, with its path shortened to
 
 This run uses the printed command, the terminal flume uses when the
 host names none: flume prints each agent's command and you run it.
-Under herdr, flume opens each agent in a pane itself and a watch
-settles every place as its agent changes state, so every `flume settle`
+Under herdr, flume opens each agent in a pane itself, and each agent's
+Stop hook settles its place as it goes quiet. With a caller keeping
+watch over the host by `flume settle --every`, every `flume settle`
 below happens with no command of yours.
 [Places and herdr](/flume/guides/places-and-herdr/) says how to set
 that up.
@@ -57,6 +58,7 @@ launched ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
   branch fix/the-parser-reads-tabs from main, head 84130b3cd2adae9a0ac2117884849d513da80181
   stage code: starting, started 1 times
   agent flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 (claude): unknown
+    keep_open = 1h (from default)
     program = claude (from default)
     run: cd ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs && FLUME_AGENT=flume:f5f5e14159a8:fix--the-parser-reads-tabs:code:1 FLUME_PLACE=~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs FLUME_SECRET=3c1a… FLUME_STAGE=code claude --plugin-dir ~/.local/share/flume/plugins/claude/0.0.0-5d294893e56e 'You are the code stage of the fix the-parser-reads-tabs, …'
   the deliverable is missing
@@ -153,7 +155,7 @@ $ flume status fix--the-parser-reads-tabs
   the deliverable exists
   submission: found {"submission":{"branch":"fix/the-parser-reads-tabs","id":"1","state":"under_test","target":"main"}}, submitted 1 times, sent back 0 times
   recipients: me
-  ended: code delivered; pending for me
+  ended stage/code/1/delivered: code delivered; pending for me
 host: 0 agents running, no bound
 ```
 
@@ -166,8 +168,9 @@ main at 84130b3 · 1 in the queue · testing 1 at once (up to 1)
   testing main + #1 fix/the-parser-reads-tabs · 2s of 1h00m
 ```
 
-`ended: code delivered; pending for me` is the stage's end, kept for
-the recipient `me` until it is delivered.
+`ended stage/code/1/delivered: code delivered; pending for me` is the
+stage's end under its key, kept for the recipient `me` until it is
+delivered.
 
 ## 5. The landing and the tidy
 
@@ -182,8 +185,8 @@ $ flume status fix--the-parser-reads-tabs
   branch fix/the-parser-reads-tabs from main
   stage code: delivered, started 1 times, ended at 3abbf3b6b8ed59e66b11146dff00e7f9d418f6c3
   recipients: me
-  ended: code delivered; pending for me
-  ended: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
+  ended stage/code/1/delivered: code delivered; pending for me
+  ended submission/1/landed: submission landed d185a879b51dba33555c036392b50443f4dfc5e8; pending for me
 $ git log --oneline main
 d185a87 chore(land): #1 fix/the-parser-reads-tabs
 3abbf3b fix(parser): keep a tab after a quote
@@ -209,7 +212,7 @@ recipient, on every place of the host:
 
 ```console
 $ flume inbox --recipient me
-fix--the-parser-reads-tabs code delivered; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
+fix--the-parser-reads-tabs code delivered [stage/code/1/delivered]; read: flume status ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs
 $ flume inbox --recipient me
 nothing pending for me
 $ flume status

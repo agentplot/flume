@@ -118,9 +118,11 @@ fn line(world: &World, id: &PlaceId) -> Result<PlaceLine, String> {
 }
 
 /// A fix named `name` whose ends are pending for a role's address that
-/// no run collects, so its document stays once it is tidied, its code
-/// stage begun.
+/// no source declares and no run collects, taken since a role stands
+/// behind its stream, so its document stays once it is tidied, its code
+/// stage begun (193).
 pub fn fix_for_a_role(world: &World, name: &str) -> Result<PlaceId, String> {
+    super::role_waking::answerer_behind(world, DEFAULT_STREAM);
     launched(&world.engine.launch(&Launch {
         recipients: vec!["madswan/planner".into()],
         ..launch("fix", name, Some("x"))

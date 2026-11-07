@@ -1,25 +1,18 @@
-# shellcheck shell=sh disable=SC2034 # root and status are read by the scripts that source this.
+# shellcheck shell=sh disable=SC2034 # root and bound are read by the scripts that source this.
 # What every script of the plugin shares: where its state is, how it calls
-# herdr and flume under a bound, and the clock. Sourced, never run.
+# herdr under a bound, and what herdr's configuration lacks for it.
+# Sourced, never run.
 
 : "${HERDR_PLUGIN_ROOT:=$(cd "$(dirname "$0")/.." && pwd -P)}"
 : "${HERDR_PLUGIN_STATE_DIR:=${XDG_STATE_HOME:-$HOME/.local/state}/herdr/plugins/agentplot.flume}"
 root=$HERDR_PLUGIN_ROOT
-# Each herdr server, told apart by its socket, has its own watch, lease,
-# status and log. flume's herdr profile reads every server's lease here
-# (watch.lease's first line: the watch's pid and when it last renewed).
+# Each herdr server, told apart by its socket, has its own state: the
+# setup.json its startup writes, which flume's herdr profile reads while
+# the socket it names is present, and the startup's log.
 state=$HERDR_PLUGIN_STATE_DIR/servers/$(printf '%s' "${HERDR_SOCKET_PATH:-none}" | cksum | cut -d' ' -f1)
 mkdir -p "$state"
-# The status the watch last wrote, which the sidebar and the popup draw.
-status=$state/status.json
 # The bound on every herdr call, in seconds (core.29).
 bound=${FLUME_HERDR_BOUND:-10}
-
-# The one source of the time, so the tests can move it: the clock file's
-# number where FLUME_HERDR_CLOCK names one.
-now() {
-  if [ -n "${FLUME_HERDR_CLOCK:-}" ]; then cat "$FLUME_HERDR_CLOCK"; else date +%s; fi
-}
 
 say() {
   printf '%s agentplot.flume: %s\n' "$(date +%H:%M:%S)" "$*" >&2
@@ -74,7 +67,7 @@ on_this_server() {
 
 # The popup's key, which herdr 0.9.5's manifest cannot declare: the
 # entry a host adds to herdr's configuration, as the README gives it and
-# tests/manifest.sh holds it (122, C.5; design 8).
+# tests/manifest.sh holds it (122, C.5).
 entry='[[keys.command]]
 key = "prefix+f"
 type = "plugin_action"
@@ -97,8 +90,7 @@ herdr_config() {
 # in words a person acts on, naming the file: a line that is not a
 # comment giving the popup's command, and one naming "$flume" in the
 # sidebar's rows. An absent file holds neither. Read by lines for display
-# alone, so it parses no TOML and nothing decides on it (72, 122; design
-# 8).
+# alone, so it parses no TOML and nothing decides on it (72, 122, C.5).
 lacking() {
   _read=$(grep -v '^[[:space:]]*#' "$1" 2>/dev/null)
   # The entry's keys on one line: `key = "prefix+f", type = ...`.

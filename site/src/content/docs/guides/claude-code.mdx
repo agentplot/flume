@@ -20,7 +20,7 @@ under `$XDG_DATA_HOME/flume/plugins/claude/<version>-<digest>`, and
 starts each agent with it:
 
 ```sh
-claude --plugin-dir <plugin> [--settings <file>] [--resume <session>] [--model <model>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
+claude --plugin-dir <plugin> [--settings <file>] [--resume <session>] [--model <model>] [--effort <word>] [--permission-mode <mode>] [--append-system-prompt-file <file>] '<prompt>'
 ```
 
 `--settings` is there only where a layer gives Claude Code's own
@@ -38,6 +38,17 @@ Each agent in the fork gets this file:
 ```json
 {"attribution":{"commit":"","pr":"","sessionUrl":false}}
 ```
+
+`--effort` is there only where a layer gives the agent an effort, one
+of the pinned release's five words, `low`, `medium`, `high`, `xhigh`
+and `max` ([the effort](/flume/guides/agent-settings/#the-effort)).
+It is the session's own level, which Claude Code reads over every
+settings file's. So Claude Code's `effortLevel` setting is flume's
+`effort`'s: a layer's `settings` that writes it is refused, and a
+named file's is left out, naming flume's `effort` as its owner. Claude
+Code reads one thing over `--effort`, `CLAUDE_CODE_EFFORT_LEVEL` in
+its environment. An account whose `env` sets it outranks the layers,
+and status says so on the agent's line, naming the variable.
 
 `--resume` is there only for a start that carries a spent agent's
 conversation ([a conversation carried](#a-conversation-carried)).
@@ -69,13 +80,16 @@ Claude Code is the one agent program flume runs.
 flume checks the plugin's hooks against the Claude Code release its
 repository pins, 2.1.296. It checks there too the `--settings` option,
 the order Claude Code reads its settings in, each key flume reserves
-for another setting, and `attribution`'s two texts.
+for another setting, `effortLevel` among them, and `attribution`'s two
+texts. It checks the `--effort` option and its five words there, and
+the variable Claude Code reads over it.
 
 ## What each hook does
 
 Each hook runs `flume hook <event>` and always exits 0. In a session
 flume did not start, one with no `FLUME_AGENT` and `FLUME_SECRET`,
-every hook does nothing.
+every hook does nothing but SessionStart ([a session of your
+own](#a-session-of-your-own)).
 
 | Hook | What flume does with it |
 |---|---|
@@ -91,6 +105,47 @@ every hook does nothing.
 
 A subagent's hooks take no ack, and the guard refuses its commands as
 its agent's.
+
+### A session of your own
+
+In a session flume did not start, SessionStart runs `flume inbox` as
+the session the multiplexer names, the pane it runs in under herdr, and
+never as `FLUME_RECIPIENT` or a role's address, so your session never
+collects a role's ends. Where the inbox holds anything, the hook gives
+it to the agent as the session's added context: each end it collected,
+and each place waiting on your session with its question, the
+question's key, whether its agent is kept open and until when, and the
+three ways on:
+
+- answer it naming the key, by `flume retry <place> --stage <stage>
+  --answers <key> --words "<answer>"`, or, while its agent is kept
+  open, `flume tell <place> --answers <key> "<answer>"`;
+- hold the move with your words, `flume hold <place> "<words>"
+  --waiting --for <time>`;
+- or leave it, and once the place stalls the answerer behind its stream
+  has it.
+
+A place that waits on another move, a retry, its submission or a done,
+is given that move's own command in place of the answer. For one place
+waiting on its question, the agent reads:
+
+```text
+flume, at this session's start: what waits on it, herdr:w1-3@/tmp/herdr.sock, from `flume inbox`.
+
+change--plan (one of two designs), in the stream east, waits on a retry of construct since 1793287841.
+Its stop-short stage/construct/1/ended-short needs an answer:
+  Which design does the brief mean?
+Its agent is kept open for the answer until 1793291441.
+Ways on:
+- answer it, naming its key: flume retry change--plan --stage construct --answers stage/construct/1/ended-short --words "<answer>"
+  or, while its agent is kept open: flume tell change--plan --answers stage/construct/1/ended-short "<answer>"
+- hold the move with your words, saying who has it: flume hold change--plan "<words>" --waiting --for <time>
+- leave it: once it stalls, the answerer behind its stream has it.
+```
+
+Where nothing waits, under the printed command, which names no
+session, or where flume cannot be reached, it gives nothing. It holds
+up the start no longer than its 20 seconds' timeout.
 
 Beside the command hooks the plugin carries one hooks module,
 `hooks/line.ts`, which pins the place's line under the prompt ([the

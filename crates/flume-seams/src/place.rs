@@ -83,13 +83,15 @@ pub enum Removed {
 }
 
 /// remove-branch: the branch removed, or the commits it holds whose
-/// change the base lacks (82).
+/// change the base lacks (82); and, for a base place's branch, which the
+/// merge queue closes, the branch it kept, in its words (204, 206).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BranchRemoved {
     Removed,
     Kept { commits: Vec<Revision> },
     Gone,
+    Refused { reason: String },
 }
 
 /// The place seam (B.1): a worktree of one repository on a branch of its

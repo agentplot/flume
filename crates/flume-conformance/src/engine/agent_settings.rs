@@ -4,8 +4,10 @@
 //! not declare, the kind's declaration and flume's default, the host's two
 //! giving a model, a mode and instructions alone; the environment its
 //! account's alone, each value read against the login environment (29,
-//! 144); the host's configuration read at every start; and the launch
-//! refused for settings flume cannot run.
+//! 144); the host's configuration read at every start; the launch
+//! refused for settings flume cannot run; and how long an agent is kept
+//! open for an answer, given by the launch's and the host's layers alone,
+//! else flume's own hour (32, 198).
 
 use super::account_pools::{account, fix_in, pool};
 use super::agent_modes::{in_mode, mode_from, passed, the_fakes_map};
@@ -78,7 +80,64 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["8", "21", "32"],
             run: the_repositorys_settings_kept,
         },
+        Scenario {
+            name: "settings: the host gives a fix 10m kept open, and its code agent starts with 10m from host-kind",
+            cites: &["32", "198"],
+            run: keep_open_from_the_hosts_kind,
+        },
+        Scenario {
+            name: "settings: the host gives a fix 10m kept open and the stream work 2h, and a fix in work starts with 10m from host-kind while a change in work starts with 2h from host-stream",
+            cites: &["32", "143", "198"],
+            run: keep_open_the_hosts_kind_over_its_stream,
+        },
+        Scenario {
+            name: "settings: a launch giving code 0 kept open over the host's 10m starts code's agent with 0 from launch",
+            cites: &["32", "198"],
+            run: keep_open_the_launch_over_the_host,
+        },
+        Scenario {
+            name: "settings: no layer giving keep_open starts the agent with flume's own 1h from default",
+            cites: &["32", "198"],
+            run: keep_open_from_no_layer,
+        },
+        Scenario {
+            name: "settings: the host's keep_open for every agent changing from 1h to 15m while construct works leaves construct's agent 1h and starts code's with 15m",
+            cites: &["8", "32", "198"],
+            run: keep_open_changed_after_the_launch,
+        },
     ]
+}
+
+/// Settings keeping an agent open `keep_open` for an answer.
+pub(super) fn kept_open(keep_open: &str) -> Settings {
+    Settings {
+        keep_open: Some(keep_open.into()),
+        ..Settings::default()
+    }
+}
+
+/// Where the place `id`'s agent's `keep_open` came from, as status gives
+/// it, and the value its start keeps in its held settings.
+fn keep_open_of(world: &World, id: &PlaceId) -> Result<(Option<Given>, Option<String>), String> {
+    let from = world
+        .status(id)?
+        .agent
+        .ok_or("no agent")?
+        .settings
+        .from
+        .get("keep_open")
+        .cloned();
+    let held = world.held(id).ok_or("no held state")?;
+    let kept = held
+        .stages
+        .iter()
+        .rev()
+        .find_map(|stage| stage.start.as_ref())
+        .ok_or("no start")?
+        .settings
+        .keep_open
+        .clone();
+    Ok((from, kept))
 }
 
 fn model(model: &str) -> Settings {
@@ -706,6 +765,119 @@ fn the_repositorys_settings_kept(_: &()) -> Outcome {
             .any(|pair| pair == ["--model", "opus"]),
         "code's model: {:?}",
         command.args
+    );
+    Ok(())
+}
+
+fn keep_open_from_the_hosts_kind(_: &()) -> Outcome {
+    let world = World::new();
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(kept_open("10m")));
+    let id = fix_in(&world, None, "one")?;
+    ensure_eq!(
+        world.stage_state(&id, "code"),
+        Some(StageState::Begun),
+        "code"
+    );
+    ensure_eq!(
+        keep_open_of(&world, &id)?,
+        (layer_gave(Layer::HostKind, "10m"), Some("10m".into())),
+        "code's keep_open from the host's kind"
+    );
+    Ok(())
+}
+
+fn keep_open_the_hosts_kind_over_its_stream(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_stream("work", Some(Stream::default()));
+    world.host.set_stream_settings("work", kept_open("2h"));
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(kept_open("10m")));
+    let fix = fix_in(&world, Some("work"), "one")?;
+    ensure_eq!(
+        keep_open_of(&world, &fix)?,
+        (layer_gave(Layer::HostKind, "10m"), Some("10m".into())),
+        "a fix in work keeps the host's kind's"
+    );
+    launched(&world.engine.launch(&Launch {
+        stream: Some("work".into()),
+        ..launch("change", "one", Some("plan it"))
+    }))?;
+    let change = World::id("change", "one");
+    world.settle(&change);
+    ensure_eq!(
+        keep_open_of(&world, &change)?,
+        (layer_gave(Layer::HostStream, "2h"), Some("2h".into())),
+        "a change in work keeps the stream's"
+    );
+    Ok(())
+}
+
+fn keep_open_the_launch_over_the_host(_: &()) -> Outcome {
+    let world = World::new();
+    world
+        .host
+        .set_settings(None, "fix", for_every_stage(kept_open("10m")));
+    let mut fix = launch("fix", "one", Some("x"));
+    fix.settings.insert("code".into(), kept_open("0"));
+    launched(&world.engine.launch(&fix))?;
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    ensure_eq!(
+        keep_open_of(&world, &id)?,
+        (layer_gave(Layer::Launch, "0"), Some("0".into())),
+        "code's keep_open from the launch"
+    );
+    Ok(())
+}
+
+fn keep_open_from_no_layer(_: &()) -> Outcome {
+    let world = World::new();
+    let id = fix_in(&world, None, "one")?;
+    ensure_eq!(
+        keep_open_of(&world, &id)?,
+        (layer_gave(Layer::Default, "1h"), Some("1h".into())),
+        "code's keep_open where no layer gives one"
+    );
+    ensure_eq!(flume_core::KEEP_OPEN, 60 * 60, "flume's own time kept open");
+    Ok(())
+}
+
+fn keep_open_changed_after_the_launch(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_every_agent(kept_open("1h"));
+    let id = World::id("change", "plan");
+    launched(
+        &world
+            .engine
+            .launch(&launch("change", "plan", Some("plan it"))),
+    )?;
+    world.settle(&id);
+    ensure_eq!(
+        keep_open_of(&world, &id)?,
+        (layer_gave(Layer::Host, "1h"), Some("1h".into())),
+        "construct's keep_open as it started"
+    );
+    world.host.set_every_agent(kept_open("15m"));
+    to_code(&world, &id, "plan")?;
+    let held = world.held(&id).ok_or("no held state")?;
+    let kept = |stage: usize| {
+        held.stages[stage]
+            .start
+            .as_ref()
+            .and_then(|start| start.settings.keep_open.clone())
+    };
+    ensure_eq!(
+        (kept(0), kept(1)),
+        (Some("1h".into()), Some("15m".into())),
+        "construct's start keeps 1h and code's starts with 15m"
+    );
+    ensure_eq!(
+        keep_open_of(&world, &id)?.0,
+        layer_gave(Layer::Host, "15m"),
+        "code's keep_open from the host as it stands at its start"
     );
     Ok(())
 }

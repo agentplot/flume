@@ -151,6 +151,46 @@ pub fn scenarios() -> Vec<Scenario<()>> {
             cites: &["4", "190"],
             run: a_streams_multiplexer_flume_does_not_carry,
         },
+        Scenario {
+            name: "launch: a launch from no session naming no recipient takes the answerer behind its stream, east/operator, which status gives as from the stream's answerer declared by acme",
+            cites: &["7", "193", "S93"],
+            run: a_launch_from_no_session_takes_its_streams_answerer,
+        },
+        Scenario {
+            name: "launch: each stream its own answerer, a like launch in west taking west/operator",
+            cites: &["143", "193"],
+            run: each_stream_its_own_answerer,
+        },
+        Scenario {
+            name: "launch: a launch in east naming west/planner, another stream's role acme declares, takes it from the launch",
+            cites: &["7", "132", "193"],
+            run: another_streams_role_named,
+        },
+        Scenario {
+            name: "launch: a launch from a shell into a stream no role stands behind is refused naming the four ways to give a recipient, nothing made",
+            cites: &["4", "7", "193"],
+            run: a_launch_from_a_shell_into_a_stream_no_role_stands_behind,
+        },
+        Scenario {
+            name: "launch: a launch from no session into a stream two roles stand behind is refused naming both roles and their sources, nothing made",
+            cites: &["4", "7", "193"],
+            run: two_roles_behind_one_stream,
+        },
+        Scenario {
+            name: "launch: a launch naming an address no source declares, into a stream no role stands behind, is refused naming the address, nothing made",
+            cites: &["4", "132", "193"],
+            run: an_address_that_wakes_nothing_with_no_answerer,
+        },
+        Scenario {
+            name: "launch: a launch naming an address no source declares, into a stream a role stands behind, is taken, and status says the address wakes nothing",
+            cites: &["4", "132", "193"],
+            run: an_address_that_wakes_nothing_behind_an_answerer,
+        },
+        Scenario {
+            name: "launch: a launch naming an address a source declares carried, into a stream no role stands behind, is taken",
+            cites: &["4", "132", "193"],
+            run: a_carried_address,
+        },
     ]
 }
 
@@ -377,6 +417,8 @@ fn the_first_stage_on_hold(_: &()) -> Outcome {
             why: Waits::OnHold,
             since: Some(now),
             words: Some(words.into()),
+            open_until: None,
+            closed: None,
         }),
         "the move the place waits on"
     );
@@ -396,18 +438,28 @@ fn recipients_at_the_launch(_: &()) -> Outcome {
     world.terminal.set_session(None);
     world.host.set_recipient(Some("someone else"));
     world.settle(&World::id("fix", "named"));
-    for (name, recipients) in [
-        ("named", vec!["operator", "role:planner"]),
-        ("variable", vec!["conductor"]),
-        ("session", vec!["pane-7"]),
+    for (name, recipients, from) in [
+        (
+            "named",
+            vec!["operator", "role:planner"],
+            RecipientsFrom::Launch,
+        ),
+        ("variable", vec!["conductor"], RecipientsFrom::Environment),
+        ("session", vec!["pane-7"], RecipientsFrom::Session),
     ] {
+        let status = world.status(&World::id("fix", name))?;
         ensure_eq!(
-            world.status(&World::id("fix", name))?.recipients,
+            status.recipients,
             recipients
                 .iter()
                 .map(|recipient| recipient.to_string())
                 .collect::<Vec<_>>(),
             format!("the recipients of {name}")
+        );
+        ensure_eq!(
+            status.recipients_from,
+            Some(from),
+            format!("where {name}'s recipients came from")
         );
     }
     Ok(())
@@ -952,4 +1004,242 @@ fn a_streams_multiplexer_flume_does_not_carry(_: &()) -> Outcome {
         "the refusal: {reason}"
     );
     nothing_made(&world)
+}
+
+/// A run the scratch source `source` declares for a role of its own kind
+/// `turn`, standing behind its address's stream where `answerer` holds
+/// (132, 193).
+fn role_run(source: &str, answerer: bool) -> RoleRun {
+    RoleRun {
+        source: source.into(),
+        repository: REPOSITORY.into(),
+        kind: "turn".into(),
+        priority: 0,
+        base: None,
+        brief: None,
+        name: None,
+        intent: None,
+        agents: RoleAgents::default(),
+        answers: None,
+        answerer,
+    }
+}
+
+/// The scratch host declares `stream`, and `source` declares
+/// `<stream>/<role>` with a run, standing behind the stream where
+/// `answerer` holds (143, 193).
+pub fn declares(world: &World, source: &str, address: &str, answerer: bool) {
+    world
+        .host
+        .set_stream(stream_of(address), Some(Stream::default()));
+    world
+        .host
+        .set_role(address, Some(role_run(source, answerer)));
+}
+
+/// The launching command runs in no session the terminal names, and its
+/// environment names no recipient.
+pub fn from_no_session(world: &World) {
+    world.host.set_recipient(None);
+    world.terminal.set_session(None);
+}
+
+/// A fix named `name` launched in `stream` naming `recipients`.
+fn fix_in(stream: &str, name: &str, recipients: &[&str]) -> Launch {
+    Launch {
+        stream: Some(stream.into()),
+        recipients: recipients.iter().map(|name| name.to_string()).collect(),
+        ..launch("fix", name, Some("mend it"))
+    }
+}
+
+/// The place's recipients and where they came from, as status gives
+/// them.
+fn recipients_of(
+    world: &World,
+    name: &str,
+) -> Result<(Vec<String>, Option<RecipientsFrom>), String> {
+    let status = world.status(&World::id("fix", name))?;
+    Ok((status.recipients, status.recipients_from))
+}
+
+/// The launching spec's "A launch from no session takes its stream's
+/// answerer" (7, 193, S93).
+fn a_launch_from_no_session_takes_its_streams_answerer(_: &()) -> Outcome {
+    let world = World::new();
+    from_no_session(&world);
+    declares(&world, "acme", "east/operator", true);
+    launched(&world.engine.launch(&fix_in("east", "one", &[])))?;
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        (
+            vec!["east/operator".to_string()],
+            Some(RecipientsFrom::Answerer {
+                source: "acme".into()
+            })
+        ),
+        "the place's recipients and where they came from"
+    );
+    Ok(())
+}
+
+/// The launching spec's "Each stream its own answerer" (143, 193).
+fn each_stream_its_own_answerer(_: &()) -> Outcome {
+    let world = World::new();
+    from_no_session(&world);
+    declares(&world, "acme", "east/operator", true);
+    declares(&world, "acme", "west/operator", true);
+    launched(&world.engine.launch(&fix_in("east", "one", &[])))?;
+    launched(&world.engine().launch(&fix_in("west", "two", &[])))?;
+    ensure_eq!(
+        recipients_of(&world, "one")?.0,
+        vec!["east/operator".to_string()],
+        "east's place's recipients"
+    );
+    ensure_eq!(
+        recipients_of(&world, "two")?.0,
+        vec!["west/operator".to_string()],
+        "west's place's recipients"
+    );
+    Ok(())
+}
+
+/// The launching spec's "Another stream's role named" (7, 132, 193).
+fn another_streams_role_named(_: &()) -> Outcome {
+    let world = World::new();
+    from_no_session(&world);
+    declares(&world, "acme", "east/operator", true);
+    declares(&world, "acme", "west/planner", false);
+    launched(
+        &world
+            .engine
+            .launch(&fix_in("east", "one", &["west/planner"])),
+    )?;
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        (
+            vec!["west/planner".to_string()],
+            Some(RecipientsFrom::Launch)
+        ),
+        "the place's recipients and where they came from"
+    );
+    Ok(())
+}
+
+/// The launching spec's "A launch from a shell into a stream no role
+/// stands behind" (4, 7, 193; core.8).
+fn a_launch_from_a_shell_into_a_stream_no_role_stands_behind(_: &()) -> Outcome {
+    let world = World::new();
+    from_no_session(&world);
+    declares(&world, "acme", "east/operator", true);
+    let reason = refused(&world.engine.launch(&fix_in(DEFAULT_STREAM, "one", &[])))?;
+    for way in [
+        "--recipient",
+        "$FLUME_RECIPIENT",
+        "session",
+        "stream default",
+    ] {
+        ensure!(reason.contains(way), "the refusal names no {way}: {reason}");
+    }
+    nothing_made(&world)
+}
+
+/// The launching spec's "Two roles behind one stream" (4, 193; core.8).
+fn two_roles_behind_one_stream(_: &()) -> Outcome {
+    let world = World::new();
+    from_no_session(&world);
+    declares(&world, "acme", "east/operator", true);
+    declares(&world, "beta", "east/door", true);
+    let reason = refused(&world.engine.launch(&fix_in("east", "one", &[])))?;
+    ensure!(
+        reason.contains("east/operator, declared by acme")
+            && reason.contains("east/door, declared by beta"),
+        "the refusal names not both roles and their sources: {reason}"
+    );
+    nothing_made(&world)
+}
+
+/// The launching spec's "An address that wakes nothing, with no
+/// answerer" (4, 132, 193; core.8).
+fn an_address_that_wakes_nothing_with_no_answerer(_: &()) -> Outcome {
+    let world = World::new();
+    declares(&world, "acme", "east/operator", true);
+    let reason = refused(
+        &world
+            .engine
+            .launch(&fix_in(DEFAULT_STREAM, "one", &["east/planner"])),
+    )?;
+    ensure!(
+        reason.contains("east/planner") && reason.contains("stream default"),
+        "the refusal names not the address and the stream: {reason}"
+    );
+    nothing_made(&world)
+}
+
+/// The launching spec's "An address that wakes nothing, behind an
+/// answerer": taken, and once an end stands pending for it, status says
+/// the address wakes nothing (4, 56, 132, 193).
+fn an_address_that_wakes_nothing_behind_an_answerer(_: &()) -> Outcome {
+    let world = World::new();
+    declares(&world, "acme", "east/operator", true);
+    launched(
+        &world
+            .engine
+            .launch(&fix_in("east", "one", &["east/planner"])),
+    )?;
+    ensure_eq!(
+        recipients_of(&world, "one")?,
+        (
+            vec!["east/planner".to_string()],
+            Some(RecipientsFrom::Launch)
+        ),
+        "the place's recipients and where they came from"
+    );
+    let id = World::id("fix", "one");
+    world.settle(&id);
+    world.queue.plan_submits(vec![flume_fakes::Plan::Hold]);
+    super::settling::deliver_fix(&world, &id);
+    world.settle(&id);
+    let host = match world.engine().status(None) {
+        flume_core::Answer::Status { host, .. } => host,
+        other => return Err(format!("status answered {other:?}")),
+    };
+    let planner = host
+        .addresses
+        .iter()
+        .find(|address| address.address == "east/planner")
+        .ok_or("status names no east/planner")?;
+    ensure!(
+        !planner.pending.is_empty(),
+        "no end pending for east/planner"
+    );
+    ensure_eq!(
+        planner.wakes_nothing.as_deref(),
+        Some("no source of the host declares east/planner"),
+        "why the address wakes nothing"
+    );
+    Ok(())
+}
+
+/// The launching spec's "A carried address" (4, 132, 193).
+fn a_carried_address(_: &()) -> Outcome {
+    let world = World::new();
+    world.host.set_carried(
+        "north/planner",
+        Some(CarriedRole {
+            source: "acme".into(),
+            answers: None,
+        }),
+    );
+    launched(
+        &world
+            .engine
+            .launch(&fix_in(DEFAULT_STREAM, "one", &["north/planner"])),
+    )?;
+    ensure_eq!(
+        recipients_of(&world, "one")?.0,
+        vec!["north/planner".to_string()],
+        "the place's recipients"
+    );
+    Ok(())
 }

@@ -11,23 +11,23 @@ sidebar:
 | `flume status [<place>]` | Every fact of a place, or of every place, and of the host; with `--line`, each place's one line. |
 | `flume list` | A line for each place on the host, under its repository, and each stream, reading only what flume keeps; `--all` adds the places that landed or were dropped. |
 | `flume prompt <place> <stage>` | The exact prompt a stage would be sent at its next start, starting nothing. |
-| `flume tell <place> <words>` | Hand the place's agent words as a prompt, once it waits. |
-| `flume hold <place> <words>` | Hold the place's next stage, `--stage`, or its submission, `--submission`, with words saying what for. |
-| `flume retry <place>` | Start a stage again with a fresh agent, or submit the place again. |
+| `flume tell <place> <words>` | Hand the place's agent words as a prompt, once it waits; to an agent kept open for its answer, the answer, `--answers <key>` naming the stop-short it answers. |
+| `flume hold <place> <words>` | Hold the place's next stage, `--stage`, or its submission, `--submission`, with words saying what for; or, `--waiting`, the move the place waits on, with words saying who makes it and an optional bound. |
+| `flume retry <place>` | Start a stage again with a fresh agent, hand an answer to the agent kept open for it, or submit the place again; `--answers <key>` names the stop-short the words answer. |
 | `flume stop <place>` | End the place's agent and nothing else. |
 | `flume finish <place>` | End a conversation's agent; the conversation counts as delivered. |
 | `flume drop <place>` | Give up the place's work, and tidy it. |
 | `flume done <place>` | Declare complete the work of a place whose kind does not land, and tidy it. |
 | `flume priority <place> <n>` | Set the place's priority in the host's queue. |
 | `flume tidy [<place>]` | Remove what is over, for one place or every place. |
-| `flume settle [<place>]` | Move a place, or every place, on. |
+| `flume settle [<place>]` | Move a place, or every place, on; with `--every <time>`, every place as a watch over the host. |
 | `flume wait <place>` | Wait on a stage's end or the submission's outcome, as a recipient. |
 | `flume inbox` | Collect every end pending for a recipient, on every place of the host. |
-| `flume wake <address>` | Wake a role's address: launch its run where none stands. |
+| `flume wake <address>` | Wake a role's address, `<stream>/<role>`: launch its run where none stands, and nothing where an agent already holds it. |
 | `flume kinds lock <identity>…` | Record each kind at its content's hash in a lock of kinds, or take it out. |
 | `flume open [<session>]` | Show a session of a stream's, by the session's name, in its stream's view: a window its terminal app opens, its multiplexer's own app, or the line to run. |
 | `flume mcp` | Serve flume's status over MCP on standard input and output. |
-| `flume needs <words>` | From an agent flume started: its stage cannot deliver without an answer, or found work. |
+| `flume needs <words>` | From an agent flume started: its stage cannot deliver without an answer, or found work; `--to` names the role the words are for. |
 | `flume ack started`, `flume ack received` | From an agent flume started: it started, or it received a prompt. |
 | `flume hook <event>` | From an agent program's hook: what flume does with the hook's input. |
 
@@ -61,8 +61,8 @@ error. `flume wait` has exits of its own.
 **Settling first.** Every command that acts, `launch`, `tell`,
 `hold`, `retry`, `stop`, `finish`, `drop`, `done`, `priority`, `tidy`,
 `wait`, `inbox` and `wake`, settles every place on the host first,
-unless every multiplexer the host binds keeps a watch, as herdr's plugin
-does. `flume status`, `flume list`, `flume prompt` and `flume mcp`
+unless a caller keeps watch over the host with `flume settle --every`.
+`flume status`, `flume list`, `flume prompt` and `flume mcp`
 only read, `flume status --line` and `flume hook status-line` among
 them. `flume open` settles nothing, and `flume kinds lock` writes its
 lock and settles nothing.
@@ -83,11 +83,11 @@ flume launch --kind <kind> --name <name> [--brief <text> | --brief-file <file>] 
 | `--kinds <file>` | A declaration of kinds the launch carries, read from disk with its prompts beside it. |
 | `--hold <stage>=<words>` | Hold that stage before it starts, with words saying what it waits for. Repeatable. |
 | `--hold-submission` | Hold the submission once the last stage delivers. |
-| `--recipient <name>` | A recipient of the place's ends: a session or a role's address. Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in. |
+| `--recipient <name>` | A recipient of the place's ends: a terminal's session by its name, or a role's address, `<stream>/<role>`, of any stream, whose run is woken for them. Repeatable. With none, `$FLUME_RECIPIENT`, else the terminal session the launch runs in, else the answerer behind the place's stream ([who answers a place](/flume/guides/callers-and-holds/#who-answers-a-place)). Every stall reaches that answerer too. |
 | `--mark <mark>` | A mark the caller finds its places by, given back in status. |
 | `--priority <n>` | The place's priority in the host's queue, a whole number, negative allowed; `0` where none is given. |
 | `--stall-after <time>` | How long the place may wait on its caller under no hold's words before it is said stalled; five minutes where none is given. |
-| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `instructions`, `beside`, `session`, `mode` or `programs`. `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. `programs.<program>.settings.<key>=<value>` gives one top-level key of a program's own settings, several building one entry. Its value is read as JSON where it parses and as the text written otherwise. A nested key, or one key given twice for one stage, refuses the launch. `programs.<program>.file=<path>` names a program's settings file, relative to the working directory, read once at the launch ([a program's own settings](/flume/guides/agent-settings/#a-programs-own-settings)). Repeatable. |
+| `--agent [<stage>.]<field>=<value>` | One setting of every stage's agent, or of one stage's. The field is `program`, `model`, `effort`, `instructions`, `beside`, `session`, `mode`, `keep_open` or `programs`. `effort=<word>` gives the agent's effort in its program's own word, as Claude Code's `low`, `medium`, `high`, `xhigh` or `max`, and a word its program does not take refuses the launch ([the effort](/flume/guides/agent-settings/#the-effort)). `session=<name>` opens the agent in that herdr session whatever its stream's, and `beside` opens it beside a pane before any session. `mode=<mode>` gives one of `plan`, `ask`, `edits` and `full`, and `mode.<program>=<value>` one entry of a table of programs, several building one table. A mode word and a table for the same stage refuse the launch. `keep_open=<time>` gives how long the agent is kept open for an answer once it stops short needing one, as a time, `0` keeping none; a `keep_open.<program>` refuses the launch ([how long an agent is kept open](/flume/guides/agent-settings/#how-long-an-agent-is-kept-open)). `programs.<program>.settings.<key>=<value>` gives one top-level key of a program's own settings, several building one entry. Its value is read as JSON where it parses and as the text written otherwise. A nested key, or one key given twice for one stage, refuses the launch. `programs.<program>.file=<path>` names a program's settings file, relative to the working directory, read once at the launch ([a program's own settings](/flume/guides/agent-settings/#a-programs-own-settings)). Repeatable. |
 | `--stream <stream>` | The stream the place runs in, one the host's configuration declares. Where none is named: the intent's stream, else the one the host's configuration names for the repository and kind, the repository or the kind, else `default`. Fixed at the launch. |
 | `--intent <name>` | The intent the place serves, by name. Places of one intent keep to one account while it is usable. Where none is named, the repository and base name the intent. |
 
@@ -110,14 +110,21 @@ nothing it made, when:
 - the name gives no valid branch;
 - the base's current revision cannot be read, a failed fetch among the
   causes;
-- a declaration sets `env` in an agents table, or a setting names a
-  stage the kind lacks, or a program no agent profile runs;
+- a declaration sets `env` or `keep_open` in an agents table, or a
+  setting names a stage the kind lacks, or a program no agent profile
+  runs;
 - a program's own setting is a key its agent profile reserves for
   another setting, holds a value shaped as a credential, or is given
   for a program whose profile takes none;
 - the stream is one the host's configuration does not declare;
-- the stream's multiplexer names no terminal profile flume carries.
-  A launch on another stream runs.
+- the stream's multiplexer names no terminal profile flume carries,
+  while a launch on another stream runs;
+- it finds no recipient: no `--recipient`, no `$FLUME_RECIPIENT`, no
+  terminal session it runs in, and no role standing behind its stream;
+- it would take its stream's answerer, and two roles stand behind the
+  stream, naming both;
+- it names a role's address that no source declares, or two declare,
+  and no role stands behind its stream to take its questions.
 
 ```console
 $ flume launch --kind deploy --name x --brief x
@@ -169,14 +176,17 @@ queue. Each stream's part gives its session, its multiplexer, view,
 terminal app and title, each with where it came from, and its labels.
 Then come each pool's part, each source of kinds the host declares with
 the kinds it holds or why it cannot be read, each base's count and the
-role addresses with ends pending. Each multiplexer the host binds gives
-its watch and what a tidy kept there. Last comes the host's
-configuration: whether its local layer was taken, each value it set and
-each key passed over with its pin. Where a multiplexer keeps no watch, it says so: places
-then move on only at flume's commands and when their agents go quiet.
-Under the line naming the watch, it gives what the terminal's own
-configuration lacks for flume's plugin there, such as herdr's key for
-the popup, in words you can act on.
+role addresses with ends pending. Every address an agent already holds
+is there too, with its agent, its session and where that came from, and
+what the multiplexer found there when asked. Each multiplexer the host binds gives
+what a tidy kept there. Then comes the host's configuration: whether
+its local layer was taken, each value it set and each key passed over
+with its pin. Last comes the host's watch: a caller keeping it, with
+the bound it stated and when its newest settle began, or no caller
+keeping it, and since when where one did. With none, places move on at
+flume's commands and when their agents go quiet. Under that line it gives what the terminal's own configuration
+lacks for flume's plugin there, such as herdr's key for the popup, in
+words you can act on.
 
 **`--line`** gives each place's one line and nothing else, reading only
 what a line holds: the place's held state, the change at its head and
@@ -289,8 +299,8 @@ each of its sessions runs, all of them in one reading. It reads no worktree, hea
 submission, asks no merge queue, and starts no session. None of a
 place's long words, a stop-short's, a hold's, a failure's or a
 teardown's, is in its lines or its JSON. It says what the last settle
-left: where a multiplexer keeps no watch, places move on only at
-flume's commands. It settles, starts, sends and writes nothing.
+left: where no caller keeps watch over the host, places move on only
+at flume's commands and their agents' quiet. It settles, starts, sends and writes nothing.
 
 With `--json` the answer is `{"list":{"places":[…],"streams":[…]}}`,
 the same lines and their parts. The [state
@@ -310,7 +320,7 @@ asks for a part with nothing to fill it is refused, naming the part.
 ## `flume tell`
 
 ```sh
-flume tell <place> <words> [--within <time>]
+flume tell <place> <words> [--within <time>] [--answers <key>]
 ```
 
 Hands the place's current agent the words as a prompt once it has said
@@ -318,14 +328,32 @@ it started and waits, read back as received or sent once more. flume
 waits up to ten minutes, or `--within`, for the agent to wait. It
 refuses with nothing typed when the place has no live agent, its agent
 is asking a person a question, or the words are not delivered within
-the bound. A tell starts, ends and moves no stage. Under the printed
-command every tell is refused, since flume holds no pane to type into.
+the bound. A tell starts and ends no agent, and moves no stage but
+one it answers.
+
+To a stage that ended short needing an answer, while its agent is kept
+open for it, the tell is the answer. flume types the question and the
+words into that agent's session and records the answer on the
+stop-short. The stage carries on there under the same start
+([the answer in its session](/flume/guides/callers-and-holds/#the-answer-in-its-session)).
+Once the agent is no longer kept open, the tell is refused with
+nothing typed, naming the retry that gives the answer:
+`flume retry <place> --words <answer>`. Under the printed command every
+tell is refused, since flume holds no pane to type into.
+
+`--answers <key>` names the stop-short the words answer, by the key the
+inbox and status give it, as `stage/construct/1/ended-short`. flume
+takes the answer only while the place waits on that stop-short and no
+answer was taken for it, and otherwise refuses with nothing typed,
+naming the answer taken, who gave it and when, or the move the place
+waits on now ([the answer's key](/flume/guides/callers-and-holds/#the-answers-key)).
 
 ## `flume hold`
 
 ```sh
 flume hold <place> --stage <stage> <words>
 flume hold <place> --submission <words>
+flume hold <place> --waiting <words> [--for <time>]
 ```
 
 Holds a stage not started since the current stage began, taking one
@@ -334,17 +362,30 @@ refuses a stage started, a submission made and undecided, a second hold
 and a place whose work is over. Only a retry naming the stage or the
 submission ends the hold.
 
+`--waiting` holds the move the place waits on its caller for, with
+words saying who makes it and how, so the place is not stalled while
+the hold holds. A later hold on the move replaces the words, the bound
+and since when. The hold ends once the place waits on another move or
+none. `--for <time>` gives how long it holds, as `--stall-after`
+takes a time, with no days, `24h` for a day: once that passes, the
+settle that reads it lapses the hold, records when, and stalls the
+place at once with the hold's words. With no `--for` it holds until the
+move is made. It refuses a place that waits on no move of its
+caller's, and a `--for` beside `--stage` or `--submission`
+([a hold on the waiting move](/flume/guides/callers-and-holds/#a-hold-on-the-waiting-move)).
+
 ## `flume retry`
 
 ```sh
-flume retry <place> [--stage <stage>] [--words <words>] [--force]
+flume retry <place> [--stage <stage>] [--words <words>] [--answers <key>] [--force]
 flume retry <place> --submission
 ```
 
 | Flag | |
 |---|---|
 | `--stage <stage>` | The stage to start again; the current one where none is named. The stages after it run again in order. |
-| `--words <words>` | Words for the stage's agent, after the question its stage stopped on. |
+| `--words <words>` | Words for the stage's agent, after the question its stage stopped on; the answer, to an agent kept open for it. |
+| `--answers <key>` | The key of the stop-short the words answer, as the inbox and status give it. Taken only while the place waits on that stop-short, once, with words and naming its stage; refused otherwise, before any agent is ended, naming the answer taken, who gave it and when, or the move the place waits on now ([the answer's key](/flume/guides/callers-and-holds/#the-answers-key)). |
 | `--force` | End an agent that is not quiet. |
 | `--submission` | Submit the place's head again, starting no agent. |
 
@@ -352,6 +393,17 @@ A retry ends the place's agent first, starts the stage with a fresh
 agent, and ends a hold on it. It never ends an agent whose stage has
 started or begun: the retry is refused, forced or not, naming the
 agent, and `flume stop <place>` ends it first.
+
+A retry with `--words` naming a stage that ended short needing an
+answer, while its agent is kept open for it, is the answer instead. It
+starts and ends no agent. flume types the question and the words into
+that agent's session as it types a tell, within ten minutes, and
+records the answer on the stop-short. The stage carries on there under
+the same start. An answer the agent does not take is refused with nothing
+recorded, and the stage still waits
+([the answer in its session](/flume/guides/callers-and-holds/#the-answer-in-its-session)).
+A retry with no words runs as above, the question alone in the fresh
+agent's prompt.
 
 ## `flume stop`, `finish`, `drop` and `done`
 
@@ -415,6 +467,7 @@ closed the tab chore--tidy-the-readme of ~/.local/share/flume/places/f5f5e14159a
 
 ```sh
 flume settle [<place>] [--on-quiet]
+flume settle --every <time>
 ```
 
 Moves a place, or every place, on. It reads each stage's deliverable,
@@ -422,8 +475,28 @@ starts the next stage or the waiting ones there is room for, and
 submits. It collects the merge queue's outcomes, delivers pending
 ends, wakes roles and tidies. Safe to repeat. `--on-quiet` first reads the place's
 agent until it is quiet, for up to sixty seconds; the Stop hook runs it.
-herdr's watch runs `flume settle` whenever an agent changes state,
-comes up or goes.
+No multiplexer and no plugin of one runs it.
+
+`--every <time>` settles every place as a watch over the host. `<time>`
+is the bound its runs come within, as `flume wait --timeout` takes one:
+`<n>`, `<n>s`, `<n>m` or `<n>h`. flume records in the host's state when
+the settle began and the bound, then settles every place, an agent in
+it or none, and steps each open submission's base. Run it on that bound
+from a timer of the host's or whatever else keeps time there. Every
+place then moves on within the bound with no command of yours, a place
+whose submission waits on the merge queue among them. While the newest such
+settle began less than twice its bound ago, a caller keeps watch and
+flume runs unattended: the commands that act settle no place first, and
+`flume wait` leaves the settling to the watch. Once its runs stop, the
+watch lapses and flume runs attended again. `flume status` gives the
+watch, its bound and when it last settled, or since when none is kept.
+`--every` beside a place's name, or with a bound that is no positive
+duration, is refused before anything is read:
+
+```console
+$ flume settle fix--one --every 2m
+refused: --every settles every place as a caller's watch over the host, and takes no place: fix--one was named
+```
 
 ## `flume wait`
 
@@ -457,8 +530,17 @@ flume inbox [--recipient <name>]
 
 Every end pending for the recipient, on every place of the host, a
 tidied place's kept record among them, each recorded delivered in the
-same write. Prints `nothing pending for <recipient>` when there is
-none. The recipient defaults as for `flume wait`.
+same write, each with its key. Prints `nothing pending for <recipient>`
+when there is none. The recipient defaults as for `flume wait`.
+
+Beneath them, `waiting` gives every place that waits on its caller and
+on the recipient: one it is a recipient of, one whose stop-short named
+it, or one whose stall of the move it waits on now reached it as the
+answerer. Each comes with its kind, name, stream and brief's first
+line, the move and since when, the stop-short's words, key and the
+role it asked, and a hold on the move that still holds. The inbox marks
+nothing for these
+([flume inbox](/flume/guides/callers-and-holds/#flume-inbox)).
 
 ## `flume wake`
 
@@ -466,10 +548,40 @@ none. The recipient defaults as for `flume wait`.
 flume wake <address>
 ```
 
-Wakes a role's address, `<group>/<role>`: launches the run the host's
-`[roles]` table names for it where none stands, and otherwise makes
-nothing, saying the run is live or waits. Refused for a name that is no
-address, or an address the table names nothing for.
+Wakes a role's address, `<stream>/<role>`: a role a source of the host
+declares in its roles file, for a stream the host declares
+([roles and wake](/flume/guides/roles-and-wake/)). Where no run of the
+address stands, it launches the run its source's entry gives, in the
+address's stream. Otherwise it makes nothing, saying the run is live or
+waits. It is refused, saying why, for a name that is no address, and
+for an address that no source declares or two declare, whose stream the
+host does not declare, whose entry is at fault, or that its source
+declares carried, its run on another host:
+
+```console
+$ flume wake east/reviewer
+refused: east/reviewer wakes nothing: no source of the host declares east/reviewer
+$ flume wake north/planner
+refused: north/planner wakes nothing on this host: acme declares it carried, its run on another host
+```
+
+An address its source gives an agent that already runs
+([an address an agent already holds](/flume/guides/roles-and-wake/#an-address-an-agent-already-holds))
+launches nothing. The wake settles as any act does, then answers that
+the agent holds the address. It names the agent, its session and where
+that came from, and what the multiplexer found there, with the ends
+pending for it beneath:
+
+```console
+$ flume wake east/design
+east/design is held by the standing agent east-design in the session acme (the entry's), none of that name there, so nothing was launched; 1 end pending
+  ~/.local/share/flume/places/f5f5e14159a8/fix--the-parser-reads-tabs: submission landed d185a879b51dba33555c036392b50443f4dfc5e8
+```
+
+With `--json` the answer is `{"woken":{…}}` for a run and
+`{"held":{…}}` for an agent that holds the address, as the [state
+reference](/flume/reference/state/#the-answer-of-flume-wake-json)
+gives them.
 
 ## `flume kinds lock`
 
@@ -615,11 +727,12 @@ server.
 
 These run inside an agent flume started, where `FLUME_AGENT` and
 `FLUME_SECRET` name its start. Elsewhere they refuse, or in the hook's
-case do nothing.
+case do nothing but `session-start`, which collects for the session
+([a session of your own](/flume/guides/claude-code/#a-session-of-your-own)).
 
 | Command | |
 |---|---|
-| `flume needs <words>` | The stage ends short with the words: it needs an answer. `--found` says it found work it cannot deliver past instead. |
+| `flume needs [--found] [--to <role or address>] <words>` | The stage ends short with the words: it needs an answer. `--found` says it found work it cannot deliver past instead. `--to` names the role the words are for, one the stage's prompt lists: a role alone, `<role>`, is the place's own stream's, and an address, `<stream>/<role>`, any stream's. The end goes to that role alone, in place of the place's recipients; a name the prompt did not list is refused, naming those it did, and the stage goes on ([asking a role](/flume/guides/callers-and-holds/#asking-a-role)). Where its multiplexer can type into a running agent, the agent is kept open for the answer, but for found work from the kind's last stage ([the agent kept open](/flume/guides/callers-and-holds/#the-agent-kept-open)). |
 | `flume ack started --session <id> --transcript <path> --plugin-version <v> [--source <how>]` | The agent started under its identity and secret, in a session with a transcript. `--source` says how the session began, `startup` where none is given. flume takes it only where the agent runs the program its start recorded and every variable of the record matches. Otherwise it refuses, naming each variable that differed and whether the program did, and starts a settle of the place. |
 | `flume ack received --digest <hex> [--mode <mode>]` | The agent received a prompt, by the SHA-256 digest of its text with paste tags taken off and whitespace collapsed. At the start's first prompt, where its start passed a mode, flume takes it only where `--mode` names that mode as the program names it. Otherwise it refuses, naming the mode asked and the one given, records the start begun without its settings and starts a settle of the place. A later prompt compares no mode. |
 | `flume hook <event>` | What the hook for the event does with the input on standard input: `session-start`, `user-prompt-submit`, `pre-tool-use`, `permission-request`, `post-tool-use`, `stop`, `stop-failure` or `session-end`. Any other event does nothing. It always exits `0`. |

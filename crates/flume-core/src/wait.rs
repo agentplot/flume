@@ -1,13 +1,14 @@
-//! The wait by place and the inbox (43, 119, 122; design 9; core.13,
-//! core.25). A wait names a place and its stage or its submission, and
+//! The wait by place and the inbox (43, 119, 122, 208; design 9;
+//! core.13, core.25). A wait names a place and its stage or its submission, and
 //! the recipient it waits as: it answers at once with the newest end of
 //! that stage's current start or that submission pending for the
 //! recipient, recording it delivered by the wait; answers one already
 //! delivered as a read, delivering nothing again; and otherwise follows
-//! the host's state until such an end comes or its timeout passes. Under
-//! a terminal that keeps watch it reads the store alone, and the watch
-//! moves the place; under one that keeps none it settles every place
-//! before each reading after its first, as every acting command does,
+//! the host's state until such an end comes or its timeout passes. While
+//! a caller keeps watch over the host it reads the store alone, and the
+//! caller's settles move the place; while none does it settles every
+//! place before each reading after its first, whatever terminal the
+//! host binds, as every acting command does,
 //! the first reading answering at once an end that stands pending
 //! before a settle could deliver it by notice and tidy its place away. The inbox gives
 //! every end pending for a recipient, of every place on the host, a
@@ -17,7 +18,8 @@
 //! environment's, else the role a role's run serves, else the calling
 //! session as the terminal names it, as a launch's (7, 132).
 
-use crate::{Answer, Collected, EndStatus, Engine, Step};
+use crate::held::stop_short_waited;
+use crate::{end_words, Answer, Collected, EndStatus, Engine, Step, WaitingPlace};
 use flume_seams::*;
 
 /// How often a wait reads the host's state again (design 9).
@@ -67,7 +69,7 @@ impl Engine {
                 Ok(None) => {}
             }
             if !watched {
-                self.settle_every();
+                self.settle_all();
                 match self.waited(place, of, recipient) {
                     Err(reason) => return Answer::refused(reason),
                     Ok(Some(answer)) => return answer,
@@ -115,11 +117,10 @@ impl Engine {
             return Ok(None);
         };
         let id = held.place.id.clone();
-        let pending = held.place.recipients.iter().any(|named| named == recipient)
-            && held
-                .ends
-                .iter()
-                .any(|end| end.of.key() == key && !end.delivered_to(recipient));
+        let pending = held
+            .ends
+            .iter()
+            .any(|end| end.of.key() == key && end.pending_to(&held.place.recipients, recipient));
         let mut delivered = false;
         let mut answered = held;
         if pending {
@@ -152,10 +153,7 @@ impl Engine {
         Ok(Some(Answer::Waited {
             place: place.clone(),
             recipient: recipient.into(),
-            end: Some(EndStatus {
-                pending_for: end.pending(&answered.place.recipients),
-                end: end.clone(),
-            }),
+            end: Some(EndStatus::of(end, &answered.place.recipients)),
             delivered,
         }))
     }
@@ -177,15 +175,21 @@ impl Engine {
 
     /// Collects every end pending for `recipient` of every place on the
     /// host, each recorded delivered by the inbox in the write that reads
-    /// it; an act on places, so under a terminal that keeps no watch it
-    /// settles every place first (43, 119; design 9).
+    /// it, and gives every place that waits on its caller and on
+    /// `recipient`, marking nothing for it; an act on places, so while no
+    /// caller keeps watch it settles every place first (43, 119, 130, 193,
+    /// 208; design 9).
     pub fn inbox(&self, recipient: &str) -> Answer {
         self.settle_attended();
         let mut ends = vec![];
+        let mut waiting = vec![];
         for read in self.store.read_every() {
             let held = read.state;
-            if !held.place.recipients.iter().any(|named| named == recipient)
-                || held.ends.iter().all(|end| end.delivered_to(recipient))
+            waiting.extend(waits_on(&held, recipient));
+            if !held
+                .ends
+                .iter()
+                .any(|end| end.pending_to(&held.place.recipients, recipient))
             {
                 continue;
             }
@@ -193,8 +197,9 @@ impl Engine {
             let collected = self
                 .update(&held.place.id, |held| {
                     let mut collected = vec![];
+                    let recipients = held.place.recipients.clone();
                     for end in &mut held.ends {
-                        if end.delivered_to(recipient) {
+                        if !end.pending_to(&recipients, recipient) {
                             continue;
                         }
                         end.deliveries.push(Delivery {
@@ -202,10 +207,7 @@ impl Engine {
                             at: now,
                             by: DeliveredBy::Inbox,
                         });
-                        collected.push(EndStatus {
-                            pending_for: end.pending(&held.place.recipients),
-                            end: end.clone(),
-                        });
+                        collected.push(EndStatus::of(end, &held.place.recipients));
                     }
                     if collected.is_empty() {
                         Step::Keep(collected)
@@ -225,14 +227,209 @@ impl Engine {
         Answer::Inbox {
             recipient: recipient.into(),
             ends,
+            waiting,
         }
     }
 }
 
+impl Engine {
+    /// The inbox run as the calling session the terminal names, never as
+    /// the caller's environment's recipient or a role's run's address, so a
+    /// person's session never takes a role's ends; none where no terminal
+    /// the host binds names one, as under the printed command (43, 190,
+    /// C.4; design 9).
+    pub fn session_inbox(&self) -> Option<Answer> {
+        let session = self.caller_session()?;
+        Some(self.inbox(&session))
+    }
+}
+
+/// The words a session flume did not start is given at its start, as its
+/// added context, from the inbox it ran there: each end the inbox
+/// collected, and each place that waits on the session with the
+/// question, its key, its agent kept open and until when, and the three
+/// ways on: answer it with the key, by a retry or, while its agent is kept
+/// open, a tell; hold the move with words; or leave it to the answerer
+/// behind its stream at its stall. None where the inbox gives nothing (43,
+/// 130, 193, 198, C.4; design 9).
+pub fn session_words(answer: &Answer) -> Option<String> {
+    let Answer::Inbox {
+        recipient,
+        ends,
+        waiting,
+    } = answer
+    else {
+        return None;
+    };
+    if ends.is_empty() && waiting.is_empty() {
+        return None;
+    }
+    let mut lines = vec![format!(
+        "flume, at this session's start: what waits on it, {recipient}, from `flume inbox`."
+    )];
+    if !ends.is_empty() {
+        lines.push(String::new());
+        lines.push("Ends delivered to this session now:".into());
+        for collected in ends {
+            let short = format!("{}--{}", collected.kind, collected.name);
+            lines.push(format!(
+                "- {short} {} [{}]; read: flume status {short}",
+                end_words(&collected.end.end.of),
+                collected.end.key
+            ));
+        }
+    }
+    for place in waiting {
+        lines.push(String::new());
+        lines.extend(waiting_words(place));
+    }
+    Some(lines.join("\n"))
+}
+
+/// One waiting place in [`session_words`]: what it waits on and since
+/// when, the question by its key, its agent kept open or let go, its hold,
+/// and the three ways on (130, 198; design 9).
+fn waiting_words(place: &WaitingPlace) -> Vec<String> {
+    let short = format!("{}--{}", place.kind, place.name);
+    let on = &place.waiting_on;
+    let brief = place
+        .brief
+        .as_ref()
+        .map(|brief| format!(" ({brief})"))
+        .unwrap_or_default();
+    let since = on
+        .since
+        .map(|since| format!(" since {since}"))
+        .unwrap_or_default();
+    let mut lines = vec![format!(
+        "{short}{brief}, in the stream {}, waits on {}{since}.",
+        place.stream,
+        on.move_words()
+    )];
+    match &place.stop_short {
+        Some(stop_short) => {
+            let needs = match stop_short.needs {
+                Some(StopKind::FoundWork) => "found work",
+                _ => "needs an answer",
+            };
+            let asking = stop_short
+                .addressee
+                .as_ref()
+                .map(|addressee| format!(", asking {addressee}"))
+                .unwrap_or_default();
+            lines.push(format!(
+                "Its stop-short {} {needs}{asking}:",
+                stop_short.key
+            ));
+            let words = stop_short.words.as_deref().unwrap_or("(no words)");
+            lines.extend(words.lines().map(|line| format!("  {line}")));
+        }
+        None => {
+            if let Some(words) = &on.words {
+                lines.push(format!("Its words: {words}"));
+            }
+        }
+    }
+    if let Some(until) = on.open_until {
+        lines.push(format!(
+            "Its agent is kept open for the answer until {until}."
+        ));
+    } else if let Some(closed) = &on.closed {
+        lines.push(format!(
+            "Its agent kept open for the answer was let go at {}; a retry starts a fresh agent with the question and the answer.",
+            closed.at
+        ));
+    }
+    if let Some(hold) = &place.hold {
+        let bound = hold
+            .bound
+            .map(|bound| format!(" for {bound} seconds"))
+            .unwrap_or_default();
+        lines.push(format!(
+            "The move is on hold since {}{bound}: {}",
+            hold.since,
+            hold.words.as_deref().unwrap_or("(no words)")
+        ));
+    }
+    lines.push("Ways on:".into());
+    let answers = place
+        .stop_short
+        .as_ref()
+        .filter(|_| on.why == Waits::Answer);
+    match (answers, on.act, on.stage.as_deref()) {
+        (Some(stop_short), _, Some(stage)) => {
+            lines.push(format!(
+                "- answer it, naming its key: flume retry {short} --stage {stage} --answers {} --words \"<answer>\"",
+                stop_short.key
+            ));
+            if on.open_until.is_some() {
+                lines.push(format!(
+                    "  or, while its agent is kept open: flume tell {short} --answers {} \"<answer>\"",
+                    stop_short.key
+                ));
+            }
+        }
+        (_, Act::Done, _) => lines.push(format!("- make the move: flume done {short}")),
+        (_, Act::Answer, _) => {
+            lines.push("- make the move: answer the dialog in its agent's own pane".into());
+        }
+        (_, _, Some(stage)) => {
+            lines.push(format!(
+                "- make the move: flume retry {short} --stage {stage}"
+            ));
+        }
+        (_, _, None) => {
+            lines.push(format!("- make the move: flume retry {short} --submission"));
+        }
+    }
+    lines.push(format!(
+        "- hold the move with your words, saying who has it: flume hold {short} \"<words>\" --waiting --for <time>"
+    ));
+    lines.push("- leave it: once it stalls, the answerer behind its stream has it.".into());
+    lines
+}
+
+/// The place `held` as the inbox gives it waiting on `recipient`: where it
+/// waits on its caller, and `recipient` is a recipient of it, was named by
+/// the stop-short the move answers, or was given a stall of the move as the
+/// answerer behind its stream; none otherwise (43, 130, 193; design 9).
+fn waits_on(held: &HeldState, recipient: &str) -> Option<WaitingPlace> {
+    let on = &held.waiting.as_ref()?.on;
+    let place = &held.place;
+    let stop_short = stop_short_waited(held, on);
+    let named = stop_short
+        .as_ref()
+        .and_then(|stop_short| stop_short.addressee.as_deref())
+        == Some(recipient);
+    // A stall of this move, not of one the place made before it: its
+    // since is the move's, or a lapsed hold's after it (130).
+    let answered = held.ends.iter().any(|end| {
+        matches!(
+            &end.of,
+            EndOf::Stall { since, answerer: Some(answerer), .. }
+                if answerer == recipient && on.since.is_none_or(|from| *since >= from)
+        )
+    });
+    let reached = place.recipients.iter().any(|named| named == recipient);
+    if !(reached || named || answered) {
+        return None;
+    }
+    Some(WaitingPlace {
+        place: PlaceId::new(place.location.clone()),
+        kind: place.kind.name.clone(),
+        name: place.name.clone(),
+        stream: place.stream.name.clone(),
+        brief: place.brief_line().map(str::to_string),
+        waiting_on: on.clone(),
+        stop_short,
+        hold: held.waiting_hold().cloned(),
+    })
+}
+
 /// The key of the newest end of what a wait waits on: of the stage's
-/// current start, or of the place's current submission; none where it
-/// has none yet, refused where the place has no such stage or its kind
-/// does not land.
+/// current start since the last answer it took in its session, or of the
+/// place's current submission; none where it has none yet, refused where
+/// the place has no such stage or its kind does not land.
 fn newest(held: &HeldState, of: &WaitFor) -> Result<Option<String>, String> {
     let place = &held.place.id;
     let ends = &held.ends;
@@ -241,9 +438,19 @@ fn newest(held: &HeldState, of: &WaitFor) -> Result<Option<String>, String> {
             let Some(stage) = held.stages.iter().find(|stage| &stage.name == name) else {
                 return Err(format!("the place {place} has no stage {name}"));
             };
-            let start = stage.start.as_ref().map_or(stage.starts, |start| start.n);
+            // An end of the current start read after the last answer it
+            // took in its session: a wait after an answer never answers the
+            // stop-short that answer answered (42, 43).
+            let (start, answered) = stage
+                .start
+                .as_ref()
+                .map_or((stage.starts, 0), |start| (start.n, start.answered));
             ends.iter().rev().find(|end| {
-                matches!(&end.of, EndOf::Stage { stage, start: n, .. } if stage == name && *n == start)
+                matches!(
+                    &end.of,
+                    EndOf::Stage { stage, start: n, answered: count, .. }
+                        if stage == name && *n == start && *count == answered
+                )
             })
         }
         WaitFor::Submission => {

@@ -7,8 +7,13 @@
 //! a place whose kind holds a conversation is kept while a process runs
 //! its last conversation start's session (207; core.18);
 //! its held state and folder go last, its document alone kept apart from
-//! a live place's while an end of it stands pending (43, 62).
+//! a live place's while an end of it stands pending (43, 62). A base
+//! place has no worktree to remove and no teardown to run: its branch is
+//! closed into its base by the merge queue, never by the place seam, and
+//! one the merge queue keeps is named once with its words (3, 64 to 67,
+//! 204, 206; core.18).
 
+use crate::base::base_place;
 use crate::start::Starts;
 use crate::{Answer, BranchKept, Engine, KeptPlace, Step, TerminalTidied, Tidied};
 use flume_seams::*;
@@ -76,6 +81,7 @@ impl Engine {
             return false;
         };
         let at = place.place_ref();
+        let base = base_place(&place.kind);
         if let Phase::Over { .. } = held.phase {
             if let (true, Some(queue)) = (place.kind.lands, &bound.merge_queue) {
                 if let SubmissionRead::CouldNotRead { reason } = crate::submit::on_base(
@@ -128,7 +134,11 @@ impl Engine {
                     );
                 }
             }
-            match bound.place.read(&at) {
+            match if base {
+                PlaceRead::Gone
+            } else {
+                bound.place.read(&at)
+            } {
                 PlaceRead::Gone => {}
                 PlaceRead::CouldNotRead { reason } => {
                     return self.keep(id, Kept::Unreadable { reason }, tidied)
@@ -151,16 +161,35 @@ impl Engine {
                 Step::Write(())
             });
         }
-        if let BranchRemoved::Kept { commits } =
-            bound
+        let removed = match (base, &bound.merge_queue) {
+            (true, Some(queue)) => {
+                match queue.close(&place.repository, &place.branch, &place.base) {
+                    BranchClosed::Removed => BranchRemoved::Removed,
+                    BranchClosed::Gone => BranchRemoved::Gone,
+                    BranchClosed::Kept { reason } => BranchRemoved::Refused { reason },
+                }
+            }
+            (true, None) => BranchRemoved::Refused {
+                reason: format!("{} binds no merge queue to close it", place.repository),
+            },
+            (false, _) => bound
                 .place
-                .remove_branch(&place.repository, &place.branch, &place.base)
-        {
-            tidied.branches_kept.push(BranchKept {
+                .remove_branch(&place.repository, &place.branch, &place.base),
+        };
+        match removed {
+            BranchRemoved::Kept { commits } => tidied.branches_kept.push(BranchKept {
                 place: id.clone(),
                 branch: place.branch.clone(),
                 commits,
-            });
+                reason: None,
+            }),
+            BranchRemoved::Refused { reason } => tidied.branches_kept.push(BranchKept {
+                place: id.clone(),
+                branch: place.branch.clone(),
+                commits: vec![],
+                reason: Some(reason),
+            }),
+            BranchRemoved::Removed | BranchRemoved::Gone => {}
         }
         // Each terminal its agents opened in tidies what it made for the
         // place, whatever the configuration names by now (137, 190).

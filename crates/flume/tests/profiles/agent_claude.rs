@@ -2,9 +2,13 @@
 //! agent seam's scenarios against it over fixture transcripts and hook
 //! records of Claude Code 2.1.296, the release `devenv.nix` pins; the
 //! command for a code stage, its instructions in a file of the start's
-//! own, and for a stage in a mode; the command for a stage with own
+//! own, and for a stage in a mode; the command for a stage with no
+//! effort and at `xhigh`, the five efforts it takes and two the release
+//! reads otherwise, and status naming the account's variable over an
+//! effort the host gave; the command for a stage with own
 //! settings and with none, the keys the profile reserves, a people's
-//! settings file named by the host through the core, the keys it takes
+//! settings file named by the host through the core, `effortLevel` in
+//! the host's table and in its named file, the keys it takes
 //! as written and a repository's tagline among them; the map of
 //! flume's modes and the release's own, and the mode read back; the
 //! plugin an agent loads, written once per version; a prompt queued while
@@ -25,11 +29,11 @@ use flume::profiles::agent::claude::{
     as_received, digest, written, Claude, NAME, PLUGIN, STANDING_PROMPT_FLAG, TRUST_CONFIRM,
     TRUST_FOCUS, TRUST_NEXT, TRUST_QUESTION, VERSION,
 };
-use flume::profiles::agent::claude::{carry, live, mode, settings, transcript};
+use flume::profiles::agent::claude::{carry, effort, live, mode, settings, transcript};
 use flume::profiles::{core_over, BuiltIn, DEFAULT_PROGRAM};
 use flume_conformance::scenario::pass_all;
-use flume_conformance::seams::agent::{self, AgentHarness, Modes, OwnWay};
-use flume_core::Answer;
+use flume_conformance::seams::agent::{self, AgentHarness, Efforts, Modes, OwnWay};
+use flume_core::{Answer, EffortStatus};
 use flume_seams::*;
 use serde_json::{json, Value};
 use std::cell::RefCell;
@@ -548,6 +552,17 @@ impl AgentHarness for Harness {
         }
     }
 
+    /// 2.1.296's five `--effort` words, and `CLAUDE_CODE_EFFORT_LEVEL`
+    /// read over them (197, C.4).
+    fn efforts(&self) -> Efforts {
+        Efforts {
+            words: ["low", "medium", "high", "xhigh", "max"]
+                .map(String::from)
+                .to_vec(),
+            variable: Some("CLAUDE_CODE_EFFORT_LEVEL"),
+        }
+    }
+
     /// The JSON object of the file the command names by `--settings`, as
     /// the release reads one, from the files the command lists; none where
     /// it names none (195, C.4).
@@ -721,6 +736,93 @@ fn the_command_passes_the_mode_it_is_given() {
 }
 
 #[test]
+fn the_command_for_a_stage_with_no_effort() {
+    // Settings giving no effort start `claude` with no `--effort`, the
+    // account's own configuration deciding (197).
+    let harness = Harness::new();
+    let command = harness.seam.command(
+        &harness.folder(),
+        &Settings {
+            model: Some("opus".into()),
+            ..Settings::default()
+        },
+        Some("acceptEdits"),
+        &BTreeMap::new(),
+        None,
+        &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
+        &harness.place(),
+        &identity("code"),
+        &Secret("s".into()),
+        "x",
+    );
+    assert!(
+        !command.args.iter().any(|arg| arg == effort::FLAG),
+        "an effort passed where none was given: {:?}",
+        command.args
+    );
+    assert_eq!(
+        command.args[2..],
+        ["--model", "opus", "--permission-mode", "acceptEdits"]
+    );
+}
+
+#[test]
+fn the_command_for_a_stage_at_xhigh() {
+    // Settings giving the model `opus` and the effort `xhigh` start
+    // `claude` with `--model opus --effort xhigh`, the effort right after
+    // the model and before the mode (S103, 88, C.4).
+    let harness = Harness::new();
+    let command = harness.seam.command(
+        &harness.folder(),
+        &Settings {
+            model: Some("opus".into()),
+            effort: Some("xhigh".into()),
+            ..Settings::default()
+        },
+        Some("acceptEdits"),
+        &BTreeMap::new(),
+        None,
+        &BTreeMap::from([("PATH".into(), "/nowhere".into())]),
+        &harness.place(),
+        &identity("code"),
+        &Secret("s".into()),
+        "x",
+    );
+    assert_eq!(command.program, NAME);
+    assert_eq!(
+        command.args[2..],
+        [
+            "--model",
+            "opus",
+            "--effort",
+            "xhigh",
+            "--permission-mode",
+            "acceptEdits"
+        ]
+    );
+}
+
+#[test]
+fn each_of_the_five_and_two_the_release_reads_otherwise() {
+    // The profile takes 2.1.296's five `--effort` words and refuses `med`
+    // and `ultracode`, which the release reads as `medium` and `xhigh`,
+    // each naming it, `claude` and the five; it names the variable the
+    // release reads over `--effort` (197, C.4).
+    let seam = Harness::new().seam;
+    for word in ["low", "medium", "high", "xhigh", "max"] {
+        assert_eq!(seam.effort(word), Ok(()), "{word}");
+    }
+    for word in ["med", "ultracode"] {
+        let words = seam.effort(word).expect_err(word);
+        assert_eq!(
+            words,
+            format!("`{word}` is no effort claude takes: low, medium, high, xhigh or max")
+        );
+    }
+    assert_eq!(seam.effort_variable(), Some("CLAUDE_CODE_EFFORT_LEVEL"));
+}
+
+#[test]
 fn the_command_for_a_stage_in_edits() {
     // Settings giving `edits` start `claude` with `--permission-mode
     // acceptEdits`: the entry the program's name takes, mapped by the
@@ -844,7 +946,7 @@ fn the_command_for_a_stage_with_none() {
 fn each_reserved_key() {
     // Each key 2.1.296's settings hold that another setting, the account
     // or a person owns, `permissions.defaultMode` by its path, with its
-    // owner (34, 144, 162, 172, 195).
+    // owner (34, 144, 162, 172, 195, 197).
     let reserved: Vec<(String, String)> = Harness::new()
         .seam
         .reserved()
@@ -859,6 +961,7 @@ fn each_reserved_key() {
         [
             ("env", account),
             ("model", "flume's `model`"),
+            ("effortLevel", "flume's `effort`"),
             ("permissions.defaultMode", "flume's `mode`"),
             ("apiKeyHelper", sign_in),
             ("awsAuthRefresh", sign_in),
@@ -875,40 +978,20 @@ fn each_reserved_key() {
     );
 }
 
-#[test]
-fn a_peoples_settings_file() {
-    // A host names the file its people's sessions get: through the core,
-    // the command's file holds its status line, renderer, hooks and
-    // permissions' rules, and none of its `env`, its
-    // `permissions.defaultMode` or its acceptance of the bypass warning,
-    // which status names left out with their owners (S100, 195).
-    let repository = Repository::new("peoples-file");
+/// A `survey` of one code stage launched over the scratch repository
+/// `name` under the host's configuration `config`, each of `files`
+/// written beside it by its name, through the core with the built-in
+/// profiles: the repository, which holds the scratch, and the launch's
+/// answer.
+fn survey_under(name: &str, config: &str, files: &[(&str, Value)]) -> (Repository, Answer) {
+    let repository = Repository::new(name);
     let scratch = &repository.scratch;
-    let line = json!({ "type": "command", "command": "~/bin/line" });
-    let hooks = json!({ "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] });
-    std::fs::write(
-        scratch.path("people.json"),
-        json!({
-            "tui": "fullscreen",
-            "statusLine": line,
-            "hooks": hooks,
-            "env": { "EDITOR": "vi" },
-            "permissions": {
-                "allow": ["Bash(git log:*)"],
-                "defaultMode": "bypassPermissions"
-            },
-            "skipDangerousModePermissionPrompt": true
-        })
-        .to_string(),
-    )
-    .expect("the people's file");
-    let config = scratch.path("config.toml");
-    std::fs::write(
-        &config,
-        "[agents.programs.claude]\nfile = \"people.json\"\n",
-    )
-    .expect("the host's configuration");
-    let config = HostConfig::read(&config).expect("the configuration read");
+    for (file, text) in files {
+        std::fs::write(scratch.path(file), text.to_string()).expect("a file of the host's");
+    }
+    let path = scratch.path("config.toml");
+    std::fs::write(&path, config).expect("the host's configuration");
+    let config = HostConfig::read(&path).expect("the configuration read");
     let home = scratch.path("home");
     std::fs::create_dir_all(&home).expect("a scratch home");
     let path = std::env::var("PATH").unwrap_or_default();
@@ -946,8 +1029,40 @@ agents = [{}]
         base: "main".into(),
         brief: Some("look around".into()),
         declaration: Some(scratch.path("kinds/kinds.toml").to_string_lossy().into()),
+        recipients: vec!["caller".into()],
         ..Launch::default()
     });
+    (repository, answer)
+}
+
+#[test]
+fn a_peoples_settings_file() {
+    // A host names the file its people's sessions get: through the core,
+    // the command's file holds its status line, renderer, hooks and
+    // permissions' rules, and none of its `env`, its
+    // `permissions.defaultMode` or its acceptance of the bypass warning,
+    // which status names left out with their owners (S100, 195).
+    let line = json!({ "type": "command", "command": "~/bin/line" });
+    let hooks = json!({ "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] });
+    let (repository, answer) = survey_under(
+        "peoples-file",
+        "[agents.programs.claude]\nfile = \"people.json\"\n",
+        &[(
+            "people.json",
+            json!({
+                "tui": "fullscreen",
+                "statusLine": line,
+                "hooks": hooks,
+                "env": { "EDITOR": "vi" },
+                "permissions": {
+                    "allow": ["Bash(git log:*)"],
+                    "defaultMode": "bypassPermissions"
+                },
+                "skipDangerousModePermissionPrompt": true
+            }),
+        )],
+    );
+    let scratch = &repository.scratch;
     let Answer::Launched { place } = answer else {
         panic!("the launch answered otherwise: {answer:?}");
     };
@@ -997,6 +1112,119 @@ agents = [{}]
             })
             .collect::<Vec<_>>()
         )]
+    );
+}
+
+#[test]
+fn effort_level_written_in_a_table() {
+    // The host's `[agents.programs.claude.settings]` giving `effortLevel`
+    // refuses the launch naming the key, `host` and flume's `effort`,
+    // which gives the effort (195, 197).
+    let (_repository, answer) = survey_under(
+        "effort-level-table",
+        "[agents.programs.claude.settings]\neffortLevel = \"xhigh\"\n",
+        &[],
+    );
+    let reason = answer
+        .refusal()
+        .unwrap_or_else(|| panic!("the launch answered otherwise: {answer:?}"));
+    for named in [
+        "`programs.claude.settings.effortLevel`",
+        "`host`",
+        "flume's `effort`",
+    ] {
+        assert!(reason.contains(named), "{named} in the refusal: {reason}");
+    }
+}
+
+#[test]
+fn effort_level_in_a_named_file() {
+    // The host's named file giving `effortLevel`, `maxEffortLevel` and
+    // `tui`: the agent's `--settings` file holds `maxEffortLevel` and
+    // `tui`, and status names `effortLevel` left out with the file,
+    // `host` and flume's `effort` (195, 197).
+    let (repository, answer) = survey_under(
+        "effort-level-file",
+        "[agents.programs.claude]\nfile = \"efforts.json\"\n",
+        &[(
+            "efforts.json",
+            json!({
+                "effortLevel": "xhigh",
+                "maxEffortLevel": "high",
+                "tui": "fullscreen"
+            }),
+        )],
+    );
+    let Answer::Launched { place } = answer else {
+        panic!("the launch answered otherwise: {answer:?}");
+    };
+    let own = place
+        .agent
+        .expect("the stage's agent")
+        .own
+        .expect("own settings in status");
+    let passed = own.passed.expect("own settings passed");
+    let file = passed
+        .strip_prefix("--settings ")
+        .unwrap_or_else(|| panic!("passed otherwise: {passed}"));
+    let text = std::fs::read_to_string(file).expect("the start's own file");
+    assert_eq!(
+        serde_json::from_str::<Value>(&text).expect("JSON"),
+        json!({ "maxEffortLevel": "high", "tui": "fullscreen" })
+    );
+    let read = repository
+        .scratch
+        .path("efforts.json")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        own.files
+            .iter()
+            .map(|file| (file.layer, file.read.clone(), file.left_out.clone()))
+            .collect::<Vec<_>>(),
+        [(
+            Layer::Host,
+            read,
+            vec![Reserved {
+                key: "effortLevel".into(),
+                owner: "flume's `effort`".into(),
+            }]
+        )]
+    );
+}
+
+#[test]
+fn an_effort_the_accounts_variable_outranks() {
+    // The host's `[agents]` giving `xhigh` to an agent whose account's
+    // `env` names `CLAUDE_CODE_EFFORT_LEVEL`: the command passes
+    // `--effort xhigh`, and status gives the effort from `host`, passed
+    // and not read back, outranked by the variable named and never its
+    // value (56, 197; core.30).
+    let (_repository, answer) = survey_under(
+        "effort-outranked",
+        "[host]\npool = \"work\"\n\n[agents]\neffort = \"xhigh\"\n\n[pools.work]\nstrategy = \"fill-first\"\naccounts = [{ name = \"work-1\", program = \"claude\", env = { CLAUDE_CODE_EFFORT_LEVEL = \"medium\" } }]\n",
+        &[],
+    );
+    let json = answer.to_json();
+    let Answer::Launched { place } = answer else {
+        panic!("the launch answered otherwise: {answer:?}");
+    };
+    let agent = place.agent.expect("the stage's agent");
+    let printed = agent.printed.clone().expect("the command printed");
+    assert!(printed.contains("--effort xhigh"), "{printed}");
+    assert_eq!(
+        agent.effort,
+        Some(EffortStatus {
+            word: "xhigh".into(),
+            layer: Layer::Host,
+            passed: "xhigh".into(),
+            read_back: false,
+            outranked_by: Some(effort::VARIABLE.into()),
+        })
+    );
+    assert!(
+        !json.contains("medium") && !printed.contains("medium"),
+        "the variable's value in status: {json}"
     );
 }
 

@@ -15,11 +15,13 @@ fn settings() -> Settings {
     Settings {
         program: Some("agent".into()),
         model: Some("large".into()),
+        effort: None,
         instructions: Some("be brief".into()),
         beside: Some("operator".into()),
         mode: None,
         session: Some("office".into()),
         programs: BTreeMap::new(),
+        keep_open: None,
     }
 }
 
@@ -247,6 +249,7 @@ fn held() -> HeldState {
             hold_submission: true,
             hold_words: BTreeMap::from([("review".into(), "until the design is ruled".into())]),
             recipients: vec!["operator".into(), "role:planner".into()],
+            recipients_from: Some(RecipientsFrom::Launch),
             stream: StreamHeld {
                 name: "work".into(),
                 from: StreamFrom::HostRepository,
@@ -275,6 +278,7 @@ fn held() -> HeldState {
                 report: Some("/s/conclusion.md".into()),
                 words: Some("which design?".into()),
                 needs: Some(StopKind::FoundWork),
+                addressee: Some("east/planner".into()),
                 last_words: Some("I could not sign in".into()),
                 commits: vec![Revision::new("c3")],
                 screen: Some("Bypass Permissions mode".into()),
@@ -286,6 +290,8 @@ fn held() -> HeldState {
                     tasks: vec!["2.1 do it".into()],
                 })),
                 unsettled: Some(Box::new(unsettled())),
+                open_until: None,
+                closed: None,
             }),
             room: Some(RoomWait {
                 live_unread: None,
@@ -379,6 +385,7 @@ fn held() -> HeldState {
                     title: Some("Task groups".into()),
                     tasks: vec!["2.1 add the groups".into(), "2.2 read them".into()],
                 }),
+                may_name: vec!["east/ops".into(), "west/ops".into()],
                 opening: Some("4242@Thu Oct 30 15:45:50 2026".into()),
                 dialog: Some(Dialog {
                     words: "New MCP server found in .mcp.json: docs".into(),
@@ -411,6 +418,7 @@ fn held() -> HeldState {
                     }],
                     passed: Some("--own /state/places/x/agent/own.json".into()),
                 }),
+                answered: 0,
             }),
             since: Some(120),
         }],
@@ -493,6 +501,8 @@ fn held() -> HeldState {
                 why: Waits::OnHold,
                 since: Some(140),
                 words: Some("until the design is ruled".into()),
+                open_until: None,
+                closed: None,
             },
             stalled: true,
         }),
@@ -540,11 +550,22 @@ fn holds_put() -> Vec<Hold> {
             },
             words: Some("until the design is ruled".into()),
             since: 10,
+            bound: None,
+            lapsed: None,
         },
         Hold {
             on: HoldOn::Submission,
             words: None,
             since: 10,
+            bound: None,
+            lapsed: None,
+        },
+        Hold {
+            on: HoldOn::Waiting,
+            words: Some("passed to east/design".into()),
+            since: 40,
+            bound: Some(3600),
+            lapsed: Some(3640),
         },
     ]
 }
@@ -557,10 +578,11 @@ fn ends() -> Vec<EndHeld> {
                 start: 2,
                 state: StageState::Delivered,
                 quiet_from: None,
-                end: StageEnd {
+                answered: 0,
+                end: Box::new(StageEnd {
                     head: Some(Revision::new("c3")),
                     ..StageEnd::default()
-                },
+                }),
             },
             read_at: 140,
             deliveries: vec![
@@ -575,6 +597,8 @@ fn ends() -> Vec<EndHeld> {
                     by: DeliveredBy::Inbox,
                 },
             ],
+            answer: None,
+            claim: None,
         },
         EndHeld {
             of: EndOf::Stage {
@@ -582,15 +606,18 @@ fn ends() -> Vec<EndHeld> {
                 start: 3,
                 state: StageState::Stuck,
                 quiet_from: Some(160),
-                end: StageEnd {
+                answered: 0,
+                end: Box::new(StageEnd {
                     last_words: Some("I am waiting".into()),
                     commits: vec![Revision::new("c4")],
                     screen: Some("the agent's screen".into()),
                     ..StageEnd::default()
-                },
+                }),
             },
             read_at: 170,
             deliveries: vec![],
+            answer: None,
+            claim: None,
         },
         EndHeld {
             of: EndOf::Submission {
@@ -607,14 +634,27 @@ fn ends() -> Vec<EndHeld> {
                 at: 181,
                 by: DeliveredBy::Wait,
             }],
+            answer: None,
+            claim: None,
         },
         EndHeld {
             of: EndOf::Stall {
                 since: 190,
                 waiting: "a retry of code".into(),
+                answerer: Some("east/operator".into()),
+                stop_short: Some(Box::new(StopShortWaited {
+                    words: Some("Which queue does east run?".into()),
+                    needs: Some(StopKind::NeedsAnswer),
+                    key: "stage/code/1/ended-short".parse().unwrap(),
+                    addressee: Some("west/ops".into()),
+                })),
+                answerer_read: true,
+                lapsed: Some("east-planner has it".into()),
             },
             read_at: 490,
             deliveries: vec![],
+            answer: None,
+            claim: None,
         },
     ]
 }
@@ -700,6 +740,7 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         Waits::PastBound,
         Waits::Submission,
         Waits::Delivered,
+        Waits::Unsubmitted,
     ] {
         round_trips(why);
     }
@@ -709,11 +750,16 @@ fn holds_the_waiting_move_and_the_stall_bound() {
         serde_json::json!([
             {"on": "stage", "stage": "review", "words": "until the design is ruled", "since": 10},
             {"on": "submission", "since": 10},
+            {"on": "waiting", "words": "passed to east/design", "since": 40, "bound": 3600, "lapsed": 3640},
         ])
     );
     assert_eq!(held.hold_on("review"), Some(&held.holds[0]));
     assert_eq!(held.hold_on("code"), None);
     assert_eq!(held.submission_hold(), Some(&held.holds[1]));
+    assert_eq!(held.waiting_hold(), None, "a lapsed hold holds nothing");
+    let mut holding = held.clone();
+    holding.holds[2].lapsed = None;
+    assert_eq!(holding.waiting_hold(), Some(&holding.holds[2]));
     let mut value = serde_json::to_value(&held).unwrap();
     for field in ["holds", "waiting", "stall_after"] {
         value.as_object_mut().unwrap().remove(field);
@@ -743,6 +789,8 @@ fn a_moves_words() {
         why: Waits::Answer,
         since: Some(1),
         words: Some("which?".into()),
+        open_until: None,
+        closed: None,
     };
     assert_eq!(
         on(Act::Retry, Some("construct")).move_words(),
@@ -827,6 +875,42 @@ fn a_held_state_with_a_stream_an_account_and_a_record() {
     assert_eq!(start["from"]["env.AGENT_HOME"]["layer"], "account");
 }
 
+#[test]
+fn a_held_state_with_where_its_recipients_came_from() {
+    // Each of the four a launch takes its recipients from reads back
+    // unchanged, the answerer with its source; a state written before
+    // reads with none, and writes none (7, 193).
+    for from in [
+        RecipientsFrom::Launch,
+        RecipientsFrom::Environment,
+        RecipientsFrom::Session,
+        RecipientsFrom::Answerer {
+            source: "acme".into(),
+        },
+    ] {
+        let mut state = held();
+        state.place.recipients = vec!["east/operator".into()];
+        state.place.recipients_from = Some(from);
+        round_trips(state);
+    }
+    let mut state = held();
+    state.place.recipients_from = Some(RecipientsFrom::Answerer {
+        source: "acme".into(),
+    });
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["recipients_from"]["from"], "answerer");
+    assert_eq!(json["place"]["recipients_from"]["source"], "acme");
+    let mut before = json;
+    before["place"]
+        .as_object_mut()
+        .expect("the place")
+        .remove("recipients_from");
+    let read: HeldState = serde_json::from_value(before).expect("a state written before");
+    assert_eq!(read.place.recipients_from, None);
+    let written = serde_json::to_value(&read).expect("held state as JSON");
+    assert!(written["place"].get("recipients_from").is_none());
+}
+
 /// `value` with every `mode` key taken out, at any depth.
 fn without_modes(value: &mut serde_json::Value) {
     match value {
@@ -881,6 +965,58 @@ fn a_held_state_with_a_mode() {
         serde_json::to_value(&read).expect("written again"),
         before,
         "no mode written where none is held"
+    );
+}
+
+/// `value` with every `effort` key taken out, at any depth.
+fn without_efforts(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(object) => {
+            object.remove("effort");
+            object.values_mut().for_each(without_efforts);
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(without_efforts),
+        _ => {}
+    }
+}
+
+#[test]
+fn a_held_state_with_an_effort() {
+    // The launch gives verify the effort `max` and the kind gives every
+    // stage `high`, each its program's own word as written; the same
+    // state written before the effort reads with none, and writes none
+    // back (32, 197).
+    let mut state = held();
+    state.place.settings.insert(
+        "verify".into(),
+        Settings {
+            effort: Some("max".into()),
+            ..Settings::default()
+        },
+    );
+    state.place.kind.agents.every_stage.effort = Some("high".into());
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["place"]["settings"]["verify"]["effort"], "max");
+    assert_eq!(
+        json["place"]["kind"]["agents"]["every_stage"]["effort"],
+        "high"
+    );
+    assert_eq!(
+        json["place"]["settings"]["code"].get("effort"),
+        None,
+        "no effort written where none is given"
+    );
+
+    let mut before = json;
+    without_efforts(&mut before);
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read with no effort");
+    assert_eq!(read.place.settings["verify"].effort, None);
+    assert_eq!(read.place.kind.agents.every_stage.effort, None);
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "no effort written where none is held"
     );
 }
 
@@ -1455,7 +1591,7 @@ fn a_held_state_with_a_repositorys_settings_for_every_kind() {
     let read = KindsRead::Read {
         kinds: vec![kind()],
         settings: BTreeMap::from([("change".into(), kind_settings())]),
-        agents: every_kind(),
+        agents: Box::new(every_kind()),
     };
     round_trips(read.clone());
     let state = held();
@@ -1484,7 +1620,7 @@ fn a_held_state_with_a_repositorys_settings_for_every_kind() {
     else {
         panic!("a kinds read read back as another");
     };
-    assert_eq!(agents, Settings::default());
+    assert_eq!(*agents, Settings::default());
 }
 
 #[test]
@@ -1780,6 +1916,10 @@ impl Agent for Bare {
         String::new()
     }
 
+    fn stop_short_to(&self) -> String {
+        String::new()
+    }
+
     fn send_back(&self) -> Offered {
         Offered::NotOffered
     }
@@ -1807,6 +1947,18 @@ fn a_profile_that_maps_no_mode() {
         .expect_err("a profile that maps no mode mapped an own value");
     assert!(words.contains("`careful`"), "{words}");
     assert_eq!(Bare.mode_read_back(), Offered::NotOffered);
+}
+
+#[test]
+fn a_profile_that_names_no_way_to_give_an_effort() {
+    // A profile that keeps the seam's defaults refuses every effort,
+    // naming it, and names no variable read over it (170, 197).
+    let words = Bare
+        .effort("high")
+        .expect_err("a profile that names no way to give an effort took high");
+    assert!(words.contains("`high`"), "{words}");
+    assert_eq!(words, no_effort("high"));
+    assert_eq!(Bare.effort_variable(), None);
 }
 
 #[test]
@@ -1890,6 +2042,30 @@ fn settings_under_others_take_the_mode_whole() {
 }
 
 #[test]
+fn settings_under_others_take_the_effort_whole() {
+    // The effort is taken whole, as the model is: the more specific
+    // settings' where they give one, and the less specific's otherwise
+    // (32, 197).
+    let under = Settings {
+        effort: Some("high".into()),
+        ..Settings::default()
+    };
+    let over = Settings {
+        effort: Some("max".into()),
+        ..Settings::default()
+    };
+    assert_eq!(under.under(&over).effort, Some("max".into()));
+    assert_eq!(
+        under.under(&Settings::default()).effort,
+        Some("high".into())
+    );
+    assert_eq!(
+        Settings::default().under(&under).effort,
+        Some("high".into())
+    );
+}
+
+#[test]
 fn settings_under_others_take_own_settings_whole() {
     // Own settings over own settings are taken whole, the more specific
     // table's where it gives any; their fold key by key is the core's
@@ -1921,6 +2097,500 @@ fn an_end_and_its_deliveries() {
     })
     .unwrap();
     assert!(before.ends.is_empty(), "a document from before ends");
+}
+
+/// A held state whose code stage stopped short needing an answer, its
+/// agent kept open for it until an hour after, under a start whose
+/// settings gave `keep_open` as `1h`, and let go by `by`, ended at
+/// `ended_at`, or left in its pane where `left_in_pane`; the place waits
+/// on a retry of code, its move carrying the close (130, 198).
+fn let_go(by: ClosedBy, ended_at: Option<Seconds>, left_in_pane: bool) -> HeldState {
+    let mut state = held();
+    let closed = SessionClosed {
+        at: 3000,
+        by,
+        ended_at,
+        left_in_pane,
+    };
+    let stage = &mut state.stages[0];
+    stage.state = StageState::EndedShort;
+    stage.end = Some(StageEnd {
+        words: Some("Which file?".into()),
+        needs: Some(StopKind::NeedsAnswer),
+        open_until: Some(200 + 3600),
+        closed: Some(closed),
+        ..StageEnd::default()
+    });
+    let start = stage.start.as_mut().expect("a start");
+    start.settings.keep_open = Some("1h".into());
+    start.live = ended_at.is_none();
+    state.waiting = Some(Waiting {
+        on: WaitingOn {
+            act: Act::Retry,
+            stage: Some("code".into()),
+            why: Waits::Answer,
+            since: Some(200),
+            words: Some("Which file?".into()),
+            open_until: None,
+            closed: Some(closed),
+        },
+        stalled: false,
+    });
+    state
+}
+
+#[test]
+fn an_agent_let_go() {
+    // The seam-contracts spec's "An agent let go": an agent let go by its
+    // account spent and ended reads back equal, each field as written
+    // (75, 146, 198).
+    let state = let_go(ClosedBy::AccountSpent, Some(3010), false);
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    let stage = &json["stages"][0];
+    assert_eq!(stage["end"]["open_until"], 3800);
+    assert_eq!(
+        stage["end"]["closed"],
+        serde_json::json!({"at": 3000, "by": "account_spent", "ended_at": 3010}),
+        "no left_in_pane written where none was left"
+    );
+    assert_eq!(stage["start"]["settings"]["keep_open"], "1h");
+    assert_eq!(json["waiting"]["closed"]["by"], "account_spent");
+    assert!(json["waiting"].get("open_until").is_none());
+    // A conversation's agent lost while kept open, a bare agent the
+    // terminal brought back left in its pane, not yet ended (77).
+    let left = let_go(ClosedBy::AgentEnded, None, true);
+    round_trips(left.clone());
+    let json = serde_json::to_value(&left).expect("held state as JSON");
+    assert_eq!(
+        json["stages"][0]["end"]["closed"],
+        serde_json::json!({"at": 3000, "by": "agent_ended", "left_in_pane": true})
+    );
+    for (by, word) in [
+        (ClosedBy::Time, "time"),
+        (ClosedBy::Stopped, "stopped"),
+        (ClosedBy::AgentEnded, "agent_ended"),
+        (ClosedBy::AccountSpent, "account_spent"),
+    ] {
+        round_trips(by);
+        assert_eq!(serde_json::to_value(by).unwrap(), word);
+    }
+    // While it is kept open: the move gives the time, and no close.
+    let mut open = let_go(ClosedBy::Time, None, false);
+    open.stages[0].end.as_mut().unwrap().closed = None;
+    let waiting = &mut open.waiting.as_mut().unwrap().on;
+    waiting.closed = None;
+    waiting.open_until = Some(3800);
+    round_trips(open.clone());
+    let json = serde_json::to_value(&open).expect("held state as JSON");
+    assert_eq!(json["waiting"]["open_until"], 3800);
+    assert!(json["stages"][0]["end"].get("closed").is_none());
+}
+
+/// Code's start 2 stopped short twice in its session, each stop-short
+/// answered there: the first by a retry, the second by a tell, the start
+/// having taken both (42, 43, 53).
+fn two_answers() -> HeldState {
+    let mut state = held();
+    let stop_short = |answered, words: &str, answer: AnswerHeld| EndHeld {
+        of: EndOf::Stage {
+            stage: "code".into(),
+            start: 2,
+            state: StageState::EndedShort,
+            quiet_from: None,
+            answered,
+            end: Box::new(StageEnd {
+                words: Some(words.into()),
+                needs: Some(StopKind::NeedsAnswer),
+                open_until: Some(200 + 3600),
+                ..StageEnd::default()
+            }),
+        },
+        read_at: 200,
+        deliveries: vec![Delivery {
+            recipient: "operator".into(),
+            at: 201,
+            by: DeliveredBy::Notice,
+        }],
+        answer: Some(answer),
+        claim: None,
+    };
+    state.ends = vec![
+        stop_short(
+            0,
+            "Which file?",
+            AnswerHeld {
+                words: "notes.md".into(),
+                act: Act::Retry,
+                at: 300,
+                session: Some(Handed {
+                    sent_at: 298,
+                    received_at: 300,
+                }),
+                by: None,
+                key: None,
+            },
+        ),
+        stop_short(
+            1,
+            "And its text?",
+            AnswerHeld {
+                words: "Hello.".into(),
+                act: Act::Tell,
+                at: 400,
+                session: Some(Handed {
+                    sent_at: 395,
+                    received_at: 400,
+                }),
+                by: None,
+                key: None,
+            },
+        ),
+    ];
+    state.stages[0].start.as_mut().expect("a start").answered = 2;
+    state
+}
+
+#[test]
+fn an_answer_being_taken() {
+    // The seam-contracts spec's "A claim read back": a stop-short's end
+    // claimed by an answer being handed to its session:
+    // who gives it, the key it named, when and until when, each read back
+    // as written, and an end written before reading as unclaimed (42, 75).
+    let mut state = two_answers();
+    state.ends[1].answer = None;
+    state.ends[1].claim = Some(AnswerClaim {
+        by: Some("east/ops".into()),
+        key: Some("stage/code/2/ended-short/1".parse().expect("a key")),
+        at: 500,
+        until: 1400,
+    });
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(
+        json["ends"][1]["claim"],
+        serde_json::json!({
+            "by": "east/ops",
+            "key": "stage/code/2/ended-short/1",
+            "at": 500,
+            "until": 1400,
+        })
+    );
+    let mut written_before = serde_json::to_value(&state.ends[0]).expect("an end as JSON");
+    written_before
+        .as_object_mut()
+        .expect("an object")
+        .remove("claim");
+    let read: EndHeld = serde_json::from_value(written_before).expect("an end written before");
+    assert_eq!(read.claim, None);
+}
+
+#[test]
+fn two_answers_in_one_session() {
+    // The seam-contracts spec's "Two answers": each field reads back as
+    // written, and the two ends key apart (43, 75).
+    let state = two_answers();
+    round_trips(state.clone());
+    let json = serde_json::to_value(&state).expect("held state as JSON");
+    assert_eq!(json["stages"][0]["start"]["answered"], 2);
+    assert!(json["ends"][0].get("answered").is_none(), "none at zero");
+    assert_eq!(json["ends"][1]["answered"], 1);
+    assert_eq!(
+        json["ends"][0]["answer"],
+        serde_json::json!({
+            "words": "notes.md",
+            "act": "retry",
+            "at": 300,
+            "session": {"sent_at": 298, "received_at": 300},
+        })
+    );
+    assert_eq!(json["ends"][1]["answer"]["act"], "tell");
+    assert!(json["ends"][0].get("claim").is_none(), "none unclaimed");
+    assert_ne!(state.ends[0].of.key(), state.ends[1].of.key());
+    assert!(!state.ends[0].same(&state.ends[1].of));
+    // An answer taken by no session, as a retry past the time gives none.
+    round_trips(AnswerHeld {
+        words: "notes.md".into(),
+        act: Act::Retry,
+        at: 300,
+        session: None,
+        by: None,
+        key: None,
+    });
+}
+
+#[test]
+fn an_answer_with_who_gave_it_and_its_key() {
+    // 42: who gave an answer, as the answering command's recipient named
+    // it, and the key it named, each read back as written; an answer
+    // written before either reads with neither.
+    let answer = AnswerHeld {
+        words: "the queue".into(),
+        act: Act::Retry,
+        at: 300,
+        session: None,
+        by: Some("east/ops".into()),
+        key: Some("stage/construct/1/ended-short".parse().expect("a key")),
+    };
+    round_trips(answer.clone());
+    let json = serde_json::to_value(&answer).expect("the answer as JSON");
+    assert_eq!(json["by"], "east/ops");
+    assert_eq!(json["key"], "stage/construct/1/ended-short");
+    let before: AnswerHeld = serde_json::from_value(serde_json::json!({
+        "words": "the queue",
+        "act": "retry",
+        "at": 300,
+    }))
+    .expect("an answer written before");
+    assert_eq!((before.by, before.key), (None, None));
+}
+
+#[test]
+fn an_ends_key_with_and_without_answers() {
+    // A stage's end keys as it did with no answers taken, and names the
+    // count where there are some (43).
+    let end = |state, quiet_from, answered| EndOf::Stage {
+        stage: "code".into(),
+        start: 2,
+        state,
+        quiet_from,
+        answered,
+        end: Box::default(),
+    };
+    assert_eq!(
+        end(StageState::EndedShort, None, 0).key(),
+        "stage code 2 EndedShort "
+    );
+    assert_eq!(
+        end(StageState::Stuck, Some(160), 0).key(),
+        "stage code 2 Stuck 160"
+    );
+    assert_eq!(
+        end(StageState::EndedShort, None, 1).key(),
+        "stage code 2 EndedShort  1"
+    );
+    assert_eq!(
+        end(StageState::Stuck, Some(160), 2).key(),
+        "stage code 2 Stuck 160 2"
+    );
+    assert_ne!(
+        end(StageState::EndedShort, None, 1).key(),
+        end(StageState::EndedShort, None, 2).key()
+    );
+}
+
+#[test]
+fn every_ends_key_round_trips() {
+    // 42, 43, 198: each end's key as callers see it, made from the parts
+    // of the held key, read back from its token and written to JSON as
+    // that token.
+    let stage = |state, quiet_from, answered| EndOf::Stage {
+        stage: "construct".into(),
+        start: 1,
+        state,
+        quiet_from,
+        answered,
+        end: Box::default(),
+    };
+    let submission = |verdict| EndOf::Submission { submit: 2, verdict };
+    let ends = [
+        (
+            stage(StageState::EndedShort, None, 0),
+            "stage/construct/1/ended-short",
+        ),
+        (
+            stage(StageState::EndedShort, None, 1),
+            "stage/construct/1/ended-short/1",
+        ),
+        (
+            stage(StageState::Delivered, None, 0),
+            "stage/construct/1/delivered",
+        ),
+        (
+            stage(StageState::Finished, None, 2),
+            "stage/construct/1/finished/2",
+        ),
+        (stage(StageState::Lost, None, 0), "stage/construct/1/lost"),
+        (
+            stage(StageState::NeverBegun, None, 0),
+            "stage/construct/1/never-begun",
+        ),
+        (
+            stage(StageState::Stuck, Some(160), 0),
+            "stage/construct/1/stuck",
+        ),
+        (
+            submission(Verdict::Landed {
+                commit: Revision("abc".into()),
+                place_removed: false,
+                branch_removed: false,
+            }),
+            "submission/2/landed",
+        ),
+        (
+            submission(Verdict::Failed {
+                words: "check failed".into(),
+            }),
+            "submission/2/failed",
+        ),
+        (
+            submission(Verdict::Conflict {
+                files: vec!["a.rs".into()],
+                words: "conflict".into(),
+            }),
+            "submission/2/conflict",
+        ),
+        (submission(Verdict::Withdrawn), "submission/2/withdrawn"),
+        (
+            submission(Verdict::Refused {
+                reason: "no queue".into(),
+            }),
+            "submission/2/refused",
+        ),
+        (
+            EndOf::Stall {
+                since: 3700,
+                waiting: "a retry of construct".into(),
+                answerer: None,
+                stop_short: None,
+                answerer_read: true,
+                lapsed: None,
+            },
+            "stall/3700",
+        ),
+    ];
+    for (end, token) in ends {
+        let key = end.end_key();
+        assert_eq!(key.to_string(), token);
+        assert_eq!(token.parse::<EndKey>(), Ok(key.clone()), "{token}");
+        assert_eq!(
+            serde_json::to_value(&key).expect("written"),
+            serde_json::json!(token)
+        );
+        round_trips(key);
+    }
+    // Every state a stage's key may name reads back.
+    for state in [
+        StageState::NotReached,
+        StageState::OnHold,
+        StageState::WaitingOnReadiness,
+        StageState::WaitingForRoom,
+        StageState::Refused,
+        StageState::Starting,
+        StageState::Started,
+        StageState::Begun,
+        StageState::NeverBegun,
+        StageState::Stuck,
+        StageState::Lost,
+        StageState::Stopped,
+        StageState::Delivered,
+        StageState::Repeating,
+        StageState::EndedShort,
+        StageState::Finished,
+    ] {
+        round_trips(stage(state, None, 3).end_key());
+    }
+}
+
+#[test]
+fn a_key_in_another_form_is_refused() {
+    // 42, 43: any other form refused, naming the forms, the held key's
+    // among them.
+    for given in [
+        "construct",
+        "stage/construct/1",
+        "stage//1/ended-short",
+        "stage/construct/one/ended-short",
+        "stage/construct/1/ended_short",
+        "stage/construct/1/ended-short/0",
+        "stage/construct/01/ended-short",
+        "stage/construct/1/ended-short/1/2",
+        "submission/2/merged",
+        "submission/2",
+        "stall/soon",
+        "stall/",
+        "stage construct 1 EndedShort ",
+        "",
+    ] {
+        let refused = given.parse::<EndKey>().unwrap_err();
+        assert!(
+            refused.contains(END_KEY_FORMS) && refused.contains(&format!("`{given}`")),
+            "{given}: {refused}"
+        );
+        assert!(serde_json::from_value::<EndKey>(serde_json::json!(given)).is_err());
+    }
+}
+
+#[test]
+fn state_written_before_an_agent_kept_open() {
+    // The seam-contracts spec's "State written before": no agent kept
+    // open, no close, no answers and no `keep_open`, each end keying as
+    // it did, and none of them written back (75).
+    let before = serde_json::to_value(held()).expect("held state as JSON");
+    for field in ["open_until", "closed"] {
+        assert!(before["stages"][0]["end"].get(field).is_none(), "{field}");
+        assert!(before["waiting"].get(field).is_none(), "{field}");
+    }
+    for settings in [
+        &before["stages"][0]["start"]["settings"],
+        &before["place"]["every_stage"],
+        &before["place"]["settings"]["code"],
+    ] {
+        assert!(settings.get("keep_open").is_none());
+    }
+    assert!(before["stages"][0]["start"].get("answered").is_none());
+    for end in before["ends"].as_array().expect("ends") {
+        assert!(end.get("answer").is_none() && end.get("answered").is_none());
+    }
+    let read: HeldState = serde_json::from_value(before.clone()).expect("read from before");
+    let end = read.stages[0].end.as_ref().expect("an end");
+    assert_eq!((end.open_until, end.closed.as_ref()), (None, None));
+    let start = read.stages[0].start.as_ref().expect("a start");
+    assert_eq!(
+        (start.answered, start.settings.keep_open.as_ref()),
+        (0, None)
+    );
+    let waiting = &read.waiting.as_ref().expect("a move").on;
+    assert_eq!((waiting.open_until, waiting.closed), (None, None));
+    assert!(read.ends.iter().all(|end| end.answer.is_none()));
+    assert_eq!(
+        read.ends.iter().map(|end| end.of.key()).collect::<Vec<_>>(),
+        vec![
+            "stage code 2 Delivered ",
+            "stage code 3 Stuck 160",
+            "submission 2 landed",
+            "stall 190",
+        ]
+    );
+    assert_eq!(
+        serde_json::to_value(&read).expect("written again"),
+        before,
+        "nothing of an agent kept open written where none is held"
+    );
+}
+
+#[test]
+fn settings_under_others_take_keep_open_whole() {
+    // `keep_open` taken whole from the settings over, else kept, beside
+    // the model (32, 198).
+    let under = Settings {
+        keep_open: Some("1h".into()),
+        ..settings()
+    };
+    let over = Settings {
+        keep_open: Some("10m".into()),
+        ..Settings::default()
+    };
+    assert_eq!(under.under(&over).keep_open.as_deref(), Some("10m"));
+    assert_eq!(
+        under.under(&Settings::default()).keep_open.as_deref(),
+        Some("1h")
+    );
+    assert_eq!(
+        Settings::default().under(&under).keep_open.as_deref(),
+        Some("1h")
+    );
+    round_trips(under);
 }
 
 #[test]
@@ -1959,22 +2629,243 @@ fn a_wake_not_made_and_the_submission_before_the_launch() {
 }
 
 #[test]
-fn a_role_run_as_the_configuration_names_it() {
+fn a_role_run_as_its_source_declares_it() {
+    // A run's entry with every key, and with none it may leave out; its
+    // stream is its address's, so it holds none (132, 193, C.7).
     let run = RoleRun {
+        source: "acme".into(),
         repository: "/r".into(),
-        kind: "planner".into(),
+        kind: "turn".into(),
         priority: 5,
         base: Some("next".into()),
         brief: Some("read the records".into()),
-        stream: Some("work".into()),
+        name: Some("east".into()),
+        intent: Some("east-planner".into()),
+        agents: RoleAgents {
+            every_stage: Settings {
+                model: Some("opus".into()),
+                ..Settings::default()
+            },
+            stages: BTreeMap::from([(
+                "turn".into(),
+                Settings {
+                    instructions: Some("be brief".into()),
+                    ..Settings::default()
+                },
+            )]),
+        },
+        answers: Some("The work's scope.".into()),
+        answerer: true,
     };
     round_trips(run.clone());
-    round_trips(RoleRun {
+    let bare = RoleRun {
         base: None,
         brief: None,
-        stream: None,
+        name: None,
+        intent: None,
+        agents: RoleAgents::default(),
+        answers: None,
+        answerer: false,
         ..run
+    };
+    round_trips(bare.clone());
+    assert_eq!(
+        serde_json::to_value(&bare).unwrap(),
+        serde_json::json!({"source": "acme", "repository": "/r", "kind": "turn", "priority": 5}),
+        "only the keys the entry gives"
+    );
+    let before: RoleRun = serde_json::from_value(
+        serde_json::json!({"repository": "/r", "kind": "planner", "priority": 5}),
+    )
+    .unwrap();
+    assert_eq!(before.source, "", "a run status gave before sources");
+}
+
+#[test]
+fn what_a_source_declares_for_an_address() {
+    // A run, a standing agent and a carried address, an entry that
+    // declares nothing, and a roles file not read, as the host gives them
+    // (132, 191, 193, C.7).
+    let standing = StandingAgent {
+        source: "acme".into(),
+        agent: "east-design".into(),
+        session: None,
+        answers: Some("A decision the design has not made.".into()),
+        answerer: false,
+    };
+    let roles = HostRoles {
+        declared: BTreeMap::from([
+            (
+                "east/design".to_string(),
+                RoleEntry::Standing(standing.clone()),
+            ),
+            (
+                "north/planner".to_string(),
+                RoleEntry::Carried(CarriedRole {
+                    source: "acme".into(),
+                    answers: Some("The work's scope.".into()),
+                }),
+            ),
+            (
+                "east/operator".to_string(),
+                RoleEntry::Run(Box::new(RoleRun {
+                    source: "beta".into(),
+                    repository: "/r".into(),
+                    kind: "turn".into(),
+                    priority: 0,
+                    base: None,
+                    brief: None,
+                    name: None,
+                    intent: None,
+                    agents: RoleAgents::default(),
+                    answers: None,
+                    answerer: true,
+                })),
+            ),
+        ]),
+        refused: vec![RoleRefused {
+            address: "east/ops".into(),
+            source: "acme".into(),
+            reason: "its kind beta/turn is not acme's own".into(),
+        }],
+        unread: BTreeMap::from([(
+            "gamma".to_string(),
+            RolesUnread {
+                file: "/state/gamma/roles.toml".into(),
+                reason: "is not TOML".into(),
+            },
+        )]),
+    };
+    round_trips(roles.clone());
+    round_trips(HostRoles::default());
+    assert_eq!(
+        serde_json::to_value(HostRoles::default()).unwrap(),
+        serde_json::json!({})
+    );
+    assert_eq!(
+        serde_json::to_value(RoleEntry::Standing(standing.clone())).unwrap(),
+        serde_json::json!({"standing": {
+            "source": "acme",
+            "agent": "east-design",
+            "answers": "A decision the design has not made."
+        }})
+    );
+    assert_eq!(roles.run("east/design"), None, "a standing address's run");
+    assert_eq!(
+        roles.standing(),
+        BTreeMap::from([("east/design".to_string(), standing)])
+    );
+    assert_eq!(
+        roles.declared("east/ops"),
+        Err("its kind beta/turn is not acme's own".into())
+    );
+    assert!(roles
+        .declared("west/ops")
+        .is_err_and(|why| why.contains("no source") && why.contains("west/ops")));
+    let door = StreamAnswerer::Stands(DeclaredBy {
+        address: "east/operator".into(),
+        source: "beta".into(),
     });
+    assert_eq!(roles.answerer("east"), Some(door.clone()));
+    assert_eq!(
+        roles.answerer("north"),
+        None,
+        "a carried address stands behind none"
+    );
+    round_trips(door);
+    round_trips(StreamAnswerer::Contested {
+        roles: vec![
+            DeclaredBy {
+                address: "east/operator".into(),
+                source: "acme".into(),
+            },
+            DeclaredBy {
+                address: "east/ops".into(),
+                source: "beta".into(),
+            },
+        ],
+    });
+    let answering = roles.answering();
+    round_trips(answering[0].clone());
+    assert_eq!(
+        answering
+            .iter()
+            .map(|role| (role.address.as_str(), role.stream.as_str()))
+            .collect::<Vec<_>>(),
+        [("east/design", "east"), ("north/planner", "north")],
+        "each address declared with its words, and its stream"
+    );
+}
+
+#[test]
+fn a_standing_address_round_trips() {
+    // The seam-contracts spec's "A standing address round-trips", for
+    // the seams' types: a standing entry with and without its session,
+    // its words and its standing behind its stream, a part's agents read,
+    // two of one name among them, and not read, and a session from the
+    // entry's own `session` (56, 132, 193, C.5, C.7; core.14).
+    let entry = StandingAgent {
+        source: "acme".into(),
+        agent: "madswan-planner".into(),
+        session: Some("madswan".into()),
+        answers: Some("The work's scope.".into()),
+        answerer: true,
+    };
+    round_trips(entry.clone());
+    let bare = StandingAgent {
+        session: None,
+        answers: None,
+        answerer: false,
+        ..entry
+    };
+    round_trips(bare.clone());
+    assert_eq!(
+        serde_json::to_value(&bare).unwrap(),
+        serde_json::json!({"source": "acme", "agent": "madswan-planner"}),
+        "no session, words or standing behind where the entry gives none"
+    );
+    let named = |name: &str, pane: &str, state| NamedAgent {
+        name: name.into(),
+        at: format!("terminal:{pane}@/run/madswan.sock"),
+        state,
+    };
+    let read = AgentsIn::Read {
+        agents: vec![
+            named("madswan-planner", "w1-1", AgentState::Waiting),
+            named("madswan-ops", "w1-2", AgentState::Working),
+            named("madswan-ops", "w1-3", AgentState::Asking),
+        ],
+    };
+    round_trips(read.clone());
+    let json = serde_json::to_value(&read).unwrap();
+    assert_eq!(
+        json["read"]["agents"][0],
+        serde_json::json!({
+            "name": "madswan-planner",
+            "at": "terminal:w1-1@/run/madswan.sock",
+            "state": "waiting"
+        })
+    );
+    round_trips(AgentsIn::Read { agents: vec![] });
+    let unread = AgentsIn::Unread {
+        reason: NO_NAMED_AGENTS.into(),
+    };
+    round_trips(unread.clone());
+    assert_eq!(
+        serde_json::to_value(&unread).unwrap(),
+        serde_json::json!({"unread": {"reason": "the terminal holds no agent a name finds"}})
+    );
+    round_trips(SessionFrom::Role);
+    assert_eq!(serde_json::to_value(SessionFrom::Role).unwrap(), "role");
+    let session = SessionHeld {
+        name: Some("madswan".into()),
+        from: SessionFrom::Role,
+    };
+    round_trips(session.clone());
+    assert_eq!(
+        serde_json::to_value(session).unwrap(),
+        serde_json::json!({"name": "madswan", "from": "role"})
+    );
 }
 
 #[test]
@@ -2157,10 +3048,12 @@ fn a_move_past_a_threshold() {
 }
 
 #[test]
-fn an_address_is_a_partition_and_a_role() {
+fn an_address_is_a_stream_and_a_role() {
     assert!(is_address("madswan/planner"));
     assert!(is_address("slc-2/ops.1"));
     assert_eq!(role_of("madswan/planner"), "planner");
+    assert_eq!(stream_of("madswan/planner"), "madswan");
+    assert_eq!(stream_of("slc-2/ops.1"), "slc-2");
     for session in [
         "ops",
         "term:p1@/tmp/term.sock",
@@ -2188,9 +3081,72 @@ fn an_ends_key_and_its_pending_recipients() {
     let recipients = vec!["operator".to_string(), "ops".to_string()];
     assert_eq!(ends[0].pending(&recipients), vec!["ops".to_string()]);
     assert_eq!(ends[1].pending(&recipients), recipients);
+    assert!(ends[1].pending_to(&recipients, "ops"));
+    assert!(!ends[0].pending_to(&recipients, "operator"));
+}
+
+#[test]
+fn a_stop_shorts_end_goes_to_the_role_it_named_alone() {
+    // 41, 43, 132: a stop-short that named a role stands pending for its
+    // address alone, never for the place's recipients.
+    let mut end = ends().remove(0);
+    if let EndOf::Stage { end, .. } = &mut end.of {
+        end.addressee = Some("west/ops".into());
+    }
+    end.deliveries.clear();
+    let recipients = vec!["operator".to_string(), "ops".to_string()];
+    assert_eq!(end.recipients(&recipients), vec!["west/ops".to_string()]);
+    assert!(end.pending_to(&recipients, "west/ops"));
+    assert!(!end.pending_to(&recipients, "operator"));
+}
+
+#[test]
+fn a_stalls_answerer_beside_the_places_recipients() {
+    // 41, 130, 132, 193: a stall's recipients are the place's, then the
+    // role its stop-short named, of whichever stream, then the answerer,
+    // each named once; and a stall an earlier flume wrote names neither,
+    // nor that it read them.
+    let stall = ends().pop().expect("the stall");
+    let recipients = vec!["operator".to_string()];
+    assert_eq!(
+        stall.recipients(&recipients),
+        vec![
+            "operator".to_string(),
+            "west/ops".to_string(),
+            "east/operator".to_string()
+        ]
+    );
+    assert_eq!(
+        stall.recipients(&["east/operator".to_string(), "west/ops".to_string()]),
+        vec!["east/operator".to_string(), "west/ops".to_string()]
+    );
+    assert_eq!(
+        stall.pending(&[]),
+        vec!["west/ops".to_string(), "east/operator".to_string()]
+    );
+    let before: EndOf =
+        serde_json::from_str(r#"{"of":"stall","since":190,"waiting":"a retry of code"}"#)
+            .expect("a stall written before");
+    assert_eq!(
+        before,
+        EndOf::Stall {
+            since: 190,
+            waiting: "a retry of code".into(),
+            answerer: None,
+            stop_short: None,
+            answerer_read: false,
+            lapsed: None,
+        }
+    );
     assert_eq!(
         held().pending_for(),
-        vec!["operator".to_string(), "role:planner".to_string()]
+        vec![
+            "operator".to_string(),
+            "role:planner".to_string(),
+            "west/ops".to_string(),
+            "east/operator".to_string()
+        ],
+        "the stall's addressee and answerer among the recipients pending"
     );
 }
 
@@ -2335,6 +3291,44 @@ fn an_affinity_written_before() {
 }
 
 #[test]
+fn the_hosts_watch() {
+    // The seam-contracts spec's round trips: the host's watch, its key
+    // and its document read back as written, and a host's state written
+    // before, which holds no watch, reading unchanged (73, 153, 208).
+    round_trips(HostKey::Watch);
+    assert_eq!(
+        serde_json::to_value(HostKey::Watch).unwrap(),
+        serde_json::json!({"of": "watch"})
+    );
+    let watched = Watched {
+        began: 47_400,
+        bound: 120,
+    };
+    round_trips(watched);
+    round_trips(HostVersioned {
+        version: 2,
+        document: HostDocument::Watch(watched),
+    });
+    assert!(watched.kept(47_400 + 239));
+    assert!(!watched.kept(47_400 + 240));
+    assert_eq!(watched.lapses(), 47_640);
+    // A host's state written before holds an account's and an intent's
+    // documents alone, each reading as it did.
+    let before: HostVersioned = serde_json::from_value(serde_json::json!({
+        "version": 3,
+        "document": {
+            "of": "account",
+            "until": 54_000,
+            "words": null,
+            "recorded_at": 47_400,
+        },
+    }))
+    .expect("a host document written before");
+    assert!(matches!(before.document, HostDocument::Account(_)));
+    round_trips(before);
+}
+
+#[test]
 fn a_versioned_held_state() {
     round_trips(Versioned {
         version: 4,
@@ -2350,7 +3344,7 @@ fn a_kind_with_its_stages() {
     round_trips(KindsRead::Read {
         kinds: vec![kind()],
         settings: BTreeMap::from([("change".into(), kind_settings())]),
-        agents: every_kind(),
+        agents: Box::new(every_kind()),
     });
     round_trips(HostSettings {
         repository: kind_settings(),
@@ -2547,8 +3541,19 @@ fn a_source_the_host_declares() {
         file: "/config/flume/sources/acme.toml".into(),
         read: HostSourceRead::Read {
             kinds_dir: "/data/flume/kinds/acme".into(),
+            roles: Some("/state/crew/flume/roles.toml".into()),
         },
     });
+    let bare = HostSourceRead::Read {
+        kinds_dir: "/data/flume/kinds/acme".into(),
+        roles: None,
+    };
+    round_trips(bare.clone());
+    assert_eq!(
+        serde_json::to_value(&bare).unwrap(),
+        serde_json::json!({"read": {"kinds_dir": "/data/flume/kinds/acme"}}),
+        "no roles where the source names none, as a source read before roles"
+    );
     round_trips(HostSource {
         file: "/config/flume/sources/bad.toml".into(),
         read: HostSourceRead::CouldNotRead {
@@ -2689,6 +3694,17 @@ fn an_identity_a_secret_and_a_stop_short() {
         needs: Some(StopKind::FoundWork),
         ..StageEnd::default()
     });
+    // A stop-short naming a role keeps its address whole; one written
+    // before names none, and writes none (41, 132).
+    round_trips(StageEnd {
+        words: Some("which queue is deployed?".into()),
+        needs: Some(StopKind::NeedsAnswer),
+        addressee: Some("west/ops".into()),
+        ..StageEnd::default()
+    });
+    assert!(!serde_json::to_string(&StageEnd::default())
+        .unwrap()
+        .contains("addressee"));
     round_trips(StageEnd {
         head: Some(Revision::new("c4")),
         last_words: Some("Usage limit reached".into()),
@@ -2698,6 +3714,7 @@ fn an_identity_a_secret_and_a_stop_short() {
     });
     let before: StageEnd =
         serde_json::from_str(r#"{"head":"c3","report":null,"words":null}"#).unwrap();
+    assert_eq!(before.addressee, None);
     assert_eq!(before.commits, Vec::<Revision>::new());
     assert_eq!(before.screen, None);
 }
@@ -2911,6 +3928,32 @@ fn submit_holds_no_wait() {
 }
 
 #[test]
+fn what_a_submission_sends() {
+    round_trips(SubmitHead::Worktree {
+        head: Revision::new("c5"),
+    });
+    round_trips(SubmitHead::Branch {
+        branch: "train/a".into(),
+        revision: Revision::new("c6"),
+    });
+}
+
+#[test]
+fn a_base_places_branch_opened_and_closed() {
+    round_trips(BranchOpened::Made {
+        revision: Revision::new("c1"),
+    });
+    round_trips(BranchOpened::Refused {
+        reason: "train/a already exists".into(),
+    });
+    round_trips(BranchClosed::Removed);
+    round_trips(BranchClosed::Kept {
+        reason: "train/a holds c7 that main lacks".into(),
+    });
+    round_trips(BranchClosed::Gone);
+}
+
+#[test]
 fn the_inbox_and_its_outcomes() {
     let outcomes = vec![
         SubmissionOutcome::Landed {
@@ -3068,6 +4111,9 @@ fn the_place_seams_answers() {
     round_trips(BranchRemoved::Gone);
     round_trips(BranchRemoved::Kept {
         commits: vec![Revision::new("c4")],
+    });
+    round_trips(BranchRemoved::Refused {
+        reason: "train/a has submission #4 open".into(),
     });
 }
 
@@ -3277,7 +4323,19 @@ fn the_terminal_seams_answers() {
             waiting_on_caller: 1,
             stalled: 0,
         },
+        line: "code 1/2 · run 1 · tasks 2/5 · working".into(),
     });
+    assert_eq!(
+        serde_json::from_value::<Clues>(serde_json::json!({
+            "stage": "code",
+            "state": "working",
+            "base": BaseCount::default(),
+        }))
+        .unwrap()
+        .line,
+        "",
+        "clues written before the line"
+    );
     assert_eq!(
         BaseCount {
             running: 3,

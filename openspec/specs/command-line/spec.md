@@ -145,11 +145,11 @@ its place's agents open in, for every stage or for one, at the
 
 ### Requirement: status --line gives each place's line
 
-`flume status [<place>] --line` SHALL give the line of the place named, or of every place on the host, each line's full form on a line of its own for a person and the lines as JSON with `--json`, reading only what a line holds and settling nothing (57, 60, 61).
+`flume status [<place>] --line` SHALL give the line of the place named, or of every place on the host, each line's full form on a line of its own for a person and the lines as JSON with `--json`, reading only what a line holds and settling nothing, whether or not a caller keeps watch (57, 60, 61, 208).
 
 #### Scenario: One place's line under the printed command
 
-- **WHEN** `flume status fix--one --line` runs over a scratch repository whose place's code stage was started under the printed command, the terminal keeping no watch
+- **WHEN** `flume status fix--one --line` runs over a scratch repository whose place's code stage was started under the printed command, no caller keeping watch
 - **THEN** it prints `fix--one · fix@1 · code · run 1 · starting` alone, `--json` gives the same line in `lines`, the place's held state is at the version it was before, and no agent was started (57)
 
 ### Requirement: open names a stream or none
@@ -276,3 +276,110 @@ launch (7, 21, 195, C.2).
 
 - **WHEN** `flume launch --kind fix --agent programs.claude.file=claude.json` runs in a scratch directory holding `claude.json`, which gives `tui = "fullscreen"`
 - **THEN** the launch's settings name the file by its absolute path with `tui` as read at the launch, at the `launch` layer (7, 21, 195)
+
+### Requirement: launch gives an effort by --agent
+
+`flume launch --agent [<stage>.]effort=<word>` SHALL give the effort for
+every stage or for one, at the `launch` layer, kept as written, and
+`--agent`'s help and its refusals SHALL name `effort` among the
+settings it gives (7, 32, 197).
+
+#### Scenario: An effort for every stage and for one
+
+- **WHEN** `flume launch --kind change --agent effort=high --agent verify.effort=max` runs over a scratch repository
+- **THEN** the launch's settings give every stage `high` and verify `max`, each at the `launch` layer (7, 197)
+
+#### Scenario: The settings named in a refusal
+
+- **WHEN** `flume launch --kind fix --agent colour=blue` runs
+- **THEN** it is refused naming `colour`, and its words name `effort` among the settings `--agent` gives, and nothing is launched (7, 32)
+
+### Requirement: launch gives keep_open by --agent
+
+`flume launch --agent [<stage>.]keep_open=<time>` SHALL give the
+setting in the forms `--stall-after` takes, `<n>`, `<n>s`, `<n>m` or
+`<n>h`, and SHALL refuse a value of any other form, naming the field
+and the forms (7, 32, 198).
+
+#### Scenario: A stage's time
+
+- **WHEN** a caller launches with `--agent code.keep_open=15m`
+- **THEN** the launch's settings give code `keep_open` `15m` (7, 32)
+
+#### Scenario: A time in another form
+
+- **WHEN** a caller launches with `--agent keep_open=soon`
+- **THEN** the launch is refused naming `keep_open` and the forms it takes, and nothing is made (7)
+
+#### Scenario: A program's time
+
+- **WHEN** a caller launches with `--agent keep_open.claude=1h`
+- **THEN** the launch is refused naming `keep_open` and that it is one time for every program, and nothing is made (7, 198)
+
+### Requirement: settle --every keeps the host's watch
+
+`flume settle --every <bound>` SHALL settle every place on the host as
+`flume settle` naming no place does, recording first the host's watch
+with its bound, a duration as `flume wait --timeout` takes it; it SHALL
+be refused, naming why, beside a place's name or with a bound that is
+not a positive duration (61, 119, 208).
+
+#### Scenario: A watch over a scratch repository
+
+- **WHEN** `flume settle --every 2m` runs on a scratch host holding one submitted place, and `flume status --json` runs after it
+- **THEN** the settle stepped the place's base once, and status gives the host's `watch` with a bound of 120 seconds and `watch_settled` when the settle began (56, 208)
+
+#### Scenario: A watch with a place named
+
+- **WHEN** `flume settle fix--one --every 2m` runs
+- **THEN** it is refused naming `--every` and the place, nothing is settled, and no watch is recorded (208)
+
+### Requirement: needs --to, hold --waiting, retry --answers and tell --answers
+
+The command line SHALL take `flume needs [--found] --to <role or
+address> "<words>"`, `flume hold <place> <words> --waiting [--for
+<time>]` with the time in the forms `--stall-after` takes, `flume retry
+<place> --answers <key>` and `flume tell <place> --answers <key>
+"<words>"`, each answering from the one core in the JSON form and the
+person's, and each key as the inbox and status give it (41, 42, 49, 53,
+61, 130).
+
+#### Scenario: The forms
+
+- **WHEN** `flume hold change--x "on the user's card" --waiting --for 1h --json` and `flume retry change--x --stage construct --answers stage/construct/1/ended-short --words "yes" --json` run in turn against the fakes
+- **THEN** each answers in the JSON form, the hold with its words and bound, and the retry with the place's status
+
+#### Scenario: A stop-short addressed by its role
+
+- **WHEN** a stage's agent of a place in `east` runs `flume needs --to ops "which queue's settings are live?"` against the fakes, with `ops` in its list
+- **THEN** the stop-short is taken naming `east/ops`, and its answer says so
+
+#### Scenario: A stop-short addressed to another stream
+
+- **WHEN** the same agent runs `flume needs --to west/ops "which queue's settings are live?"`, with `west/ops` in its list
+- **THEN** the stop-short is taken naming `west/ops`, and its answer says so
+
+#### Scenario: A hold's bound in a wrong form
+
+- **WHEN** `flume hold change--x "words" --waiting --for soon` runs
+- **THEN** it is refused naming the forms a time takes, and nothing is held
+
+#### Scenario: A tell's key
+
+- **WHEN** `flume tell change--x --answers stage/construct/1/ended-short "yes" --json` runs against the fakes, the place's construct agent kept open for that stop-short
+- **THEN** it answers in the JSON form, the tell delivered as the answer to that stop-short
+
+#### Scenario: A key in a wrong form
+
+- **WHEN** `flume retry change--x --answers construct` runs
+- **THEN** it is refused naming the forms a key takes, and no agent is ended
+
+### Requirement: wake names an address of a stream
+
+`flume wake <address>`'s help and its refusal of a name of another form
+SHALL give the address as `<stream>/<role>` (61, 132; core.35).
+
+#### Scenario: The help
+
+- **WHEN** `flume wake --help` runs
+- **THEN** it names the address `<stream>/<role>`, and the word partition nowhere

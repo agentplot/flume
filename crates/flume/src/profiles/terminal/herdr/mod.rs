@@ -49,12 +49,13 @@
 //! tab in every session it made one in, and its base's workspace in each
 //! once no tab of a live place and no pane flume did not open is in it,
 //! keeping and naming either where a pane flume did not open stands
-//! (137, 138). show titles the agent's pane with its stage and state and
-//! gives each of the base's workspaces, in every session, its count as
-//! the token `flume` (139), and says where it shows them, the place's
-//! tab and its base's workspace on its live agent's server, its agent's
-//! pane, and each of the base's workspaces, each as `herdr:<id>@<socket>`
-//! from its records, for flume's herdr plugin to refresh them (C.5).
+//! (137, 138). show titles the agent's pane with its stage and state,
+//! gives it the short form of its place's line as the token `flume`, the
+//! row herdr's sidebar shows, and gives each of the base's workspaces, in
+//! every session, its count as the token `flume` (139); it says where it
+//! shows them, the place's tab and its base's workspace on its live
+//! agent's server, its agent's pane, and each of the base's workspaces,
+//! each as `herdr:<id>@<socket>` from its records, for status (C.5).
 //! attach gives a window `<herdr> session attach <name>`, the session's
 //! server found or started headless first, `<herdr>` the full path of the
 //! herdr the profile's calls run, and `XDG_CONFIG_HOME` where they run
@@ -64,13 +65,15 @@
 //! `herdr session list --json`, bounded at a second, and finds the part
 //! by its name, the own session `flume`, or an own server held by its
 //! socket alone by the session listed at that socket, and starts no
-//! server, where attach starts one (201). The watch is flume's herdr plugin's: while a
-//! watch of it has renewed its lease within the lease's term, a minute,
-//! the profile answers its bound, thirty seconds, and no watch
-//! otherwise, reading the lease and starting nothing (119, 122; design
-//! 10). setup is what the watch wrote herdr's configuration lacks for the
-//! plugin, `setup.json` beside each fresh lease, its words in order and
-//! once each, read from the files alone (122; design 8). The session a
+//! server, where attach starts one (201). The profile settles nothing,
+//! keeps no watch and decides nothing of whether flume runs attended
+//! (119, 122, 208). flume's herdr plugin keeps no watch and no process
+//! of its own: at herdr's startup of a server it writes what herdr's
+//! configuration lacks for it into that server's `setup.json`, with the
+//! server's socket, and exits. setup is those words of each server whose
+//! socket is still present, in order and once each, read from the files
+//! alone, reading no lease and calling no herdr command (122, C.5;
+//! core.29). The session a
 //! command runs in is `herdr:<pane>@<socket>`, its pane on its server
 //! (7).
 //!
@@ -86,6 +89,19 @@
 //! session is not interrupted to clear it, its program queuing the
 //! notice as its next turn.
 //!
+//! A standing agent is found by its name in its session at each ask
+//! (132, C.5's standing row): agents_in reads one `herdr session list
+//! --json` and finds the part's socket by its `name` listed `running`,
+//! the own session `flume`, or an own server held by its socket alone at
+//! that socket; a part not listed running holds no agent, and no server
+//! is started. Then `agent list` on that socket gives each agent herdr
+//! lists with a string `name`, by its `pane_id` and `agent_status`, the
+//! status read as state reads it, at `herdr:<pane_id>@<socket>`, which
+//! send_to and session_state then reach by the pane's id. An agent herdr
+//! lists with no name is not given, and two of one name, which herdr
+//! never lists on one server, would both be. A listing or a list refused
+//! or unanswered is not read, in herdr's words; nothing is kept.
+//!
 //! Every herdr call runs under a bound, ten seconds where the call states
 //! none, and one that does not answer within it is unknown or a refusal
 //! naming the bound; each runs with the caller's `HERDR_*` stripped and
@@ -93,9 +109,9 @@
 
 use crate::host::process::{executable, program_path};
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
-    PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
-    ViewCommand, Watch,
+    AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, FolderTrust, Identity, NamedAgent,
+    OpenIn, Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession,
+    View, ViewCommand,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -118,14 +134,6 @@ pub const BOUND: Duration = Duration::from_secs(10);
 /// The bound on runs' one session listing, which herdr answers in
 /// milliseconds (201, C.5).
 pub const RUNS_BOUND: Duration = Duration::from_secs(1);
-
-/// The bound flume's herdr plugin settles every place on while its watch
-/// runs (122).
-pub const WATCH_BOUND: flume_seams::Seconds = 30;
-
-/// How long a lease of the plugin's watch is fresh after it was last
-/// renewed; the watch renews it four times as often.
-pub const LEASE_TERM: Duration = Duration::from_secs(60);
 
 /// How long a start waits for the pane's shell to come to its prompt and
 /// the program to be ready: room for a shell and SessionStart hooks slow
@@ -364,49 +372,36 @@ impl Herdr {
         self
     }
 
-    /// The state directory of flume's herdr plugin, whose watch's lease
-    /// says the terminal keeps watch; none, no watch.
+    /// The state directory of flume's herdr plugin, where each server's
+    /// startup writes what herdr's configuration lacks; none, nothing
+    /// lacking.
     pub fn with_plugin(mut self, plugin: Option<PathBuf>) -> Herdr {
         self.plugin = plugin;
         self
     }
 
-    /// Whether a watch of flume's herdr plugin, on any herdr server, has
-    /// renewed its lease within the lease's term (design 10).
-    pub fn watch_kept(&self) -> bool {
-        !self.watched_servers().is_empty()
-    }
-
-    /// The state directory of each herdr server whose watch of flume's
-    /// herdr plugin renewed its lease within the lease's term, in the
-    /// order of their names: the lease's first line is the watch's pid
-    /// and when it last renewed, in seconds since the epoch (design 10).
-    fn watched_servers(&self) -> Vec<PathBuf> {
+    /// The state directory of each herdr server whose startup of flume's
+    /// herdr plugin wrote its `setup.json` naming a socket still present,
+    /// in the order of their names, with what it holds (122, C.5).
+    fn running_servers(&self) -> Vec<(PathBuf, Value)> {
         let Some(plugin) = &self.plugin else {
             return vec![];
         };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs());
         let mut servers: Vec<PathBuf> = fs::read_dir(plugin.join("servers"))
             .into_iter()
             .flatten()
             .filter_map(Result::ok)
             .map(|server| server.path())
-            .filter(|server| {
-                fs::read_to_string(server.join("watch.lease"))
-                    .ok()
-                    .and_then(|lease| {
-                        let first = lease.lines().next()?.to_string();
-                        first.split_whitespace().nth(1)?.parse::<u64>().ok()
-                    })
-                    .is_some_and(|renewed| {
-                        renewed <= now + 5 && now.saturating_sub(renewed) < LEASE_TERM.as_secs()
-                    })
-            })
             .collect();
         servers.sort();
         servers
+            .into_iter()
+            .filter_map(|server| {
+                let written = read_json(&server.join("setup.json"))?;
+                let socket = written.get("socket")?.as_str()?;
+                Path::new(socket).exists().then_some((server, written))
+            })
+            .collect()
     }
 
     /// Exactly `variables` for the host user's login environment, in
@@ -867,12 +862,7 @@ impl Herdr {
             return AgentState::Stopped;
         }
         if info.get("agent").is_some_and(|agent| !agent.is_null()) {
-            return match info.get("agent_status").and_then(Value::as_str) {
-                Some("working") => AgentState::Working,
-                Some("idle" | "done") => AgentState::Waiting,
-                Some("blocked") => AgentState::Asking,
-                _ => AgentState::Unknown,
-            };
+            return status_state(info.get("agent_status").and_then(Value::as_str));
         }
         let Call::Answered(processes) =
             self.ask(&pane.socket, &["pane", "process-info", "--pane", &pane.id])
@@ -1685,6 +1675,18 @@ fn focused(screen: &str, trust: &FolderTrust) -> Option<bool> {
 }
 
 /// The pane id under `key` of a herdr result.
+/// An agent's state as herdr's `agent_status` gives it: working as
+/// working, idle and done as waiting, blocked as asking, and anything
+/// else, herdr's unknown among it, as unknown (90, 96).
+fn status_state(status: Option<&str>) -> AgentState {
+    match status {
+        Some("working") => AgentState::Working,
+        Some("idle" | "done") => AgentState::Waiting,
+        Some("blocked") => AgentState::Asking,
+        _ => AgentState::Unknown,
+    }
+}
+
 fn pane_id(result: &Value, key: &str) -> Result<String, String> {
     result
         .get(key)
@@ -1975,6 +1977,12 @@ impl Terminal for Herdr {
         Sent::Sent
     }
 
+    /// herdr types into a running agent's pane by `agent prompt`, so an
+    /// agent is kept open for an answer under it (53, 95, 198, C.5).
+    fn sends(&self) -> bool {
+        true
+    }
+
     fn state(&self, agent: &Identity) -> AgentState {
         match self.found(agent) {
             Found::At(pane) => self.pane_state(&pane),
@@ -2158,6 +2166,7 @@ impl Terminal for Herdr {
         if let Some(agent) = &clues.agent {
             if let Found::At(pane) = self.found(agent) {
                 let title = format!("{} · {}", clues.stage, clues.state);
+                let row = format!("flume={}", clues.line);
                 match self.answered(
                     &pane.socket,
                     &[
@@ -2170,6 +2179,8 @@ impl Terminal for Herdr {
                         &title,
                         "--display-agent",
                         &agent.place,
+                        "--token",
+                        &row,
                     ],
                 ) {
                     Ok(_) => shown = true,
@@ -2232,20 +2243,10 @@ impl Terminal for Herdr {
         }
     }
 
-    fn watch(&self) -> Watch {
-        if self.watch_kept() {
-            Watch::Bound {
-                seconds: WATCH_BOUND,
-            }
-        } else {
-            Watch::None
-        }
-    }
-
     fn setup(&self) -> Vec<String> {
         let mut setup: Vec<String> = Vec::new();
-        for server in self.watched_servers() {
-            let Some(Value::Array(lacking)) = read_json(&server.join("setup.json")) else {
+        for (_, written) in self.running_servers() {
+            let Some(Value::Array(lacking)) = written.get("lacking") else {
                 continue;
             };
             for words in lacking.iter().filter_map(Value::as_str) {
@@ -2335,30 +2336,106 @@ impl Terminal for Herdr {
                 })
                 .collect()
         };
-        let listing = match self.run(None, &["session", "list", "--json"], RUNS_BOUND) {
-            Ok((true, listing, _)) => listing,
-            Ok((false, _, errors)) => {
-                return unread(format!("herdr session list --json: {}", errors.trim()))
-            }
+        let listed = match self.sessions_listed(RUNS_BOUND) {
+            Ok(listed) => listed,
             Err(words) => return unread(words),
         };
-        let listed: Value = match serde_json::from_str(listing.trim()) {
-            Ok(listed) => listed,
-            Err(error) => return unread(format!("herdr session list --json: {error}")),
-        };
-        let listed = listed
-            .get("sessions")
-            .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
         sessions
             .iter()
-            .map(|session| self.listed_runs(listed, *session))
+            .map(|session| self.listed_runs(&listed, *session))
             .collect()
+    }
+
+    /// The agents the part `session` holds that carry a name, as C.5's
+    /// standing row reads them: the part's socket found by one `herdr
+    /// session list --json` under the profile's bound, by its `name`
+    /// listed `running`, the profile's own session where none is named, or
+    /// an own server held by its socket alone at that socket; a part not
+    /// listed running, or whose server has stopped since, holds none, and
+    /// nothing is started. Then `agent list` on that socket, each agent
+    /// with a string `name` by its `pane_id` and `agent_status`, the status
+    /// read as state reads it, at `herdr:<pane_id>@<socket>`. A listing or
+    /// a list refused, unanswered within the bound or not parsed is not
+    /// read, in herdr's words. Every call runs with the caller's `HERDR_*`
+    /// stripped, and nothing is kept (132, C.5; core.13, core.15, core.29).
+    fn agents_in(&self, session: Option<&str>) -> AgentsIn {
+        let unread = |reason: String| AgentsIn::Unread { reason };
+        let listed_at = |name: &str| -> Result<Option<PathBuf>, String> {
+            Ok(self
+                .sessions_listed(self.bound)?
+                .iter()
+                .find(|listed| {
+                    listed.get("name").and_then(Value::as_str) == Some(name)
+                        && listed.get("running") == Some(&Value::Bool(true))
+                })
+                .and_then(|listed| listed.get("socket_path")?.as_str())
+                .map(PathBuf::from))
+        };
+        let found = match (session, &self.server) {
+            (Some(name), _) => listed_at(name),
+            (None, Server::Session(own)) => listed_at(own),
+            (None, Server::Socket(socket)) => Ok(Some(socket.clone())),
+        };
+        let socket = match found {
+            Ok(Some(socket)) => socket,
+            Ok(None) => return AgentsIn::Read { agents: vec![] },
+            Err(words) => return unread(words),
+        };
+        let listed = match self.ask(&socket, &["agent", "list"]) {
+            Call::Answered(listed) => listed,
+            Call::Refused { code, .. } if code == "server_not_running" => {
+                return AgentsIn::Read { agents: vec![] }
+            }
+            Call::Refused { code, words } => {
+                return unread(format!("herdr refused ({code}): {words}"))
+            }
+            Call::Unanswered(words) => return unread(words),
+        };
+        let Some(agents) = listed.get("agents").and_then(Value::as_array) else {
+            return unread(format!("herdr agent list gave no agents: {listed}"));
+        };
+        AgentsIn::Read {
+            agents: agents
+                .iter()
+                .filter_map(|agent| {
+                    let name = agent.get("name")?.as_str()?;
+                    let id = agent.get("pane_id")?.as_str()?;
+                    Some(NamedAgent {
+                        name: name.into(),
+                        at: Pane {
+                            id: id.into(),
+                            socket: socket.clone(),
+                        }
+                        .session(),
+                        state: status_state(agent.get("agent_status").and_then(Value::as_str)),
+                    })
+                })
+                .collect(),
+        }
     }
 }
 
 impl Herdr {
+    /// The sessions one `herdr session list --json` lists, under `bound`
+    /// and with the caller's `HERDR_*` stripped; a listing refused,
+    /// unanswered within the bound or not parsed in herdr's words (C.5;
+    /// core.29).
+    fn sessions_listed(&self, bound: Duration) -> Result<Vec<Value>, String> {
+        let listing = match self.run(None, &["session", "list", "--json"], bound)? {
+            (true, listing, _) => listing,
+            (false, _, errors) => {
+                return Err(format!("herdr session list --json: {}", errors.trim()))
+            }
+        };
+        let listed: Value = serde_json::from_str(listing.trim())
+            .map_err(|error| format!("herdr session list --json: {error}"))?;
+        Ok(listed
+            .get("sessions")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default())
+    }
+
     /// Whether the part `session`, the profile's own where none, runs, as
     /// the listing `sessions` gives it (201, C.5).
     fn listed_runs(&self, sessions: &[Value], session: Option<&str>) -> SessionRuns {
@@ -2614,21 +2691,31 @@ mod tests {
         (herdr, plugin, ran)
     }
 
-    /// A server of the plugin's whose watch last renewed its lease `ago`
-    /// seconds since, and wrote `lacking` into its setup.json.
-    fn server(plugin: &Path, name: &str, ago: u64, lacking: &[&str]) {
+    /// A server of the plugin's whose startup wrote `lacking` into its
+    /// setup.json, naming the socket `socket` under the plugin's scratch,
+    /// present where `running`.
+    fn server(plugin: &Path, name: &str, running: bool, lacking: &[&str]) {
         let server = plugin.join("servers").join(name);
         fs::create_dir_all(&server).unwrap();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        fs::write(
-            server.join("watch.lease"),
-            format!("4242 {}\n/plugin\n0.0.0\n77\n", now - ago),
+        let socket = plugin.join(format!("{name}.sock"));
+        if running {
+            fs::write(&socket, "").unwrap();
+        }
+        write_json(
+            &server.join("setup.json"),
+            &json!({ "socket": socket, "lacking": lacking }),
         )
         .unwrap();
-        write_json(&server.join("setup.json"), &json!(lacking)).unwrap();
+    }
+
+    #[test]
+    fn herdr_hands_a_running_agent_words() {
+        // The seam-contracts spec's herdr scenario: the profile says it
+        // types into a running agent, asking herdr nothing to say so (53,
+        // 95, 198, C.5).
+        let (herdr, _, ran) = over_plugin("sends");
+        assert!(herdr.sends());
+        assert!(!ran.exists(), "a herdr command was run");
     }
 
     const KEY: &str = "herdr's configuration, /h/config.toml, binds no key to flume's places";
@@ -2636,30 +2723,41 @@ mod tests {
         "herdr's configuration, /h/config.toml, shows no row of flume's in the sidebar";
 
     #[test]
-    fn setup_is_a_fresh_leases_words_alone() {
-        // 122, C.5, design 8: one server's watch keeps a fresh lease and
-        // says the popup's key is missing; another's lease is stale, its
-        // words of the rows no longer what a watch reads. The profile
-        // gives the first's words alone and runs no herdr command.
-        let (herdr, plugin, ran) = over_plugin("fresh-stale");
-        server(&plugin, "1111", 5, &[KEY]);
-        server(&plugin, "2222", 120, &[ROWS]);
+    fn setup_is_a_running_servers_words_alone() {
+        // The terminal-profiles spec's "A running server and a gone one"
+        // (122, C.5): one server's setup.json names its present socket and
+        // the popup's missing key; another's names a socket now gone and
+        // the missing rows. The profile gives the first's words alone and
+        // runs no herdr command, an earlier release's fresh lease beside
+        // the gone one read as nothing.
+        let (herdr, plugin, ran) = over_plugin("running-gone");
+        server(&plugin, "1111", true, &[KEY]);
+        server(&plugin, "2222", false, &[ROWS]);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        fs::write(
+            plugin.join("servers/2222/watch.lease"),
+            format!("4242 {now}\n/plugin\n0.0.0\n77\n"),
+        )
+        .unwrap();
         assert_eq!(herdr.setup(), vec![KEY.to_string()]);
         assert!(!ran.exists(), "a herdr command was run");
     }
 
     #[test]
     fn setup_gives_each_servers_words_in_order_and_once() {
-        // 122, design 8: two watches read one configuration file, and a
-        // third another; each of their words is given once, in the order
-        // of their servers.
+        // 122, C.5: two servers read one configuration file, and a third
+        // another; each of their words is given once, in the order of
+        // their servers.
         let (herdr, plugin, ran) = over_plugin("in-order");
-        server(&plugin, "1111", 5, &[KEY, ROWS]);
-        server(&plugin, "2222", 5, &[KEY, ROWS]);
+        server(&plugin, "1111", true, &[KEY, ROWS]);
+        server(&plugin, "2222", true, &[KEY, ROWS]);
         server(
             &plugin,
             "3333",
-            5,
+            true,
             &["herdr's configuration, /other.toml, binds no key"],
         );
         assert_eq!(
@@ -2674,15 +2772,18 @@ mod tests {
     }
 
     #[test]
-    fn setup_is_none_beside_no_lease_or_nothing_lacking() {
-        // 122, design 8: no plugin's state, a fresh lease beside an empty
-        // array, and one beside no setup.json, as a watch of an earlier
-        // plugin keeps, each give none.
+    fn setup_is_none_for_nothing_lacking_or_nothing_written() {
+        // 122, C.5: no plugin's state, a running server's setup.json
+        // naming nothing lacking, one with no setup.json, and an earlier
+        // release's array, which names no socket, each give none.
         let (herdr, plugin, ran) = over_plugin("none");
         assert_eq!(herdr.setup(), Vec::<String>::new());
-        server(&plugin, "1111", 5, &[]);
-        server(&plugin, "2222", 5, &[KEY]);
+        server(&plugin, "1111", true, &[]);
+        server(&plugin, "2222", true, &[KEY]);
         fs::remove_file(plugin.join("servers/2222/setup.json")).unwrap();
+        let earlier = plugin.join("servers/3333");
+        fs::create_dir_all(&earlier).unwrap();
+        write_json(&earlier.join("setup.json"), &json!([KEY])).unwrap();
         assert_eq!(herdr.setup(), Vec::<String>::new());
         assert!(!ran.exists(), "a herdr command was run");
     }
