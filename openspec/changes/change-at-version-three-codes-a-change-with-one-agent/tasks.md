@@ -40,3 +40,7 @@ is passed by moon to the task's `cargo test`.
 ## 6. The site
 
 - [x] 6.1 In `site/src/content/docs/guides/kinds.mdx`, list flume's own kinds with `flume/change@3`, say a bare `change` takes the newest, `change@3`, unless a lock records another, and say in a sentence each how change@1, change@2 and change@3 code a change, as design 9 has it, to any host's operator (22, 154; core.35). Check: `devenv shell -- moon run site:prose`.
+
+## 7. The base's planning rules
+
+- [x] 7.1 Merge the base at 6d82383, where #1 (3177b9e) rewrote the same two rules of `openspec/config.yaml`'s `rules.tasks` for record 0054, taking the base's words whole, and have design 8 quote them as they stand and the proposal's impact name them the base's, `CLAUDE.md`'s paragraph under "Checks" left as task 1.2 wrote it (kit:specs.3; record 0054). Check: `sluice exec main -- moon run root:changes`.

@@ -81,7 +81,8 @@ None.
 - `crates/flume-conformance`: the fake harness's own kinds gain
   change@3; the engine's and the kinds seam's scenarios that name the
   newest or rely on repetition; a scenario citing S119; the clause list.
-- `openspec/config.yaml`, `CLAUDE.md` and
-  `site/src/content/docs/guides/kinds.mdx`.
+- `CLAUDE.md` and `site/src/content/docs/guides/kinds.mdx`;
+  `openspec/config.yaml`'s rules for record 0054, the base's since #1,
+  kept as they stand.
 - No new crate, plugin or site part, so no new moon project; no seam,
   core or weir change: flume's own kinds are data the profile reads.

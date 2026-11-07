@@ -249,20 +249,28 @@ unbuilt. The list's own tests are updated to the revision's counts.
 
 ### 8. This repository's planning rules
 
-`openspec/config.yaml`'s `rules.tasks` replaces its first rule and its
-last with:
+`openspec/config.yaml`'s `rules.tasks` holds, in place of its first
+rule and its last, record 0054's two rules as the base gives them since
+#1 (3177b9e), and this change keeps them as they stand:
 
 - "Each task says what must be true and names the narrowest check that
-  shows it done, written so it runs as named: one test by name,
-  `devenv shell -- moon run <project>:test -- <test name>`, one
-  package's tests, or the formatter or linter the gate runs given only
-  the files the task touched (kit:specs.3; record 0054). No task is a
-  step done by hand, a deploy or work after the landing."
+  shows that task done: one test by name, run as
+  `devenv shell -- cargo test -p <crate> <test>` with the features and
+  target its crate's moon task gives, where a test shows it; else one
+  project's task, its tests or the lint of what the task touched, run
+  as `sluice exec main -- moon run <project>:<task>` (kit:specs.3;
+  record 0054). No task is a step done by hand, a deploy or work after
+  the landing."
 - "No task runs the repository's whole checks, `sluice exec main` or a
-  layer's tag, and no task checks a task group or every project the
-  change touches: the task groups are headings for reading, a change's
-  verify stage runs the whole checks once, and sluice runs them again
-  at the merge (record 0054)."
+  layer of them, and no task checks a task group or the projects the
+  change touches: a group is a heading, for reading, and the change's
+  verify runs the repository's whole checks once, before sluice runs
+  its gate at the merge (record 0054)."
+
+Path not taken: words of this change's own for the two rules, a test by
+name run through `moon run <project>:test --`, beside the base's, which
+would leave one rule of record 0054 two wordings and the base not their
+owner.
 
 The three rules between them stay as they are. `CLAUDE.md`'s paragraph
 under "Checks" says `sluice exec main` runs the gate's checks, which a
