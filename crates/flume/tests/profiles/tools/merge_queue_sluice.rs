@@ -15,7 +15,10 @@
 //! read-submission while the place's landing is collected, every branch
 //! asked at once read from one overview and one status of each base, a
 //! fetch that fails, and what the policy says of a place, its readiness
-//! asked of the pinned sluice's equip and its answer read.
+//! asked of the pinned sluice's equip and its answer read. A base place's
+//! branch is opened and closed by the seam's scenarios, an open of a
+//! branch the policy names no table for refused and a close of a branch a
+//! submission is queued on kept, each in sluice's words (205, 206).
 
 use super::walk::{user_scratch, USER_SCRATCH};
 use crate::common::*;
@@ -42,6 +45,10 @@ fn from_worktree(head: &Revision) -> SubmitHead {
 const POLICY: &str =
     "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\n\n[branches.main]\n";
 
+/// The policy with a table for `train/*` beside main's, so sluice opens,
+/// lands on and closes `train/a`.
+const TRAINS: &str = "[tests]\nrunner = \"command\"\ncommand = \"sh check.sh\"\n\n[branches.\"train/*\"]\n\n[branches.main]\n";
+
 /// A scratch repository gated by sluice, and the place it holds.
 struct Harness {
     repository: Repository,
@@ -53,8 +60,13 @@ struct Harness {
 
 impl Harness {
     fn new() -> Harness {
+        Harness::with_policy(POLICY)
+    }
+
+    /// A scratch repository whose policy is `policy`.
+    fn with_policy(policy: &str) -> Harness {
         let repository = Repository::new("sluice");
-        repository.write(".config/sluice.toml", POLICY);
+        repository.write(".config/sluice.toml", policy);
         repository.write("check.sh", "exit 0\n");
         repository.commit("the gate");
         let home = repository.scratch.path("home");
@@ -375,6 +387,77 @@ impl MergeQueueHarness for Harness {
 #[test]
 fn the_sluice_profile_passes_the_merge_queue_scenarios() {
     pass_all("merge queue", &merge_queue::scenarios(), Harness::new);
+}
+
+#[test]
+fn the_sluice_profile_opens_and_closes_a_base_places_branch() {
+    // The seam's base-place scenarios that open and close a branch, over
+    // a policy that names `train/*`; the submit by name waits on the pin
+    // that takes `--head` without `--check` (203, 205, 206).
+    let opens: Vec<_> = merge_queue::base_place_scenarios()
+        .into_iter()
+        .filter(|scenario| !scenario.cites.contains(&"203"))
+        .collect();
+    assert_eq!(opens.len(), 2, "the open and close scenarios");
+    pass_all("merge queue's base place", &opens, || {
+        Harness::with_policy(TRAINS)
+    });
+}
+
+#[test]
+fn an_open_of_a_branch_the_policy_names_no_table_for_is_refused_in_sluices_words() {
+    let harness = Harness::new();
+    let repository = harness.repository.name();
+    match harness.seam.open(&repository, "other/a", "main") {
+        BranchOpened::Refused { reason } => assert!(
+            reason.starts_with("sluice branch create: ")
+                && reason.contains("no [branches] table")
+                && reason.contains("other/a"),
+            "the refusal is not sluice's words: {reason}"
+        ),
+        other => panic!("an open the policy names no table for answered {other:?}"),
+    }
+    assert_eq!(
+        harness.branch_head(&repository, "other/a"),
+        None,
+        "a branch made"
+    );
+}
+
+#[test]
+fn a_close_sluice_refuses_keeps_the_branch_in_its_words() {
+    let harness = Harness::with_policy(TRAINS);
+    let repository = harness.repository.name();
+    let BranchOpened::Made { revision } = harness.seam.open(&repository, "train/a", "main") else {
+        panic!("train/a was not opened");
+    };
+    let fix = harness.repository.dir.join("places/fix--a");
+    harness.repository.git(&[
+        "worktree",
+        "add",
+        "--quiet",
+        "-b",
+        "fix/a",
+        &fix.to_string_lossy(),
+        "train/a",
+    ]);
+    fs::write(fix.join("a.rs"), "fix/a\n").expect("the fix's work");
+    git(&fix, &["add", "a.rs"]);
+    git(&fix, &["commit", "--quiet", "-m", "fix/a"]);
+    let entry = harness.sluice(&fix, &["submit", "train/a", "--no-wait", "--json"]);
+    assert!(entry["id"].is_u64(), "the fix's submission: {entry}");
+    match harness.seam.close(&repository, "train/a", "main") {
+        BranchClosed::Kept { reason } => assert!(
+            reason.starts_with("sluice branch delete: ") && reason.contains("queued on train/a"),
+            "the refusal is not sluice's words: {reason}"
+        ),
+        other => panic!("a close with a submission queued answered {other:?}"),
+    }
+    assert_eq!(
+        harness.branch_head(&repository, "train/a"),
+        Some(revision),
+        "the branch a close was refused"
+    );
 }
 
 #[test]
