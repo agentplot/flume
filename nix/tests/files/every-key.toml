@@ -1,0 +1,123 @@
+# Written by flume's module from services.flume.settings; a change goes there.
+
+[agents]
+keep_open = "1h"
+model = "opus"
+
+[agents.programs.claude.settings]
+theme = "dark"
+
+[agents.streams.work]
+effort = "high"
+
+[host]
+agents = 8
+multiplexer = "printed"
+pin = ["streams.work.agents"]
+pool = "work"
+terminal_app = "printed"
+view = "terminal"
+
+[kinds.change]
+label = "construction"
+stream = "work"
+undeclared = "passes as written"
+
+[kinds.change.agents]
+effort = "high"
+instructions = "Say \"done\" when the tasks are ticked."
+keep_open = "30m"
+mode = "edits"
+model = "opus"
+
+[kinds.change.agents.programs.claude]
+file = "people-settings.json"
+
+[kinds.change.agents.programs.claude.settings]
+cleanupPeriodDays = 30
+includeCoAuthoredBy = false
+mixed = ["a", { b = 1 }, [2]]
+sampleRate = 0.5
+
+[[kinds.change.agents.programs.claude.settings.hooks.Stop]]
+matcher = ""
+
+[[kinds.change.agents.programs.claude.settings.hooks.Stop.hooks]]
+command = "true"
+type = "command"
+
+[kinds.change.agents.programs.claude.settings.permissions]
+allow = ["Bash(git status)", "Read"]
+
+[kinds.change.agents.stages.code]
+model = "sonnet"
+
+[kinds.change.agents.stages.code.mode]
+claude = "acceptEdits"
+
+[kinds.research]
+label = "inception"
+
+[pools.work]
+strategy = "most-left"
+threshold = 90
+
+[[pools.work.accounts]]
+agents = 4
+name = "work-1"
+program = "claude"
+usage = "~/.local/state/usage/work-1.json"
+
+[pools.work.accounts.env]
+CLAUDE_CONFIG_DIR = "$HOME/.claude-work-1"
+
+[[pools.work.accounts]]
+name = "work-2"
+program = "claude"
+
+[pools.work.accounts.env]
+CLAUDE_CONFIG_DIR = "~/.claude-work-2"
+
+[repos."acme/acme"]
+stream = "work"
+
+[repos."acme/acme".agents]
+effort = "medium"
+
+[repos."acme/acme".kinds.fix]
+label = "operation"
+stream = "personal"
+
+[repos."acme/acme".kinds.fix.agents]
+effort = "low"
+
+[repos."acme/acme".kinds.fix.agents.stages.code]
+model = "sonnet"
+
+[repos."~/Code/upstream-fork"]
+stream = "personal"
+
+[streams.personal]
+
+[streams.work]
+agents = 5
+multiplexer = "printed"
+pool = "work"
+priority = 10
+session = "work"
+terminal_app = "printed"
+title = "Work"
+view = "app"
+
+[streams.work.kinds.research]
+session = "work-design"
+
+[streams.work.kinds.research.stages.review]
+session = "work-review"
+
+[streams.work.labels.construction]
+reserve = 2
+
+[streams.work.labels.operation]
+keep_free = 1
+reserve = 2

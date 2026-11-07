@@ -17,5 +17,5 @@ let
 in
 {
   typecheck = lines (import ./typecheck.nix t);
-  test = lines (import ./packages.nix t);
+  test = lines (import ./packages.nix t // import ./file.nix t);
 }
