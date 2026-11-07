@@ -3397,7 +3397,7 @@ fn east_with_its_roles(host: &UnderHerdr) {
 
 /// Settles every place, as a caller does between its commands, until
 /// `holds` holds, for up to three minutes; `what` names it where it never
-/// does, with every place's line.
+/// does, with every place's line and what each start's stand-in did.
 fn settled_until(host: &UnderHerdr, what: &str, holds: impl Fn() -> bool) {
     let began = std::time::Instant::now();
     loop {
@@ -3412,7 +3412,7 @@ fn settled_until(host: &UnderHerdr, what: &str, holds: impl Fn() -> bool) {
                 .flatten()
                 .map(|place| json!([place["place"], place["line"]["full"], place["waiting_on"]]))
                 .collect();
-            panic!("never came to {what}: {lines:?}");
+            panic!("never came to {what}: {lines:?}\n{}", host.logs());
         }
         std::thread::sleep(std::time::Duration::from_millis(300));
     }
