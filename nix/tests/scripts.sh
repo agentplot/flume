@@ -70,3 +70,115 @@ expect "$named" "its failure names no services.flume.settings.kinds.change.agent
   says "$err" "services.flume.settings.kinds.change.agents.programs.claude.file"
 expect "$named" "its failure names not the values the file takes: $err" \
   says "$err" "strings, booleans, integers, floats, lists and tables"
+
+# The activation's link, in a case's folder: its home, the module's file
+# in a store of its own, and where the link goes.
+activate=$nix/modules/activate.sh
+home_of() {
+  home=$dir/home
+  file=$dir/store/flume-config.toml
+  folder=$home/.config/flume
+  target=$folder/config.toml
+  aside=$target.before-nix
+  mkdir -p "$home" "$dir/store"
+  echo '# the module' >"$file"
+}
+
+# activate.sh with `$@` in the case's home: its status, output and error.
+activation() {
+  status=0
+  HOME=$home sh "$activate" "$@" >"$dir/out" 2>"$dir/err" || status=$?
+  out=$(cat "$dir/out")
+  err=$(cat "$dir/err")
+}
+
+linked() {
+  [ -L "$target" ] && [ "$(readlink "$target")" = "$file" ]
+}
+holds() {
+  [ "$(cat "$1" 2>/dev/null)" = "$2" ]
+}
+missing() {
+  [ ! -e "$1" ] && [ ! -L "$1" ]
+}
+# `$1` names `$2`, then `$3`.
+names() {
+  case $1 in *"$2"*"$3"*) ;; *) return 1 ;; esac
+}
+# The names of the folder `$1`'s entries, sorted, on one line.
+listed() {
+  (cd "$1" && find . -mindepth 1 -maxdepth 1 | sed 's|^\./||' | sort | paste -s -d ' ' -)
+}
+# The folder `$1` holds exactly `$2`.
+entries() {
+  [ "$(listed "$1")" = "$2" ]
+}
+
+named="A fresh home"
+fresh
+home_of
+activation link "$file"
+expect "$named" "link exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$target is no link to $file" linked
+expect "$named" "link says \"$out\", not that it linked $target" \
+  [ "$out" = "flume: linked $target to $file" ]
+expect "$named" "$folder holds $(listed "$folder"), not config.toml alone" \
+  entries "$folder" config.toml
+
+named="A file aside already"
+fresh
+home_of
+mkdir -p "$folder"
+echo '# by hand' >"$target"
+echo '# by hand before' >"$aside"
+activation link "$file"
+expect "$named" "link exits $status, not 1" [ "$status" -eq 1 ]
+expect "$named" "link changed $target" holds "$target" '# by hand'
+expect "$named" "link changed $aside" holds "$aside" '# by hand before'
+expect "$named" "link's refusal \"$err\" names not both paths" \
+  names "$err" "$target" "$aside"
+expect "$named" "link says \"$out\"" [ -z "$out" ]
+
+named="A link of an earlier activation"
+fresh
+home_of
+mkdir -p "$folder"
+ln -s "$dir/store/earlier-config.toml" "$target"
+activation link "$file"
+expect "$named" "link exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$target is no link to $file" linked
+expect "$named" "link says \"$out\", not that it linked $target" \
+  [ "$out" = "flume: linked $target to $file" ]
+expect "$named" "link moved the earlier link aside" missing "$aside"
+
+named="A hand-written file there"
+fresh
+home_of
+mkdir -p "$folder/sources"
+echo '# by hand' >"$target"
+echo '[streams.work]' >"$folder/config.local.toml"
+echo 'kinds_dir = "/srv/kinds"' >"$folder/sources/acme.toml"
+echo '# the host lock' >"$folder/flume.lock"
+before=$(cd "$folder" && cat config.local.toml sources/acme.toml flume.lock | cksum)
+activation link "$file"
+after=$(cd "$folder" && cat config.local.toml sources/acme.toml flume.lock | cksum)
+expect "$named" "link exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$target is no link to $file" linked
+expect "$named" "$aside does not hold the hand-written file" holds "$aside" '# by hand'
+expect "$named" "link says \"$out\", not both paths" \
+  [ "$out" = "flume: moved $target to $aside
+flume: linked $target to $file" ]
+expect "$named" "config.local.toml, sources/ or flume.lock changed" [ "$before" = "$after" ]
+expect "$named" "$folder holds $(listed "$folder")" \
+  entries "$folder" "config.local.toml config.toml config.toml.before-nix flume.lock sources"
+expect "$named" "sources/ holds $(listed "$folder/sources")" \
+  entries "$folder/sources" acme.toml
+
+fresh
+home_of
+mkdir -p "$target"
+echo 'kept' >"$target/inside"
+activation link "$file"
+expect "$named" "link of a folder exits $status: $err" [ "$status" -eq 0 ]
+expect "$named" "$target is no link to $file, where a folder was" linked
+expect "$named" "$aside does not hold the folder" holds "$aside/inside" kept
