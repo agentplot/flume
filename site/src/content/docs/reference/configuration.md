@@ -86,6 +86,10 @@ attribution = { commit = "", pr = "", sessionUrl = false }
 repository = "~/src/acme"
 kind = "planner"
 priority = 5
+
+[roles."acme/ops"]
+agent = "acme-ops"
+session = "acme"
 ```
 
 ### `[host]`
@@ -371,8 +375,9 @@ with its refusal.
 
 ### `[roles."<group>/<role>"]`
 
-The run the host launches for a role's address
-([roles and wake](/flume/guides/roles-and-wake/)):
+The run the host launches for a role's address, or the agent that
+already holds it
+([roles and wake](/flume/guides/roles-and-wake/)). A run's entry:
 
 | Key | Meaning | Left out |
 |---|---|---|
@@ -383,8 +388,31 @@ The run the host launches for a role's address
 | `brief` | the run's brief | none |
 | `stream` | the stream the run's place runs in | as for any launch |
 
+An entry that gives `agent` names an agent that already runs, which
+takes the address's ends as notices and wakes no run
+([an address an agent already holds](/flume/guides/roles-and-wake/#an-address-an-agent-already-holds)):
+
+| Key | Meaning | Left out |
+|---|---|---|
+| `agent` | the name the multiplexer knows the agent by, a string | the entry is a run's |
+| `session` | the session the agent lives in, a string | the session the entry's stream opens its own agents in: its `session`, else its name, else the multiplexer's own for a default stream naming none |
+| `stream` | the stream whose multiplexer the agent is found in, one the host declares | `default` |
+
+flume looks for the agent by its name in that session of that
+stream's multiplexer at each delivery and each status, and keeps
+nothing of where it was.
+
+The file is unreadable, naming the address, where an entry gives:
+
+- `agent` beside `kind`, two agents of one role;
+- `agent` beside `repository`, `priority`, `base` or `brief`, naming the
+  key;
+- `session` with no `agent`;
+- `agent` or `session` empty, or not a string.
+
 A key that is no `<group>/<role>` address, or a key the table does not
-know, makes the file unreadable.
+know, makes the file unreadable too. The table is the managed layer's:
+a local file that names it is not taken at all.
 
 ## The host's sources
 

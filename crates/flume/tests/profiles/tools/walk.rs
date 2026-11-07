@@ -18,7 +18,9 @@
 //! scratch home with no multiplexer's session, no flume, sluice or Claude
 //! Code session of the caller's, no credential and no forge (core.6,
 //! core.22, core.29): the remote is a directory, and sluice's checkouts
-//! keep their scratch in the walkthrough's own folder.
+//! keep their scratch in the walkthrough's own folder. A walkthrough
+//! under herdr keeps its home behind a short link, so the sockets of its
+//! sessions fit, and its sessions' servers are stopped when it ends.
 
 use crate::common::*;
 use flume::profiles::place::git_worktree;
@@ -599,6 +601,132 @@ exec "$pinned" "$@"
     std::fs::write(&path, script).expect("the stand-in for sluice");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
         .expect("the stand-in for sluice made executable");
+}
+
+/// A walkthrough's host under herdr (C.5): the walk, its home a short
+/// link, so the sockets the pinned herdr binds for its sessions beneath
+/// its configuration home fit a socket's path, its sessions' servers
+/// stopped and its link removed when it is dropped.
+pub struct UnderHerdr {
+    pub walk: Walk,
+    pub link: PathBuf,
+}
+
+/// How many short links this run has made, which names the next.
+static LINKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// The longest path a socket's address holds on this host, its closing
+/// nul left out.
+fn socket_path_limit() -> usize {
+    // SAFETY: an address of all zeros is a valid `sockaddr_un`.
+    let address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    address.sun_path.len() - 1
+}
+
+impl UnderHerdr {
+    /// `walk` under herdr, its home a short link in the temporary folder,
+    /// else in `/tmp` where the run may write there, whose sockets fit for
+    /// the session `longest`, the longest name it opens (core.51).
+    pub fn new(walk: Walk, longest: &str) -> UnderHerdr {
+        // The longest socket the pinned herdr binds for a session,
+        // beneath the configuration home.
+        let socket = format!("config/herdr/sessions/{longest}/herdr-client.sock");
+        let named = format!(
+            "o{}-{}",
+            std::process::id(),
+            LINKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        );
+        let limit = socket_path_limit();
+        let fits = |folder: &Path| folder.join(&named).join(&socket).as_os_str().len() <= limit;
+        let linked = |folder: &Path| {
+            let link = folder.join(&named);
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink(walk.home(), &link).map(|()| link)
+        };
+        let temporary = std::env::temp_dir();
+        let tmp = PathBuf::from("/tmp");
+        let link = [&temporary, &tmp]
+            .into_iter()
+            .filter(|folder| fits(folder))
+            .find_map(|folder| linked(folder).ok())
+            .unwrap_or_else(|| {
+                let socket = temporary.join(&named).join(&socket);
+                panic!(
+                    "herdr's session {longest} would bind {}, {} bytes, past the {limit} a \
+                     socket's path holds on this host, and /tmp cannot be written",
+                    socket.display(),
+                    socket.as_os_str().len()
+                )
+            });
+        UnderHerdr {
+            walk: walk.with_home(link.clone()),
+            link,
+        }
+    }
+
+    /// herdr's answer for `args` under the host's configuration home, on
+    /// the server at `socket` where one is named.
+    pub fn herdr(&self, socket: Option<&str>, args: &[&str]) -> Value {
+        let mut command = self.walk.command("herdr", &self.walk.repository.dir);
+        command.args(args).stdout(Stdio::piped());
+        if let Some(socket) = socket {
+            command.env("HERDR_SOCKET_PATH", socket);
+        }
+        let output = command.output().expect("herdr runs");
+        let answer: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+        answer.get("result").cloned().unwrap_or(answer)
+    }
+
+    /// The sessions herdr lists running under the host's configuration
+    /// home, by name, with their sockets.
+    pub fn running(&self) -> Vec<(String, String)> {
+        self.herdr(None, &["session", "list", "--json"])["sessions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|session| session["running"] == Value::Bool(true))
+            .filter_map(|session| {
+                Some((
+                    session["name"].as_str()?.to_string(),
+                    session["socket_path"].as_str()?.to_string(),
+                ))
+            })
+            .collect()
+    }
+
+    /// The socket of the session `name` herdr lists running under the
+    /// host's configuration home.
+    pub fn socket_of(&self, name: &str) -> String {
+        self.running()
+            .into_iter()
+            .find(|(running, _)| running == name)
+            .map(|(_, socket)| socket)
+            .unwrap_or_else(|| panic!("no session {name}: {:?}", self.running()))
+    }
+
+    /// The labels of what herdr lists of `what`, `tab` or `workspace`, on
+    /// the server at `socket`.
+    pub fn labels(&self, socket: &str, what: &str) -> Vec<String> {
+        self.herdr(Some(socket), &[what, "list"])[format!("{what}s")]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|listed| listed["label"].as_str().map(str::to_string))
+            .collect()
+    }
+}
+
+impl Drop for UnderHerdr {
+    fn drop(&mut self) {
+        for (_, socket) in self.running() {
+            let _ = self.herdr(Some(&socket), &["server", "stop"]);
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !self.running().is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let _ = std::fs::remove_file(&self.link);
+    }
 }
 
 /// The walk's login shell, written into `dir` as `shell`: run as a login

@@ -799,6 +799,13 @@ impl TerminalHarness for FakeTerminalHarness {
     fn logged(&self) -> Option<Vec<String>> {
         Some(self.terminal.log.calls())
     }
+
+    /// The fake scripts the agent in the part, waiting (132).
+    fn named_agent(&self, session: &str, name: &str) -> bool {
+        self.terminal
+            .add_agent(Some(session), name, AgentState::Waiting);
+        true
+    }
 }
 
 /// The fake window, its shows answered as each scenario scripts them.

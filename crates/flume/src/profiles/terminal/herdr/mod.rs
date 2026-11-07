@@ -86,6 +86,19 @@
 //! session is not interrupted to clear it, its program queuing the
 //! notice as its next turn.
 //!
+//! A standing agent is found by its name in its session at each ask
+//! (132, C.5's standing row): agents_in reads one `herdr session list
+//! --json` and finds the part's socket by its `name` listed `running`,
+//! the own session `flume`, or an own server held by its socket alone at
+//! that socket; a part not listed running holds no agent, and no server
+//! is started. Then `agent list` on that socket gives each agent herdr
+//! lists with a string `name`, by its `pane_id` and `agent_status`, the
+//! status read as state reads it, at `herdr:<pane_id>@<socket>`, which
+//! send_to and session_state then reach by the pane's id. An agent herdr
+//! lists with no name is not given, and two of one name, which herdr
+//! never lists on one server, would both be. A listing or a list refused
+//! or unanswered is not read, in herdr's words; nothing is kept.
+//!
 //! Every herdr call runs under a bound, ten seconds where the call states
 //! none, and one that does not answer within it is unknown or a refusal
 //! naming the bound; each runs with the caller's `HERDR_*` stripped and
@@ -93,9 +106,9 @@
 
 use crate::host::process::{executable, program_path};
 use flume_seams::{
-    AgentCommand, AgentState, Attached, Closed, Clues, FolderTrust, Identity, OpenIn, Opened,
-    PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession, View,
-    ViewCommand, Watch,
+    AgentCommand, AgentState, AgentsIn, Attached, Closed, Clues, FolderTrust, Identity, NamedAgent,
+    OpenIn, Opened, PlaceRef, Sent, SessionRuns, Shown, ShownAt, Terminal, TerminalTidy, ToSession,
+    View, ViewCommand, Watch,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -867,12 +880,7 @@ impl Herdr {
             return AgentState::Stopped;
         }
         if info.get("agent").is_some_and(|agent| !agent.is_null()) {
-            return match info.get("agent_status").and_then(Value::as_str) {
-                Some("working") => AgentState::Working,
-                Some("idle" | "done") => AgentState::Waiting,
-                Some("blocked") => AgentState::Asking,
-                _ => AgentState::Unknown,
-            };
+            return status_state(info.get("agent_status").and_then(Value::as_str));
         }
         let Call::Answered(processes) =
             self.ask(&pane.socket, &["pane", "process-info", "--pane", &pane.id])
@@ -1685,6 +1693,18 @@ fn focused(screen: &str, trust: &FolderTrust) -> Option<bool> {
 }
 
 /// The pane id under `key` of a herdr result.
+/// An agent's state as herdr's `agent_status` gives it: working as
+/// working, idle and done as waiting, blocked as asking, and anything
+/// else, herdr's unknown among it, as unknown (90, 96).
+fn status_state(status: Option<&str>) -> AgentState {
+    match status {
+        Some("working") => AgentState::Working,
+        Some("idle" | "done") => AgentState::Waiting,
+        Some("blocked") => AgentState::Asking,
+        _ => AgentState::Unknown,
+    }
+}
+
 fn pane_id(result: &Value, key: &str) -> Result<String, String> {
     result
         .get(key)
@@ -2335,30 +2355,106 @@ impl Terminal for Herdr {
                 })
                 .collect()
         };
-        let listing = match self.run(None, &["session", "list", "--json"], RUNS_BOUND) {
-            Ok((true, listing, _)) => listing,
-            Ok((false, _, errors)) => {
-                return unread(format!("herdr session list --json: {}", errors.trim()))
-            }
+        let listed = match self.sessions_listed(RUNS_BOUND) {
+            Ok(listed) => listed,
             Err(words) => return unread(words),
         };
-        let listed: Value = match serde_json::from_str(listing.trim()) {
-            Ok(listed) => listed,
-            Err(error) => return unread(format!("herdr session list --json: {error}")),
-        };
-        let listed = listed
-            .get("sessions")
-            .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
         sessions
             .iter()
-            .map(|session| self.listed_runs(listed, *session))
+            .map(|session| self.listed_runs(&listed, *session))
             .collect()
+    }
+
+    /// The agents the part `session` holds that carry a name, as C.5's
+    /// standing row reads them: the part's socket found by one `herdr
+    /// session list --json` under the profile's bound, by its `name`
+    /// listed `running`, the profile's own session where none is named, or
+    /// an own server held by its socket alone at that socket; a part not
+    /// listed running, or whose server has stopped since, holds none, and
+    /// nothing is started. Then `agent list` on that socket, each agent
+    /// with a string `name` by its `pane_id` and `agent_status`, the status
+    /// read as state reads it, at `herdr:<pane_id>@<socket>`. A listing or
+    /// a list refused, unanswered within the bound or not parsed is not
+    /// read, in herdr's words. Every call runs with the caller's `HERDR_*`
+    /// stripped, and nothing is kept (132, C.5; core.13, core.15, core.29).
+    fn agents_in(&self, session: Option<&str>) -> AgentsIn {
+        let unread = |reason: String| AgentsIn::Unread { reason };
+        let listed_at = |name: &str| -> Result<Option<PathBuf>, String> {
+            Ok(self
+                .sessions_listed(self.bound)?
+                .iter()
+                .find(|listed| {
+                    listed.get("name").and_then(Value::as_str) == Some(name)
+                        && listed.get("running") == Some(&Value::Bool(true))
+                })
+                .and_then(|listed| listed.get("socket_path")?.as_str())
+                .map(PathBuf::from))
+        };
+        let found = match (session, &self.server) {
+            (Some(name), _) => listed_at(name),
+            (None, Server::Session(own)) => listed_at(own),
+            (None, Server::Socket(socket)) => Ok(Some(socket.clone())),
+        };
+        let socket = match found {
+            Ok(Some(socket)) => socket,
+            Ok(None) => return AgentsIn::Read { agents: vec![] },
+            Err(words) => return unread(words),
+        };
+        let listed = match self.ask(&socket, &["agent", "list"]) {
+            Call::Answered(listed) => listed,
+            Call::Refused { code, .. } if code == "server_not_running" => {
+                return AgentsIn::Read { agents: vec![] }
+            }
+            Call::Refused { code, words } => {
+                return unread(format!("herdr refused ({code}): {words}"))
+            }
+            Call::Unanswered(words) => return unread(words),
+        };
+        let Some(agents) = listed.get("agents").and_then(Value::as_array) else {
+            return unread(format!("herdr agent list gave no agents: {listed}"));
+        };
+        AgentsIn::Read {
+            agents: agents
+                .iter()
+                .filter_map(|agent| {
+                    let name = agent.get("name")?.as_str()?;
+                    let id = agent.get("pane_id")?.as_str()?;
+                    Some(NamedAgent {
+                        name: name.into(),
+                        at: Pane {
+                            id: id.into(),
+                            socket: socket.clone(),
+                        }
+                        .session(),
+                        state: status_state(agent.get("agent_status").and_then(Value::as_str)),
+                    })
+                })
+                .collect(),
+        }
     }
 }
 
 impl Herdr {
+    /// The sessions one `herdr session list --json` lists, under `bound`
+    /// and with the caller's `HERDR_*` stripped; a listing refused,
+    /// unanswered within the bound or not parsed in herdr's words (C.5;
+    /// core.29).
+    fn sessions_listed(&self, bound: Duration) -> Result<Vec<Value>, String> {
+        let listing = match self.run(None, &["session", "list", "--json"], bound)? {
+            (true, listing, _) => listing,
+            (false, _, errors) => {
+                return Err(format!("herdr session list --json: {}", errors.trim()))
+            }
+        };
+        let listed: Value = serde_json::from_str(listing.trim())
+            .map_err(|error| format!("herdr session list --json: {error}"))?;
+        Ok(listed
+            .get("sessions")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default())
+    }
+
     /// Whether the part `session`, the profile's own where none, runs, as
     /// the listing `sessions` gives it (201, C.5).
     fn listed_runs(&self, sessions: &[Value], session: Option<&str>) -> SessionRuns {

@@ -2,8 +2,9 @@
 //! file's write time, whether a command of flume's still lives, the bound
 //! on agents its configuration states, its streams with their sessions,
 //! labels and displays, its pools of accounts, the labels it gives kinds,
-//! its configuration's values with their layers, the sources of its
-//! kinds, and a lock over the room (design 3, 6). No seam of Part B.
+//! its configuration's values with their layers, the runs and standing
+//! agents it names for roles' addresses, the sources of its kinds, and a
+//! lock over the room (design 3, 6). No seam of Part B.
 
 use crate::{KindSettings, Seconds, Secret, Settings};
 use serde::{Deserialize, Serialize};
@@ -423,6 +424,23 @@ pub struct RoleRun {
     pub stream: Option<String>,
 }
 
+/// The standing agent a host's configuration names for a role's address,
+/// as its `[roles."<partition>/<role>"]` table gives it with `agent`: the
+/// name the terminal knows the agent by, which a caller keeps standing;
+/// the session it lives in where the entry names one, else its stream's
+/// own; and the stream whose session and terminal it is found in where
+/// the entry names one, else the default stream. The address's ends go
+/// into that agent, and flume starts, wakes and keeps nothing of it (43,
+/// 132, 143, 190, C.7; core.28).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StandingAgent {
+    pub agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
+}
+
 /// A source the host's configuration declares by a file of its own in its
 /// sources directory, the file's name less `.toml` being the source's
 /// (191, C.7): the file, and the directory its packages lie in or why
@@ -504,6 +522,15 @@ pub trait Host: Send + Sync {
     /// The run the host's configuration names for a role's address, as
     /// it stands now; none where it names nothing for it (132, C.7).
     fn role(&self, address: &str) -> Option<RoleRun>;
+
+    /// Each address the host's configuration gives a standing agent, by
+    /// the address, as it stands now: read at each delivery and each
+    /// status, never kept, and none of them a run's, which `role` gives
+    /// (132, C.7). None by default, a host whose configuration gives no
+    /// standing agent.
+    fn standing(&self) -> BTreeMap<String, StandingAgent> {
+        BTreeMap::new()
+    }
 
     /// The streams the host's configuration declares, by name, as it
     /// stands now: `default` among them always, held by the host's bound
