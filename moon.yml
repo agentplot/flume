@@ -21,8 +21,8 @@ tasks:
     tags: [check-fast]
     options: {runFromWorkspaceRoot: true}
   # rustc, cargo, clippy and rustfmt are the build .prototools pins, and
-  # Claude Code, OpenSpec, herdr and sluice the releases devenv.nix pins, on
-  # whichever host runs the gate (core.22). It reads the tools it checks
+  # Claude Code, OpenSpec, herdr, sluice, nix, nixfmt, statix and deadnix
+  # the releases devenv.nix pins, on whichever host runs the gate (core.22). It reads the tools it checks
   # from outside the tree, so it never replays.
   toolchain:
     command: 'sh check-toolchain.sh'
