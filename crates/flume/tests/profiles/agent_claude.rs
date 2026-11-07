@@ -6,7 +6,8 @@
 //! settings and with none, the keys the profile reserves, a people's
 //! settings file named by the host through the core, the keys it takes
 //! as written and a repository's tagline among them; the map of
-//! flume's modes and the release's own, and the mode read back; the
+//! flume's modes and the release's own, and the mode read back; the way
+//! to stop short, one text for every agent; the
 //! plugin an agent loads, written once per version; a prompt queued while
 //! the agent worked; a slash command's
 //! prompt; the folder-trust dialog the command names, against that
@@ -1098,6 +1099,44 @@ fn the_mode_read_back() {
         ["default", "acceptEdits", "plan"].map(mode::began),
         ["manual", "acceptEdits", "plan"]
     );
+}
+
+#[test]
+fn the_words_a_fixs_code_is_told() {
+    // The way to stop short asked for a fix's code agent and for a
+    // change's verify agent is one text, naming `flume needs --found` for
+    // work a stage before this one must do again, with nothing of either
+    // agent's identity and no "cannot deliver past" (28, 41, 131; core.31).
+    let seam = Harness::new().seam;
+    let code = identity("code");
+    let verify = Identity {
+        repository: "/elsewhere".into(),
+        place: "change--two".into(),
+        stage: "verify".into(),
+        start: 7,
+    };
+    let way = seam.stop_short(&code);
+    assert_eq!(seam.stop_short(&verify), way, "the verify agent's words");
+    assert_eq!(
+        way,
+        "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work a stage before this one must do again, saying what you found; then stop."
+    );
+    assert!(
+        way.contains("`flume needs --found \"<words>\"` when you found work a stage before this one must do again"),
+        "a found is not work a stage before this one must do again: {way}"
+    );
+    assert!(!way.contains("cannot deliver past"), "{way}");
+    for who in [&code, &verify] {
+        for part in [
+            who.to_string(),
+            who.repository.clone(),
+            who.place.clone(),
+            who.stage.clone(),
+            who.start.to_string(),
+        ] {
+            assert!(!way.contains(&part), "{part} of {who} in {way}");
+        }
+    }
 }
 
 #[test]

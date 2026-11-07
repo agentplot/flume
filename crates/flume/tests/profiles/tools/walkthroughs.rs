@@ -11,9 +11,13 @@
 //! taken in, then to its landing, and a failure of the entry taken in
 //! from it goes back to code once and lands on the next (124, C.6); a change runs construct, code and
 //! verify, its report committed in the archived change (S2, S35); verify
-//! finding work sends the place back to code (131); a fix whose prompt
-//! Claude Code submits inside paste tags lands (89); a host's bound
-//! queues a launch and starts the waiting ones by priority (S37), and a
+//! finding work sends the place back to code (131); a fix whose code
+//! finds work waits on an answer, with one agent opened, and its
+//! caller's retry with the answer starts code once more, the findings
+//! then the answer in its prompt, and lands (41, 42, 48, 49, 131); a fix
+//! whose prompt Claude Code submits inside paste tags lands (89); a
+//! host's bound queues a launch and starts the waiting ones by priority
+//! (S37), and a
 //! stage waiting for room starts at the next command of flume's once the
 //! host's configuration gives it room, status saying no watch is kept
 //! (70, 119); a fix launched on a stream whose pool holds only `codex`
@@ -695,6 +699,70 @@ fn verify_finding_work_sends_the_place_back_to_code() {
 }
 
 #[test]
+fn a_fixs_code_finding_work_waits_on_an_answer_and_its_retry_lands() {
+    // 131, 42: fix's code is its kind's own fix round, so its found sends
+    // the place back to no stage: no agent starts, no going-back is
+    // counted, and the place waits on an answer with the findings; the
+    // caller's retry of code with an answer starts it once more, its
+    // prompt holding the findings and then the answer, counting no
+    // going-back (48, 49), and the fix lands.
+    let walk = Walk::new("walk-fix-found");
+    let place = walk.launch("fix", "found", &["--brief", "fix the parser"]);
+    let findings = "the landing is read from another host's queue, outside this place";
+    walk.agent(
+        &place,
+        json!([{ "bash": format!("flume needs --found '{findings}'") }]),
+    );
+    walk.until(&place, "its code stage ended short", |status| {
+        stage(status, "code")["state"] == "ended_short"
+    });
+    for _ in 0..2 {
+        walk.settle(&place);
+    }
+    let status = walk.status(&place);
+    let code = stage(&status, "code");
+    assert_eq!(code["starts"], 1, "one agent opened: {status}");
+    assert_eq!(code["end"]["needs"], "found_work", "{status}");
+    assert_eq!(code["end"]["words"], findings, "{status}");
+    assert_eq!(status["submission"]["send_backs"], 0, "{status}");
+    assert_eq!(
+        (
+            &status["waiting_on"]["act"],
+            &status["waiting_on"]["stage"],
+            &status["waiting_on"]["why"],
+            &status["waiting_on"]["words"],
+        ),
+        (
+            &json!("retry"),
+            &json!("code"),
+            &json!("answer"),
+            &json!(findings)
+        ),
+        "{status}"
+    );
+    assert_eq!(status["line"]["state"], "waiting on an answer", "{status}");
+
+    let answer = "read it from this host's queue alone; the other host's is not ours";
+    walk.flume(&["retry", &place, "--stage", "code", "--words", answer]);
+    let status = walk.until(&place, "its code stage started once more", |status| {
+        stage(status, "code")["starts"] == 2 && !status["agent"].is_null()
+    });
+    assert_eq!(status["submission"]["send_backs"], 0, "{status}");
+    let prompt = walk.prompt(&place);
+    match (prompt.find(findings), prompt.find(answer)) {
+        (Some(question), Some(answered)) if question < answered => {}
+        _ => panic!("the findings then the answer are not in {prompt}"),
+    }
+    walk.agent(&place, commits("parser.rs", "fn parse() {}\n"));
+    until_landed(&walk, &place);
+    assert_eq!(
+        walk.on_remote("parser.rs").as_deref(),
+        Some("fn parse() {}\n")
+    );
+    assert!(!walk.has_branch("fix/found"));
+}
+
+#[test]
 fn a_bound_host_queues_launches_and_starts_them_by_priority() {
     // S37: with room for two agents, the first two launches start, the
     // third and fourth wait for room, and as each agent ends the waiting
@@ -1088,7 +1156,7 @@ fn a_failed_submission_sends_a_repeating_stage_back_for_one_repetition_with_no_g
 const CARRIED: &str = "Your last turn stopped at your account's usage limit. This session now goes on under an account of the pool, with its conversation as it stood: carry on from where you stopped.";
 
 /// The way to stop short the Claude Code profile gives every start (28).
-const STOP_SHORT: &str = "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work this stage cannot deliver past, saying what you found; then stop.";
+const STOP_SHORT: &str = "run `flume needs \"<words>\"` when you cannot go on without an answer, saying what you need, or `flume needs --found \"<words>\"` when you found work a stage before this one must do again, saying what you found; then stop.";
 
 /// The host's fill-first pool of two accounts, `stand-in-1` and
 /// `stand-in-2`, whose `CLAUDE_CONFIG_DIR`s are `first` and `second`.
